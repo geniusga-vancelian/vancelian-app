@@ -3,9 +3,17 @@ import sys
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-import yaml
+import re
+try:
+    import yaml
+except Exception:
+    yaml = None
+
+
 
 def load_product_vision() -> dict:
+    if yaml is None:
+        return {}
     path = Path("product/vision.yaml")
     if not path.exists():
         return {}
@@ -138,6 +146,21 @@ def build_json(env: str, action: str, prompt: str) -> dict:
 
     return base
 
+def slugify(text: str) -> str:
+    text = (text or "").strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = re.sub(r"-{2,}", "-", text).strip("-")
+    return text or "plan"
+
+def write_plan_file(md: str, prompt: str) -> str:
+    # Creates: product/plans/YYYYMMDD_HHMM_<slug>.md
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    slug = slugify(prompt)[:60]
+    out_dir = Path("product/plans")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{ts}_{slug}.md"
+    out_path.write_text(md, encoding="utf-8")
+    return str(out_path)
 
 def main() -> None:
     env = os.getenv("TARGET_ENV", "dev").strip()
@@ -160,6 +183,10 @@ def main() -> None:
 
     print(md)
 
+    if action == "PLAN":
+        out_file = write_plan_file(md, prompt)
+        print(f"\nSaved plan to: {out_file}\n")
+    
     # 2) Machine-friendly output (bonus Option 2)
     payload = build_json(env, action, prompt)
     print("\n\n```json")
