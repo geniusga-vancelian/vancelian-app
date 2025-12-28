@@ -1,7 +1,14 @@
-name: Deploy Ganopa Bot (ECS Fargate - DEV)
+name: Deploy Ganopa Bot (ECS Fargate)
 
 on:
   workflow_dispatch:
+    inputs:
+      target_env:
+        description: "dev | staging | prod"
+        required: true
+        default: "dev"
+        type: choice
+        options: [dev, staging, prod]
 
 permissions:
   contents: read
@@ -10,13 +17,10 @@ permissions:
 env:
   AWS_REGION: me-central-1
   AWS_ACCOUNT_ID: "411714852748"
-
-  # ✅ DEV (tes vrais noms AWS)
-  CLUSTER: vancelian-dev-api-cluster
-  SERVICE: vancelian-dev-api-svc
-
-  # ✅ ECR repo (mets le bon si tu en as déjà un)
   ECR_REPO_NAME: ganopa-bot
+
+  # IMPORTANT: sur ton screenshot, le container s'appelle "api"
+  CONTAINER_NAME: api
 
 jobs:
   deploy:
@@ -31,17 +35,44 @@ jobs:
           role-to-assume: arn:aws:iam::411714852748:role/GitHubDeployRole
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Resolve image uri
+      - name: Resolve env -> ECS names
         shell: bash
         run: |
           set -euo pipefail
+
+          case "${{ inputs.target_env }}" in
+            dev)
+              CLUSTER="vancelian-dev-api-cluster"
+              SERVICE="vancelian-dev-api-svc"
+              ;;
+            staging)
+              CLUSTER="vancelian-staging-api-cluster"
+              SERVICE="vancelian-staging-api-svc"
+              ;;
+            prod)
+              CLUSTER="vancelian-prod-api-cluster"
+              SERVICE="vancelian-prod-api-svc"
+              ;;
+            *)
+              echo "Unknown env" >&2; exit 1;;
+          esac
+
           IMAGE_TAG="${GITHUB_SHA}"
           IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}"
+
           {
+            echo "CLUSTER=${CLUSTER}"
+            echo "SERVICE=${SERVICE}"
             echo "IMAGE_TAG=${IMAGE_TAG}"
             echo "IMAGE_URI=${IMAGE_URI}"
           } >> "$GITHUB_ENV"
-          echo "IMAGE_URI=${IMAGE_URI}"
+
+          echo "Resolved:"
+          echo "  ENV=${{ inputs.target_env }}"
+          echo "  CLUSTER=${CLUSTER}"
+          echo "  SERVICE=${SERVICE}"
+          echo "  CONTAINER_NAME=${CONTAINER_NAME}"
+          echo "  IMAGE_URI=${IMAGE_URI}"
 
       - name: Sanity check - ECS service exists
         shell: bash
@@ -59,11 +90,13 @@ jobs:
           print(len(d.get("failures", [])))
           PY
           )
+
           if [[ "$FAILURES_COUNT" != "0" ]]; then
             echo "❌ ECS service not found: $SERVICE in cluster $CLUSTER"
             cat svc.json
             exit 1
           fi
+
           echo "✅ ECS service exists."
 
       - name: Ensure ECR repository exists
@@ -75,13 +108,12 @@ jobs:
               --repository-names "$ECR_REPO_NAME" >/dev/null 2>&1; then
             echo "✅ ECR repo exists: ${ECR_REPO_NAME}"
           else
-            echo "⚠️ ECR repo missing, creating: ${ECR_REPO_NAME}"
+            echo "⚠️ Creating ECR repo: ${ECR_REPO_NAME}"
             aws ecr create-repository \
               --region "$AWS_REGION" \
               --repository-name "$ECR_REPO_NAME" \
               --image-scanning-configuration scanOnPush=true \
               --encryption-configuration encryptionType=AES256 >/dev/null
-            echo "✅ Created ECR repo: ${ECR_REPO_NAME}"
           fi
 
       - name: Login to Amazon ECR
@@ -105,8 +137,8 @@ jobs:
             --query "services[0].taskDefinition" \
             --output text)
 
-          echo "TASKDEF_ARN=$TASKDEF_ARN" >> $GITHUB_ENV
-          echo "TASKDEF_ARN=$TASKDEF_ARN"
+          echo "TASKDEF_ARN=$TASKDEF_ARN" >> "$GITHUB_ENV"
+          echo "TASKDEF_ARN resolved to: $TASKDEF_ARN"
 
       - name: Download task definition JSON
         shell: bash
@@ -118,7 +150,7 @@ jobs:
             --query "taskDefinition" \
             --output json > taskdef.json
 
-      - name: Patch task definition image (container api)
+      - name: Patch task definition image (by container name)
         shell: bash
         run: |
           set -euo pipefail
@@ -135,19 +167,21 @@ jobs:
             td.pop(k, None)
 
           image_uri = os.environ["IMAGE_URI"]
+          container_name = os.environ["CONTAINER_NAME"]
 
-          # ⚠️ on patch uniquement le container nommé "api" (comme dans ton ECS)
-          patched = False
+          found = False
           for c in td.get("containerDefinitions", []):
-            if c.get("name") == "api":
+            if c.get("name") == container_name:
               c["image"] = image_uri
-              patched = True
+              found = True
+              break
 
-          if not patched:
-            raise SystemExit("Container 'api' not found in task definition. Check container name in ECS.")
+          if not found:
+            names = [c.get("name") for c in td.get("containerDefinitions", [])]
+            raise SystemExit(f"❌ Container '{container_name}' not found. Found: {names}")
 
           Path("taskdef_patched.json").write_text(json.dumps(td, indent=2))
-          print("Patched image:", image_uri)
+          print("✅ Patched:", container_name, "->", image_uri)
           PY
 
       - name: Register new task definition revision
@@ -159,8 +193,8 @@ jobs:
             --cli-input-json file://taskdef_patched.json \
             --query "taskDefinition.taskDefinitionArn" \
             --output text)
-          echo "NEW_TASKDEF_ARN=$NEW_TASKDEF_ARN" >> $GITHUB_ENV
-          echo "NEW_TASKDEF_ARN=$NEW_TASKDEF_ARN"
+          echo "NEW_TASKDEF_ARN=$NEW_TASKDEF_ARN" >> "$GITHUB_ENV"
+          echo "✅ New task definition: $NEW_TASKDEF_ARN"
 
       - name: Update ECS service
         shell: bash
@@ -174,6 +208,8 @@ jobs:
             --force-new-deployment
 
       - name: Wait for service to stabilize
+        id: wait
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -181,6 +217,43 @@ jobs:
             --region "$AWS_REGION" \
             --cluster "$CLUSTER" \
             --services "$SERVICE"
+
+      - name: Debug if not stable (events + stopped tasks)
+        if: steps.wait.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "❌ Service did not stabilize. Dumping debug info..."
+
+          echo "== describe-services =="
+          aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --output json
+
+          echo "== list STOPPED tasks =="
+          STOPPED=$(aws ecs list-tasks \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --service-name "$SERVICE" \
+            --desired-status STOPPED \
+            --max-results 5 \
+            --query "taskArns[]" \
+            --output text || true)
+
+          echo "STOPPED tasks: $STOPPED"
+
+          if [[ -n "$STOPPED" ]]; then
+            echo "== describe STOPPED tasks =="
+            aws ecs describe-tasks \
+              --region "$AWS_REGION" \
+              --cluster "$CLUSTER" \
+              --tasks $STOPPED \
+              --output json
+          fi
+
+          exit 1
 
       - name: Print service status
         shell: bash
@@ -190,5 +263,5 @@ jobs:
             --region "$AWS_REGION" \
             --cluster "$CLUSTER" \
             --services "$SERVICE" \
-            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition,status:status}" \
+            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition,status:status,deployments:deployments}" \
             --output json
