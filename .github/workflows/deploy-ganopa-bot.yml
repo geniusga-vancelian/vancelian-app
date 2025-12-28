@@ -17,6 +17,7 @@ permissions:
 env:
   AWS_REGION: me-central-1
   AWS_ACCOUNT_ID: "411714852748"
+  ECR_REPO_NAME: ganopa-bot
 
 jobs:
   deploy:
@@ -35,23 +36,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           case "${{ inputs.target_env }}" in
             staging)
-              echo "CLUSTER=vancelian-staging-api-cluster" >> $GITHUB_ENV
-              echo "SERVICE=ganopa-staging-bot-svc" >> $GITHUB_ENV
-              echo "ECR_REPO=ganopa-bot" >> $GITHUB_ENV
+              CLUSTER="vancelian-staging-api-cluster"
+              SERVICE="ganopa-staging-bot-svc"
               ;;
             prod)
-              echo "CLUSTER=vancelian-prod-api-cluster" >> $GITHUB_ENV
-              echo "SERVICE=ganopa-prod-bot-svc" >> $GITHUB_ENV
-              echo "ECR_REPO=ganopa-bot" >> $GITHUB_ENV
+              CLUSTER="vancelian-prod-api-cluster"
+              SERVICE="ganopa-prod-bot-svc"
               ;;
             *)
               echo "Unknown env" >&2; exit 1;;
           esac
 
-          echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
-          echo "IMAGE_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${ECR_REPO}:${GITHUB_SHA}" >> $GITHUB_ENV
+          IMAGE_TAG="${GITHUB_SHA}"
+          IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}"
+
+          {
+            echo "CLUSTER=${CLUSTER}"
+            echo "SERVICE=${SERVICE}"
+            echo "IMAGE_TAG=${IMAGE_TAG}"
+            echo "IMAGE_URI=${IMAGE_URI}"
+          } >> "$GITHUB_ENV"
+
+          echo "Resolved:"
+          echo "  CLUSTER=${CLUSTER}"
+          echo "  SERVICE=${SERVICE}"
+          echo "  IMAGE_URI=${IMAGE_URI}"
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
@@ -60,6 +72,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          : "${IMAGE_URI:?Missing IMAGE_URI}"
           docker build -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile services/ganopa-bot
           docker push "$IMAGE_URI"
 
@@ -105,7 +118,6 @@ jobs:
             td.pop(k, None)
 
           image_uri = os.environ["IMAGE_URI"]
-          # Assume first container is the bot container
           td["containerDefinitions"][0]["image"] = image_uri
 
           Path("taskdef_patched.json").write_text(json.dumps(td, indent=2))
