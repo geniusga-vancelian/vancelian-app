@@ -1,14 +1,16 @@
-import os
+from os import getenv
+from dotenv import load_dotenv
+
+# 🔑 Charge automatiquement le fichier .env
+load_dotenv()
+
 
 def getenv_required(name: str) -> str:
-    v = os.getenv(name, "").strip()
-    if not v:
+    value = getenv(name)
+    if not value:
         raise RuntimeError(f"Missing required env var: {name}")
-    return v
+    return value
+
 
 TELEGRAM_BOT_TOKEN = getenv_required("TELEGRAM_BOT_TOKEN")
-# On branchera OpenAI après
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-
-# Optionnel : simple secret pour protéger le webhook
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
+WEBHOOK_SECRET = getenv_required("WEBHOOK_SECRET")
