@@ -1,6 +1,6 @@
-name: Agent (plan / qa)
+name: Agent (plan / qa / brainstorm)
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       target_env:
@@ -16,7 +16,11 @@ on:
         type: choice
         options: [PLAN, QA, BRAINSTORM]
       prompt:
-        description: "Prompt (required for PLAN/BRAINSTORM)"
+        description: "Prompt (required for BRAINSTORM; optional for PLAN if source_file is provided)"
+        required: false
+        default: ""
+      source_file:
+        description: "Optional (PLAN only): path to a markdown file inside ./product/ (e.g. product/brainstorms/20250101_1200_topic.md)"
         required: false
         default: ""
 
@@ -37,18 +41,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ("${{ inputs.action }}" == "PLAN" || "${{ inputs.action }}" == "BRAINSTORM") && -z "${{ inputs.prompt }}" ]]; then
-            echo "PROMPT is required for action=${{ inputs.action }}"
+          ACTION="${{ inputs.action }}"
+          PROMPT="${{ inputs.prompt }}"
+          SOURCE_FILE="${{ inputs.source_file }}"
+
+          if [[ "$ACTION" == "BRAINSTORM" && -z "$PROMPT" ]]; then
+            echo "PROMPT is required for action=BRAINSTORM"
+            exit 1
+          fi
+
+          if [[ "$ACTION" == "PLAN" && -z "$PROMPT" && -z "$SOURCE_FILE" ]]; then
+            echo "PROMPT or source_file is required for action=PLAN"
+            exit 1
+          fi
+
+          if [[ -n "$SOURCE_FILE" && "$ACTION" != "PLAN" ]]; then
+            echo "source_file is only supported for action=PLAN"
+            exit 1
+          fi
+
+          if [[ -n "$SOURCE_FILE" && "$SOURCE_FILE" != product/* ]]; then
+            echo "source_file must be inside ./product/ (e.g. product/brainstorms/...)"
             exit 1
           fi
 
       - name: Configure AWS credentials (OIDC)
+        if: ${{ inputs.action == 'QA' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::411714852748:role/GitHubDeployRole
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Resolve env -> cluster/service/tg
+        if: ${{ inputs.action == 'QA' }}
         id: resolve
         shell: bash
         run: |
@@ -104,6 +129,15 @@ jobs:
 
           cat REPORT.md
 
+      - name: Upload QA report
+        if: ${{ inputs.action == 'QA' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vancelian-qa-${{ inputs.target_env }}
+          path: REPORT.md
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Set up Python
         if: ${{ inputs.action == 'PLAN' || inputs.action == 'BRAINSTORM' }}
         uses: actions/setup-python@v5
@@ -116,19 +150,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r agent/requirements.txt
 
-      - name: Debug deps (optional)
-        if: ${{ inputs.action == 'PLAN' || inputs.action == 'BRAINSTORM' }}
-        run: |
-          ls -la agent
-          cat agent/requirements.txt
-          python -c "import yaml; print('yaml OK', getattr(yaml,'__version__','?'))" || echo "yaml not installed"
-
       - name: Run generator (no OpenAI)
         if: ${{ inputs.action == 'PLAN' || inputs.action == 'BRAINSTORM' }}
         env:
           TARGET_ENV: ${{ inputs.target_env }}
           ACTION: ${{ inputs.action }}
           PROMPT: ${{ inputs.prompt }}
+          SOURCE_FILE: ${{ inputs.source_file }}
         run: |
           mkdir -p product/plans product/brainstorms
           python agent/main.py
