@@ -65,6 +65,26 @@ jobs:
           echo "  SERVICE=${SERVICE}"
           echo "  IMAGE_URI=${IMAGE_URI}"
 
+      - name: Ensure ECR repository exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking ECR repo: ${ECR_REPO_NAME}"
+
+          if aws ecr describe-repositories \
+              --region "$AWS_REGION" \
+              --repository-names "$ECR_REPO_NAME" >/dev/null 2>&1; then
+            echo "ECR repo exists: ${ECR_REPO_NAME}"
+          else
+            echo "ECR repo missing, creating: ${ECR_REPO_NAME}"
+            aws ecr create-repository \
+              --region "$AWS_REGION" \
+              --repository-name "$ECR_REPO_NAME" \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256 >/dev/null
+            echo "Created ECR repo: ${ECR_REPO_NAME}"
+          fi
+
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -107,10 +127,8 @@ jobs:
           from pathlib import Path
           import os
 
-          p = Path("taskdef.json")
-          td = json.loads(p.read_text())
+          td = json.loads(Path("taskdef.json").read_text())
 
-          # Fields not allowed in register-task-definition payload:
           for k in [
             "taskDefinitionArn","revision","status","requiresAttributes","compatibilities",
             "registeredAt","registeredBy"
