@@ -1,0 +1,21 @@
+product:
+  name: Vancelian
+  domain: wealth-tech / crypto
+  principles:
+    - simple
+    - regulated
+    - capital-protected first
+  environments:
+    - dev
+    - staging
+    - prod
+
+modules:
+  deposits:
+    status: MVP
+    currency: AED
+    yield: false
+  vaults:
+    status: planned
+  rwa:
+    status: planned
