@@ -65,6 +65,40 @@ jobs:
           echo "  SERVICE=${SERVICE}"
           echo "  IMAGE_URI=${IMAGE_URI}"
 
+      - name: Sanity check - does ECS service exist?
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Listing services in cluster (first 50):"
+          aws ecs list-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --max-results 50 \
+            --output json
+
+          echo "Describing service:"
+          aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --output json > svc.json
+
+          FAILURES_COUNT=$(python - <<'PY'
+          import json
+          d=json.load(open("svc.json"))
+          print(len(d.get("failures", [])))
+          PY
+          )
+          if [[ "$FAILURES_COUNT" != "0" ]]; then
+            echo "❌ ECS service not found: $SERVICE in cluster $CLUSTER"
+            echo "Failures:"
+            cat svc.json
+            exit 1
+          fi
+
+          echo "✅ ECS service exists."
+
       - name: Ensure ECR repository exists
         shell: bash
         run: |
@@ -74,15 +108,15 @@ jobs:
           if aws ecr describe-repositories \
               --region "$AWS_REGION" \
               --repository-names "$ECR_REPO_NAME" >/dev/null 2>&1; then
-            echo "ECR repo exists: ${ECR_REPO_NAME}"
+            echo "✅ ECR repo exists: ${ECR_REPO_NAME}"
           else
-            echo "ECR repo missing, creating: ${ECR_REPO_NAME}"
+            echo "⚠️ ECR repo missing, creating: ${ECR_REPO_NAME}"
             aws ecr create-repository \
               --region "$AWS_REGION" \
               --repository-name "$ECR_REPO_NAME" \
               --image-scanning-configuration scanOnPush=true \
               --encryption-configuration encryptionType=AES256 >/dev/null
-            echo "Created ECR repo: ${ECR_REPO_NAME}"
+            echo "✅ Created ECR repo: ${ECR_REPO_NAME}"
           fi
 
       - name: Login to Amazon ECR
@@ -96,16 +130,38 @@ jobs:
           docker build -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile services/ganopa-bot
           docker push "$IMAGE_URI"
 
-      - name: Fetch current task definition ARN
+      - name: Fetch and validate task definition ARN
         shell: bash
         run: |
           set -euo pipefail
+
           TASKDEF_ARN=$(aws ecs describe-services \
             --region "$AWS_REGION" \
             --cluster "$CLUSTER" \
             --services "$SERVICE" \
             --query "services[0].taskDefinition" \
             --output text)
+
+          echo "Raw TASKDEF_ARN = '$TASKDEF_ARN'"
+
+          if [[ -z "$TASKDEF_ARN" || "$TASKDEF_ARN" == "None" || "$TASKDEF_ARN" == "null" ]]; then
+            echo "❌ ECS service returned an empty task definition ARN"
+            exit 1
+          fi
+
+          # Validate it is describable (prevents the exact error you got)
+          if ! aws ecs describe-task-definition \
+            --region "$AWS_REGION" \
+            --task-definition "$TASKDEF_ARN" \
+            >/dev/null 2>&1; then
+            echo "❌ Task definition ARN is NOT describable (invalid/deleted/missing revision):"
+            echo "   $TASKDEF_ARN"
+            echo ""
+            echo "➡️ Fix once in AWS Console: ECS -> Service -> Update service -> pick a valid task definition -> Deploy"
+            exit 1
+          fi
+
+          echo "✅ Task definition is valid"
           echo "TASKDEF_ARN=$TASKDEF_ARN" >> $GITHUB_ENV
 
       - name: Download task definition JSON
@@ -129,6 +185,7 @@ jobs:
 
           td = json.loads(Path("taskdef.json").read_text())
 
+          # Remove fields not allowed in register-task-definition payload
           for k in [
             "taskDefinitionArn","revision","status","requiresAttributes","compatibilities",
             "registeredAt","registeredBy"
@@ -136,10 +193,13 @@ jobs:
             td.pop(k, None)
 
           image_uri = os.environ["IMAGE_URI"]
-          td["containerDefinitions"][0]["image"] = image_uri
+
+          # Patch ALL container images (more robust than assuming index 0)
+          for c in td.get("containerDefinitions", []):
+            c["image"] = image_uri
 
           Path("taskdef_patched.json").write_text(json.dumps(td, indent=2))
-          print("Patched image:", image_uri)
+          print("Patched image for all containers:", image_uri)
           PY
 
       - name: Register new task definition revision
@@ -152,7 +212,7 @@ jobs:
             --query "taskDefinition.taskDefinitionArn" \
             --output text)
           echo "NEW_TASKDEF_ARN=$NEW_TASKDEF_ARN" >> $GITHUB_ENV
-          echo "New task definition: $NEW_TASKDEF_ARN"
+          echo "✅ New task definition: $NEW_TASKDEF_ARN"
 
       - name: Update ECS service
         shell: bash
@@ -182,5 +242,5 @@ jobs:
             --region "$AWS_REGION" \
             --cluster "$CLUSTER" \
             --services "$SERVICE" \
-            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition}" \
+            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition,status:status,deployments:deployments}" \
             --output json
