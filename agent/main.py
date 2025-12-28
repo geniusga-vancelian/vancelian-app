@@ -9,8 +9,20 @@ try:
 except Exception:
     yaml = None
 
-
-
+def brainstorm_markdown(env: str, prompt: str) -> str:
+    md = []
+    md.append(header(env, "BRAINSTORM"))
+    md.append(f"## Topic\n{prompt}\n")
+    md.append("## 1) Goals\n- ...\n")
+    md.append("## 2) Questions to answer\n- ...\n")
+    md.append("## 3) Ideas (diverge)\n- ...\n")
+    md.append("## 4) Options (converge)\n- Option A\n- Option B\n- Option C\n")
+    md.append("## 5) Risks / constraints\n- ...\n")
+    md.append("## 6) Next decisions\n- ...\n")
+    md.append("\n---\n")
+    md.append("### Status\n- ✅ Saved as artifact\n- ⏭ Ready to convert into PLAN / SPEC\n")
+    return "\n".join(md)
+    
 def load_product_vision() -> dict:
     if yaml is None:
         return {}
@@ -143,7 +155,18 @@ def build_json(env: str, action: str, prompt: str) -> dict:
                 "Health check stable",
             ],
         }
-
+    elif action == "BRAINSTORM":
+        base["deliverable"] = {
+            "sections": [
+                "Goals",
+                "Questions",
+                "Ideas",
+                "Options",
+                "Risks",
+                "Decisions",
+            ],
+            "next_step": "Convert to PLAN or SPEC",
+        }
     return base
 
 def slugify(text: str) -> str:
@@ -162,32 +185,55 @@ def write_plan_file(md: str, prompt: str) -> str:
     out_path.write_text(md, encoding="utf-8")
     return str(out_path)
 
+def write_brainstorm_file(md: str, prompt: str) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    slug = slugify(prompt)[:60]
+    out_dir = Path("product/brainstorms")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{ts}_{slug}.md"
+    out_path.write_text(md, encoding="utf-8")
+    return str(out_path)
+
 def main() -> None:
     env = os.getenv("TARGET_ENV", "dev").strip()
     action = os.getenv("ACTION", "PLAN").strip().upper()
     prompt = (os.getenv("PROMPT", "") or "").strip()
 
-    if action not in {"PLAN", "QA"}:
-        print(f"Unknown ACTION={action}. Expected PLAN or QA.", file=sys.stderr)
+    # --- Validate action ---
+    if action not in {"PLAN", "QA", "BRAINSTORM"}:
+        print(
+            f"Unknown ACTION={action}. Expected PLAN, QA or BRAINSTORM.",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
-    if action == "PLAN" and not prompt:
-        print("PROMPT is required when ACTION=PLAN", file=sys.stderr)
+    # --- Validate prompt ---
+    if action in {"PLAN", "BRAINSTORM"} and not prompt:
+        print(f"PROMPT is required when ACTION={action}", file=sys.stderr)
         sys.exit(2)
 
-    # 1) Human-friendly output
+    # --- Generate human-readable output ---
     if action == "PLAN":
         md = plan_markdown(env, prompt)
-    else:
+
+    elif action == "BRAINSTORM":
+        md = brainstorm_markdown(env, prompt)
+
+    else:  # QA
         md = qa_markdown(env, prompt)
 
     print(md)
 
+    # --- Persist artifacts ---
     if action == "PLAN":
         out_file = write_plan_file(md, prompt)
         print(f"\nSaved plan to: {out_file}\n")
+
+    if action == "BRAINSTORM":
+        out_file = write_brainstorm_file(md, prompt)
+        print(f"\nSaved brainstorm to: {out_file}\n")
     
-    # 2) Machine-friendly output (bonus Option 2)
+    # --- Machine-readable output (JSON, optional but useful) ---
     payload = build_json(env, action, prompt)
     print("\n\n```json")
     print(json.dumps(payload, indent=2))
