@@ -10,13 +10,13 @@ on:
         type: choice
         options: [dev, staging, prod]
       action:
-        description: "PLAN | QA"
+        description: "PLAN | QA | BRAINSTORM"
         required: true
         default: "PLAN"
         type: choice
-        options: [PLAN, QA]
+        options: [PLAN, QA, BRAINSTORM]
       prompt:
-        description: "Prompt (required for PLAN)"
+        description: "Prompt (required for PLAN/BRAINSTORM)"
         required: false
         default: ""
 
@@ -37,8 +37,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ inputs.action }}" == "PLAN" && -z "${{ inputs.prompt }}" ]]; then
-            echo "PROMPT is required for action=PLAN"
+          if [[ ("${{ inputs.action }}" == "PLAN" || "${{ inputs.action }}" == "BRAINSTORM") && -z "${{ inputs.prompt }}" ]]; then
+            echo "PROMPT is required for action=${{ inputs.action }}"
             exit 1
           fi
 
@@ -105,32 +105,32 @@ jobs:
           cat REPORT.md
 
       - name: Set up Python
-        if: ${{ inputs.action == 'PLAN' }}
+        if: ${{ inputs.action == 'PLAN' || inputs.action == 'BRAINSTORM' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install agent deps
-        if: ${{ inputs.action == 'PLAN' }}
+        if: ${{ inputs.action == 'PLAN' || inputs.action == 'BRAINSTORM' }}
         run: |
           python -m pip install --upgrade pip
           pip install -r agent/requirements.txt
 
       - name: Debug deps (optional)
-        if: ${{ inputs.action == 'PLAN' }}
+        if: ${{ inputs.action == 'PLAN' || inputs.action == 'BRAINSTORM' }}
         run: |
           ls -la agent
           cat agent/requirements.txt
           python -c "import yaml; print('yaml OK', getattr(yaml,'__version__','?'))" || echo "yaml not installed"
 
-      - name: Run PLAN generator (no OpenAI)
-        if: ${{ inputs.action == 'PLAN' }}
+      - name: Run generator (no OpenAI)
+        if: ${{ inputs.action == 'PLAN' || inputs.action == 'BRAINSTORM' }}
         env:
           TARGET_ENV: ${{ inputs.target_env }}
           ACTION: ${{ inputs.action }}
           PROMPT: ${{ inputs.prompt }}
         run: |
-          mkdir -p product/plans
+          mkdir -p product/plans product/brainstorms
           python agent/main.py
 
       - name: Upload PLAN artifact
@@ -139,5 +139,14 @@ jobs:
         with:
           name: vancelian-plan-${{ inputs.target_env }}
           path: product/plans/*.md
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload BRAINSTORM artifact
+        if: ${{ inputs.action == 'BRAINSTORM' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vancelian-brainstorm-${{ inputs.target_env }}
+          path: product/brainstorms/*.md
           if-no-files-found: error
           retention-days: 14
