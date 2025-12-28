@@ -1,25 +1,122 @@
 import os
 import sys
+import json
+from datetime import datetime, timezone
 
-def main():
-    # Plus tard on branchera OpenAI + tes outils (git diff, tests, etc.)
-    env = os.getenv("TARGET_ENV", "dev")
-    action = os.getenv("ACTION", "PLAN")
-    prompt = os.getenv("PROMPT", "")
 
-    print("=== Vancelian Agent ===")
-    print(f"env={env}")
-    print(f"action={action}")
-    print(f"prompt={prompt[:200]}")
+def now_utc_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # placeholder
+
+def header(env: str, action: str) -> str:
+    return f"# Vancelian Agent — {action}\n\n- env: **{env}**\n- generated_at: **{now_utc_iso()}**\n"
+
+
+def plan_markdown(env: str, prompt: str) -> str:
+    # V1: plan "product/dev" générique mais actionnable
+    # (On specialisera ensuite: deposits, vaults, kyc, etc.)
+    md = []
+    md.append(header(env, "PLAN"))
+    md.append(f"## Prompt\n{prompt}\n")
+    md.append("## 1) Scope\n- What we are building\n- What is explicitly out-of-scope\n- Assumptions / constraints\n")
+    md.append("## 2) User stories\n- As a user, I can ...\n- As an admin, I can ...\n")
+    md.append("## 3) API design\n- Endpoints (method + path)\n- Request/response payloads\n- Error codes\n- Idempotency strategy (if applicable)\n")
+    md.append("## 4) Data model\n- Tables / collections\n- Key fields\n- State machine (status transitions)\n")
+    md.append("## 5) Security & compliance checks\n- AuthZ/authN requirements\n- KYC/AML gating rules (if applicable)\n- Audit trail expectations\n")
+    md.append("## 6) QA plan\n- Unit tests\n- Integration tests\n- Negative cases\n- Monitoring / alerts\n")
+    md.append("## 7) Delivery plan\n- Milestone 1 (MVP)\n- Milestone 2\n- Definition of Done\n")
+    md.append("\n---\n")
+    md.append("### Next questions for you (to refine)\n- What’s the exact feature boundary?\n- Any must-have edge cases?\n- Any performance or compliance constraints?\n")
+    return "\n".join(md)
+
+
+def qa_markdown(env: str, prompt: str) -> str:
+    md = []
+    md.append(header(env, "QA"))
+    if prompt.strip():
+        md.append(f"## Context\n{prompt}\n")
+    md.append("## Checklist\n- [ ] App boots / endpoints reachable\n- [ ] Lint / formatting\n- [ ] Unit tests pass\n- [ ] Integration tests pass\n- [ ] AuthZ checks validated\n- [ ] Error handling validated (4xx/5xx)\n- [ ] Logging & correlation IDs present\n- [ ] Observability hooks (metrics/alerts) defined\n")
+    md.append("## Negative tests\n- [ ] Invalid payloads\n- [ ] Missing auth\n- [ ] Wrong permissions\n- [ ] Idempotency collisions (if relevant)\n")
+    md.append("## Release gates\n- [ ] Rollback plan exists\n- [ ] Ops workflow can restart/rollback/scale\n- [ ] Health check stable\n")
+    return "\n".join(md)
+
+
+def build_json(env: str, action: str, prompt: str) -> dict:
+    # Option 2 "bonus" dès maintenant: JSON exploitable par CI / Notion / Jira plus tard
+    base = {
+        "env": env,
+        "action": action,
+        "prompt": prompt,
+        "generated_at": now_utc_iso(),
+        "version": "v1",
+    }
+
     if action == "PLAN":
-        print("TODO: generate a product/dev plan")
+        base["deliverable"] = {
+            "sections": [
+                "Scope",
+                "User stories",
+                "API design",
+                "Data model",
+                "Security & compliance checks",
+                "QA plan",
+                "Delivery plan",
+            ],
+            "next_questions": [
+                "What’s the exact feature boundary?",
+                "Any must-have edge cases?",
+                "Any performance or compliance constraints?",
+            ],
+        }
     elif action == "QA":
-        print("TODO: run QA checks (pytest/ruff) and summarize")
-    else:
-        print("Unknown action:", action)
+        base["deliverable"] = {
+            "checklist": [
+                "App boots / endpoints reachable",
+                "Lint / formatting",
+                "Unit tests pass",
+                "Integration tests pass",
+                "AuthZ checks validated",
+                "Error handling validated (4xx/5xx)",
+                "Logging & correlation IDs present",
+                "Observability hooks defined",
+            ],
+            "release_gates": [
+                "Rollback plan exists",
+                "Ops workflow can restart/rollback/scale",
+                "Health check stable",
+            ],
+        }
+
+    return base
+
+
+def main() -> None:
+    env = os.getenv("TARGET_ENV", "dev").strip()
+    action = os.getenv("ACTION", "PLAN").strip().upper()
+    prompt = (os.getenv("PROMPT", "") or "").strip()
+
+    if action not in {"PLAN", "QA"}:
+        print(f"Unknown ACTION={action}. Expected PLAN or QA.", file=sys.stderr)
         sys.exit(2)
+
+    if action == "PLAN" and not prompt:
+        print("PROMPT is required when ACTION=PLAN", file=sys.stderr)
+        sys.exit(2)
+
+    # 1) Human-friendly output
+    if action == "PLAN":
+        md = plan_markdown(env, prompt)
+    else:
+        md = qa_markdown(env, prompt)
+
+    print(md)
+
+    # 2) Machine-friendly output (bonus Option 2)
+    payload = build_json(env, action, prompt)
+    print("\n\n```json")
+    print(json.dumps(payload, indent=2))
+    print("```")
+
 
 if __name__ == "__main__":
     main()
