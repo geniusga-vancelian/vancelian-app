@@ -1,0 +1,156 @@
+name: Deploy Ganopa Bot (ECS Fargate)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "staging | prod"
+        required: true
+        default: "staging"
+        type: choice
+        options: [staging, prod]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: me-central-1
+  AWS_ACCOUNT_ID: "411714852748"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::411714852748:role/GitHubDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve env -> ECS/ECR names
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.target_env }}" in
+            staging)
+              echo "CLUSTER=vancelian-staging-api-cluster" >> $GITHUB_ENV
+              echo "SERVICE=ganopa-staging-bot-svc" >> $GITHUB_ENV
+              echo "ECR_REPO=ganopa-bot" >> $GITHUB_ENV
+              ;;
+            prod)
+              echo "CLUSTER=vancelian-prod-api-cluster" >> $GITHUB_ENV
+              echo "SERVICE=ganopa-prod-bot-svc" >> $GITHUB_ENV
+              echo "ECR_REPO=ganopa-bot" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "Unknown env" >&2; exit 1;;
+          esac
+
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
+          echo "IMAGE_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${ECR_REPO}:${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push Docker image (ganopa-bot)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile services/ganopa-bot
+          docker push "$IMAGE_URI"
+
+      - name: Fetch current task definition ARN
+        shell: bash
+        run: |
+          set -euo pipefail
+          TASKDEF_ARN=$(aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query "services[0].taskDefinition" \
+            --output text)
+          echo "TASKDEF_ARN=$TASKDEF_ARN" >> $GITHUB_ENV
+
+      - name: Download task definition JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs describe-task-definition \
+            --region "$AWS_REGION" \
+            --task-definition "$TASKDEF_ARN" \
+            --query "taskDefinition" \
+            --output json > taskdef.json
+
+      - name: Patch task definition image
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import os
+
+          p = Path("taskdef.json")
+          td = json.loads(p.read_text())
+
+          # Fields not allowed in register-task-definition payload:
+          for k in [
+            "taskDefinitionArn","revision","status","requiresAttributes","compatibilities",
+            "registeredAt","registeredBy"
+          ]:
+            td.pop(k, None)
+
+          image_uri = os.environ["IMAGE_URI"]
+          # Assume first container is the bot container
+          td["containerDefinitions"][0]["image"] = image_uri
+
+          Path("taskdef_patched.json").write_text(json.dumps(td, indent=2))
+          print("Patched image:", image_uri)
+          PY
+
+      - name: Register new task definition revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW_TASKDEF_ARN=$(aws ecs register-task-definition \
+            --region "$AWS_REGION" \
+            --cli-input-json file://taskdef_patched.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)
+          echo "NEW_TASKDEF_ARN=$NEW_TASKDEF_ARN" >> $GITHUB_ENV
+          echo "New task definition: $NEW_TASKDEF_ARN"
+
+      - name: Update ECS service
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "$NEW_TASKDEF_ARN" \
+            --force-new-deployment
+
+      - name: Wait for service to stabilize
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs wait services-stable \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE"
+
+      - name: Print service status
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition}" \
+            --output json
