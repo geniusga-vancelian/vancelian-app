@@ -2,7 +2,16 @@ import os
 import sys
 import json
 from datetime import datetime, timezone
+from pathlib import Path
+import yaml
 
+def load_product_vision() -> dict:
+    path = Path("product/vision.yaml")
+    if not path.exists():
+        return {}
+
+    with path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
 def now_utc_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
