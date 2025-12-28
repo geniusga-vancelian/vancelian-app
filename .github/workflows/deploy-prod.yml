@@ -27,6 +27,43 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
+name: Deploy API (prod)
+
+on:
+  push:
+    branches: [ "prod" ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: me-central-1
+  ECR_REPOSITORY: vancelian-api
+  ECS_CLUSTER: vancelian-prod-api-cluster
+  ECS_SERVICE: vancelian-prod-api-svc
+  CONTAINER_NAME: api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Sécurité : on refuse toute exécution hors branche prod
+      - name: Safety check (prod branch only)
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "prod" ]; then
+            echo "Not on prod branch, refusing to deploy."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
           role-to-assume: arn:aws:iam::411714852748:role/GitHubDeployRole
           aws-region: ${{ env.AWS_REGION }}
 
@@ -39,6 +76,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+        working-directory: .
         run: |
           echo "ECR_REGISTRY=$ECR_REGISTRY"
           docker build -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
