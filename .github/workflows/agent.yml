@@ -16,44 +16,105 @@ on:
         type: choice
         options: [PLAN, QA]
       prompt:
-        description: "What do you want the agent to do?"
+        description: "Prompt (required for PLAN)"
         required: false
         default: ""
-        
+
 permissions:
   contents: read
   id-token: write
-  
+
+env:
+  AWS_REGION: me-central-1
+
 jobs:
   agent:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install agent deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r agent/requirements.txt
-          
       - name: Validate inputs
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ inputs.action }}" != "QA" && -z "${{ inputs.prompt }}" ]]; then
-            echo "PROMPT is required for action=${{ inputs.action }}"
+          if [[ "${{ inputs.action }}" == "PLAN" && -z "${{ inputs.prompt }}" ]]; then
+            echo "PROMPT is required for action=PLAN"
             exit 1
           fi
-          
-      - name: Run agent
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::411714852748:role/GitHubDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve env -> cluster/service/tg
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.target_env }}" in
+            dev)
+              echo "CLUSTER=vancelian-dev-api-cluster" >> $GITHUB_ENV
+              echo "SERVICE=vancelian-dev-api-svc" >> $GITHUB_ENV
+              echo "TG_NAME=vancelian-dev-api-tg" >> $GITHUB_ENV
+              ;;
+            staging)
+              echo "CLUSTER=vancelian-staging-api-cluster" >> $GITHUB_ENV
+              echo "SERVICE=vancelian-staging-api-svc" >> $GITHUB_ENV
+              echo "TG_NAME=vancelian-staging-api-tg" >> $GITHUB_ENV
+              ;;
+            prod)
+              echo "CLUSTER=vancelian-prod-api-cluster" >> $GITHUB_ENV
+              echo "SERVICE=vancelian-prod-api-svc" >> $GITHUB_ENV
+              echo "TG_NAME=vancelian-prod-api-tg" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "Unknown env" >&2; exit 1;;
+          esac
+
+      - name: Collect AWS status (only for QA)
+        if: ${{ inputs.action == 'QA' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## ECS service status" >> REPORT.md
+          aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition}" \
+            --output json >> REPORT.md
+
+          TASKDEF_ARN=$(aws ecs describe-services --region "$AWS_REGION" --cluster "$CLUSTER" --services "$SERVICE" --query "services[0].taskDefinition" --output text)
+          echo -e "\n## Current image" >> REPORT.md
+          aws ecs describe-task-definition --region "$AWS_REGION" --task-definition "$TASKDEF_ARN" --query "taskDefinition.containerDefinitions[0].image" --output text >> REPORT.md
+
+          echo -e "\n## Target health" >> REPORT.md
+          TG_ARN=$(aws elbv2 describe-target-groups --region "$AWS_REGION" --names "$TG_NAME" --query "TargetGroups[0].TargetGroupArn" --output text)
+          aws elbv2 describe-target-health --region "$AWS_REGION" --target-group-arn "$TG_ARN" --output json >> REPORT.md
+
+          echo -e "\n## Last ECS events" >> REPORT.md
+          aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query "services[0].events[0:12].message" \
+            --output json >> REPORT.md
+
+          cat REPORT.md
+
+      - name: Set up Python
+        if: ${{ inputs.action == 'PLAN' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run PLAN generator (no OpenAI)
+        if: ${{ inputs.action == 'PLAN' }}
         env:
           TARGET_ENV: ${{ inputs.target_env }}
           ACTION: ${{ inputs.action }}
           PROMPT: ${{ inputs.prompt }}
-          # plus tard: OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           python agent/main.py
