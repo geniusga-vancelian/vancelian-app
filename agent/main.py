@@ -13,6 +13,43 @@ def load_product_vision() -> dict:
     with path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
+def render_product_context(vision: dict) -> str:
+    p = (vision or {}).get("product", {})
+    modules = (p.get("modules") or {})
+
+    name = p.get("name", "Vancelian")
+    domain = p.get("domain", "")
+    principles = p.get("principles", [])
+    envs = p.get("environments", [])
+
+    lines = []
+    lines.append("## Product context (from product/vision.yaml)")
+    lines.append(f"- name: **{name}**")
+    if domain:
+        lines.append(f"- domain: **{domain}**")
+    if envs:
+        lines.append(f"- environments: {', '.join(envs)}")
+    if principles:
+        lines.append("- principles:")
+        for x in principles:
+            lines.append(f"  - {x}")
+
+    if modules:
+        lines.append("- modules:")
+        for k, v in modules.items():
+            if isinstance(v, dict):
+                status = v.get("status", "unknown")
+                extra = []
+                for kk in ["currency", "yield"]:
+                    if kk in v:
+                        extra.append(f"{kk}={v[kk]}")
+                suffix = f" ({', '.join(extra)})" if extra else ""
+                lines.append(f"  - {k}: **{status}**{suffix}")
+            else:
+                lines.append(f"  - {k}: {v}")
+
+    return "\n".join(lines) + "\n"
+
 def now_utc_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -24,9 +61,12 @@ def header(env: str, action: str) -> str:
 def plan_markdown(env: str, prompt: str) -> str:
     # V1: plan "product/dev" générique mais actionnable
     # (On specialisera ensuite: deposits, vaults, kyc, etc.)
+    vision = load_product_vision()
     md = []
     md.append(header(env, "PLAN"))
     md.append(f"## Prompt\n{prompt}\n")
+    if vision:
+        md.append(render_product_context(vision))
     md.append("## 1) Scope\n- What we are building\n- What is explicitly out-of-scope\n- Assumptions / constraints\n")
     md.append("## 2) User stories\n- As a user, I can ...\n- As an admin, I can ...\n")
     md.append("## 3) API design\n- Endpoints (method + path)\n- Request/response payloads\n- Error codes\n- Idempotency strategy (if applicable)\n")
