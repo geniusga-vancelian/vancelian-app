@@ -121,7 +121,7 @@ jobs:
         run: |
           ls -la agent
           cat agent/requirements.txt
-          python -c "import yaml; print('yaml OK', yaml.__version__)"
+          python -c "import yaml; print('yaml OK', getattr(yaml,'__version__','?'))" || echo "yaml not installed"
 
       - name: Run PLAN generator (no OpenAI)
         if: ${{ inputs.action == 'PLAN' }}
@@ -130,4 +130,14 @@ jobs:
           ACTION: ${{ inputs.action }}
           PROMPT: ${{ inputs.prompt }}
         run: |
+          mkdir -p product/plans
           python agent/main.py
+
+      - name: Upload PLAN artifact
+        if: ${{ inputs.action == 'PLAN' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vancelian-plan-${{ inputs.target_env }}
+          path: product/plans/*.md
+          if-no-files-found: error
+          retention-days: 14
