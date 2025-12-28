@@ -1,0 +1,46 @@
+name: Agent (plan / qa)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "dev | staging | prod"
+        required: true
+        default: "staging"
+        type: choice
+        options: [dev, staging, prod]
+      action:
+        description: "PLAN | QA"
+        required: true
+        default: "PLAN"
+        type: choice
+        options: [PLAN, QA]
+      prompt:
+        description: "What do you want the agent to do?"
+        required: false
+        default: ""
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install agent deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r agent/requirements.txt
+
+      - name: Run agent
+        env:
+          TARGET_ENV: ${{ inputs.target_env }}
+          ACTION: ${{ inputs.action }}
+          PROMPT: ${{ inputs.prompt }}
+          # plus tard: OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python agent/main.py
