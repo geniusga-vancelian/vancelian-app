@@ -1,14 +1,7 @@
-name: Deploy Ganopa Bot (ECS Fargate)
+name: Deploy Ganopa Bot (ECS Fargate - DEV)
 
 on:
   workflow_dispatch:
-    inputs:
-      target_env:
-        description: "staging | prod"
-        required: true
-        default: "staging"
-        type: choice
-        options: [staging, prod]
 
 permissions:
   contents: read
@@ -17,6 +10,12 @@ permissions:
 env:
   AWS_REGION: me-central-1
   AWS_ACCOUNT_ID: "411714852748"
+
+  # ✅ DEV (tes vrais noms AWS)
+  CLUSTER: vancelian-dev-api-cluster
+  SERVICE: vancelian-dev-api-svc
+
+  # ✅ ECR repo (mets le bon si tu en as déjà un)
   ECR_REPO_NAME: ganopa-bot
 
 jobs:
@@ -32,52 +31,22 @@ jobs:
           role-to-assume: arn:aws:iam::411714852748:role/GitHubDeployRole
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Resolve env -> ECS/ECR names
+      - name: Resolve image uri
         shell: bash
         run: |
           set -euo pipefail
-
-          case "${{ inputs.target_env }}" in
-            staging)
-              CLUSTER="vancelian-staging-api-cluster"
-              SERVICE="ganopa-staging-bot-svc"
-              ;;
-            prod)
-              CLUSTER="vancelian-prod-api-cluster"
-              SERVICE="ganopa-prod-bot-svc"
-              ;;
-            *)
-              echo "Unknown env" >&2; exit 1;;
-          esac
-
           IMAGE_TAG="${GITHUB_SHA}"
           IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}"
-
           {
-            echo "CLUSTER=${CLUSTER}"
-            echo "SERVICE=${SERVICE}"
             echo "IMAGE_TAG=${IMAGE_TAG}"
             echo "IMAGE_URI=${IMAGE_URI}"
           } >> "$GITHUB_ENV"
+          echo "IMAGE_URI=${IMAGE_URI}"
 
-          echo "Resolved:"
-          echo "  CLUSTER=${CLUSTER}"
-          echo "  SERVICE=${SERVICE}"
-          echo "  IMAGE_URI=${IMAGE_URI}"
-
-      - name: Sanity check - does ECS service exist?
+      - name: Sanity check - ECS service exists
         shell: bash
         run: |
           set -euo pipefail
-
-          echo "Listing services in cluster (first 50):"
-          aws ecs list-services \
-            --region "$AWS_REGION" \
-            --cluster "$CLUSTER" \
-            --max-results 50 \
-            --output json
-
-          echo "Describing service:"
           aws ecs describe-services \
             --region "$AWS_REGION" \
             --cluster "$CLUSTER" \
@@ -92,19 +61,15 @@ jobs:
           )
           if [[ "$FAILURES_COUNT" != "0" ]]; then
             echo "❌ ECS service not found: $SERVICE in cluster $CLUSTER"
-            echo "Failures:"
             cat svc.json
             exit 1
           fi
-
           echo "✅ ECS service exists."
 
       - name: Ensure ECR repository exists
         shell: bash
         run: |
           set -euo pipefail
-          echo "Checking ECR repo: ${ECR_REPO_NAME}"
-
           if aws ecr describe-repositories \
               --region "$AWS_REGION" \
               --repository-names "$ECR_REPO_NAME" >/dev/null 2>&1; then
@@ -122,19 +87,17 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push Docker image (ganopa-bot)
+      - name: Build & push Docker image
         shell: bash
         run: |
           set -euo pipefail
-          : "${IMAGE_URI:?Missing IMAGE_URI}"
           docker build -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile services/ganopa-bot
           docker push "$IMAGE_URI"
 
-      - name: Fetch and validate task definition ARN
+      - name: Fetch current task definition ARN
         shell: bash
         run: |
           set -euo pipefail
-
           TASKDEF_ARN=$(aws ecs describe-services \
             --region "$AWS_REGION" \
             --cluster "$CLUSTER" \
@@ -142,27 +105,8 @@ jobs:
             --query "services[0].taskDefinition" \
             --output text)
 
-          echo "Raw TASKDEF_ARN = '$TASKDEF_ARN'"
-
-          if [[ -z "$TASKDEF_ARN" || "$TASKDEF_ARN" == "None" || "$TASKDEF_ARN" == "null" ]]; then
-            echo "❌ ECS service returned an empty task definition ARN"
-            exit 1
-          fi
-
-          # Validate it is describable (prevents the exact error you got)
-          if ! aws ecs describe-task-definition \
-            --region "$AWS_REGION" \
-            --task-definition "$TASKDEF_ARN" \
-            >/dev/null 2>&1; then
-            echo "❌ Task definition ARN is NOT describable (invalid/deleted/missing revision):"
-            echo "   $TASKDEF_ARN"
-            echo ""
-            echo "➡️ Fix once in AWS Console: ECS -> Service -> Update service -> pick a valid task definition -> Deploy"
-            exit 1
-          fi
-
-          echo "✅ Task definition is valid"
           echo "TASKDEF_ARN=$TASKDEF_ARN" >> $GITHUB_ENV
+          echo "TASKDEF_ARN=$TASKDEF_ARN"
 
       - name: Download task definition JSON
         shell: bash
@@ -174,18 +118,16 @@ jobs:
             --query "taskDefinition" \
             --output json > taskdef.json
 
-      - name: Patch task definition image
+      - name: Patch task definition image (container api)
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
-          import os
 
           td = json.loads(Path("taskdef.json").read_text())
 
-          # Remove fields not allowed in register-task-definition payload
           for k in [
             "taskDefinitionArn","revision","status","requiresAttributes","compatibilities",
             "registeredAt","registeredBy"
@@ -194,12 +136,18 @@ jobs:
 
           image_uri = os.environ["IMAGE_URI"]
 
-          # Patch ALL container images (more robust than assuming index 0)
+          # ⚠️ on patch uniquement le container nommé "api" (comme dans ton ECS)
+          patched = False
           for c in td.get("containerDefinitions", []):
-            c["image"] = image_uri
+            if c.get("name") == "api":
+              c["image"] = image_uri
+              patched = True
+
+          if not patched:
+            raise SystemExit("Container 'api' not found in task definition. Check container name in ECS.")
 
           Path("taskdef_patched.json").write_text(json.dumps(td, indent=2))
-          print("Patched image for all containers:", image_uri)
+          print("Patched image:", image_uri)
           PY
 
       - name: Register new task definition revision
@@ -212,7 +160,7 @@ jobs:
             --query "taskDefinition.taskDefinitionArn" \
             --output text)
           echo "NEW_TASKDEF_ARN=$NEW_TASKDEF_ARN" >> $GITHUB_ENV
-          echo "✅ New task definition: $NEW_TASKDEF_ARN"
+          echo "NEW_TASKDEF_ARN=$NEW_TASKDEF_ARN"
 
       - name: Update ECS service
         shell: bash
@@ -242,5 +190,5 @@ jobs:
             --region "$AWS_REGION" \
             --cluster "$CLUSTER" \
             --services "$SERVICE" \
-            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition,status:status,deployments:deployments}" \
+            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition,status:status}" \
             --output json
