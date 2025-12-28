@@ -19,8 +19,9 @@ env:
   AWS_ACCOUNT_ID: "411714852748"
   ECR_REPO_NAME: ganopa-bot
 
-  # IMPORTANT: sur ton screenshot, le container s'appelle "api"
-  CONTAINER_NAME: api
+  # IMPORTANT: le nom du container dans la Task Definition Ganopa
+  # (à corriger: ce n'est pas "api" ici)
+  CONTAINER_NAME: ganopa-bot
 
 jobs:
   deploy:
@@ -42,16 +43,19 @@ jobs:
 
           case "${{ inputs.target_env }}" in
             dev)
+              # Ganopa DEV
               CLUSTER="vancelian-dev-api-cluster"
-              SERVICE="vancelian-dev-api-svc"
+              SERVICE="ganopa-dev-bot-svc"
               ;;
             staging)
+              # Ganopa STAGING (à adapter si tes noms diffèrent)
               CLUSTER="vancelian-staging-api-cluster"
-              SERVICE="vancelian-staging-api-svc"
+              SERVICE="ganopa-staging-bot-svc"
               ;;
             prod)
+              # Ganopa PROD (à adapter si tes noms diffèrent)
               CLUSTER="vancelian-prod-api-cluster"
-              SERVICE="vancelian-prod-api-svc"
+              SERVICE="ganopa-prod-bot-svc"
               ;;
             *)
               echo "Unknown env" >&2; exit 1;;
