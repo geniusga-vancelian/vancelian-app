@@ -1,0 +1,191 @@
+name: Ops (one-click)
+
+on:
+  workflow_dispatch:
+    inputs:
+      env_name:
+        description: "Environment"
+        type: choice
+        required: true
+        default: prod
+        options:
+          - dev
+          - staging
+          - prod
+      action:
+        description: "Action"
+        type: choice
+        required: true
+        default: status
+        options:
+          - status
+          - restart
+          - rollback
+          - scale
+          - target-health
+          - events
+      desired_count:
+        description: "Desired count (only for action=scale)"
+        required: false
+        default: "1"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: me-central-1
+
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::411714852748:role/GitHubDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve env -> cluster/service/alb/tg
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ENV_NAME="${{ inputs.env_name }}"
+
+          case "$ENV_NAME" in
+            dev)
+              CLUSTER="vancelian-dev-api-cluster"
+              SERVICE="vancelian-dev-api-svc"
+              ALB_NAME="vancelian-dev-api-alb"
+              TG_NAME="vancelian-dev-api-tg"
+              TASK_FAMILY="vancelian-dev-api-task"
+              ;;
+            staging)
+              CLUSTER="vancelian-staging-api-cluster"
+              SERVICE="vancelian-staging-api-svc"
+              ALB_NAME="vancelian-staging-api-alb"
+              TG_NAME="vancelian-staging-api-tg"
+              TASK_FAMILY="vancelian-staging-api-task"
+              ;;
+            prod)
+              CLUSTER="vancelian-prod-api-cluster"
+              SERVICE="vancelian-prod-api-svc"
+              ALB_NAME="vancelian-prod-api-alb"
+              TG_NAME="vancelian-prod-api-tg"
+              TASK_FAMILY="vancelian-prod-api-task"
+              ;;
+            *)
+              echo "Unknown env_name=$ENV_NAME" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "CLUSTER=$CLUSTER" >> $GITHUB_ENV
+          echo "SERVICE=$SERVICE" >> $GITHUB_ENV
+          echo "ALB_NAME=$ALB_NAME" >> $GITHUB_ENV
+          echo "TG_NAME=$TG_NAME" >> $GITHUB_ENV
+          echo "TASK_FAMILY=$TASK_FAMILY" >> $GITHUB_ENV
+
+          echo "Resolved:"
+          echo "- CLUSTER=$CLUSTER"
+          echo "- SERVICE=$SERVICE"
+          echo "- ALB_NAME=$ALB_NAME"
+          echo "- TG_NAME=$TG_NAME"
+          echo "- TASK_FAMILY=$TASK_FAMILY"
+
+      - name: Action - STATUS
+        if: ${{ inputs.action == 'status' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== ECS service status ==="
+          aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query "services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDef:taskDefinition,deployments:deployments[*].{status:status,rollout:rolloutState,taskDef:taskDefinition,desired:desiredCount,running:runningCount}}" \
+            --output json
+
+      - name: Action - EVENTS
+        if: ${{ inputs.action == 'events' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Last ECS events (latest first) ==="
+          aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query "services[0].events[0:15].message" \
+            --output json
+
+      - name: Action - TARGET HEALTH
+        if: ${{ inputs.action == 'target-health' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Target group health ==="
+          TG_ARN=$(aws elbv2 describe-target-groups --region "$AWS_REGION" --names "$TG_NAME" --query "TargetGroups[0].TargetGroupArn" --output text)
+          aws elbv2 describe-target-health --region "$AWS_REGION" --target-group-arn "$TG_ARN" --output json
+
+      - name: Action - RESTART (force new deployment)
+        if: ${{ inputs.action == 'restart' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Forcing new deployment ==="
+          aws ecs update-service \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --force-new-deployment \
+            --output json
+
+      - name: Action - SCALE
+        if: ${{ inputs.action == 'scale' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DESIRED="${{ inputs.desired_count }}"
+          if ! [[ "$DESIRED" =~ ^[0-9]+$ ]]; then
+            echo "desired_count must be an integer" >&2
+            exit 1
+          fi
+          echo "=== Scaling service to desiredCount=$DESIRED ==="
+          aws ecs update-service \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --desired-count "$DESIRED" \
+            --output json
+
+      - name: Action - ROLLBACK (previous task definition)
+        if: ${{ inputs.action == 'rollback' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Finding previous task definition for family: $TASK_FAMILY ==="
+          # Returns newest first; take 2nd as "previous"
+          PREV_TD=$(aws ecs list-task-definitions \
+            --region "$AWS_REGION" \
+            --family-prefix "$TASK_FAMILY" \
+            --sort DESC \
+            --max-items 2 \
+            --query "taskDefinitionArns[1]" \
+            --output text)
+
+          if [[ -z "$PREV_TD" || "$PREV_TD" == "None" ]]; then
+            echo "No previous task definition found to rollback to." >&2
+            exit 1
+          fi
+
+          echo "Rolling back to: $PREV_TD"
+          aws ecs update-service \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "$PREV_TD" \
+            --output json
