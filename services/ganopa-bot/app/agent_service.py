@@ -279,9 +279,26 @@ def format_reply(raw_reply: str, meta: Dict[str, Any]) -> str:
     Returns:
         Formatted reply with prefix if needed
     """
-    if meta.get("fresh_context", False):
-        docs_hash = meta.get("docs_hash", "unknown")
-        prefix = f"J'ai bien relu toute la doc (version: {docs_hash}), je suis prêt à répondre.\n\n"
+    fresh_context = meta.get("fresh_context", False)
+    docs_hash = meta.get("docs_hash", "unknown")
+    docs_included = meta.get("docs_included", False)
+    
+    # Log for debugging
+    logger.info(
+        "format_reply",
+        extra={
+            "fresh_context": fresh_context,
+            "docs_hash": docs_hash,
+            "docs_included": docs_included,
+        },
+    )
+    
+    if fresh_context:
+        if docs_hash != "no-docs" and docs_included:
+            prefix = f"J'ai bien relu toute la doc (version: {docs_hash}), je suis prêt à répondre.\n\n"
+        else:
+            # Doc not loaded, but fresh context - still add prefix but mention it
+            prefix = f"Je suis prêt à répondre (doc non disponible: {docs_hash}).\n\n"
         return prefix + raw_reply
     
     return raw_reply
