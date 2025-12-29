@@ -34,6 +34,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -136,6 +139,15 @@ jobs:
         run: |
           set -euo pipefail
           
+          # Debug: Show current Git state
+          echo "🔍 Git Debug Info:"
+          echo "  GITHUB_SHA: ${GITHUB_SHA}"
+          echo "  Current commit: $(git rev-parse HEAD)"
+          echo "  Current branch: $(git branch --show-current)"
+          echo "  Git log -3:"
+          git log --oneline -3
+          echo ""
+          
           # Verify that Python files exist before building
           echo "🔍 Verifying Python files exist..."
           ls -la services/ganopa-bot/app/
@@ -145,8 +157,19 @@ jobs:
           test -f services/ganopa-bot/app/ai_prompt.py || (echo "❌ ai_prompt.py missing!" && exit 1)
           echo "✅ All Python files verified"
           
+          # Verify we're on the right commit
+          if [ "$(git rev-parse HEAD)" != "${GITHUB_SHA}" ]; then
+            echo "⚠️  WARNING: Current commit does not match GITHUB_SHA!"
+            echo "   Current: $(git rev-parse HEAD)"
+            echo "   Expected: ${GITHUB_SHA}"
+            echo "   Checking out correct commit..."
+            git checkout "${GITHUB_SHA}"
+          fi
+          
           # Build without cache to ensure latest code is included
           echo "🔨 Building Docker image..."
+          echo "   Image URI: $IMAGE_URI"
+          echo "   Git SHA: ${GITHUB_SHA}"
           docker build --no-cache -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile services/ganopa-bot
           
           # Verify files are in the image
@@ -159,6 +182,7 @@ jobs:
           docker push "$IMAGE_URI"
           echo "✅ Image built and pushed: $IMAGE_URI"
           echo "✅ Git SHA: ${GITHUB_SHA}"
+          echo "✅ Image tag should be: ${GITHUB_SHA}"
 
       - name: Fetch current task definition ARN
         shell: bash
