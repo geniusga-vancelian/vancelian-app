@@ -63,8 +63,10 @@ def build_messages(
             "memory_miss",
             extra={
                 "chat_id": chat_id,
+                "docs_dir": docs_dir,
                 "docs_hash": docs_hash,
                 "docs_length": len(docs_text),
+                "docs_loaded": bool(docs_text),
             },
         )
     else:
