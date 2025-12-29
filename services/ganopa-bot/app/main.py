@@ -10,6 +10,8 @@ import logging
 import os
 import socket
 import time
+import uuid
+from collections import OrderedDict
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -40,6 +42,47 @@ try:
     HOSTNAME = socket.gethostname()
 except Exception:
     HOSTNAME = "unknown"
+
+# -------------------------------------------------
+# Deduplication Cache (in-memory, 5 minutes TTL)
+# -------------------------------------------------
+
+# Simple in-memory cache for update_id deduplication
+# Format: {update_id: timestamp}
+_update_cache: OrderedDict[int, float] = OrderedDict()
+_cache_ttl = 300  # 5 minutes in seconds
+_cache_max_size = 10000  # Prevent unbounded growth
+
+
+def _is_duplicate_update(update_id: int) -> bool:
+    """
+    Check if an update_id has been processed recently.
+    Returns True if duplicate, False otherwise.
+    Also cleans old entries.
+    """
+    current_time = time.time()
+    
+    # Clean old entries (older than TTL)
+    cutoff_time = current_time - _cache_ttl
+    keys_to_remove = [
+        uid for uid, ts in _update_cache.items() if ts < cutoff_time
+    ]
+    for uid in keys_to_remove:
+        _update_cache.pop(uid, None)
+    
+    # Check if update_id exists
+    if update_id in _update_cache:
+        return True
+    
+    # Add to cache
+    _update_cache[update_id] = current_time
+    
+    # Prevent unbounded growth (remove oldest if needed)
+    if len(_update_cache) > _cache_max_size:
+        _update_cache.popitem(last=False)  # Remove oldest
+    
+    return False
+
 
 # -------------------------------------------------
 # App & logging
@@ -149,47 +192,63 @@ async def telegram_webhook(
     Receives updates from Telegram, responds immediately with 200 OK,
     and processes the update asynchronously in background.
     """
-    # Log webhook reception with path and secret status
+    # Generate correlation_id (use update_id if available, otherwise UUID)
+    correlation_id = str(uuid.uuid4())[:8]
+    
+    # Log webhook reception
     path = str(request.url.path)
+    logger.info(
+        "webhook_received",
+        extra={
+            "correlation_id": correlation_id,
+            "path": path,
+        },
+    )
+    
+    # Verify webhook secret
     header_present, header_ok = _verify_webhook_secret(x_telegram_bot_api_secret_token)
+    logger.info(
+        "secret_ok",
+        extra={
+            "correlation_id": correlation_id,
+            "header_present": header_present,
+            "secret_ok": header_ok,
+        },
+    )
+    
+    if not header_ok:
+        raise HTTPException(status_code=401, detail="Invalid Telegram secret token")
     
     # Parse JSON payload
     try:
         update: Dict[str, Any] = await request.json()
     except Exception as e:
         logger.error(
-            "telegram_webhook_invalid_json",
+            "update_parse_error",
             extra={
+                "correlation_id": correlation_id,
                 "path": path,
                 "error": str(e),
-                "header_secret_present": header_present,
-                "header_secret_ok": header_ok,
             },
         )
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
+    # Extract update_id and use it as correlation_id if available
     update_id = update.get("update_id")
-    message = update.get("message") or update.get("edited_message")
-    chat_id = message.get("chat", {}).get("id") if message else None
-    text = (message.get("text") or "").strip() if message else ""
-
-    # Log webhook reception with structured data
+    if update_id is not None:
+        correlation_id = f"upd-{update_id}"
+    
     logger.info(
-        "telegram_webhook_post",
+        "update_parsed",
         extra={
+            "correlation_id": correlation_id,
             "update_id": update_id,
-            "chat_id": chat_id,
-            "text_len": len(text),
-            "text_preview": text[:50] if text else "",
-            "path": path,
-            "header_secret_present": header_present,
-            "header_secret_ok": header_ok,
         },
     )
 
     # Schedule background processing
     # Telegram requires immediate 200 OK response (within 5 seconds)
-    background_tasks.add_task(process_telegram_update_safe, update)
+    background_tasks.add_task(process_telegram_update_safe, update, correlation_id)
 
     # Return immediate response to Telegram
     return JSONResponse({"ok": True})
@@ -202,6 +261,7 @@ async def telegram_webhook(
 def call_openai(
     text: str,
     *,
+    correlation_id: str,
     update_id: Optional[int] = None,
     chat_id: Optional[int] = None,
 ) -> str:
@@ -210,6 +270,7 @@ def call_openai(
     
     Args:
         text: User message text
+        correlation_id: Correlation ID for logging
         update_id: Telegram update ID for logging
         chat_id: Telegram chat ID for logging
     
@@ -224,16 +285,22 @@ def call_openai(
     # Check API key before making request
     if not OPENAI_API_KEY:
         logger.error(
-            "openai_missing_api_key",
-            extra={"update_id": update_id, "chat_id": chat_id},
+            "openai_error",
+            extra={
+                "correlation_id": correlation_id,
+                "update_id": update_id,
+                "chat_id": chat_id,
+                "error": "missing_api_key",
+            },
         )
         return "⚠️ OPENAI_API_KEY manquante (backend config)."
 
     # Log before OpenAI call
     start_time = time.time()
     logger.info(
-        "openai_request_start",
+        "openai_called",
         extra={
+            "correlation_id": correlation_id,
             "update_id": update_id,
             "chat_id": chat_id,
             "model": OPENAI_MODEL,
@@ -264,7 +331,7 @@ def call_openai(
     }
 
     try:
-        with httpx.Client(timeout=20.0) as client:  # Timeout 20s as requested
+        with httpx.Client(timeout=20.0) as client:  # Timeout 20s
             response = client.post(
                 "https://api.openai.com/v1/chat/completions",
                 json=payload,
@@ -273,22 +340,12 @@ def call_openai(
 
             latency_ms = int((time.time() - start_time) * 1000)
 
-            # Log HTTP response
-            logger.info(
-                "openai_http_response",
-                extra={
-                    "update_id": update_id,
-                    "chat_id": chat_id,
-                    "status_code": response.status_code,
-                    "latency_ms": latency_ms,
-                },
-            )
-
             if response.status_code >= 400:
                 error_body = response.text[:500]
                 logger.error(
-                    "openai_request_failed",
+                    "openai_error",
                     extra={
+                        "correlation_id": correlation_id,
                         "update_id": update_id,
                         "chat_id": chat_id,
                         "status_code": response.status_code,
@@ -312,8 +369,13 @@ def call_openai(
             choices = data.get("choices", [])
             if not choices:
                 logger.warning(
-                    "openai_empty_choices",
-                    extra={"update_id": update_id, "chat_id": chat_id},
+                    "openai_error",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "update_id": update_id,
+                        "chat_id": chat_id,
+                        "error": "empty_choices",
+                    },
                 )
                 return "⚠️ Réponse vide de l'API. Veuillez reformuler votre question."
 
@@ -326,8 +388,13 @@ def call_openai(
 
             if not content:
                 logger.warning(
-                    "openai_empty_content",
-                    extra={"update_id": update_id, "chat_id": chat_id},
+                    "openai_error",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "update_id": update_id,
+                        "chat_id": chat_id,
+                        "error": "empty_content",
+                    },
                 )
                 return "⚠️ Je n'ai pas pu générer de réponse. Pouvez-vous reformuler votre question ?"
 
@@ -335,10 +402,11 @@ def call_openai(
             response_len = len(content)
             latency_ms = int((time.time() - start_time) * 1000)
             
-            # Log successful OpenAI response with all details
+            # Log successful OpenAI response
             logger.info(
-                "openai_request_success",
+                "openai_ok",
                 extra={
+                    "correlation_id": correlation_id,
                     "update_id": update_id,
                     "chat_id": chat_id,
                     "model": OPENAI_MODEL,
@@ -355,8 +423,9 @@ def call_openai(
     except httpx.TimeoutException:
         latency_ms = int((time.time() - start_time) * 1000)
         logger.error(
-            "openai_request_failed",
+            "openai_error",
             extra={
+                "correlation_id": correlation_id,
                 "update_id": update_id,
                 "chat_id": chat_id,
                 "error": "timeout",
@@ -369,8 +438,9 @@ def call_openai(
     except httpx.NetworkError as e:
         latency_ms = int((time.time() - start_time) * 1000)
         logger.error(
-            "openai_request_failed",
+            "openai_error",
             extra={
+                "correlation_id": correlation_id,
                 "update_id": update_id,
                 "chat_id": chat_id,
                 "error": "network_error",
@@ -384,8 +454,9 @@ def call_openai(
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
         logger.exception(
-            "openai_request_failed",
+            "openai_error",
             extra={
+                "correlation_id": correlation_id,
                 "update_id": update_id,
                 "chat_id": chat_id,
                 "error": "unexpected_error",
@@ -401,17 +472,18 @@ def call_openai(
 # Message Processing
 # -------------------------------------------------
 
-def process_telegram_update_safe(update: Dict[str, Any]) -> None:
+def process_telegram_update_safe(update: Dict[str, Any], correlation_id: str) -> None:
     """
     Safe wrapper for processing Telegram updates.
     Catches all exceptions to prevent background task crashes.
     """
     try:
-        process_telegram_update(update)
+        process_telegram_update(update, correlation_id)
     except Exception as e:
         logger.exception(
             "telegram_update_processing_failed",
             extra={
+                "correlation_id": correlation_id,
                 "update_id": update.get("update_id"),
                 "error": str(e),
                 "error_type": type(e).__name__,
@@ -419,18 +491,47 @@ def process_telegram_update_safe(update: Dict[str, Any]) -> None:
         )
 
 
-def process_telegram_update(update: Dict[str, Any]) -> None:
+def process_telegram_update(update: Dict[str, Any], correlation_id: str) -> None:
     """
     Process a Telegram update and send AI-generated response.
     
     Extracts message, calls OpenAI, and sends response to user.
     NEVER echoes user input - always uses OpenAI or returns explicit error.
     """
+    update_id = update.get("update_id")
+    
+    # Deduplication: skip if already processed
+    if update_id is not None and _is_duplicate_update(update_id):
+        logger.info(
+            "update_duplicate",
+            extra={
+                "correlation_id": correlation_id,
+                "update_id": update_id,
+            },
+        )
+        return
+    
     message = update.get("message") or update.get("edited_message")
     if not message:
         logger.info(
-            "telegram_update_no_message",
-            extra={"update_id": update.get("update_id")},
+            "update_no_message",
+            extra={
+                "correlation_id": correlation_id,
+                "update_id": update_id,
+            },
+        )
+        return
+
+    # Anti-loop guard: ignore messages from bots
+    from_user = message.get("from", {})
+    if from_user.get("is_bot", False):
+        logger.info(
+            "update_ignored_bot",
+            extra={
+                "correlation_id": correlation_id,
+                "update_id": update_id,
+                "from_user_id": from_user.get("id"),
+            },
         )
         return
 
@@ -438,11 +539,12 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
     chat_id = chat.get("id")
     text = (message.get("text") or "").strip()
 
-    # Log extraction
+    # Log message extraction
     logger.info(
-        "telegram_message_extracted",
+        "message_extracted",
         extra={
-            "update_id": update.get("update_id"),
+            "correlation_id": correlation_id,
+            "update_id": update_id,
             "chat_id": chat_id,
             "text_len": len(text),
             "text_preview": text[:50] if text else "",
@@ -451,8 +553,11 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
 
     if not chat_id:
         logger.info(
-            "telegram_message_missing_chat_id",
-            extra={"update_id": update.get("update_id")},
+            "message_missing_chat_id",
+            extra={
+                "correlation_id": correlation_id,
+                "update_id": update_id,
+            },
         )
         return
 
@@ -462,7 +567,8 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
         logger.info(
             "signature_test_response",
             extra={
-                "update_id": update.get("update_id"),
+                "correlation_id": correlation_id,
+                "update_id": update_id,
                 "chat_id": chat_id,
                 "build_id": BUILD_ID,
                 "version": VERSION,
@@ -473,7 +579,8 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
         # NEVER echo user input - always use OpenAI
         reply = call_openai(
             text,
-            update_id=update.get("update_id"),
+            correlation_id=correlation_id,
+            update_id=update_id,
             chat_id=chat_id,
         )
 
@@ -481,7 +588,8 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
     logger.info(
         "telegram_send_start",
         extra={
-            "update_id": update.get("update_id"),
+            "correlation_id": correlation_id,
+            "update_id": update_id,
             "chat_id": chat_id,
             "reply_len": len(reply),
             "reply_preview": reply[:50] if reply else "",
@@ -492,7 +600,8 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
     send_telegram_message(
         chat_id,
         reply,
-        update_id=update.get("update_id"),
+        correlation_id=correlation_id,
+        update_id=update_id,
     )
 
 
@@ -500,6 +609,7 @@ def send_telegram_message(
     chat_id: int,
     text: str,
     *,
+    correlation_id: str,
     update_id: Optional[int] = None,
 ) -> None:
     """
@@ -508,6 +618,7 @@ def send_telegram_message(
     Args:
         chat_id: Telegram chat ID
         text: Message text to send
+        correlation_id: Correlation ID for logging
         update_id: Telegram update ID for logging
     """
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -520,8 +631,9 @@ def send_telegram_message(
             if response.status_code >= 400:
                 error_body = response.text[:500]
                 logger.error(
-                    "telegram_send_failed",
+                    "telegram_send_error",
                     extra={
+                        "correlation_id": correlation_id,
                         "update_id": update_id,
                         "chat_id": chat_id,
                         "status_code": response.status_code,
@@ -535,8 +647,9 @@ def send_telegram_message(
             response.raise_for_status()
 
             logger.info(
-                "telegram_send_success",
+                "telegram_sent",
                 extra={
+                    "correlation_id": correlation_id,
                     "update_id": update_id,
                     "chat_id": chat_id,
                     "status_code": response.status_code,
@@ -545,8 +658,9 @@ def send_telegram_message(
 
     except httpx.TimeoutException:
         logger.error(
-            "telegram_send_failed",
+            "telegram_send_error",
             extra={
+                "correlation_id": correlation_id,
                 "update_id": update_id,
                 "chat_id": chat_id,
                 "error": "timeout",
@@ -556,8 +670,9 @@ def send_telegram_message(
 
     except Exception as e:
         logger.exception(
-            "telegram_send_failed",
+            "telegram_send_error",
             extra={
+                "correlation_id": correlation_id,
                 "update_id": update_id,
                 "chat_id": chat_id,
                 "error": str(e),

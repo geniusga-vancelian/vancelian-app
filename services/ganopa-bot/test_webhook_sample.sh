@@ -13,6 +13,7 @@ echo "============================"
 echo ""
 echo "URL: ${BASE_URL}/telegram/webhook"
 echo "Chat ID: ${CHAT_ID}"
+echo "Webhook Secret: ${WEBHOOK_SECRET}"
 echo ""
 
 # Test POST avec payload Telegram sample
@@ -51,12 +52,14 @@ if [ "$HTTP_CODE" = "200" ]; then
         echo "✅ Réponse immédiate OK: {\"ok\": true}"
         echo ""
         echo "⚠️  Vérifiez les logs du serveur pour confirmer:"
-        echo "  - telegram_webhook_post"
-        echo "  - telegram_message_extracted"
-        echo "  - openai_request_start"
-        echo "  - openai_request_success"
+        echo "  - webhook_received"
+        echo "  - secret_ok"
+        echo "  - update_parsed"
+        echo "  - message_extracted"
+        echo "  - openai_called"
+        echo "  - openai_ok (ou openai_error)"
         echo "  - telegram_send_start"
-        echo "  - telegram_send_success"
+        echo "  - telegram_sent"
     else
         echo "❌ Réponse inattendue: ${BODY}"
         exit 1
@@ -66,4 +69,3 @@ else
     echo "Body: ${BODY}"
     exit 1
 fi
-
