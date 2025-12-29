@@ -53,12 +53,11 @@ def build_messages(
     memory = memory_store.get(chat_id)
     fresh_context = memory is None
     
-    # Load docs if fresh context
-    docs_text = ""
-    docs_hash = "no-docs"
+    # Always load docs (they are cached, so it's cheap)
+    # This ensures the doc is always available in the system prompt
+    docs_text, docs_hash = load_docs(docs_dir, refresh_seconds=docs_refresh_seconds)
     
     if fresh_context:
-        docs_text, docs_hash = load_docs(docs_dir, refresh_seconds=docs_refresh_seconds)
         logger.info(
             "memory_miss",
             extra={
@@ -75,6 +74,8 @@ def build_messages(
             extra={
                 "chat_id": chat_id,
                 "message_count": len(memory),
+                "docs_hash": docs_hash,
+                "docs_loaded": bool(docs_text),
             },
         )
     
@@ -86,11 +87,30 @@ def build_messages(
         "Be concise and helpful. Keep responses under 200 words.",
     ]
     
-    # Add documentation context if available
+    # Always add documentation context if available (even if memory exists)
+    # This ensures the bot always has access to the documentation
     if docs_text:
         system_prompt_parts.append(
-            "\n\nUse the documentation below as source of truth:\n\n"
+            "\n\nUse the documentation below as source of truth. Always refer to it when answering questions:\n\n"
             f"{docs_text}"
+        )
+        logger.debug(
+            "docs_injected",
+            extra={
+                "chat_id": chat_id,
+                "docs_hash": docs_hash,
+                "docs_length": len(docs_text),
+                "system_prompt_length": len("\n".join(system_prompt_parts)),
+            },
+        )
+    else:
+        logger.warning(
+            "docs_not_loaded",
+            extra={
+                "chat_id": chat_id,
+                "docs_dir": docs_dir,
+                "docs_hash": docs_hash,
+            },
         )
     
     system_prompt = "\n".join(system_prompt_parts)
