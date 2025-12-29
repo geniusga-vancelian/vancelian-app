@@ -69,6 +69,21 @@ def health():
     }
 
 
+@app.get("/version")
+def version():
+    """Endpoint to verify which code version is running."""
+    return {
+        "service": "ganopa-bot",
+        "bot_build_id": BOT_BUILD_ID,
+        "openai_model": OPENAI_MODEL,
+        "has_openai_key": bool(OPENAI_API_KEY),
+        "has_webhook_secret": bool(WEBHOOK_SECRET),
+        "signature_test_mode": BOT_SIGNATURE_TEST,
+        "git_sha": "c78b569",  # Hardcoded for this deployment
+        "ts": datetime.utcnow().isoformat() + "Z",
+    }
+
+
 # -------------------------------------------------
 # Telegram Webhook
 # -------------------------------------------------
