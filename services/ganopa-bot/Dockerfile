@@ -8,7 +8,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # 2) Copy requirements first (for better Docker layer caching)
-COPY requirements.txt .
+COPY services/ganopa-bot/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 3) Copy all Python files from app/ directory

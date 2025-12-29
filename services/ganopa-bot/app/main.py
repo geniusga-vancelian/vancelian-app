@@ -42,10 +42,6 @@ from .agent_service import build_messages, call_openai, format_reply
 from .memory_store import MemoryStore
 from .doc_store import load_docs
 
-# Set VERSION in telegram_handlers module
-from . import telegram_handlers
-telegram_handlers.VERSION = VERSION
-
 # -------------------------------------------------
 # Version Identification
 # -------------------------------------------------
@@ -53,6 +49,10 @@ telegram_handlers.VERSION = VERSION
 # Generate a stable version hash based on service name and build ID
 VERSION_HASH = hashlib.sha256(f"{SERVICE_NAME}-{BUILD_ID}".encode()).hexdigest()[:8]
 VERSION = f"{SERVICE_NAME}-{VERSION_HASH}"
+
+# Set VERSION in telegram_handlers module (after VERSION is defined)
+from . import telegram_handlers
+telegram_handlers.VERSION = VERSION
 
 # Export VERSION for telegram_handlers
 import sys
