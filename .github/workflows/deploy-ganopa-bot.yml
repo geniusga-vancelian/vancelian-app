@@ -254,6 +254,64 @@ jobs:
           echo "NEW_TASKDEF_ARN=$NEW_TASKDEF_ARN" >> "$GITHUB_ENV"
           echo "✅ New task definition: $NEW_TASKDEF_ARN"
 
+      - name: Wait for service to be ACTIVE (if needed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAX_WAIT=300  # 5 minutes
+          ELAPSED=0
+          
+          # Check current service status
+          STATUS=$(aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query 'services[0].status' \
+            --output text 2>/dev/null || echo "UNKNOWN")
+          
+          echo "📊 Current service status: $STATUS"
+          
+          if [ "$STATUS" = "ACTIVE" ]; then
+            echo "✅ Service is already ACTIVE, proceeding..."
+            exit 0
+          fi
+          
+          if [ "$STATUS" = "INACTIVE" ]; then
+            echo "⚠️  Service is INACTIVE. Attempting to activate..."
+            # Try to update service with desired count 1 to activate it
+            aws ecs update-service \
+              --region "$AWS_REGION" \
+              --cluster "$CLUSTER" \
+              --service "$SERVICE" \
+              --desired-count 1 \
+              --task-definition "$NEW_TASKDEF_ARN" \
+              --force-new-deployment >/dev/null 2>&1 || echo "⚠️  Could not activate service automatically"
+          fi
+          
+          # Wait for service to become ACTIVE
+          echo "⏳ Waiting for service to become ACTIVE (max ${MAX_WAIT}s)..."
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STATUS=$(aws ecs describe-services \
+              --region "$AWS_REGION" \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --query 'services[0].status' \
+              --output text 2>/dev/null || echo "UNKNOWN")
+            
+            if [ "$STATUS" = "ACTIVE" ]; then
+              echo "✅ Service is now ACTIVE"
+              exit 0
+            fi
+            
+            echo "⏳ Service status: $STATUS (${ELAPSED}s/${MAX_WAIT}s)..."
+            sleep 10
+            ELAPSED=$((ELAPSED + 10))
+          done
+          
+          echo "⚠️  Service did not become ACTIVE within $MAX_WAIT seconds"
+          echo "📊 Final status: $STATUS"
+          echo "⚠️  Continuing anyway - update-service may still work..."
+
       - name: Update ECS service
         shell: bash
         run: |
