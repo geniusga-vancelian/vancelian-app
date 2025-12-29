@@ -6,6 +6,7 @@ Deployed on AWS ECS Fargate.
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -13,7 +14,21 @@ import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from starlette.responses import JSONResponse
 
-from .config import TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET, OPENAI_API_KEY, OPENAI_MODEL
+from .config import (
+    TELEGRAM_BOT_TOKEN,
+    WEBHOOK_SECRET,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+    BOT_SIGNATURE_TEST,
+)
+
+# -------------------------------------------------
+# Build ID - Generated at startup
+# -------------------------------------------------
+
+# Generate build ID from timestamp (format: YYYYMMDD-HHMMSS)
+_BUILD_TIMESTAMP = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+BOT_BUILD_ID = f"build-{_BUILD_TIMESTAMP}"
 
 # -------------------------------------------------
 # App & logging
@@ -27,13 +42,16 @@ logger = logging.getLogger("ganopa-bot")
 
 app = FastAPI(title="Ganopa Agent Bot")
 
-# Log startup with version identifier
+# Log startup with comprehensive version identifier
 logger.info(
     "ganopa_bot_started",
     extra={
         "service": "ganopa-bot",
-        "version": "v1.0.0-production",
-        "model": OPENAI_MODEL,
+        "bot_build_id": BOT_BUILD_ID,
+        "openai_model": OPENAI_MODEL,
+        "has_openai_key": bool(OPENAI_API_KEY),
+        "has_webhook_secret": bool(WEBHOOK_SECRET),
+        "signature_test_mode": BOT_SIGNATURE_TEST,
     },
 )
 
@@ -176,6 +194,7 @@ def call_openai(
         "Content-Type": "application/json",
     }
 
+    start_time = time.time()
     try:
         with httpx.Client(timeout=30.0) as client:
             response = client.post(
@@ -184,12 +203,15 @@ def call_openai(
                 headers=headers,
             )
 
+            latency_ms = int((time.time() - start_time) * 1000)
+
             logger.info(
                 "openai_http_response",
                 extra={
                     "update_id": update_id,
                     "chat_id": chat_id,
                     "status_code": response.status_code,
+                    "latency_ms": latency_ms,
                 },
             )
 
@@ -202,6 +224,7 @@ def call_openai(
                         "chat_id": chat_id,
                         "status_code": response.status_code,
                         "error_body": error_body,
+                        "latency_ms": latency_ms,
                     },
                 )
 
@@ -239,37 +262,59 @@ def call_openai(
                 return "⚠️ Je n'ai pas pu générer de réponse. Pouvez-vous reformuler votre question ?"
 
             tokens_used = data.get("usage", {}).get("total_tokens", 0)
+            latency_ms = int((time.time() - start_time) * 1000)
+            
             logger.info(
-                "openai_call_success",
+                "openai_request_done",
                 extra={
                     "update_id": update_id,
                     "chat_id": chat_id,
                     "model": OPENAI_MODEL,
                     "response_len": len(content),
+                    "reply_preview": content[:100],
                     "tokens_used": tokens_used,
+                    "latency_ms": latency_ms,
                 },
             )
 
             return content
 
     except httpx.TimeoutException:
+        latency_ms = int((time.time() - start_time) * 1000)
         logger.error(
             "openai_timeout",
-            extra={"update_id": update_id, "chat_id": chat_id},
+            extra={
+                "update_id": update_id,
+                "chat_id": chat_id,
+                "latency_ms": latency_ms,
+            },
         )
         return "⚠️ Délai d'attente dépassé. Veuillez réessayer."
 
     except httpx.NetworkError as e:
+        latency_ms = int((time.time() - start_time) * 1000)
         logger.error(
             "openai_network_error",
-            extra={"update_id": update_id, "chat_id": chat_id, "error": str(e)},
+            extra={
+                "update_id": update_id,
+                "chat_id": chat_id,
+                "error": str(e),
+                "latency_ms": latency_ms,
+            },
         )
         return "⚠️ Problème de connexion. Veuillez réessayer dans quelques instants."
 
     except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
         logger.exception(
-            "openai_unexpected_error",
-            extra={"update_id": update_id, "chat_id": chat_id, "error": str(e)},
+            "openai_request_error",
+            extra={
+                "update_id": update_id,
+                "chat_id": chat_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "latency_ms": latency_ms,
+            },
         )
         return "⚠️ Erreur inattendue. Veuillez réessayer ou contacter le support."
 
@@ -331,13 +376,34 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
         },
     )
 
-    # Call OpenAI to generate response
-    # NEVER echo user input - always use OpenAI
-    reply = call_openai(
-        text,
-        update_id=update.get("update_id"),
-        chat_id=chat_id,
-    )
+    # Signature test mode: if enabled, respond with version test message
+    if BOT_SIGNATURE_TEST:
+        reply = f"✅ VERSION-TEST-123 | {BOT_BUILD_ID}"
+        logger.info(
+            "signature_test_response",
+            extra={
+                "update_id": update.get("update_id"),
+                "chat_id": chat_id,
+                "bot_build_id": BOT_BUILD_ID,
+            },
+        )
+    else:
+        # Normal mode: call OpenAI to generate response
+        # NEVER echo user input - always use OpenAI
+        logger.info(
+            "openai_request_start",
+            extra={
+                "update_id": update.get("update_id"),
+                "chat_id": chat_id,
+                "text_preview": text[:100],
+            },
+        )
+        
+        reply = call_openai(
+            text,
+            update_id=update.get("update_id"),
+            chat_id=chat_id,
+        )
 
     # Send response to Telegram
     send_telegram_message(
@@ -381,7 +447,7 @@ def send_telegram_message(
             if response.status_code >= 400:
                 error_body = response.text[:500]
                 logger.error(
-                    "telegram_send_failed",
+                    "telegram_send_failed_http",
                     extra={
                         "update_id": update_id,
                         "chat_id": chat_id,
@@ -395,7 +461,7 @@ def send_telegram_message(
             response.raise_for_status()
 
             logger.info(
-                "telegram_send_success",
+                "telegram_send_done",
                 extra={
                     "update_id": update_id,
                     "chat_id": chat_id,
