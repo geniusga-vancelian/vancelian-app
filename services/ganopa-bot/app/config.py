@@ -10,6 +10,12 @@ def getenv_required(name: str) -> str:
         raise RuntimeError(f"Missing required env var: {name}")
     return value
 
+# -------------------------------------------------
+# OpenAI
+# -------------------------------------------------
+OPENAI_API_KEY = getenv_required("OPENAI_API_KEY")
+OPENAI_MODEL = (getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
+
 
 # -------------------------------------------------
 # Telegram
