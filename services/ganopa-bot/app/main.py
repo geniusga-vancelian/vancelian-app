@@ -6,21 +6,18 @@ import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from starlette.responses import JSONResponse
 
-from .config import TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET
-
-# -------------------------------------------------
-# App & logging
-# -------------------------------------------------
+from .config import (
+    TELEGRAM_BOT_TOKEN,
+    WEBHOOK_SECRET,
+    VANCELIAN_BACKEND_URL,
+    VANCELIAN_INTERNAL_TOKEN,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ganopa-bot")
 
 app = FastAPI(title="Ganopa Agent Bot")
 
-
-# -------------------------------------------------
-# Healthcheck
-# -------------------------------------------------
 
 @app.get("/health")
 def health():
@@ -31,25 +28,15 @@ def health():
     }
 
 
-# -------------------------------------------------
-# Telegram Webhook
-# -------------------------------------------------
-
 def _verify_webhook_secret(header_value: Optional[str]) -> None:
-    """
-    Vérifie le secret Telegram si activé.
-    Si WEBHOOK_SECRET est vide => pas de blocage.
-    """
     if not WEBHOOK_SECRET:
         return
-
     if not header_value or header_value != WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Invalid Telegram secret token")
 
 
 @app.get("/telegram/webhook")
 def telegram_webhook_get():
-    # Juste pour éviter la "page blanche" au navigateur
     return {"ok": True, "hint": "Telegram webhook expects POST"}
 
 
@@ -57,12 +44,12 @@ def telegram_webhook_get():
 async def telegram_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    x_telegram_bot_api_secret_token: Optional[str] = Header(default=None),
+    x_telegram_bot_api_secret_token: Optional[str] = Header(
+        default=None, alias="X-Telegram-Bot-Api-Secret-Token"
+    ),
 ):
-    # 1) Sécurité optionnelle
     _verify_webhook_secret(x_telegram_bot_api_secret_token)
 
-    # 2) Lecture JSON
     try:
         update: Dict[str, Any] = await request.json()
     except Exception:
@@ -71,21 +58,40 @@ async def telegram_webhook(
     update_id = update.get("update_id")
     logger.info("telegram_update_received", extra={"update_id": update_id})
 
-    # 3) Traitement en background (CRUCIAL)
     background_tasks.add_task(process_telegram_update_safe, update)
 
-    # 4) Réponse IMMÉDIATE à Telegram
     return JSONResponse({"ok": True})
 
 
-# -------------------------------------------------
-# Processing (background)
-# -------------------------------------------------
+def call_vancelian_backend(update: Dict[str, Any], chat_id: int, text: str) -> str:
+    if not VANCELIAN_BACKEND_URL:
+        return f"✅ Reçu: {text}"
+
+    url = f"{VANCELIAN_BACKEND_URL}/internal/ganopa/telegram"
+
+    headers = {"Content-Type": "application/json"}
+    if VANCELIAN_INTERNAL_TOKEN:
+        headers["X-Internal-Token"] = VANCELIAN_INTERNAL_TOKEN
+
+    payload = {
+        "update_id": update.get("update_id"),
+        "chat_id": chat_id,
+        "text": text,
+        "raw": update,
+    }
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.post(url, json=payload, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            return (data.get("reply_text") or "").strip() or "✅ OK"
+    except Exception as e:
+        logger.exception("vancelian_backend_call_failed", extra={"err": str(e)})
+        return "⚠️ Backend Vancelian indisponible."
+
 
 def process_telegram_update_safe(update: Dict[str, Any]) -> None:
-    """
-    Wrapper SAFE : aucune exception ne doit remonter.
-    """
     try:
         process_telegram_update(update)
     except Exception as e:
@@ -107,17 +113,9 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
     if not chat_id:
         return
 
-    # Log minimal
     logger.info("telegram_message", extra={"chat_id": chat_id, "text": text[:120]})
 
-    # Réponse simple (pour valider le pipe)
-    if text == "/start":
-        reply = "👋 Hello, Ganopa Agent est en ligne."
-    elif text:
-        reply = f"✅ Reçu: {text}"
-    else:
-        reply = "✅ Reçu."
-
+    reply = call_vancelian_backend(update, chat_id, text)
     send_telegram_message(chat_id, reply)
 
 
@@ -127,9 +125,13 @@ def send_telegram_message(chat_id: int, text: str) -> None:
 
     try:
         with httpx.Client(timeout=10) as client:
-            client.post(url, json=payload)
+            resp = client.post(url, json=payload)
+            # utile pour debug prod
+            if resp.status_code >= 400:
+                logger.error(
+                    "telegram_send_failed_http",
+                    extra={"chat_id": chat_id, "status": resp.status_code, "body": resp.text[:300]},
+                )
+            resp.raise_for_status()
     except Exception as e:
-        logger.exception(
-            "telegram_send_failed",
-            extra={"chat_id": chat_id, "err": str(e)},
-        )
+        logger.exception("telegram_send_failed", extra={"chat_id": chat_id, "err": str(e)})
