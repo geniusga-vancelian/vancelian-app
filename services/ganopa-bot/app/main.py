@@ -5,7 +5,10 @@ Receives Telegram webhooks and responds using OpenAI.
 Deployed on AWS ECS Fargate.
 """
 
+import hashlib
 import logging
+import os
+import socket
 import time
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
@@ -25,6 +28,20 @@ from .config import (
 )
 
 # -------------------------------------------------
+# Version Identification
+# -------------------------------------------------
+
+# Generate a stable version hash based on service name and build ID
+VERSION_HASH = hashlib.sha256(f"{SERVICE_NAME}-{BUILD_ID}".encode()).hexdigest()[:8]
+VERSION = f"{SERVICE_NAME}-{VERSION_HASH}"
+
+# Get hostname for metadata
+try:
+    HOSTNAME = socket.gethostname()
+except Exception:
+    HOSTNAME = "unknown"
+
+# -------------------------------------------------
 # App & logging
 # -------------------------------------------------
 
@@ -41,7 +58,9 @@ logger.info(
     "ganopa_bot_started",
     extra={
         "service": SERVICE_NAME,
+        "version": VERSION,
         "build_id": BUILD_ID,
+        "hostname": HOSTNAME,
         "openai_model": OPENAI_MODEL,
         "has_openai_key": bool(OPENAI_API_KEY),
         "has_webhook_secret": bool(WEBHOOK_SECRET),
@@ -50,8 +69,9 @@ logger.info(
 
 
 def _add_build_id_header(response: Response) -> Response:
-    """Add X-Ganopa-Build-Id header to response."""
+    """Add X-Ganopa-Build-Id and X-Ganopa-Version headers to response."""
     response.headers["X-Ganopa-Build-Id"] = BUILD_ID
+    response.headers["X-Ganopa-Version"] = VERSION
     return response
 
 
@@ -76,7 +96,9 @@ def meta(response: Response):
     _add_build_id_header(response)
     return {
         "service": SERVICE_NAME,
+        "version": VERSION,
         "build_id": BUILD_ID,
+        "hostname": HOSTNAME,
         "openai_model": OPENAI_MODEL,
         "has_openai_key": bool(OPENAI_API_KEY),
         "has_webhook_secret": bool(WEBHOOK_SECRET),
@@ -127,14 +149,23 @@ async def telegram_webhook(
     Receives updates from Telegram, responds immediately with 200 OK,
     and processes the update asynchronously in background.
     """
-    # Verify webhook secret if configured
+    # Log webhook reception with path and secret status
+    path = str(request.url.path)
     header_present, header_ok = _verify_webhook_secret(x_telegram_bot_api_secret_token)
-
+    
     # Parse JSON payload
     try:
         update: Dict[str, Any] = await request.json()
     except Exception as e:
-        logger.error("telegram_webhook_invalid_json", extra={"error": str(e)})
+        logger.error(
+            "telegram_webhook_invalid_json",
+            extra={
+                "path": path,
+                "error": str(e),
+                "header_secret_present": header_present,
+                "header_secret_ok": header_ok,
+            },
+        )
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     update_id = update.get("update_id")
@@ -149,6 +180,8 @@ async def telegram_webhook(
             "update_id": update_id,
             "chat_id": chat_id,
             "text_len": len(text),
+            "text_preview": text[:50] if text else "",
+            "path": path,
             "header_secret_present": header_present,
             "header_secret_ok": header_ok,
         },
@@ -181,7 +214,7 @@ def call_openai(
         chat_id: Telegram chat ID for logging
     
     Returns:
-        AI-generated response or fallback message on error
+        AI-generated response with 🤖 prefix or fallback message on error
     """
     if not text or not text.strip():
         return "👋 Bonjour ! Comment puis-je vous aider aujourd'hui ?"
@@ -231,7 +264,7 @@ def call_openai(
     }
 
     try:
-        with httpx.Client(timeout=25.0) as client:
+        with httpx.Client(timeout=20.0) as client:  # Timeout 20s as requested
             response = client.post(
                 "https://api.openai.com/v1/chat/completions",
                 json=payload,
@@ -261,6 +294,7 @@ def call_openai(
                         "status_code": response.status_code,
                         "error_body": error_body,
                         "latency_ms": latency_ms,
+                        "error_type": "http_error",
                     },
                 )
 
@@ -298,22 +332,25 @@ def call_openai(
                 return "⚠️ Je n'ai pas pu générer de réponse. Pouvez-vous reformuler votre question ?"
 
             tokens_used = data.get("usage", {}).get("total_tokens", 0)
+            response_len = len(content)
             latency_ms = int((time.time() - start_time) * 1000)
             
-            # Log successful OpenAI response
+            # Log successful OpenAI response with all details
             logger.info(
                 "openai_request_success",
                 extra={
                     "update_id": update_id,
                     "chat_id": chat_id,
                     "model": OPENAI_MODEL,
-                    "response_len": len(content),
+                    "response_len": response_len,
                     "tokens_used": tokens_used,
                     "latency_ms": latency_ms,
+                    "http_status": response.status_code,
                 },
             )
 
-            return content
+            # Add 🤖 prefix to prove it's AI-generated (not echo)
+            return f"🤖 {content}"
 
     except httpx.TimeoutException:
         latency_ms = int((time.time() - start_time) * 1000)
@@ -323,6 +360,7 @@ def call_openai(
                 "update_id": update_id,
                 "chat_id": chat_id,
                 "error": "timeout",
+                "error_type": "timeout",
                 "latency_ms": latency_ms,
             },
         )
@@ -336,6 +374,7 @@ def call_openai(
                 "update_id": update_id,
                 "chat_id": chat_id,
                 "error": "network_error",
+                "error_type": "network_error",
                 "error_detail": str(e)[:200],
                 "latency_ms": latency_ms,
             },
@@ -351,6 +390,7 @@ def call_openai(
                 "chat_id": chat_id,
                 "error": "unexpected_error",
                 "error_type": type(e).__name__,
+                "error_detail": str(e)[:200],
                 "latency_ms": latency_ms,
             },
         )
@@ -384,6 +424,7 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
     Process a Telegram update and send AI-generated response.
     
     Extracts message, calls OpenAI, and sends response to user.
+    NEVER echoes user input - always uses OpenAI or returns explicit error.
     """
     message = update.get("message") or update.get("edited_message")
     if not message:
@@ -397,6 +438,17 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
     chat_id = chat.get("id")
     text = (message.get("text") or "").strip()
 
+    # Log extraction
+    logger.info(
+        "telegram_message_extracted",
+        extra={
+            "update_id": update.get("update_id"),
+            "chat_id": chat_id,
+            "text_len": len(text),
+            "text_preview": text[:50] if text else "",
+        },
+    )
+
     if not chat_id:
         logger.info(
             "telegram_message_missing_chat_id",
@@ -406,13 +458,14 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
 
     # Signature test mode: if enabled, respond with version test message
     if BOT_SIGNATURE_TEST:
-        reply = f"✅ VERSION-TEST-123 | {BUILD_ID}"
+        reply = f"✅ VERSION-TEST-123 | {BUILD_ID} | {VERSION}"
         logger.info(
             "signature_test_response",
             extra={
                 "update_id": update.get("update_id"),
                 "chat_id": chat_id,
                 "build_id": BUILD_ID,
+                "version": VERSION,
             },
         )
     else:
@@ -431,6 +484,7 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
             "update_id": update.get("update_id"),
             "chat_id": chat_id,
             "reply_len": len(reply),
+            "reply_preview": reply[:50] if reply else "",
         },
     )
 
@@ -472,6 +526,7 @@ def send_telegram_message(
                         "chat_id": chat_id,
                         "status_code": response.status_code,
                         "error_body": error_body,
+                        "error_type": "http_error",
                     },
                 )
                 return
@@ -495,6 +550,7 @@ def send_telegram_message(
                 "update_id": update_id,
                 "chat_id": chat_id,
                 "error": "timeout",
+                "error_type": "timeout",
             },
         )
 
