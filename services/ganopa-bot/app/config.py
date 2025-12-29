@@ -11,7 +11,22 @@ def getenv_required(name: str) -> str:
     return value
 
 
+# -------------------------------------------------
+# Telegram
+# -------------------------------------------------
+
 TELEGRAM_BOT_TOKEN = getenv_required("TELEGRAM_BOT_TOKEN")
 
-# Optionnel: si vide => pas de vérification du header Telegram
+# Optionnel : si vide => pas de vérification du header Telegram
 WEBHOOK_SECRET = (getenv("WEBHOOK_SECRET") or "").strip()
+
+
+# -------------------------------------------------
+# Backend Vancelian (connexion bot -> backend)
+# -------------------------------------------------
+
+# Ex: https://api.vancelian.com
+VANCELIAN_BACKEND_URL = (getenv("VANCELIAN_BACKEND_URL") or "").strip().rstrip("/")
+
+# Fortement recommandé (auth interne)
+VANCELIAN_INTERNAL_TOKEN = (getenv("VANCELIAN_INTERNAL_TOKEN") or "").strip()
