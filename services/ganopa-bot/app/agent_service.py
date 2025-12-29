@@ -91,10 +91,13 @@ def build_messages(
     # This ensures the bot always has access to the documentation
     if docs_text:
         system_prompt_parts.append(
-            "\n\nUse the documentation below as source of truth. Always refer to it when answering questions:\n\n"
-            f"{docs_text}"
+            "\n\n=== DOCUMENTATION (SOURCE OF TRUTH) ===\n"
+            "Use the documentation below as source of truth. Always refer to it when answering questions.\n"
+            "If the user asks about architecture, deployment, decisions, or technical details, use this documentation.\n\n"
+            f"{docs_text}\n"
+            "=== END DOCUMENTATION ===\n"
         )
-        logger.debug(
+        logger.info(
             "docs_injected",
             extra={
                 "chat_id": chat_id,
