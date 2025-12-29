@@ -3,6 +3,9 @@ name: Deploy API (dev)
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "services/ganopa-bot/**"
+      - ".github/workflows/deploy-ganopa-bot.yml"
   workflow_dispatch:
 
 permissions:
