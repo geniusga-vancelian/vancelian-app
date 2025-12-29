@@ -290,7 +290,7 @@ def call_openai(messages: List[Dict[str, str]]) -> str:
 
 def format_reply(raw_reply: str, meta: Dict[str, Any]) -> str:
     """
-    Format reply with prefix if fresh context.
+    Format reply with prefix if fresh context and doc status indicator.
     
     Args:
         raw_reply: Raw reply from OpenAI
@@ -313,13 +313,25 @@ def format_reply(raw_reply: str, meta: Dict[str, Any]) -> str:
         },
     )
     
+    # Always add doc status prefix if doc is loaded
+    doc_prefix = ""
+    if docs_hash != "no-docs" and docs_included:
+        doc_prefix = "(doc ok) "
+    elif docs_hash == "no-docs":
+        doc_prefix = "(doc non disponible) "
+    
+    # Add fresh context message if first message
     if fresh_context:
         if docs_hash != "no-docs" and docs_included:
-            prefix = f"J'ai bien relu toute la doc (version: {docs_hash}), je suis prêt à répondre.\n\n"
+            prefix = f"{doc_prefix}J'ai bien relu toute la doc (version: {docs_hash}), je suis prêt à répondre.\n\n"
         else:
             # Doc not loaded, but fresh context - still add prefix but mention it
-            prefix = f"Je suis prêt à répondre (doc non disponible: {docs_hash}).\n\n"
+            prefix = f"{doc_prefix}Je suis prêt à répondre (doc non disponible: {docs_hash}).\n\n"
         return prefix + raw_reply
+    
+    # For subsequent messages, just add doc status prefix
+    if doc_prefix:
+        return doc_prefix + raw_reply
     
     return raw_reply
 
