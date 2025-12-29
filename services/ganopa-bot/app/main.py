@@ -6,18 +6,21 @@ import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from starlette.responses import JSONResponse
 
-from .config import (
-    TELEGRAM_BOT_TOKEN,
-    WEBHOOK_SECRET,
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
-)
+from .config import TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET, OPENAI_API_KEY, OPENAI_MODEL
+
+# -------------------------------------------------
+# App & logging
+# -------------------------------------------------
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ganopa-bot")
 
 app = FastAPI(title="Ganopa Agent Bot")
 
+
+# -------------------------------------------------
+# Healthcheck
+# -------------------------------------------------
 
 @app.get("/health")
 def health():
@@ -27,6 +30,10 @@ def health():
         "ts": datetime.utcnow().isoformat() + "Z",
     }
 
+
+# -------------------------------------------------
+# Telegram Webhook
+# -------------------------------------------------
 
 def _verify_webhook_secret(header_value: Optional[str]) -> None:
     if not WEBHOOK_SECRET:
@@ -58,6 +65,7 @@ async def telegram_webhook(
     update_id = update.get("update_id")
     logger.info("telegram_update_received", extra={"update_id": update_id})
 
+    # traitement async => Telegram doit avoir une réponse immédiate
     background_tasks.add_task(process_telegram_update_safe, update)
     return JSONResponse({"ok": True})
 
@@ -66,15 +74,28 @@ async def telegram_webhook(
 # OpenAI call
 # -------------------------------------------------
 
-def call_openai(chat_id: int, text: str) -> str:
+def call_openai(text: str, *, update_id: Optional[int] = None, chat_id: Optional[int] = None) -> str:
     """
     Réponse IA simple (MVP).
-    Plus tard: mémoire, tools, context, etc.
     """
     if not text:
         return "👋 Envoie-moi un message."
 
-    # Prompt ultra simple
+    # Logs diagnostics (très utiles pour voir si tu es sur la bonne task/version)
+    logger.info(
+        "openai_call_start",
+        extra={
+            "update_id": update_id,
+            "chat_id": chat_id,
+            "model": OPENAI_MODEL,
+            "text_len": len(text),
+        },
+    )
+
+    if not OPENAI_API_KEY:
+        logger.error("openai_missing_api_key", extra={"update_id": update_id, "chat_id": chat_id})
+        return "⚠️ OPENAI_API_KEY manquante côté serveur."
+
     system = (
         "You are Ganopa, a helpful assistant. "
         "Reply in French unless the user writes in another language. "
@@ -97,20 +118,59 @@ def call_openai(chat_id: int, text: str) -> str:
 
     try:
         with httpx.Client(timeout=20) as client:
-            r = client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
+            r = client.post(
+                "https://api.openai.com/v1/chat/completions",
+                json=payload,
+                headers=headers,
+            )
+
+            logger.info(
+                "openai_http_response",
+                extra={
+                    "update_id": update_id,
+                    "chat_id": chat_id,
+                    "status": r.status_code,
+                },
+            )
+
             if r.status_code >= 400:
-                logger.error("openai_http_error", extra={"status": r.status_code, "body": r.text[:300]})
+                logger.error(
+                    "openai_http_error",
+                    extra={
+                        "update_id": update_id,
+                        "chat_id": chat_id,
+                        "status": r.status_code,
+                        "body": r.text[:500],
+                    },
+                )
                 return "⚠️ OpenAI erreur (HTTP)."
+
             data = r.json()
+
             content = (
                 data.get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content", "")
-                    .strip()
+                .get("message", {})
+                .get("content", "")
+                .strip()
             )
+
+            logger.info(
+                "openai_call_ok",
+                extra={
+                    "update_id": update_id,
+                    "chat_id": chat_id,
+                    "model": OPENAI_MODEL,
+                    "reply_len": len(content or ""),
+                },
+            )
+
             return content or "✅ OK"
+
     except Exception as e:
-        logger.exception("openai_call_failed", extra={"err": str(e)})
+        logger.exception(
+            "openai_call_failed",
+            extra={"update_id": update_id, "chat_id": chat_id, "err": str(e)},
+        )
         return "⚠️ OpenAI indisponible."
 
 
@@ -131,6 +191,7 @@ def process_telegram_update_safe(update: Dict[str, Any]) -> None:
 def process_telegram_update(update: Dict[str, Any]) -> None:
     message = update.get("message") or update.get("edited_message")
     if not message:
+        logger.info("telegram_update_no_message", extra={"update_id": update.get("update_id")})
         return
 
     chat = message.get("chat") or {}
@@ -138,26 +199,55 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
     text = (message.get("text") or "").strip()
 
     if not chat_id:
+        logger.info("telegram_message_missing_chat_id", extra={"update_id": update.get("update_id")})
         return
 
-    logger.info("telegram_message", extra={"chat_id": chat_id, "text": text[:120]})
+    logger.info(
+        "telegram_message",
+        extra={
+            "update_id": update.get("update_id"),
+            "chat_id": chat_id,
+            "text_preview": text[:120],
+            "text_len": len(text),
+        },
+    )
 
-    reply = call_openai(chat_id, text)
-    send_telegram_message(chat_id, reply)
+    reply = call_openai(text, update_id=update.get("update_id"), chat_id=chat_id)
+    send_telegram_message(chat_id, reply, update_id=update.get("update_id"))
 
 
-def send_telegram_message(chat_id: int, text: str) -> None:
+def send_telegram_message(chat_id: int, text: str, *, update_id: Optional[int] = None) -> None:
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
 
     try:
         with httpx.Client(timeout=10) as client:
             resp = client.post(url, json=payload)
+
+            logger.info(
+                "telegram_send_http_response",
+                extra={
+                    "update_id": update_id,
+                    "chat_id": chat_id,
+                    "status": resp.status_code,
+                },
+            )
+
             if resp.status_code >= 400:
                 logger.error(
                     "telegram_send_failed_http",
-                    extra={"chat_id": chat_id, "status": resp.status_code, "body": resp.text[:300]},
+                    extra={
+                        "update_id": update_id,
+                        "chat_id": chat_id,
+                        "status": resp.status_code,
+                        "body": resp.text[:500],
+                    },
                 )
+
             resp.raise_for_status()
+
     except Exception as e:
-        logger.exception("telegram_send_failed", extra={"chat_id": chat_id, "err": str(e)})
+        logger.exception(
+            "telegram_send_failed",
+            extra={"update_id": update_id, "chat_id": chat_id, "err": str(e)},
+        )
