@@ -135,8 +135,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker build -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile services/ganopa-bot
+          # Build without cache to ensure latest code is included
+          docker build --no-cache -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile services/ganopa-bot
           docker push "$IMAGE_URI"
+          echo "✅ Image built and pushed: $IMAGE_URI"
+          echo "✅ Git SHA: ${GITHUB_SHA}"
 
       - name: Fetch current task definition ARN
         shell: bash
