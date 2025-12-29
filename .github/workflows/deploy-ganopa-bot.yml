@@ -153,8 +153,10 @@ jobs:
           ls -la services/ganopa-bot/app/
           test -f services/ganopa-bot/app/main.py || (echo "❌ main.py missing!" && exit 1)
           test -f services/ganopa-bot/app/config.py || (echo "❌ config.py missing!" && exit 1)
-          test -f services/ganopa-bot/app/ai_service.py || (echo "❌ ai_service.py missing!" && exit 1)
-          test -f services/ganopa-bot/app/ai_prompt.py || (echo "❌ ai_prompt.py missing!" && exit 1)
+          test -f services/ganopa-bot/app/agent_service.py || (echo "❌ agent_service.py missing!" && exit 1)
+          test -f services/ganopa-bot/app/doc_store.py || (echo "❌ doc_store.py missing!" && exit 1)
+          test -f services/ganopa-bot/app/memory_store.py || (echo "❌ memory_store.py missing!" && exit 1)
+          test -f services/ganopa-bot/app/telegram_handlers.py || (echo "❌ telegram_handlers.py missing!" && exit 1)
           echo "✅ All Python files verified"
           
           # Verify we're on the right commit
@@ -179,7 +181,11 @@ jobs:
           docker run --rm "$IMAGE_URI" ls -la app/ || true
           docker run --rm "$IMAGE_URI" test -f app/main.py || (echo "❌ main.py not in image!" && exit 1)
           docker run --rm "$IMAGE_URI" test -f app/config.py || (echo "❌ config.py not in image!" && exit 1)
+          docker run --rm "$IMAGE_URI" test -f app/agent_service.py || (echo "❌ agent_service.py not in image!" && exit 1)
+          docker run --rm "$IMAGE_URI" test -f app/doc_store.py || (echo "❌ doc_store.py not in image!" && exit 1)
+          docker run --rm "$IMAGE_URI" test -f app/memory_store.py || (echo "❌ memory_store.py not in image!" && exit 1)
           docker run --rm "$IMAGE_URI" test -d docs && echo "✅ Docs directory is present" || echo "⚠️  Docs directory not found (will use fallback)"
+          docker run --rm "$IMAGE_URI" ls -la docs/ | head -5 || echo "⚠️  Cannot list docs files"
           echo "✅ All files verified in Docker image"
           
           docker push "$IMAGE_URI"
