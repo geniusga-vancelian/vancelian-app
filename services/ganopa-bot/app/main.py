@@ -8,27 +8,21 @@ Deployed on AWS ECS Fargate.
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import httpx
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, Response
 from starlette.responses import JSONResponse
 
 from .config import (
+    SERVICE_NAME,
+    BUILD_ID,
     TELEGRAM_BOT_TOKEN,
     WEBHOOK_SECRET,
     OPENAI_API_KEY,
     OPENAI_MODEL,
     BOT_SIGNATURE_TEST,
 )
-
-# -------------------------------------------------
-# Build ID - Generated at startup
-# -------------------------------------------------
-
-# Generate build ID from timestamp (format: YYYYMMDD-HHMMSS)
-_BUILD_TIMESTAMP = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-BOT_BUILD_ID = f"build-{_BUILD_TIMESTAMP}"
 
 # -------------------------------------------------
 # App & logging
@@ -46,40 +40,46 @@ app = FastAPI(title="Ganopa Agent Bot")
 logger.info(
     "ganopa_bot_started",
     extra={
-        "service": "ganopa-bot",
-        "bot_build_id": BOT_BUILD_ID,
+        "service": SERVICE_NAME,
+        "build_id": BUILD_ID,
         "openai_model": OPENAI_MODEL,
         "has_openai_key": bool(OPENAI_API_KEY),
         "has_webhook_secret": bool(WEBHOOK_SECRET),
-        "signature_test_mode": BOT_SIGNATURE_TEST,
     },
 )
 
 
+def _add_build_id_header(response: Response) -> Response:
+    """Add X-Ganopa-Build-Id header to response."""
+    response.headers["X-Ganopa-Build-Id"] = BUILD_ID
+    return response
+
+
 # -------------------------------------------------
-# Healthcheck
+# Healthcheck & Meta
 # -------------------------------------------------
 
 @app.get("/health")
-def health():
+def health(response: Response):
+    """Health check endpoint."""
+    _add_build_id_header(response)
     return {
         "status": "ok",
-        "service": "ganopa-bot",
+        "service": SERVICE_NAME,
         "ts": datetime.utcnow().isoformat() + "Z",
     }
 
 
-@app.get("/version")
-def version():
-    """Endpoint to verify which code version is running."""
+@app.get("/_meta")
+def meta(response: Response):
+    """Metadata endpoint to verify deployed version and configuration."""
+    _add_build_id_header(response)
     return {
-        "service": "ganopa-bot",
-        "bot_build_id": BOT_BUILD_ID,
+        "service": SERVICE_NAME,
+        "build_id": BUILD_ID,
         "openai_model": OPENAI_MODEL,
         "has_openai_key": bool(OPENAI_API_KEY),
         "has_webhook_secret": bool(WEBHOOK_SECRET),
-        "signature_test_mode": BOT_SIGNATURE_TEST,
-        "git_sha": "c78b569",  # Hardcoded for this deployment
         "ts": datetime.utcnow().isoformat() + "Z",
     }
 
@@ -88,12 +88,23 @@ def version():
 # Telegram Webhook
 # -------------------------------------------------
 
-def _verify_webhook_secret(header_value: Optional[str]) -> None:
-    """Verify Telegram webhook secret token if configured."""
+def _verify_webhook_secret(header_value: Optional[str]) -> Tuple[bool, bool]:
+    """
+    Verify Telegram webhook secret token if configured.
+    
+    Returns:
+        (header_present, header_ok)
+    """
+    header_present = header_value is not None and header_value.strip() != ""
+    
     if not WEBHOOK_SECRET:
-        return
+        # Secret not configured, accept any or no header
+        return header_present, True
+    
     if not header_value or header_value != WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Invalid Telegram secret token")
+    
+    return header_present, True
 
 
 @app.get("/telegram/webhook")
@@ -117,7 +128,7 @@ async def telegram_webhook(
     and processes the update asynchronously in background.
     """
     # Verify webhook secret if configured
-    _verify_webhook_secret(x_telegram_bot_api_secret_token)
+    header_present, header_ok = _verify_webhook_secret(x_telegram_bot_api_secret_token)
 
     # Parse JSON payload
     try:
@@ -127,12 +138,19 @@ async def telegram_webhook(
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     update_id = update.get("update_id")
+    message = update.get("message") or update.get("edited_message")
+    chat_id = message.get("chat", {}).get("id") if message else None
+    text = (message.get("text") or "").strip() if message else ""
+
+    # Log webhook reception with structured data
     logger.info(
-        "telegram_update_received",
+        "telegram_webhook_post",
         extra={
             "update_id": update_id,
-            "has_message": "message" in update,
-            "has_edited_message": "edited_message" in update,
+            "chat_id": chat_id,
+            "text_len": len(text),
+            "header_secret_present": header_present,
+            "header_secret_ok": header_ok,
         },
     )
 
@@ -170,8 +188,18 @@ def call_openai(
 
     text = text.strip()
 
+    # Check API key before making request
+    if not OPENAI_API_KEY:
+        logger.error(
+            "openai_missing_api_key",
+            extra={"update_id": update_id, "chat_id": chat_id},
+        )
+        return "⚠️ OPENAI_API_KEY manquante (backend config)."
+
+    # Log before OpenAI call
+    start_time = time.time()
     logger.info(
-        "openai_call_start",
+        "openai_request_start",
         extra={
             "update_id": update_id,
             "chat_id": chat_id,
@@ -180,13 +208,6 @@ def call_openai(
             "text_preview": text[:100],
         },
     )
-
-    if not OPENAI_API_KEY:
-        logger.error(
-            "openai_missing_api_key",
-            extra={"update_id": update_id, "chat_id": chat_id},
-        )
-        return "⚠️ Configuration manquante côté serveur. Veuillez contacter le support."
 
     system_prompt = (
         "You are Ganopa, a professional AI assistant specialized in fintech. "
@@ -209,9 +230,8 @@ def call_openai(
         "Content-Type": "application/json",
     }
 
-    start_time = time.time()
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=25.0) as client:
             response = client.post(
                 "https://api.openai.com/v1/chat/completions",
                 json=payload,
@@ -220,6 +240,7 @@ def call_openai(
 
             latency_ms = int((time.time() - start_time) * 1000)
 
+            # Log HTTP response
             logger.info(
                 "openai_http_response",
                 extra={
@@ -233,7 +254,7 @@ def call_openai(
             if response.status_code >= 400:
                 error_body = response.text[:500]
                 logger.error(
-                    "openai_http_error",
+                    "openai_request_failed",
                     extra={
                         "update_id": update_id,
                         "chat_id": chat_id,
@@ -279,14 +300,14 @@ def call_openai(
             tokens_used = data.get("usage", {}).get("total_tokens", 0)
             latency_ms = int((time.time() - start_time) * 1000)
             
+            # Log successful OpenAI response
             logger.info(
-                "openai_request_done",
+                "openai_request_success",
                 extra={
                     "update_id": update_id,
                     "chat_id": chat_id,
                     "model": OPENAI_MODEL,
                     "response_len": len(content),
-                    "reply_preview": content[:100],
                     "tokens_used": tokens_used,
                     "latency_ms": latency_ms,
                 },
@@ -297,10 +318,11 @@ def call_openai(
     except httpx.TimeoutException:
         latency_ms = int((time.time() - start_time) * 1000)
         logger.error(
-            "openai_timeout",
+            "openai_request_failed",
             extra={
                 "update_id": update_id,
                 "chat_id": chat_id,
+                "error": "timeout",
                 "latency_ms": latency_ms,
             },
         )
@@ -309,11 +331,12 @@ def call_openai(
     except httpx.NetworkError as e:
         latency_ms = int((time.time() - start_time) * 1000)
         logger.error(
-            "openai_network_error",
+            "openai_request_failed",
             extra={
                 "update_id": update_id,
                 "chat_id": chat_id,
-                "error": str(e),
+                "error": "network_error",
+                "error_detail": str(e)[:200],
                 "latency_ms": latency_ms,
             },
         )
@@ -322,11 +345,11 @@ def call_openai(
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
         logger.exception(
-            "openai_request_error",
+            "openai_request_failed",
             extra={
                 "update_id": update_id,
                 "chat_id": chat_id,
-                "error": str(e),
+                "error": "unexpected_error",
                 "error_type": type(e).__name__,
                 "latency_ms": latency_ms,
             },
@@ -381,44 +404,35 @@ def process_telegram_update(update: Dict[str, Any]) -> None:
         )
         return
 
-    logger.info(
-        "telegram_message_processing",
-        extra={
-            "update_id": update.get("update_id"),
-            "chat_id": chat_id,
-            "text_len": len(text),
-            "text_preview": text[:100],
-        },
-    )
-
     # Signature test mode: if enabled, respond with version test message
     if BOT_SIGNATURE_TEST:
-        reply = f"✅ VERSION-TEST-123 | {BOT_BUILD_ID}"
+        reply = f"✅ VERSION-TEST-123 | {BUILD_ID}"
         logger.info(
             "signature_test_response",
             extra={
                 "update_id": update.get("update_id"),
                 "chat_id": chat_id,
-                "bot_build_id": BOT_BUILD_ID,
+                "build_id": BUILD_ID,
             },
         )
     else:
         # Normal mode: call OpenAI to generate response
         # NEVER echo user input - always use OpenAI
-        logger.info(
-            "openai_request_start",
-            extra={
-                "update_id": update.get("update_id"),
-                "chat_id": chat_id,
-                "text_preview": text[:100],
-            },
-        )
-        
         reply = call_openai(
             text,
             update_id=update.get("update_id"),
             chat_id=chat_id,
         )
+
+    # Log before sending to Telegram
+    logger.info(
+        "telegram_send_start",
+        extra={
+            "update_id": update.get("update_id"),
+            "chat_id": chat_id,
+            "reply_len": len(reply),
+        },
+    )
 
     # Send response to Telegram
     send_telegram_message(
@@ -449,20 +463,10 @@ def send_telegram_message(
         with httpx.Client(timeout=10.0) as client:
             response = client.post(url, json=payload)
 
-            logger.info(
-                "telegram_send_response",
-                extra={
-                    "update_id": update_id,
-                    "chat_id": chat_id,
-                    "status_code": response.status_code,
-                    "response_len": len(text),
-                },
-            )
-
             if response.status_code >= 400:
                 error_body = response.text[:500]
                 logger.error(
-                    "telegram_send_failed_http",
+                    "telegram_send_failed",
                     extra={
                         "update_id": update_id,
                         "chat_id": chat_id,
@@ -476,21 +480,31 @@ def send_telegram_message(
             response.raise_for_status()
 
             logger.info(
-                "telegram_send_done",
+                "telegram_send_success",
                 extra={
                     "update_id": update_id,
                     "chat_id": chat_id,
+                    "status_code": response.status_code,
                 },
             )
 
     except httpx.TimeoutException:
         logger.error(
-            "telegram_send_timeout",
-            extra={"update_id": update_id, "chat_id": chat_id},
+            "telegram_send_failed",
+            extra={
+                "update_id": update_id,
+                "chat_id": chat_id,
+                "error": "timeout",
+            },
         )
 
     except Exception as e:
         logger.exception(
-            "telegram_send_exception",
-            extra={"update_id": update_id, "chat_id": chat_id, "error": str(e)},
+            "telegram_send_failed",
+            extra={
+                "update_id": update_id,
+                "chat_id": chat_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
         )

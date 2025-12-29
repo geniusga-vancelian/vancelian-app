@@ -3,20 +3,10 @@ Configuration management for Ganopa bot.
 
 Loads environment variables required for operation.
 In production (ECS), env vars are injected by the task definition.
-For local development, .env file is loaded via python-dotenv.
+No .env file loading in production - only use environment variables.
 """
 
 from os import getenv
-
-# Try to load .env for local development
-# In production (ECS), this will be a no-op as .env doesn't exist
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    # python-dotenv not installed (production)
-    pass
 
 
 def getenv_required(name: str) -> str:
@@ -43,6 +33,21 @@ def getenv_bool(name: str, default: bool = False) -> bool:
 
 
 # -------------------------------------------------
+# Service Configuration
+# -------------------------------------------------
+
+SERVICE_NAME = "ganopa-bot"
+
+# Build ID from environment (default: "dev")
+# Set BUILD_ID in ECS task definition to identify deployed version
+BUILD_ID = (getenv("BUILD_ID") or "dev").strip()
+
+# Port (default: "8000")
+# Set PORT in ECS task definition if different
+PORT = (getenv("PORT") or "8000").strip()
+
+
+# -------------------------------------------------
 # Telegram Configuration
 # -------------------------------------------------
 
@@ -57,7 +62,9 @@ WEBHOOK_SECRET = (getenv("WEBHOOK_SECRET") or "").strip()
 # OpenAI Configuration
 # -------------------------------------------------
 
-OPENAI_API_KEY = getenv_required("OPENAI_API_KEY")
+# OpenAI API key (optional - will log has_openai_key boolean)
+# If not set, bot will return error message to user
+OPENAI_API_KEY = (getenv("OPENAI_API_KEY") or "").strip()
 
 # OpenAI model to use (default: gpt-4o-mini)
 OPENAI_MODEL = (getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
