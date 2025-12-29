@@ -3,9 +3,15 @@ name: Deploy API (dev)
 on:
   push:
     branches: [ "main" ]
-    paths-ignore:
-      - "services/ganopa-bot/**"
-      - ".github/workflows/deploy-ganopa-bot.yml"
+    paths:
+      - "app/**"
+      - "agent_gateway/**"
+      - "agent/**"
+      - "requirements.txt"
+      - "Dockerfile"
+      - ".github/workflows/deploy-dev.yml"
+      - ".github/workflows/deploy-staging.yml"
+      - ".github/workflows/deploy-prod.yml"
   workflow_dispatch:
 
 permissions:
