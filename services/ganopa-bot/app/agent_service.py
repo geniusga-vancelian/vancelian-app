@@ -317,11 +317,23 @@ def format_reply(raw_reply: str, meta: Dict[str, Any]) -> str:
     )
     
     # Always add doc status prefix if doc is loaded
+    # This provides visual confirmation that the doc is being used
     doc_prefix = ""
     if docs_hash != "no-docs" and docs_included:
         doc_prefix = "(doc ok) "
     elif docs_hash == "no-docs":
         doc_prefix = "(doc non disponible) "
+    
+    # Log the prefix being added
+    logger.info(
+        "format_reply_prefix",
+        extra={
+            "doc_prefix": doc_prefix,
+            "docs_hash": docs_hash,
+            "docs_included": docs_included,
+            "fresh_context": fresh_context,
+        },
+    )
     
     # Add fresh context message if first message
     if fresh_context:
@@ -332,9 +344,27 @@ def format_reply(raw_reply: str, meta: Dict[str, Any]) -> str:
             prefix = f"{doc_prefix}Je suis prêt à répondre (doc non disponible: {docs_hash}).\n\n"
         return prefix + raw_reply
     
-    # For subsequent messages, just add doc status prefix
+    # For subsequent messages, ALWAYS add doc status prefix
+    # This ensures (doc ok) appears on every message
     if doc_prefix:
-        return doc_prefix + raw_reply
+        final_reply = doc_prefix + raw_reply
+        logger.info(
+            "format_reply_applied",
+            extra={
+                "doc_prefix": doc_prefix,
+                "reply_length": len(final_reply),
+                "reply_preview": final_reply[:100],
+            },
+        )
+        return final_reply
     
+    # Fallback: if no prefix, return raw reply (should not happen)
+    logger.warning(
+        "format_reply_no_prefix",
+        extra={
+            "docs_hash": docs_hash,
+            "docs_included": docs_included,
+        },
+    )
     return raw_reply
 
