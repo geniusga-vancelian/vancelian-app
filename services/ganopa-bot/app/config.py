@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 def getenv_required(name: str) -> str:
     value = (getenv(name) or "").strip()
     if not value:
