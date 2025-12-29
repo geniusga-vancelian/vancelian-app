@@ -28,6 +28,16 @@ from .config import (
     OPENAI_MODEL,
     BOT_SIGNATURE_TEST,
 )
+from .telegram_handlers import (
+    parse_update,
+    route_command,
+    truncate_message,
+    MAX_MESSAGE_LENGTH,
+)
+
+# Set VERSION in telegram_handlers module
+from . import telegram_handlers
+telegram_handlers.VERSION = VERSION
 
 # -------------------------------------------------
 # Version Identification
@@ -36,6 +46,10 @@ from .config import (
 # Generate a stable version hash based on service name and build ID
 VERSION_HASH = hashlib.sha256(f"{SERVICE_NAME}-{BUILD_ID}".encode()).hexdigest()[:8]
 VERSION = f"{SERVICE_NAME}-{VERSION_HASH}"
+
+# Export VERSION for telegram_handlers
+import sys
+sys.modules[__name__].VERSION = VERSION
 
 # Get hostname for metadata
 try:
@@ -495,8 +509,7 @@ def process_telegram_update(update: Dict[str, Any], correlation_id: str) -> None
     """
     Process a Telegram update and send AI-generated response.
     
-    Extracts message, calls OpenAI, and sends response to user.
-    NEVER echoes user input - always uses OpenAI or returns explicit error.
+    Flow: parse -> dedupe -> guard (bot/empty) -> route command -> OpenAI -> send
     """
     update_id = update.get("update_id")
     
@@ -511,46 +524,34 @@ def process_telegram_update(update: Dict[str, Any], correlation_id: str) -> None
         )
         return
     
-    message = update.get("message") or update.get("edited_message")
-    if not message:
-        logger.info(
-            "update_no_message",
-            extra={
-                "correlation_id": correlation_id,
-                "update_id": update_id,
-            },
-        )
-        return
-
-    # Anti-loop guard: ignore messages from bots
-    from_user = message.get("from", {})
-    if from_user.get("is_bot", False):
+    # Parse update
+    chat_id, text, user_id, is_bot, message_id, parsed_update_id = parse_update(update)
+    
+    # Guard: ignore messages from bots
+    if is_bot:
         logger.info(
             "update_ignored_bot",
             extra={
                 "correlation_id": correlation_id,
                 "update_id": update_id,
-                "from_user_id": from_user.get("id"),
+                "user_id": user_id,
             },
         )
         return
-
-    chat = message.get("chat") or {}
-    chat_id = chat.get("id")
-    text = (message.get("text") or "").strip()
-
-    # Log message extraction
-    logger.info(
-        "message_extracted",
-        extra={
-            "correlation_id": correlation_id,
-            "update_id": update_id,
-            "chat_id": chat_id,
-            "text_len": len(text),
-            "text_preview": text[:50] if text else "",
-        },
-    )
-
+    
+    # Guard: ignore empty messages
+    if not text:
+        logger.info(
+            "update_ignored_empty",
+            extra={
+                "correlation_id": correlation_id,
+                "update_id": update_id,
+                "chat_id": chat_id,
+            },
+        )
+        return
+    
+    # Guard: require chat_id
     if not chat_id:
         logger.info(
             "message_missing_chat_id",
@@ -560,9 +561,45 @@ def process_telegram_update(update: Dict[str, Any], correlation_id: str) -> None
             },
         )
         return
+    
+    # Log message extraction
+    logger.info(
+        "message_extracted",
+        extra={
+            "correlation_id": correlation_id,
+            "update_id": update_id,
+            "chat_id": chat_id,
+            "user_id": user_id,
+            "message_id": message_id,
+            "text_len": len(text),
+            "text_preview": text[:50] if text else "",
+        },
+    )
 
-    # Signature test mode: if enabled, respond with version test message
-    if BOT_SIGNATURE_TEST:
+    # Route command or use OpenAI
+    reply = None
+    
+    # Try command routing first
+    command_reply = route_command(
+        text,
+        correlation_id=correlation_id,
+        chat_id=chat_id,
+        update_id=update_id,
+    )
+    
+    if command_reply:
+        reply = command_reply
+        logger.info(
+            "command_handled",
+            extra={
+                "correlation_id": correlation_id,
+                "update_id": update_id,
+                "chat_id": chat_id,
+                "command": text.split()[0] if text else None,
+            },
+        )
+    elif BOT_SIGNATURE_TEST:
+        # Signature test mode
         reply = f"✅ VERSION-TEST-123 | {BUILD_ID} | {VERSION}"
         logger.info(
             "signature_test_response",
@@ -575,14 +612,16 @@ def process_telegram_update(update: Dict[str, Any], correlation_id: str) -> None
             },
         )
     else:
-        # Normal mode: call OpenAI to generate response
-        # NEVER echo user input - always use OpenAI
+        # Normal mode: call OpenAI
         reply = call_openai(
             text,
             correlation_id=correlation_id,
             update_id=update_id,
             chat_id=chat_id,
         )
+
+    # Truncate message if too long
+    reply = truncate_message(reply)
 
     # Log before sending to Telegram
     logger.info(
