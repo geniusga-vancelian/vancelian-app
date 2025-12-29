@@ -27,6 +27,10 @@ from .config import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
     BOT_SIGNATURE_TEST,
+    DOCS_DIR,
+    DOCS_REFRESH_SECONDS,
+    MEMORY_TTL_SECONDS,
+    MEMORY_MAX_MESSAGES,
 )
 from .telegram_handlers import (
     parse_update,
@@ -34,6 +38,9 @@ from .telegram_handlers import (
     truncate_message,
     MAX_MESSAGE_LENGTH,
 )
+from .agent_service import build_messages, call_openai, format_reply
+from .memory_store import MemoryStore
+from .doc_store import load_docs
 
 # Set VERSION in telegram_handlers module
 from . import telegram_handlers
@@ -56,6 +63,9 @@ try:
     HOSTNAME = socket.gethostname()
 except Exception:
     HOSTNAME = "unknown"
+
+# Initialize memory store
+_memory_store = MemoryStore(ttl_seconds=MEMORY_TTL_SECONDS, max_messages=MEMORY_MAX_MESSAGES)
 
 # -------------------------------------------------
 # Deduplication Cache (in-memory, 5 minutes TTL)
@@ -151,6 +161,14 @@ def health(response: Response):
 def meta(response: Response):
     """Metadata endpoint to verify deployed version and configuration."""
     _add_build_id_header(response)
+    
+    # Load docs to get current hash
+    docs_text, docs_hash = load_docs(DOCS_DIR, refresh_seconds=DOCS_REFRESH_SECONDS)
+    docs_loaded = bool(docs_text)
+    
+    # Get memory stats
+    memory_stats = _memory_store.stats()
+    
     return {
         "service": SERVICE_NAME,
         "version": VERSION,
@@ -159,6 +177,12 @@ def meta(response: Response):
         "openai_model": OPENAI_MODEL,
         "has_openai_key": bool(OPENAI_API_KEY),
         "has_webhook_secret": bool(WEBHOOK_SECRET),
+        "docs_hash": docs_hash,
+        "docs_loaded": docs_loaded,
+        "memory_enabled": True,
+        "memory_ttl_seconds": MEMORY_TTL_SECONDS,
+        "memory_max_messages": MEMORY_MAX_MESSAGES,
+        "memory_active_chats": memory_stats["active_chats"],
         "ts": datetime.utcnow().isoformat() + "Z",
     }
 
@@ -431,8 +455,8 @@ def call_openai(
                 },
             )
 
-            # Add 🤖 prefix to prove it's AI-generated (not echo)
-            return f"🤖 {content}"
+            # Return content (prefix will be added by format_reply if needed)
+            return content
 
     except httpx.TimeoutException:
         latency_ms = int((time.time() - start_time) * 1000)
@@ -612,15 +636,68 @@ def process_telegram_update(update: Dict[str, Any], correlation_id: str) -> None
             },
         )
     else:
-        # Normal mode: call OpenAI
-        reply = call_openai(
-            text,
-            correlation_id=correlation_id,
-            update_id=update_id,
-            chat_id=chat_id,
-        )
+        # Normal mode: use agent service with memory and docs
+        try:
+            # Build messages with memory and docs context
+            messages, meta = build_messages(
+                chat_id,
+                text,
+                docs_dir=DOCS_DIR,
+                docs_refresh_seconds=DOCS_REFRESH_SECONDS,
+            )
+            
+            # Call OpenAI
+            raw_reply = call_openai(messages)
+            
+            # Format reply (add prefix if fresh context)
+            reply = format_reply(raw_reply, meta)
+            
+            # Store in memory
+            _memory_store.append(chat_id, "user", text)
+            _memory_store.append(chat_id, "assistant", raw_reply)  # Store without prefix
+            
+            # Log memory status
+            if meta.get("fresh_context", False):
+                logger.info(
+                    "memory_created",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "update_id": update_id,
+                        "chat_id": chat_id,
+                        "docs_hash": meta.get("docs_hash", "unknown"),
+                    },
+                )
+            else:
+                logger.info(
+                    "memory_updated",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "update_id": update_id,
+                        "chat_id": chat_id,
+                        "memory_messages": meta.get("memory_messages", 0),
+                    },
+                )
+                
+        except Exception as e:
+            logger.exception(
+                "agent_service_error",
+                extra={
+                    "correlation_id": correlation_id,
+                    "update_id": update_id,
+                    "chat_id": chat_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+            # Fallback to simple OpenAI call
+            reply = call_openai(
+                text,
+                correlation_id=correlation_id,
+                update_id=update_id,
+                chat_id=chat_id,
+            )
 
-    # Truncate message if too long
+    # Truncate message if too long (after formatting)
     reply = truncate_message(reply)
 
     # Log before sending to Telegram
@@ -680,6 +757,19 @@ def send_telegram_message(
                         "error_type": "http_error",
                     },
                 )
+                
+                # Also log as telegram_send_failed for consistency
+                logger.error(
+                    "telegram_send_failed",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "update_id": update_id,
+                        "chat_id": chat_id,
+                        "status_code": response.status_code,
+                        "error_body": error_body,
+                        "error_type": "http_error",
+                    },
+                )
                 return
 
             # Verify success
@@ -687,6 +777,17 @@ def send_telegram_message(
 
             logger.info(
                 "telegram_sent",
+                extra={
+                    "correlation_id": correlation_id,
+                    "update_id": update_id,
+                    "chat_id": chat_id,
+                    "status_code": response.status_code,
+                },
+            )
+            
+            # Also log as telegram_send_ok for consistency
+            logger.info(
+                "telegram_send_ok",
                 extra={
                     "correlation_id": correlation_id,
                     "update_id": update_id,
@@ -710,6 +811,18 @@ def send_telegram_message(
     except Exception as e:
         logger.exception(
             "telegram_send_error",
+            extra={
+                "correlation_id": correlation_id,
+                "update_id": update_id,
+                "chat_id": chat_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+        )
+        
+        # Also log as telegram_send_failed for consistency
+        logger.error(
+            "telegram_send_failed",
             extra={
                 "correlation_id": correlation_id,
                 "update_id": update_id,

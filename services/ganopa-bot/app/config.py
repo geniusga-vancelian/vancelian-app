@@ -77,3 +77,19 @@ OPENAI_MODEL = (getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
 # Signature test mode: if enabled, bot responds with version test message
 # Set BOT_SIGNATURE_TEST=1 to enable
 BOT_SIGNATURE_TEST = getenv_bool("BOT_SIGNATURE_TEST", default=False)
+
+# -------------------------------------------------
+# Documentation & Memory Configuration
+# -------------------------------------------------
+
+# Path to docs directory (default: /app/docs in container, ../../docs in local)
+DOCS_DIR = (getenv("DOCS_DIR") or "/app/docs").strip()
+
+# Docs cache refresh interval in seconds (default: 300 = 5 minutes)
+DOCS_REFRESH_SECONDS = int(getenv("DOCS_REFRESH_SECONDS") or "300")
+
+# Memory TTL in seconds (default: 1800 = 30 minutes)
+MEMORY_TTL_SECONDS = int(getenv("MEMORY_TTL_SECONDS") or "1800")
+
+# Maximum number of messages per chat in memory (default: 20)
+MEMORY_MAX_MESSAGES = int(getenv("MEMORY_MAX_MESSAGES") or "20")

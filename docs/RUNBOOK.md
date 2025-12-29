@@ -320,7 +320,76 @@ aws elbv2 describe-target-health --region me-central-1 --target-group-arn "${TG_
 
 ---
 
-### Runbook 5: Le déploiement GitHub est vert mais la version n'a pas changé
+### Runbook 5.5: Doc-Memory Mode (CTO Agent)
+
+### Symptômes
+- Le bot répond avec le préfixe "J'ai bien relu toute la doc (version: ...)" au premier message
+- Les messages suivants n'ont pas le préfixe (mémoire active)
+- Le endpoint `/_meta` montre `docs_hash` et `memory_enabled: true`
+
+### Probable Causes
+- Mode normal: le bot charge la documentation au premier message d'un chat
+- La mémoire expire après `MEMORY_TTL_SECONDS` (default: 1800 = 30 minutes)
+
+### Vérifications
+
+**1. Vérifier que la doc est chargée:**
+```bash
+curl -s https://api.maisonganopa.com/_meta | jq '{docs_hash, docs_loaded, memory_enabled}'
+```
+
+**Résultat attendu:**
+- `docs_hash`: Hash SHA256 (12 caractères) ou "no-docs"
+- `docs_loaded`: `true` si la doc est présente
+- `memory_enabled`: `true`
+
+**2. Vérifier les logs CloudWatch:**
+```bash
+aws logs tail /ecs/ganopa-dev-bot-task \
+  --region me-central-1 \
+  --since 10m \
+  --format short \
+  --filter-pattern "docs_loaded OR memory_miss OR memory_hit"
+```
+
+**Logs attendus:**
+- `docs_loaded`: Hash + length de la doc
+- `memory_miss`: Premier message d'un chat (fresh context)
+- `memory_hit`: Messages suivants (mémoire existante)
+
+**3. Vérifier que le dossier docs/ est dans l'image Docker:**
+```bash
+# Dans le workflow GitHub Actions, vérifier:
+docker run --rm <IMAGE_URI> test -d docs && echo "✅ Docs present" || echo "❌ Docs missing"
+```
+
+### Fix
+
+**Si docs_hash = "no-docs":**
+1. Vérifier que le Dockerfile copie `docs/` (build depuis repo root)
+2. Vérifier que le workflow GitHub Actions build depuis repo root: `docker build -f services/ganopa-bot/Dockerfile .`
+3. Vérifier que `DOCS_DIR` env var pointe vers `/app/docs` (default)
+
+**Si memory ne fonctionne pas:**
+1. Vérifier les env vars: `MEMORY_TTL_SECONDS`, `MEMORY_MAX_MESSAGES`
+2. Vérifier les logs pour erreurs `agent_service_error`
+3. Vérifier que `memory_enabled: true` dans `/_meta`
+
+### Validation
+
+**Test manuel:**
+1. Envoyer un premier message au bot → doit avoir le préfixe "J'ai bien relu..."
+2. Envoyer un deuxième message → ne doit PAS avoir le préfixe
+3. Attendre 30+ minutes → le prochain message doit avoir le préfixe (mémoire expirée)
+
+**Vérifier via `/_meta`:**
+```bash
+curl -s https://api.maisonganopa.com/_meta | jq '{docs_hash, memory_active_chats}'
+```
+
+---
+
+## Runbook 6: Le déploiement GitHub est vert mais la version n'a pas changé
 
 **Symptômes:**
 - GitHub Actions workflow: ✅ Success

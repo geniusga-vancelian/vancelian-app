@@ -167,16 +167,19 @@ jobs:
           fi
           
           # Build without cache to ensure latest code is included
+          # Build from repo root to include docs/ directory
           echo "🔨 Building Docker image..."
           echo "   Image URI: $IMAGE_URI"
           echo "   Git SHA: ${GITHUB_SHA}"
-          docker build --no-cache -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile services/ganopa-bot
+          echo "   Building from repo root (to include docs/)"
+          docker build --no-cache -t "$IMAGE_URI" -f services/ganopa-bot/Dockerfile .
           
           # Verify files are in the image
           echo "🔍 Verifying files in Docker image..."
           docker run --rm "$IMAGE_URI" ls -la app/ || true
           docker run --rm "$IMAGE_URI" test -f app/main.py || (echo "❌ main.py not in image!" && exit 1)
           docker run --rm "$IMAGE_URI" test -f app/config.py || (echo "❌ config.py not in image!" && exit 1)
+          docker run --rm "$IMAGE_URI" test -d docs && echo "✅ Docs directory is present" || echo "⚠️  Docs directory not found (will use fallback)"
           echo "✅ All files verified in Docker image"
           
           docker push "$IMAGE_URI"
