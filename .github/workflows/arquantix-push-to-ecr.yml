@@ -1,0 +1,75 @@
+name: Arquantix - Push to ECR
+
+on:
+  push:
+    branches: [ "main", "arquantix/coming-soon" ]
+    paths:
+      - "services/arquantix/**"
+      - ".github/workflows/arquantix-push-to-ecr.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Docker image tag (default: latest)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: me-central-1
+  ECR_REGISTRY: 411714852748.dkr.ecr.me-central-1.amazonaws.com
+  ECR_REPOSITORY: arquantix-coming-soon
+  IMAGE_TAG: ${{ inputs.tag || 'latest' }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build Docker image
+        run: |
+          set -euo pipefail
+          echo "🔨 Building Docker image..."
+          echo "   Repository: ${{ env.ECR_REPOSITORY }}"
+          echo "   Tag: ${{ env.IMAGE_TAG }}"
+          echo "   Context: services/arquantix/coming-soon"
+          
+          docker build \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            -f services/arquantix/coming-soon/Dockerfile \
+            services/arquantix/coming-soon
+      
+      - name: Push Docker image to ECR
+        run: |
+          set -euo pipefail
+          echo "📤 Pushing image to ECR..."
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          echo "✅ Image pushed: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
+      
+      - name: Verify image in ECR
+        run: |
+          set -euo pipefail
+          echo "🔍 Verifying image in ECR..."
+          aws ecr describe-images \
+            --region ${{ env.AWS_REGION }} \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-ids imageTag=${{ env.IMAGE_TAG }} \
+            --query 'imageDetails[0].{digest:imageDigest,pushedAt:imagePushedAt}' \
+            --output json || echo "⚠️  Image not found in ECR (may need to create repository first)"
+
