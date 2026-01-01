@@ -2,6 +2,8 @@
 
 Page "Coming Soon" pour Arquantix, déployée via Docker sur AWS ECS.
 
+**Last updated:** 2025-12-30
+
 ## Structure
 
 ```
