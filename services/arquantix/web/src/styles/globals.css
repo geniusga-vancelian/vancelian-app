@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --color-black: #0B0D10;
+  --color-bronze: #742232;
+  --color-neutral: #E6E6E6;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: "Avenir Next", Avenir, "Avenir Next Condensed", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
