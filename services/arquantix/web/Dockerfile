@@ -9,6 +9,8 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Ensure public directory exists for Next.js build
+RUN mkdir -p ./public
 RUN npm run build
 
 # --- runner ---
@@ -21,9 +23,7 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/next.config.js* ./
-# Ensure public directory exists
-RUN mkdir -p ./public
-# Copy public directory from builder (will fail silently if empty)
+# Copy public directory (ensured to exist in builder stage)
 COPY --from=builder /app/public ./public
 
 EXPOSE 3000
