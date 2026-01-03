@@ -106,10 +106,15 @@
 - [ ] Origin path = "" (vide)
 - [ ] Origin protocol = HTTPS Only
 - [ ] HTTPS Port = 443
-- [ ] Certificate ACM attaché (us-east-1)
+- [ ] Certificate ACM attaché (us-east-1) ✅
+
+**État actuel:**
+- Certificate: ACM (us-east-1) ✅
+- Aliases: arquantix.com, www.arquantix.com ✅
+- Origin: À vérifier dans la config complète
 
 **Problèmes identifiés:**
-- À compléter après vérification
+- ⚠️ Origin configuration à vérifier (doit pointer vers ALB)
 
 ---
 
@@ -126,14 +131,15 @@
 - [ ] Rules: Forward vers target group correct
 
 **Vérifications:**
-- [ ] Internet-facing (pas internal)
-- [ ] Listener 80 → Redirect 443
-- [ ] Listener 443 → Certificat ACM
-- [ ] Default rule → arquantix-prod-tg
-- [ ] Host header rules corrects (si présents)
+- [x] Internet-facing (pas internal) ✅
+- [ ] Listener 80 → Redirect 443 ❌ (actuellement forward)
+- [ ] Listener 443 → Certificat ACM ❌ **MANQUANT**
+- [x] Default rule → arquantix-prod-tg ✅
+- [x] Host header rules corrects (si présents) ✅
 
 **Problèmes identifiés:**
-- À compléter après vérification
+- ❌ **CRITIQUE:** Listener HTTPS (443) manquant
+- ⚠️ Listener 80 forward au lieu de redirect vers 443
 
 ---
 
@@ -152,12 +158,13 @@
 - Matcher: 200-399
 
 **Targets:**
-- [ ] Au moins 1 target HEALTHY
-- [ ] Pas de targets "unused" (AZ non activée)
-- [ ] Pas de targets "draining" permanents
+- [ ] Au moins 1 target HEALTHY ❌ (actuellement UNHEALTHY)
+- [x] Pas de targets "unused" (AZ non activée) ✅
+- [x] Pas de targets "draining" permanents ✅
 
 **Problèmes identifiés:**
-- À compléter après vérification
+- ❌ Target 172.31.31.39:3000 UNHEALTHY (FailedHealthChecks)
+- ⚠️ Target Group port = 80 mais containers sur 3000 (normal si port mapping)
 
 ---
 
@@ -189,8 +196,9 @@
 - [ ] Tasks stables (pas de "stopped" fréquents)
 
 **Problèmes identifiés:**
-- ✅ Health check grace period: 120s (recommandé: 180s - à mettre à jour)
-- ⚠️ Targets peuvent être unhealthy (vérifier après déploiement)
+- ✅ Health check grace period: 180s (corrigé)
+- ⚠️ Tasks: 2 tasks running (révision 2), révision 3 pas encore démarrée
+- ⚠️ Erreurs ECR timeout dans les événements (problème réseau)
 
 ---
 
@@ -225,7 +233,8 @@
 - [ ] Health check endpoint répond
 
 **Problèmes identifiés:**
-- Permissions insuffisantes pour accéder aux logs
+- ⚠️ Permissions insuffisantes pour accéder aux logs
+- ⚠️ Impossible de vérifier les erreurs de démarrage directement
 
 ---
 
@@ -233,7 +242,7 @@
 
 ### Changements AWS à Appliquer
 
-#### 1. ECS Service - Health Check Grace Period
+#### 1. ✅ ECS Service - Health Check Grace Period (APPLIQUÉ)
 **Changement:**
 ```bash
 aws ecs update-service \
@@ -243,22 +252,48 @@ aws ecs update-service \
   --region me-central-1
 ```
 **Raison:** 120s peut être insuffisant pour Next.js. 180s donne plus de marge.
+**Status:** ✅ Appliqué
 
-#### 2. Vérifier et Corriger Route53
-**Si nécessaire:**
-- S'assurer que les records pointent vers CloudFront
-- Vérifier qu'il n'y a pas de drift
+#### 2. ❌ ALB - Créer Listener HTTPS (443) (CRITIQUE)
+**Changement:**
+```bash
+# Créer listener 443 avec certificat ACM
+aws elbv2 create-listener \
+  --load-balancer-arn <ALB_ARN> \
+  --protocol HTTPS \
+  --port 443 \
+  --certificates CertificateArn=<CERT_ARN> \
+  --default-actions Type=forward,TargetGroupArn=<TG_ARN> \
+  --region me-central-1
+```
+**Raison:** CloudFront nécessite HTTPS vers l'ALB. Actuellement, seul HTTP (80) existe.
+**Status:** ❌ À appliquer
 
-#### 3. Vérifier et Corriger CloudFront Origin
-**Si nécessaire:**
-- S'assurer que l'origin est l'ALB DNS
-- Vérifier que l'origin path est vide
-- Vérifier le protocol policy
+#### 3. ⚠️ ALB - Modifier Listener 80 pour Redirect vers 443
+**Changement:**
+```bash
+aws elbv2 modify-listener \
+  --listener-arn <LISTENER_80_ARN> \
+  --default-actions Type=redirect,RedirectConfig='{Protocol=HTTPS,Port=443,StatusCode=HTTP_301}' \
+  --region me-central-1
+```
+**Raison:** Forcer HTTPS pour toutes les requêtes HTTP.
+**Status:** ⚠️ À appliquer après création du listener 443
 
-#### 4. Vérifier et Corriger ALB Rules
-**Si nécessaire:**
-- S'assurer que les règles pointent vers le bon target group
-- Vérifier les Host headers si présents
+#### 4. ⚠️ CloudFront - Vérifier Origin Configuration
+**Changement:**
+- Vérifier que Origin Domain = ALB DNS
+- Vérifier que Origin Path = "" (vide)
+- Vérifier que Protocol Policy = HTTPS Only
+**Raison:** S'assurer que CloudFront peut atteindre l'ALB en HTTPS.
+**Status:** ⚠️ À vérifier
+
+#### 5. ⚠️ ECS - Résoudre Erreurs ECR Timeout
+**Changement:**
+- Vérifier la configuration réseau (NAT Gateway, VPC endpoints)
+- S'assurer que les subnets ECS ont accès à Internet pour ECR
+**Raison:** Les tasks ne peuvent pas pull l'image depuis ECR.
+**Status:** ⚠️ À investiguer
 
 ---
 
