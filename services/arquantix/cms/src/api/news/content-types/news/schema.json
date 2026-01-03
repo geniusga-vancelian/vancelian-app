@@ -1,0 +1,47 @@
+{
+  "kind": "collectionType",
+  "collectionName": "news",
+  "info": {
+    "singularName": "news",
+    "pluralName": "news",
+    "displayName": "News",
+    "description": "Articles de news avec i18n"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {
+    "i18n": {
+      "localized": true
+    }
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "required": true,
+      "unique": true
+    },
+    "excerpt": {
+      "type": "text"
+    },
+    "content": {
+      "type": "richtext",
+      "required": true
+    },
+    "coverImage": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": ["images"]
+    },
+    "publishedAt": {
+      "type": "datetime"
+    }
+  }
+}
+
+

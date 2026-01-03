@@ -1,0 +1,69 @@
+{
+  "CallerReference": "arquantix-coming-soon-2026-01-01",
+  "Comment": "Arquantix Coming Soon - S3 Static Website",
+  "Enabled": true,
+  "Origins": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "Id": "S3-arquantix-coming-soon-dev",
+        "DomainName": "arquantix-coming-soon-dev.s3.me-central-1.amazonaws.com",
+        "S3OriginConfig": {
+          "OriginAccessIdentity": ""
+        },
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 3,
+            "Items": ["TLSv1", "TLSv1.1", "TLSv1.2"]
+          }
+        }
+      }
+    ]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "S3-arquantix-coming-soon-dev",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": {
+      "Quantity": 2,
+      "Items": ["GET", "HEAD"],
+      "CachedMethods": {
+        "Quantity": 2,
+        "Items": ["GET", "HEAD"]
+      }
+    },
+    "ForwardedValues": {
+      "QueryString": false,
+      "Cookies": {
+        "Forward": "none"
+      }
+    },
+    "MinTTL": 0,
+    "DefaultTTL": 3600,
+    "MaxTTL": 86400,
+    "Compress": true
+  },
+  "DefaultRootObject": "index.html",
+  "CustomErrorResponses": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "ErrorCode": 403,
+        "ResponsePagePath": "/index.html",
+        "ResponseCode": "200",
+        "ErrorCachingMinTTL": 300
+      },
+      {
+        "ErrorCode": 404,
+        "ResponsePagePath": "/index.html",
+        "ResponseCode": "200",
+        "ErrorCachingMinTTL": 300
+      }
+    ]
+  },
+  "PriceClass": "PriceClass_100"
+}
+
+

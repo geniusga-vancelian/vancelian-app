@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Route53ReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ListHostedZones",
+        "route53:ListHostedZonesByName",
+        "route53:GetHostedZone",
+        "route53:ListResourceRecordSets"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Route53ChangeRecordsTemporary",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+
+

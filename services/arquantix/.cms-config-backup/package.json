@@ -1,0 +1,35 @@
+{
+  "name": "arquantix-cms",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Arquantix CMS - Strapi",
+  "scripts": {
+    "build": "strapi build",
+    "develop": "strapi develop",
+    "start": "strapi start",
+    "strapi": "strapi",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "@strapi/strapi": "4.18.0",
+    "@strapi/plugin-i18n": "4.18.0",
+    "@strapi/plugin-users-permissions": "4.18.0",
+    "@strapi/plugin-documentation": "4.18.0",
+    "pg": "8.11.3"
+  },
+  "devDependencies": {
+    "sqlite3": "5.1.6"
+  },
+  "author": {
+    "name": "Arquantix"
+  },
+  "strapi": {
+    "uuid": "arquantix-cms-uuid"
+  },
+  "engines": {
+    "node": ">=18.0.0 <=20.x.x",
+    "npm": ">=6.0.0"
+  },
+  "license": "MIT"
+}
+
