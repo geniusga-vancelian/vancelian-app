@@ -8,7 +8,7 @@ export default function Navbar() {
           {/* Logo wordmark */}
           <div className="flex items-center">
             <img
-              src="/logo-arquantix.svg"
+              src="/media/logo/arquantix.svg"
               alt="Arquantix"
               className="h-8 md:h-10 text-white"
               style={{ filter: 'invert(1)' }}

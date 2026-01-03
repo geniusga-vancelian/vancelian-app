@@ -25,7 +25,7 @@ export default function Footer() {
         {/* Logo */}
         <div className="flex justify-center">
           <img
-            src="/logo-arquantix.svg"
+            src="/media/logo/arquantix.svg"
             alt="Arquantix"
             style={{
               width: '203px',

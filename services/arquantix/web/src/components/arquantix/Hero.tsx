@@ -9,7 +9,9 @@ interface HeroProps {
 }
 
 export default function Hero({ images, autoplay = true, intervalMs = 4500 }: HeroProps) {
-  const heroImages = images && images.length > 0 ? images : ["/hero.jpg"]
+  // Default images if none provided
+  const defaultImages = ["/media/hero/slide-1.jpg", "/media/hero/slide-2.jpg"]
+  const heroImages = images && images.length > 0 ? images : defaultImages
   const hasMultipleImages = heroImages.length > 1
 
   const [currentIndex, setCurrentIndex] = useState(0)

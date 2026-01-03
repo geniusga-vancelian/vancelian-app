@@ -10,7 +10,7 @@ export default function ComingSoonPage() {
       <Navbar />
       <div className="pt-20">
         <Hero
-          images={['/hero.jpg', '/hero-2.jpg']}
+          images={['/media/hero/slide-1.jpg', '/media/hero/slide-2.jpg']}
           autoplay={true}
           intervalMs={4500}
         />
