@@ -28,6 +28,8 @@ COPY --from=builder /app/public ./public
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV HOST="0.0.0.0"
 ENV PATH="/app/node_modules/.bin:$PATH"
 
-CMD ["node_modules/.bin/next", "start", "-p", "3000"]
+# Next.js start with explicit hostname
+CMD ["node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
