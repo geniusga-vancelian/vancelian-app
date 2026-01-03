@@ -134,21 +134,29 @@ Vérifier et corriger la configuration CloudFront
 
 ```bash
 # Créer le certificat
-aws acm request-certificate \
+CERT_ARN=$(aws acm request-certificate \
   --domain-name arquantix.com \
   --subject-alternative-names www.arquantix.com \
   --validation-method DNS \
-  --region me-central-1
+  --region me-central-1 \
+  --query 'CertificateArn' --output text)
 
 # Récupérer les CNAME de validation
 aws acm describe-certificate \
-  --certificate-arn <CERT_ARN> \
+  --certificate-arn "$CERT_ARN" \
   --region me-central-1 \
   --query 'Certificate.DomainValidationOptions[*].ResourceRecord'
 
 # Ajouter les CNAME dans Route53 pour validation
+ZONE_ID=$(aws route53 list-hosted-zones \
+  --query "HostedZones[?Name=='arquantix.com.'].Id" \
+  --output text | sed 's|/hostedzone/||')
+
+# Créer les records de validation (voir script complet dans la doc)
 # Attendre la validation (peut prendre 5-30 minutes)
 ```
+
+**Status:** ✅ Certificat créé, validation en cours
 
 **Étape 2: Créer le listener 443**
 
