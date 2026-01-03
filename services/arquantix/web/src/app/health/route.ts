@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server'
 
+// Health check endpoint - no middleware, no redirects, instant response
 export async function GET() {
-  // Log simple pour diagnostic
-  console.log('[HEALTH] Health check hit at', new Date().toISOString())
-  
-  return NextResponse.json(
-    { 
-      status: 'ok', 
-      service: 'arquantix-coming-soon',
-      timestamp: new Date().toISOString()
+  // Return 200 OK immediately, no JSON parsing needed
+  return new NextResponse('ok', {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/plain',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
     },
-    { status: 200 }
-  )
+  })
 }
