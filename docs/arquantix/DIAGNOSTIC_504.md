@@ -240,5 +240,20 @@ Après les corrections:
 ---
 
 **Dernière mise à jour:** 2026-01-03  
-**Status:** En cours de déploiement
+**Status:** Corrections appliquées, en attente de stabilisation
+
+## ⏳ Note sur le Timing
+
+Le déploiement peut prendre 3-5 minutes pour:
+1. Le nouveau container démarre (30-60s)
+2. L'application Next.js démarre (30-60s)
+3. Le container s'enregistre dans le target group (30-60s)
+4. Les health checks passent (2-3 checks × 30s = 60-90s)
+
+**Total estimé:** 3-5 minutes après le redéploiement.
+
+Si le problème persiste après 5 minutes, vérifier:
+- Les logs CloudWatch pour les erreurs de démarrage
+- Que le nouveau container est bien enregistré dans le target group
+- Que l'IP du nouveau container correspond à celle dans le target group
 
