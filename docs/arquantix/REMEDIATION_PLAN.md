@@ -123,16 +123,43 @@ Vérifier et corriger la configuration CloudFront
 
 ## 🔧 Changements AWS à Appliquer
 
-### Changement 1: Créer Listener HTTPS sur ALB
+### Changement 1: Créer Listener HTTPS sur ALB ❌ CRITIQUE
+
+**Problème identifié:**
+- CloudFront origin protocol: "http-only"
+- ALB n'a pas de listener 443
+- CloudFront ne peut pas se connecter en HTTPS
+
+**Étape 1: Créer certificat ACM dans me-central-1 (si absent)**
 
 ```bash
-# Récupérer le certificat ACM
+# Créer le certificat
+aws acm request-certificate \
+  --domain-name arquantix.com \
+  --subject-alternative-names www.arquantix.com \
+  --validation-method DNS \
+  --region me-central-1
+
+# Récupérer les CNAME de validation
+aws acm describe-certificate \
+  --certificate-arn <CERT_ARN> \
+  --region me-central-1 \
+  --query 'Certificate.DomainValidationOptions[*].ResourceRecord'
+
+# Ajouter les CNAME dans Route53 pour validation
+# Attendre la validation (peut prendre 5-30 minutes)
+```
+
+**Étape 2: Créer le listener 443**
+
+```bash
+# Récupérer le certificat ACM validé
 CERT_ARN=$(aws acm list-certificates \
   --region me-central-1 \
-  --query 'CertificateSummaryList[?DomainName==`arquantix.com` || DomainName==`*.arquantix.com`].CertificateArn' \
-  --output text)
+  --query 'CertificateSummaryList[?contains(DomainName, `arquantix`) && Status==`ISSUED`].CertificateArn' \
+  --output text | head -1)
 
-# Créer le listener 443
+# Récupérer l'ALB ARN
 ALB_ARN=$(aws elbv2 describe-load-balancers \
   --region me-central-1 \
   --query 'LoadBalancers[?contains(LoadBalancerName, `arquantix`)].LoadBalancerArn' \
@@ -140,6 +167,7 @@ ALB_ARN=$(aws elbv2 describe-load-balancers \
 
 TG_ARN="arn:aws:elasticloadbalancing:me-central-1:411714852748:targetgroup/arquantix-prod-tg/89fe413e994d9f0f"
 
+# Créer le listener 443
 aws elbv2 create-listener \
   --load-balancer-arn "$ALB_ARN" \
   --protocol HTTPS \
@@ -149,7 +177,7 @@ aws elbv2 create-listener \
   --region me-central-1
 ```
 
-**Raison:** CloudFront nécessite HTTPS vers l'ALB
+**Raison:** CloudFront nécessite HTTPS vers l'ALB. Actuellement, CloudFront est configuré en "http-only" mais essaie de se connecter en HTTPS (port 443) qui n'existe pas.
 
 ### Changement 2: Mettre à jour Listener 80 pour Redirect vers 443
 
@@ -180,21 +208,50 @@ aws ecs update-service \
 
 **Raison:** Donner plus de temps à Next.js pour démarrer
 
-### Changement 4: Vérifier CloudFront Origin
+### Changement 4: Mettre à jour CloudFront Origin Protocol ⚠️
 
+**État actuel:**
+- Origin Domain: ✅ ALB DNS (correct)
+- Origin Path: ✅ "" (vide, correct)
+- Protocol Policy: ❌ "http-only" (doit être "https-only")
+
+**Changement:**
 ```bash
-# Vérifier que l'origin pointe vers l'ALB
-ALB_DNS="arquantix-prod-alb-1651887598.me-central-1.elb.amazonaws.com"
+# Récupérer la config CloudFront
+aws cloudfront get-distribution-config \
+  --id EPJ3WQCO04UWW \
+  --region me-central-1 > /tmp/cf-config.json
 
-# Mettre à jour si nécessaire
-aws cloudfront get-distribution-config --id EPJ3WQCO04UWW --region me-central-1 > /tmp/cf-config.json
-# Modifier Origins.Items[0].DomainName = ALB_DNS
-# Modifier Origins.Items[0].OriginPath = ""
-# Modifier Origins.Items[0].CustomOriginConfig.OriginProtocolPolicy = "https-only"
-aws cloudfront update-distribution --id EPJ3WQCO04UWW --if-match <ETag> --distribution-config file:///tmp/cf-config-updated.json --region me-central-1
+# Extraire l'ETag
+ETAG=$(cat /tmp/cf-config.json | python3 -c "import sys, json; print(json.load(sys.stdin)['ETag'])")
+
+# Modifier le protocol policy
+python3 << 'EOF'
+import json
+
+with open('/tmp/cf-config.json', 'r') as f:
+    config = json.load(f)['DistributionConfig']
+
+# Modifier le protocol policy
+config['Origins']['Items'][0]['CustomOriginConfig']['OriginProtocolPolicy'] = 'https-only'
+
+# Sauvegarder
+with open('/tmp/cf-config-updated.json', 'w') as f:
+    json.dump({'DistributionConfig': config}, f, indent=2)
+
+print("✅ Config mise à jour: https-only")
+EOF
+
+# Appliquer la mise à jour
+aws cloudfront update-distribution \
+  --id EPJ3WQCO04UWW \
+  --if-match "$ETAG" \
+  --distribution-config file:///tmp/cf-config-updated.json \
+  --region me-central-1
 ```
 
-**Raison:** S'assurer que CloudFront pointe vers l'ALB en HTTPS
+**Raison:** CloudFront doit utiliser HTTPS vers l'ALB une fois le listener 443 créé.
+**Note:** À faire APRÈS la création du listener 443.
 
 ### Changement 5: Corriger Target Group Port (si nécessaire)
 
