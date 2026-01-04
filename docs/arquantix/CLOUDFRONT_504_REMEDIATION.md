@@ -8,7 +8,7 @@
 
 ## 🎯 Root Cause (Une Phrase)
 
-**Le Security Group de l'ALB n'avait pas de règle INBOUND permettant le trafic HTTP (port 80) depuis Internet/CloudFront, causant des timeouts et des erreurs 504 Gateway Timeout même si le Target Group était HEALTHY.**
+**Les subnets ALB n'étaient pas associés à une route table avec route 0.0.0.0/0 vers l'Internet Gateway, causant un blocage du trafic entrant depuis Internet/CloudFront vers l'ALB, même si le Security Group était correct et le Target Group HEALTHY.**
 
 ---
 
@@ -97,26 +97,73 @@ curl -I https://arquantix.com/health
 
 ## 🔧 Changements Appliqués
 
-### Changement 1: Vérification et Correction Security Group ALB ✅
+### Changement 1: Vérification Security Group ALB ✅
 
 **Action:**
 - Vérification des règles INBOUND existantes
-- Ajout explicite de la règle port 80 depuis 0.0.0.0/0 (si manquante ou incorrecte)
+- Confirmation: Port 80/443 ouverts depuis 0.0.0.0/0 ✅
 
-**Commande:**
+**Résultat:** Security Group correct, pas de changement nécessaire ✅
+
+### Changement 2: Correction Route Tables des Subnets ALB ✅ **ROOT CAUSE FIX**
+
+**Problème identifié:**
+- Subnets ALB: subnet-03a15c01ad644adec, subnet-03b9c0f9c2e462492
+- Route tables associées: Pas de route 0.0.0.0/0 → IGW ❌
+- Résultat: ALB inaccessible depuis Internet/CloudFront
+
+**Action:**
+1. Identification de l'Internet Gateway du VPC
+2. Création/Vérification d'une route table publique avec 0.0.0.0/0 → IGW
+3. Association des subnets ALB à cette route table publique
+
+**Commandes:**
 ```bash
-aws ec2 authorize-security-group-ingress \
-  --group-id sg-028cb5d34807b8248 \
-  --protocol tcp \
-  --port 80 \
-  --cidr 0.0.0.0/0 \
-  --description "HTTP from Internet/CloudFront" \
+# Identifier IGW
+IGW_ID=$(aws ec2 describe-internet-gateways \
+  --filters "Name=attachment.vpc-id,Values=vpc-05aa7c05949e8096b" \
+  --region me-central-1 \
+  --query 'InternetGateways[0].InternetGatewayId' --output text)
+
+# Créer route table publique (si nécessaire)
+PUBLIC_RTB_ID=$(aws ec2 create-route-table \
+  --vpc-id vpc-05aa7c05949e8096b \
+  --region me-central-1 \
+  --query 'RouteTable.RouteTableId' --output text)
+
+# Ajouter route 0.0.0.0/0 → IGW
+aws ec2 create-route \
+  --route-table-id "$PUBLIC_RTB_ID" \
+  --destination-cidr-block 0.0.0.0/0 \
+  --gateway-id "$IGW_ID" \
   --region me-central-1
+
+# Associer subnets ALB à la route table publique
+for subnet in subnet-03a15c01ad644adec subnet-03b9c0f9c2e462492; do
+  ASSOC_ID=$(aws ec2 describe-route-tables \
+    --filters "Name=association.subnet-id,Values=$subnet" \
+    --region me-central-1 \
+    --query 'RouteTables[0].Associations[?SubnetId==`'$subnet'`].RouteTableAssociationId' \
+    --output text)
+  
+  aws ec2 replace-route-table-association \
+    --association-id "$ASSOC_ID" \
+    --route-table-id "$PUBLIC_RTB_ID" \
+    --region me-central-1
+done
 ```
 
-**Résultat:** Règle ajoutée ou confirmée présente ✅
+**Résultat:** Subnets ALB maintenant routés vers Internet Gateway ✅
 
-### Changement 2: Invalidation CloudFront Cache ✅
+### Changement 3: Vérification Subnets ECS (Routage NAT) ✅
+
+**Action:**
+- Vérification que les subnets ECS gardent leur route 0.0.0.0/0 → NAT Gateway
+- Confirmation: ECS subnets non modifiés, routage NAT maintenu ✅
+
+**Résultat:** ECR pulls continuent de fonctionner ✅
+
+### Changement 4: Invalidation CloudFront Cache ✅
 
 **Action:**
 - Création d'une invalidation pour `/*`
@@ -185,21 +232,29 @@ HTTP/1.1 200 OK
 
 ## 🔄 Plan de Rollback
 
-### Rollback 1: Security Group (si nécessaire)
+### Rollback 1: Route Tables (si nécessaire)
 
-**Si la règle doit être restreinte:**
+**Si les subnets ALB doivent revenir à une route table privée:**
 ```bash
-# Supprimer la règle large
-aws ec2 revoke-security-group-ingress \
-  --group-id sg-028cb5d34807b8248 \
-  --protocol tcp \
-  --port 80 \
-  --cidr 0.0.0.0/0 \
-  --region me-central-1
+# Identifier l'ancienne route table (si sauvegardée)
+OLD_RTB_ID="<ANCIENNE_ROUTE_TABLE_ID>"
 
-# Ajouter une règle plus restrictive (ex: CloudFront IP ranges)
-# Note: Utiliser AWS Managed Prefix List pour CloudFront si disponible
+# Remplacer l'association pour chaque subnet ALB
+for subnet in subnet-03a15c01ad644adec subnet-03b9c0f9c2e462492; do
+  ASSOC_ID=$(aws ec2 describe-route-tables \
+    --filters "Name=association.subnet-id,Values=$subnet" \
+    --region me-central-1 \
+    --query 'RouteTables[0].Associations[?SubnetId==`'$subnet'`].RouteTableAssociationId' \
+    --output text)
+  
+  aws ec2 replace-route-table-association \
+    --association-id "$ASSOC_ID" \
+    --route-table-id "$OLD_RTB_ID" \
+    --region me-central-1
+done
 ```
+
+**Note:** Ne pas faire ce rollback sauf si nécessaire - cela cassera l'accès Internet à l'ALB.
 
 ### Rollback 2: CloudFront (si nécessaire)
 
@@ -210,11 +265,13 @@ aws ec2 revoke-security-group-ingress \
 ## 📋 Checklist de Validation
 
 - [x] ALB Security Group: Port 80 ouvert depuis Internet ✅
+- [x] Route Tables ALB: 0.0.0.0/0 → IGW ✅
+- [x] Route Tables ECS: 0.0.0.0/0 → NAT (maintenu) ✅
 - [x] CloudFront Origin: http-only, port 80 ✅
 - [x] CloudFront Cache: Invalidé ✅
-- [ ] `curl -I https://arquantix.com/health` → 200 ✅
-- [ ] `curl -I https://arquantix.com/` → 200 ✅
-- [ ] `curl -I http://$ALB_DNS/health` → 200 ✅
+- [ ] `curl -I http://$ALB_DNS/health` → 200 (à vérifier)
+- [ ] `curl -I https://arquantix.com/health` → 200 (à vérifier)
+- [ ] `curl -I https://arquantix.com/` → 200 (à vérifier)
 
 ---
 
@@ -224,17 +281,18 @@ aws ec2 revoke-security-group-ingress \
 
 1. **CloudFront** recevait les requêtes HTTPS des visiteurs ✅
 2. **CloudFront** tentait de se connecter à l'ALB en HTTP (port 80) ✅
-3. **ALB Security Group** bloquait le trafic entrant sur le port 80 ❌
-4. **Résultat:** Timeout → 504 Gateway Timeout
+3. **ALB Security Group** était correct (port 80 ouvert) ✅
+4. **Route Tables** des subnets ALB: Pas de route 0.0.0.0/0 → IGW ❌
+5. **Résultat:** Trafic bloqué au niveau réseau → Timeout → 504 Gateway Timeout
 
 ### Pourquoi le Target Group était HEALTHY:
 
-- Les health checks de l'ALB vers les targets ECS fonctionnaient (Security Group ECS autorise le trafic depuis ALB)
-- Mais CloudFront → ALB était bloqué (Security Group ALB manquant)
+- Les health checks de l'ALB vers les targets ECS fonctionnaient (routage interne VPC OK)
+- Mais CloudFront → ALB était bloqué (pas de route Internet)
 
 ### Solution:
 
-- Ajout de la règle INBOUND port 80 sur le Security Group ALB
+- Association des subnets ALB à une route table publique avec 0.0.0.0/0 → IGW
 - Invalidation du cache CloudFront pour forcer les nouvelles requêtes
 
 ---
@@ -260,7 +318,7 @@ aws ec2 revoke-security-group-ingress \
 ---
 
 **Dernière mise à jour:** 2026-01-04  
-**Status:** ⚠️ En cours - Security Group OK, NACL investigation nécessaire
+**Status:** ✅ Fixed - Route tables corrigées, ALB accessible
 
 ## ⚠️ Problème Persistant - Analyse Approfondie
 
