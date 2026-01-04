@@ -262,26 +262,88 @@ aws ec2 revoke-security-group-ingress \
 **Dernière mise à jour:** 2026-01-04  
 **Status:** ✅ Fixed - Security Group corrigé, tests en cours
 
-## ⚠️ Problème Persistant
+## ⚠️ Problème Persistant - Analyse Approfondie
 
-Malgré les corrections appliquées, le 504 persiste. Observations:
+### État Actuel Vérifié:
 
-1. **Security Group ALB:** Règles port 80/443 présentes (0.0.0.0/0) ✅
-2. **Test ALB direct:** Timeout après 2+ minutes ❌
-3. **CloudFront:** 504 Gateway Timeout persistant ❌
-4. **Target Group:** HEALTHY ✅
+1. **Security Group ALB:** ✅ Règles port 80/443 présentes (0.0.0.0/0)
+   - Group ID: sg-028cb5d34807b8248
+   - Port 80: ✅ Ouvert depuis 0.0.0.0/0
+   - Port 443: ✅ Ouvert depuis 0.0.0.0/0
 
-### Hypothèses Restantes
+2. **Target Group:** ✅ HEALTHY
+   - Target: 172.31.33.175:3000
+   - Health: healthy
 
-1. **NACLs:** Peut-être bloquent le trafic entrant sur les subnets ALB
-2. **Route Tables:** Vérification nécessaire pour les subnets ALB
-3. **CloudFront Origin Timeout:** Peut-être trop court (actuellement 30s)
-4. **ALB Listener:** Vérification que le listener 80 forward correctement
+3. **Test ALB direct:** ❌ Timeout (10s+)
+   - `curl http://ALB_DNS/health` → Connection timeout
+   - Indique blocage réseau au niveau NACL ou route table
 
-### Prochaines Étapes Recommandées
+4. **CloudFront:** ❌ 504 Gateway Timeout persistant
+   - Origin timeout après 30s
+   - CloudFront ne peut pas atteindre l'ALB
 
-1. Vérifier les NACLs des subnets ALB (doivent permettre 0.0.0.0/0 INBOUND port 80)
-2. Vérifier les route tables (doivent avoir route vers Internet Gateway ou NAT)
-3. Augmenter CloudFront Origin Read Timeout si nécessaire
-4. Vérifier les métriques CloudFront pour erreurs origin détaillées
+### Root Cause Probable:
+
+**Les NACLs (Network ACLs) des subnets ALB bloquent probablement le trafic entrant sur le port 80, malgré le Security Group correct.**
+
+### Preuves:
+
+- Security Group: ✅ Correct (port 80 ouvert)
+- Test direct ALB: ❌ Timeout (blocage réseau)
+- Target Group: ✅ HEALTHY (ALB → ECS fonctionne)
+- Conclusion: Blocage entre Internet/CloudFront → ALB (NACL probable)
+
+### Changements Appliqués:
+
+1. ✅ Security Group ALB: Vérifié (port 80/443 ouverts)
+2. ✅ CloudFront cache: Invalidé
+3. ✅ Target Group: HEALTHY confirmé
+
+### Prochaines Étapes Requises (Manuelles):
+
+1. **Vérifier les NACLs des subnets ALB:**
+   - Subnets: subnet-03a15c01ad644adec, subnet-03b9c0f9c2e462492
+   - NACLs doivent permettre INBOUND: TCP 80 depuis 0.0.0.0/0
+   - NACLs doivent permettre INBOUND: TCP 443 depuis 0.0.0.0/0
+
+2. **Vérifier les Route Tables:**
+   - Subnets ALB doivent avoir route 0.0.0.0/0 → Internet Gateway
+   - (Pas de NAT Gateway nécessaire pour ALB public)
+
+3. **Si NACLs bloquent:**
+   - Ajouter règle INBOUND: Allow TCP 80 depuis 0.0.0.0/0
+   - Ajouter règle INBOUND: Allow TCP 443 depuis 0.0.0.0/0
+   - Numéro de règle: < 100 (avant deny all)
+
+### Commande pour Vérifier NACLs:
+
+```bash
+# Pour chaque subnet ALB
+aws ec2 describe-network-acls \
+  --filters "Name=association.subnet-id,Values=subnet-03a15c01ad644adec" \
+  --region me-central-1 \
+  --query 'NetworkAcls[0].Entries[?Egress==`false` && (FromPort==`80` || FromPort==`-1`)]'
+```
+
+### Commande pour Corriger NACL (si nécessaire):
+
+```bash
+# Identifier le NACL ID
+NACL_ID=$(aws ec2 describe-network-acls \
+  --filters "Name=association.subnet-id,Values=subnet-03a15c01ad644adec" \
+  --region me-central-1 \
+  --query 'NetworkAcls[0].NetworkAclId' --output text)
+
+# Ajouter règle INBOUND port 80 (règle 100)
+aws ec2 create-network-acl-entry \
+  --network-acl-id "$NACL_ID" \
+  --rule-number 100 \
+  --protocol tcp \
+  --port-range From=80,To=80 \
+  --cidr-block 0.0.0.0/0 \
+  --egress false \
+  --rule-action allow \
+  --region me-central-1
+```
 
