@@ -11,6 +11,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Ensure public directory exists for Next.js build
 RUN mkdir -p ./public
+ARG NEXT_PUBLIC_GIT_SHA
+ENV NEXT_PUBLIC_GIT_SHA=$NEXT_PUBLIC_GIT_SHA
 RUN npm run build
 
 # --- runner ---
