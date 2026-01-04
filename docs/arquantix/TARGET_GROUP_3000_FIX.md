@@ -255,3 +255,20 @@ aws ecs update-service \
 **Dernière mise à jour:** 2026-01-04  
 **Configuration validée:** ✅
 
+## ⚠️ Note sur le Déploiement
+
+Le service ECS peut prendre quelques minutes pour:
+1. Démarrer de nouvelles tasks avec la nouvelle configuration
+2. Enregistrer automatiquement les containers dans le nouveau Target Group
+3. Passer les health checks (2 checks réussis = HEALTHY)
+
+**Timeline normale:**
+- 0-2 min: Nouvelles tasks démarrent
+- 2-4 min: Targets enregistrés et health checks passent
+- 4+ min: Site accessible ✅
+
+Si les targets restent unhealthy après 5 minutes, vérifier:
+- Les logs ECS/CloudWatch pour erreurs de démarrage
+- Que l'application écoute bien sur 0.0.0.0:3000
+- Que l'endpoint /health retourne 200 OK
+
