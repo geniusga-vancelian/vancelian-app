@@ -124,19 +124,14 @@ try:
     with open('taskdef.json', 'r') as f:
         td = json.load(f)
     
-    if 'taskRoleArn' in td:
-        if td['taskRoleArn'] is None:
-            del td['taskRoleArn']
-            print("✅ Removed null taskRoleArn from task definition")
-        else:
-            print(f"ℹ️  taskRoleArn exists: {td['taskRoleArn']}")
-    
-    # Also remove other null values that ECS might reject
+    # Remove null values that ECS doesn't accept
     fields_to_check = ['taskRoleArn', 'proxyConfiguration']
     for field in fields_to_check:
         if field in td and td[field] is None:
             del td[field]
             print(f"✅ Removed null {field} from task definition")
+        elif field in td:
+            print(f"ℹ️  {field} exists: {td[field][:50] if isinstance(td[field], str) else td[field]}...")
     
     # Write cleaned task definition
     with open('taskdef.json', 'w') as f:
