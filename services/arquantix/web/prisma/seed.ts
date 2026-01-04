@@ -1,6 +1,7 @@
 import { PrismaClient, UserRole } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
+// Use vanilla PrismaClient (no adapter/accelerate) for local development
 const prisma = new PrismaClient()
 
 async function main() {
