@@ -260,7 +260,7 @@ aws ec2 revoke-security-group-ingress \
 ---
 
 **Dernière mise à jour:** 2026-01-04  
-**Status:** ✅ Fixed - Security Group corrigé, tests en cours
+**Status:** ⚠️ En cours - Security Group OK, NACL investigation nécessaire
 
 ## ⚠️ Problème Persistant - Analyse Approfondie
 
