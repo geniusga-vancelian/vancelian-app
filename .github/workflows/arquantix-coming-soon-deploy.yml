@@ -119,18 +119,48 @@ jobs:
             # Remove taskRoleArn if it's null (ECS doesn't accept null)
             python3 << 'PYEOF'
 import json
-with open('taskdef.json', 'r') as f:
-    td = json.load(f)
-if 'taskRoleArn' in td and td['taskRoleArn'] is None:
-    del td['taskRoleArn']
+import sys
+try:
+    with open('taskdef.json', 'r') as f:
+        td = json.load(f)
+    
+    if 'taskRoleArn' in td:
+        if td['taskRoleArn'] is None:
+            del td['taskRoleArn']
+            print("✅ Removed null taskRoleArn from task definition")
+        else:
+            print(f"ℹ️  taskRoleArn exists: {td['taskRoleArn']}")
+    
+    # Also remove other null values that ECS might reject
+    fields_to_check = ['taskRoleArn', 'proxyConfiguration']
+    for field in fields_to_check:
+        if field in td and td[field] is None:
+            del td[field]
+            print(f"✅ Removed null {field} from task definition")
+    
+    # Write cleaned task definition
     with open('taskdef.json', 'w') as f:
-        json.dump(td, f, indent=2)
-    print("✅ Removed null taskRoleArn from task definition")
+        json.dump(td, f, indent=2, sort_keys=True)
+    
+    # Validate JSON
+    with open('taskdef.json', 'r') as f:
+        json.load(f)  # Will raise if invalid
+    print("✅ Task definition cleaned and validated")
+except Exception as e:
+    print(f"❌ Error cleaning task definition: {e}", file=sys.stderr)
+    sys.exit(1)
 PYEOF
           else
             echo "📋 No existing task definition found, using template"
             cp services/arquantix/.aws/task-definition.json taskdef.json
           fi
+      
+      - name: Verify task definition before render
+        run: |
+          echo "🔍 Verifying task definition JSON..."
+          python3 -m json.tool taskdef.json > /dev/null && echo "✅ JSON is valid" || (echo "❌ Invalid JSON" && exit 1)
+          echo "📋 Task definition preview:"
+          python3 -c "import json; td = json.load(open('taskdef.json')); print(f\"  Family: {td.get('family')}\"); print(f\"  Container: {td['containerDefinitions'][0]['name']}\"); print(f\"  ExecutionRole: {td.get('executionRoleArn', 'N/A')[:50]}...\")"
       
       - name: Render new task definition with new image
         id: render-taskdef
