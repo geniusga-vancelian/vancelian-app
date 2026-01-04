@@ -21,12 +21,11 @@ env:
   AWS_REGION: me-central-1
   ECR_REGISTRY: 411714852748.dkr.ecr.me-central-1.amazonaws.com
   ECR_REPOSITORY: arquantix-coming-soon
-  IMAGE_TAG: ${{ inputs.tag || 'latest' }}
   ECS_CLUSTER: arquantix-cluster
   ECS_SERVICE: arquantix-coming-soon
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
     
     steps:
@@ -44,16 +43,25 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       
+      - name: Set image tag
+        id: set-tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Build Docker image
         run: |
           set -euo pipefail
           echo "🔨 Building Docker image..."
           echo "   Repository: ${{ env.ECR_REPOSITORY }}"
-          echo "   Tag: ${{ env.IMAGE_TAG }}"
+          echo "   Tag: ${{ steps.set-tag.outputs.tag }}"
           echo "   Context: services/arquantix/web"
           
           docker build \
-            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.set-tag.outputs.tag }} \
             -f services/arquantix/web/Dockerfile \
             services/arquantix/web
       
@@ -61,34 +69,67 @@ jobs:
         run: |
           set -euo pipefail
           echo "📤 Pushing image to ECR..."
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          echo "✅ Image pushed: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.set-tag.outputs.tag }}
+          echo "✅ Image pushed: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.set-tag.outputs.tag }}"
       
       - name: Verify image in ECR
+        id: verify-image
         run: |
           set -euo pipefail
           echo "🔍 Verifying image in ECR..."
-          aws ecr describe-images \
+          IMAGE_DIGEST=$(aws ecr describe-images \
             --region ${{ env.AWS_REGION }} \
             --repository-name ${{ env.ECR_REPOSITORY }} \
-            --image-ids imageTag=${{ env.IMAGE_TAG }} \
-            --query 'imageDetails[0].{digest:imageDigest,pushedAt:imagePushedAt}' \
-            --output json || echo "⚠️  Image not found in ECR"
+            --image-ids imageTag=${{ steps.set-tag.outputs.tag }} \
+            --query 'imageDetails[0].imageDigest' \
+            --output text 2>&1)
+          
+          if [ "$IMAGE_DIGEST" = "None" ] || [ -z "$IMAGE_DIGEST" ]; then
+            echo "❌ Error: Image with tag ${{ steps.set-tag.outputs.tag }} not found in ECR"
+            exit 1
+          fi
+          
+          echo "✅ Image verified: $IMAGE_DIGEST"
+          echo "digest=$IMAGE_DIGEST" >> $GITHUB_OUTPUT
       
-      - name: Deploy to ECS (if service exists)
+      - name: Fetch current task definition
+        id: fetch-taskdef
         run: |
           set -euo pipefail
-          echo "🚀 Deploying to ECS..."
-          echo "   Cluster: ${{ env.ECS_CLUSTER }}"
-          echo "   Service: ${{ env.ECS_SERVICE }}"
+          echo "📥 Fetching current task definition..."
           
-          # Try to update service, but don't fail if it doesn't exist yet
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
-            --force-new-deployment \
-            --region ${{ env.AWS_REGION }} \
-            || echo "⚠️  ECS service not found - deployment will be manual"
+          # Try to get current task definition from service
+          CURRENT_TASK_DEF=$(aws ecs describe-services \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --query "services[0].taskDefinition" \
+            --output text 2>/dev/null || echo "")
           
-          echo "✅ ECS deployment triggered"
-
+          if [ -n "$CURRENT_TASK_DEF" ] && [ "$CURRENT_TASK_DEF" != "None" ]; then
+            echo "📋 Found existing task definition: $CURRENT_TASK_DEF"
+            aws ecs describe-task-definition \
+              --task-definition "$CURRENT_TASK_DEF" \
+              --region "${{ env.AWS_REGION }}" \
+              --query "taskDefinition" \
+              --output json > taskdef.json
+          else
+            echo "📋 No existing task definition found, using template"
+            cp services/arquantix/.aws/task-definition.json taskdef.json
+          fi
+      
+      - name: Render new task definition with new image
+        id: render-taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: taskdef.json
+          container-name: arquantix-coming-soon
+          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.set-tag.outputs.tag }}
+      
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-taskdef.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
