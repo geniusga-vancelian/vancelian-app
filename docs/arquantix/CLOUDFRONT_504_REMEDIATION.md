@@ -260,5 +260,28 @@ aws ec2 revoke-security-group-ingress \
 ---
 
 **Dernière mise à jour:** 2026-01-04  
-**Status:** ✅ Fixed - En attente de validation finale
+**Status:** ⚠️ En cours - 504 persiste après corrections initiales
+
+## ⚠️ Problème Persistant
+
+Malgré les corrections appliquées, le 504 persiste. Observations:
+
+1. **Security Group ALB:** Règles port 80/443 présentes (0.0.0.0/0) ✅
+2. **Test ALB direct:** Timeout après 2+ minutes ❌
+3. **CloudFront:** 504 Gateway Timeout persistant ❌
+4. **Target Group:** HEALTHY ✅
+
+### Hypothèses Restantes
+
+1. **NACLs:** Peut-être bloquent le trafic entrant sur les subnets ALB
+2. **Route Tables:** Vérification nécessaire pour les subnets ALB
+3. **CloudFront Origin Timeout:** Peut-être trop court (actuellement 30s)
+4. **ALB Listener:** Vérification que le listener 80 forward correctement
+
+### Prochaines Étapes Recommandées
+
+1. Vérifier les NACLs des subnets ALB (doivent permettre 0.0.0.0/0 INBOUND port 80)
+2. Vérifier les route tables (doivent avoir route vers Internet Gateway ou NAT)
+3. Augmenter CloudFront Origin Read Timeout si nécessaire
+4. Vérifier les métriques CloudFront pour erreurs origin détaillées
 
