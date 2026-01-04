@@ -51,7 +51,24 @@ Aucun CacheBehavior personnalisé
 Aucune fonction associée au Default Behavior
 
 ### 6. Custom Error Responses
-Aucune custom error response configurée
+```json
+[
+  {
+    "ErrorCode": 403,
+    "ResponsePagePath": "/index.html",
+    "ResponseCode": "200",
+    "ErrorCachingMinTTL": 300
+  },
+  {
+    "ErrorCode": 404,
+    "ResponsePagePath": "/index.html",
+    "ResponseCode": "200",
+    "ErrorCachingMinTTL": 300
+  }
+]
+```
+
+⚠️ **Problème identifié:** Les Custom Error Responses redirigent les 403/404 vers `/index.html`, ce qui peut causer des problèmes avec Next.js.
 
 ### Tests Avant Correction
 
@@ -88,6 +105,12 @@ curl -I "http://arquantix-prod-alb-1651887598.me-central-1.elb.amazonaws.com/" -
 **Action:**
 - Modification de `DefaultRootObject: index.html` → `DefaultRootObject: ''` (chaîne vide)
 - Le Default Behavior pointe déjà vers le bon origin (ALB) ✅
+
+### Changement 2: Suppression des Custom Error Responses ✅
+
+**Action:**
+- Suppression des Custom Error Responses qui redirigent 403/404 vers `/index.html`
+- Ces redirections ne sont pas compatibles avec Next.js qui gère les erreurs dynamiquement
 
 **Commande:**
 ```bash
@@ -129,7 +152,7 @@ aws cloudfront update-distribution \
 | **DefaultBehavior TargetOriginId** | `S3-arquantix-coming-soon-dev` (ALB) | `S3-arquantix-coming-soon-dev` (ALB) ✅ |
 | **CacheBehaviors** | Aucun | Aucun ✅ |
 | **Functions/Lambda@Edge** | Aucune | Aucune ✅ |
-| **Custom Error Responses** | Aucune | Aucune ✅ |
+| **Custom Error Responses** | 2 (403→/index.html, 404→/index.html) | 0 (supprimées) ✅ |
 
 ### Tests de Preuve (Après Correction)
 
