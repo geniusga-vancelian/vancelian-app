@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getSessionFromToken } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -18,43 +19,47 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Protect admin routes
+  // Admin routes protection
   if (pathname.startsWith('/admin')) {
-    // Allow access to /admin/login
     if (pathname === '/admin/login') {
+      // Allow access to login page
       return NextResponse.next()
     }
 
-    // Allow access to API routes (they handle their own auth)
-    if (pathname.startsWith('/api/admin')) {
-      return NextResponse.next()
-    }
+    // Get session token from cookie
+    const token = request.cookies.get('arq_admin_session')?.value
 
-    // Check for session cookie
-    const sessionToken = request.cookies.get('arq_admin_session')?.value
-
-    if (!sessionToken) {
-      // Redirect to login
+    if (!token) {
+      // Redirect to login if not authenticated
       const url = request.nextUrl.clone()
       url.pathname = '/admin/login'
-      url.searchParams.set('redirect', pathname)
       return NextResponse.redirect(url)
     }
 
     // Verify session token
-    const session = await getSessionFromToken(sessionToken)
+    try {
+      const session = await getSessionFromToken(token)
+      
+      if (!session) {
+        // Invalid or expired session
+        const url = request.nextUrl.clone()
+        url.pathname = '/admin/login'
+        const response = NextResponse.redirect(url)
+        response.cookies.delete('arq_admin_session')
+        return response
+      }
 
-    if (!session) {
-      // Invalid or expired session, redirect to login
+      // Session is valid, allow access
+      return NextResponse.next()
+    } catch (error) {
+      // Error verifying session, redirect to login
+      console.error('Middleware session verification error:', error)
       const url = request.nextUrl.clone()
       url.pathname = '/admin/login'
       const response = NextResponse.redirect(url)
       response.cookies.delete('arq_admin_session')
       return response
     }
-
-    // Session is valid, allow access
-    return NextResponse.next()
   }
 
   return NextResponse.next()
