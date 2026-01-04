@@ -1,8 +1,8 @@
 # CloudFront 504 Gateway Timeout - Remediation
 
 **Date:** 2026-01-04  
-**Status:** ✅ Fixed  
-**Root Cause:** ALB Security Group missing inbound rule for port 80 from Internet/CloudFront
+**Status:** ✅ Fixed - Route table publique créée et associée aux subnets ALB  
+**Root Cause:** Subnets ALB non associés à une route table avec route 0.0.0.0/0 → IGW
 
 ---
 
@@ -197,7 +197,14 @@ HTTP/2 200
 content-type: text/plain
 ```
 
-**Status:** ✅ À vérifier après correction
+**Résultat:**
+```
+HTTP/2 200 
+content-type: text/plain
+x-cache: Miss from cloudfront
+```
+
+**Status:** ✅ **RÉUSSI** - CloudFront accessible
 
 ### Test 2: Page Principale via CloudFront
 
@@ -206,27 +213,23 @@ content-type: text/plain
 curl -I https://arquantix.com/
 ```
 
-**Résultat attendu:**
-```
-HTTP/2 200
-content-type: text/html
-```
+**Résultat:** ✅ **RÉUSSI** - HTTP/2 200
 
-**Status:** ✅ À vérifier après correction
-
-### Test 3: ALB Direct (après correction SG)
+### Test 3: ALB Direct (après correction route table)
 
 **Commande:**
 ```bash
 curl -I "http://$ALB_DNS/health" -H "Host: arquantix.com"
 ```
 
-**Résultat attendu:**
+**Résultat:**
 ```
 HTTP/1.1 200 OK
+Date: Sun, 04 Jan 2026 08:01:24 GMT
+Content-Type: text/plain
 ```
 
-**Status:** ✅ À vérifier après correction
+**Status:** ✅ **RÉUSSI** - ALB accessible directement
 
 ---
 
