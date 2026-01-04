@@ -115,6 +115,18 @@ jobs:
               --region "${{ env.AWS_REGION }}" \
               --query "taskDefinition" \
               --output json > taskdef.json
+            
+            # Remove taskRoleArn if it's null (ECS doesn't accept null)
+            python3 << 'PYEOF'
+import json
+with open('taskdef.json', 'r') as f:
+    td = json.load(f)
+if 'taskRoleArn' in td and td['taskRoleArn'] is None:
+    del td['taskRoleArn']
+    with open('taskdef.json', 'w') as f:
+        json.dump(td, f, indent=2)
+    print("✅ Removed null taskRoleArn from task definition")
+PYEOF
           else
             echo "📋 No existing task definition found, using template"
             cp services/arquantix/.aws/task-definition.json taskdef.json
