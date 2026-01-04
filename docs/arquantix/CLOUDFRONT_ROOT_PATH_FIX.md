@@ -100,7 +100,9 @@ aws cloudfront update-distribution \
 - Création d'une invalidation pour `/*`
 - Attente de la completion
 
-**Invalidation ID:** I7IMJZWQ6I2U18HHJ0K4X4KTNE  
+**Invalidation IDs:** 
+- IANYEQK9FTI234P4O0LR6I32PI (première tentative)
+- (nouvelle invalidation après correction finale)
 **Status:** Completed ✅
 
 ---
