@@ -1,0 +1,53 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ACM Certificate Management",
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:DescribeCertificate",
+        "acm:ListCertificates",
+        "acm:AddTagsToCertificate",
+        "acm:DeleteCertificate"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "me-central-1"
+        }
+      }
+    },
+    {
+      "Sid": "Route53 DNS Validation",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets",
+        "route53:ListHostedZones",
+        "route53:ListResourceRecordSets",
+        "route53:GetChange"
+      ],
+      "Resource": [
+        "arn:aws:route53:::hostedzone/Z08819812KDG05NSYVRFJ",
+        "arn:aws:route53:::change/*"
+      ]
+    },
+    {
+      "Sid": "ALB Listener Management",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:CreateListener",
+        "elasticloadbalancing:ModifyListener",
+        "elasticloadbalancing:DescribeListeners",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeTargetGroups"
+      ],
+      "Resource": [
+        "arn:aws:elasticloadbalancing:me-central-1:411714852748:loadbalancer/app/arquantix-prod-alb/*",
+        "arn:aws:elasticloadbalancing:me-central-1:411714852748:listener/app/arquantix-prod-alb/*/*",
+        "arn:aws:elasticloadbalancing:me-central-1:411714852748:targetgroup/arquantix-prod-tg/*"
+      ]
+    }
+  ]
+}
+
