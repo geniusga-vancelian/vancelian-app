@@ -60,6 +60,8 @@ NEXT_PUBLIC_BASE_URL="http://localhost:3000"
 npm run db:generate
 ```
 
+**Note :** Ce projet utilise Prisma v6.x pour la stabilité et la compatibilité avec PrismaClient vanilla (sans adapter/accelerate requis par v7).
+
 ### 5. Exécuter les migrations
 
 ```bash
