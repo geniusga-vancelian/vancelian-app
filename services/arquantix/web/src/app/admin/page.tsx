@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface User {
@@ -12,57 +12,55 @@ interface User {
 
 export default function AdminDashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Check if user is authenticated
     fetch('/api/admin/me')
       .then((res) => res.json())
       .then((data) => {
-        if (data.user) {
-          setUser(data.user)
-        } else {
+        if (!data.user) {
+          // Not authenticated, redirect to login
           router.push('/admin/login')
         }
-        setLoading(false)
+        // If authenticated, stay on this page (dashboard)
       })
       .catch(() => {
+        // Error checking auth, redirect to login
         router.push('/admin/login')
-        setLoading(false)
       })
   }, [router])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return null
-  }
 
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Dashboard</h1>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">Welcome, {user.email}</h2>
-        <div className="space-y-2 text-sm text-gray-600">
-          <p>
-            <span className="font-medium">Role:</span> {user.role}
-          </p>
-          <p>
-            <span className="font-medium">User ID:</span> {user.id}
-          </p>
-        </div>
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4">Welcome to Arquantix CMS</h2>
+        <p className="text-gray-600 mb-4">
+          Manage your site content, pages, and sections from here.
+        </p>
       </div>
 
-      <div className="mt-8 bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">Quick Stats</h2>
-        <p className="text-gray-600">Coming soon...</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <a
+          href="/admin/pages"
+          className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+        >
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Pages</h3>
+          <p className="text-gray-600 text-sm">
+            Manage pages and sections of your site
+          </p>
+        </a>
+
+        <div className="bg-white rounded-lg shadow p-6 opacity-50">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Media</h3>
+          <p className="text-gray-600 text-sm">Coming soon...</p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6 opacity-50">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Settings</h3>
+          <p className="text-gray-600 text-sm">Coming soon...</p>
+        </div>
       </div>
     </div>
   )

@@ -18,9 +18,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       if (response.ok) {
         router.push('/admin/login')
         router.refresh()
+      } else {
+        // Even if API fails, redirect to login
+        router.push('/admin/login')
+        router.refresh()
       }
     } catch (error) {
       console.error('Logout error:', error)
+      // Redirect to login even on error
+      router.push('/admin/login')
+      router.refresh()
     }
   }
 

@@ -3,3 +3,7 @@ node_modules/
 package-lock.json
 
 /src/generated/prisma
+.env
+.env.local
+.env.*
+!.env.example

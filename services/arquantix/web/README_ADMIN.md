@@ -42,7 +42,18 @@ npm install
 
 ### 3. Configurer les variables d'environnement
 
-Le fichier `.env` dans `services/arquantix/web/` doit contenir :
+#### Copier le template
+
+```bash
+cp .env.example .env
+```
+
+Le fichier `.env.example` sert de template avec toutes les variables nécessaires.  
+Le fichier `.env` est **local uniquement** et n'est **jamais commité** dans git.
+
+#### Variables de base
+
+Le fichier `.env` dans `services/arquantix/web/` doit contenir au minimum :
 
 ```env
 DATABASE_URL="postgresql://arquantix:arquantix@localhost:5443/arquantix_admin"
@@ -53,6 +64,63 @@ NEXT_PUBLIC_BASE_URL="http://localhost:3000"
 ```
 
 **Note :** Le service `arquantix-db` utilise le port **5443** (pas 5432).
+
+#### Cloudflare R2 configuration
+
+Pour utiliser la bibliothèque de médias, vous devez configurer les credentials Cloudflare R2.
+
+1. **Copiez le template** : Le fichier `.env.example` contient déjà la section R2 avec des valeurs vides.
+
+2. **Récupérez vos credentials** depuis Cloudflare Dashboard :
+   - Allez sur https://dash.cloudflare.com/
+   - Accédez à **R2 Object Storage**
+   - Créez un bucket (ex: `arquantix-media`) si nécessaire
+   - Allez dans **Manage R2 API Tokens**
+   - Créez un nouveau token avec les permissions **Object Read & Write**
+   - Copiez l'**Access Key ID** et le **Secret Access Key**
+   - Notez l'**Endpoint S3** (format: `https://<account-id>.r2.cloudflarestorage.com`)
+
+3. **Remplissez votre `.env` local** (jamais commité) :
+
+```env
+### Cloudflare R2 — Media storage (S3 compatible)
+R2_ACCESS_KEY_ID=votre-access-key-id
+R2_SECRET_ACCESS_KEY=votre-secret-access-key
+R2_BUCKET_NAME=arquantix-media
+R2_ENDPOINT=https://votre-account-id.r2.cloudflarestorage.com
+# Optionnel — domaine public custom Cloudflare
+# R2_PUBLIC_URL=https://media.arquantix.com
+```
+
+**Important :**
+- Le fichier `.env` est **local uniquement** et est ignoré par git (`.gitignore`)
+- Ne **jamais** commiter de vraies clés dans le repository
+- Le fichier `.env.example` sert uniquement de template avec des valeurs vides
+
+#### OpenAI Translation configuration
+
+Pour utiliser la fonctionnalité d'auto-traduction, vous devez configurer les credentials OpenAI.
+
+1. **Récupérez votre clé API** depuis OpenAI Dashboard :
+   - Allez sur https://platform.openai.com/api-keys
+   - Créez une nouvelle clé API si nécessaire
+   - Copiez la clé (format: `sk-...`)
+
+2. **Remplissez votre `.env` local** (jamais commité) :
+
+```env
+### OpenAI Translation
+OPENAI_API_KEY=sk-votre-cle-api-ici
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TRANSLATION_TEMPERATURE=0
+OPENAI_TRANSLATION_MAX_CHARS=12000
+```
+
+**Important :**
+- Le fichier `.env` est **local uniquement** et est ignoré par git (`.gitignore`)
+- Ne **jamais** commiter de vraies clés dans le repository
+- En production (ECS), ajoutez ces variables dans vos secrets ECS/CloudFormation
+- Le fichier `.env.example` contient le template avec des valeurs vides
 
 ### 4. Générer le client Prisma
 
@@ -76,9 +144,47 @@ Cette commande créera les tables `users` et `sessions` dans votre base de donn�
 npm run db:seed
 ```
 
-Cette commande créera un utilisateur super admin avec l'email et le mot de passe définis dans `.env`.
+Cette commande créera un utilisateur super admin avec l'email et le mot de passe définis dans `.env`, ainsi que le contenu initial (page "home" avec sections).
 
 **Note :** Le script de seed utilise un PrismaClient vanilla (runtime Node.js uniquement, pas d'Accelerate/Edge).
+
+## Gestion du Contenu (Phase 2)
+
+### Éditer les Pages et Sections
+
+1. **Liste des pages** : `/admin/pages`
+   - Affiche toutes les pages du site
+   - Cliquez sur "Edit" pour gérer les sections d'une page
+
+2. **Gérer les sections** : `/admin/pages/[slug]`
+   - Liste toutes les sections d'une page
+   - Cliquez sur "Edit" pour éditer une section
+
+3. **Éditer une section** : `/admin/sections/[id]`
+   - Sélectionnez la locale (fr, en, ar, it)
+   - Choisissez entre "Draft" et "Published"
+   - Éditez le JSON du contenu
+   - Actions disponibles :
+     - **Save Draft** : Sauvegarde le brouillon
+     - **Publish** : Publie le brouillon (écrase la version publiée)
+     - **Reset Draft** : Réinitialise le brouillon depuis la version publiée
+     - **Preview** : Ouvre la page en mode preview
+
+### Mode Preview
+
+- URL : `/preview/[slug]?locale=xx`
+- Accessible uniquement si vous êtes connecté en tant qu'admin
+- Affiche le contenu DRAFT pour la locale sélectionnée
+- Permet de prévisualiser les changements avant publication
+
+### Workflow de Publication
+
+1. Éditez une section en mode "Draft"
+2. Modifiez le JSON du contenu
+3. Cliquez sur "Save Draft" pour sauvegarder
+4. Cliquez sur "Preview" pour voir le résultat
+5. Une fois satisfait, cliquez sur "Publish" pour publier
+6. Le contenu publié est visible sur le site public
 
 ## Utilisation
 
@@ -100,8 +206,8 @@ Le site sera accessible sur `http://localhost:3000`.
 ### Structure de l'admin
 
 - **Dashboard** (`/admin`) : Vue d'ensemble
-- **Pages** (`/admin/pages`) : Gestion des pages (à venir)
-- **Media** (`/admin/media`) : Gestion des médias (à venir)
+- **Pages** (`/admin/pages`) : Gestion des pages et sections
+- **Media** (`/admin/media`) : Bibliothèque de médias (images, vidéos, PDF)
 - **Settings** (`/admin/settings`) : Paramètres (à venir)
 
 ## Commandes disponibles
@@ -145,6 +251,79 @@ Le site sera accessible sur `http://localhost:3000`.
   - `token` : Token unique (32 bytes hex)
   - `expiresAt` : Date d'expiration
   - `createdAt` : Timestamp
+
+## Media Library (Phase 3)
+
+### Configuration Cloudflare R2
+
+La bibliothèque de médias utilise Cloudflare R2 pour le stockage des fichiers. Vous devez configurer les credentials R2 dans votre fichier `.env`.
+
+#### Obtenir les credentials R2 depuis Cloudflare
+
+1. **Connectez-vous à Cloudflare Dashboard** : https://dash.cloudflare.com/
+2. **Accédez à R2** : R2 Object Storage dans le menu
+3. **Créez un bucket** (si nécessaire) :
+   - Nom : `arquantix-media` (ou votre nom préféré)
+   - Région : Auto (par défaut)
+4. **Créez une API Token** :
+   - Allez dans "Manage R2 API Tokens"
+   - Cliquez sur "Create API Token"
+   - Donnez-lui un nom (ex: `arquantix-media-token`)
+   - Permissions : Object Read & Write
+   - TTL : Permanent (ou selon vos besoins)
+   - Cliquez sur "Create API Token"
+5. **Copiez les informations** :
+   - `Account ID` : Trouvé dans l'URL ou dans les paramètres du bucket
+   - `Access Key ID` : Depuis le token créé
+   - `Secret Access Key` : Depuis le token créé (à copier immédiatement, il n'est affiché qu'une fois)
+
+#### Configuration des variables d'environnement
+
+Ajoutez ces variables à votre fichier `.env` :
+
+```env
+# Cloudflare R2 Storage
+R2_ACCOUNT_ID=your-account-id
+R2_ACCESS_KEY_ID=your-access-key-id
+R2_SECRET_ACCESS_KEY=your-secret-access-key
+R2_BUCKET_NAME=arquantix-media
+R2_PUBLIC_URL=https://your-custom-domain.com  # Optionnel : domaine custom pour URLs publiques
+# MAX_UPLOAD_MB=20  # Optionnel : limite de taille d'upload (défaut: 20MB)
+```
+
+**Note :** Si `R2_PUBLIC_URL` n'est pas défini, les URLs publiques utiliseront le format R2 par défaut : `https://pub-<account-id>.r2.dev/<key>`
+
+### Utilisation de la Media Library
+
+1. **Accéder à la bibliothèque** : `/admin/media`
+2. **Uploader un fichier** : Cliquez sur "Upload Media" et sélectionnez un fichier
+3. **Rechercher** : Utilisez la barre de recherche pour filtrer par nom de fichier ou alt text
+4. **Copier l'URL** : Cliquez sur "Copy URL" pour copier l'URL publique du fichier
+5. **Supprimer** : Cliquez sur l'icône de suppression pour supprimer un fichier
+
+### Formats supportés
+
+- **Images** : JPEG, PNG, GIF, WebP, SVG
+- **Vidéos** : MP4, WebM
+- **Documents** : PDF
+
+### Intégration dans les éditeurs
+
+Le composant `MediaPicker` peut être intégré dans les éditeurs de sections pour sélectionner des médias :
+
+```tsx
+import { MediaPicker } from '@/components/admin/MediaPicker'
+
+// Dans votre composant
+<MediaPicker
+  isOpen={isPickerOpen}
+  onClose={() => setIsPickerOpen(false)}
+  onSelect={(media) => {
+    // Mettre à jour le contenu avec media.id
+  }}
+  currentMediaId={currentMediaId}
+/>
+```
 
 ## Développement
 

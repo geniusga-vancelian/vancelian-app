@@ -16,12 +16,13 @@ enum UserRole {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  role         UserRole @default(ADMIN)
-  createdAt    DateTime @default(now()) @map("created_at")
-  sessions     Session[]
+  id                String           @id @default(cuid())
+  email             String           @unique
+  passwordHash      String           @map("password_hash")
+  role              UserRole         @default(ADMIN)
+  createdAt         DateTime         @default(now()) @map("created_at")
+  sessions          Session[]
+  updatedSectionContents SectionContent[]
 
   @@map("users")
 }
@@ -37,4 +38,50 @@ model Session {
   @@index([token])
   @@index([userId])
   @@map("sessions")
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Page {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  createdAt DateTime  @default(now()) @map("created_at")
+  sections  Section[]
+
+  @@map("pages")
+}
+
+model Section {
+  id            String          @id @default(cuid())
+  pageId        String          @map("page_id")
+  key           String // e.g., "hero", "features"
+  order         Int
+  schemaVersion String          @default("v1") @map("schema_version")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  page          Page             @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  contents      SectionContent[]
+
+  @@unique([pageId, key])
+  @@index([pageId])
+  @@map("sections")
+}
+
+model SectionContent {
+  id             String        @id @default(cuid())
+  sectionId      String        @map("section_id")
+  locale         String
+  status         ContentStatus
+  data           Json
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at")
+  updatedByUserId String?      @map("updated_by_user_id")
+  section        Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  updatedBy      User?         @relation(fields: [updatedByUserId], references: [id])
+
+  @@unique([sectionId, locale, status])
+  @@index([sectionId])
+  @@index([locale, status])
+  @@map("section_contents")
 }
