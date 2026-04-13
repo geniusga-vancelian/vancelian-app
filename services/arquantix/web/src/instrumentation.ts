@@ -1,5 +1,8 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const { validateBffStartupConfig } = await import('@/lib/bff-startup-validation')
+    await validateBffStartupConfig()
+
     const hostname = process.env.HOSTNAME || process.env.HOST || '0.0.0.0'
     const port = process.env.PORT || '3000'
     

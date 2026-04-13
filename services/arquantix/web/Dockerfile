@@ -2,6 +2,7 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm ci
 
 # --- build ---
@@ -13,6 +14,15 @@ COPY . .
 RUN mkdir -p ./public
 ARG NEXT_PUBLIC_GIT_SHA
 ENV NEXT_PUBLIC_GIT_SHA=$NEXT_PUBLIC_GIT_SHA
+# Aligné avec l’API FastAPI (PORT=8000 par défaut) — doit être cohérent au moment du build (client bundle)
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+ARG NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=
+ENV NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=$NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO
+# Collecte des données de route au build : les handlers importent le client OpenAI
+ENV OPENAI_API_KEY=sk-build-placeholder
 RUN npm run build
 
 # --- runner ---

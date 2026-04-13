@@ -2,9 +2,9 @@
 Arquantix API - FastAPI REST API with PostgreSQL
 Public endpoints for site vitrine + Admin endpoints with JWT auth
 """
-from fastapi import FastAPI, HTTPException, Depends, status, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, status, Request, UploadFile, File, WebSocket, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -20,56 +20,418 @@ from database import (
     StatusEnum, init_db
 )
 from schemas import (
-    Token, LoginRequest, GlobalSettingsResponse, GlobalSettingsUpdate,
+    Token, LoginRequest, RefreshTokenRequest, RevokeTokenRequest, AuthSessionItem,
+    GlobalSettingsResponse, GlobalSettingsUpdate,
     PageCreate, PageUpdate, PageResponse,
     NewsCreate, NewsUpdate, NewsResponse,
     ContactSubmissionCreate, ContactSubmissionResponse
 )
 from auth import (
-    get_current_user, create_access_token, verify_password, get_password_hash,
-    ACCESS_TOKEN_EXPIRE_MINUTES
+    get_current_user,
+    oauth2_scheme,
+    verify_password,
+    get_password_hash,
 )
+from services.auth.device_attestation_routes import router as device_attestation_router
+from services.auth.device_credentials_routes import router as device_credentials_router
+from services.auth.refresh_session import (
+    perform_login,
+    perform_refresh,
+    perform_revoke,
+    perform_revoke_all,
+    list_active_sessions,
+)
+from services.auth.security_admin_routes import router as auth_security_admin_router
+from services.security.risk_dashboard_routes import router as risk_dashboard_router
+from services.auth.risk_rules_admin_routes import router as risk_rules_admin_router
+from services.security.ml.fraud_ml_admin_routes import router as fraud_ml_admin_router
+from services.security.device_reputation.device_reputation_admin_routes import (
+    router as device_reputation_admin_router,
+)
+from services.auth.passkeys_routes import router as passkeys_router
+from services.auth.well_known_routes import router as well_known_router
+from services.auth.admin_email_otp_routes import router as admin_email_otp_router
+from services.auth.adaptive_auth_routes import router as adaptive_auth_router
+from services.auth.mobile_otp_login_routes import router as mobile_otp_login_router
+from services.auth.signup_mobile_routes import router as signup_mobile_router
+from services.auth.local_passcode_ack_routes import router as local_passcode_ack_router
 from services.translate import translate_page_payload
-from datetime import timedelta
+from services.bundles import router as bundles_router
+from services.diagnostics import router as diagnostics_router
+from services.market_data.routes import router as market_data_router
+from services.backtest.routes import router as backtest_router
+from services.ai_email.routes import router as ai_email_router
+from services.ai_jurisdiction_configs.routes import router as ai_jurisdiction_configs_router
+from services.persons.routes import router as persons_router
+from services.jurisdiction_configs.routes import router as jurisdiction_configs_router
+from services.onboarding.routes import router as onboarding_router
+from services.aml_risk.routes import router as aml_risk_router
+from services.field_definitions.routes import router as field_definitions_router
+from services.finance_strategy_chat.routes import router as finance_strategy_chat_router
+from services.chatbot_epargne.routes import router as chatbot_epargne_router
+from services.migrations.routes import router as migrations_router
+from services.portfolio_engine import router as portfolio_engine_router
+from services.customers_admin import customers_admin_router
+from services.test_clients import (
+    bootstrap_router as test_clients_bootstrap_router,
+    mobile_flutter_router as test_clients_mobile_flutter_router,
+)
+from services.custody import custody_admin_router, custody_transfer_router, custody_webhook_router
+from services.exchange import exchange_admin_router, exchange_router
+from services.price_alerts import price_alerts_router, orders_router
+from services.favorites.router import router as favorites_router
+from services.notifications import notifications_router
+from services.lending import lending_router, wealth_router as lending_wealth_router, pool_router as lending_pool_router, interest_router as lending_interest_router, product_router as lending_product_router, offer_router as lending_offer_router
+from services.registration import (
+    registration_runtime_router,
+    registration_admin_router,
+    jurisdiction_policy_admin_router,
+    jurisdiction_policy_legacy_router,
+    country_directory_admin_router,
+)
+from services.address import address_router
+from services.security import two_factor_router
+from services.security.contact_submissions_crypto import (
+    contact_row_to_admin_dict,
+    contact_row_to_public_response_dict,
+    encrypt_and_assign_contact_fields,
+)
+from services.security.zero_trust.request_security_context import build_request_security_context
+from services.security.sensitive_action_events import record_sensitive_action_completed
+from services.security.session_intelligence_dependencies import require_continuous_auth_for_action
+from services.security.zero_trust.security_guards import enforce_zero_trust_or_raise
+from services.security.zero_trust.zero_trust_admin_routes import router as zero_trust_admin_router
+from services.security.crypto_service import (
+    crypto_feature_contact_enabled,
+    is_encryption_configured,
+    strip_plaintext_after_encrypt_contact,
+)
+from services.presentations.router import (
+    presentations_router as presentation_decks_router,
+    templates_router as presentation_templates_router,
+    version_router as presentation_versions_router,
+)
+from services.portfolio_engine.clients.models import Client as _Client  # noqa: F401 — force mapper init for Person ↔ Client relationship
+from services.market_data.ws_broadcast import handle_market_data_ws
 from pydantic import BaseModel
 
-app = FastAPI(
-    title="Arquantix API",
-    version="2.0.0",
-    description="REST API for Arquantix site vitrine + admin"
-)
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3001,http://localhost:3000,http://localhost:3011").split(","),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Media storage configuration
+# Media / uploads (used by create_app and route handlers)
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "http://localhost:8011")
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
-# Mount static files for media
-app.mount("/media", StaticFiles(directory=str(UPLOADS_DIR)), name="media")
+
+def create_app(testing: bool = False) -> FastAPI:
+    """Build FastAPI app. Use testing=True to skip non-essential startup (e.g. heavy logging)."""
+    app = FastAPI(
+        title="Arquantix API",
+        version="2.0.0",
+        description="REST API for Arquantix site vitrine + admin"
+    )
+    app.state.testing = testing
+
+    from services.auth.auth_bootstrap import enforce_auth_infrastructure_bootstrap
+
+    enforce_auth_infrastructure_bootstrap(testing=testing)
+
+    from database import engine as _db_engine
+    from services.auth.db_sql_metrics import install_db_sql_metrics_listener
+
+    install_db_sql_metrics_listener(_db_engine)
+
+    # CORS — les origines Vite (5173) sont toujours ajoutées si absentes, car CORS_ORIGINS
+    # dans .env remplace sinon toute la liste par défaut et casse le design-system sur :5173.
+    _cors_default = (
+        "http://localhost:3001,http://localhost:3000,http://localhost:3011,"
+        "http://localhost:5173,http://127.0.0.1:5173"
+    )
+    _cors_raw = os.getenv("CORS_ORIGINS", _cors_default)
+    _cors_list = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+    for _extra in ("http://localhost:5173", "http://127.0.0.1:5173"):
+        if _extra not in _cors_list:
+            _cors_list.append(_extra)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    from services.auth.auth_rate_limit_middleware import AuthRateLimitMiddleware
+
+    app.add_middleware(AuthRateLimitMiddleware)
+
+    from services.security.session_intelligence_middleware import SessionIntelligenceActivityMiddleware
+
+    app.add_middleware(SessionIntelligenceActivityMiddleware)
+
+    # Media storage (UPLOADS_DIR at module level below)
+    app.mount("/media", StaticFiles(directory=str(UPLOADS_DIR)), name="media")
+
+    # Include routers
+    app.include_router(bundles_router)
+    app.include_router(diagnostics_router)
+    app.include_router(market_data_router)
+    app.include_router(backtest_router)
+    app.include_router(ai_email_router)
+    app.include_router(ai_jurisdiction_configs_router)
+    app.include_router(persons_router)
+    app.include_router(jurisdiction_configs_router)
+    app.include_router(onboarding_router)
+    app.include_router(aml_risk_router)
+    app.include_router(field_definitions_router)
+    app.include_router(finance_strategy_chat_router)
+    app.include_router(chatbot_epargne_router)
+    app.include_router(migrations_router)
+    app.include_router(portfolio_engine_router)
+    app.include_router(customers_admin_router)
+    app.include_router(test_clients_bootstrap_router)
+    app.include_router(test_clients_mobile_flutter_router)
+    app.include_router(custody_admin_router)
+    app.include_router(custody_transfer_router)
+    app.include_router(custody_webhook_router)
+    app.include_router(exchange_router)
+    app.include_router(exchange_admin_router)
+    app.include_router(price_alerts_router)
+    app.include_router(orders_router)
+    app.include_router(favorites_router)
+    app.include_router(notifications_router)
+    app.include_router(lending_router)
+    app.include_router(lending_wealth_router)
+    app.include_router(lending_pool_router)
+    app.include_router(lending_interest_router)
+    app.include_router(lending_product_router)
+    app.include_router(lending_offer_router)
+    app.include_router(registration_runtime_router)
+    app.include_router(address_router)
+    app.include_router(registration_admin_router)
+    app.include_router(jurisdiction_policy_admin_router)
+    app.include_router(jurisdiction_policy_legacy_router)
+    app.include_router(country_directory_admin_router)
+    app.include_router(two_factor_router)
+    app.include_router(presentation_templates_router)
+    app.include_router(presentation_decks_router)
+    app.include_router(presentation_versions_router)
+    app.include_router(auth_security_admin_router)
+    app.include_router(risk_dashboard_router)
+    app.include_router(risk_rules_admin_router)
+    app.include_router(zero_trust_admin_router)
+    app.include_router(fraud_ml_admin_router)
+    app.include_router(device_reputation_admin_router)
+    app.include_router(passkeys_router)
+    app.include_router(well_known_router)
+    app.include_router(admin_email_otp_router)
+    app.include_router(adaptive_auth_router)
+    app.include_router(mobile_otp_login_router)
+    app.include_router(signup_mobile_router)
+    app.include_router(local_passcode_ack_router)
+    app.include_router(device_attestation_router)
+    app.include_router(device_credentials_router)
+
+    # WebSocket: latest market quotes (no auth in V1)
+    @app.websocket("/ws/market-data")
+    async def ws_market_data(websocket: WebSocket):
+        await handle_market_data_ws(websocket)
+
+    # ============================================================================
+    # Health & Root
+    # ============================================================================
+
+    @app.get("/")
+    def root():
+        return {"ok": True, "service": "arquantix-api", "version": "2.0.0"}
+
+    @app.get("/health")
+    def health():
+        return {"status": "ok", "service": "arquantix-api"}
+
+    @app.get("/api/health")
+    def api_health():
+        return {"ok": True}
+
+    # Toujours renvoyer du JSON en 500 (évite "Unexpected token 'I'... is not valid JSON" côté client)
+    import logging
+    _log = logging.getLogger("arquantix.api")
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        _log.exception("Unhandled: %s", exc)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal Server Error"},
+        )
+
+    # Cron Refresh Data : toutes les minutes si active (backfill barres en retard)
+    if not getattr(app.state, "testing", False):
+        import threading
+        import time
+        def _cron_refresh_loop():
+            from database import SessionLocal
+            from services.market_data.routes import run_backfill_lag_logic
+            from services.market_data.cron_refresh import (
+                is_cron_enabled,
+                CRON_INTERVAL_SECONDS,
+                add_cron_log,
+            )
+            while True:
+                time.sleep(CRON_INTERVAL_SECONDS)
+                if not is_cron_enabled():
+                    continue
+                db = SessionLocal()
+                try:
+                    result = run_backfill_lag_logic(db)
+                    add_cron_log(
+                        "Refresh barres en retard",
+                        result.get("download_summary") or [],
+                    )
+                except Exception as e:
+                    _log.exception("Cron backfill-lag: %s", e)
+                    add_cron_log("Refresh barres en retard (erreur)", [])
+                finally:
+                    db.close()
+        _t = threading.Thread(target=_cron_refresh_loop, daemon=True)
+        _t.start()
+        _log.info("Cron Refresh Data started (interval=%ss)", 60)
+
+        PURGE_M1_INTERVAL_SECONDS = 12 * 3600  # every 12 hours
+        def _cron_purge_m1_loop():
+            from database import SessionLocal
+            from services.market_data.purge_m1_bars import run_purge_m1_bars
+            from services.market_data.cron_refresh import add_cron_log
+            while True:
+                time.sleep(PURGE_M1_INTERVAL_SECONDS)
+                db = SessionLocal()
+                try:
+                    deleted = run_purge_m1_bars(db)
+                    add_cron_log("Purge M1 bars", [{"deleted": deleted}])
+                except Exception as e:
+                    _log.exception("Cron purge-m1: %s", e)
+                    add_cron_log("Purge M1 bars (erreur)", [])
+                finally:
+                    db.close()
+        _t2 = threading.Thread(target=_cron_purge_m1_loop, daemon=True)
+        _t2.start()
+        _log.info("Cron Purge M1 bars started (interval=%ss)", PURGE_M1_INTERVAL_SECONDS)
+
+        _jti_cleanup_interval = int(os.getenv("AUTH_SPENT_JTI_CLEANUP_INTERVAL_SEC", "86400"))
+
+        def _auth_spent_jti_cleanup_loop():
+            from database import SessionLocal
+            from services.auth.spent_jti_cleanup import run_spent_jti_cleanup
+
+            while True:
+                time.sleep(max(60, _jti_cleanup_interval))
+                db = SessionLocal()
+                try:
+                    run_spent_jti_cleanup(db)
+                except Exception as e:
+                    _log.exception("Auth spent JTI cleanup failed: %s", e)
+                finally:
+                    db.close()
+
+        _tj = threading.Thread(target=_auth_spent_jti_cleanup_loop, daemon=True)
+        _tj.start()
+        _log.info(
+            "Auth spent JTI cleanup thread started (interval=%ss)",
+            max(60, _jti_cleanup_interval),
+        )
+
+        _webauthn_ch_cleanup_interval = int(os.getenv("WEBAUTHN_CHALLENGE_CLEANUP_INTERVAL_SEC", "600"))
+
+        def _webauthn_challenges_cleanup_loop():
+            from database import SessionLocal
+            from services.auth.webauthn_challenges_cleanup import (
+                cleanup_expired_admin_email_otp_challenges,
+                cleanup_expired_mobile_login_otp_challenges,
+                cleanup_webauthn_challenges,
+            )
+
+            while True:
+                time.sleep(max(60, _webauthn_ch_cleanup_interval))
+                db = SessionLocal()
+                try:
+                    cleanup_webauthn_challenges(db)
+                    cleanup_expired_admin_email_otp_challenges(db)
+                    cleanup_expired_mobile_login_otp_challenges(db)
+                except Exception as e:
+                    _log.exception("WebAuthn challenges cleanup failed: %s", e)
+                finally:
+                    db.close()
+
+        _tw = threading.Thread(target=_webauthn_challenges_cleanup_loop, daemon=True)
+        _tw.start()
+        _log.info(
+            "WebAuthn challenges cleanup thread started (interval=%ss)",
+            max(60, _webauthn_ch_cleanup_interval),
+        )
+
+        _auth_sec_retention_interval = int(os.getenv("AUTH_SECURITY_EVENTS_PURGE_INTERVAL_SEC", "86400"))
+
+        def _auth_security_events_retention_loop():
+            from database import SessionLocal
+            from services.security.security_events_retention import purge_old_auth_security_events
+
+            while True:
+                time.sleep(max(60, _auth_sec_retention_interval))
+                db = SessionLocal()
+                try:
+                    purge_old_auth_security_events(db)
+                except Exception as e:
+                    _log.exception("Auth security events retention purge failed: %s", e)
+                finally:
+                    db.close()
+
+        _tsiem = threading.Thread(target=_auth_security_events_retention_loop, daemon=True)
+        _tsiem.start()
+        _log.info(
+            "Auth security events retention purge thread started (interval=%ss)",
+            max(60, _auth_sec_retention_interval),
+        )
+
+        def _init_price_alert_engine():
+            from database import SessionLocal
+            from services.redis_client import get_redis
+            from services.price_alerts.engine import init_alert_engine
+            from services.price_alerts.cache import load_all_active_alerts
+            from services.notifications.dispatcher import init_dispatcher
+
+            init_dispatcher(SessionLocal)
+
+            r = get_redis()
+            engine = init_alert_engine(r)
+            if engine is None:
+                return
+            db = SessionLocal()
+            try:
+                load_all_active_alerts(r, db)
+            except Exception as e:
+                _log.exception("Failed to load price alerts into Redis: %s", e)
+            finally:
+                db.close()
+        _t3 = threading.Thread(target=_init_price_alert_engine, daemon=True)
+        _t3.start()
+
+    if not testing:
+        from services.security.two_factor_config_guard import (
+            TwoFactorConfigGuardError,
+            run_two_factor_config_guard,
+        )
+
+        try:
+            run_two_factor_config_guard()
+        except TwoFactorConfigGuardError as exc:
+            import logging
+
+            logging.getLogger("arquantix.api").critical("2FA config guard failed: %s", exc)
+            raise
+
+    return app
 
 
-# ============================================================================
-# Health & Root
-# ============================================================================
-
-@app.get("/")
-def root():
-    return {"ok": True, "service": "arquantix-api", "version": "2.0.0"}
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "arquantix-api"}
+app = create_app()
 
 
 # ============================================================================
@@ -77,21 +439,111 @@ def health():
 # ============================================================================
 
 @app.post("/auth/login", response_model=Token)
-def login(credentials: LoginRequest, db: Session = Depends(get_db)):
-    """Login endpoint - returns JWT token"""
-    user = db.query(AdminUser).filter(AdminUser.email == credentials.email).first()
-    if not user or not verify_password(credentials.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+def login(
+    credentials: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    x_device_id: Optional[str] = Header(None, alias="X-Device-ID"),
+    x_device_attestation: Optional[str] = Header(None, alias="X-Device-Attestation"),
+):
+    """Login — access + refresh JWT ; session persistée (Phase 2) + device binding via ``X-Device-ID``."""
+    return perform_login(
+        db=db,
+        request=request,
+        email=str(credentials.email),
+        password=credentials.password,
+        device_header=x_device_id,
+        attest_header=x_device_attestation,
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/auth/refresh", response_model=Token)
+def auth_refresh(
+    body: RefreshTokenRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    x_device_id: Optional[str] = Header(None, alias="X-Device-ID"),
+    x_device_attestation: Optional[str] = Header(None, alias="X-Device-Attestation"),
+):
+    """Rotation stricte du refresh : session DB + denylist jti ; ``X-Device-ID`` aligné sur le jeton."""
+    return perform_refresh(
+        db=db,
+        request=request,
+        refresh_token=body.refresh_token,
+        device_header=x_device_id,
+        attest_header=x_device_attestation,
+    )
+
+
+@app.post("/auth/revoke", status_code=status.HTTP_204_NO_CONTENT)
+def auth_revoke(
+    request: Request,
+    body: RevokeTokenRequest,
+    db: Session = Depends(get_db),
+    x_device_id: Optional[str] = Header(None, alias="X-Device-ID"),
+):
+    """Révoque la session liée au refresh — appareil effectif = en-tête ou claims JWT (``did`` / ``device_id``), comme ``/auth/refresh``."""
+    perform_revoke(
+        db=db,
+        request=request,
+        refresh_token=body.refresh_token,
+        device_header=x_device_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/auth/revoke-all", status_code=status.HTTP_204_NO_CONTENT)
+def auth_revoke_all(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(require_continuous_auth_for_action("session_revoke_all")),
+    token: str = Depends(oauth2_scheme),
+    x_device_id: Optional[str] = Header(None, alias="X-Device-ID"),
+):
+    """Révoque toutes les sessions refresh de l’utilisateur (Bearer access)."""
+    if not getattr(request.app.state, "testing", False):
+        enforce_zero_trust_or_raise(
+            db=db,
+            request=request,
+            user=current_user,
+            token=token,
+            action="auth.revoke_all",
+            resource=f"user:{current_user.id}",
+            x_device_id=x_device_id,
+        )
+    perform_revoke_all(db=db, request=request, user=current_user)
+    dev = (x_device_id or "")[:128]
+    record_sensitive_action_completed(
+        user_id=current_user.id,
+        action_key="session_revoke_all",
+        request=request,
+        db=db,
+        device_id=dev,
+        extra={"endpoint": "POST /auth/revoke-all"},
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/auth/sessions", response_model=List[AuthSessionItem])
+def auth_list_sessions(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(require_continuous_auth_for_action("view_sensitive_data")),
+):
+    """Sessions actives (non révoquées, non expirées) pour l’utilisateur courant."""
+    rows = list_active_sessions(db=db, user=current_user)
+    dev = (request.headers.get("x-device-id") or "")[:128]
+    record_sensitive_action_completed(
+        user_id=current_user.id,
+        action_key="view_sensitive_data",
+        request=request,
+        db=db,
+        device_id=dev,
+        extra={"endpoint": "GET /auth/sessions", "read_only": True},
+    )
+    db.commit()
+    return rows
 
 
 # ============================================================================
@@ -130,9 +582,14 @@ def get_page_public(locale: str, slug: str, db: Session = Depends(get_db)):
     return page
 
 
-@app.get("/public/news/{locale}", response_model=List[NewsResponse])
+@app.get(
+    "/public/news/{locale}",
+    response_model=List[NewsResponse],
+    deprecated=True,
+    summary="[DEPRECATED] Use Web /api/blog instead",
+)
 def get_news_list_public(locale: str, limit: int = 10, db: Session = Depends(get_db)):
-    """Get published news list by locale (public)"""
+    """Get published news list by locale (public). DEPRECATED: blog = Prisma Article sur la base unifiée, pas News (legacy quant)."""
     news = db.query(News).filter(
         and_(
             News.locale == locale,
@@ -142,9 +599,14 @@ def get_news_list_public(locale: str, limit: int = 10, db: Session = Depends(get
     return news
 
 
-@app.get("/public/news/{locale}/{slug}", response_model=NewsResponse)
+@app.get(
+    "/public/news/{locale}/{slug}",
+    response_model=NewsResponse,
+    deprecated=True,
+    summary="[DEPRECATED] Use Web /blog/[slug] instead",
+)
 def get_news_public(locale: str, slug: str, db: Session = Depends(get_db)):
-    """Get a published news item by locale and slug (public)"""
+    """Get a published news item by locale and slug (public). DEPRECATED: Blog uses Article model in Web."""
     news = db.query(News).filter(
         and_(
             News.slug == slug,
@@ -164,20 +626,35 @@ def create_contact_submission(
     db: Session = Depends(get_db)
 ):
     """Create a contact submission (public)"""
-    # Get IP and user agent if available
+    if crypto_feature_contact_enabled() and not is_encryption_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "CRYPTO_MISCONFIGURED",
+                "message": "APPLICATION_ENCRYPT_CONTACT_SUBMISSIONS requires CRYPTO_LOCAL_MASTER_KEY_B64 or KMS.",
+            },
+        )
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    
-    db_submission = ContactSubmission(
+
+    db_submission = ContactSubmission(ip=ip, user_agent=user_agent)
+    encrypt_and_assign_contact_fields(
+        db_submission,
         name=submission.name,
-        email=submission.email,
+        email=str(submission.email),
         message=submission.message,
-        ip=ip,
-        user_agent=user_agent
     )
     db.add(db_submission)
     db.commit()
     db.refresh(db_submission)
+    if crypto_feature_contact_enabled() and strip_plaintext_after_encrypt_contact():
+        payload = contact_row_to_public_response_dict(
+            db_submission,
+            submitted_name=submission.name,
+            submitted_email=str(submission.email),
+            submitted_message=submission.message,
+        )
+        return ContactSubmissionResponse(**payload)
     return db_submission
 
 
@@ -342,7 +819,7 @@ def delete_page_admin(
     return None
 
 
-@app.get("/admin/news")
+@app.get("/admin/news", deprecated=True, summary="[DEPRECATED] Use Web admin articles instead")
 def list_news_admin(
     locale: Optional[str] = None,
     current_user: AdminUser = Depends(get_current_user),
@@ -375,7 +852,7 @@ def list_news_admin(
     }
 
 
-@app.post("/admin/news", response_model=NewsResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/admin/news", response_model=NewsResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 def create_news_admin(
     news: NewsCreate,
     current_user: AdminUser = Depends(get_current_user),
@@ -395,7 +872,7 @@ def create_news_admin(
     return db_news
 
 
-@app.get("/admin/news/{news_id}", response_model=NewsResponse)
+@app.get("/admin/news/{news_id}", response_model=NewsResponse, deprecated=True)
 def get_news_admin(
     news_id: int,
     current_user: AdminUser = Depends(get_current_user),
@@ -408,7 +885,7 @@ def get_news_admin(
     return news
 
 
-@app.put("/admin/news/{news_id}", response_model=NewsResponse)
+@app.put("/admin/news/{news_id}", response_model=NewsResponse, deprecated=True)
 def update_news_admin(
     news_id: int,
     update: NewsUpdate,
@@ -434,7 +911,7 @@ def update_news_admin(
     return news
 
 
-@app.delete("/admin/news/{news_id}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/admin/news/{news_id}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 def delete_news_admin(
     news_id: int,
     current_user: AdminUser = Depends(get_current_user),
@@ -451,24 +928,22 @@ def delete_news_admin(
 
 @app.get("/admin/contact-submissions")
 def list_contact_submissions_admin(
+    request: Request,
     current_user: AdminUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+    x_device_id: Optional[str] = Header(None, alias="X-Device-ID"),
 ):
     """List all contact submissions (admin) - React Admin format: {data: [...], total: n}"""
+    zt_ctx = build_request_security_context(
+        db=db,
+        request=request,
+        user=current_user,
+        access_token=token,
+        device_header=x_device_id,
+    )
     submissions = db.query(ContactSubmission).order_by(ContactSubmission.created_at.desc()).all()
-    # Convert to dict format for React Admin
-    submissions_data = [
-        {
-            "id": s.id,
-            "name": s.name,
-            "email": s.email,
-            "message": s.message,
-            "ip": s.ip,
-            "user_agent": s.user_agent,
-            "created_at": s.created_at.isoformat() if s.created_at else None,
-        }
-        for s in submissions
-    ]
+    submissions_data = [contact_row_to_admin_dict(s, security_context=zt_ctx) for s in submissions]
     return {
         "data": submissions_data,
         "total": len(submissions_data)
@@ -621,6 +1096,31 @@ def mark_page_reviewed(
     db.commit()
     db.refresh(page)
     return page
+
+
+# Startup: Log all /api/ai/ routes
+@app.on_event("startup")
+async def startup_event():
+    if getattr(app.state, "testing", False):
+        return
+    try:
+        from database import DATABASE_URL as _db_url
+        from db_connection_info import log_api_database_at_startup
+        from env_docker_guard import log_docker_env_validation
+
+        log_docker_env_validation()
+        log_api_database_at_startup(_db_url)
+    except Exception as exc:
+        print(f"[API DB] WARNING: could not log database target: {exc}")
+    print("\n" + "=" * 60)
+    print("FastAPI Startup: Registered /api/ai/ routes:")
+    print("=" * 60)
+    for route in app.routes:
+        if hasattr(route, "path") and "/api/ai/" in route.path:
+            methods = getattr(route, "methods", set())
+            methods_str = ", ".join(sorted(methods)) if methods else "N/A"
+            print(f"  {methods_str:20} {route.path}")
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>{{ meta.document_title | e }}</title>
+  <link rel="stylesheet" href="{{ stylesheet | default('iban_statement.css') }}">
+</head>
+<body class="statement-root">
+  <!--
+    Gabarit PDF relevé (design system) :
+    — En-tête running : pdf_document_header (logo + titre), toutes les pages.
+    — Page 1 : pdf_info_section (deux cartes).
+    — Corps : pdf_section_title (trait + période) + soldes optionnels + pdf_transactions_table.
+    — Pied running : pdf_footer_ds.
+    Feuille : stylesheet (défaut iban_statement.css) ; operation_statement.css pour relevé d’opération.
+  -->
+  <header class="pdf-doc-header">
+    {% include 'pdf_document_header.html' %}
+  </header>
+  <footer class="statement__footer">
+    {% include 'pdf_footer_ds.html' %}
+  </footer>
+
+  <article class="statement" role="document">
+    <section class="statement__page1-modules" aria-label="Informations titulaire et compte">
+      {% include 'pdf_info_section.html' %}
+    </section>
+
+    <section class="statement__body">
+      {% include 'pdf_section_title.html' %}
+
+      {% if not meta.hide_balance_summary %}
+      <section class="balance-summary" aria-label="Soldes du compte">
+        <h2>Soldes du compte</h2>
+        <div class="balance-summary__row">
+          <div class="balance-summary__col">
+            <p class="balance-summary__label">Solde d’ouverture</p>
+            <p class="balance-summary__amount">{{ summary.opening_balance_display | e }}</p>
+          </div>
+          <div class="balance-summary__col balance-summary__col--end">
+            <p class="balance-summary__label">Solde de clôture</p>
+            <p class="balance-summary__amount">{{ summary.closing_balance_display | e }}</p>
+          </div>
+        </div>
+        {% if summary.money_in_display or summary.money_out_display %}
+        <div class="balance-summary__totals">
+          <div class="balance-summary__col">
+            {% if summary.money_out_display %}
+            <p class="balance-summary__label">Total débits</p>
+            <p class="balance-summary__amount">{{ summary.money_out_display | e }}</p>
+            {% endif %}
+          </div>
+          <div class="balance-summary__col balance-summary__col--end">
+            {% if summary.money_in_display %}
+            <p class="balance-summary__label">Total crédits</p>
+            <p class="balance-summary__amount">{{ summary.money_in_display | e }}</p>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      {% if layout is defined and layout.mode == 'exchange' %}
+      {% include 'pdf_statement_exchange_body.html' %}
+      {% else %}
+      <section class="operations" aria-label="Opérations">
+        {% if transactions %}
+        {% include 'pdf_transactions_table.html' %}
+        {% else %}
+        <p class="operations__empty" role="status">Il n’y a eu aucune opération sur cette période.</p>
+        {% endif %}
+      </section>
+      {% endif %}
+    </section>
+  </article>
+</body>
+</html>

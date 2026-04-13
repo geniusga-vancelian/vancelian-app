@@ -1,0 +1,172 @@
+# ⚠️  LEGACY — ne pas utiliser comme stack locale par défaut. Source de vérité :
+#    docker-compose.arquantix-recovery.yml + COMPOSE_PROJECT_NAME=arquantixrecovery (.env.arquantix).
+#    Ce fichier reste pour référence / certains teardowns (voir scripts/dev-reset.sh) ; ne pas lancer
+#    un « up » ici si la politique repo est uniquement recovery.
+# Pas de container_name : les noms générés par Compose (projet_service_…) évitent les conflits
+# d’état fantôme avec le moteur Docker tout en conservant la résolution DNS par nom de service
+# (arquantix-db, arquantix-api, …). Préférer : docker compose exec <service> …
+services:
+  # PostgreSQL Database
+  arquantix-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-arquantix}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-arquantix}
+      POSTGRES_DB: ${DB_NAME:-arquantix}
+    ports:
+      - "${DB_PORT:-5443}:5432"
+    volumes:
+      - arquantix-db-data:/var/lib/postgresql/data
+      # Nouveaux volumes : autorise le réseau Docker (évite pg_hba tronqué = seulement localhost)
+      - ./services/arquantix/db/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-arquantix}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arquantix-network
+
+  # FastAPI Arquantix (auth, custody, mobile, PDF / WeasyPrint) — mode local par défaut.
+  # Image = services/arquantix/api/Dockerfile (libs natives pour WeasyPrint). templates/pdf inclus via COPY . .
+  arquantix-api:
+    build:
+      context: ./services/arquantix/api
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env.arquantix
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-arquantix}:${DB_PASSWORD:-arquantix}@arquantix-db:5432/${DB_NAME:-arquantix}
+      REDIS_URL: redis://arquantix-redis:6379/0
+      AUTH_REDIS_URL: redis://arquantix-redis:6379/0
+    depends_on:
+      arquantix-db:
+        condition: service_healthy
+      arquantix-redis:
+        condition: service_healthy
+    networks:
+      - arquantix-network
+    restart: unless-stopped
+
+  # Strapi CMS (Admin)
+  arquantix-cms:
+    image: node:20-alpine
+    working_dir: /srv/app
+    environment:
+      DATABASE_CLIENT: ${CMS_DATABASE_CLIENT:-sqlite}
+      DATABASE_FILENAME: .tmp/data.db
+      HOST: 0.0.0.0
+      PORT: 1337
+      APP_KEYS: ${CMS_APP_KEYS:-toBeModified1,toBeModified2,toBeModified3,toBeModified4}
+      API_TOKEN_SALT: ${CMS_API_TOKEN_SALT:-toBeModified}
+      ADMIN_JWT_SECRET: ${CMS_ADMIN_JWT_SECRET:-toBeModified}
+      JWT_SECRET: ${CMS_JWT_SECRET:-toBeModified}
+      TRANSFER_TOKEN_SALT: ${CMS_TRANSFER_TOKEN_SALT:-toBeModified}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "${CMS_PORT:-1337}:1337"
+    volumes:
+      - ./services/arquantix/cms:/srv/app
+    command: >
+      sh -c "
+        if [ ! -f package.json ]; then
+          echo 'Initializing Strapi (this may take a few minutes)...';
+          npx --yes create-strapi-app@latest . --quickstart --no-run --skip-cloud || true;
+        fi;
+        if [ -f package.json ] && [ ! -d node_modules ]; then
+          echo 'Installing dependencies...';
+          npm install;
+        fi;
+        if [ -f package.json ]; then
+          echo 'Starting Strapi...';
+          npm run develop;
+        else
+          echo 'Error: Strapi initialization failed. Check logs.';
+          sleep 3600;
+        fi
+      "
+    networks:
+      - arquantix-network
+    restart: unless-stopped
+
+  # Next.js Site Vitrine
+  arquantix-web:
+    build:
+      context: ./services/arquantix/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
+        NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO: ${NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO:-}
+    # BFF serveur → FastAPI : service arquantix-api sur le réseau compose (défaut).
+    # extra_hosts utile si BACKEND_URL pointe vers l’hôte (ex. API uvicorn local).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Charge les variables du .env à la racine du repo (ex. ADMIN_LOGIN0_BG_VIDEO) ;
+    # les clés ci-dessous écrasent en cas de doublon.
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      # Aligné sur l’API (auth.py) : même secret que .env.arquantix pour les JWT BFF (custody, proxy admin).
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      # Prisma (routes /api/admin/*) : accès depuis le conteneur vers Postgres du compose
+      DATABASE_URL: postgresql://${DB_USER:-arquantix}:${DB_PASSWORD:-arquantix}@arquantix-db:5432/${DB_NAME:-arquantix}
+      # Serveur uniquement : proxy BFF → FastAPI (prioritaire sur NEXT_PUBLIC_* dans getBackendBaseUrl).
+      BACKEND_URL: ${BACKEND_URL:-http://arquantix-api:8000}
+      # Routes API Next (server) — résolution via getBackendBaseUrl() (priorité BACKEND_API_URL → …)
+      BACKEND_API_URL: ${BACKEND_API_URL:-http://arquantix-api:8000}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://arquantix-api:8000}
+      NEXT_PUBLIC_STRAPI_URL: ${NEXT_PUBLIC_STRAPI_URL:-http://localhost:1337}
+      NEXT_PUBLIC_STRAPI_API_URL: ${NEXT_PUBLIC_STRAPI_API_URL:-http://localhost:1337/api}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
+      # Vidéo fond /admin/login0 — lu au runtime (pas besoin de rebuild si tu utilises ADMIN_LOGIN0_BG_VIDEO)
+      ADMIN_LOGIN0_BG_VIDEO: ${ADMIN_LOGIN0_BG_VIDEO:-}
+      NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO: ${NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO:-}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./services/arquantix/web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      arquantix-cms:
+        condition: service_started
+      arquantix-api:
+        condition: service_started
+    networks:
+      - arquantix-network
+    restart: unless-stopped
+
+  # Redis (alerts cache, future task queue)
+  arquantix-redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - arquantix-redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arquantix-network
+
+# Noms fixes : le même volume Postgres/Redis est réutilisé quel que soit COMPOSE_PROJECT_NAME
+# (évite une « nouvelle base vide » à chaque nouveau nom de projet).
+volumes:
+  arquantix-db-data:
+    name: arquantix_arquantix-db-data
+  arquantix-redis-data:
+    name: arquantix_arquantix-redis-data
+
+networks:
+  arquantix-network:
+    name: arquantix_arquantix-network
+    driver: bridge
+

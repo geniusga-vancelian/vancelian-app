@@ -1,0 +1,46 @@
+{# Pied de page PDF — design system Vancelian (sans marge externe : le conteneur parent gère le retrait). #}
+{# Variables : voir pdf_footer_ds.README (commentaire) ou iban_statement_mapper footer.* #}
+<div class="pdf-ds-footer">
+  <div class="pdf-ds-footer__stack">
+    <div class="pdf-ds-footer__rule" aria-hidden="true"></div>
+
+    <div class="pdf-ds-footer__main">
+      <div class="pdf-ds-footer__left">
+        <div class="pdf-ds-footer__mark">
+          <img
+            src="{{ footer.mark_image_src | default('assets/vancelian-footer-mark.png') }}"
+            width="42"
+            height="43"
+            alt=""
+          />
+        </div>
+        <div class="pdf-ds-footer__support">
+          <p class="pdf-ds-footer__support-title">{{ footer.contact_title_lost_card | default('Signaler une carte perdue ou volée') | e }}</p>
+          <p class="pdf-ds-footer__support-line">{{ footer.support_phone | e }}</p>
+          <p class="pdf-ds-footer__support-title">{{ footer.help_title | default('Obtenir de l’aide dans l’application') | e }}</p>
+          <p class="pdf-ds-footer__support-line">{{ footer.help_text | default('Scanner le QR code') | e }}</p>
+        </div>
+      </div>
+
+      <div class="pdf-ds-footer__legal">
+        {% if footer.legal_second_block_plain %}
+        <p class="pdf-ds-footer__legal-p">{{ footer.legal_paragraph_1 | e }}</p>
+        <p class="pdf-ds-footer__legal-p">{{ footer.legal_second_block_plain | e }}</p>
+        {% else %}
+        <p class="pdf-ds-footer__legal-p">{{ footer.legal_paragraph_1 | e }}</p>
+        <p class="pdf-ds-footer__legal-p pdf-ds-footer__legal-p--tight">
+          <span>{{ footer.legal_paragraph_2a | e }}</span>
+          <span class="pdf-ds-footer__legal-gap"> </span>
+          <strong class="pdf-ds-footer__legal-strong">{{ footer.legal_paragraph_2b | e }}</strong>
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="pdf-ds-footer__bottom">
+    <p class="pdf-ds-footer__copyright">{{ footer.copyright_line | e }}</p>
+    {# Pagination réelle : @page @bottom-right (WeasyPrint), emplacement réservé pour alignement visuel #}
+    <span class="pdf-ds-footer__page-placeholder" aria-hidden="true"></span>
+  </div>
+</div>

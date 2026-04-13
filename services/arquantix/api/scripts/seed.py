@@ -27,10 +27,11 @@ def seed():
         if not existing_admin:
             admin = AdminUser(
                 email=admin_email,
-                hashed_password=hashed
+                hashed_password=hashed,
+                mobile_app_allowed=False,
             )
             db.add(admin)
-            print(f"✅ Admin user created: {admin_email}")
+            print(f"✅ Admin user created: {admin_email} (mobile_app_allowed=False — back-office web uniquement)")
         else:
             # Reset password if ADMIN_PASSWORD is set
             if admin_password:
@@ -38,6 +39,8 @@ def seed():
                 print(f"✅ Admin password reset: {admin_email}")
             else:
                 print(f"ℹ️  Admin user already exists: {admin_email}")
+            existing_admin.mobile_app_allowed = False
+            print("✅ Admin mobile_app_allowed=False (back-office web uniquement)")
         
         # Create global settings if not exists
         global_settings = db.query(GlobalSettings).first()

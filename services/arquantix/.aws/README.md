@@ -56,3 +56,11 @@ aws ecs describe-task-definition \
 ## Mise à jour
 
 Après avoir renseigné les ARNs, remplacez `TO_BE_SET` par les valeurs réelles dans `task-definition.json`.
+
+
+
+
+
+
+
+

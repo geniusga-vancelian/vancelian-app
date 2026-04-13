@@ -1,0 +1,148 @@
+slug,field_name_en,field_type,category,is_active
+first-name,First Name,string,identity,True
+middle-name,Middle Name,string,identity,True
+last-name,Last Name,string,identity,True
+preferred-name,Preferred Name,string,identity,False
+full-name,Full Name,string,identity,True
+date-of-birth,Date of Birth,date,identity,True
+place-of-birth-city,Place of Birth City,string,identity,True
+place-of-birth-region,Place of Birth Region,string,identity,False
+place-of-birth-country,Place of Birth Country,string,identity,True
+gender,Gender,enum,identity,True
+nationality,Nationality,string,identity,True
+nationality-primary,Nationality (Primary),string,identity,True
+national-id-number,National ID Number,string,identity,True
+national-id-type,National ID Type,enum,identity,True
+national-id-issuing-authority,National ID Issuing Authority,string,identity,False
+national-id-issue-date,National ID Issue Date,date,identity,False
+national-id-expiry-date,National ID Expiry Date,date,identity,False
+email,Email Address,string,contact,True
+phone-number,Phone Number,string,contact,True
+phone-country-code,Phone Country Code,string,contact,True
+mobile-number,Mobile Number,string,contact,True
+mobile-country-code,Mobile Country Code,string,contact,True
+address_line_1,Primary street address,string,address,True
+address_line_2,Additional address details,string,address,False
+city,City or town,string,address,True
+state-province,State/Province,string,address,True
+postal_code,ZIP or postal code,string,address,True
+address_metadata,Google Places metadata,json,address,True
+country,Country,string,address,True
+country_of_residence,Country of residence ISO2,string,address,True
+address-type,Address Type,enum,address,True
+residential-address-line-1,Residential Address Line 1,string,address,True
+residential-address-line1,Residential Address Line 1,string,address,True
+residential-address-line-2,Residential Address Line 2,string,address,False
+residential-city,Residential City,string,address,True
+residential-address-city,Residential Address City,string,address,True
+residential-state-province,Residential State/Province,string,address,True
+residential-postal-code,Residential Postal Code,string,address,True
+residential-country,Residential Country,string,address,True
+residential-address-country,Residential Address Country,string,address,True
+mailing-address-line-1,Mailing Address Line 1,string,address,False
+mailing-address-line-2,Mailing Address Line 2,string,address,False
+mailing-city,Mailing City,string,address,False
+mailing-state-province,Mailing State/Province,string,address,False
+mailing-postal-code,Mailing Postal Code,string,address,False
+mailing-country,Mailing Country,string,address,False
+residency-status,Residency Status,enum,identity,True
+residency-country,Residency Country,string,identity,True
+residency-start-date,Residency Start Date,date,identity,False
+immigration-status,Immigration Status,enum,identity,False
+visa-type,Visa Type,enum,identity,False
+visa-number,Visa Number,string,identity,False
+visa-expiry-date,Visa Expiry Date,date,identity,False
+passport-number,Passport Number,string,identity,True
+passport-country,Passport Issuing Country,string,identity,True
+passport-issue-date,Passport Issue Date,date,identity,False
+passport-expiry-date,Passport Expiry Date,date,identity,True
+driving-license-number,Driving License Number,string,identity,False
+driving-license-country,Driving License Issuing Country,string,identity,False
+driving-license-state-province,Driving License State/Province,string,identity,False
+driving-license-issue-date,Driving License Issue Date,date,identity,False
+driving-license-expiry-date,Driving License Expiry Date,date,identity,False
+id-card-number,ID Card Number,string,identity,False
+id-card-country,ID Card Issuing Country,string,identity,False
+id-card-issue-date,ID Card Issue Date,date,identity,False
+id-card-expiry-date,ID Card Expiry Date,date,identity,False
+id-document-type,ID Document Type,enum,identity,True
+id-document-front-file,ID Document Front File,file,identity,True
+id-document-selfie-file,ID Document Selfie File,file,identity,True
+proof-of-address-document-type,Proof of Address Document Type,enum,identity,False
+proof-of-address-document-number,Proof of Address Document Number,string,identity,False
+proof-of-address-issue-date,Proof of Address Issue Date,date,identity,False
+proof-of-address-expiry-date,Proof of Address Expiry Date,date,identity,False
+proof-of-address-file,Proof of Address File,file,address,True
+tax-id-number,Tax ID Number,string,tax,True
+tax-identification-number,Tax Identification Number,string,tax,True
+tax-id-type,Tax ID Type,enum,tax,True
+tax-id-country,Tax ID Country,string,tax,True
+tax-residency-country,Tax Residency Country,string,tax,True
+tax-residency-country-primary,Tax Residency Country (Primary),string,tax,True
+tax-residency-countries,Tax Residency Countries,array,tax,False
+fatca-us-indicia,FATCA US Indicia,boolean,tax,True
+fatca-status,FATCA Status,enum,tax,True
+pep-status,PEP Status,boolean,aml,True
+pep-relationship,PEP Relationship,string,aml,False
+sanctions-check,Sanctions Check Status,string,aml,True
+sanctions-check-date,Sanctions Check Date,date,aml,False
+sanctions-match,Sanctions Match,boolean,aml,False
+aml-risk-level,AML Risk Level,string,derived,True
+aml-risk-score,AML Risk Score,number,derived,False
+aml-review-date,AML Review Date,date,derived,False
+occupation,Occupation,string,employment,True
+occupation-title,Occupation Title,string,employment,True
+employer-name,Employer Name,string,employment,True
+employer-address,Employer Address,string,employment,False
+employment-status,Employment Status,enum,employment,True
+employment-start-date,Employment Start Date,date,employment,False
+employment-end-date,Employment End Date,date,employment,False
+job-title,Job Title,string,employment,False
+industry,Industry,string,employment,False
+annual-income,Annual Income,number,financial,True
+annual-income-range,Annual Income Range,enum,financial,True
+income-currency,Income Currency,string,financial,True
+source-of-funds,Source of Funds,string,financial,True
+source-of-wealth,Source of Wealth,string,financial,False
+bank-account-number,Bank Account Number,string,financial,False
+bank-name,Bank Name,string,financial,False
+bank-country,Bank Country,string,financial,False
+bank-account-type,Bank Account Type,enum,financial,False
+expected-deposit-range,Expected Deposit Range,enum,financial,True
+expected-monthly-volume-range,Expected Monthly Transaction Volume Range,enum,financial,True
+investment-experience,Investment Experience,enum,knowledge,True
+known-asset-classes,Known Asset Classes,array,knowledge,True
+investment-experience-level,Investment Experience Level,enum,knowledge,True
+investment-objectives,Investment Objectives,array,knowledge,True
+investment-objective,Investment Objective,array,knowledge,True
+risk-tolerance,Risk Tolerance,enum,knowledge,True
+investment-horizon,Investment Horizon,enum,knowledge,True
+investment-time-horizon,Investment Time Horizon,enum,objectives,True
+marketing-consent,Marketing Consent,boolean,consents,True
+data-processing-consent,Data Processing Consent,boolean,consents,True
+terms-and-conditions-accepted,Terms and Conditions Accepted,boolean,consents,True
+terms-accepted,Terms and Privacy Acceptance (combined),boolean,consents,True
+terms-and-conditions,Terms and Conditions Accepted,boolean,consents,True
+terms-accepted-at,Terms Accepted At,datetime,consents,True
+privacy-policy,Privacy Policy Accepted,boolean,consents,True
+privacy-policy-accepted,Privacy Policy Accepted,boolean,consents,True
+privacy-policy-accepted-at,Privacy Policy Accepted At,datetime,consents,True
+kyc-consent,KYC Consent,boolean,consents,True
+consent-kyc-processing,Consent KYC Processing,boolean,consents,True
+consent-data-sharing-providers,Consent Data Sharing With Providers,boolean,consents,True
+biometric-consent,Biometric Consent,boolean,consents,False
+two-factor-auth-enabled,Two Factor Auth Enabled,boolean,security,True
+password-hash,Password Hash,string,security,True
+security-questions,Security Questions,json,security,False
+device-fingerprint,Device Fingerprint,string,security,False
+ip-address,IP Address,string,security,False
+kyc-status,KYC Status,string,derived,True
+kyc-verification-date,KYC Verification Date,date,derived,False
+kyc-verification-level,KYC Verification Level,enum,derived,True
+kyc-provider,KYC Provider,string,derived,False
+data-quality-score,Data Quality Score,number,derived,False
+completeness-score,Completeness Score,number,derived,False
+last-updated,Last Updated,datetime,derived,True
+preferred-language,Preferred Language,string,consents,True
+preferred-currency,Preferred Currency,string,consents,True
+language-preference,Preferred Language,enum,contact,True

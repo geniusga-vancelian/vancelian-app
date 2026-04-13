@@ -1,0 +1,70 @@
+/*
+ * Modules « page 1 uniquement » : section deux colonnes + cartes (design system Jinja2).
+ */
+
+.pdf-ds-info-section {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  width: 100%;
+  align-items: stretch;
+}
+
+.pdf-ds-info-section__col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.pdf-ds-info-card {
+  background-color: #f2f2f7;
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.pdf-ds-info-card__row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.pdf-ds-info-card__label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: calc(18 / 11);
+  letter-spacing: -0.035em;
+  color: #000000;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.pdf-ds-info-card__value {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: calc(18 / 11);
+  letter-spacing: -0.008em;
+  color: #000000;
+  margin: 0;
+  white-space: pre-line;
+}
+
+.pdf-ds-info-card__value--strong {
+  font-weight: 700;
+}
+
+.pdf-ds-info-card__value--left {
+  text-align: left;
+}
+
+.pdf-ds-info-card__value--right {
+  text-align: right;
+  max-width: 203px;
+}

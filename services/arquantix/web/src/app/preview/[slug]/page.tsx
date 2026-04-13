@@ -2,10 +2,13 @@ import { redirect } from 'next/navigation'
 import { getPageSections } from '@/lib/cms/content'
 import { getSessionFromCookie } from '@/lib/auth'
 import { getLocaleOrDefault } from '@/config/locales'
+import { SectionRenderer } from '@/components/cms/SectionRenderer'
+import { Navigation } from '@/components/sections/Navigation'
+import { getPrimaryMenu } from '@/lib/menu/getPrimaryMenu'
 
 interface PreviewPageProps {
   params: { slug: string }
-  searchParams: { locale?: string }
+  searchParams: { locale?: string; raw?: string }
 }
 
 export default async function PreviewPage({
@@ -20,51 +23,57 @@ export default async function PreviewPage({
 
   const locale = getLocaleOrDefault(searchParams.locale)
   const sections = await getPageSections(params.slug, locale, 'draft')
+  const menuItems = await getPrimaryMenu(locale)
 
-  // For now, just display the sections data as JSON
-  // In production, you would render the actual page components
+  const showRaw = searchParams.raw === 'true'
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-6">
-          <strong>Preview Mode</strong> - Showing draft content for locale: {locale}
-        </div>
+    <div className="min-h-screen bg-black text-white">
 
-        <h1 className="text-3xl font-bold mb-6">Preview: {params.slug}</h1>
-
-        {sections.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-6">
-            <p className="text-gray-500">No sections found for this page.</p>
+      {sections.length === 0 ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <p className="text-xl text-gray-400 mb-4">No sections found for this page.</p>
+            <a
+              href="/admin/pages"
+              className="text-indigo-400 hover:text-indigo-300 underline"
+            >
+              Go to Admin
+            </a>
           </div>
-        ) : (
+        </div>
+      ) : showRaw ? (
+        // Raw JSON view
+        <div className="max-w-4xl mx-auto p-8">
           <div className="space-y-6">
             {sections.map((section) => (
-              <div key={section.id} className="bg-white rounded-lg shadow p-6">
+              <div key={section.id} className="bg-gray-900 rounded-lg shadow p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h2 className="text-xl font-semibold">{section.key}</h2>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-400">
                       Order: {section.order} • Schema: {section.schemaVersion} • Status: {section.status}
                     </p>
                   </div>
                 </div>
-                <pre className="bg-gray-50 p-4 rounded text-sm overflow-auto">
+                <pre className="bg-gray-800 p-4 rounded text-sm overflow-auto text-gray-300">
                   {JSON.stringify(section.data, null, 2)}
                 </pre>
               </div>
             ))}
           </div>
-        )}
-
-        <div className="mt-8">
-          <a
-            href="/admin/pages"
-            className="text-indigo-600 hover:text-indigo-900"
-          >
-            ← Back to Admin
-          </a>
         </div>
-      </div>
+      ) : (
+        // Rendered view
+        <>
+          <Navigation menuItems={menuItems} />
+          <main>
+            {sections.map((section) => (
+              <SectionRenderer key={section.id} section={section} />
+            ))}
+          </main>
+        </>
+      )}
     </div>
   )
 }

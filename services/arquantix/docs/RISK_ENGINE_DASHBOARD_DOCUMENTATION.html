@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Risk Engine — Documentation du dashboard produit</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --card: #ffffff;
+      --text: #1c2433;
+      --muted: #5c667a;
+      --accent: #3b5bdb;
+      --accent-soft: #e7ecff;
+      --border: #e4e8f0;
+      --ok: #0d9488;
+      --warn: #d97706;
+      --bad: #dc2626;
+      --mono: ui-monospace, "Cascadia Code", monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text);
+      background: linear-gradient(180deg, #eef1f8 0%, #f6f8fc 40%, #eef1f8 100%);
+    }
+    .shell { max-width: 980px; margin: 0 auto; padding: 2rem 1.25rem 3.5rem; }
+    header.hero {
+      background: linear-gradient(135deg, #1e2a45 0%, #2d3f63 50%, #3b5bdb 120%);
+      color: #fff;
+      padding: 2.5rem 1.5rem;
+      margin: 0 0 2rem;
+      border-radius: 0 0 20px 20px;
+      box-shadow: 0 12px 40px rgba(30, 42, 69, 0.25);
+    }
+    header.hero h1 { font-size: 1.65rem; font-weight: 650; margin: 0 0 0.5rem; }
+    header.hero p { margin: 0; opacity: 0.92; max-width: 40rem; font-size: 0.95rem; }
+    nav.toc {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem 1.35rem;
+      margin-bottom: 2rem;
+      position: sticky;
+      top: 8px;
+      z-index: 5;
+      box-shadow: 0 4px 24px rgba(28, 36, 51, 0.06);
+    }
+    nav.toc h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 0.65rem; }
+    nav.toc ol { margin: 0; padding-left: 1.2rem; columns: 2; column-gap: 2rem; }
+    @media (max-width: 720px) { nav.toc ol { columns: 1; } }
+    nav.toc a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    nav.toc a:hover { text-decoration: underline; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.45rem 1.55rem 1.65rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 2px 12px rgba(28, 36, 51, 0.04);
+    }
+    section > h2 {
+      font-size: 1.28rem;
+      font-weight: 650;
+      color: #1e2a45;
+      margin: 0 0 0.85rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 2px solid var(--accent-soft);
+    }
+    h3 { font-size: 1.05rem; margin: 1.15rem 0 0.4rem; color: #243047; }
+    h4 { font-size: 0.92rem; margin: 0.85rem 0 0.3rem; color: var(--muted); font-weight: 600; }
+    p { margin: 0.5rem 0; }
+    ul, ol { margin: 0.4rem 0 0.6rem; padding-left: 1.3rem; }
+    li { margin: 0.25rem 0; }
+    code, .mono { font-family: var(--mono); font-size: 0.86em; background: #f0f3fa; padding: 0.1em 0.35em; border-radius: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 0.65rem 0;
+    }
+    th, td { border: 1px solid var(--border); padding: 0.45rem 0.55rem; text-align: left; vertical-align: top; }
+    th { background: var(--accent-soft); color: #1e2a45; font-weight: 600; }
+    tr:nth-child(even) td { background: #fafbfd; }
+    .box {
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      margin: 0.85rem 0;
+      border-left: 4px solid;
+      font-size: 0.92rem;
+    }
+    .box .t { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.35rem; }
+    .mean { background: #f0f9ff; border-color: #0284c7; }
+    .mean .t { color: #0369a1; }
+    .do { background: #ecfdf5; border-color: var(--ok); }
+    .do .t { color: #0f766e; }
+    .mist { background: #fff7ed; border-color: var(--warn); }
+    .mist .t { color: #b45309; }
+    .flow {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+      background: #f8fafc; border: 1px dashed var(--border); border-radius: 12px;
+      padding: 1rem 1.1rem; margin: 1rem 0; font-size: 0.88rem;
+    }
+    .flow span { color: var(--muted); font-weight: 700; }
+    .mock-dash {
+      background: #1a2332;
+      border-radius: 14px;
+      padding: 1rem;
+      margin: 1rem 0;
+      color: #e8ecf4;
+      font-size: 0.78rem;
+    }
+    .mock-dash .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .mock-dash .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+    @media (max-width: 600px) { .mock-dash .kpis { grid-template-columns: repeat(2, 1fr); } }
+    .mock-dash .kpi {
+      background: #252f42;
+      border-radius: 8px;
+      padding: 0.5rem 0.6rem;
+    }
+    .mock-dash .kpi b { font-size: 1.1rem; color: #fff; }
+    .mock-dash .chart {
+      margin-top: 0.75rem;
+      height: 64px;
+      background: linear-gradient(90deg, #4f46e5 0%, #6366f1 40%, #818cf8 100%);
+      border-radius: 6px;
+      opacity: 0.85;
+    }
+    .footnote { font-size: 0.84rem; color: var(--muted); margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="shell">
+      <h1>Risk Engine — Dashboard produit</h1>
+      <p>Guide d’usage : lecture des indicateurs, pilotage du moteur, interprétation métier. Contenu aligné sur le code (<span class="mono">risk_dashboard_store.py</span>, <span class="mono">risk_dashboard_routes.py</span>, page admin Next.js).</p>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="toc" aria-label="Table des matières">
+      <h2>Table des matières</h2>
+      <ol>
+        <li><a href="#s1">Introduction</a></li>
+        <li><a href="#s2">Vue d’ensemble</a></li>
+        <li><a href="#s3">Endpoints backend</a></li>
+        <li><a href="#s4">Résumé /summary</a></li>
+        <li><a href="#s5">Facteurs /factors</a></li>
+        <li><a href="#s6">Segments /segments</a></li>
+        <li><a href="#s7">Expériences /experiments</a></li>
+        <li><a href="#s8">Alertes /alerts</a></li>
+        <li><a href="#s9">Décisions récentes /recent</a></li>
+        <li><a href="#s10">Suggestions calibration</a></li>
+        <li><a href="#s11">Interface admin</a></li>
+        <li><a href="#s12">Guide de lecture métier</a></li>
+        <li><a href="#s13">Cas d’usage opérationnels</a></li>
+        <li><a href="#s14">Limites connues</a></li>
+        <li><a href="#s15">Recommandations d’usage</a></li>
+        <li><a href="#s16">Glossaire</a></li>
+        <li><a href="#s17">Annexes</a></li>
+      </ol>
+    </nav>
+
+    <section id="s1">
+      <h2>1. Introduction</h2>
+      <p><strong>Objectif du dashboard :</strong> offrir une <strong>visibilité agrégée</strong> sur les évaluations du moteur de risque (scores, niveaux, outcomes recommandés, segments, expériences) et sur les <strong>feedbacks</strong> terrain, afin de piloter friction, sécurité et calibration sans analyser uniquement des logs bruts.</p>
+      <p><strong>Pourquoi il existe :</strong> après le déploiement des phases 5C–5F, les équipes ont besoin d’un <strong>tableau de bord unique</strong> pour suivre l’effet produit du moteur (taux d’<span class="mono">allow</span> / <span class="mono">step_up</span> / <span class="mono">reauth</span>), la distribution des niveaux de risque, les facteurs les plus présents, et les signaux d’alerte simples.</p>
+      <p><strong>À qui il s’adresse :</strong> produit, ops, sécurité, management, support avancé — chacun avec un angle différent (friction UX, incidents, conformité, synthèse, investigation cas par cas).</p>
+      <p><strong>Ce qu’il permet de décider :</strong> ajuster des <strong>seuils ou poids</strong> (via processus hors dashboard : variables d’environnement, <span class="mono">RISK_WEIGHTS_JSON</span>, etc.), lancer ou arrêter une <strong>expérience A/B</strong>, prioriser une <strong>analyse de facteurs</strong> trop frictionnants ou trop liés à la fraude, et valider une <strong>release</strong> en comparant avant/après sur une fenêtre donnée.</p>
+    </section>
+
+    <section id="s2">
+      <h2>2. Vue d’ensemble</h2>
+      <h3>Architecture backend</h3>
+      <table>
+        <thead><tr><th>Composant</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">risk_dashboard_store.py</span></td><td>Files d’événements en mémoire (thread-safe) : snapshots d’évaluation et de feedback ; fonctions d’agrégation et d’alertes.</td></tr>
+          <tr><td><span class="mono">risk_dashboard_routes.py</span></td><td>Routes FastAPI sous <span class="mono">/admin/security/risk-dashboard/*</span> ; authentification admin via <span class="mono">get_current_user</span>.</td></tr>
+          <tr><td><span class="mono">risk_engine.py</span></td><td>À chaque évaluation, appel à <span class="mono">record_risk_evaluation_event</span> (best-effort) pour alimenter le store.</td></tr>
+          <tr><td><span class="mono">risk_feedback.py</span></td><td>Lors d’un <span class="mono">record_risk_feedback</span>, enregistrement d’un <span class="mono">FeedbackSnapshot</span> dans le store.</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Sources de données :</strong> uniquement ce qui est enregistré dans le process — pas de requête SQL directe pour les agrégats du dashboard.</p>
+      <h3>Proxy Next.js</h3>
+      <p>Fichier <span class="mono">web/src/app/api/admin/security/risk-dashboard/[[...path]]/route.ts</span> : vérifie la session cookie, signe un JWT, appelle <span class="mono">${API_BASE_URL}/admin/security/risk-dashboard/...</span> en <span class="mono">GET</span> avec <span class="mono">Authorization: Bearer</span>.</p>
+      <h3>Page admin</h3>
+      <p><span class="mono">web/src/app/admin/security/risk-dashboard/page.tsx</span> : charge en parallèle summary, factors, segments, experiments, alerts, recent (limit 30), calibration-suggestions.</p>
+      <p>Entrée de menu : <strong>Admin → Risk dashboard</strong> (<span class="mono">AdminSidebar.tsx</span>, icône bouclier).</p>
+      <div class="box mean">
+        <div class="t">What this means</div>
+        <p>Les chiffres reflètent le <strong>trafic vu par ce worker API</strong>. En cluster multi-instances, chaque instance a son propre buffer mémoire : la vue n’est pas globale tant qu’une couche d’agrégation centralisée n’existe pas.</p>
+      </div>
+      <div class="flow">
+        <span>Risk engine</span> → <span class="mono">record_*</span> → <strong>Store (deque)</strong> → <span class="mono">aggregate_*</span> → <strong>API</strong> → <strong>Proxy Next</strong> → <strong>UI</strong>
+      </div>
+    </section>
+
+    <section id="s3">
+      <h2>3. Endpoints backend</h2>
+      <p>Préfixe : <span class="mono">/admin/security/risk-dashboard</span>. Tous exigent un utilisateur <strong>admin</strong> authentifié (JWT valide côté API).</p>
+      <table>
+        <thead>
+          <tr><th>GET</th><th>Query</th><th>Rôle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="mono">/summary</span></td><td><span class="mono">window_hours</span> (défaut 24, 1–168)</td><td>Agrégats globaux sur les évaluations.</td></tr>
+          <tr><td><span class="mono">/factors</span></td><td><span class="mono">window_hours</span></td><td>Fréquences de facteurs + feedbacks fraude / FP.</td></tr>
+          <tr><td><span class="mono">/segments</span></td><td><span class="mono">window_hours</span></td><td>Métriques par <span class="mono">user_segment</span>.</td></tr>
+          <tr><td><span class="mono">/experiments</span></td><td><span class="mono">window_hours</span></td><td>Lignes par (<span class="mono">experiment_id</span>, <span class="mono">variant</span>).</td></tr>
+          <tr><td><span class="mono">/alerts</span></td><td><span class="mono">window_hours</span></td><td>Alertes seuils (voir section 8).</td></tr>
+          <tr><td><span class="mono">/recent</span></td><td><span class="mono">limit</span> (défaut 50, max 200)</td><td>Dernières décisions (pas filtrées par fenêtre dans le code actuel).</td></tr>
+          <tr><td><span class="mono">/calibration-suggestions</span></td><td>—</td><td>Suggestions à partir des feedbacks du store.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s4">
+      <h2>4. Résumé <span class="mono">/summary</span></h2>
+      <table>
+        <thead><tr><th>Champ</th><th>Définition (code)</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">window_hours</span></td><td>Fenêtre glissante en heures.</td></tr>
+          <tr><td><span class="mono">sample_size</span></td><td>Nombre d’évaluations dans la fenêtre.</td></tr>
+          <tr><td><span class="mono">avg_risk_score</span></td><td>Moyenne des <span class="mono">risk_score</span> ; <span class="mono">null</span> si échantillon vide.</td></tr>
+          <tr><td><span class="mono">distribution</span></td><td>Comptes par <span class="mono">risk_level</span> : <span class="mono">low</span>, <span class="mono">medium</span>, <span class="mono">high</span>, <span class="mono">critical</span>.</td></tr>
+          <tr><td><span class="mono">allow_rate</span></td><td>Part des <span class="mono">recommended_outcome == "allow"</span>.</td></tr>
+          <tr><td><span class="mono">step_up_rate</span></td><td>Part des <span class="mono">"step_up"</span>.</td></tr>
+          <tr><td><span class="mono">reauth_rate</span></td><td>Part des <span class="mono">"reauth"</span>.</td></tr>
+          <tr><td><span class="mono">anomaly_detection_rate</span></td><td>Part des évaluations où <span class="mono">behavioral_anomaly</span> est vrai. Dans le code, l’enregistrement reçoit <span class="mono">behavioral_flags=list(beh_flags)</span> avec <span class="mono">beh_flags</span> issu uniquement des <strong>overrides durs</strong> (<span class="mono">_apply_hard_behavioral_overrides</span> : ex. <span class="mono">geo_impossible_travel</span>, <span class="mono">new_device_high_amount</span>, <span class="mono">burst_high_value</span>) — ce n’est <strong>pas</strong> la présence de facteurs comportementaux généraux (géo, rafale, etc.) dans le score.</td></tr>
+        </tbody>
+      </table>
+      <div class="box mean">
+        <div class="t">What this means</div>
+        <p>Les taux d’outcome décrivent <strong>ce que le moteur a recommandé</strong> après évaluation, pas le résultat métier final côté utilisateur (pas de funnel « abandon après step-up » dans ce MVP).</p>
+      </div>
+      <h3>Cas d’interprétation</h3>
+      <ul>
+        <li><strong>allow très élevé :</strong> beaucoup de parcours classés « allow » au niveau risque — friction faible côté moteur ; à croiser avec la sécurité (volume, segments).</li>
+        <li><strong>reauth qui monte :</strong> hausse des recommandations de ré-authentification complète — peut indiquer scores élevés, contexte SI strict, ou overrides comportementaux.</li>
+        <li><strong>anomaly rate qui explose :</strong> hausse des cas où un <strong>override dur</strong> a posé un drapeau (<span class="mono">beh_flags</span>) — typiquement vélocité géographique extrême, nouveau device + gros montant, ou rafale + action à forte valeur ; croiser avec <span class="mono">/recent</span> et les logs métier.</li>
+      </ul>
+    </section>
+
+    <section id="s5">
+      <h2>5. Facteurs <span class="mono">/factors</span></h2>
+      <ul>
+        <li><span class="mono">top_factors_by_frequency</span> : facteurs les plus souvent présents dans les listes de facteurs des évaluations (comptage par occurrence de code).</li>
+        <li><span class="mono">top_factors_in_fraud_feedback</span> : codes parmi les feedbacks <span class="mono">fraud_confirmed</span> / <span class="mono">fraud_suspected</span>.</li>
+        <li><span class="mono">top_factors_in_false_positive_feedback</span> : codes pour <span class="mono">false_positive</span>.</li>
+        <li><span class="mono">fraud_feedback_rate</span> : part des événements feedback de type fraude parmi <strong>tous</strong> les feedbacks de la fenêtre (pas parmi les évaluations).</li>
+        <li><span class="mono">false_positive_rate</span> : idem pour les faux positifs.</li>
+      </ul>
+      <div class="box do">
+        <div class="t">What to do</div>
+        <p>Un facteur <strong>fréquent</strong> n’est pas forcément « mauvais » : il peut être central au modèle. Le comparer aux listes <strong>fraude</strong> et <strong>faux positifs</strong> : si le même code domine en FP, envisager de <strong>baisser son poids</strong> (processus calibration) ; s’il domine en fraude, envisager de <strong>le renforcer</strong>.</p>
+      </div>
+      <div class="box mist">
+        <div class="t">Common mistake</div>
+        <p>Confondre <span class="mono">fraud_feedback_rate</span> avec un taux de fraude dans la population utilisateurs : c’est un taux <strong>parmi les feedbacks enregistrés</strong>, dont le volume peut être faible.</p>
+      </div>
+    </section>
+
+    <section id="s6">
+      <h2>6. Segments <span class="mono">/segments</span></h2>
+      <p>Réponse : <span class="mono">by_segment</span> — pour chaque clé de segment (<span class="mono">new_user</span>, <span class="mono">normal_user</span>, <span class="mono">trusted_user</span>, <span class="mono">high_value_user</span>, <span class="mono">risky_user</span>, etc.), <span class="mono">sample_size</span>, <span class="mono">avg_risk_score</span>, <span class="mono">allow_rate</span>, <span class="mono">step_up_rate</span>, <span class="mono">reauth_rate</span>.</p>
+      <p><strong>Step_up_rate élevé sur trusted_user :</strong> anormal si l’attente produit est une friction minimale pour ce segment — vérifier évolution des poids segment, seuils dynamiques, ou biais d’échantillon (peu de lignes).</p>
+      <div class="box mean">
+        <div class="t">What this means</div>
+        <p>Les segments viennent des évaluations enregistrées (<span class="mono">user_segment</span> calculé côté moteur à l’évaluation). Comparer les colonnes entre segments sur la <strong>même fenêtre</strong> pour le tuning.</p>
+      </div>
+    </section>
+
+    <section id="s7">
+      <h2>7. Expériences <span class="mono">/experiments</span></h2>
+      <p>Une ligne apparaît si des évaluations ont un <span class="mono">experiment_id</span> non vide (sinon liste vide — message UI : pas d’évaluation avec <span class="mono">RISK_EXPERIMENT_ID</span>).</p>
+      <p>Champs : <span class="mono">experiment_id</span>, <span class="mono">variant</span>, <span class="mono">sample_size</span>, <span class="mono">allow_rate</span>, <span class="mono">step_up_rate</span>, <span class="mono">reauth_rate</span>, <span class="mono">avg_risk_score</span>, <span class="mono">critical_level_rate</span> (part de <span class="mono">risk_level == "critical"</span>).</p>
+      <div class="box do">
+        <div class="t">What to do</div>
+        <p>Comparer deux variantes du <strong>même</strong> <span class="mono">experiment_id</span> : si une variante augmente <span class="mono">allow_rate</span> mais aussi <span class="mono">critical_level_rate</span> ou les feedbacks fraude (via <span class="mono">/factors</span>), le trade-off est défavorable côté sécurité — décision collective produit / sécurité.</p>
+      </div>
+    </section>
+
+    <section id="s8">
+      <h2>8. Alertes <span class="mono">/alerts</span></h2>
+      <p>Variables d’environnement (défauts entre parenthèses) :</p>
+      <ul>
+        <li><span class="mono">RISK_DASHBOARD_ALERT_REAUTH_RATE_GT</span> (0.35)</li>
+        <li><span class="mono">RISK_DASHBOARD_ALERT_ANOMALY_RATE_GT</span> (0.30)</li>
+        <li><span class="mono">RISK_DASHBOARD_ALERT_FRAUD_FEEDBACK_RATE_GT</span> (0.15)</li>
+      </ul>
+      <p>Conditions : pour reauth / anomaly, <span class="mono">sample_size ≥ 20</span> ; pour fraude, <span class="mono">feedback_sample_size ≥ 10</span> et taux ≥ seuil.</p>
+      <p><span class="mono">severity</span> : <span class="mono">warning</span> pour reauth et anomaly ; <span class="mono">critical</span> pour spike fraud feedback.</p>
+      <div class="box mean">
+        <div class="t">What this means</div>
+        <p>Une alerte <strong>warning</strong> signale un dépassement de seuil sur la fenêtre — pas nécessairement un incident de sécurité avéré ; un <strong>critical</strong> sur feedback fraude mérite une revue prioritaire des retours terrain.</p>
+      </div>
+    </section>
+
+    <section id="s9">
+      <h2>9. Décisions récentes <span class="mono">/recent</span></h2>
+      <p>Liste triée par temps décroissant (jusqu’à <span class="mono">limit</span>). Champs : <span class="mono">ts</span>, <span class="mono">action_key</span>, <span class="mono">risk_score</span>, <span class="mono">risk_level</span>, <span class="mono">recommended_outcome</span>, <span class="mono">user_segment</span>, <span class="mono">variant</span>, <span class="mono">experiment_id</span>, <span class="mono">behavioral_anomaly</span>, <span class="mono">factor_codes</span> (tronqué à 20 codes).</p>
+      <p><strong>Investigation :</strong> partir d’une ligne suspecte → vérifier le segment, le outcome, les facteurs → croiser avec la politique d’action (<span class="mono">sensitive_action_map</span>) et les logs applicatifs si besoin.</p>
+    </section>
+
+    <section id="s10">
+      <h2>10. Suggestions calibration</h2>
+      <p>Le backend reconstruit des objets <span class="mono">RiskFeedback</span> à partir des snapshots du store (champs feedback + factor_codes) et appelle <span class="mono">compute_calibration_suggestions</span> (<span class="mono">risk_calibration.py</span>) — <strong>suggestions uniquement</strong>, pas d’application automatique des poids.</p>
+      <p>Réponse : <span class="mono">suggestions</span> (liste avec <span class="mono">factor_code</span>, <span class="mono">current_weight</span>, <span class="mono">suggested_weight</span>, <span class="mono">confidence</span>, <span class="mono">reason</span>), <span class="mono">feedback_events_used</span>.</p>
+      <div class="box do">
+        <div class="t">What to do</div>
+        <p>Workflow : produit / sécurité examinent la suggestion → décision de changer <span class="mono">RISK_WEIGHTS_JSON</span> ou équivalent → release documentée → revalider sur le dashboard après déploiement.</p>
+      </div>
+    </section>
+
+    <section id="s11">
+      <h2>11. Interface admin (UI)</h2>
+      <p>La page affiche :</p>
+      <ul>
+        <li>Sélecteur de fenêtre : <strong>6 h, 24 h, 72 h, 7 j</strong> + bouton <strong>Rafraîchir</strong>.</li>
+        <li><strong>Cartes KPI</strong> : échantillon (nombre d’évaluations), score moyen, bloc friction (allow / step_up / reauth en %), bloc signaux (taux anomalies comportement, feedback fraude, faux positifs depuis <span class="mono">factors</span>).</li>
+        <li><strong>Graphique</strong> : barres — répartition <span class="mono">risk_level</span>.</li>
+        <li><strong>Alertes</strong> : liste des messages (styles critique vs warning).</li>
+        <li><strong>Tableau segments</strong> : segment, n, avg score, allow, step_up, reauth.</li>
+        <li><strong>Facteurs</strong> : liste fréquence (15 premiers).</li>
+        <li><strong>Expériences A/B</strong> : tableau exp / variant / n / allow / reauth / avg score.</li>
+        <li><strong>Décisions récentes</strong> : tableau synthétique.</li>
+        <li><strong>Suggestions calibration</strong> : cartes facteur avec poids actuel → suggéré et raison.</li>
+      </ul>
+      <div class="mock-dash" aria-hidden="true">
+        <div class="top"><span>Risk engine — dashboard</span><span>▼ 24 h · Actualiser</span></div>
+        <div class="kpis">
+          <div class="kpi">Échantillon<br/><b>1 240</b></div>
+          <div class="kpi">Score moyen<br/><b>38</b></div>
+          <div class="kpi">Friction<br/>allow / step / reauth</div>
+          <div class="kpi">Signaux<br/>anomalies · FP</div>
+        </div>
+        <div class="chart"></div>
+      </div>
+      <p class="muted">Maquette visuelle illustrative — données fictives.</p>
+    </section>
+
+    <section id="s12">
+      <h2>12. Guide de lecture métier (si / alors)</h2>
+      <table>
+        <thead><tr><th>Observation</th><th>Piste d’action</th></tr></thead>
+        <tbody>
+          <tr><td><strong>reauth_rate monte</strong></td><td>Vérifier distribution <span class="mono">critical</span>, alertes reauth, facteurs liés à SI / géo ; revue des seuils <span class="mono">RISK_*</span> ou contexte session.</td></tr>
+          <tr><td><strong>fraud_feedback_rate monte</strong></td><td>Analyser <span class="mono">top_factors_in_fraud_feedback</span> ; ne pas baisser la friction sans preuve ; escalade sécurité.</td></tr>
+          <tr><td><strong>false_positive_rate monte</strong></td><td>Identifier facteurs dans <span class="mono">top_factors_in_false_positive_feedback</span> ; envisager baisse de poids ciblée via calibration.</td></tr>
+          <tr><td><strong>trusted_user trop frictionné</strong></td><td>Comparer <span class="mono">step_up_rate</span> / <span class="mono">allow_rate</span> à d’autres segments ; vérifier segment_adjustment et données d’entrée (en-têtes volume, âge).</td></tr>
+          <tr><td><strong>Variante A/B : plus d’allow mais fraude up</strong></td><td>Ne pas retenir la variante sur le seul allow_rate ; exiger stabilité des feedbacks fraude et du <span class="mono">critical_level_rate</span>.</td></tr>
+          <tr><td><strong>Facteur en tête des FP</strong></td><td>Prioriser une étude de calibration sur ce code ; valider avec le support / cas réels.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s13">
+      <h2>13. Cas d’usage opérationnels</h2>
+      <ul>
+        <li><strong>Monitoring quotidien :</strong> ouvrir 24 h, lire cartes friction + alertes + tableau segments.</li>
+        <li><strong>Tuning hebdo :</strong> fenêtre 7 j, comparer segments et facteurs ; noter les suggestions calibration.</li>
+        <li><strong>Investigation incident :</strong> <span class="mono">/recent</span> + corrélation manuelle avec l’heure et l’<span class="mono">action_key</span>.</li>
+        <li><strong>Revue d’expérience :</strong> onglet expériences, comparer variantes et <span class="mono">critical_level_rate</span>.</li>
+        <li><strong>Validation de release :</strong> capture avant / après (même fenêtre) sur les mêmes KPIs.</li>
+        <li><strong>Pré / post changement de config :</strong> noter <span class="mono">sample_size</span> suffisant avant de conclure.</li>
+      </ul>
+    </section>
+
+    <section id="s14">
+      <h2>14. Limites connues</h2>
+      <ul>
+        <li>Stockage <strong>en mémoire</strong>, buffers bornés (<span class="mono">_MAX_EVAL_EVENTS</span> / <span class="mono">_MAX_FEEDBACK_EVENTS</span>).</li>
+        <li>Vue <strong>par processus</strong> — pas de total cluster.</li>
+        <li>Pas de <strong>funnel</strong> natif « abandon après step-up ».</li>
+        <li>MVP : pas d’historique long d’alertes ni de tendances stockées.</li>
+      </ul>
+    </section>
+
+    <section id="s15">
+      <h2>15. Recommandations d’usage</h2>
+      <ul>
+        <li><span class="mono">window_hours</span> : 24 h pour le quotidien ; 7 j pour les tendances ; 6 h après un déploiement urgent.</li>
+        <li>Hebdomadaire : <span class="mono">allow_rate</span>, <span class="mono">reauth_rate</span>, <span class="mono">fraud_feedback_rate</span> / <span class="mono">false_positive_rate</span> (si feedbacks suffisants), top facteurs.</li>
+        <li>Seuils : ajuster d’abord les <strong>alertes dashboard</strong> (env) pour limiter le bruit, puis les <strong>poids risque</strong> avec gouvernance.</li>
+        <li>Coordination : produit (friction), sécurité (seuils et fraude), support (cas clients alimentant les feedbacks).</li>
+      </ul>
+    </section>
+
+    <section id="s16">
+      <h2>16. Glossaire</h2>
+      <table>
+        <tbody>
+          <tr><td><strong>allow_rate</strong></td><td>Part des recommandations « allow ».</td></tr>
+          <tr><td><strong>step_up_rate</strong></td><td>Part « step_up ».</td></tr>
+          <tr><td><strong>reauth_rate</strong></td><td>Part « reauth ».</td></tr>
+          <tr><td><strong>anomaly_detection_rate</strong></td><td>Part des évals avec au moins un drapeau d’<strong>override dur</strong> (<span class="mono">beh_flags</span>), pas l’ensemble des facteurs comportementaux.</td></tr>
+          <tr><td><strong>false_positive</strong></td><td>Type de feedback utilisateur côté <span class="mono">risk_feedback</span>.</td></tr>
+          <tr><td><strong>fraud_feedback</strong></td><td>Agrégation des types <span class="mono">fraud_confirmed</span> / <span class="mono">fraud_suspected</span> dans les taux.</td></tr>
+          <tr><td><strong>segment</strong></td><td>Catégorie utilisateur telle qu’enregistrée à l’évaluation.</td></tr>
+          <tr><td><strong>variant</strong></td><td>Variante d’expérience (ex. <span class="mono">control</span> / <span class="mono">variant_a</span>).</td></tr>
+          <tr><td><strong>calibration suggestion</strong></td><td>Proposition de poids — validation humaine requise.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s17">
+      <h2>17. Annexes</h2>
+      <h3>Exemple JSON <span class="mono">/summary</span> (schéma)</h3>
+      <pre><code>{
+  "window_hours": 24,
+  "sample_size": 142,
+  "avg_risk_score": 38.5,
+  "distribution": { "low": 80, "medium": 40, "high": 18, "critical": 4 },
+  "allow_rate": 0.55,
+  "step_up_rate": 0.28,
+  "reauth_rate": 0.17,
+  "anomaly_detection_rate": 0.12
+}</code></pre>
+      <h3>Mapping rapide</h3>
+      <table>
+        <thead><tr><th>Endpoint</th><th>Usage principal</th></tr></thead>
+        <tbody>
+          <tr><td>summary</td><td>Vue santé globale, friction</td></tr>
+          <tr><td>factors</td><td>Tuning poids, FP vs fraude</td></tr>
+          <tr><td>segments</td><td>Équité par segment</td></tr>
+          <tr><td>experiments</td><td>A/B</td></tr>
+          <tr><td>alerts</td><td>Veille seuils</td></tr>
+          <tr><td>recent</td><td>Investigation</td></tr>
+          <tr><td>calibration-suggestions</td><td>File calibration</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <p class="footnote">Documentation d’usage basée sur <span class="mono">api/services/security/risk_dashboard_store.py</span>, <span class="mono">risk_dashboard_routes.py</span>, <span class="mono">web/src/app/admin/security/risk-dashboard/page.tsx</span>, <span class="mono">web/src/app/api/admin/security/risk-dashboard/[[...path]]/route.ts</span>. Pour une v2, voir les limites structurelles ci-dessous.</p>
+
+    <section style="background:#fffbeb;border-color:#fcd34d;">
+      <h2 style="border-color:#fde68a;">Limites structurelles — pistes v2</h2>
+      <ul>
+        <li><strong>Agrégation centralisée</strong> (Redis, data warehouse) pour vue cluster et rétention longue.</li>
+        <li><strong>Funnel post–step-up</strong> (événements métier + corrélation IDs).</li>
+        <li><strong>Historique d’alertes</strong> et courbes de tendance.</li>
+        <li><strong>RBAC fin</strong> sur la route admin si besoin de séparer lecture vs configuration.</li>
+        <li><strong>Export</strong> CSV / rapport planifié pour compliance.</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

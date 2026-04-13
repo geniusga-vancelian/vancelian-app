@@ -1,0 +1,39 @@
+Prompt Cursor — outillage local de dev iPhone / Xcode / Flutter
+
+Je veux intégrer dans le repo une petite boîte à outils locale de développement pour Mac / Xcode / iPhone physique, afin d’éviter de galérer avec le terminal.
+
+Objectif :
+- un script shell unique avec menu interactif
+- commandes simples pour :
+  - sync mobile vers ~/dev
+  - flutter clean + pub get
+  - reset Pods + pod install
+  - start API (FastAPI 8000)
+  - start Web/BFF (Next 3000)
+  - stop serveurs
+  - open Runner.xcworkspace
+  - reset Xcode caches (DerivedData / DeviceSupport)
+  - network tests / health checks
+  - launch iPhone en profile
+  - launch iPhone en release
+- détection auto de l’IP locale
+- utilisation des dart-defines :
+  - FLAVOR=dev
+  - API_BASE_URL=http://<IP>:3000
+  - AUTH_API_BASE_URL=http://<IP>:8000
+  - TRACE_JANK=true en profile
+
+Contraintes :
+- zéro magie complexe
+- bash lisible
+- chemins configurables en haut du script
+- menu interactif simple
+- modes CLI rapides aussi (fast / clean / release / api / web / status)
+- ne rien casser dans le projet
+- placer le script dans un endroit cohérent du repo (ou tooling/dev si existant)
+
+Bonus :
+- petite doc markdown d’utilisation
+- alias recommandés zsh : vmenu, vrun, vclean, vrelease
+
+Je veux un livrable propre et immédiatement utilisable.

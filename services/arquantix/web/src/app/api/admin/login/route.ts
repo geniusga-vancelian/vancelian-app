@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { verifyPassword, createSession, setSessionCookie } from '@/lib/auth'
+import {
+  verifyPassword,
+  createSession,
+  setSessionCookie,
+  ensureCmsUserLinkedToAdminUser,
+} from '@/lib/auth'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -35,8 +40,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Liaison users.admin_user_id → admin_users.id (même logique que [ensureCmsUserLinkedToAdminUser]).
+    await ensureCmsUserLinkedToAdminUser(user)
+    const userForSession = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    })
+
     // Create session
-    const token = await createSession(user.id)
+    const token = await createSession(userForSession.id)
 
     // Set cookie
     const response = NextResponse.json({

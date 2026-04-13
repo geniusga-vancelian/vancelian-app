@@ -17,12 +17,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Redirect /dashboard to /admin
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = pathname.replace('/dashboard', '/admin') || '/admin'
+    return NextResponse.redirect(url, 307) // Temporary redirect
+  }
+
   // Admin routes protection
   // Note: Full authentication check is done in API routes and page components
   // Middleware only checks for the presence of the session cookie
   if (pathname.startsWith('/admin')) {
-    // Allow access to /admin/login
-    if (pathname === '/admin/login') {
+    // Entrée publique admin (sans session)
+    if (
+      pathname === '/admin/login' ||
+      pathname === '/admin/login0' ||
+      pathname === '/admin/signup'
+    ) {
       return NextResponse.next()
     }
 
@@ -52,12 +63,10 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * Exclure tout le préfixe `/_next` (pas seulement static/image) : en dev, webpack-hmr,
+     * flight, chunks, etc. ne doivent jamais passer par ce middleware (risque de 404/500 ou
+     * comportements étranges si la logique évolue).
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!api|_next|favicon\\.ico).*)',
   ],
 }

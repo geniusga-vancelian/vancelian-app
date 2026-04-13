@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+import { getSessionFromCookie } from '@/lib/auth'
+import { buildBackendUrl } from '@/lib/backend'
+import { preflightCustodyRequest } from '@/lib/custody-bff'
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const pre = preflightCustodyRequest(await getSessionFromCookie())
+    if (!pre.ok) return pre.response
+
+    const { id } = await params
+    const res = await fetch(
+      buildBackendUrl(`/api/admin/custody/webhook-events/${id}/replay`),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...pre.headers,
+        },
+      },
+    )
+    return NextResponse.json(await res.json(), { status: res.status })
+  } catch (error) {
+    console.error('[custody/webhook-events replay POST]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

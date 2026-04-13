@@ -1,0 +1,4 @@
+// Production — Release / archive App Store.
+PRODUCT_BUNDLE_IDENTIFIER=com.vancelian.app
+APP_DISPLAY_NAME=Vancelian
+DART_DEFINES=$(inherited),RkxBVk9SPXByb2Q=

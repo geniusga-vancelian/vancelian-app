@@ -10,3 +10,9 @@ __pycache__/
 # Env
 .env
 **/.env
+
+# Sauvegardes locales (dump SQL, copies .env) — données sensibles
+/backups/
+
+# PDF générés en local (preview design)
+docs/arquantix/generated-pdfs/*.pdf

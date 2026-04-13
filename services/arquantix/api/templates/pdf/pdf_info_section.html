@@ -1,0 +1,11 @@
+{# Section 2 colonnes — uniquement page 1 du PDF (flux unique, non répétée). #}
+<div class="pdf-ds-info-section">
+  <div class="pdf-ds-info-section__col">
+    {% set items = page1_left_items %}
+    {% include 'pdf_info_card.html' %}
+  </div>
+  <div class="pdf-ds-info-section__col">
+    {% set items = page1_right_items %}
+    {% include 'pdf_info_card.html' %}
+  </div>
+</div>

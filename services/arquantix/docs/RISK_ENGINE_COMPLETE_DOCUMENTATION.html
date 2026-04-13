@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Risk Engine — Documentation complète (Arquantix)</title>
+  <style>
+    :root {
+      --bg: #f6f7fa;
+      --card: #fff;
+      --text: #161922;
+      --muted: #5a6270;
+      --accent: #0f2744;
+      --border: #dde2ec;
+      --sec: #7f1d1d;
+      --sec-bg: #fff7ed;
+      --prod: #14532d;
+      --prod-bg: #f0fdf4;
+      --ex: #1d4ed8;
+      --ex-bg: #eff6ff;
+      --mono: ui-monospace, "Cascadia Code", monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 15px; line-height: 1.62; color: var(--text); background: var(--bg); }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    header.hero {
+      background: linear-gradient(145deg, #0f2744 0%, #1e3a5f 55%, #2d4a6f 100%);
+      color: #fff;
+      padding: 2.75rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.hero h1 { font-size: 1.75rem; font-weight: 650; margin: 0 0 0.5rem; }
+    header.hero p { margin: 0; opacity: 0.92; max-width: 52rem; }
+    nav.toc {
+      position: sticky; top: 0; z-index: 20;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.35rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 12px rgba(15,39,68,0.07);
+    }
+    nav.toc h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 0 0 0.65rem; }
+    nav.toc ol { margin: 0; padding-left: 1.2rem; columns: 2; column-gap: 2.5rem; }
+    @media (max-width: 800px) { nav.toc ol { columns: 1; } }
+    nav.toc a { color: #1e40af; text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 1.65rem 1.85rem;
+      margin-bottom: 1.35rem;
+    }
+    section > h2 {
+      font-size: 1.35rem;
+      font-weight: 650;
+      color: var(--accent);
+      margin: 0 0 1rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 2px solid #e8edf5;
+    }
+    h3 { font-size: 1.08rem; margin: 1.35rem 0 0.45rem; }
+    h4 { font-size: 0.95rem; margin: 1rem 0 0.35rem; color: var(--muted); font-weight: 600; }
+    p { margin: 0.55rem 0; }
+    ul, ol { margin: 0.4rem 0 0.65rem; padding-left: 1.35rem; }
+    li { margin: 0.28rem 0; }
+    code, .mono { font-family: var(--mono); font-size: 0.86em; background: #eef1f6; padding: 0.1em 0.35em; border-radius: 4px; }
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 0.95rem 1.05rem;
+      border-radius: 10px;
+      overflow-x: auto;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      margin: 0.65rem 0;
+    }
+    pre code { background: none; padding: 0; color: inherit; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 0.65rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.55rem; text-align: left; vertical-align: top; }
+    th { background: #e8eef7; color: var(--accent); font-weight: 600; }
+    tr:nth-child(even) td { background: #fafbfd; }
+    .box { border-radius: 10px; padding: 0.95rem 1.1rem; margin: 1rem 0; border-left: 4px solid; }
+    .box .lbl { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.35rem; }
+    .ex { background: var(--ex-bg); border-color: var(--ex); }
+    .ex .lbl { color: var(--ex); }
+    .sec { background: var(--sec-bg); border-color: var(--sec); }
+    .sec .lbl { color: var(--sec); }
+    .prod { background: var(--prod-bg); border-color: var(--prod); }
+    .prod .lbl { color: var(--prod); }
+    .flow {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem;
+      justify-content: flex-start; margin: 1rem 0; padding: 1rem;
+      background: #f1f5f9; border-radius: 10px; border: 1px dashed var(--border);
+    }
+    .flow .b {
+      background: #fff; border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.45rem 0.65rem; font-size: 0.82rem; text-align: center; max-width: 200px;
+    }
+    .flow .ar { color: var(--muted); font-weight: 700; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    details.annex { margin: 0.75rem 0; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.85rem; background: #fafbfc; }
+    details.annex summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+    .footnote { font-size: 0.84rem; color: var(--muted); margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <h1>Risk Engine — Documentation complète</h1>
+      <p>Phases 5B–5F : friction adaptative, scoring déterministe (5C), risque comportemental (5D), intelligence adaptative / segments (5E), calibration &amp; expériences (5F). Contenu aligné sur le code dans <span class="mono">services/arquantix/api/services/security/</span>.</p>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <nav class="toc" aria-label="Table des matières">
+      <h2>Table des matières</h2>
+      <ol>
+        <li><a href="#s1">Introduction</a></li>
+        <li><a href="#s2">Architecture générale</a></li>
+        <li><a href="#s3">Politiques statiques</a></li>
+        <li><a href="#s4">Risk Engine Phase 5C — modèle</a></li>
+        <li><a href="#s5">Modèle de scoring</a></li>
+        <li><a href="#s6">Règles de décision</a></li>
+        <li><a href="#s7">internal_transfer_low</a></li>
+        <li><a href="#s8">Behavioral Risk Phase 5D</a></li>
+        <li><a href="#s9">Affinements 5D.1</a></li>
+        <li><a href="#s10">Adaptive Intelligence Phase 5E</a></li>
+        <li><a href="#s11">Calibration &amp; Learning Phase 5F</a></li>
+        <li><a href="#s12">Observabilité</a></li>
+        <li><a href="#s13">Configuration et flags</a></li>
+        <li><a href="#s14">Exemples détaillés</a></li>
+        <li><a href="#s15">Guide d’interprétation</a></li>
+        <li><a href="#s16">Guide pour les équipes</a></li>
+        <li><a href="#s17">Limites connues</a></li>
+        <li><a href="#s18">Feuille de route possible</a></li>
+        <li><a href="#s19">Glossaire</a></li>
+        <li><a href="#s20">Annexes</a></li>
+      </ol>
+    </nav>
+
+    <section id="s1">
+      <h2>1. Introduction</h2>
+      <p><strong>Objectif du Risk Engine :</strong> enrichir la décision de sécurité <strong>après</strong> les politiques d’authentification statiques et la friction adaptative « simple », en produisant un <strong>score 0–100</strong>, un <strong>niveau</strong> (<span class="mono">low</span> / <span class="mono">medium</span> / <span class="mono">high</span> / <span class="mono">critical</span>), des <strong>facteurs pondérés explicables</strong>, et une <strong>recommandation</strong> (<span class="mono">allow</span> / <span class="mono">step_up</span> / <span class="mono">reauth</span>) — le tout <strong>sans modèle ML</strong> dans le moteur (<span class="mono">risk_engine.py</span>, docstring).</p>
+      <p><strong>Pourquoi déterministe :</strong> auditabilité, répétabilité, explication par facteurs, absence de boîte noire ; les poids sont versionnés et surchargeables (<span class="mono">risk_config.py</span>).</p>
+      <div class="box prod">
+        <div class="lbl">Product implication</div>
+        <p>Les couches se cumulent : la <strong>policy</strong> fixe le niveau d’exigence par type d’action ; la <strong>friction adaptative (5B)</strong> peut réduire le step-up dans des cas bas risque <em>avant</em> le moteur ; le <strong>risk engine</strong> peut <strong>escalader</strong> (step-up / reauth) mais <strong>respecte une reauth déjà requise</strong> par la couche continue (<span class="mono">continuous_auth_engine._merge_risk_into_decision</span>).</p>
+      </div>
+      <table>
+        <thead><tr><th>Couche</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr><td>Policy statique (<span class="mono">sensitive_action_map</span>)</td><td>Niveaux LOW/MEDIUM/HIGH, step-up obligatoire, fenêtres recent auth, trusted-only — <strong>ne calcule pas</strong> de score métier.</td></tr>
+          <tr><td>Friction adaptative 5B (<span class="mono">continuous_auth_engine</span>)</td><td>Règles montant / device / récence pour alléger certaines actions <em>si</em> flags activés.</td></tr>
+          <tr><td>Risk engine 5C (<span class="mono">risk_engine.evaluate_request_risk</span>)</td><td>Somme pondérée + seuils + recommandation ; intègre facteurs session, montant, comportementaux si activés.</td></tr>
+          <tr><td>Behavioral risk 5D</td><td>Signaux géo, appareil, rafales, etc. ; bornés par facteur (<span class="mono">clamp_behavioral_weight</span> : −20 … +40).</td></tr>
+          <tr><td>Adaptive intelligence 5E</td><td>Segment utilisateur, ajustement de score, seuils <span class="mono">high</span>/<span class="mono">critical</span> par segment, seuils dynamiques pour friction (montant / récence) utilisés ailleurs.</td></tr>
+          <tr><td>Calibration / feedback 5F</td><td>Feedback typé, suggestions de poids <strong>non automatiques</strong>, expériences A/B sur poids, version de calibration.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s2">
+      <h2>2. Architecture générale</h2>
+      <div class="flow" aria-label="Ordre de layering">
+        <div class="b"><span class="mono">sensitive_action_map</span><br/>Politique par action</div>
+        <span class="ar">→</span>
+        <div class="b"><span class="mono">continuous_auth_engine</span><br/>SI + policy + friction 5B</div>
+        <span class="ar">→</span>
+        <div class="b"><span class="mono">risk_engine</span><br/>Si <span class="mono">RISK_ENGINE_ENABLED</span></div>
+        <span class="ar">→</span>
+        <div class="b"><span class="mono">_merge_risk_into_decision</span><br/>401/403 + payload</div>
+      </div>
+      <p><strong>Ordre d’exécution réel</strong> (<span class="mono">continuous_auth_engine.evaluate_request_security_context</span>) :</p>
+      <ol>
+        <li>Si auth continue ou SI désactivés → décision permissive (<span class="mono">continuous_auth_disabled</span> / <span class="mono">no_session_intelligence</span>).</li>
+        <li>Application des règles policy + session intelligence + friction adaptative 5B (éventuelle réduction de step-up).</li>
+        <li>Si <span class="mono">is_risk_engine_enabled()</span> et action sensible : <span class="mono">evaluate_request_risk(...)</span> avec le contexte strict (reauth déjà requise, friction adaptative appliquée, etc.).</li>
+        <li>Fusion : une <span class="mono">require_reauth</span> déjà vraie <strong>court-circuite</strong> l’escalade risque ; sinon application des outcomes risque (<span class="mono">reauth</span> / <span class="mono">step_up</span>).</li>
+      </ol>
+      <p><strong>Dashboard</strong> (<span class="mono">risk_dashboard_store.py</span>, routes <span class="mono">/admin/security/risk-dashboard/*</span>) : agrégations en mémoire par processus pour métriques produit — voir <span class="mono">PHASE_5_DASHBOARD_PRODUCT.md</span>.</p>
+    </section>
+
+    <section id="s3">
+      <h2>3. Politiques statiques</h2>
+      <p>Fichier <span class="mono">sensitive_action_map.py</span> : <span class="mono">ACTION_POLICIES</span> par <span class="mono">action_key</span> (<span class="mono">SensitiveActionPolicy</span> : <span class="mono">required_auth_level</span>, <span class="mono">requires_step_up</span>, <span class="mono">requires_recent_auth_seconds</span>, <span class="mono">requires_biometric</span>, <span class="mono">allowed_if_device_trusted_only</span>).</p>
+      <p><strong>Ce que les policies définissent :</strong> exigences d’auth continue <strong>avant</strong> le score (via <span class="mono">require_continuous_auth_for_action</span> + moteur continu).</p>
+      <p><strong>Ce qu’elles ne définissent pas :</strong> les poids du risk engine, les facteurs comportementaux, les segments 5E — ce sont des couches séparées.</p>
+    </section>
+
+    <section id="s4">
+      <h2>4. Risk Engine Phase 5C — structure</h2>
+      <p>Modèle Pydantic <span class="mono">RiskEvaluation</span> (<span class="mono">risk_engine.py</span>) :</p>
+      <table>
+        <thead><tr><th>Champ</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">risk_score</span></td><td>Flottant 0–100 après <span class="mono">clamp_risk_score</span> (somme des poids des facteurs).</td></tr>
+          <tr><td><span class="mono">risk_level</span></td><td>Dérivé via <span class="mono">derive_risk_level</span> avec seuils effectifs (globaux ou par segment si 5E actif).</td></tr>
+          <tr><td><span class="mono">factors</span></td><td>Liste de <span class="mono">RiskFactorContribution</span> : <span class="mono">code</span>, <span class="mono">weight</span>, <span class="mono">value</span>, <span class="mono">description</span>.</td></tr>
+          <tr><td><span class="mono">base_action_score</span></td><td>Score de base issu de <span class="mono">base_score_for_action</span> (table <span class="mono">_BASE_ACTION_SCORES</span>).</td></tr>
+          <tr><td><span class="mono">final_action_key</span></td><td>Souvent égal à l’action d’entrée ; peut devenir <span class="mono">internal_transfer_low</span> si reclassement appliqué.</td></tr>
+          <tr><td><span class="mono">recommended_outcome</span></td><td><span class="mono">allow</span> | <span class="mono">step_up</span> | <span class="mono">reauth</span> — voir <span class="mono">_recommended_outcome</span> et overrides comportementaux.</td></tr>
+          <tr><td><span class="mono">override_reason</span></td><td><span class="mono">behavioral_force_reauth</span> | <span class="mono">behavioral_force_step_up</span> ou <span class="mono">null</span>.</td></tr>
+          <tr><td><span class="mono">behavioral_flags</span></td><td>Ex. <span class="mono">geo_impossible_travel</span>, <span class="mono">new_device_high_amount</span>, <span class="mono">burst_high_value</span>.</td></tr>
+          <tr><td><span class="mono">user_segment</span></td><td>Segment 5E (défaut <span class="mono">normal_user</span>).</td></tr>
+          <tr><td><span class="mono">dynamic_thresholds_used</span></td><td>Dict montant / récence / device_tolerance par segment si 5E.</td></tr>
+          <tr><td><span class="mono">experiment_id</span> / <span class="mono">variant</span></td><td>Si expériences activées + <span class="mono">RISK_EXPERIMENT_ID</span> + user id.</td></tr>
+          <tr><td><span class="mono">calibration_version</span></td><td><span class="mono">RISK_CALIBRATION_VERSION</span> ou <span class="mono">"1"</span>.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s5">
+      <h2>5. Modèle de scoring</h2>
+      <h3>5.1 Scores de base par action (<span class="mono">_BASE_ACTION_SCORES</span>)</h3>
+      <table>
+        <thead><tr><th>action_key</th><th>Score de base</th></tr></thead>
+        <tbody>
+          <tr><td>withdrawal</td><td>55</td></tr>
+          <tr><td>wallet_transfer</td><td>45</td></tr>
+          <tr><td>internal_transfer_low</td><td>20</td></tr>
+          <tr><td>beneficiary_add</td><td>50</td></tr>
+          <tr><td>api_key_create</td><td>60</td></tr>
+          <tr><td>security_settings_change</td><td>50</td></tr>
+          <tr><td>passcode_reset</td><td>55</td></tr>
+          <tr><td>biometric_disable</td><td>45</td></tr>
+          <tr><td>contact_change</td><td>45</td></tr>
+          <tr><td>view_sensitive_data</td><td>30</td></tr>
+          <tr><td>view_portfolio</td><td>25</td></tr>
+          <tr><td>data_export</td><td>50</td></tr>
+          <tr><td>session_revoke_all</td><td>35</td></tr>
+          <tr><td>change_password</td><td>35</td></tr>
+          <tr><td><em>autre / inconnu</em></td><td>30</td></tr>
+        </tbody>
+      </table>
+      <h3>5.2 Facteurs non comportementaux (extraits)</h3>
+      <table>
+        <thead><tr><th>Domaine</th><th>Codes typiques</th><th>Logique</th></tr></thead>
+        <tbody>
+          <tr><td>Device trust</td><td><span class="mono">device_trusted</span>, <span class="mono">device_medium</span>, <span class="mono">device_untrusted</span></td><td>TRUSTED/HIGH → −15 ; MEDIUM → 0 ; sinon +20</td></tr>
+          <tr><td>Auth freshness</td><td><span class="mono">auth_fresh_le_5min</span> … <span class="mono">auth_stale_gt_60min</span></td><td>Basé sur <span class="mono">last_step_up_at</span> (secondes depuis step-up)</td></tr>
+          <tr><td>Montant</td><td><span class="mono">amount_lt_100</span> … <span class="mono">amount_ge_50000</span></td><td>Transferts seulement ; pénalité +5 si montant absent</td></tr>
+          <tr><td>Same owner</td><td><span class="mono">same_owner_true</span> / <span class="mono">false</span> / <span class="mono">unknown</span></td><td>−10 / +10 / 0</td></tr>
+          <tr><td>Session intelligence</td><td><span class="mono">si_requires_step_up</span>, <span class="mono">si_requires_reauth</span>, <span class="mono">session_risk_elevated</span>, <span class="mono">country_changed_signal</span></td><td>+20, +35, +15, +35 selon cas</td></tr>
+          <tr><td>Fréquence (header)</td><td><span class="mono">burst_*</span></td><td>Via <span class="mono">x-recent-similar-actions</span> ou paramètre override</td></tr>
+          <tr><td>Lecture sensible</td><td><span class="mono">read_scope_*</span></td><td>Renforce selon <span class="mono">view_sensitive_data</span> / export</td></tr>
+          <tr><td>Signaux incomplets</td><td><span class="mono">legacy_uncertainty_same_owner</span></td><td>+5 si <span class="mono">wallet_transfer</span> et <span class="mono">same_owner</span> absent</td></tr>
+        </tbody>
+      </table>
+      <h3>5.3 Seuils de niveau (<span class="mono">derive_risk_level</span>)</h3>
+      <p>Par défaut : <span class="mono">critical</span> si score ≥ <span class="mono">critical_threshold</span> (env <span class="mono">RISK_CRITICAL_THRESHOLD</span>, défaut 75) ; <span class="mono">high</span> si ≥ <span class="mono">high_threshold</span> (<span class="mono">RISK_HIGH_THRESHOLD</span>, défaut 50) ; <span class="mono">medium</span> si ≥ 25 ; sinon <span class="mono">low</span>.</p>
+      <p>Avec 5E, <span class="mono">segment_risk_thresholds</span> modifie les deux premiers seuils par segment (ex. trusted_user : 60 / 80 ; new_user / risky_user : 40 / 65).</p>
+      <div class="box sec">
+        <div class="lbl">Security implication</div>
+        <p>Les overrides durs <span class="mono">behavioral_force_reauth</span> fixent <span class="mono">recommended_outcome</span> à <span class="mono">reauth</span> et <span class="mono">risk_level</span> à <span class="mono">critical</span> (<span class="mono">evaluate_request_risk</span>). <span class="mono">behavioral_force_step_up</span> force au minimum <span class="mono">step_up</span> et remonte le niveau <span class="mono">low</span> → <span class="mono">medium</span> si besoin.</p>
+      </div>
+    </section>
+
+    <section id="s6">
+      <h2>6. Règles de décision</h2>
+      <p>Fonction <span class="mono">_recommended_outcome</span> : si <span class="mono">strict_require_reauth</span> (contexte continu) → <span class="mono">reauth</span> ; sinon selon niveau : <span class="mono">critical</span> → <span class="mono">reauth</span> ; <span class="mono">high</span> → <span class="mono">step_up</span> ; <span class="mono">medium</span> : si 5E et segment <span class="mono">trusted_user</span> → <span class="mono">allow</span> ; si <span class="mono">risky_user</span> → <span class="mono">step_up</span> ; sinon <span class="mono">allow</span> si friction adaptative appliquée, sinon <span class="mono">step_up</span> ; <span class="mono">low</span> → <span class="mono">allow</span>.</p>
+      <p><strong>Priorité reauth stricte :</strong> dans <span class="mono">_merge_risk_into_decision</span>, si <span class="mono">dec.require_reauth</span> déjà vrai, le moteur de risque n’écrase pas cette exigence.</p>
+      <p><strong>Escalade</strong> : recommandation risque <span class="mono">reauth</span> ou <span class="mono">step_up</span> peut augmenter la friction ; <strong>downgrade</strong> de clé métier : uniquement <span class="mono">wallet_transfer</span> → <span class="mono">internal_transfer_low</span> sous conditions (section 7).</p>
+    </section>
+
+    <section id="s7">
+      <h2>7. internal_transfer_low</h2>
+      <p><strong>Pourquoi :</strong> permettre un reclassement d’action lorsque le transfert est manifestement bas risque (même titulaire, petit montant, appareil fiable, step-up récent, score &lt; 25) <strong>et</strong> <span class="mono">ADAPTIVE_FRICTION_ENABLED</span> — aligné sur la doc interne Phase 5C.</p>
+      <p><strong>Règles exactes</strong> (<span class="mono">_downgrade_wallet_to_internal_transfer_low</span>) — toutes doivent être vraies :</p>
+      <ul>
+        <li><span class="mono">is_adaptive_friction_enabled()</span></li>
+        <li><span class="mono">action_key == "wallet_transfer"</span></li>
+        <li><span class="mono">amount_eur</span> présent et <strong>&lt;</strong> <span class="mono">low_risk_transfer_amount_eur()</span> (variable <span class="mono">LOW_RISK_TRANSFER_AMOUNT</span>, défaut 100 EUR) — <strong>seuil global</strong>, pas le seuil par segment 5E.</li>
+        <li><span class="mono">same_owner is True</span></li>
+        <li><span class="mono">device_trust_level</span> ∈ {HIGH, TRUSTED}</li>
+        <li>intelligence présente et <span class="mono">_recent_auth_within(intelligence, low_risk_recent_auth_seconds())</span> avec <span class="mono">LOW_RISK_RECENT_AUTH_SECONDS</span> (défaut 900) — <strong>global</strong>.</li>
+        <li>Pas de <span class="mono">should_require_step_up</span> ni <span class="mono">should_force_reauth</span> pour ce tier.</li>
+        <li><span class="mono">risk_score &lt; 25.0</span> (score déjà calculé sur la somme complète des facteurs).</li>
+      </ul>
+      <div class="box ex">
+        <div class="lbl">Example</div>
+        <p>Si toutes les conditions sont remplies, un facteur <span class="mono">downgraded_to_internal_transfer_low</span> (poids 0) est ajouté et <span class="mono">final_action_key</span> vaut <span class="mono">internal_transfer_low</span>. Un log <span class="mono">continuous_auth.risk_downgrade_applied</span> est émis.</p>
+      </div>
+      <p class="muted"><strong>Important :</strong> les seuils dynamiques par segment (<span class="mono">resolve_low_risk_transfer_amount_eur_for_segment</span>) servent la friction adaptative dans <span class="mono">continuous_auth_engine</span>, pas cette fonction de downgrade du <span class="mono">risk_engine</span> — éviter la confusion entre les deux.</p>
+    </section>
+
+    <section id="s8">
+      <h2>8. Behavioral Risk Phase 5D</h2>
+      <p>Activé si <span class="mono">BEHAVIORAL_RISK_ENABLED=true</span>. Sous-flags : <span class="mono">GEO_VELOCITY_ENABLED</span> (vélocité + risque pays + bonus stabilité) ; <span class="mono">DEVICE_RISK_ENABLED</span> (cohérence empreinte).</p>
+      <p>Contexte construit par <span class="mono">extract_behavioral_context</span> (en-têtes <span class="mono">x-geo-country</span>, <span class="mono">x-previous-geo-country</span>, <span class="mono">x-last-action-at</span>, empreintes, compteurs, etc.).</p>
+      <table>
+        <thead><tr><th>Signal / facteur</th><th>Code(s)</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Vélocité géographique</td><td><span class="mono">geo_velocity_anomaly</span></td><td>Branches 30 min / 2h / 6h / lent ; poids depuis <span class="mono">get_risk_weight</span> ; <span class="mono">raw_meta.geo_velocity_raw</span> pour overrides</td></tr>
+          <tr><td>Risque pays</td><td><span class="mono">geo_country_risk</span></td><td>Cartes statiques LOW/MEDIUM/HIGH + inconnu</td></tr>
+          <tr><td>Cohérence appareil</td><td><span class="mono">device_*</span></td><td>Voir section 9</td></tr>
+          <tr><td>Rafale d’actions</td><td><span class="mono">action_burst*</span></td><td>Compteur 5 min ; homogène vs mixte si types fournis</td></tr>
+          <tr><td>Sessions multiples</td><td><span class="mono">multi_session_risk</span></td><td></td></tr>
+          <tr><td>Âge de compte</td><td><span class="mono">account_age_risk</span></td><td>&lt;1j, &lt;7j, &lt;30j</td></tr>
+          <tr><td>Méthode de login</td><td><span class="mono">login_method_risk</span></td><td>passkey vs mot de passe seul, etc.</td></tr>
+        </tbody>
+      </table>
+      <h3>Overrides durs (<span class="mono">_apply_hard_behavioral_overrides</span>)</h3>
+      <ul>
+        <li>Si <span class="mono">geo_velocity_raw &gt;= 40</span> → <span class="mono">behavioral_force_reauth</span>, flag <span class="mono">geo_impossible_travel</span>.</li>
+        <li>Nouvel appareil + montant &gt; 10 000 EUR + action retrait/transfert → <span class="mono">behavioral_force_reauth</span>, <span class="mono">new_device_high_amount</span>.</li>
+        <li>Rafale &gt; 5 + action « haute valeur » (déf. <span class="mono">_is_high_value_action</span>) → <span class="mono">behavioral_force_step_up</span>, <span class="mono">burst_high_value</span>.</li>
+      </ul>
+    </section>
+
+    <section id="s9">
+      <h2>9. Affinements 5D.1</h2>
+      <p><span class="mono">_device_consistency_factor</span> : <span class="mono">device_known</span> (dans liste), <span class="mono">device_new</span>, <span class="mono">device_no_baseline</span> (empreinte sans liste), ou signal absent avec message explicite ; bonus <span class="mono">device_multi_new</span> si ≥3 nouveaux appareils.</p>
+      <p><span class="mono">_behavioral_action_burst</span> : si types d’actions récents permettent, distinction <span class="mono">action_burst_homogeneous</span> vs <span class="mono">action_burst_mixed</span> ; plafond via <span class="mono">action_burst_homogeneous_cap</span> si <span class="mono">n &gt; 5</span>.</p>
+      <p><span class="mono">_geo_stability_bonus_factor</span> : bonus <span class="mono">geo_stability_bonus</span> (poids défaut −5) si pas d’anomalie de vélocité, pays stable, fenêtre temporelle cohérente ou intelligence alignée.</p>
+    </section>
+
+    <section id="s10">
+      <h2>10. Adaptive Intelligence Phase 5E</h2>
+      <p>Activé par <span class="mono">ADAPTIVE_INTELLIGENCE_ENABLED</span>. <span class="mono">derive_user_segment</span> : ordre — (1) anomalies historiques ≥ 2 → <span class="mono">risky_user</span> ; (2) âge &lt; 7 j → <span class="mono">new_user</span> ; (3) volume ≥ 50 000 EUR → <span class="mono">high_value_user</span> ; (4) âge ≥ 90 j, pas d’anomalies, KYC « trusted » → <span class="mono">trusted_user</span> ; sinon <span class="mono">normal_user</span>.</p>
+      <p><span class="mono">extract_segmentation_inputs</span> : âge depuis <span class="mono">created_at</span> utilisateur, en-têtes <span class="mono">x-user-kyc-level</span>, <span class="mono">x-user-lifetime-volume-eur</span>, <span class="mono">x-user-successful-actions-count</span>, <span class="mono">x-user-historical-anomaly-count</span> (ou champ intelligence).</p>
+      <p><strong>Ajustement de score :</strong> facteur <span class="mono">user_segment_adjustment</span> avec poids <span class="mono">segment_adjustment_*</span> (défauts dans <span class="mono">DEFAULT_RISK_WEIGHTS</span>). Les poids négatifs sont assouplis à 0 si <span class="mono">_segment_soften_blocked</span> (reauth stricte, vélocité geo raw ≥ 40, ou niveau préliminaire critique).</p>
+      <p><strong>Seuils dynamiques</strong> : <span class="mono">build_dynamic_thresholds_dict</span> expose montant / récence / <span class="mono">device_tolerance</span> par segment pour observabilité ; la friction adaptative côté <span class="mono">continuous_auth_engine</span> utilise <span class="mono">resolve_low_risk_*_for_segment</span> lorsque 5E est actif.</p>
+    </section>
+
+    <section id="s11">
+      <h2>11. Calibration &amp; Learning Phase 5F</h2>
+      <ul>
+        <li><span class="mono">risk_config.py</span> : <span class="mono">DEFAULT_RISK_WEIGHTS</span>, surcharge <span class="mono">RISK_WEIGHTS_JSON</span>, scalaires <span class="mono">RISK_WEIGHT_&lt;KEY&gt;</span>, <span class="mono">calibration_version()</span> via <span class="mono">RISK_CALIBRATION_VERSION</span>.</li>
+        <li><span class="mono">risk_experiments.py</span> : <span class="mono">assign_variant(user_id, experiment_id)</span> déterministe (SHA-256) ; ratio contrôle <span class="mono">RISK_EXPERIMENT_CONTROL_RATIO_PCT</span> ; JSON <span class="mono">RISK_EXPERIMENT_&lt;EXP&gt;_VARIANT_A_WEIGHTS_JSON</span> ou <span class="mono">RISK_EXPERIMENT_VARIANT_A_WEIGHTS_JSON</span>.</li>
+        <li><span class="mono">runtime_weight_overrides</span> : ContextVar — appliqué dans <span class="mono">evaluate_request_risk</span> pour la variante expérimentale.</li>
+        <li><span class="mono">risk_feedback.py</span> : types <span class="mono">fraud_confirmed</span>, <span class="mono">fraud_suspected</span>, <span class="mono">false_positive</span>, <span class="mono">successful_action</span>, <span class="mono">manual_override</span> ; log <span class="mono">risk_feedback.recorded</span> avec <span class="mono">user_id_hash</span> opaque.</li>
+        <li><span class="mono">risk_calibration.compute_calibration_suggestions</span> : suggestions uniquement (seuils d’échantillons, pas d’application auto).</li>
+      </ul>
+      <div class="box prod">
+        <div class="lbl">Product implication</div>
+        <p>Toute modification de poids en production relève de la <strong>gouvernance</strong> (env / release), pas d’apprentissage automatique dans l’API.</p>
+      </div>
+    </section>
+
+    <section id="s12">
+      <h2>12. Observabilité</h2>
+      <table>
+        <thead><tr><th>Événement / log</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">continuous_auth.risk_evaluated</span></td><td><span class="mono">_log_risk_event</span> après évaluation — métadonnées : scores, facteurs, segment, expérience, échantillon de poids effectifs (16 clés triées).</td></tr>
+          <tr><td><span class="mono">continuous_auth.risk_downgrade_applied</span></td><td>Reclassement <span class="mono">internal_transfer_low</span></td></tr>
+          <tr><td><span class="mono">continuous_auth.behavioral_anomaly_detected</span></td><td>Si signaux comportementaux présents ou flags d’override</td></tr>
+          <tr><td><span class="mono">continuous_auth.risk_escalation_applied</span></td><td><span class="mono">log_risk_outcome_event</span> depuis <span class="mono">continuous_auth_engine</span> lorsque le risque modifie la décision</td></tr>
+          <tr><td><span class="mono">risk_feedback.recorded</span></td><td>Feedback terrain</td></tr>
+        </tbody>
+      </table>
+      <p><span class="mono">_log_risk_event</span> précise : logs structurés <strong>sans PII financière brute</strong> — montants via codes de facteurs (<span class="mono">risk_engine.py</span>).</p>
+      <p>Dashboard en mémoire : pas de données persistantes multi-instance sans extension (cf. doc Phase 5 dashboard).</p>
+    </section>
+
+    <section id="s13">
+      <h2>13. Configuration et flags</h2>
+      <table>
+        <thead><tr><th>Variable</th><th>Rôle</th><th>Défaut (extrait code)</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">RISK_ENGINE_ENABLED</span></td><td>Active <span class="mono">evaluate_request_risk</span> dans la chaîne continue</td><td>false</td></tr>
+          <tr><td><span class="mono">ADAPTIVE_FRICTION_ENABLED</span></td><td>Friction 5B + éligibilité downgrade <span class="mono">internal_transfer_low</span></td><td>false</td></tr>
+          <tr><td><span class="mono">BEHAVIORAL_RISK_ENABLED</span></td><td>Facteurs comportementaux</td><td>false</td></tr>
+          <tr><td><span class="mono">GEO_VELOCITY_ENABLED</span></td><td>Sous-ensemble géo (sous master behavioral)</td><td>false</td></tr>
+          <tr><td><span class="mono">DEVICE_RISK_ENABLED</span></td><td>Facteurs appareil</td><td>false</td></tr>
+          <tr><td><span class="mono">ADAPTIVE_INTELLIGENCE_ENABLED</span></td><td>Segmentation 5E</td><td>false</td></tr>
+          <tr><td><span class="mono">RISK_HIGH_THRESHOLD</span></td><td>Seuil « high »</td><td>50</td></tr>
+          <tr><td><span class="mono">RISK_CRITICAL_THRESHOLD</span></td><td>Seuil « critical »</td><td>75</td></tr>
+          <tr><td><span class="mono">LOW_RISK_TRANSFER_AMOUNT</span></td><td>Seuil EUR friction + <strong>downgrade</strong></td><td>100</td></tr>
+          <tr><td><span class="mono">LOW_RISK_RECENT_AUTH_SECONDS</span></td><td>Fenêtre step-up récent (friction + downgrade)</td><td>900</td></tr>
+          <tr><td><span class="mono">RISK_EXPERIMENTS_ENABLED</span></td><td>A/B poids</td><td>false</td></tr>
+          <tr><td><span class="mono">RISK_EXPERIMENT_ID</span></td><td>Identifiant expérience</td><td>vide</td></tr>
+          <tr><td><span class="mono">RISK_CALIBRATION_VERSION</span></td><td>Version logique</td><td>« 1 »</td></tr>
+          <tr><td><span class="mono">RISK_WEIGHTS_JSON</span> / <span class="mono">RISK_WEIGHT_*</span></td><td>Surcharges de poids</td><td>—</td></tr>
+          <tr><td><span class="mono">RISK_EXPERIMENT_CONTROL_RATIO_PCT</span></td><td>% contrôle</td><td>50</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">Les flags <span class="mono">SESSION_INTELLIGENCE_ENABLED</span> et <span class="mono">CONTINUOUS_AUTH_ENABLED</span> conditionnent l’ensemble de l’auth continue, pas uniquement le risk engine.</p>
+    </section>
+
+    <section id="s14">
+      <h2>14. Exemples détaillés (illustratifs)</h2>
+      <p>Les valeurs numériques suivent les <strong>poids par défaut</strong> (<span class="mono">risk_config.DEFAULT_RISK_WEIGHTS</span>) et supposent les flags nécessaires activés. Les cas réels somment tous les facteurs applicables.</p>
+
+      <h3>14.1 Trusted user + petit transfert même titulaire (downgrade possible)</h3>
+      <p><strong>Inputs :</strong> <span class="mono">wallet_transfer</span>, montant 50 EUR, <span class="mono">same_owner=true</span>, device TRUSTED, step-up récent (&lt; 900 s), pas de SI step-up/reauth, score final &lt; 25 après somme, <span class="mono">ADAPTIVE_FRICTION_ENABLED=true</span>.</p>
+      <p><strong>Résultat :</strong> <span class="mono">final_action_key=internal_transfer_low</span>, facteur <span class="mono">downgraded_to_internal_transfer_low</span>, log downgrade.</p>
+
+      <h3>14.2 New user + nouveau device + gros montant</h3>
+      <p><strong>Inputs :</strong> segment <span class="mono">new_user</span> (âge &lt; 7j) si 5E ; <span class="mono">device_new</span> + poids positif ; montant élevé → contributions <span class="mono">amount_*</span> positives ; ajustement segment +10.</p>
+      <p><strong>Résultat :</strong> score élevé, niveau souvent <span class="mono">high</span> ou <span class="mono">critical</span> selon somme ; <span class="mono">recommended_outcome</span> <span class="mono">step_up</span> ou <span class="mono">reauth</span>.</p>
+
+      <h3>14.3 « Dubai → Paris en 20 minutes »</h3>
+      <p><strong>Inputs :</strong> pays courant ≠ pays précédent, <span class="mono">delta_seconds</span> = 1200 ≤ 1800 → branche vélocité « 30 min », poids défaut 40 sur le facteur <span class="mono">geo_velocity_anomaly</span> ; <span class="mono">geo_velocity_raw</span> ≥ 40 → override <span class="mono">behavioral_force_reauth</span>.</p>
+      <p><strong>Résultat :</strong> <span class="mono">recommended_outcome=reauth</span>, <span class="mono">risk_level=critical</span>, flag <span class="mono">geo_impossible_travel</span>.</p>
+
+      <h3>14.4 view_sensitive_data sur device trusted</h3>
+      <p>Base 30 + ajustements device (−15) + fraîcheur selon step-up + facteur lecture <span class="mono">read_scope_identity_kyc</span> (+10) + facteurs comportementaux si activés.</p>
+
+      <h3>14.5 Segment risky_user</h3>
+      <p>Au moins 2 anomalies historiques → segment <span class="mono">risky_user</span> ; seuils 40/65 ; ajustement +20 si non bloqué → friction accrue.</p>
+
+      <h3>14.6 Burst homogène</h3>
+      <p>Si ≥3 actions du même type en 5 min et compteur élevé → code <span class="mono">action_burst_homogeneous</span> avec poids défaut 20 (borné).</p>
+
+      <h3>14.7 Account age faible</h3>
+      <p><span class="mono">account_age_risk</span> avec poids <span class="mono">account_age_lt1d</span> (30) ou &lt;7j (20) selon âge en jours.</p>
+    </section>
+
+    <section id="s15">
+      <h2>15. Guide d’interprétation</h2>
+      <ul>
+        <li><strong>risk_score</strong> : somme clampée 0–100 ; comparer aux seuils effectifs (globaux ou segment).</li>
+        <li><strong>risk_level</strong> : dérivé des seuils ; peut être forcé <span class="mono">critical</span> par override reauth comportemental.</li>
+        <li><strong>factor codes</strong> : liste explicable pour audit ; chaque code a un poids dans la somme (sauf cas particuliers documentés).</li>
+        <li><strong>Calibration suggestions</strong> : propositions à valider humainnement ; comparer <span class="mono">suggested_weight</span> à <span class="mono">get_risk_weight</span>.</li>
+        <li><strong>False positive</strong> : feedback <span class="mono">false_positive</span> + codes de facteurs alimentent les suggestions de baisse de poids si taux suffisant.</li>
+      </ul>
+    </section>
+
+    <section id="s16">
+      <h2>16. Guide pour les équipes</h2>
+      <table>
+        <thead><tr><th>Équipe</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr><td>Produit</td><td>Ajuster <span class="mono">RISK_WEIGHTS_JSON</span> ou segments via spec ; vérifier impacts sur <span class="mono">_recommended_outcome</span> et downgrade.</td></tr>
+          <tr><td>Sécurité</td><td>Valider overrides durs, surveiller logs <span class="mono">behavioral_anomaly_detected</span>, ne pas baisser <span class="mono">geo_velocity_30min</span> sans revue.</td></tr>
+          <tr><td>Backend</td><td>Nouveau facteur : ajouter contribution dans <span class="mono">evaluate_request_risk</span> ou helper, clé dans <span class="mono">DEFAULT_RISK_WEIGHTS</span>, tests.</td></tr>
+          <tr><td>Data / ops</td><td>Exploiter <span class="mono">risk_feedback</span> + suggestions ; corréler avec dashboard mémoire (une instance = un échantillon partiel en cluster).</td></tr>
+          <tr><td>Support</td><td>Lire <span class="mono">reason_codes</span> / facteurs dans les logs côté API ou réponses enrichies pour expliquer step-up.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s17">
+      <h2>17. Limites connues</h2>
+      <ul>
+        <li>Pas de ML dans le moteur — règles et poids explicites.</li>
+        <li>Dépendance aux en-têtes / champs optionnels : dégradation gracieuse avec poids nuls ou pénalités légères.</li>
+        <li>Compteurs « burst » côté client ou headers — pas de compteur serveur central décrit dans le moteur.</li>
+        <li>Dashboard produit : stockage en mémoire par processus (<span class="mono">risk_dashboard_store.py</span>).</li>
+        <li>Calibration : suggestions seulement ; application manuelle des poids.</li>
+      </ul>
+    </section>
+
+    <section id="s18">
+      <h2>18. Feuille de route possible</h2>
+      <p>Points évoqués dans les rapports / commentaires du dépôt : affinage géographique, compteurs serveur pour rafales, empreinte enrichie, calibration par segment, décroissance temporelle des scores, scoring qualité avancé — <strong>non implémentés comme tels</strong> dans les extraits de code consultés ; listés ici comme orientation.</p>
+    </section>
+
+    <section id="s19">
+      <h2>19. Glossaire</h2>
+      <table>
+        <tbody>
+          <tr><td><strong>action_key</strong></td><td>Identifiant d’action sensible (policy + moteur).</td></tr>
+          <tr><td><strong>risk_score</strong></td><td>Somme pondérée bornée 0–100.</td></tr>
+          <tr><td><strong>risk_level</strong></td><td>low / medium / high / critical.</td></tr>
+          <tr><td><strong>factor</strong></td><td>Contribution explicable avec poids.</td></tr>
+          <tr><td><strong>step_up / reauth</strong></td><td>Recommandations produites par le moteur ou la couche continue.</td></tr>
+          <tr><td><strong>same_owner</strong></td><td>Indicateur transfert même titulaire (header dédié côté API continue).</td></tr>
+          <tr><td><strong>trusted device</strong></td><td>Niveau HIGH/TRUSTED pour ajustements et heuristiques.</td></tr>
+          <tr><td><strong>behavioral override</strong></td><td>Règle dure forçant reauth ou step-up.</td></tr>
+          <tr><td><strong>segment</strong></td><td>Catégorie 5E dérivée des métadonnées utilisateur.</td></tr>
+          <tr><td><strong>calibration version</strong></td><td>Étiquette de configuration (<span class="mono">RISK_CALIBRATION_VERSION</span>).</td></tr>
+          <tr><td><strong>experiment variant</strong></td><td><span class="mono">control</span> ou <span class="mono">variant_a</span> (hash stable).</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s20">
+      <h2>20. Annexes</h2>
+      <details class="annex" open>
+        <summary>Poids par défaut complets (<span class="mono">DEFAULT_RISK_WEIGHTS</span>)</summary>
+        <table>
+          <thead><tr><th>Clé</th><th>Poids</th></tr></thead>
+          <tbody>
+            <tr><td>device_new</td><td>20</td></tr>
+            <tr><td>device_known</td><td>−10</td></tr>
+            <tr><td>device_no_baseline</td><td>5</td></tr>
+            <tr><td>device_multi_new</td><td>25</td></tr>
+            <tr><td>geo_velocity_no_delta</td><td>5</td></tr>
+            <tr><td>geo_velocity_30min</td><td>40</td></tr>
+            <tr><td>geo_velocity_2h</td><td>25</td></tr>
+            <tr><td>geo_velocity_6h</td><td>15</td></tr>
+            <tr><td>geo_velocity_slow</td><td>5</td></tr>
+            <tr><td>geo_country_unknown</td><td>5</td></tr>
+            <tr><td>geo_country_high_risk</td><td>15</td></tr>
+            <tr><td>geo_country_medium</td><td>5</td></tr>
+            <tr><td>geo_country_low</td><td>0</td></tr>
+            <tr><td>geo_stability_bonus</td><td>−5</td></tr>
+            <tr><td>action_burst_moderate</td><td>10</td></tr>
+            <tr><td>action_burst_high</td><td>25</td></tr>
+            <tr><td>action_burst_homogeneous</td><td>20</td></tr>
+            <tr><td>action_burst_mixed</td><td>10</td></tr>
+            <tr><td>action_burst_homogeneous_cap</td><td>25</td></tr>
+            <tr><td>multi_session_few</td><td>5</td></tr>
+            <tr><td>multi_session_many</td><td>15</td></tr>
+            <tr><td>account_age_lt1d</td><td>30</td></tr>
+            <tr><td>account_age_lt7d</td><td>20</td></tr>
+            <tr><td>account_age_lt30d</td><td>10</td></tr>
+            <tr><td>login_passkey</td><td>−10</td></tr>
+            <tr><td>login_password_only</td><td>10</td></tr>
+            <tr><td>segment_adjustment_trusted_user</td><td>−10</td></tr>
+            <tr><td>segment_adjustment_high_value_user</td><td>−5</td></tr>
+            <tr><td>segment_adjustment_new_user</td><td>10</td></tr>
+            <tr><td>segment_adjustment_risky_user</td><td>20</td></tr>
+            <tr><td>segment_adjustment_normal_user</td><td>0</td></tr>
+          </tbody>
+        </table>
+      </details>
+      <details class="annex">
+        <summary>Segments et seuils (<span class="mono">segment_risk_thresholds</span> + résolutions montant/récence)</summary>
+        <table>
+          <thead><tr><th>Segment</th><th>high / critical</th><th>low_risk_transfer EUR</th><th>recent_auth s</th><th>device_tolerance</th></tr></thead>
+          <tbody>
+            <tr><td>trusted_user</td><td>60 / 80</td><td>2000</td><td>1200</td><td>1.2</td></tr>
+            <tr><td>normal_user</td><td>defaut env</td><td>500</td><td>900</td><td>1.0</td></tr>
+            <tr><td>new_user</td><td>40 / 65</td><td>100</td><td>300</td><td>0.9</td></tr>
+            <tr><td>high_value_user</td><td>55 / 75</td><td>5000</td><td>900</td><td>1.1</td></tr>
+            <tr><td>risky_user</td><td>40 / 65</td><td>50</td><td>120</td><td>0.65</td></tr>
+          </tbody>
+        </table>
+      </details>
+      <details class="annex">
+        <summary>Noms d’événements (liste principale)</summary>
+        <ul>
+          <li><span class="mono">continuous_auth.risk_evaluated</span></li>
+          <li><span class="mono">continuous_auth.risk_downgrade_applied</span></li>
+          <li><span class="mono">continuous_auth.behavioral_anomaly_detected</span></li>
+          <li><span class="mono">continuous_auth.risk_escalation_applied</span></li>
+          <li><span class="mono">risk_feedback.recorded</span></li>
+        </ul>
+      </details>
+    </section>
+
+    <p class="footnote">Documentation générée à partir des fichiers <span class="mono">risk_engine.py</span>, <span class="mono">risk_config.py</span>, <span class="mono">risk_experiments.py</span>, <span class="mono">risk_calibration.py</span>, <span class="mono">risk_feedback.py</span>, <span class="mono">continuous_auth_engine.py</span>, <span class="mono">security_env.py</span>, <span class="mono">sensitive_action_map.py</span>. Les scénarios chiffrés de la section 14 sont <strong>illustratifs</strong> : la somme réelle dépend de tous les facteurs actifs et des surcharges d’environnement.</p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{# Tableau d’opérations — même schéma que le ZIP (colonnes date / description / débit / crédit / solde), rendu <table> pour WeasyPrint. #}
+{# Contexte : liste transactions (date_display, description, debit_display, credit_display, balance_display, balance_strong optionnel). #}
+<div class="operations__table-wrap">
+  <table class="statement-table">
+    <colgroup>
+      <col class="statement-table__col-date" />
+      <col class="statement-table__col-desc" />
+      <col class="statement-table__col-debit" />
+      <col class="statement-table__col-credit" />
+      <col class="statement-table__col-balance" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th scope="col">Date</th>
+        <th scope="col">Description</th>
+        <th scope="col" class="col-debit">Débit</th>
+        <th scope="col" class="col-credit">Crédit</th>
+        <th scope="col" class="col-balance">Solde</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in transactions %}
+      <tr>
+        <td>{{ row.date_display | e }}</td>
+        <td class="col-desc">{{ row.description | e }}</td>
+        <td class="num col-debit">{% if row.debit_display %}{{ row.debit_display | e }}{% endif %}</td>
+        <td class="num col-credit">{% if row.credit_display %}{{ row.credit_display | e }}{% endif %}</td>
+        <td class="num col-balance">{% if row.balance_strong %}<strong>{{ row.balance_display | e }}</strong>{% else %}{{ row.balance_display | e }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

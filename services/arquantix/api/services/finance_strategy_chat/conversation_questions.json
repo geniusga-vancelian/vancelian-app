@@ -1,0 +1,439 @@
+{
+  "travel": [
+    {
+      "id": "travel_q1",
+      "text": "✨ Qu’est-ce que tu aimerais vivre avec ce voyage ?",
+      "expected_fields": ["goal.type", "intent"],
+      "suggestions": ["Repos", "Découverte", "Célébration", "Kiff"],
+      "tags": ["intent", "project_type"]
+    },
+    {
+      "id": "travel_q2",
+      "text": "🌍 Tu pars plutôt seul(e), à deux, en famille, entre amis ?",
+      "expected_fields": ["goal.party"],
+      "suggestions": ["Seul(e)", "À deux", "En famille", "Entre amis"],
+      "tags": ["context"]
+    },
+    {
+      "id": "travel_q3",
+      "text": "📅 Tu imagines ce voyage quand, à peu près ?",
+      "expected_fields": ["timeline.horizon_months"],
+      "suggestions": ["Quelques mois", "L’an prochain", "Plus tard"],
+      "tags": ["timeline"]
+    },
+    {
+      "id": "travel_q4",
+      "text": "💸 Pour te projeter : tu vois ce voyage plutôt raisonnable, confort, ou wahou ?",
+      "expected_fields": ["goal.budget_band"],
+      "suggestions": ["Raisonnable", "Confort", "Wahou"],
+      "tags": ["budget"]
+    },
+    {
+      "id": "travel_q5",
+      "text": "🎯 Si on devait poser un ordre de grandeur aujourd’hui, tu dirais plutôt : 2k / 5k / 10k €… ou autre ?",
+      "expected_fields": ["goal.target_amount"],
+      "suggestions": ["2 000€", "5 000€", "10 000€", "Autre"],
+      "tags": ["budget"]
+    },
+    {
+      "id": "travel_q6",
+      "text": "🧠 Est-ce que tu préfères tout payer d’un coup le jour J, ou lisser tranquillement avant ?",
+      "expected_fields": ["capacity.saving_preference"],
+      "suggestions": ["Tout d’un coup", "Lisser avant"],
+      "tags": ["plan"]
+    },
+    {
+      "id": "travel_q7",
+      "text": "💼 Tu as déjà une somme de côté pour ce projet, même petite ?",
+      "expected_fields": ["capacity.initial_contribution"],
+      "suggestions": ["Oui", "Non"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "travel_q8",
+      "text": "🔁 Sans stress pour toi, tu pourrais mettre combien par mois pour ce voyage ?",
+      "expected_fields": ["capacity.monthly_contribution"],
+      "suggestions": ["50€/mois", "150€/mois", "300€/mois"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "travel_q9",
+      "text": "🧘 Si jamais tu devais piocher dedans en cours de route, c’est important que ce soit possible ?",
+      "expected_fields": ["capacity.liquidity_need"],
+      "suggestions": ["Oui", "Pas forcément"],
+      "tags": ["liquidity"]
+    },
+    {
+      "id": "travel_q10",
+      "text": "OK, on va faire simple : on crée un coffre d’épargne dédié à ce voyage, et je t’aide à l’alimenter intelligemment.",
+      "expected_fields": ["vault.transition"],
+      "suggestions": ["On le crée", "Plus tard"],
+      "tags": ["vault_transition"]
+    }
+  ],
+  "purchase": [
+    {
+      "id": "purchase_q1",
+      "text": "💭 Qu’est-ce que représente cet achat pour toi ?",
+      "expected_fields": ["intent"],
+      "suggestions": ["Plaisir", "Récompense", "Utilité", "Symbole"],
+      "tags": ["intent"]
+    },
+    {
+      "id": "purchase_q2",
+      "text": "🏷️ Tu as déjà une idée du prix, ou on l’estime ensemble ?",
+      "expected_fields": ["goal.target_amount"],
+      "suggestions": ["J’ai une idée", "On estime ensemble"],
+      "tags": ["budget"]
+    },
+    {
+      "id": "purchase_q3",
+      "text": "⏳ Tu aimerais pouvoir te l’offrir quand idéalement ?",
+      "expected_fields": ["timeline.horizon_months"],
+      "suggestions": ["Quelques mois", "L’an prochain", "Plus tard"],
+      "question_id": "q_time_or_budget",
+      "dont_know_behavior": {
+        "type": "propose_options",
+        "options_months": [6, 12, 24]
+      },
+      "tags": ["timeline"]
+    },
+    {
+      "id": "purchase_q4",
+      "text": "😌 Tu préfères attendre un peu mais être 100% à l’aise, ou aller plus vite quitte à ajuster ?",
+      "expected_fields": ["risk.tolerance_score"],
+      "suggestions": ["100% à l’aise", "Aller plus vite"],
+      "tags": ["risk"]
+    },
+    {
+      "id": "purchase_q5",
+      "text": "💰 Aujourd’hui, tu pourrais mettre une somme de départ sans te mettre en tension ?",
+      "expected_fields": ["capacity.initial_contribution"],
+      "suggestions": ["Oui", "Non"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "purchase_q6",
+      "text": "🔁 Et ensuite, tu serais à l’aise avec combien par mois environ ?",
+      "expected_fields": ["capacity.monthly_contribution"],
+      "suggestions": ["100€/mois", "200€/mois", "400€/mois"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "purchase_q7",
+      "text": "🧾 Tu veux que cet argent reste dispo à tout moment, ou tu es OK pour le mettre à part ?",
+      "expected_fields": ["capacity.liquidity_need"],
+      "suggestions": ["Toujours dispo", "OK pour mettre à part"],
+      "tags": ["liquidity"]
+    },
+    {
+      "id": "purchase_q8",
+      "text": "⚖️ Pour toi, c’est important que cet achat n’impacte pas ton quotidien, on est d’accord ?",
+      "expected_fields": ["constraints.daily_comfort"],
+      "suggestions": ["Oui", "Non"],
+      "tags": ["constraints"]
+    },
+    {
+      "id": "purchase_q9",
+      "text": "🧠 Si je résume : tu veux X, pour Y €, d’ici Z, sans stress. C’est bien ça ?",
+      "expected_fields": ["confirmation.summary"],
+      "suggestions": ["Oui", "Ajustons"],
+      "tags": ["confirmation"]
+    },
+    {
+      "id": "purchase_q10",
+      "text": "Parfait. On crée un coffre d’épargne dédié à cet achat, et on avance ensemble.",
+      "expected_fields": ["vault.transition"],
+      "suggestions": ["On le crée", "Plus tard"],
+      "tags": ["vault_transition"]
+    }
+  ],
+  "real_estate": [
+    {
+      "id": "real_estate_q1",
+      "text": "🏠 C’est pour y vivre, investir, ou les deux à terme ?",
+      "expected_fields": ["goal.type"],
+      "suggestions": ["Y vivre", "Investir", "Les deux"],
+      "tags": ["goal"]
+    },
+    {
+      "id": "real_estate_q2",
+      "text": "📍 Tu penses à une zone précise, ou c’est encore ouvert ?",
+      "expected_fields": ["goal.location"],
+      "suggestions": ["Zone précise", "Ouvert"],
+      "tags": ["context"]
+    },
+    {
+      "id": "real_estate_q3",
+      "text": "⏱️ Tu imagines ce projet dans combien de temps ?",
+      "expected_fields": ["timeline.horizon_months"],
+      "suggestions": ["1–2 ans", "2–4 ans", "> 4 ans"],
+      "tags": ["timeline"]
+    },
+    {
+      "id": "real_estate_q4",
+      "text": "💰 Pour l’instant, tu réfléchis plutôt à l’apport, pas encore au crédit, c’est bien ça ?",
+      "expected_fields": ["goal.focus"],
+      "suggestions": ["Oui", "Pas encore sûr"],
+      "tags": ["goal"]
+    },
+    {
+      "id": "real_estate_q5",
+      "text": "🎯 As-tu une idée de l’apport idéal, même approximative ?",
+      "expected_fields": ["goal.target_amount"],
+      "suggestions": ["10 000€", "30 000€", "50 000€"],
+      "tags": ["budget"]
+    },
+    {
+      "id": "real_estate_q6",
+      "text": "💼 Tu as déjà une somme dédiée aujourd’hui ?",
+      "expected_fields": ["capacity.initial_contribution"],
+      "suggestions": ["Oui", "Non"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "real_estate_q7",
+      "text": "🔁 Chaque mois, tu pourrais mettre combien sans te sentir contraint(e) ?",
+      "expected_fields": ["capacity.monthly_contribution"],
+      "suggestions": ["200€/mois", "500€/mois", "900€/mois"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "real_estate_q8",
+      "text": "🧯 C’est important pour toi de garder une épargne de sécurité à côté ?",
+      "expected_fields": ["constraints.safety_buffer"],
+      "suggestions": ["Oui", "Non"],
+      "tags": ["constraints"]
+    },
+    {
+      "id": "real_estate_q9",
+      "text": "🧠 Tu préfères une progression tranquille et sûre, ou optimiser un peu si possible ?",
+      "expected_fields": ["risk.tolerance_score"],
+      "suggestions": ["Tranquille et sûre", "Optimiser un peu"],
+      "tags": ["risk"]
+    },
+    {
+      "id": "real_estate_q10",
+      "text": "On va donc créer un coffre d’épargne dédié à cet apport, séparé du reste.",
+      "expected_fields": ["vault.transition"],
+      "suggestions": ["On le crée", "Plus tard"],
+      "tags": ["vault_transition"]
+    }
+  ],
+  "retirement": [
+    {
+      "id": "retirement_q1",
+      "text": "💬 Quand tu penses à ce projet, c’est plutôt pour te sentir rassuré(e) ou pour viser plus de liberté plus tard ?",
+      "expected_fields": ["intent"],
+      "suggestions": ["Rassuré(e)", "Plus de liberté"],
+      "tags": ["intent"]
+    },
+    {
+      "id": "retirement_q2",
+      "text": "🧓 Tu te projettes à quel horizon : 10 ans, 20 ans, plus ?",
+      "expected_fields": ["timeline.horizon_months"],
+      "suggestions": ["10 ans", "20 ans", "Plus"],
+      "tags": ["timeline"]
+    },
+    {
+      "id": "retirement_q3",
+      "text": "🧠 Tu as déjà une idée de ce que serait un ‘avenir confortable’ pour toi ?",
+      "expected_fields": ["goal.target_amount"],
+      "suggestions": ["Oui", "Pas encore"],
+      "tags": ["budget"]
+    },
+    {
+      "id": "retirement_q4",
+      "text": "💰 Aujourd’hui, tu aimerais plutôt partir d’un montant mensuel ou d’un objectif final ?",
+      "expected_fields": ["capacity.saving_preference"],
+      "suggestions": ["Mensuel", "Objectif final"],
+      "tags": ["plan"]
+    },
+    {
+      "id": "retirement_q5",
+      "text": "🔁 Sans te mettre en difficulté, tu pourrais mettre combien par mois environ ?",
+      "expected_fields": ["capacity.monthly_contribution"],
+      "suggestions": ["150€/mois", "400€/mois", "800€/mois"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "retirement_q6",
+      "text": "📉 Si ton épargne bouge un peu certaines années, ça te stresserait beaucoup ou pas trop ?",
+      "expected_fields": ["risk.tolerance_score"],
+      "suggestions": ["Beaucoup", "Pas trop"],
+      "tags": ["risk"]
+    },
+    {
+      "id": "retirement_q7",
+      "text": "🧯 Tu as déjà une épargne de sécurité à côté, ou c’est aussi à construire ?",
+      "expected_fields": ["constraints.safety_buffer"],
+      "suggestions": ["Déjà", "À construire"],
+      "tags": ["constraints"]
+    },
+    {
+      "id": "retirement_q8",
+      "text": "🧠 Tu as déjà investi ou c’est encore nouveau pour toi ?",
+      "expected_fields": ["knowledge_level"],
+      "suggestions": ["Débutant", "Déjà investi"],
+      "tags": ["knowledge"]
+    },
+    {
+      "id": "retirement_q9",
+      "text": "Donc l’idée, c’est d’avancer progressivement, sans pression, mais avec un vrai cadre.",
+      "expected_fields": ["confirmation.summary"],
+      "suggestions": ["Oui", "Ajustons"],
+      "tags": ["confirmation"]
+    },
+    {
+      "id": "retirement_q10",
+      "text": "On peut créer un coffre d’épargne long terme, et ajuster la stratégie au fil du temps.",
+      "expected_fields": ["vault.transition"],
+      "suggestions": ["On le crée", "Plus tard"],
+      "tags": ["vault_transition"]
+    }
+  ],
+  "safety": [
+    {
+      "id": "safety_q1",
+      "text": "🧠 C’est surtout pour te sentir plus serein(e) au quotidien ?",
+      "expected_fields": ["intent"],
+      "suggestions": ["Oui", "Pas exactement"],
+      "tags": ["intent"]
+    },
+    {
+      "id": "safety_q2",
+      "text": "🧯 Tu aimerais couvrir combien de mois de dépenses, idéalement ?",
+      "expected_fields": ["goal.target_amount"],
+      "suggestions": ["2 mois", "4 mois", "6 mois"],
+      "tags": ["budget"]
+    },
+    {
+      "id": "safety_q3",
+      "text": "💸 Aujourd’hui, tu as déjà un petit matelas ou pas encore ?",
+      "expected_fields": ["capacity.initial_contribution"],
+      "suggestions": ["Oui", "Non"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "safety_q4",
+      "text": "⏱️ Tu veux construire ça rapidement, ou tranquillement ?",
+      "expected_fields": ["timeline.horizon_months"],
+      "suggestions": ["Rapidement", "Tranquillement"],
+      "tags": ["timeline"]
+    },
+    {
+      "id": "safety_q5",
+      "text": "🔁 Chaque mois, tu pourrais y consacrer combien sans y penser ?",
+      "expected_fields": ["capacity.monthly_contribution"],
+      "suggestions": ["100€/mois", "250€/mois", "400€/mois"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "safety_q6",
+      "text": "💼 Cet argent doit rester disponible à tout moment, on est d’accord ?",
+      "expected_fields": ["capacity.liquidity_need"],
+      "suggestions": ["Oui", "Pas forcément"],
+      "tags": ["liquidity"]
+    },
+    {
+      "id": "safety_q7",
+      "text": "📉 Tu préfères zéro surprise, même si ça rapporte peu ?",
+      "expected_fields": ["risk.tolerance_score"],
+      "suggestions": ["Oui", "Un peu plus souple"],
+      "tags": ["risk"]
+    },
+    {
+      "id": "safety_q8",
+      "text": "Donc priorité à la tranquillité, pas à la performance.",
+      "expected_fields": ["confirmation.summary"],
+      "suggestions": ["Oui", "Ajustons"],
+      "tags": ["confirmation"]
+    },
+    {
+      "id": "safety_q9",
+      "text": "🧾 Tu veux que ce soit complètement séparé de tes autres projets ?",
+      "expected_fields": ["vault.separate"],
+      "suggestions": ["Oui", "Non"],
+      "tags": ["vault"]
+    },
+    {
+      "id": "safety_q10",
+      "text": "On va créer un coffre sécurité dédié, simple et accessible.",
+      "expected_fields": ["vault.transition"],
+      "suggestions": ["On le crée", "Plus tard"],
+      "tags": ["vault_transition"]
+    }
+  ],
+  "unknown": [
+    {
+      "id": "unknown_q1",
+      "text": "💬 Tu veux plutôt te faire plaisir, sécuriser, ou préparer un projet long terme ?",
+      "expected_fields": ["goal.type"],
+      "suggestions": ["Voyage", "Achat", "Sécurité", "Long terme"],
+      "tags": ["project_type"]
+    },
+    {
+      "id": "unknown_q2",
+      "text": "🎯 Tu as une idée du budget total, même approximative ?",
+      "expected_fields": ["goal.target_amount"],
+      "suggestions": ["5 000€", "10 000€", "Je ne sais pas"],
+      "tags": ["budget"]
+    },
+    {
+      "id": "unknown_q3",
+      "text": "📅 Tu veux atteindre ça dans combien de temps ?",
+      "expected_fields": ["timeline.horizon_months"],
+      "suggestions": ["< 1 an", "1–3 ans", "> 3 ans"],
+      "tags": ["timeline"]
+    },
+    {
+      "id": "unknown_q4",
+      "text": "💼 Tu as déjà une somme de côté pour démarrer ?",
+      "expected_fields": ["capacity.initial_contribution"],
+      "suggestions": ["Oui", "Non"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "unknown_q5",
+      "text": "🔁 Sans te mettre en difficulté, tu pourrais mettre combien par mois ?",
+      "expected_fields": ["capacity.monthly_contribution"],
+      "suggestions": ["100€/mois", "250€/mois", "500€/mois"],
+      "tags": ["capacity"]
+    },
+    {
+      "id": "unknown_q6",
+      "text": "🧘 Est-ce important pour toi de pouvoir piocher dedans ?",
+      "expected_fields": ["capacity.liquidity_need"],
+      "suggestions": ["Oui", "Pas forcément"],
+      "tags": ["liquidity"]
+    },
+    {
+      "id": "unknown_q7",
+      "text": "📉 Tu veux rester très prudent, ou tu es ok pour un peu de variation ?",
+      "expected_fields": ["risk.tolerance_score"],
+      "suggestions": ["Très prudent", "Un peu de variation"],
+      "tags": ["risk"]
+    },
+    {
+      "id": "unknown_q8",
+      "text": "🧠 Tu te sens plutôt débutant ou déjà à l’aise sur ces sujets ?",
+      "expected_fields": ["knowledge_level"],
+      "suggestions": ["Débutant", "À l’aise"],
+      "tags": ["knowledge"]
+    },
+    {
+      "id": "unknown_q9",
+      "text": "Je récapitule pour être sûr : on avance calmement vers cet objectif, c’est bien ça ?",
+      "expected_fields": ["confirmation.summary"],
+      "suggestions": ["Oui", "Ajustons"],
+      "tags": ["confirmation"]
+    },
+    {
+      "id": "unknown_q10",
+      "text": "On crée un coffre dédié et on avance ensemble.",
+      "expected_fields": ["vault.transition"],
+      "suggestions": ["On le crée", "Plus tard"],
+      "tags": ["vault_transition"]
+    }
+  ]
+}

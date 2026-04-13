@@ -1,0 +1,4 @@
+// Dev — bundle id, nom affiché, FLAVOR pour dart-define (voir core/config.dart).
+PRODUCT_BUNDLE_IDENTIFIER=com.vancelian.app.dev
+APP_DISPLAY_NAME=Vancelian Dev
+DART_DEFINES=$(inherited),RkxBVk9SPWRldg==

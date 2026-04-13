@@ -33,9 +33,57 @@ export async function createSession(userId: string): Promise<string> {
   return token
 }
 
+/** Session admin web + lien API Python (`users.admin_user_id` → `admin_users.id`). */
+export type AdminWebSession = {
+  userId: string
+  userEmail: string
+  userRole: string
+  /** FK vers `admin_users.id` — seule source pour le `sub` JWT côté BFF (pas de lookup email). */
+  adminUserId: number | null
+}
+
+/**
+ * Remplit `users.admin_user_id` si une ligne `admin_users` existe avec le même e-mail
+ * (recherche insensible à la casse, `findFirst` — index unique partiel SQL sur email).
+ * Appelée au login et à chaque lecture de session pour éviter le 403 BFF sans re-login.
+ */
+export async function ensureCmsUserLinkedToAdminUser(user: {
+  id: string
+  email: string
+  adminUserId: number | null
+}): Promise<number | null> {
+  if (user.adminUserId != null) {
+    return user.adminUserId
+  }
+
+  const au = await prisma.adminUser.findFirst({
+    where: {
+      email: { equals: user.email, mode: 'insensitive' },
+    },
+    orderBy: { id: 'asc' },
+  })
+  if (!au) {
+    return null
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { adminUserId: au.id },
+    })
+    return updated.adminUserId
+  } catch (e) {
+    console.warn(
+      '[auth] ensureCmsUserLinkedToAdminUser: liaison users → admin_users impossible (conflit FK / autre user ?)',
+      e
+    )
+    return null
+  }
+}
+
 export async function getSessionFromToken(
   token: string
-): Promise<{ userId: string; userEmail: string; userRole: string } | null> {
+): Promise<AdminWebSession | null> {
   const session = await prisma.session.findUnique({
     where: { token },
     include: { user: true },
@@ -52,10 +100,13 @@ export async function getSessionFromToken(
     return null
   }
 
+  const adminUserId = await ensureCmsUserLinkedToAdminUser(session.user)
+
   return {
     userId: session.userId,
     userEmail: session.user.email,
     userRole: session.user.role,
+    adminUserId,
   }
 }
 
@@ -65,11 +116,7 @@ export async function deleteSession(token: string): Promise<void> {
   })
 }
 
-export async function getSessionFromCookie(): Promise<{
-  userId: string
-  userEmail: string
-  userRole: string
-} | null> {
+export async function getSessionFromCookie(): Promise<AdminWebSession | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
 
@@ -105,4 +152,5 @@ export async function cleanupExpiredSessions(): Promise<void> {
     },
   })
 }
+
 

@@ -1,0 +1,145 @@
+/*
+ * Module pied de page PDF — design system Vancelian (relevés et futurs documents).
+ * Aucune marge de « safe area » ici : le parent (.statement__footer, autre wrapper) applique le retrait horizontal.
+ * Couleurs / typo alignées sur l’export Figma (équivalents print sans Tailwind ni réseau).
+ */
+
+.pdf-ds-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pdf-ds-footer__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.pdf-ds-footer__rule {
+  width: 100%;
+  height: 1px;
+  background: #d1d1d6;
+  flex-shrink: 0;
+}
+
+.pdf-ds-footer__main {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 40px;
+  width: 100%;
+  min-height: 60px;
+}
+
+.pdf-ds-footer__left {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.pdf-ds-footer__mark {
+  width: 42px;
+  height: 43px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.pdf-ds-footer__mark img {
+  display: block;
+  width: 42px;
+  height: 43px;
+  object-fit: cover;
+}
+
+.pdf-ds-footer__support {
+  font-size: 8px;
+  line-height: 11px;
+  letter-spacing: -0.08px;
+  color: #000000;
+}
+
+.pdf-ds-footer__support-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.pdf-ds-footer__support-line {
+  margin: 0;
+  font-weight: 400;
+}
+
+.pdf-ds-footer__support .pdf-ds-footer__support-title + .pdf-ds-footer__support-line {
+  margin-bottom: 0;
+}
+
+.pdf-ds-footer__support .pdf-ds-footer__support-line + .pdf-ds-footer__support-title {
+  margin-top: 0;
+}
+
+.pdf-ds-footer__legal {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-self: stretch;
+}
+
+.pdf-ds-footer__legal-p {
+  margin: 0 0 0 0;
+  font-size: 7px;
+  line-height: 10px;
+  letter-spacing: -0.08px;
+  color: #000000;
+  font-weight: 400;
+}
+
+.pdf-ds-footer__legal-p + .pdf-ds-footer__legal-p {
+  margin-top: 8px;
+}
+
+.pdf-ds-footer__legal-p--tight {
+  font-size: 7px;
+}
+
+.pdf-ds-footer__legal-gap {
+  white-space: pre;
+}
+
+.pdf-ds-footer__legal-strong {
+  font-weight: 600;
+}
+
+.pdf-ds-footer__bottom {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  font-size: 8px;
+  line-height: 11px;
+  letter-spacing: -0.08px;
+  color: #000000;
+}
+
+.pdf-ds-footer__copyright {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pdf-ds-footer__page-placeholder {
+  flex-shrink: 0;
+  width: 28mm;
+  min-width: 80px;
+  min-height: 1em;
+  white-space: nowrap;
+}

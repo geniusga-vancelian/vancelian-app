@@ -60,14 +60,14 @@ export async function POST(
         },
       },
       update: {
-        data: published.data,
+        data: published.data as any, // Prisma Json type compatibility
         updatedByUserId: session.userId,
       },
       create: {
         sectionId: params.sectionId,
         locale: validated.locale,
         status: 'DRAFT',
-        data: published.data,
+        data: published.data as any, // Prisma Json type compatibility
         updatedByUserId: session.userId,
       },
     })

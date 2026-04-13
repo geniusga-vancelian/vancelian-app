@@ -1,0 +1,5 @@
+# Local environment overrides (may contain secrets)
+.env.local
+
+# Client Flutter « courant » (dev / tests) — remplace app_runtime_settings
+.current_test_client_id

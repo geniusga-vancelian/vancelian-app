@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Notice — Dev Flutter iOS (Vancelian / Arquantix)</title>
+  <style>
+    :root { --bg: #f6f7fb; --card: #fff; --border: #e2e5ee; --text: #1a1d26; --muted: #5c6478; --code: #0d1117; --accent: #3b5bdb; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; color: var(--text); background: var(--bg); margin: 0; padding: 1.5rem; }
+    h1 { font-size: 1.35rem; margin: 0 0 0.5rem; }
+    h2 { font-size: 1.1rem; margin: 2rem 0 0.75rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--accent); }
+    p, li { color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; max-width: 52rem; }
+    .lead { font-size: 0.95rem; color: var(--muted); margin-bottom: 1.5rem; }
+    pre { background: var(--code); color: #e6edf3; padding: 1rem 1.1rem; border-radius: 8px; overflow-x: auto; font-size: 0.82rem; line-height: 1.45; margin: 0.75rem 0; }
+    code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .note { background: #fff8e6; border-left: 4px solid #e6a800; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+    .ok { background: #ecfdf3; border-left: 4px solid #16a34a; }
+    ul { padding-left: 1.25rem; }
+    li { margin: 0.35rem 0; }
+    kbd { background: #eee; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+
+  <h1>Notice développement — App Flutter sur iPhone</h1>
+  <p class="lead">
+    Projet source sous OneDrive, <strong>build iOS hors OneDrive</strong> (codesign). Copie de travail :
+    <code>~/dev/vancelian-mobile</code>. Adapte <code>IP_MAC</code> et l’ID d’appareil si besoin.
+  </p>
+
+  <!-- ========== NOTICE 1 ========== -->
+  <div class="card">
+    <h2>1. Après modification du code — relancer / appliquer les changements</h2>
+
+    <p><strong>Synchroniser OneDrive → copie locale</strong> (à chaque fois que tu modifies des fichiers dans le dépôt OneDrive) :</p>
+    <pre><code>rsync -a --delete \
+  "/Users/gael/Library/CloudStorage/OneDrive-Vancelian/Documents/vancelian-app/services/arquantix/mobile/" \
+  ~/dev/vancelian-mobile/</code></pre>
+
+    <p><strong>Puis</strong>, selon ce que tu as changé :</p>
+    <ul>
+      <li><strong>Uniquement du Dart / assets</strong> (la plupart des cas) : avec <code>flutter run</code> déjà actif, appuie sur <kbd>r</kbd> pour <em>hot reload</em>, ou <kbd>R</kbd> pour <em>hot restart</em>.</li>
+      <li><strong><code>pubspec.yaml</code> ou dépendances</strong> :</li>
+    </ul>
+    <pre><code>cd ~/dev/vancelian-mobile
+flutter pub get
+cd ios &amp;&amp; pod install &amp;&amp; cd ..</code></pre>
+
+    <ul>
+      <li><strong>Fichiers natifs iOS</strong> (<code>ios/</code>, plugins) : même bloc <code>pod install</code> ci-dessus, puis relance complète (quitte <kbd>q</kbd> puis relance <code>flutter run</code>).</li>
+      <li><strong>Changement lourd / doute</strong> : relance propre :</li>
+    </ul>
+    <pre><code>cd ~/dev/vancelian-mobile
+flutter clean
+flutter pub get
+cd ios &amp;&amp; pod install &amp;&amp; cd ..
+xattr -cr .</code></pre>
+
+    <p><strong>Lancer l’app sur l’iPhone</strong> (remplace l’IP et l’ID du téléphone) :</p>
+    <pre><code>cd ~/dev/vancelian-mobile
+
+flutter run -d TON_ID_IPHONE \
+  --dart-define=FLAVOR=dev \
+  --dart-define=API_BASE_URL=http://IP_MAC:3000 \
+  --dart-define=AUTH_API_BASE_URL=http://IP_MAC:8000</code></pre>
+
+    <p>Exemple :</p>
+    <pre><code>flutter run -d 00008130-001165803A88001C \
+  --dart-define=FLAVOR=dev \
+  --dart-define=API_BASE_URL=http://192.168.1.42:3000 \
+  --dart-define=AUTH_API_BASE_URL=http://192.168.1.42:8000</code></pre>
+
+    <div class="note">
+      <strong>Rappel :</strong> les serveurs <strong>Next</strong> (port <code>3000</code>) et <strong>API FastAPI</strong> (port <code>8000</code>) doivent tourner sur le Mac pour le login / le BFF. Voir la notice « Après redémarrage du Mac ».
+    </div>
+  </div>
+
+  <!-- ========== NOTICE 2 ========== -->
+  <div class="card">
+    <h2>2. Après un redémarrage du Mac — remettre l’environnement en route</h2>
+
+    <ol style="color: var(--muted);">
+      <li><strong>Docker Desktop</strong> : ouvre-le et attends qu’il soit prêt (icône dans la barre de menu).</li>
+      <li><strong>Base de données + API + Web + tâches</strong> depuis le repo Arquantix :</li>
+    </ol>
+
+    <pre><code>cd /Users/gael/Library/CloudStorage/OneDrive-Vancelian/Documents/vancelian-app/services/arquantix
+make boot</code></pre>
+
+    <p>Alternative si Docker / la DB est déjà OK :</p>
+    <pre><code>cd /Users/gael/Library/CloudStorage/OneDrive-Vancelian/Documents/vancelian-app/services/arquantix
+make start-api-web</code></pre>
+
+    <p><strong>Vérifier rapidement</strong> :</p>
+    <pre><code>curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/health
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000</code></pre>
+    <p>Les codes <code>200</code> (ou réponse valide pour Next) indiquent que les services écoutent.</p>
+
+    <p><strong>IP du Mac</strong> pour l’iPhone (même Wi‑Fi) :</p>
+    <pre><code>ipconfig getifaddr en0</code></pre>
+
+    <p><strong>ID de l’iPhone</strong> :</p>
+    <pre><code>flutter devices</code></pre>
+
+    <p><strong>Synchroniser le mobile puis lancer l’app</strong> (même flux que la section 1) :</p>
+    <pre><code>rsync -a --delete \
+  "/Users/gael/Library/CloudStorage/OneDrive-Vancelian/Documents/vancelian-app/services/arquantix/mobile/" \
+  ~/dev/vancelian-mobile/
+
+xattr -cr ~/dev/vancelian-mobile
+
+cd ~/dev/vancelian-mobile
+flutter pub get
+cd ios &amp;&amp; pod install &amp;&amp; cd ..
+
+flutter run -d TON_ID_IPHONE \
+  --dart-define=FLAVOR=dev \
+  --dart-define=API_BASE_URL=http://IP_MAC:3000 \
+  --dart-define=AUTH_API_BASE_URL=http://IP_MAC:8000</code></pre>
+
+    <div class="note ok">
+      <strong>Astuce :</strong> si l’IP du Mac change après le redémarrage (DHCP), mets à jour uniquement les deux <code>--dart-define=...URL...</code> avec la nouvelle IP.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Raccourcis utiles pendant <code>flutter run</code></h2>
+    <ul>
+      <li><kbd>r</kbd> — Hot reload (rapide)</li>
+      <li><kbd>R</kbd> — Hot restart</li>
+      <li><kbd>q</kbd> — Quitter (arrête l’app sur l’appareil)</li>
+    </ul>
+  </div>
+
+  <p style="font-size: 0.85rem; color: #888; margin-top: 2rem;">
+    Fichier : <code>mobile/docs/NOTICE_DEV_FLUTTER_iOS.html</code> — à ouvrir dans un navigateur.
+  </p>
+
+</body>
+</html>

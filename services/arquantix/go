@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Lance toute la stack Arquantix: Docker/DB + API (8000) + Web (3000)
+# Usage: ./go   ou   bash go
+cd "$(dirname "$0")"
+exec ./scripts/arquantix-boot.sh

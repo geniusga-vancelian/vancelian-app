@@ -1,0 +1,17 @@
+# OBSOLÈTE pour le flux standard — conservé uniquement pour récupération manuelle exceptionnelle.
+# Les volumes Postgres/Redis sont désormais nommés explicitement dans docker-compose.arquantix.yml
+# (arquantix_arquantix-db-data, etc.) : un changement de COMPOSE_PROJECT_NAME ne crée plus une base vide.
+#
+# N’utiliser ce fichier qu’en dernier recours, sur consigne explicite (voir
+# docs/arquantix/LOCAL_ENV_RUNBOOK.md), avec une commande du type :
+#   docker compose --project-name <nom> --env-file .env.arquantix \
+#     -f docker-compose.arquantix.yml -f docker-compose.arquantix.attach-volumes.yml config
+#
+# Ne plus activer ce fichier depuis Makefile.arquantix ni scripts/dev-reset.sh.
+volumes:
+  arquantix-db-data:
+    external: true
+    name: arquantix_arquantix-db-data
+  arquantix-redis-data:
+    external: true
+    name: arquantix_arquantix-redis-data

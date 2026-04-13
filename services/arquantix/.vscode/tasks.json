@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Arquantix: Démarrer Next.js (port 3000)",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/web",
+        "env": {
+          "PORT": "3000"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "nextjs",
+        "pattern": { "regexp": "^.*$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "(Local:.*3000|Ready in|started server)"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "Arquantix"
+      }
+    },
+    {
+      "label": "Arquantix: Lancer Flutter sur simulateur iOS (port 3000)",
+      "type": "shell",
+      "command": "API_BASE_URL=http://localhost:3000 ./run-ios.sh",
+      "options": {
+        "cwd": "${workspaceFolder}/mobile",
+        "env": {
+          "API_BASE_URL": "http://localhost:3000"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "Arquantix"
+      }
+    },
+    {
+      "label": "Arquantix: Tout lancer (Next.js + simulateur iOS)",
+      "dependsOn": [
+        "Arquantix: Démarrer Next.js (port 3000)",
+        "Arquantix: Lancer Flutter sur simulateur iOS (port 3000)"
+      ],
+      "dependsOrder": "sequence",
+      "presentation": {
+        "reveal": "always",
+        "group": "Arquantix"
+      }
+    },
+  ]
+}

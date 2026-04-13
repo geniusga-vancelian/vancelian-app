@@ -1,0 +1,61 @@
+---
+description: Charte stricte — ne pas casser Docker/DB/env Arquantix (validation requise)
+alwaysApply: true
+---
+
+# Stabilité environnement Arquantix
+
+Référence complète : `docs/arquantix/CURSOR_CHARTE_ENVIRONNEMENT.md`.
+
+## Règle absolue
+
+Ne pas modifier l’environnement (Docker, DB, ports, `.env`, `COMPOSE_PROJECT_NAME`, `DB_NAME`, `DATABASE_URL`, volumes) **sans validation explicite** de l’utilisateur.
+
+## Interdit sans accord préalable
+
+- Changer `COMPOSE_PROJECT_NAME` ou inventer un projet Compose (`clean`, `clean2`, `recover`, etc.).
+- Créer ou basculer vers une base parallèle (`*_fresh`, `*_test`, etc.) ou toucher aux volumes Docker.
+- Modifier `DB_NAME`, `DATABASE_URL`, ports, ou fichiers `.env*`.
+- `docker compose down -v` ou toute suppression de données.
+- Nouvelle stack parallèle.
+
+Si une piste impose l’un de ces points : **s’arrêter, demander confirmation.**
+
+## Process (toute demande backend / PDF / API / DB / Docker / env)
+
+1. **Audit** — Compréhension, fichiers, risques.  
+2. **Diagnostic** — Causes possibles ; **pas de modification**.  
+3. **Plan minimal** — Préférer logs, `curl`, doctor ; éviter l’infra.  
+4. **Validation** — Attendre le feu vert avant code ou changement de config.
+
+## Stabilité à préserver
+
+Même **`DB_NAME` / `DATABASE_URL`** partout ; projet Compose officiel = **`COMPOSE_PROJECT_NAME`** dans `.env.arquantix` (souvent **`arquantix`**). Toute divergence entre ce nom et les labels Docker des conteneurs `arquantix-*` est **critique** (voir `arquantix_local_doctor.sh`, `LOCAL_ENV_RUNBOOK.md` §3).
+
+**Interdit** : inventer un nouveau `--project-name` pour contourner Compose « dead » sans validation explicite et sans la procédure documentée.
+
+## Contournements infra interdits
+
+Ne jamais « réparer » un bug **fonctionnel** en créant une autre DB, une autre stack Docker, ou en modifiant la config globale pour masquer le métier. Corriger à la bonne couche (code / API / logique).
+
+## Infra : justification obligatoire
+
+Toute modif d’infra doit être motivée par un **besoin fonctionnel clair**, montrer que ce n’est pas un contournement, et lister des **alternatives sans infra**. Sinon : **interdit**.
+
+## Fail fast
+
+Si la **cause** n’est pas certaine : **pas** de solution proposée comme plan fermé ; seulement diagnostic, logs / `curl` / doctor, questions. **Interdit** : patch ou infra « pour tester » sans accord.
+
+## Erreurs / debug
+
+Privilégier logs, HTTP, `curl`, `bash scripts/arquantix_local_doctor.sh`. **Jamais** recréer l’environnement ou une nouvelle DB pour contourner.
+
+## Format de réponse attendu
+
+**A.** Diagnostic · **B.** Cause probable · **C.** Plan minimal · **D.** Risques.
+
+## Si incertain
+
+Poser une question ; ne pas improviser.
+
+Phrase utile en début de tâche sensible : *Audit only. No code. No infra changes.*

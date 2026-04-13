@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquantix — Coming Soon</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 600px;
+            animation: fadeIn 1s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+        
+        .subtitle {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.95;
+        }
+        
+        .subtitle-en {
+            font-size: 1rem;
+            opacity: 0.8;
+            font-style: italic;
+        }
+        
+        .divider {
+            width: 80px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.3);
+            margin: 2rem auto;
+        }
+        
+        .message {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            opacity: 0.9;
+            margin-top: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .subtitle {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Arquantix</h1>
+        <p class="subtitle">Bientôt disponible</p>
+        <p class="subtitle-en">Coming soon</p>
+        <div class="divider"></div>
+        <p class="message">
+            Nous préparons quelque chose d'exceptionnel.<br>
+            Revenez bientôt.
+        </p>
+    </div>
+</body>
+</html>
+

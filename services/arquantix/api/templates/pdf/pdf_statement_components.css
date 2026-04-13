@@ -1,0 +1,29 @@
+/*
+ * Corps de relevé PDF : titre de section (ligne + titre) issu du bundle Jinja2 « section_title »,
+ * en complément du tableau .statement-table (WeasyPrint).
+ */
+
+.pdf-ds-section-title {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  align-items: stretch;
+  width: 100%;
+  margin: 0 0 20px 0;
+}
+
+.pdf-ds-section-title__rule {
+  width: 100%;
+  height: 1px;
+  background: #d1d1d6;
+  flex-shrink: 0;
+}
+
+.pdf-ds-section-title__text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: calc(18 / 14);
+  letter-spacing: -0.035em;
+  color: #000000;
+}

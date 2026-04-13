@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arquantix — Investisseurs · Conformité &amp; Risk Engine</title>
+  <style>
+    :root {
+      --bg: #0c1222;
+      --card: #152238;
+      --text: #eef2ff;
+      --muted: #94a3b8;
+      --accent: #14b8a6;
+      --accent2: #a78bfa;
+      --line: rgba(255,255,255,0.07);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    .deck { height: 100vh; display: flex; flex-direction: column; }
+    .slide {
+      display: none;
+      flex: 1;
+      padding: 3.5rem 4rem 5rem;
+      max-width: 1150px;
+      margin: 0 auto;
+      width: 100%;
+      overflow-y: auto;
+      animation: in 0.35s ease;
+    }
+    .slide.active { display: block; }
+    @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .slide h1 { font-size: 2rem; font-weight: 700; line-height: 1.2; margin-bottom: 1rem; color: #fff; }
+    .slide h2 { font-size: 1.25rem; font-weight: 600; color: var(--accent); margin: 1.35rem 0 0.65rem; }
+    .slide p, .slide li { font-size: 1.02rem; line-height: 1.65; color: var(--muted); }
+    .slide ul { margin: 0.75rem 0 0 1.2rem; }
+    .slide li { margin: 0.35rem 0; }
+    .tag { display: inline-block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent2); margin-bottom: 0.75rem; font-weight: 700; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1rem; }
+    @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.2rem 1.35rem;
+    }
+    .card strong { color: var(--text); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin-top: 0.65rem; }
+    th, td { border: 1px solid var(--line); padding: 0.4rem 0.5rem; text-align: left; }
+    th { background: rgba(20,184,166,0.12); color: var(--accent); }
+    .bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 0.65rem 1.5rem;
+      background: rgba(12,18,34,0.95);
+      border-top: 1px solid var(--line);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.8rem; color: var(--muted);
+    }
+    .bar button {
+      background: var(--accent); color: #0c1222; border: none; padding: 0.45rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 700;
+    }
+    .bar button:hover { filter: brightness(1.08); }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.88em; color: #5eead4; }
+    .cover { text-align: center; padding-top: 7vh; }
+    .cover h1 { font-size: 2.45rem; background: linear-gradient(90deg, #5eead4, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .cover .sub { font-size: 1.2rem; color: var(--muted); margin-top: 1rem; max-width: 36rem; margin-left: auto; margin-right: auto; }
+    .hl { color: #fff; font-weight: 600; }
+    .note { font-size: 0.82rem; opacity: 0.9; margin-top: 1rem; border-left: 3px solid var(--accent2); padding-left: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck">
+    <section class="slide active cover">
+      <p class="tag">Confidentiel · Présentation investisseurs</p>
+      <h1>Conformité &amp; Risk Engine</h1>
+      <p class="sub">Décision de risque déterministe, traçable et gouvernée — du scoring aux signaux comportementaux, jusqu’au pilotage produit.</p>
+      <p class="note">Basé sur <span class="mono">risk_engine.py</span>, <span class="mono">risk_config.py</span>, rapports Phase 5B–5F et dashboard produit. Aucune promesse réglementaire : diligence technique et exploitabilité audit.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Enjeu réglementaire &amp; audit</p>
+      <h1>Pourquoi le « risque » doit être explicable</h1>
+      <p>Les autorités et partenaires attendent des institutions financières qu’elles <span class="hl">démontrent</span> des contrôles proportionnés : savoir <em>pourquoi</em> une action a été bloquée, escaladée ou autorisée.</p>
+      <p>Un modèle boîte noire pur complique la défense devant un régulateur ou un litige client. Notre approche privilégie un <strong>moteur déterministe</strong> : scores, seuils, facteurs nommés, logs structurés — complété par un pipeline SIEM et un feedback terrain pour la calibration.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Positionnement</p>
+      <h1>Risque explicable vs ML opaque</h1>
+      <div class="grid2">
+        <div class="card">
+          <strong>Approche courante « scoring ML »</strong>
+          <ul>
+            <li>Score peu ou pas expliqué au client interne.</li>
+            <li>Ajustements opaques, risque de biais difficile à auditer.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <strong>Arquantix (cœur Phase 5)</strong>
+          <ul>
+            <li>Somme pondérée de facteurs nommés, clamp [0,100].</li>
+            <li>Poids surchargeables (<span class="mono">RISK_WEIGHTS_JSON</span>, env).</li>
+            <li>Événements <span class="mono">continuous_auth.risk_evaluated</span>, escalades loguées.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note">Des extensions ML pourraient s’ajouter en aval ; le socle actuel reste auditable par conception.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Empilement</p>
+      <h1>Où vit le Risk Engine</h1>
+      <p>Le moteur s’exécute <strong>après</strong> la politique statique (<span class="mono">sensitive_action_map</span>) et la friction adaptative (5B). Il <strong>ne remplace pas</strong> une réauth déjà requise par la couche continue ; il peut <strong>augmenter</strong> la friction (step-up, reauth) selon le score et les overrides comportementaux.</p>
+      <p>Intégration : <span class="mono">continuous_auth_engine</span> → <span class="mono">evaluate_request_risk</span> → fusion dans la décision HTTP.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Phase 5C</p>
+      <h1>Score, niveaux, recommandation</h1>
+      <ul>
+        <li><strong>Score 0–100</strong> : somme des contributions (base par type d’action + device trust SI + fraîcheur step-up + montant + même titulaire + session intelligence + rafales + lecture sensible + pénalités signaux manquants).</li>
+        <li><strong>Niveaux</strong> : low / medium / high / critical (seuils <span class="mono">RISK_HIGH_THRESHOLD</span>, <span class="mono">RISK_CRITICAL_THRESHOLD</span> — ajustables par segment en Phase 5E).</li>
+        <li><strong>Recommandation</strong> : allow / step_up / reauth — avec règles explicites (ex. critical → reauth).</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Phase 5D</p>
+      <h1>Signaux comportementaux &amp; règles dures</h1>
+      <p>Facteurs optionnels : vélocité géographique, risque pays (carte statique), cohérence appareil, rafales d’actions, multi-sessions, âge de compte, méthode de login. Chaque contribution comportementale est <strong>bornée</strong> avant sommation.</p>
+      <p><strong>Overrides durs</strong> (exemples documentés) : vélocité extrême → réauth forcée ; nouveau device + gros montant sur transfert → réauth ; rafale + action à forte valeur → step-up forcé.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Phase 5E</p>
+      <h1>Segmentation prudente</h1>
+      <p>Segments déterministes : <span class="mono">new_user</span>, <span class="mono">normal_user</span>, <span class="mono">trusted_user</span>, <span class="mono">high_value_user</span>, <span class="mono">risky_user</span> — dérivés d’âge de compte, volume, anomalies historiques, KYC.</p>
+      <p>Effets : seuils high/critical par segment, ajustement de score pondéré, seuils de « bas risque » pour la friction (montants, récence) — avec garde-fous pour ne pas adoucir un contexte déjà dangereux (vélocité geo extrême, etc.).</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Roadmap produit Phase 5</p>
+      <h1>Les briques B → F</h1>
+      <table>
+        <thead><tr><th>Phase</th><th>Apport</th></tr></thead>
+        <tbody>
+          <tr><td>5B — Friction adaptative</td><td>Règles montant / confiance / récence avant score complet.</td></tr>
+          <tr><td>5C — Risk engine</td><td>Score déterministe, niveaux, recommandation, logs.</td></tr>
+          <tr><td>5D — Comportemental</td><td>Géo, device, rafales, overrides durs anti-fraude.</td></tr>
+          <tr><td>5E — Intelligence adaptative</td><td>Segments, seuils dynamiques, ajustements pondérés.</td></tr>
+          <tr><td>5F — Calibration</td><td>Feedback, suggestions, A/B sur poids, versionnement.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Phase 5F</p>
+      <h1>Calibration, feedback, expériences</h1>
+      <ul>
+        <li><strong>Feedback</strong> typé (fraude suspectée / confirmée, faux positif, succès, override manuel) avec codes de facteurs — journalisé et alimentant le store du dashboard.</li>
+        <li><strong>Suggestions de calibration</strong> : règles fixes sur agrégats (<span class="mono">compute_calibration_suggestions</span>) — <strong>jamais d’application automatique</strong> des poids en production.</li>
+        <li><strong>A/B</strong> : variantes déterministes (hash utilisateur + experiment_id), surcharges de poids pour <span class="mono">variant_a</span> uniquement.</li>
+        <li><strong>Version</strong> : <span class="mono">RISK_CALIBRATION_VERSION</span> pour la traçabilité des releases config.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Reclassement contrôlé</p>
+      <h1>Transferts « bas risque»</h1>
+      <p>Sous conditions strictes (friction adaptative activée, même titulaire, montant sous seuil global, appareil trusted, step-up récent, score &lt; 25, pas d’exigence SI contradictoire), un transfert peut être <strong>reclassé</strong> en <span class="mono">internal_transfer_low</span> avec facteur documenté — traçable via log <span class="mono">continuous_auth.risk_downgrade_applied</span>.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Dashboard produit</p>
+      <h1>Piloter sans boîte noire</h1>
+      <p>Endpoints admin agrégés (fenêtre glissante) : taux allow / step_up / reauth, distribution des niveaux, facteurs les plus fréquents, corrélation feedback fraude / faux positifs par facteur, métriques par segment et par variante d’expérience, alertes seuils (reauth, anomalies d’overrides durs, taux de feedback fraude), décisions récentes, suggestions de calibration.</p>
+      <p class="note">Stockage en mémoire par processus API — vue complète en cluster nécessiterait une couche d’agrégation (feuille de route).</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Preuve &amp; traçabilité</p>
+      <h1>Ce que les équipes compliance peuvent attendre</h1>
+      <table>
+        <thead><tr><th>Artéfact</th><th>Usage</th></tr></thead>
+        <tbody>
+          <tr><td>Logs structurés risque</td><td>Reconstruction d’une décision (facteurs, score, outcome).</td></tr>
+          <tr><td>Événements SIEM auth</td><td>Chaîne login → session → action sensible.</td></tr>
+          <tr><td>Feedback avec factor_codes</td><td>Boucle terrain pour ajuster les poids avec gouvernance.</td></tr>
+          <tr><td>Version de calibration</td><td>Aligner incidents avec une release de configuration.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Limites assumées</p>
+      <h1>Transparence investisseur</h1>
+      <ul>
+        <li>Pas de ML dans le cœur du score — la précision repose sur la qualité des signaux (headers, SI, clients).</li>
+        <li>Dashboard MVP : pas d’historique long multi-région sans agrégation centralisée.</li>
+        <li>Funnel « abandon après step-up » non modélisé nativement dans le dashboard.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Roadmap crédible</p>
+      <h1>Évolutions possibles</h1>
+      <ul>
+        <li>Agrégation Redis / entrepôt pour métriques globales et rétention.</li>
+        <li>Enrichissement des signaux device / géo côté serveur.</li>
+        <li>Calibration par segment avec validation humaine systématique.</li>
+        <li>Couches ML en scoring secondaire, avec garde-fous et explicabilité contratuelle.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Dashboard produit (extraits)</p>
+      <h1>Indicateurs livrés</h1>
+      <p><strong>Summary</strong> : taille d’échantillon, score moyen, distribution low→critical, taux allow / step_up / reauth, taux d’évaluations avec drapeaux d’overrides comportementaux durs.</p>
+      <p><strong>Factors</strong> : facteurs les plus fréquents ; corrélation feedback fraude et faux positifs par code de facteur.</p>
+      <p><strong>Segments &amp; expériences</strong> : comparaison par segment utilisateur et par variante A/B (dont <span class="mono">critical_level_rate</span>).</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Gouvernance des changements</p>
+      <h1>Workflow recommandé</h1>
+      <ol style="color:var(--muted); margin-left:1.2rem;">
+        <li>Observer le dashboard et les logs sur une fenêtre représentative.</li>
+        <li>Examiner les suggestions de calibration (non auto-appliquées).</li>
+        <li>Valider produit + sécurité une modification de <span class="mono">RISK_WEIGHTS_JSON</span> ou seuils.</li>
+        <li>Déployer avec version <span class="mono">RISK_CALIBRATION_VERSION</span> incrémentée.</li>
+        <li>Contrôler post-release via les mêmes KPIs.</li>
+      </ol>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Synthèse</p>
+      <h1>Message investisseur</h1>
+      <p>Le Risk Engine d’Arquantix combine <span class="hl">rigueur déterministe</span>, <span class="hl">gouvernance des poids</span>, <span class="hl">signaux anti-fraude explicables</span> et <span class="hl">outils de pilotage</span> pour aligner sécurité, expérience utilisateur et exigences de contrôle — avec une trajectoire claire vers une maturité « institutionnelle » sans dépendre d’une seule boîte noire.</p>
+    </section>
+  </div>
+
+  <div class="bar">
+    <span id="slideLabel">1 / 17</span>
+    <div>
+      <button type="button" id="prevBtn">← Précédent</button>
+      <button type="button" id="nextBtn">Suivant →</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const slides = document.querySelectorAll('.slide');
+      let i = 0;
+      function show(n) {
+        i = (n + slides.length) % slides.length;
+        slides.forEach((s, j) => s.classList.toggle('active', j === i));
+        document.getElementById('slideLabel').textContent = (i + 1) + ' / ' + slides.length;
+      }
+      document.getElementById('nextBtn').onclick = () => show(i + 1);
+      document.getElementById('prevBtn').onclick = () => show(i - 1);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); show(i + 1); }
+        if (e.key === 'ArrowLeft') show(i - 1);
+      });
+    })();
+  </script>
+</body>
+</html>

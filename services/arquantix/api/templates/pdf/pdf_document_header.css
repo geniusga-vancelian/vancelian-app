@@ -1,0 +1,55 @@
+/*
+ * En-tête de page PDF répété (running) : logo à gauche, titre + sous-titres alignés à droite.
+ * Pas de marge « page » ici : le parent .pdf-doc-header-running applique le retrait horizontal.
+ */
+
+.pdf-ds-doc-header {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 40px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pdf-ds-doc-header__logo {
+  height: 30px;
+  width: 233px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.pdf-ds-doc-header__logo svg {
+  display: block;
+  width: 233px;
+  height: 30px;
+  max-width: 100%;
+}
+
+.pdf-ds-doc-header__info {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.pdf-ds-doc-header__title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: calc(26 / 28);
+  letter-spacing: -0.035em;
+  color: #000000;
+}
+
+.pdf-ds-doc-header__subtitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: calc(15 / 11);
+  letter-spacing: -0.008em;
+  color: #8e8e93;
+}

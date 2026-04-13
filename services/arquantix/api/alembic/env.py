@@ -4,11 +4,41 @@ from sqlalchemy import pool
 from alembic import context
 import os
 import sys
+from pathlib import Path
+
+# Load environment variables (same method as backend)
+try:
+    from dotenv import load_dotenv
+    # Load .env.local first, then .env (explicit order, same as backend)
+    api_dir = Path(__file__).parent.parent
+    load_dotenv(api_dir / ".env.local")  # Priority: .env.local first
+    load_dotenv(api_dir / ".env")  # Then .env
+except ImportError:
+    pass  # dotenv not available, use system env
 
 # Add parent directory to path to import database
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from database import Base, DATABASE_URL
+
+# Log the database URL being used (mask password)
+def mask_password(url: str) -> str:
+    """Mask password in database URL"""
+    if "@" in url:
+        parts = url.split("@")
+        if "://" in parts[0]:
+            scheme_user = parts[0]
+            if ":" in scheme_user:
+                scheme, user_pass = scheme_user.rsplit("://", 1)
+                if ":" in user_pass:
+                    user, password = user_pass.rsplit(":", 1)
+                    return f"{scheme}://{user}:***@{parts[1]}"
+    return url
+
+# Debug: log the database URL being used
+import logging
+logger = logging.getLogger("alembic.env")
+logger.debug(f"Alembic using DATABASE_URL: {mask_password(DATABASE_URL)}")
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -63,6 +93,13 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    try:
+        from db_connection_info import log_database_target
+
+        log_database_target("Alembic", DATABASE_URL)
+    except Exception as exc:
+        logger.warning("Alembic DB banner skipped: %s", exc)
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

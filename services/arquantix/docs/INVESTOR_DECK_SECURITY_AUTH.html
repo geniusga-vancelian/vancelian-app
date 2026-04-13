@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arquantix — Investisseurs · Sécurité, authentification &amp; confiance</title>
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --card: #121a2b;
+      --text: #e8edf7;
+      --muted: #8b95a8;
+      --accent: #3b82f6;
+      --accent2: #22d3ee;
+      --ok: #34d399;
+      --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    .deck { height: 100vh; display: flex; flex-direction: column; }
+    .slide {
+      display: none;
+      flex: 1;
+      padding: 3.5rem 4rem 5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      overflow-y: auto;
+      animation: in 0.35s ease;
+    }
+    .slide.active { display: block; }
+    @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .slide h1 { font-size: 2.15rem; font-weight: 700; line-height: 1.2; margin-bottom: 1rem; background: linear-gradient(90deg, #fff, var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .slide h2 { font-size: 1.35rem; font-weight: 600; color: var(--accent2); margin: 1.5rem 0 0.75rem; }
+    .slide p, .slide li { font-size: 1.05rem; line-height: 1.65; color: var(--muted); }
+    .slide ul { margin: 0.75rem 0 0 1.25rem; }
+    .slide li { margin: 0.4rem 0; }
+    .tag { display: inline-block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); margin-bottom: 0.75rem; font-weight: 700; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1rem; }
+    @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 1.25rem 1.4rem;
+    }
+    .card strong { color: var(--text); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 0.75rem; }
+    th, td { border: 1px solid rgba(255,255,255,0.08); padding: 0.45rem 0.55rem; text-align: left; }
+    th { background: rgba(59,130,246,0.15); color: var(--accent2); }
+    .bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 0.65rem 1.5rem;
+      background: rgba(10,14,23,0.92);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.8rem; color: var(--muted);
+    }
+    .bar button {
+      background: var(--accent); color: #fff; border: none; padding: 0.45rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+    .bar button:hover { filter: brightness(1.1); }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.9em; color: var(--ok); }
+    .cover { text-align: center; padding-top: 8vh; }
+    .cover h1 { font-size: 2.6rem; -webkit-text-fill-color: #fff; background: none; }
+    .cover .sub { font-size: 1.25rem; color: var(--muted); margin-top: 1rem; }
+    .hl { color: var(--text); font-weight: 600; }
+    .note { font-size: 0.85rem; opacity: 0.85; margin-top: 1rem; border-left: 3px solid var(--warn); padding-left: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck">
+    <!-- 1 -->
+    <section class="slide active cover">
+      <p class="tag">Confidentiel · Présentation investisseurs</p>
+      <h1>Sécurité &amp; authentification</h1>
+      <p class="sub">Couche de confiance continue : sessions serveur, intelligence par session,<br/>authentification continue des actions sensibles, audit &amp; SIEM.</p>
+      <p class="note">Document aligné sur l’implémentation Arquantix (API FastAPI, mobile Flutter). Comparaisons marché formulées comme objectifs de maturité, non comme études tierces.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Pourquoi investir dans cette couche</p>
+      <h1>La confiance est un actif produit</h1>
+      <p>Les applications financières sont jugées sur leur capacité à <span class="hl">protéger l’identité</span>, les fonds et les données réglementées. Une authentification « login + JWT » suffit rarement : le risque évolue <strong>pendant la session</strong> (changement d’appareil, de pays, de contexte).</p>
+      <h2>Ce que nous avons construit</h2>
+      <p>Une architecture en <span class="hl">couches empilées</span> : politiques par type d’action, état de session enrichi, décisions par requête, réponses structurées pour le client, événements d’audit exploitables par un SIEM.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Niveau de maturité vs pratique courante</p>
+      <h1>Où nous nous positionnons</h1>
+      <div class="grid2">
+        <div class="card">
+          <strong>Pratique courante (fintech / apps)</strong>
+          <ul>
+            <li>Session longue après login, contrôle d’accès grossier.</li>
+            <li>2FA surtout à l’onboarding ou au login.</li>
+            <li>Peu de corrélation entre device, géo et action sensible.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <strong>Arquantix (implémenté)</strong>
+          <ul>
+            <li>Sessions serveur liées au JWT (<span class="mono">sid</span>), refresh rotatif.</li>
+            <li>Intelligence par session + auth continue sur actions sensibles.</li>
+            <li>Passkeys, OTP, biométrie locale reliés aux politiques.</li>
+            <li>Événements normalisés vers SIEM (Datadog / OpenSearch).</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note">La profondeur réelle dépend du déploiement (feature flags activés, routes branchées, clients à jour).</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Architecture</p>
+      <h1>Vue d’ensemble technique</h1>
+      <table>
+        <thead><tr><th>Bloc</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">AuthSession</span></td><td>Session persistante ; refresh JWT rotatif, révocation, liaison device.</td></tr>
+          <tr><td>JWT + <span class="mono">sid</span></td><td>Lie le bearer à une session ; sans <span class="mono">sid</span>, l’auth continue ne s’applique pas (rétrocompat).</td></tr>
+          <tr><td><span class="mono">AuthSessionIntelligence</span></td><td>État 1:1 : confiance appareil/session, scores, <span class="mono">last_step_up_at</span>, raisons.</td></tr>
+          <tr><td><span class="mono">sensitive_action_map</span></td><td>Politiques LOW/MEDIUM/HIGH par <span class="mono">action_key</span>.</td></tr>
+          <tr><td><span class="mono">continuous_auth_engine</span></td><td>Décision allow / step-up / reauth / biométrie par requête.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Login vs protection continue</p>
+      <h1>Deux temporalités distinctes</h1>
+      <p><strong>Authentification initiale</strong> : mot de passe, passkey login, OTP orchestré à l’issue de session — établit <span class="mono">AuthSession</span> et tokens.</p>
+      <p><strong>Protection continue</strong> : chaque opération sensible (virement, données KYC, révocation de sessions, etc.) peut exiger une <strong>preuve fraîche</strong> (OTP, passkey) ou une <strong>réauth complète</strong> selon le contexte.</p>
+      <p>Les flux <strong>non authentifiés</strong> (login, démarrage passkey) ne passent pas par <span class="mono">require_continuous_auth_for_action</span> : ils n’ont pas encore de <span class="mono">sid</span> de session applicative.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">2FA &amp; accès renforcé</p>
+      <h1>Passkeys, OTP, biométrie</h1>
+      <ul>
+        <li><strong>Passkeys (WebAuthn)</strong> : enregistrement et révocation protégés par des politiques (<span class="mono">security_settings_change</span>) ; liste des credentials par <span class="mono">view_sensitive_data</span>.</li>
+        <li><strong>OTP / step-up</strong> : peut être exigé au login (orchestrateur adaptatif) et surtout <strong>sur action sensible</strong> via le moteur d’auth continue.</li>
+        <li><strong>Biométrie / code local</strong> : signal client (<span class="mono">relock</span>, hints JWT) aligné avec <span class="mono">should_relock_local</span> pour les tiers HIGH.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Session Intelligence</p>
+      <h1>État vivant par session</h1>
+      <p>La table <span class="mono">auth_session_intelligence</span> agrège : force d’auth, niveaux de confiance, scores de risque, activité, IP/pays, flags step-up / relock, <span class="mono">last_step_up_at</span>, raisons structurées.</p>
+      <p>Un <strong>middleware</strong> optionnel met à jour l’activité sur les requêtes authentifiées (JWT avec <span class="mono">sid</span>), hors chemins login/refresh bruts.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Authentification continue</p>
+      <h1>Une dépendance, des réponses machine-lisibles</h1>
+      <p><span class="mono">require_continuous_auth_for_action("clé")</span> : si les flags globaux sont actifs et qu’une intelligence existe, la requête est évaluée.</p>
+      <p>Réponses HTTP structurées : <span class="mono">session.reauth_required</span> (401), <span class="mono">session.step_up_required</span> (403), avec <span class="mono">next_step</span> (<span class="mono">otp_or_passkey</span>, <span class="mono">full_reauth</span>, etc.), <span class="mono">reason_codes</span>, extrait de <span class="mono">policy</span>.</p>
+      <p>Couche UX : <span class="mono">ux_message</span>, <span class="mono">ux_tone</span>, <span class="mono">ux_context</span> — le mobile affiche un message court non technique.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Friction adaptative (Phase 5B)</p>
+      <h1>Réduire la friction sans abandonner la sécurité</h1>
+      <p>Lorsque les flags le permettent, des règles <strong>déterministes</strong> peuvent alléger le step-up pour certains transferts (montant faible, appareil de confiance, step-up récent) ou certaines lectures sensibles — <strong>sans</strong> contourner une réauth déjà exigée par la politique stricte ou la session.</p>
+      <p>Cette couche vit dans le <span class="mono">continuous_auth_engine</span>, au-dessus de la carte d’actions et en dessous du moteur de risque optionnel.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Zero Trust ciblée</p>
+      <h1>Révocation &amp; liste des sessions</h1>
+      <p>La révocation globale des sessions combine une politique dédiée (<span class="mono">session_revoke_all</span>) et des garde-fous zero-trust sur la route — l’utilisateur doit prouver qu’il contrôle encore la session courante avant d’invalider les autres.</p>
+      <p>La consultation des sessions actives est traitée comme une lecture sensible (<span class="mono">view_sensitive_data</span>) avec audit métier.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Cartographie des risques</p>
+      <h1>Actions sensibles centralisées</h1>
+      <p>Une seule source de politique (<span class="mono">ACTION_POLICIES</span>) : retraits, transferts, bénéficiaires, paramètres sécurité, données sensibles, révocation globale des sessions, etc.</p>
+      <p>Évite la prolifération de garde-fous incohérents ; les équipes branchent les routes sur une clé stable pour l’audit.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Observabilité</p>
+      <h1>SIEM &amp; événements</h1>
+      <p>Pipeline documenté : persistance, anonymisation, export Datadog ou OpenSearch/ELK, corrélation légère, alertes critiques (webhook), rétention paramétrable.</p>
+      <p>Préfixes typiques : <span class="mono">auth.session.*</span>, <span class="mono">sensitive_action.*</span> — utiles pour détection d’incident et preuve de diligence.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Client mobile</p>
+      <h1>Alignement Flutter</h1>
+      <p>Parsing des erreurs : <span class="mono">sensitive_action_http.dart</span> — codes, <span class="mono">next_step</span>, champs UX.</p>
+      <p>Gestion du relock / biométrie : <span class="mono">SessionIntelligenceManager</span> et politique locale cohérente avec les claims JWT.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Gouvernance &amp; déploiement</p>
+      <h1>Feature flags</h1>
+      <p>Rollout progressif documenté : activer d’abord <span class="mono">SESSION_INTELLIGENCE_ENABLED</span>, puis <span class="mono">CONTINUOUS_AUTH_ENABLED</span>, puis brancher route par route.</p>
+      <p>Si désactivé, le comportement historique est préservé — important pour la continuité d’exploitation.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Limites &amp; transparence</p>
+      <h1>Ce qu’il reste à renforcer</h1>
+      <ul>
+        <li>Certaines routes « moteur portfolio » historiques utilisent un contexte acteur sans la même chaîne JWT + auth continue — dette connue, plan de convergence.</li>
+        <li>API « step-up completed » côté serveur pour ancrer <span class="mono">last_step_up_at</span> : piste d’évolution.</li>
+        <li>Coverage client : intercepteur HTTP global recommandé pour uniformiser les parcours step-up.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="tag">JWT enrichi</p>
+      <h1>Claims de confiance dans le token</h1>
+      <p>Les tokens d’accès peuvent porter : <span class="mono">sid</span> (session), <span class="mono">dtrust</span> (device trust), <span class="mono">auth_str</span>, <span class="mono">strust</span> (session trust), <span class="mono">lstup</span> (dernier step-up), <span class="mono">relock</span>, <span class="mono">bio_req</span> — le client Flutter persiste un snapshot pour aligner biométrie et relock local avec le serveur.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Traçabilité opérationnelle</p>
+      <h1>Événements « sensitive action »</h1>
+      <table>
+        <thead><tr><th>Événement</th><th>Moment</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">sensitive_action.requested</span></td><td>Entrée dans la dépendance d’auth continue</td></tr>
+          <tr><td><span class="mono">sensitive_action.step_up_required</span></td><td>Refus 403 step-up</td></tr>
+          <tr><td><span class="mono">sensitive_action.reauth_required</span></td><td>401 reauth</td></tr>
+          <tr><td><span class="mono">sensitive_action.completed</span> / <span class="mono">failed</span></td><td>Après exécution métier dans le handler</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Qualité logicielle</p>
+      <h1>Tests &amp; non-régression</h1>
+      <p>Le dépôt inclut des suites ciblées (session intelligence, auth continue, transferts sensibles, custody, etc.) pour sécuriser les évolutions — prérequis pour une vélocité de release sans casser les garde-fous.</p>
+    </section>
+
+    <section class="slide">
+      <p class="tag">Synthèse investisseur</p>
+      <h1>Message clé</h1>
+      <p>Arquantix ne se contente pas d’authentifier une fois : elle <span class="hl">mesure et réagit au risque à chaque action sensible</span>, avec des politiques versionnables, des journaux structurés et une expérience utilisateur guidée par des réponses API explicites — socle crédible pour une plateforme réglementée et compétitive sur la sécurité.</p>
+    </section>
+  </div>
+
+  <div class="bar">
+    <span id="slideLabel">1 / 19</span>
+    <div>
+      <button type="button" id="prevBtn">← Précédent</button>
+      <button type="button" id="nextBtn">Suivant →</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const slides = document.querySelectorAll('.slide');
+      let i = 0;
+      function show(n) {
+        i = (n + slides.length) % slides.length;
+        slides.forEach((s, j) => s.classList.toggle('active', j === i));
+        document.getElementById('slideLabel').textContent = (i + 1) + ' / ' + slides.length;
+      }
+      document.getElementById('nextBtn').onclick = () => show(i + 1);
+      document.getElementById('prevBtn').onclick = () => show(i - 1);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); show(i + 1); }
+        if (e.key === 'ArrowLeft') show(i - 1);
+      });
+    })();
+  </script>
+</body>
+</html>

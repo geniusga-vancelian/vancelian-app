@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>{{ meta.document_title | e }}</title>
+  <link rel="stylesheet" href="operation_statement.css">
+</head>
+<body class="opstmt-root">
+  <header class="pdf-doc-header">
+    {% include 'pdf_document_header.html' %}
+  </header>
+  <footer class="statement__footer">
+    {% include 'pdf_footer_ds.html' %}
+  </footer>
+
+  <main class="opstmt-doc" role="document">
+    {# Hero : unitaire — montant + statut + badge type #}
+    <section class="opstmt-hero" aria-label="Synthèse de l’opération">
+      <span class="opstmt-hero__badge">{{ presentation.badge | e }}</span>
+      {% if presentation.primary_label %}
+      <h2 class="opstmt-hero__title">{{ presentation.primary_label | e }}</h2>
+      {% endif %}
+      {% if presentation.secondary_label %}
+      <p class="opstmt-hero__subtitle">{{ presentation.secondary_label | e }}</p>
+      {% endif %}
+      <div class="opstmt-hero__amount">{{ presentation.amount_display | e }}</div>
+      <div class="opstmt-hero__meta">
+        <span class="opstmt-pill"><strong>Statut</strong> — {{ presentation.status_label | e }}</span>
+        {% if presentation.booking_display %}
+        <span class="opstmt-pill"><strong>Date</strong> — {{ presentation.booking_display | e }}</span>
+        {% endif %}
+        <span class="opstmt-pill"><strong>Sens</strong> — {{ presentation.direction_label | e }}</span>
+      </div>
+    </section>
+
+    {# Blocs titulaire / compte — layout 2 colonnes, lignes label | valeur #}
+    <section class="section opstmt-section opstmt-section--account" aria-label="Parties et compte">
+      <div class="opstmt-header">
+        <div class="opstmt-header__left opstmt-header-card">
+          <div class="section-title">Titulaire</div>
+          <div class="opstmt-rows">
+            <div class="opstmt-row">
+              <span class="label">{{ labels.account_holder | default('Titulaire') | e }}</span>
+              <span class="value">{{ client.full_name | e }}</span>
+            </div>
+            <div class="opstmt-row opstmt-row--multiline">
+              <span class="label">{{ labels.address | default('Adresse') | e }}</span>
+              <span class="value value--multiline">{{ client.address_multiline | e }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="opstmt-header__right opstmt-header-card">
+          {% if layout.mode == 'custody' %}
+          <div class="section-title">Compte concerné</div>
+          <div class="opstmt-rows">
+            <div class="opstmt-row">
+              <span class="label">{{ labels.currency | default('Devise') | e }}</span>
+              <span class="value">{{ account.currency | e }}</span>
+            </div>
+            <div class="opstmt-row">
+              <span class="label">{{ labels.iban | default('IBAN') | e }}</span>
+              <span class="value value--iban">{{ account.iban | e }}</span>
+            </div>
+            <div class="opstmt-row">
+              <span class="label">{{ labels.bic | default('BIC') | e }}</span>
+              <span class="value">{{ account.bic | e }}</span>
+            </div>
+            <div class="opstmt-row">
+              <span class="label">{{ labels.account_number | default('Nº de compte') | e }}</span>
+              <span class="value">{{ account.account_number | e }}</span>
+            </div>
+          </div>
+          {% else %}
+          <div class="section-title">Détails d’exécution</div>
+          {% if execution_detail_rows %}
+          <div class="opstmt-rows">
+            {% for row in execution_detail_rows %}
+            <div class="opstmt-row">
+              <span class="label">{{ row.label | e }}</span>
+              <span class="value">{{ row.value | e }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="opstmt-empty">Aucun détail supplémentaire.</p>
+          {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    {% if layout.mode == 'custody' %}
+    {# Tableau structuré : colonnes séparées, padding, alignement numérique #}
+    <section class="section opstmt-section opstmt-section--movement" aria-label="Détail du mouvement">
+      <h3 class="section-title section-title--block">Détail du mouvement</h3>
+      {% if transactions %}
+      <div class="operations__table-wrap">
+        <table class="statement-table">
+          <colgroup>
+            <col class="statement-table__col-date" />
+            <col class="statement-table__col-desc" />
+            <col class="statement-table__col-debit" />
+            <col class="statement-table__col-credit" />
+            <col class="statement-table__col-balance" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Description</th>
+              <th scope="col" class="col-debit">Débit</th>
+              <th scope="col" class="col-credit">Crédit</th>
+              <th scope="col" class="col-balance">Solde</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tx in transactions %}
+            <tr>
+              <td>{{ tx.date_display | e }}</td>
+              <td class="col-desc">{{ tx.description | e }}</td>
+              <td class="num col-debit debit">{% if tx.debit_display %}{{ tx.debit_display | e }}{% else %}—{% endif %}</td>
+              <td class="num col-credit credit">{% if tx.credit_display %}{{ tx.credit_display | e }}{% else %}—{% endif %}</td>
+              <td class="num col-balance">{{ tx.balance_display | e }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="opstmt-empty">Aucun mouvement à afficher.</p>
+      {% endif %}
+    </section>
+
+    {% if not meta.hide_balance_summary %}
+    <section class="section opstmt-section opstmt-context" aria-label="Contexte de solde">
+      <h3 class="section-title section-title--block opstmt-context__title">Contexte sur le compte</h3>
+      <p class="opstmt-context__lead">Soldes autour de cette opération (pas un relevé de mouvements sur une période).</p>
+      <div class="opstmt-context-grid">
+        <div class="opstmt-context-stat">
+          <span class="opstmt-context-stat__label">Solde avant</span>
+          <span class="opstmt-context-stat__val">{{ summary.opening_balance_display | e }}</span>
+        </div>
+        <div class="opstmt-context-stat">
+          <span class="opstmt-context-stat__label">Solde après</span>
+          <span class="opstmt-context-stat__val">{{ summary.closing_balance_display | e }}</span>
+        </div>
+      </div>
+      {% if summary.money_in_display or summary.money_out_display %}
+      <div class="opstmt-context-grid opstmt-context-grid--quad opstmt-context-grid--spaced">
+        {% if summary.money_out_display %}
+        <div class="opstmt-context-stat">
+          <span class="opstmt-context-stat__label">Montant sortant (opération)</span>
+          <span class="opstmt-context-stat__val">{{ summary.money_out_display | e }}</span>
+        </div>
+        {% endif %}
+        {% if summary.money_in_display %}
+        <div class="opstmt-context-stat">
+          <span class="opstmt-context-stat__label">Montant entrant (opération)</span>
+          <span class="opstmt-context-stat__val">{{ summary.money_in_display | e }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% else %}
+    {# Exchange : flux, frais, références #}
+    <section class="opstmt-flows" aria-label="Flux de l’opération">
+      <h2>Flux de l’opération</h2>
+      {% if asset_impact_rows %}
+      <div class="opstmt-flow-table-wrap">
+        <table class="opstmt-flow-table">
+          <thead>
+            <tr>
+              <th scope="col">Sens</th>
+              <th scope="col">Actif</th>
+              <th scope="col" class="num">Montant</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in asset_impact_rows %}
+            <tr class="opstmt-flow-row opstmt-flow-row--{{ row.flow | e }}">
+              <td class="{% if row.flow == 'in' %}flow-in{% else %}flow-out{% endif %}">{{ row.flow_display | e }}</td>
+              <td>{{ row.asset | e }}</td>
+              <td class="num">{{ row.amount_display | e }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="opstmt-empty">Aucun flux d’actif à afficher.</p>
+      {% endif %}
+    </section>
+
+    {% if fee_rows %}
+    <section class="opstmt-fees" aria-label="Frais">
+      <h2>Frais</h2>
+      <ul>
+        {% for f in fee_rows %}
+        <li>{{ f.display | e }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if reference_rows %}
+    <section class="opstmt-refs" aria-label="Références">
+      <h2>Références</h2>
+      {% for r in reference_rows %}
+      <p><span class="opstmt-refs__label">{{ r.label | e }} :</span> {{ r.value | e }}</p>
+      {% endfor %}
+    </section>
+    {% endif %}
+    {% endif %}
+  </main>
+</body>
+</html>

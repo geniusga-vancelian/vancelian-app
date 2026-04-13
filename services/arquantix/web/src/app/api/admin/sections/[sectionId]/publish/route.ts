@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { z } from 'zod'
 import { isValidLocale } from '@/config/locales'
+import { TranslationStatus } from '@prisma/client'
 
 const publishSchema = z.object({
   locale: z.string().refine(isValidLocale, {
@@ -50,7 +51,10 @@ export async function POST(
       )
     }
 
-    // Upsert published content (copy from draft)
+    // Check if draft has unapproved machine translation
+    const hasUnapprovedMachine = draft.translationStatus === TranslationStatus.MACHINE
+
+    // Upsert published content (copy from draft, including translationStatus)
     const published = await prisma.sectionContent.upsert({
       where: {
         sectionId_locale_status: {
@@ -60,19 +64,26 @@ export async function POST(
         },
       },
       update: {
-        data: draft.data,
+        data: draft.data as any, // Prisma Json type compatibility
+        translationStatus: draft.translationStatus, // Copy translation status
         updatedByUserId: session.userId,
       },
       create: {
         sectionId: params.sectionId,
         locale: validated.locale,
         status: 'PUBLISHED',
-        data: draft.data,
+        data: draft.data as any, // Prisma Json type compatibility
+        translationStatus: draft.translationStatus, // Copy translation status
         updatedByUserId: session.userId,
       },
     })
 
-    return NextResponse.json({ content: published })
+    return NextResponse.json({
+      content: published,
+      warning: hasUnapprovedMachine
+        ? `Locale ${validated.locale} contains machine translation not approved yet.`
+        : undefined,
+    })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

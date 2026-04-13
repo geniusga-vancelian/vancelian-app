@@ -3,9 +3,12 @@ import svgPaths from "@/imports/svg-uawwnp5dcp";
 
 export interface LogoProps extends React.SVGAttributes<SVGSVGElement> {
   variant?: "default" | "icon";
+  color?: "white" | "black";
 }
 
-export function Logo({ variant = "default", className, ...props }: LogoProps) {
+export function Logo({ variant = "default", className, color = "white", ...props }: LogoProps) {
+  const fillColor = color === "black" ? "black" : "white";
+  
   if (variant === "icon") {
     return (
       <svg
@@ -15,7 +18,7 @@ export function Logo({ variant = "default", className, ...props }: LogoProps) {
         viewBox="0 0 178 85.7715"
         {...props}
       >
-        <path d={svgPaths.p25268400} fill="white" />
+        <path d={svgPaths.p25268400} fill={fillColor} />
       </svg>
     );
   }
@@ -28,7 +31,7 @@ export function Logo({ variant = "default", className, ...props }: LogoProps) {
       viewBox="0 0 178 85.7715"
       {...props}
     >
-      <path d={svgPaths.p25268400} fill="white" />
+      <path d={svgPaths.p25268400} fill={fillColor} />
     </svg>
   );
 }

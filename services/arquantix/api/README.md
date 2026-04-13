@@ -4,27 +4,44 @@ API REST pour Arquantix, similaire à l'architecture Vancelian.
 
 ## 🚀 Démarrage
 
-### Avec Docker Compose
+### Mode par défaut (recommandé) : API en Docker
+
+L’image inclut les **bibliothèques système** pour **WeasyPrint** (PDF relevés IBAN). Les templates sont dans `templates/pdf/` et sont copiés dans l’image (`COPY . .` dans le `Dockerfile`).
+
+**Depuis la racine du dépôt** — stack complète (Postgres, Redis, **API**, CMS, Next) :
 
 ```bash
-# Depuis la racine du repo
 make -f Makefile.arquantix arquantix-up
-
-# Ou directement
-docker compose --env-file .env.arquantix -f docker-compose.arquantix.yml up -d arquantix-api
+# API : http://127.0.0.1:8000  —  Next (conteneur) : WEB_PORT du .env.arquantix
 ```
 
-L'API sera accessible sur: http://localhost:8001
+Équivalent :
 
-### Développement Local
+```bash
+docker compose --env-file .env.arquantix -f docker-compose.arquantix.yml up -d
+```
+
+Le service **`arquantix-api`** joint Postgres (`arquantix-db:5432`) et Redis (`arquantix-redis`) sur le réseau compose. Le BFF Next (conteneur `arquantix-web`) utilise par défaut **`BACKEND_URL=http://arquantix-api:8000`**.
+
+**Next sur la machine hôte** (`npm run dev`) : dans `services/arquantix/web/.env.local`, fixer  
+`BACKEND_URL=http://127.0.0.1:8000` pour joindre l’API exposée sur le port hôte.
+
+### Image seule (CI / run manuel)
+
+```bash
+docker build -t arquantix-api:local -f services/arquantix/api/Dockerfile services/arquantix/api
+```
+
+Sur **GitHub Actions**, le workflow **« Arquantix API (FastAPI) - Build & push ECR »** (`.github/workflows/arquantix-api-deploy.yml`) build et pousse cette image.
+
+### Option développement : uvicorn sur l’hôte (sans garantie PDF sur macOS)
+
+Itération rapide sur le code Python ; **WeasyPrint** peut échouer sur macOS sans stack Homebrew complète.
 
 ```bash
 cd services/arquantix/api
-
-# Installer les dépendances
 pip install -r requirements.txt
-
-# Démarrer l'API
+# macOS (tentative) : brew install pango cairo gdk-pixbuf libffi
 uvicorn main:app --reload --port 8000
 ```
 
@@ -46,12 +63,27 @@ Actuellement, l'API utilise un stockage en mémoire (MVP).
 
 Pour la production, connecter à PostgreSQL (comme `ganopa-bot`).
 
+## 🔐 JWT `sub` (identité utilisateur)
+
+**Invariant (sessions utilisateur access + refresh) :**
+
+```text
+JWT.sub MUST always be "au:<admin_users.id>"
+Any other format is invalid and rejected.
+```
+
+Toute régression (émission ou acceptation d’un `sub` e-mail, numérique seul, etc.) casse le contrat d’identité. Voir `services/auth/jwt_user_claims.py` et `services/auth/jwt_subject_resolution.py`.
+
+**Runtime :** les `sub` non canoniques déclenchent des logs structurés `jwt_sub_rejected` (et `logger.error` si le sujet ressemble à un ancien e-mail). Compteur process : `get_jwt_sub_resolution_metrics()["jwt_sub_rejected_count"]`.
+
+**Post-déploiement (48–72 h) :** surveiller les 401, les échecs `/auth/refresh` et les pics de login (clients encore en vieux token).
+
 ## 📚 Documentation
 
 Voir `docs/arquantix/` pour la documentation complète.
 
 ---
 
-**Dernière mise à jour:** 2026-01-01
+**Dernière mise à jour:** 2026-04-11
 
 

@@ -1,0 +1,9 @@
+{# Carte label/valeur — utilisée par pdf_info_section (page 1 uniquement). #}
+<div class="pdf-ds-info-card">
+  {% for item in items %}
+  <div class="pdf-ds-info-card__row">
+    <p class="pdf-ds-info-card__label">{{ item.label | e }}</p>
+    <p class="pdf-ds-info-card__value pdf-ds-info-card__value--{{ item.align | default('left') }}{% if item.bold %} pdf-ds-info-card__value--strong{% endif %}">{{ item.value | e }}</p>
+  </div>
+  {% endfor %}
+</div>

@@ -1,0 +1,7 @@
+# Local development
+.DS_Store
+*.log
+
+# Docker
+.dockerignore
+

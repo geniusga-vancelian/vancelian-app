@@ -1,0 +1,4 @@
+// Staging — Profile (flutter run --profile --flavor staging).
+PRODUCT_BUNDLE_IDENTIFIER=com.vancelian.app.staging
+APP_DISPLAY_NAME=Vancelian Staging
+DART_DEFINES=$(inherited),RkxBVk9SPXN0YWdpbmc=

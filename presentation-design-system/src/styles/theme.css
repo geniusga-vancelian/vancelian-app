@@ -1,0 +1,268 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: #262626;
+  --card: #ffffff;
+  --card-foreground: #262626;
+  --popover: #ffffff;
+  --popover-foreground: #262626;
+  --primary: #030213;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f2f5;
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #b3b3b3;
+  --chart-1: #ea580c;
+  --chart-2: #06b6d4;
+  --chart-3: #6366f1;
+  --chart-4: #f59e0b;
+  --chart-5: #eab308;
+  --radius: 0.625rem;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #262626;
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #353535;
+  --sidebar-border: #ebebeb;
+  --sidebar-ring: #b3b3b3;
+
+  /* ── Flutter DS (`AppColors`) — garder sync avec `design-tokens/flutterAppColors.ts` ── */
+  --flutter-red: #ff4245;
+  --flutter-mint: #00dac3;
+  --flutter-orange: #ff9230;
+  --flutter-yellow: #ffd600;
+  --flutter-green: #30d158;
+  --flutter-teal: #00d2e0;
+  --flutter-cyan: #3cd3fe;
+  --flutter-blue: #0091ff;
+  --flutter-indigo: #6b5dff;
+  --flutter-purple: #db34f2;
+  --flutter-pink: #ff375f;
+  --flutter-brown: #b78a66;
+  --flutter-black: #000000;
+  --flutter-gray: #8e8e93;
+  --flutter-gray2: #636366;
+  --flutter-gray3: #48484a;
+  --flutter-gray4: #3a3a3c;
+  --flutter-gray5: #2c2c2e;
+  --flutter-gray6: #1c1c1e;
+  --flutter-white: #ffffff;
+  --flutter-semantic-neutral: #aeaeb2;
+  --flutter-semantic-active: #00c3d0;
+  --flutter-semantic-active-light: #e5f9fa;
+  --flutter-semantic-info: #0088ff;
+  --flutter-semantic-info-light: #e5f3ff;
+  --flutter-semantic-warning: #ff8d28;
+  --flutter-semantic-warning-light: #fff4e9;
+  --flutter-semantic-danger: #ff383c;
+  --flutter-semantic-danger-light: #ffebeb;
+  --flutter-semantic-positive: #34c759;
+  --flutter-semantic-positive-light: #ebf9ee;
+  --flutter-semantic-negative: #ff2d55;
+  --flutter-semantic-negative-light: #ffeaee;
+  --flutter-accent-light: #efeefe;
+  --flutter-page-background: #f5f5f5;
+  --flutter-app-border: #e5e7eb;
+  --flutter-app-text-primary: #000000;
+  --flutter-app-text-secondary: #64748b;
+  --flutter-app-text-muted: #8e8e93;
+}
+
+.dark {
+  --background: #262626;
+  --foreground: #fafafa;
+  --card: #262626;
+  --card-foreground: #fafafa;
+  --popover: #262626;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #353535;
+  --secondary: #444444;
+  --secondary-foreground: #fafafa;
+  --muted: #444444;
+  --muted-foreground: #b3b3b3;
+  --accent: #444444;
+  --accent-foreground: #fafafa;
+  --destructive: #c0392b;
+  --destructive-foreground: #e8968e;
+  --border: #444444;
+  --input: #444444;
+  --ring: #6e6e6e;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: #6366f1;
+  --chart-2: #14b8a6;
+  --chart-3: #eab308;
+  --chart-4: #a855f7;
+  --chart-5: #f97316;
+  --sidebar: #353535;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #444444;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #444444;
+  --sidebar-ring: #6e6e6e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Flutter DS → utilitaires Tailwind (`bg-flutter-*`, `text-flutter-*`, …) */
+  --color-flutter-red: var(--flutter-red);
+  --color-flutter-mint: var(--flutter-mint);
+  --color-flutter-orange: var(--flutter-orange);
+  --color-flutter-yellow: var(--flutter-yellow);
+  --color-flutter-green: var(--flutter-green);
+  --color-flutter-teal: var(--flutter-teal);
+  --color-flutter-cyan: var(--flutter-cyan);
+  --color-flutter-blue: var(--flutter-blue);
+  --color-flutter-indigo: var(--flutter-indigo);
+  --color-flutter-purple: var(--flutter-purple);
+  --color-flutter-pink: var(--flutter-pink);
+  --color-flutter-brown: var(--flutter-brown);
+  --color-flutter-black: var(--flutter-black);
+  --color-flutter-gray: var(--flutter-gray);
+  --color-flutter-gray2: var(--flutter-gray2);
+  --color-flutter-gray3: var(--flutter-gray3);
+  --color-flutter-gray4: var(--flutter-gray4);
+  --color-flutter-gray5: var(--flutter-gray5);
+  --color-flutter-gray6: var(--flutter-gray6);
+  --color-flutter-white: var(--flutter-white);
+  --color-flutter-semantic-neutral: var(--flutter-semantic-neutral);
+  --color-flutter-semantic-active: var(--flutter-semantic-active);
+  --color-flutter-semantic-active-light: var(--flutter-semantic-active-light);
+  --color-flutter-semantic-info: var(--flutter-semantic-info);
+  --color-flutter-semantic-info-light: var(--flutter-semantic-info-light);
+  --color-flutter-semantic-warning: var(--flutter-semantic-warning);
+  --color-flutter-semantic-warning-light: var(--flutter-semantic-warning-light);
+  --color-flutter-semantic-danger: var(--flutter-semantic-danger);
+  --color-flutter-semantic-danger-light: var(--flutter-semantic-danger-light);
+  --color-flutter-semantic-positive: var(--flutter-semantic-positive);
+  --color-flutter-semantic-positive-light: var(--flutter-semantic-positive-light);
+  --color-flutter-semantic-negative: var(--flutter-semantic-negative);
+  --color-flutter-semantic-negative-light: var(--flutter-semantic-negative-light);
+  --color-flutter-accent-light: var(--flutter-accent-light);
+  --color-flutter-page-background: var(--flutter-page-background);
+  --color-flutter-app-border: var(--flutter-app-border);
+  --color-flutter-app-text-primary: var(--flutter-app-text-primary);
+  --color-flutter-app-text-secondary: var(--flutter-app-text-secondary);
+  --color-flutter-app-text-muted: var(--flutter-app-text-muted);
+}
+
+@layer base {
+  /*
+   * outline-ring/50 produit color-mix(in oklab, …) : html2canvas échoue avec
+   * « unsupported color function oklab ». Outline en rgba fixe (équivalent ~50 % de --ring).
+   */
+  * {
+    @apply border-border;
+    outline-color: rgba(179, 179, 179, 0.5);
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /**
+  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
+  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
+  */
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  label {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  input {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+}

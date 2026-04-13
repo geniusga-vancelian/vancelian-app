@@ -1,0 +1,46 @@
+{# Corps spécifique relevé d’opération Exchange (hors custody) : flux, frais, références. #}
+<section class="operations operation-asset-flows" aria-label="Flux d'actifs">
+  <h2>Détail des flux</h2>
+  {% if asset_impact_rows %}
+  <div class="operations__table-wrap">
+    <table class="statement-table statement-table--asset-impacts">
+      <thead>
+        <tr>
+          <th scope="col">Sens</th>
+          <th scope="col">Actif</th>
+          <th scope="col" class="num">Montant</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in asset_impact_rows %}
+        <tr>
+          <td>{{ row.flow_display | e }}</td>
+          <td>{{ row.asset | e }}</td>
+          <td class="num">{{ row.amount_display | e }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="operations__empty" role="status">Aucun flux d’actif à afficher.</p>
+  {% endif %}
+</section>
+{% if fee_rows %}
+<section class="operation-fees" aria-label="Frais">
+  <h2>Frais</h2>
+  <ul class="operation-fees__list">
+    {% for f in fee_rows %}
+    <li class="num">{{ f.display | e }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% if reference_rows %}
+<section class="operation-refs" aria-label="Références">
+  <h2>Références</h2>
+  {% for r in reference_rows %}
+  <p><span class="operation-refs__label">{{ r.label | e }} :</span> {{ r.value | e }}</p>
+  {% endfor %}
+</section>
+{% endif %}

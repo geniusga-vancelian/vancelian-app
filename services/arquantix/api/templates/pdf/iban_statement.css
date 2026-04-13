@@ -1,0 +1,372 @@
+/* iban_statement.css — relevé IBAN, rendu print-first / WeasyPrint (A4 portrait)
+ * Ne pas traiter comme une UI web responsive : dimensions fixes document.
+ *
+ * Police : aucune dépendance réseau. Pile système locale / déterministe pour PDF serveur.
+ *
+ * Pour figer une typo (ex. Inter) sans réseau, déposer des .woff2 dans ce dossier puis décommenter :
+ *
+ *   @font-face {
+ *     font-family: "StatementSans";
+ *     src: url("Inter-Variable.woff2") format("woff2");
+ *     font-weight: 100 900;
+ *     font-display: swap;
+ *   }
+ *   body { font-family: "StatementSans", system-ui, ...; }
+ */
+
+@import url("pdf_footer_ds.css");
+@import url("pdf_document_header.css");
+@import url("pdf_page1_modules.css");
+@import url("pdf_statement_components.css");
+@import url("pdf_statement_table.css");
+
+/*
+ * A4 : bandes haute / basse réservées aux margin boxes (running header & footer).
+ * Corps : retraits via --pad-h sur les modules (pas de marge @page latérale).
+ */
+@page {
+  size: A4 portrait;
+  margin: 0;
+  margin-top: 36mm;
+  margin-bottom: 58mm;
+  @top-center {
+    content: element(pdf_doc_header);
+    vertical-align: bottom;
+    text-align: left;
+  }
+  @bottom-center {
+    content: element(pdf_doc_footer);
+    /* Bas de page physique : le bloc pied colle au bas de la bande réservée. */
+    vertical-align: bottom;
+    text-align: left;
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-size: 8px;
+    font-weight: 400;
+    color: #000000;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    vertical-align: bottom;
+    padding-bottom: 2mm;
+    padding-right: 2mm;
+    white-space: nowrap;
+  }
+}
+
+:root {
+  --ink: #000000;
+  --logo-ink: #1e1c1b;
+  --muted: #8e8e93;
+  --band: #f2f2f7;
+  --border: #d1d1d6;
+  --rule: #8e8e93;
+  --card-radius: 10px;
+  --pad-card: 16px;
+  --pad-h: 28px;
+  --pad-header-top: 48px;
+  --pad-header-bottom: 28px;
+  --pad-body-v: 24px;
+  /* Doit rester ≤ margin-bottom @page : évite tout débordement hors de la margin box basse. */
+  --pdf-footer-max-height: 57mm;
+  /* Doit rester ≤ margin-top @page */
+  --pdf-header-max-height: 35mm;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 11px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1.45;
+  background: #fff;
+}
+
+/* Master horizontal inset : aligné header running / corps / pied (pas de double pad-h sur les sections). */
+.statement {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 var(--pad-h);
+  box-sizing: border-box;
+}
+
+/* ----- En-tête de page PDF répété (running) : voir pdf_document_header.html ----- */
+.pdf-doc-header {
+  position: running(pdf_doc_header);
+  box-sizing: border-box;
+  width: 100%;
+  max-height: var(--pdf-header-max-height);
+  overflow: hidden;
+  padding-left: var(--pad-h);
+  padding-right: var(--pad-h);
+  padding-bottom: 2mm;
+}
+
+/* Deux cartes page 1 uniquement (pas de running) */
+.statement__page1-modules {
+  background: var(--band);
+  padding: var(--pad-header-top) 0 var(--pad-header-bottom);
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* ----- Header band (Flutter StatementHeader) ----- */
+.statement__header {
+  background: var(--band);
+  padding: var(--pad-header-top) 0 var(--pad-header-bottom);
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.statement__header-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 24px;
+}
+
+.statement__header-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+}
+
+.statement__logo {
+  margin-bottom: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  max-width: 233px;
+}
+
+.statement__logo svg {
+  display: block;
+  width: 233px;
+  height: 30px;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+.statement__titles h1 {
+  margin: 0 0 4px 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: calc(26 / 28);
+  letter-spacing: -0.035em;
+}
+
+.statement__subtitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: calc(15 / 11);
+  color: var(--muted);
+  letter-spacing: -0.008em;
+}
+
+.statement__header-cards {
+  /* Moins large → plus d’espace pour le bloc titre / logo à gauche */
+  width: 252px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.statement-card {
+  background: #fff;
+  border-radius: var(--card-radius);
+  padding: var(--pad-card);
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.statement-card__row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.statement-card__row + .statement-card__row {
+  margin-top: 8px;
+}
+
+.statement-card__label {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: calc(18 / 11);
+  letter-spacing: -0.035em;
+}
+
+.statement-card__value {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: calc(18 / 11);
+  letter-spacing: -0.008em;
+}
+
+.statement-card__value--strong {
+  font-weight: 700;
+}
+
+.statement-card__value--end {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: right;
+}
+
+/* ----- Body (meta, summary, table, footer) ----- */
+.statement__body {
+  padding: var(--pad-body-v) 0;
+}
+
+.statement__meta {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: calc(18 / 14);
+  letter-spacing: -0.035em;
+  break-after: avoid;
+}
+
+/* Balance summary (Flutter BalanceSummaryCard) */
+.balance-summary {
+  background: var(--band);
+  border-radius: var(--card-radius);
+  padding: var(--pad-card);
+  margin-bottom: 20px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.balance-summary h2 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: calc(18 / 14);
+}
+
+.balance-summary__row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.balance-summary__col {
+  display: flex;
+  flex-direction: column;
+}
+
+.balance-summary__col--end {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.balance-summary__label {
+  margin: 0 0 4px 0;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 2;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+
+.balance-summary__amount {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: calc(18 / 11);
+}
+
+.balance-summary__totals {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Operations table (Flutter TransactionsTable) */
+.operations {
+  margin-bottom: 24px;
+}
+
+.operations h2 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: calc(18 / 14);
+}
+
+.operations__empty {
+  margin: 0;
+  padding: 16px var(--pad-card);
+  font-size: 11px;
+  line-height: calc(18 / 11);
+  color: var(--muted);
+  background: var(--band);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+}
+
+/*
+ * Pied de page métier : répété en bas de chaque page PDF via Paged Media (running / element).
+ * Prévisualisation navigateur : pas de running() → flux normal en fin de document.
+ */
+.statement__footer {
+  position: running(pdf_doc_footer);
+  box-sizing: border-box;
+  width: 100%;
+  max-height: var(--pdf-footer-max-height);
+  overflow: hidden;
+  padding-left: var(--pad-h);
+  padding-right: var(--pad-h);
+  padding-bottom: 1mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* Hors WeasyPrint : en-tête → article → pied (footer en tête du DOM pour running()). */
+@media screen {
+  .statement-root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pdf-doc-header {
+    position: static;
+    order: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .statement {
+    order: 1;
+  }
+
+  .statement__footer {
+    position: static;
+    order: 2;
+    margin-top: 8px;
+    max-height: none;
+    overflow: visible;
+  }
+}

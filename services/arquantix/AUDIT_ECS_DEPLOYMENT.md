@@ -461,3 +461,11 @@ aws logs tail /ecs/arquantix-coming-soon --region me-central-1 --follow
 **Rapport généré le :** 2026-01-04  
 **Auditeur :** DevOps Audit System
 
+
+
+
+
+
+
+
+

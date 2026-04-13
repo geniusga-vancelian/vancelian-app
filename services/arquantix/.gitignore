@@ -1,1 +1,4 @@
 *.bak
+
+# Local environment overrides (may contain secrets)
+api/.env.local

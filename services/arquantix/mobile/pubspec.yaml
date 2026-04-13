@@ -1,0 +1,65 @@
+name: arquantix_news
+description: Application Flutter affichant les articles de news Arquantix
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  http: ^1.2.0
+  web_socket_channel: ^3.0.0
+  cached_network_image: ^3.3.1
+  intl: ^0.20.2
+  url_launcher: ^6.2.5
+  share_plus: ^10.1.4
+  flutter_svg: ^2.0.10+1
+  custom_refresh_indicator: ^4.0.1
+  flutter_markdown: ^0.7.4+1
+  google_fonts: ^6.2.1
+  circle_flags: ^5.0.1
+  animations: ^2.1.2
+  flutter_secure_storage: ^9.2.2
+  local_auth: ^2.3.0
+  permission_handler: ^11.3.1
+  cryptography: ^2.7.0
+  package_info_plus: ^8.0.0
+  passkeys: ^2.17.4
+  video_player: ^2.9.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.3
+
+# - path_provider_foundation 2.6.0 = FFI/objective_c 9.x → erreurs native_assets sur iOS.
+#   2.5.1 = implémentation plugin, stable.
+# - objective_c 8.1.0 évite le bug "objective_c not found in native_assets/ios" (9.x).
+dependency_overrides:
+  path_provider_foundation: 2.5.1
+  objective_c: 8.1.0
+
+flutter:
+  generate: true
+  uses-material-design: true
+  assets:
+    - assets/
+    # Sous-dossiers non inclus par « assets/ » seul (cf. doc Flutter : fichiers directement dans le dossier).
+    - assets/images/
+    - assets/crypto_svgs/
+    - assets/fiat_svgs/
+
+flutter_launcher_icons:
+  image_path: assets/app_icon_1024.png
+  ios: true
+  android: true
+  remove_alpha_ios: true
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/app_icon_1024.png
+  # Padding autour du logo (comme Fichiers / Fitness), en dp.
+  adaptive_icon_foreground_inset: 48

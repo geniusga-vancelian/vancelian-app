@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supportedLocales, type Locale } from '@/config/locales'
+import { SectionEditor } from '@/components/admin/SectionEditor'
+import { toastSuccess, toastError } from '@/lib/admin/toast'
+import { TranslateModal } from '@/components/admin/TranslateModal'
+import { getSectionType } from '@/lib/sections/library'
 
 interface Section {
   id: string
@@ -20,12 +24,13 @@ interface Content {
   locale: string
   status: string
   data: any
+  translationStatus?: 'ORIGINAL' | 'MACHINE' | 'APPROVED'
 }
 
 export default function AdminSectionEditorPage() {
   const router = useRouter()
   const params = useParams()
-  const sectionId = params.id as string
+  const sectionId = (params?.id as string | undefined) ?? ''
 
   const [section, setSection] = useState<Section | null>(null)
   const [content, setContent] = useState<Content | null>(null)
@@ -34,6 +39,9 @@ export default function AdminSectionEditorPage() {
   const [data, setData] = useState<any>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [showTranslateModal, setShowTranslateModal] = useState(false)
+  const [hasGlossary, setHasGlossary] = useState(false)
+  const [approving, setApproving] = useState(false)
 
   useEffect(() => {
     if (!sectionId) return
@@ -54,7 +62,10 @@ export default function AdminSectionEditorPage() {
           setData(result.content.data)
         } else {
           setContent(null)
-          setData({})
+          // Initialize with default data for this section type
+          const sectionType = getSectionType(result.section.key)
+          const defaultData = sectionType?.defaultData || {}
+          setData(defaultData)
         }
       } else if (result.error === 'Unauthorized') {
         router.push('/admin/login')
@@ -81,15 +92,15 @@ export default function AdminSectionEditorPage() {
       })
 
       if (res.ok) {
-        alert('Draft saved successfully!')
+        toastSuccess('Saved')
         loadSection()
       } else {
         const error = await res.json()
-        alert(`Error: ${error.error}`)
+        toastError(error.error || 'Failed to save draft')
       }
     } catch (error) {
       console.error('Error saving draft:', error)
-      alert('Error saving draft')
+      toastError('Error saving draft')
     } finally {
       setSaving(false)
     }
@@ -111,16 +122,22 @@ export default function AdminSectionEditorPage() {
       })
 
       if (res.ok) {
-        alert('Published successfully!')
+        const data = await res.json()
+        if (data.warning) {
+          // Show warning but still consider it a success
+          toastError(data.warning)
+        } else {
+          toastSuccess('Published')
+        }
         setSelectedStatus('published')
         loadSection()
       } else {
         const error = await res.json()
-        alert(`Error: ${error.error}`)
+        toastError(error.error || 'Failed to publish')
       }
     } catch (error) {
       console.error('Error publishing:', error)
-      alert('Error publishing')
+      toastError('Error publishing')
     } finally {
       setSaving(false)
     }
@@ -142,16 +159,16 @@ export default function AdminSectionEditorPage() {
       })
 
       if (res.ok) {
-        alert('Draft reset successfully!')
+        toastSuccess('Draft reset')
         setSelectedStatus('draft')
         loadSection()
       } else {
         const error = await res.json()
-        alert(`Error: ${error.error}`)
+        toastError(error.error || 'Failed to reset draft')
       }
     } catch (error) {
       console.error('Error resetting draft:', error)
-      alert('Error resetting draft')
+      toastError('Error resetting draft')
     } finally {
       setSaving(false)
     }
@@ -170,6 +187,35 @@ export default function AdminSectionEditorPage() {
   }
 
   const previewUrl = `/preview/${section.page.slug}?locale=${selectedLocale}`
+
+  const handleApproveTranslation = async () => {
+    if (!content || !section) return
+    setApproving(true)
+    try {
+      const res = await fetch('/api/admin/translate/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: 'SECTION',
+          entityId: section.id,
+          locale: selectedLocale,
+        }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to approve translation')
+      }
+      toastSuccess('Translation approved')
+      await loadSection() // Reload to update status
+    } catch (error: any) {
+      toastError(error.message || 'Failed to approve translation')
+    } finally {
+      setApproving(false)
+    }
+  }
+
+  // Check if we have a structured editor for this section type
+  const hasStructuredEditor = section.key === 'hero' || section.key === 'projects' || section.key === 'project_grid' || section.key === 'faq'
 
   return (
     <div>
@@ -227,6 +273,38 @@ export default function AdminSectionEditorPage() {
               <option value="published">Published</option>
             </select>
           </div>
+
+          {content && content.translationStatus && (
+            <div className="flex items-end">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Status:</span>
+                <span
+                  className={`px-2 py-1 text-xs font-semibold rounded ${
+                    content.translationStatus === 'ORIGINAL'
+                      ? 'bg-gray-100 text-gray-700'
+                      : content.translationStatus === 'MACHINE'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-green-100 text-green-800'
+                  }`}
+                >
+                  {content.translationStatus === 'ORIGINAL'
+                    ? 'ORIGINAL'
+                    : content.translationStatus === 'MACHINE'
+                    ? 'MACHINE'
+                    : 'APPROVED'}
+                </span>
+                {content.translationStatus === 'MACHINE' && (
+                  <button
+                    onClick={handleApproveTranslation}
+                    disabled={approving}
+                    className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {approving ? 'Approving...' : 'Approve'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2">
@@ -259,28 +337,98 @@ export default function AdminSectionEditorPage() {
           >
             Preview
           </a>
+          {content && (
+            <button
+              onClick={() => setShowTranslateModal(true)}
+              disabled={saving}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+            >
+              Auto-translate
+            </button>
+          )}
         </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">Content Data (JSON)</h2>
-        <textarea
-          value={JSON.stringify(data, null, 2)}
-          onChange={(e) => {
-            try {
-              setData(JSON.parse(e.target.value))
-            } catch {
-              // Invalid JSON, keep raw value
-            }
-          }}
-          className="w-full h-96 font-mono text-sm border border-gray-300 rounded-md p-4 focus:ring-indigo-500 focus:border-indigo-500"
-          placeholder='{"title": "Example", "description": "..."}'
-        />
-        <p className="text-sm text-gray-500 mt-2">
-          Edit the JSON data for this section. The structure depends on the section
-          type (hero, features, etc.).
-        </p>
+        <h2 className="text-xl font-semibold mb-4">Content Data</h2>
+
+        {hasStructuredEditor ? (
+          <div className="space-y-4">
+            <SectionEditor
+              sectionKey={section.key}
+              data={data}
+              onChange={setData}
+            />
+            <details className="mt-4">
+              <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-900">
+                View/Edit Raw JSON
+              </summary>
+              <textarea
+                value={JSON.stringify(data, null, 2)}
+                onChange={(e) => {
+                  try {
+                    setData(JSON.parse(e.target.value))
+                  } catch {
+                    // Invalid JSON, keep raw value
+                  }
+                }}
+                className="w-full h-64 font-mono text-xs border border-gray-300 rounded-md p-4 mt-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </details>
+          </div>
+        ) : (
+          <>
+            <textarea
+              value={JSON.stringify(data, null, 2)}
+              onChange={(e) => {
+                try {
+                  setData(JSON.parse(e.target.value))
+                } catch {
+                  // Invalid JSON, keep raw value
+                }
+              }}
+              className="w-full h-96 font-mono text-sm border border-gray-300 rounded-md p-4 focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder='{"title": "Example", "description": "..."}'
+            />
+            <p className="text-sm text-gray-500 mt-2">
+              Edit the JSON data for this section. The structure depends on the section
+              type (hero, features, etc.).
+            </p>
+          </>
+        )}
       </div>
+
+      {/* Translate Modal */}
+      {content && (
+        <TranslateModal
+          open={showTranslateModal}
+          onOpenChange={setShowTranslateModal}
+          sourceLocale={selectedLocale}
+          hasGlossary={hasGlossary}
+          onTranslate={async ({ sourceLocale, targetLocales, mode }) => {
+            const response = await fetch('/api/admin/translate/section', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sectionContentId: content.id,
+                sourceLocale,
+                targetLocales,
+                mode,
+              }),
+            })
+
+            if (!response.ok) {
+              const error = await response.json()
+              throw new Error(error.error || 'Translation failed')
+            }
+
+            const data = await response.json()
+            // Reload section to show new translations
+            await loadSection()
+            return data
+          }}
+        />
+      )}
     </div>
   )
 }

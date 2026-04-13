@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,21 +7,3042 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  SUPER_ADMIN
-  ADMIN
+model AdminUser {
+  id             Int       @id @default(autoincrement())
+  /// Nullable (PR4) — index unique partiel SQL : voir migration 130.
+  email          String?   @db.VarChar(255)
+  hashedPassword String    @map("hashed_password") @db.VarChar(255)
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  /// Compte CMS Next (au plus un) lié pour le BFF — pas de résolution JWT par email.
+  cmsUser        User?
+
+  /// Unicité côté Prisma Client. En base Alembic 130, l’index partiel reste `ix_admin_users_email` ; ce nom Prisma évite le conflit `db push` (CREATE … already exists).
+  @@unique([email], map: "uq_prisma_admin_users_email")
+  @@index([id], map: "ix_admin_users_id")
+  @@map("admin_users")
 }
 
-model User {
-  id                String           @id @default(cuid())
-  email             String           @unique
-  passwordHash      String           @map("password_hash")
-  role              UserRole         @default(ADMIN)
-  createdAt         DateTime         @default(now()) @map("created_at")
-  sessions          Session[]
-  updatedSectionContents SectionContent[]
+/// Règles dynamiques PR F.4 (table créée par Alembic). Déclarée ici pour que `prisma db push` ne supprime pas `auth_risk_rules`.
+model AuthRiskRules {
+  id         String   @id @db.Uuid
+  name       String?  @db.VarChar(128)
+  priority   Int      @default(100)
+  conditions Json     @db.JsonB
+  action     String   @db.VarChar(16)
+  enabled    Boolean  @default(true)
+  version    Int      @default(1)
+  isActive   Boolean  @default(true) @map("is_active")
+  ruleset    String   @default("default") @db.VarChar(64)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  @@map("users")
+  @@index([priority], map: "ix_auth_risk_rules_priority")
+  @@index([enabled], map: "ix_auth_risk_rules_enabled")
+  @@index([ruleset, isActive, priority], map: "ix_auth_risk_rules_ruleset_active_priority")
+  @@map("auth_risk_rules")
+}
+
+model AlembicVersion {
+  versionNum String @id(map: "alembic_version_pkc") @map("version_num") @db.VarChar(32)
+
+  @@map("alembic_version")
+}
+
+model AppRuntimeSettings {
+  id        String   @id @db.Uuid
+  key       String   @unique @db.VarChar(100)
+  value     String?  @db.VarChar(500)
+  metadata  Json?    @map("metadata_")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("app_runtime_settings")
+}
+
+model AppSettings {
+  id                  String   @id
+  supportedLocales    String   @default("[\"fr\",\"en\",\"ar\",\"it\"]") @map("supported_locales")
+  defaultLocale       String   @default("fr") @map("default_locale")
+  translationGlossary Json?    @map("translation_glossary")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model ArticleBlockI18n {
+  id                String            @id @default(cuid())
+  blockId           String            @map("block_id")
+  locale            String
+  data              Json
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  block             ArticleBlock      @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@unique([blockId, locale])
+  @@index([blockId])
+  @@index([locale])
+  @@map("article_block_i18n")
+}
+
+model ArticleBlock {
+  id        String             @id @default(cuid())
+  articleId String             @map("article_id")
+  order     Int                @default(0)
+  type      ArticleBlockType
+  data      Json
+  createdAt DateTime           @default(now()) @map("created_at")
+  i18n      ArticleBlockI18n[]
+  article   Article            @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, order])
+  @@index([articleId])
+  @@map("article_blocks")
+}
+
+model ArticleCategory {
+  id        String                @id @default(cuid())
+  slug      String                @unique
+  label     String
+  order     Int                   @default(0)
+  isActive  Boolean               @default(true) @map("is_active")
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+  i18n      ArticleCategoryI18n[]
+
+  @@index([isActive, order])
+  @@index([slug])
+  @@map("article_categories")
+}
+
+model ArticleCategoryI18n {
+  id                String            @id @default(cuid())
+  categoryId        String            @map("category_id")
+  locale            String
+  label             String
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  category          ArticleCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, locale])
+  @@index([categoryId])
+  @@index([locale])
+  @@map("article_category_i18n")
+}
+
+model ArticleI18n {
+  id                String            @id @default(cuid())
+  articleId         String            @map("article_id")
+  locale            String
+  title             String
+  standfirst        String
+  metaTitle         String?           @map("meta_title")
+  metaDescription   String?           @map("meta_description")
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  coverTitle        String?           @map("cover_title")
+  article           Article           @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, locale])
+  @@index([articleId])
+  @@map("article_i18n")
+}
+
+model ArticleLink {
+  id        String          @id @default(cuid())
+  articleId String          @map("article_id")
+  kind      ArticleLinkKind
+  targetId  String          @map("target_id")
+  createdAt DateTime        @default(now()) @map("created_at")
+  article   Article         @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, kind, targetId])
+  @@index([articleId])
+  @@index([kind, targetId])
+  @@map("article_links")
+}
+
+model ArticleProject {
+  id        String   @id @default(cuid())
+  articleId String   @map("article_id")
+  projectId String   @map("project_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, projectId])
+  @@index([articleId])
+  @@index([projectId])
+  @@map("article_projects")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Article {
+  id              String           @id @default(cuid())
+  slug            String           @unique
+  status          ContentStatus    @default(DRAFT)
+  publishedAt     DateTime?        @map("published_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  coverMediaId    String?          @map("cover_media_id")
+  authorName      String           @map("author_name")
+  authorRole      String?          @map("author_role")
+  allowComments   Boolean          @default(false) @map("allow_comments")
+  coverTitle      String?          @map("cover_title")
+  coverCredit     String?          @map("cover_credit")
+  coverSource     String?          @map("cover_source")
+  galleryMediaIds Json?            @map("gallery_media_ids")
+  videoUrl        String?          @map("video_url")
+  categorySlugs   Json?            @map("category_slugs")
+  documents       Json?
+  isFeatured      Boolean          @default(false) @map("is_featured")
+  isHighlighted   Boolean          @default(false) @map("is_highlighted")
+  isMilestone     Boolean          @default(false) @map("is_milestone")
+  /// Actualité entreprise (Vancelian). Uniquement pour `articleType` NEWS ; ANALYSIS/RESEARCH restent false.
+  isCompanyNews   Boolean          @default(false) @map("is_company_news")
+  articleType     String           @default("NEWS") @map("article_type")
+  blocks          ArticleBlock[]
+  i18n            ArticleI18n[]
+  articleLinks    ArticleLink[]
+  projects        ArticleProject[]
+  coverMedia      Media?           @relation(fields: [coverMediaId], references: [id], onDelete: Restrict)
+
+  @@index([articleType])
+  @@index([isCompanyNews])
+  @@index([isFeatured])
+  @@index([isHighlighted])
+  @@index([isMilestone])
+  @@index([publishedAt])
+  @@index([status])
+  @@map("articles")
+}
+
+model AuditEvents {
+  id            String   @id @db.Uuid
+  personId      String   @map("person_id") @db.Uuid
+  eventType     String   @map("event_type")
+  actorType     String   @map("actor_type")
+  actorId       String?  @map("actor_id")
+  correlationId String?  @map("correlation_id") @db.Uuid
+  payload       Json     @default("{}")
+  schemaVersion Int      @default(1) @map("schema_version")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  persons       Persons  @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([correlationId], map: "ix_audit_events_correlation_id")
+  @@index([eventType], map: "ix_audit_events_event_type")
+  @@index([payload], map: "ix_audit_events_payload", type: Gin)
+  @@index([personId, createdAt], map: "ix_audit_events_person_id_created_at")
+  @@map("audit_events")
+}
+
+model BacktestInstrumentSeries {
+  runId                 Int                   @map("run_id")
+  instrumentId          Int                   @map("instrument_id")
+  date                  DateTime              @db.Date
+  base100               Decimal               @db.Decimal(20, 8)
+  instrumentReturn      Decimal?              @map("instrument_return") @db.Decimal(20, 8)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  backtestRuns          BacktestRuns          @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([runId, instrumentId, date], map: "uq_backtest_instrument_series_run_inst_date")
+  @@index([date], map: "ix_backtest_instrument_series_date")
+  @@index([instrumentId], map: "ix_backtest_instrument_series_instrument_id")
+  @@index([runId], map: "ix_backtest_instrument_series_run_id")
+  @@map("backtest_instrument_series")
+}
+
+model BacktestMetrics {
+  runId                 Int                    @map("run_id")
+  scope                 String                 @db.VarChar(20)
+  instrumentId          Int?                   @map("instrument_id")
+  key                   String                 @db.VarChar(50)
+  value                 Decimal                @db.Decimal(20, 8)
+  id                    Int                    @id(map: "pk_backtest_metrics") @default(autoincrement())
+  marketDataInstruments MarketDataInstruments? @relation(fields: [instrumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  backtestRuns          BacktestRuns           @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([runId, scope, instrumentId, key], map: "uq_backtest_metrics_run_scope_inst_key")
+  @@index([runId], map: "ix_backtest_metrics_run_id")
+  @@map("backtest_metrics")
+}
+
+model BacktestPortfolioSeries {
+  runId           Int          @map("run_id")
+  date            DateTime     @db.Date
+  navBase100      Decimal      @map("nav_base100") @db.Decimal(20, 8)
+  portfolioReturn Decimal      @map("portfolio_return") @db.Decimal(20, 8)
+  drawdown        Decimal      @db.Decimal(20, 8)
+  turnover        Decimal      @db.Decimal(20, 8)
+  costs           Decimal      @db.Decimal(20, 8)
+  weightsJson     Json?        @map("weights_json") @db.Json
+  tradableJson    Json?        @map("tradable_json") @db.Json
+  backtestRuns    BacktestRuns @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([runId, date], map: "uq_backtest_portfolio_series_run_date")
+  @@index([date], map: "ix_backtest_portfolio_series_date")
+  @@index([runId], map: "ix_backtest_portfolio_series_run_id")
+  @@map("backtest_portfolio_series")
+}
+
+model BacktestRuns {
+  id                       Int                        @id @default(autoincrement())
+  name                     String?                    @db.VarChar(200)
+  createdByUserId          Int?                       @map("created_by_user_id")
+  createdAt                DateTime?                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  startDate                DateTime                   @map("start_date") @db.Date
+  endDate                  DateTime                   @map("end_date") @db.Date
+  effectiveStartDate       DateTime?                  @map("effective_start_date") @db.Date
+  effectiveEndDate         DateTime?                  @map("effective_end_date") @db.Date
+  rebalance                String                     @db.VarChar(20)
+  strategyType             String                     @map("strategy_type") @db.VarChar(50)
+  strategyParamsJson       Json?                      @map("strategy_params_json") @db.Json
+  feesBps                  Decimal                    @default(0.0) @map("fees_bps") @db.Decimal(10, 4)
+  slippageBps              Decimal                    @default(0.0) @map("slippage_bps") @db.Decimal(10, 4)
+  allowWeekendTrading      String                     @default("true") @map("allow_weekend_trading") @db.VarChar(10)
+  instrumentIdsJson        Json                       @map("instrument_ids_json") @db.Json
+  status                   String                     @default("PENDING") @db.VarChar(20)
+  errorMessage             String?                    @map("error_message")
+  createdByEmail           String?                    @map("created_by_email") @db.VarChar(255)
+  bundleId                 Int?                       @map("bundle_id")
+  rebalanceMode            String?                    @default("strategy_based") @map("rebalance_mode") @db.VarChar(50)
+  backtestInstrumentSeries BacktestInstrumentSeries[]
+  backtestMetrics          BacktestMetrics[]
+  backtestPortfolioSeries  BacktestPortfolioSeries[]
+  bundles                  Bundles?                   @relation(fields: [bundleId], references: [id], onUpdate: NoAction, map: "fk_backtest_runs_bundle_id")
+
+  @@index([bundleId], map: "ix_backtest_runs_bundle_id")
+  @@index([id], map: "ix_backtest_runs_id")
+  @@map("backtest_runs")
+}
+
+model BorrowerInterestAccruals {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId       String       @map("client_id") @db.Uuid
+  poolId         String       @map("pool_id") @db.Uuid
+  date           DateTime     @db.Date
+  borrowedAmount Decimal      @map("borrowed_amount") @db.Decimal(30, 10)
+  interestDue    Decimal      @default(0) @map("interest_due") @db.Decimal(30, 10)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  peClients      PeClients    @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+  lendingPools   LendingPools @relation(fields: [poolId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([clientId, poolId, date], map: "ix_borrower_interest_accruals_client_pool_date")
+  @@map("borrower_interest_accruals")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model BundleAllocations {
+  id                    Int                   @id @default(autoincrement())
+  bundleId              Int                   @map("bundle_id")
+  instrumentId          Int                   @map("instrument_id")
+  weight                Decimal               @db.Decimal(10, 4)
+  positionOrder         Int?                  @map("position_order")
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  bundles               Bundles               @relation(fields: [bundleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([bundleId, instrumentId], map: "uq_bundle_allocations_bundle_instrument")
+  @@index([bundleId], map: "ix_bundle_allocations_bundle_id")
+  @@index([instrumentId], map: "ix_bundle_allocations_instrument_id")
+  @@map("bundle_allocations")
+}
+
+model Bundles {
+  id                Int                 @id @default(autoincrement())
+  name              String              @db.VarChar(200)
+  assetClass        String              @map("asset_class") @db.VarChar(20)
+  type              String              @default("FIXED_WEIGHT") @db.VarChar(50)
+  description       String?
+  isActive          String              @default("true") @map("is_active") @db.VarChar(10)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  createdByEmail    String?             @map("created_by_email") @db.VarChar(255)
+  backtestRuns      BacktestRuns[]
+  bundleAllocations BundleAllocations[]
+
+  @@unique([name, assetClass], map: "uq_bundles_name_asset_class")
+  @@index([assetClass, isActive], map: "ix_bundles_asset_class_is_active")
+  @@index([id], map: "ix_bundles_id")
+  @@map("bundles")
+}
+
+model ChatbotAuditEvents {
+  id             String         @id @db.Uuid
+  sessionId      String         @map("session_id") @db.Uuid
+  eventType      String         @map("event_type")
+  payload        Json           @default("{}")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  chatbotSession ChatbotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([eventType], map: "ix_chatbot_audit_event_type")
+  @@index([payload], map: "ix_chatbot_audit_payload", type: Gin)
+  @@index([sessionId, createdAt], map: "ix_chatbot_audit_session_created")
+  @@index([sessionId], map: "ix_chatbot_audit_session_id")
+  @@map("chatbot_audit_events")
+}
+
+model ChatbotConversationTurns {
+  id                String           @id @db.Uuid
+  sessionId         String           @map("session_id") @db.Uuid
+  turnIndex         Int              @map("turn_index")
+  role              String           @db.VarChar(20)
+  content           String
+  extractedJson     Json?            @map("extracted_json")
+  profileSnapshotId String?          @map("profile_snapshot_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  chatbotProfiles   ChatbotProfiles? @relation(fields: [profileSnapshotId], references: [id], onUpdate: NoAction)
+  chatbotSession    ChatbotSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([sessionId, createdAt], map: "ix_chatbot_turns_session_created")
+  @@index([sessionId], map: "ix_chatbot_turns_session_id")
+  @@map("chatbot_conversation_turns")
+}
+
+model ChatbotPortfolioProposals {
+  id              String          @id @db.Uuid
+  profileId       String          @map("profile_id") @db.Uuid
+  allocation      Json            @default("[]")
+  rationale       String?
+  disclaimers     Json            @default("[]")
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  chatbotProfiles ChatbotProfiles @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdAt], map: "ix_chatbot_proposals_created_at")
+  @@index([profileId], map: "ix_chatbot_proposals_profile_id")
+  @@map("chatbot_portfolio_proposals")
+}
+
+model ChatbotProfiles {
+  id                        String                      @id @db.Uuid
+  sessionId                 String                      @map("session_id") @db.Uuid
+  version                   Int                         @default(1)
+  payload                   Json                        @default("{}")
+  completenessScore         Decimal                     @default(0) @map("completeness_score") @db.Decimal(5, 4)
+  missingFields             Json                        @default("[]") @map("missing_fields")
+  createdAt                 DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  validatedAt               DateTime?                   @map("validated_at") @db.Timestamptz(6)
+  chatbotConversationTurns  ChatbotConversationTurns[]
+  chatbotPortfolioProposals ChatbotPortfolioProposals[]
+  chatbotSession            ChatbotSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdAt], map: "ix_chatbot_profiles_created_at")
+  @@index([sessionId], map: "ix_chatbot_profiles_session_id")
+  @@index([sessionId, version], map: "ix_chatbot_profiles_session_version")
+  @@map("chatbot_profiles")
+}
+
+model ChatbotPromptVersions {
+  id        String   @id @db.Uuid
+  name      String   @db.VarChar(100)
+  hash      String   @db.VarChar(64)
+  content   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([name, hash], map: "ix_chatbot_prompt_name_hash")
+  @@map("chatbot_prompt_versions")
+}
+
+model ChatbotSession {
+  id                       String                     @id @db.Uuid
+  userId                   String?                    @map("user_id")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversationSummary      String?                    @map("conversation_summary")
+  conversationFacts        Json?                      @default("[]") @map("conversation_facts")
+  lastNextQuestionId       String?                    @map("last_next_question_id")
+  expiresAt                DateTime?                  @map("expires_at") @db.Timestamptz(6)
+  ipHash                   String?                    @map("ip_hash") @db.VarChar(64)
+  userAgentHash            String?                    @map("user_agent_hash") @db.VarChar(64)
+  chatbotAuditEvents       ChatbotAuditEvents[]
+  chatbotConversationTurns ChatbotConversationTurns[]
+  chatbotProfiles          ChatbotProfiles[]
+
+  @@index([createdAt], map: "ix_chatbot_sessions_created_at")
+  @@index([expiresAt], map: "ix_chatbot_sessions_expires_at")
+  @@map("chatbot_sessions")
+}
+
+model ClientFavorites {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId   String    @map("client_id") @db.Uuid
+  entityType String    @map("entity_type") @db.VarChar(30)
+  entityId   String    @map("entity_id") @db.VarChar(100)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  peClients  PeClients @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([clientId, entityType, entityId], map: "uq_client_favorites_client_entity")
+  @@index([clientId, entityType], map: "ix_client_favorites_client_type")
+  @@map("client_favorites")
+}
+
+model ContactSubmissions {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  email     String    @db.VarChar(255)
+  message   String
+  ip        String?   @db.VarChar(45)
+  userAgent String?   @map("user_agent") @db.VarChar(500)
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([id], map: "ix_contact_submissions_id")
+  @@map("contact_submissions")
+}
+
+model CountryDirectory {
+  id                                                                                         String                        @id @db.Uuid
+  iso2                                                                                       String                        @unique(map: "uq_country_directory_iso2")
+  iso3                                                                                       String                        @unique(map: "uq_country_directory_iso3")
+  displayNameEn                                                                              String                        @map("display_name_en")
+  displayNameFr                                                                              String                        @map("display_name_fr")
+  phoneCountryCode                                                                           String                        @map("phone_country_code")
+  isActive                                                                                   Boolean                       @default(true) @map("is_active")
+  createdAt                                                                                  DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  jurisdictionCountryPolicies                                                                JurisdictionCountryPolicies[]
+  jurisdictionPolicySettingsJurisdictionPolicySettingsDefaultPhoneIso2TocountryDirectory     JurisdictionPolicySettings[]  @relation("jurisdiction_policy_settings_default_phone_iso2Tocountry_directory")
+  jurisdictionPolicySettingsJurisdictionPolicySettingsDefaultResidenceIso2TocountryDirectory JurisdictionPolicySettings[]  @relation("jurisdiction_policy_settings_default_residence_iso2Tocountry_directory")
+
+  @@map("country_directory")
+}
+
+model CryptoCustodyAccounts {
+  id                    String                 @id @db.Uuid
+  asset                 String                 @db.VarChar(20)
+  accountType           String                 @map("account_type") @db.VarChar(50)
+  provider              String                 @db.VarChar(50)
+  providerAccountId     String?                @map("provider_account_id") @db.VarChar(255)
+  label                 String                 @db.VarChar(255)
+  status                String                 @default("active") @db.VarChar(20)
+  metadata              Json                   @default("{}") @map("metadata_")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  cryptoCustodyBalances CryptoCustodyBalances?
+
+  @@unique([asset, accountType], map: "uq_crypto_custody_accounts_asset_type")
+  @@index([accountType], map: "ix_crypto_custody_accounts_account_type")
+  @@index([asset], map: "ix_crypto_custody_accounts_asset")
+  @@map("crypto_custody_accounts")
+}
+
+model CryptoCustodyBalances {
+  id                    String                @id @db.Uuid
+  accountId             String                @unique(map: "uq_crypto_custody_balances_account_id") @map("account_id") @db.Uuid
+  asset                 String                @db.VarChar(20)
+  actualBalance         Decimal               @default(0) @map("actual_balance") @db.Decimal(30, 18)
+  expectedBalance       Decimal               @default(0) @map("expected_balance") @db.Decimal(30, 18)
+  updatedFromProviderAt DateTime?             @map("updated_from_provider_at") @db.Timestamptz(6)
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  cryptoCustodyAccounts CryptoCustodyAccounts @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([accountId], map: "ix_crypto_custody_balances_account_id")
+  @@map("crypto_custody_balances")
+}
+
+model CryptoPositions {
+  id               String    @id @db.Uuid
+  clientId         String    @map("client_id") @db.Uuid
+  asset            String    @db.VarChar(20)
+  balance          Decimal   @default(0) @db.Decimal(30, 18)
+  availableBalance Decimal   @default(0) @map("available_balance") @db.Decimal(30, 18)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peClients        PeClients @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+
+  @@unique([clientId, asset], map: "uq_crypto_positions_client_asset")
+  @@index([clientId], map: "ix_crypto_positions_client_id")
+  @@map("crypto_positions")
+}
+
+model CryptoSettlementDeltas {
+  id             String   @id @db.Uuid
+  asset          String   @db.VarChar(20)
+  settlementDate DateTime @map("settlement_date") @db.Date
+  deltaAmount    Decimal  @default(0) @map("delta_amount") @db.Decimal(30, 18)
+  settled        Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([asset, settlementDate], map: "uq_crypto_settlement_delta_asset_date")
+  @@index([settlementDate], map: "ix_crypto_settlement_deltas_date")
+  @@map("crypto_settlement_deltas")
+}
+
+model CustodyAccountBalances {
+  id               String          @id @db.Uuid
+  accountId        String          @unique @map("account_id") @db.Uuid
+  availableBalance Decimal         @default(0) @map("available_balance") @db.Decimal(30, 10)
+  pendingBalance   Decimal         @default(0) @map("pending_balance") @db.Decimal(30, 10)
+  currency         String          @db.VarChar(10)
+  lastUpdatedAt    DateTime        @default(now()) @map("last_updated_at") @db.Timestamptz(6)
+  version          Int             @default(1)
+  custodyAccounts  CustodyAccounts @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("custody_account_balances")
+}
+
+model CustodyAccounts {
+  id                     String                  @id @db.Uuid
+  providerId             String                  @map("provider_id") @db.Uuid
+  accountType            String                  @map("account_type") @db.VarChar(50)
+  currency               String                  @db.VarChar(10)
+  iban                   String?                 @db.VarChar(50)
+  bic                    String?                 @db.VarChar(20)
+  accountHolderName      String                  @map("account_holder_name") @db.VarChar(255)
+  clientId               String?                 @map("client_id") @db.Uuid
+  ledgerAccountId        String?                 @map("ledger_account_id") @db.Uuid
+  isMasterAccount        Boolean                 @default(false) @map("is_master_account")
+  status                 String                  @default("active") @db.VarChar(20)
+  metadata               Json                    @default("{}") @map("metadata_")
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  custodyAccountBalances CustodyAccountBalances?
+  peClients              PeClients?              @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+  peLedgerAccounts       PeLedgerAccounts?       @relation(fields: [ledgerAccountId], references: [id], onUpdate: NoAction)
+  custodyProviders       CustodyProviders        @relation(fields: [providerId], references: [id], onUpdate: NoAction)
+  custodyTransactions    CustodyTransactions[]
+
+  @@index([accountType], map: "ix_custody_accounts_account_type")
+  @@index([clientId], map: "ix_custody_accounts_client_id")
+  @@index([ledgerAccountId], map: "ix_custody_accounts_ledger_account_id")
+  @@index([providerId], map: "ix_custody_accounts_provider_id")
+  @@map("custody_accounts")
+}
+
+model CustodyProviders {
+  id                   String                 @id @db.Uuid
+  name                 String                 @db.VarChar(100)
+  providerType         String                 @map("provider_type") @db.VarChar(20)
+  jurisdiction         String?                @db.VarChar(50)
+  apiBaseUrl           String?                @map("api_base_url") @db.VarChar(500)
+  status               String                 @default("active") @db.VarChar(20)
+  metadata             Json                   @default("{}") @map("metadata_")
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  custodyAccounts      CustodyAccounts[]
+  custodyTransactions  CustodyTransactions[]
+  custodyWebhookEvents CustodyWebhookEvents[]
+
+  @@map("custody_providers")
+}
+
+model CustodyTransactions {
+  id                       String                 @id @db.Uuid
+  accountId                String                 @map("account_id") @db.Uuid
+  transactionType          String                 @map("transaction_type") @db.VarChar(30)
+  direction                String                 @db.VarChar(10)
+  amount                   Decimal                @db.Decimal(30, 10)
+  currency                 String                 @db.VarChar(10)
+  status                   String                 @default("pending") @db.VarChar(20)
+  externalReference        String?                @map("external_reference") @db.VarChar(255)
+  providerReference        String?                @map("provider_reference") @db.VarChar(255)
+  metadata                 Json                   @default("{}") @map("metadata_")
+  createdAt                DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  providerId               String?                @map("provider_id") @db.Uuid
+  updatedAt                DateTime?              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  failureReason            String?                @map("failure_reason")
+  reversalOfTransactionId  String?                @map("reversal_of_transaction_id") @db.Uuid
+  transactionKind          String?                @map("transaction_kind") @db.VarChar(30)
+  custodyAccounts          CustodyAccounts        @relation(fields: [accountId], references: [id], onUpdate: NoAction)
+  custodyProviders         CustodyProviders?      @relation(fields: [providerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  custodyTransactions      CustodyTransactions?   @relation("custody_transactionsTocustody_transactions", fields: [reversalOfTransactionId], references: [id], onUpdate: NoAction)
+  otherCustodyTransactions CustodyTransactions[]  @relation("custody_transactionsTocustody_transactions")
+  custodyWebhookEvents     CustodyWebhookEvents[]
+
+  @@index([accountId], map: "ix_custody_transactions_account_id")
+  @@index([createdAt], map: "ix_custody_transactions_created_at")
+  @@index([transactionKind], map: "ix_custody_transactions_kind")
+  @@index([providerId], map: "ix_custody_transactions_provider_id")
+  @@index([transactionType], map: "ix_custody_transactions_type")
+  @@map("custody_transactions")
+}
+
+model CustodyWebhookEvents {
+  id                  String               @id @db.Uuid
+  providerId          String               @map("provider_id") @db.Uuid
+  eventType           String               @map("event_type") @db.VarChar(50)
+  externalReference   String?              @map("external_reference") @db.VarChar(255)
+  payloadRaw          Json                 @map("payload_raw")
+  payloadHash         String               @map("payload_hash") @db.VarChar(64)
+  processingStatus    String               @default("received") @map("processing_status") @db.VarChar(20)
+  errorMessage        String?              @map("error_message")
+  linkedTransactionId String?              @map("linked_transaction_id") @db.Uuid
+  retryCount          Int                  @default(0) @map("retry_count")
+  receivedAt          DateTime             @default(now()) @map("received_at") @db.Timestamptz(6)
+  processedAt         DateTime?            @map("processed_at") @db.Timestamptz(6)
+  metadata            Json                 @default("{}") @map("metadata_")
+  custodyTransactions CustodyTransactions? @relation(fields: [linkedTransactionId], references: [id], onUpdate: NoAction)
+  custodyProviders    CustodyProviders     @relation(fields: [providerId], references: [id], onUpdate: NoAction)
+
+  @@index([providerId, externalReference], map: "ix_custody_webhook_events_provider_ref")
+  @@index([receivedAt], map: "ix_custody_webhook_events_received")
+  @@index([processingStatus], map: "ix_custody_webhook_events_status")
+  @@map("custody_webhook_events")
+}
+
+model Documents {
+  id              String   @id @db.Uuid
+  personId        String   @map("person_id") @db.Uuid
+  docType         String   @map("doc_type")
+  status          String
+  storageProvider String   @map("storage_provider")
+  storageBucket   String   @map("storage_bucket")
+  storageKey      String   @map("storage_key")
+  contentType     String   @map("content_type")
+  fileSize        BigInt   @map("file_size")
+  sha256          String
+  metadataJson    Json     @default("{}") @map("metadata_json")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  persons         Persons  @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([metadataJson], map: "ix_documents_metadata_json", type: Gin)
+  @@index([personId, createdAt], map: "ix_documents_person_id_created_at")
+  @@map("documents")
+}
+
+model DsComponentChapter {
+  id         String        @id @default(cuid())
+  name       String
+  slug       String        @unique
+  order      Int           @default(0)
+  createdAt  DateTime      @default(now()) @map("created_at")
+  components DsComponent[]
+
+  @@map("ds_component_chapters")
+}
+
+model DsComponent {
+  id         String             @id @default(cuid())
+  chapterId  String             @map("chapter_id")
+  slug       String
+  name       String
+  schemaJson Json               @map("schema_json")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  chapter    DsComponentChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([chapterId, slug])
+  @@index([chapterId])
+  @@map("ds_components")
+}
+
+model EmailModuleI18n {
+  id                String                 @id @default(cuid()) @db.VarChar
+  moduleId          String                 @map("module_id") @db.VarChar
+  locale            String                 @db.VarChar
+  spec              Json                   @db.Json
+  translationStatus Translationstatusenum? @default(MACHINE) @map("translation_status")
+  createdAt         DateTime?              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime?              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  module            EmailModule            @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([moduleId, locale], map: "uq_email_module_i18n_module_locale")
+  @@index([moduleId], map: "ix_email_module_i18n_module_id")
+  @@map("email_module_i18n")
+}
+
+model EmailModule {
+  id                   String                @id @default(cuid()) @db.VarChar
+  slug                 String                @unique @db.VarChar
+  name                 String                @db.VarChar
+  description          String?
+  moduleType           Emailmoduletypeenum   @map("module_type")
+  theme                String?               @default("arquantix_v1") @db.VarChar
+  status               Emailstatusenum?      @default(DRAFT)
+  spec                 Json                  @db.Json
+  createdAt            DateTime?             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime?             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  translations         EmailModuleI18n[]
+  templateHeaders      EmailTemplateEntity[] @relation("TemplateHeaderModule")
+  templateFooters      EmailTemplateEntity[] @relation("TemplateFooterModule")
+  templateBodyStarters EmailTemplateEntity[] @relation("TemplateBodyStarterModule")
+
+  @@index([id], map: "ix_email_modules_id")
+  @@map("email_modules")
+}
+
+model EmailTemplateEntity {
+  id                  String               @id @default(cuid()) @db.VarChar
+  slug                String               @unique @db.VarChar
+  name                String               @db.VarChar
+  description         String?
+  theme               String?              @default("arquantix_v1") @db.VarChar
+  status              Emailstatusenum?     @default(DRAFT)
+  heroPolicy          Emailheropolicyenum? @default(REQUIRED) @map("hero_policy")
+  headerModuleId      String               @map("header_module_id") @db.VarChar
+  footerModuleId      String               @map("footer_module_id") @db.VarChar
+  bodyStarterModuleId String?              @map("body_starter_module_id") @db.VarChar
+  fixedModuleIds      Json?                @map("fixed_module_ids") @db.Json
+  bodyTemplate        Json                 @map("body_template") @db.Json
+  lockPolicy          Json                 @map("lock_policy") @db.Json
+  createdAt           DateTime?            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime?            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  headerModule        EmailModule          @relation("TemplateHeaderModule", fields: [headerModuleId], references: [id])
+  footerModule        EmailModule          @relation("TemplateFooterModule", fields: [footerModuleId], references: [id])
+  bodyStarterModule   EmailModule?         @relation("TemplateBodyStarterModule", fields: [bodyStarterModuleId], references: [id])
+
+  @@index([bodyStarterModuleId], map: "ix_email_template_entities_body_starter_module_id")
+  @@index([footerModuleId], map: "ix_email_template_entities_footer_module_id")
+  @@index([headerModuleId], map: "ix_email_template_entities_header_module_id")
+  @@map("email_template_entities")
+}
+
+model Email {
+  id           String           @id @default(cuid()) @db.VarChar
+  name         String           @db.VarChar
+  templateId   String           @map("template_id") @db.VarChar
+  theme        String           @default("arquantix_v1") @db.VarChar
+  locale       String           @db.VarChar
+  spec         Json             @db.Json
+  status       Emailstatusenum? @default(DRAFT)
+  createdAt    DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime?        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  translations EmailI18n[]
+
+  @@index([templateId], map: "ix_emails_template_id")
+  @@map("emails")
+}
+
+model EmailI18n {
+  id                String            @id @default(cuid()) @db.VarChar
+  emailId           String            @map("email_id") @db.VarChar
+  locale            String            @db.VarChar
+  spec              Json              @db.Json
+  translationStatus TranslationStatus @default(MACHINE) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  email             Email             @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@unique([emailId, locale], map: "uq_email_i18n_email_locale")
+  @@index([emailId], map: "ix_email_i18n_email_id")
+  @@map("email_i18n")
+}
+
+model HelpCollection {
+  id          String               @id @default(cuid())
+  slug        String               @unique
+  iconKey     String               @default("article") @map("icon_key")
+  colorHex    String               @default("#0F172A") @map("color_hex")
+  order       Int                  @default(0)
+  isPublished Boolean              @default(true) @map("is_published")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  i18n        HelpCollectionI18n[]
+  categories  HelpCategory[]
+
+  @@map("help_collections")
+}
+
+model HelpCollectionI18n {
+  id                String            @id @default(cuid())
+  collectionId      String            @map("collection_id")
+  locale            String
+  title             String
+  subtitle          String?
+  description       String?
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  collection        HelpCollection    @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, locale])
+  @@map("help_collection_i18n")
+}
+
+model HelpCategory {
+  id           String             @id @default(cuid())
+  collectionId String             @map("collection_id")
+  slug         String
+  order        Int                @default(0)
+  isPublished  Boolean            @default(true) @map("is_published")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  collection   HelpCollection     @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  articles     HelpArticle[]
+  i18n         HelpCategoryI18n[]
+
+  @@unique([collectionId, slug])
+  @@index([collectionId])
+  @@map("help_categories")
+}
+
+model HelpCategoryI18n {
+  id                String            @id @default(cuid())
+  categoryId        String            @map("category_id")
+  locale            String
+  title             String
+  description       String?
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  category          HelpCategory      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, locale])
+  @@map("help_category_i18n")
+}
+
+model HelpArticle {
+  id           String             @id @default(cuid())
+  categoryId   String             @map("category_id")
+  slug         String
+  status       ContentStatus      @default(DRAFT)
+  publishedAt  DateTime?          @map("published_at")
+  authorName   String?            @map("author_name")
+  coverMediaId String?            @map("cover_media_id")
+  allowAnchors Boolean            @default(true) @map("allow_anchors")
+  targetTags   Json?              @map("target_tags")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  category     HelpCategory       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  coverMedia   Media?             @relation("HelpArticleCover", fields: [coverMediaId], references: [id])
+  i18n         HelpArticleI18n[]
+  blocks       HelpArticleBlock[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId])
+  @@map("help_articles")
+}
+
+model HelpArticleI18n {
+  id                String            @id @default(cuid())
+  articleId         String            @map("article_id")
+  locale            String
+  title             String
+  standfirst        String?
+  contentMarkdown   String?           @map("content_markdown")
+  metaTitle         String?           @map("meta_title")
+  metaDescription   String?           @map("meta_description")
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  article           HelpArticle       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, locale])
+  @@map("help_article_i18n")
+}
+
+model HelpArticleBlock {
+  id        String           @id @default(cuid())
+  articleId String           @map("article_id")
+  locale    String
+  type      ArticleBlockType
+  data      Json
+  order     Int              @default(0)
+  article   HelpArticle      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId, locale])
+  @@map("help_article_blocks")
+}
+
+model ExchangeFeeConfig {
+  id        String   @id @db.Uuid
+  asset     String   @unique(map: "uq_exchange_fee_config_asset") @db.VarChar(20)
+  feeBps    Int      @default(0) @map("fee_bps")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  spreadBps Int      @default(50) @map("spread_bps")
+
+  @@map("exchange_fee_config")
+}
+
+model ExchangeOrders {
+  id                   String    @id @db.Uuid
+  clientId             String    @map("client_id") @db.Uuid
+  side                 String    @db.VarChar(10)
+  asset                String    @db.VarChar(20)
+  amountCrypto         Decimal   @map("amount_crypto") @db.Decimal(30, 18)
+  amountFiat           Decimal   @map("amount_fiat") @db.Decimal(30, 10)
+  price                Decimal   @db.Decimal(30, 10)
+  currency             String    @default("EUR") @db.VarChar(10)
+  status               String    @default("pending") @db.VarChar(20)
+  externalReference    String    @unique(map: "uq_exchange_orders_ext_ref") @map("external_reference") @db.VarChar(255)
+  failureReason        String?   @map("failure_reason")
+  metadata             Json      @default("{}") @map("metadata_")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  fromAsset            String?   @map("from_asset") @db.VarChar(20)
+  toAsset              String?   @map("to_asset") @db.VarChar(20)
+  amountFrom           Decimal?  @map("amount_from") @db.Decimal(30, 10)
+  amountTo             Decimal?  @map("amount_to") @db.Decimal(30, 18)
+  feeAmount            Decimal?  @map("fee_amount") @db.Decimal(30, 18)
+  feeAsset             String?   @map("fee_asset") @db.VarChar(20)
+  costBasisConsumed    Decimal?  @map("cost_basis_consumed") @db.Decimal(30, 10)
+  realizedPnlGenerated Decimal?  @map("realized_pnl_generated") @db.Decimal(30, 10)
+  swapGroupId          String?   @map("swap_group_id") @db.Uuid
+  peClients            PeClients @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+
+  @@index([asset], map: "ix_exchange_orders_asset")
+  @@index([clientId], map: "ix_exchange_orders_client_id")
+  @@index([createdAt], map: "ix_exchange_orders_created_at")
+  @@index([swapGroupId], map: "ix_exchange_orders_swap_group_id")
+  @@map("exchange_orders")
+}
+
+model FieldDefinitions {
+  id                           String                         @id @db.Uuid
+  slug                         String                         @unique
+  fieldNameEn                  String                         @map("field_name_en")
+  fieldType                    String                         @map("field_type")
+  category                     String?
+  isActive                     Boolean                        @default(true) @map("is_active")
+  createdAt                    DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime                       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  uiLabel                      String?                        @map("ui_label")
+  componentTypeDefault         String?                        @map("component_type_default")
+  requiredDefault              Boolean?                       @map("required_default")
+  optionsJson                  Json?                          @map("options_json")
+  policyScope                  String?                        @map("policy_scope")
+  registrationScreenComponents RegistrationScreenComponents[]
+
+  @@index([category], map: "ix_field_definitions_category")
+  @@map("field_definitions")
+}
+
+model GlobalSettings {
+  id          Int       @id @default(autoincrement())
+  siteName    String    @default("Arquantix") @map("site_name") @db.VarChar(255)
+  tagline     String?   @db.VarChar(500)
+  socialsJson Json?     @default("{}") @map("socials_json") @db.Json
+  seoJson     Json?     @default("{}") @map("seo_json") @db.Json
+  updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([id], map: "ix_global_settings_id")
+  @@map("global_settings")
+}
+
+model InvestmentCategory {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  label       String
+  imageUrl    String? @map("image_url")
+  sortOrder   Int     @default(0) @map("sort_order")
+  description String?
+  mediaId     String? @map("media_id")
+  media       Media?  @relation(fields: [mediaId], references: [id])
+
+  @@index([mediaId])
+  @@index([sortOrder])
+  @@map("investment_categories")
+}
+
+model InvestmentEnvelopeEntries {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  envelopeId          String              @map("envelope_id") @db.Uuid
+  commitmentId        String?             @map("commitment_id") @db.Uuid
+  entryAsset          String              @map("entry_asset") @db.VarChar(20)
+  entryAmount         Decimal             @map("entry_amount") @db.Decimal(30, 10)
+  targetAsset         String              @map("target_asset") @db.VarChar(20)
+  convertedAmount     Decimal             @map("converted_amount") @db.Decimal(30, 10)
+  fxRate              Decimal?            @map("fx_rate") @db.Decimal(20, 10)
+  conversionType      String              @default("none") @map("conversion_type") @db.VarChar(20)
+  conversionFee       Decimal             @default(0) @map("conversion_fee") @db.Decimal(30, 10)
+  platformFee         Decimal             @default(0) @map("platform_fee") @db.Decimal(30, 10)
+  netAllocated        Decimal             @map("net_allocated") @db.Decimal(30, 10)
+  externalReference   String?             @map("external_reference") @db.VarChar(255)
+  conversionDetails   Json?               @map("conversion_details")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  investmentEnvelopes InvestmentEnvelopes @relation(fields: [envelopeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([envelopeId], map: "ix_investment_envelope_entries_envelope_id")
+  @@map("investment_envelope_entries")
+}
+
+model InvestmentEnvelopes {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId                  String                      @map("client_id") @db.Uuid
+  type                      String                      @db.VarChar(50)
+  referenceId               String?                     @map("reference_id") @db.VarChar(255)
+  status                    String                      @default("active") @db.VarChar(30)
+  metadata                  Json?                       @map("metadata_")
+  createdAt                 DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  investmentEnvelopeEntries InvestmentEnvelopeEntries[]
+
+  @@index([clientId], map: "ix_investment_envelopes_client_id")
+  @@map("investment_envelopes")
+}
+
+model InvestmentTypes {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  label       String
+  description String?
+  colorHex    String   @default("#6366F1") @map("color_hex")
+  iconKey     String   @default("tag") @map("icon_key")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([sortOrder])
+  @@map("investment_types")
+}
+
+model JurisdictionConfigs {
+  id           String   @id @db.Uuid
+  jurisdiction String
+  purpose      String
+  version      Int
+  status       String
+  configJson   Json     @map("config_json")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([jurisdiction, purpose, version], map: "uq_jurisdiction_configs_jurisdiction_purpose_version")
+  @@index([configJson], map: "ix_jurisdiction_configs_config_json", type: Gin)
+  @@index([jurisdiction, purpose, status], map: "ix_jurisdiction_configs_jurisdiction_purpose_status")
+  @@map("jurisdiction_configs")
+}
+
+model JurisdictionCountryPolicies {
+  id                    String           @id @db.Uuid
+  jurisdictionCode      String           @map("jurisdiction_code")
+  countryIso2           String           @map("country_iso2")
+  allowResidence        Boolean          @default(false) @map("allow_residence")
+  allowPhoneCountryCode Boolean          @default(false) @map("allow_phone_country_code")
+  position              Int              @default(0)
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  isDefaultResidence    Boolean          @default(false) @map("is_default_residence")
+  isDefaultPhone        Boolean          @default(false) @map("is_default_phone")
+  allowNationality      Boolean          @map("allow_nationality")
+  countryDirectory      CountryDirectory @relation(fields: [countryIso2], references: [iso2], onDelete: Cascade, onUpdate: NoAction, map: "fk_jcp_country_iso2")
+
+  @@unique([jurisdictionCode, countryIso2], map: "uq_jcp_jurisdiction_country")
+  @@index([jurisdictionCode], map: "ix_jcp_jurisdiction_code")
+  @@map("jurisdiction_country_policies")
+}
+
+model JurisdictionPolicySettings {
+  id                                                                               String            @id @db.Uuid
+  jurisdictionCode                                                                 String            @unique(map: "uq_jurisdiction_policy_settings_code") @map("jurisdiction_code")
+  inheritPhoneCountriesFromResidence                                               Boolean           @default(false) @map("inherit_phone_countries_from_residence")
+  defaultResidenceIso2                                                             String?           @map("default_residence_iso2")
+  defaultPhoneIso2                                                                 String?           @map("default_phone_iso2")
+  updatedAt                                                                        DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  countryDirectoryJurisdictionPolicySettingsDefaultPhoneIso2TocountryDirectory     CountryDirectory? @relation("jurisdiction_policy_settings_default_phone_iso2Tocountry_directory", fields: [defaultPhoneIso2], references: [iso2], onUpdate: NoAction, map: "fk_jps_default_phone_iso2")
+  countryDirectoryJurisdictionPolicySettingsDefaultResidenceIso2TocountryDirectory CountryDirectory? @relation("jurisdiction_policy_settings_default_residence_iso2Tocountry_directory", fields: [defaultResidenceIso2], references: [iso2], onUpdate: NoAction, map: "fk_jps_default_residence_iso2")
+
+  @@map("jurisdiction_policy_settings")
+}
+
+model KeyInformationCategory {
+  id          String   @id
+  key         String   @unique
+  label       String
+  infoTitle   String?  @map("info_title")
+  infoContent String?  @map("info_content")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  @@index([sortOrder])
+  @@map("key_information_categories")
+}
+
+model LegacyJsonPages {
+  id                   Int               @id
+  slug                 String            @db.VarChar(255)
+  locale               String            @default("fr") @db.VarChar(10)
+  title                String            @db.VarChar(500)
+  sectionsJson         Json?             @default("{}") @map("sections_json") @db.Json
+  seoJson              Json?             @default("{}") @map("seo_json") @db.Json
+  status               Statusenum        @default(DRAFT)
+  publishedAt          DateTime?         @map("published_at") @db.Timestamptz(6)
+  updatedAt            DateTime?         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  sourcePageId         Int?              @map("source_page_id")
+  translationStatus    String            @default("manual") @map("translation_status") @db.VarChar
+  translationMetaJson  Json?             @map("translation_meta_json") @db.Json
+  legacyJsonPage       LegacyJsonPages?  @relation("legacy_json_pagesTolegacy_json_pages", fields: [sourcePageId], references: [id], onUpdate: NoAction, map: "fk_legacy_json_pages_source_page_id")
+  otherLegacyJsonPages LegacyJsonPages[] @relation("legacy_json_pagesTolegacy_json_pages")
+
+  @@unique([slug, locale], map: "ix_legacy_json_pages_slug_locale")
+  @@index([id], map: "ix_legacy_json_pages_id")
+  @@map("legacy_json_pages")
+}
+
+model LenderInterestAccruals {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId        String       @map("client_id") @db.Uuid
+  poolId          String       @map("pool_id") @db.Uuid
+  date            DateTime     @db.Date
+  allocatedAmount Decimal      @map("allocated_amount") @db.Decimal(30, 10)
+  interestEarned  Decimal      @default(0) @map("interest_earned") @db.Decimal(30, 10)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  peClients       PeClients    @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+  lendingPools    LendingPools @relation(fields: [poolId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([clientId, poolId, date], map: "ix_lender_interest_accruals_client_pool_date")
+  @@map("lender_interest_accruals")
+}
+
+model LendingPoolProducts {
+  id                 String           @id @db.Uuid
+  lendingPoolId      String           @unique @map("lending_pool_id") @db.Uuid
+  productType        String           @default("exclusive_offer") @map("product_type") @db.VarChar(50)
+  title              String           @db.VarChar(200)
+  description        String?
+  borrowerClientId   String           @map("borrower_client_id") @db.Uuid
+  asset              String           @db.VarChar(20)
+  targetSize         Decimal          @map("target_size") @db.Decimal(30, 10)
+  currentRaised      Decimal          @default(0) @map("current_raised") @db.Decimal(30, 10)
+  minTicket          Decimal?         @map("min_ticket") @db.Decimal(30, 10)
+  maxTicket          Decimal?         @map("max_ticket") @db.Decimal(30, 10)
+  supplyAprBps       Decimal          @default(300) @map("supply_apr_bps") @db.Decimal(10, 2)
+  borrowAprBps       Decimal          @default(500) @map("borrow_apr_bps") @db.Decimal(10, 2)
+  useOfFunds         String?          @map("use_of_funds")
+  startDate          DateTime?        @map("start_date") @db.Date
+  maturityDate       DateTime?        @map("maturity_date") @db.Date
+  status             String           @default("draft") @db.VarChar(30)
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  projectId          String?          @unique @map("project_id") @db.VarChar(30)
+  packagedProductId  String?          @unique @map("packaged_product_id") @db.Uuid
+  entryAssetDefault  String?          @map("entry_asset_default") @db.VarChar(20)
+  entryAssetsAllowed Json?            @map("entry_assets_allowed")
+  peClients          PeClients        @relation(fields: [borrowerClientId], references: [id], onUpdate: NoAction)
+  lendingPools       LendingPools     @relation(fields: [lendingPoolId], references: [id], onUpdate: NoAction)
+  packagedProduct    PackagedProduct? @relation(fields: [packagedProductId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([borrowerClientId], map: "ix_lpp_borrower")
+  @@index([lendingPoolId], map: "ix_lpp_pool_id")
+  @@index([projectId], map: "ix_lpp_project_id")
+  @@index([status], map: "ix_lpp_status")
+  @@map("lending_pool_products")
+}
+
+model LendingPools {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  asset                    String                     @db.VarChar(20)
+  totalCommitted           Decimal                    @default(0) @map("total_committed") @db.Decimal(30, 10)
+  totalBorrowed            Decimal                    @default(0) @map("total_borrowed") @db.Decimal(30, 10)
+  utilizationRate          Decimal                    @default(0) @map("utilization_rate") @db.Decimal(10, 4)
+  status                   String                     @default("active") @db.VarChar(30)
+  metadata                 Json                       @default("{}")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  borrowRateBps            Decimal                    @default(500) @map("borrow_rate_bps") @db.Decimal(10, 2)
+  supplyRateBps            Decimal                    @default(300) @map("supply_rate_bps") @db.Decimal(10, 2)
+  borrowerInterestAccruals BorrowerInterestAccruals[]
+  lenderInterestAccruals   LenderInterestAccruals[]
+  lendingPoolProducts      LendingPoolProducts?
+  poolBorrowPositions      PoolBorrowPositions[]
+  poolInterestSnapshots    PoolInterestSnapshots[]
+  poolSupplyCommitments    PoolSupplyCommitments[]
+
+  @@map("lending_pools")
+}
+
+model LoanInterestAccruals {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loanId        String   @map("loan_id") @db.Uuid
+  accruedAmount Decimal  @default(0) @map("accrued_amount") @db.Decimal(30, 10)
+  lastAccrualAt DateTime @default(now()) @map("last_accrual_at") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  loans         Loans    @relation(fields: [loanId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([loanId], map: "ix_loan_interest_accruals_loan_id")
+  @@map("loan_interest_accruals")
+}
+
+model Loans {
+  id                                        String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lenderClientId                            String                 @map("lender_client_id") @db.Uuid
+  borrowerClientId                          String                 @map("borrower_client_id") @db.Uuid
+  asset                                     String                 @db.VarChar(20)
+  principal                                 Decimal                @db.Decimal(30, 10)
+  interestRateBps                           Int                    @default(0) @map("interest_rate_bps")
+  platformFeeBps                            Int                    @default(0) @map("platform_fee_bps")
+  durationDays                              Int                    @map("duration_days")
+  startAt                                   DateTime?              @map("start_at") @db.Timestamptz(6)
+  endAt                                     DateTime?              @map("end_at") @db.Timestamptz(6)
+  repaidAt                                  DateTime?              @map("repaid_at") @db.Timestamptz(6)
+  status                                    String                 @default("pending") @db.VarChar(30)
+  lenderPositionAtomId                      String?                @map("lender_position_atom_id") @db.Uuid
+  borrowerPositionAtomId                    String?                @map("borrower_position_atom_id") @db.Uuid
+  metadata                                  Json                   @default("{}")
+  createdAt                                 DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                 DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  loanInterestAccruals                      LoanInterestAccruals[]
+  peClientsLoansBorrowerClientIdTopeClients PeClients              @relation("loans_borrower_client_idTope_clients", fields: [borrowerClientId], references: [id], onUpdate: NoAction)
+  peClientsLoansLenderClientIdTopeClients   PeClients              @relation("loans_lender_client_idTope_clients", fields: [lenderClientId], references: [id], onUpdate: NoAction)
+
+  @@index([asset], map: "ix_loans_asset")
+  @@index([borrowerClientId], map: "ix_loans_borrower_client_id")
+  @@index([lenderClientId], map: "ix_loans_lender_client_id")
+  @@index([status], map: "ix_loans_status")
+  @@map("loans")
+}
+
+model MarketDataBars_1d {
+  instrumentId          Int                   @map("instrument_id")
+  openTime              DateTime              @map("open_time") @db.Timestamptz(6)
+  open                  Decimal               @db.Decimal(20, 8)
+  high                  Decimal               @db.Decimal(20, 8)
+  low                   Decimal               @db.Decimal(20, 8)
+  close                 Decimal               @db.Decimal(20, 8)
+  volume                Decimal               @db.Decimal(20, 8)
+  source                String                @default("binance") @db.VarChar(50)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([instrumentId, openTime])
+  @@index([instrumentId], map: "ix_market_data_bars_1d_instrument_id")
+  @@index([openTime], map: "ix_market_data_bars_1d_open_time")
+  @@map("market_data_bars_1d")
+}
+
+model MarketDataBars_1h {
+  instrumentId          Int                   @map("instrument_id")
+  openTime              DateTime              @map("open_time") @db.Timestamptz(6)
+  open                  Decimal               @db.Decimal(20, 8)
+  high                  Decimal               @db.Decimal(20, 8)
+  low                   Decimal               @db.Decimal(20, 8)
+  close                 Decimal               @db.Decimal(20, 8)
+  volume                Decimal               @db.Decimal(20, 8)
+  source                String                @default("binance") @db.VarChar(50)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([instrumentId, openTime])
+  @@index([instrumentId], map: "ix_market_data_bars_1h_instrument_id")
+  @@index([openTime], map: "ix_market_data_bars_1h_open_time")
+  @@map("market_data_bars_1h")
+}
+
+model MarketDataBars_1m {
+  instrumentId          Int                   @map("instrument_id")
+  openTime              DateTime              @map("open_time") @db.Timestamptz(6)
+  open                  Decimal               @db.Decimal(20, 8)
+  high                  Decimal               @db.Decimal(20, 8)
+  low                   Decimal               @db.Decimal(20, 8)
+  close                 Decimal               @db.Decimal(20, 8)
+  volume                Decimal               @db.Decimal(20, 8)
+  source                String                @default("binance") @db.VarChar(50)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([instrumentId, openTime])
+  @@index([instrumentId], map: "ix_market_data_bars_1m_instrument_id")
+  @@index([openTime], map: "ix_market_data_bars_1m_open_time")
+  @@map("market_data_bars_1m")
+}
+
+model MarketDataBars_1w {
+  instrumentId          Int                   @map("instrument_id")
+  openTime              DateTime              @map("open_time") @db.Timestamptz(6)
+  open                  Decimal               @db.Decimal(20, 8)
+  high                  Decimal               @db.Decimal(20, 8)
+  low                   Decimal               @db.Decimal(20, 8)
+  close                 Decimal               @db.Decimal(20, 8)
+  volume                Decimal               @db.Decimal(20, 8)
+  source                String                @default("binance") @db.VarChar(50)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([instrumentId, openTime])
+  @@index([instrumentId], map: "ix_market_data_bars_1w_instrument_id")
+  @@index([openTime], map: "ix_market_data_bars_1w_open_time")
+  @@map("market_data_bars_1w")
+}
+
+model MarketDataBars_4h {
+  instrumentId          Int                   @map("instrument_id")
+  openTime              DateTime              @map("open_time") @db.Timestamptz(6)
+  open                  Decimal               @db.Decimal(20, 8)
+  high                  Decimal               @db.Decimal(20, 8)
+  low                   Decimal               @db.Decimal(20, 8)
+  close                 Decimal               @db.Decimal(20, 8)
+  volume                Decimal               @db.Decimal(20, 8)
+  source                String                @default("binance") @db.VarChar(50)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([instrumentId, openTime])
+  @@index([instrumentId], map: "ix_market_data_bars_4h_instrument_id")
+  @@index([openTime], map: "ix_market_data_bars_4h_open_time")
+  @@map("market_data_bars_4h")
+}
+
+model MarketDataBars_5m {
+  instrumentId          Int                   @map("instrument_id")
+  openTime              DateTime              @map("open_time") @db.Timestamptz(6)
+  open                  Decimal               @db.Decimal(20, 8)
+  high                  Decimal               @db.Decimal(20, 8)
+  low                   Decimal               @db.Decimal(20, 8)
+  close                 Decimal               @db.Decimal(20, 8)
+  volume                Decimal               @db.Decimal(20, 8)
+  source                String                @default("binance") @db.VarChar(50)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([instrumentId, openTime])
+  @@index([instrumentId], map: "ix_market_data_bars_5m_instrument_id")
+  @@index([openTime], map: "ix_market_data_bars_5m_open_time")
+  @@map("market_data_bars_5m")
+}
+
+model MarketDataBarsD1 {
+  instrumentId          Int                   @map("instrument_id")
+  date                  DateTime              @db.Date
+  open                  Decimal               @db.Decimal(20, 8)
+  high                  Decimal               @db.Decimal(20, 8)
+  low                   Decimal               @db.Decimal(20, 8)
+  close                 Decimal               @db.Decimal(20, 8)
+  volume                BigInt
+  source                String                @default("alphavantage") @db.VarChar(50)
+  createdAt             DateTime?             @default(now()) @map("created_at") @db.Timestamptz(6)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([instrumentId, date], map: "uq_market_data_bars_d1_instrument_date")
+  @@index([date], map: "ix_market_data_bars_d1_date")
+  @@index([instrumentId], map: "ix_market_data_bars_d1_instrument_id")
+  @@map("market_data_bars_d1")
+}
+
+model MarketDataBundles {
+  id            String   @id @db.VarChar(36)
+  name          String   @db.VarChar(200)
+  description   String?
+  instrumentIds Json     @map("instrument_ids") @db.Json
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([id], map: "ix_market_data_bundles_id")
+  @@index([name], map: "ix_market_data_bundles_name")
+  @@map("market_data_bundles")
+}
+
+model MarketDataInstruments {
+  id                       Int                        @id @default(autoincrement())
+  symbol                   String                     @unique @db.VarChar(20)
+  name                     String?                    @db.VarChar(200)
+  assetClass               String                     @map("asset_class") @db.VarChar(20)
+  weekendTradable          String                     @default("false") @map("weekend_tradable") @db.VarChar(10)
+  provider                 String                     @default("alphavantage") @db.VarChar(50)
+  providerSymbol           String?                    @map("provider_symbol") @db.VarChar(50)
+  isActive                 String                     @default("true") @map("is_active") @db.VarChar(10)
+  createdAt                DateTime?                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  archivedAt               DateTime?                  @map("archived_at") @db.Timestamptz(6)
+  logoFilename             String?                    @map("logo_filename") @db.VarChar(100)
+  backtestInstrumentSeries BacktestInstrumentSeries[]
+  backtestMetrics          BacktestMetrics[]
+  bundleAllocations        BundleAllocations[]
+  marketDataBars_1d        MarketDataBars_1d[]
+  marketDataBars_1h        MarketDataBars_1h[]
+  marketDataBars_1m        MarketDataBars_1m[]
+  marketDataBars_1w        MarketDataBars_1w[]
+  marketDataBars_4h        MarketDataBars_4h[]
+  marketDataBars_5m        MarketDataBars_5m[]
+  marketDataBarsD1         MarketDataBarsD1[]
+  marketDataLatestQuotes   MarketDataLatestQuotes?
+
+  @@index([id], map: "ix_market_data_instruments_id")
+  @@index([symbol], map: "ix_market_data_instruments_symbol")
+  @@map("market_data_instruments")
+}
+
+model MarketDataLatestQuotes {
+  instrumentId          Int                   @id @map("instrument_id")
+  provider              String                @db.VarChar(50)
+  providerSymbol        String?               @map("provider_symbol") @db.VarChar(50)
+  lastPrice             Decimal               @map("last_price") @db.Decimal(20, 8)
+  bidPrice              Decimal?              @map("bid_price") @db.Decimal(20, 8)
+  askPrice              Decimal?              @map("ask_price") @db.Decimal(20, 8)
+  volume                Decimal?              @db.Decimal(20, 8)
+  quoteTime             DateTime?             @map("quote_time") @db.Timestamptz(6)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  marketDataInstruments MarketDataInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([instrumentId], map: "ix_market_data_latest_quotes_instrument_id")
+  @@map("market_data_latest_quotes")
+}
+
+model Media {
+  id                   String               @id @default(cuid())
+  key                  String               @unique
+  url                  String
+  filename             String
+  mimeType             String               @map("mime_type")
+  size                 Int
+  width                Int?
+  height               Int?
+  alt                  String?
+  uploadedByUserId     String?              @map("uploaded_by_user_id")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  articles             Article[]
+  investmentCategories InvestmentCategory[]
+  uploadedBy           User?                @relation(fields: [uploadedByUserId], references: [id])
+  projectMedia         ProjectMedia[]
+  projectCovers        Project[]            @relation("ProjectCoverMedia")
+  projectHeroes        Project[]            @relation("ProjectHeroMedia")
+  helpArticleCovers    HelpArticle[]        @relation("HelpArticleCover")
+
+  @@index([mimeType])
+  @@index([uploadedByUserId])
+  @@map("media")
+}
+
+model MenuI18n {
+  id                String            @id @default(cuid())
+  menuId            String            @map("menu_id")
+  locale            String
+  name              String
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  menu              Menu              @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([menuId, locale])
+  @@index([locale])
+  @@index([menuId])
+  @@map("menu_i18n")
+}
+
+model MenuItemI18n {
+  id                String            @id @default(cuid())
+  menuItemId        String            @map("menu_item_id")
+  locale            String
+  label             String
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  menuItem          MenuItem          @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, locale])
+  @@index([locale])
+  @@index([menuItemId])
+  @@map("menu_item_i18n")
+}
+
+model MenuItem {
+  id           String         @id @default(cuid())
+  menuId       String         @map("menu_id")
+  label        String
+  order        Int            @default(0)
+  enabled      Boolean        @default(true)
+  isRoot       Boolean        @default(false) @map("is_root")
+  pageId       String?        @map("page_id")
+  type         MenuItemType   @default(LINK)
+  buttonStyle  String?        @map("button_style")
+  buttonAction String?        @map("button_action")
+  externalUrl  String?        @map("external_url")
+  i18n         MenuItemI18n[]
+  menu         Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  page         Page?          @relation(fields: [pageId], references: [id])
+
+  @@unique([menuId, order])
+  @@index([menuId])
+  @@index([pageId])
+  @@map("menu_items")
+}
+
+model Menu {
+  id        String     @id @default(cuid())
+  key       String     @unique
+  name      String
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  i18n      MenuI18n[]
+  menuItems MenuItem[]
+
+  @@map("menus")
+}
+
+model News {
+  id              Int        @id @default(autoincrement())
+  slug            String     @db.VarChar(255)
+  locale          String     @default("fr") @db.VarChar(10)
+  title           String     @db.VarChar(500)
+  excerpt         String?
+  contentMarkdown String?    @map("content_markdown")
+  coverImageUrl   String?    @map("cover_image_url") @db.VarChar(1000)
+  status          Statusenum @default(DRAFT)
+  publishedAt     DateTime?  @map("published_at") @db.Timestamptz(6)
+  updatedAt       DateTime?  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([slug, locale], map: "ix_news_slug_locale")
+  @@index([id], map: "ix_news_id")
+  @@map("news")
+}
+
+model Notifications {
+  id        String    @id @db.Uuid
+  clientId  String    @map("client_id") @db.Uuid
+  type      String    @db.VarChar(30)
+  title     String    @db.VarChar(200)
+  body      String?
+  payload   Json?
+  isRead    Boolean   @default(false) @map("is_read")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  peClients PeClients @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clientId, isRead], map: "ix_notifications_client_read")
+  @@map("notifications")
+}
+
+model Page {
+  id              String           @id @default(cuid())
+  slug            String           @unique
+  createdAt       DateTime         @default(now()) @map("created_at")
+  urlPath         String           @unique @map("url_path")
+  title           String?
+  template        String           @default("homepage")
+  description     String?
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  themeColor      String           @default("dark") @map("theme_color")
+  menuItems       MenuItem[]
+  sections        Section[]
+  packagedProduct PackagedProduct?
+
+  @@map("pages")
+}
+
+/// Registre catalogue des produits packagés (contenu editorial = Page Vault Builder).
+model PackagedProduct {
+  id                String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug              String                   @unique
+  pageId            String                   @unique @map("page_id")
+  productType       PackagedProductType      @map("product_type")
+  commercialStatus  PackagedCommercialStatus @map("commercial_status")
+  visibility        PackagedVisibility
+  featuredRank      Int?                     @map("featured_rank")
+  categorySlug      String?                  @map("category_slug")
+  tags              Json?
+  engineType        PackagedEngineType?      @map("engine_type")
+  engineReferenceId String?                  @map("engine_reference_id") @db.VarChar(255)
+  legacyProjectId   String?                  @unique @map("legacy_project_id")
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  publishedAt       DateTime?                @map("published_at") @db.Timestamptz(6)
+
+  page               Page                 @relation(fields: [pageId], references: [id], onDelete: Restrict)
+  legacyProject      Project?             @relation("PackagedProductLegacyProject", fields: [legacyProjectId], references: [id], onDelete: SetNull)
+  lendingPoolProduct LendingPoolProducts?
+
+  @@index([productType], map: "ix_packaged_products_product_type")
+  @@index([visibility], map: "ix_packaged_products_visibility")
+  @@index([commercialStatus], map: "ix_packaged_products_commercial_status")
+  @@index([productType, featuredRank], map: "ix_packaged_products_type_featured")
+  @@map("packaged_products")
+}
+
+model PeAdvisorClientAssignments {
+  id             String    @id @db.Uuid
+  advisorActorId String    @map("advisor_actor_id") @db.VarChar(255)
+  clientId       String    @map("client_id") @db.Uuid
+  status         String    @default("active") @db.VarChar(20)
+  metadata       Json      @default("{}")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peClients      PeClients @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([advisorActorId, clientId], map: "uq_advisor_client")
+  @@index([advisorActorId], map: "ix_pe_advisor_assign_advisor")
+  @@index([clientId], map: "ix_pe_advisor_assign_client")
+  @@map("pe_advisor_client_assignments")
+}
+
+model PeAssets {
+  id                       String                     @id @db.Uuid
+  symbol                   String                     @unique(map: "ix_pe_assets_symbol") @db.VarChar(50)
+  name                     String                     @db.VarChar(255)
+  assetType                String                     @map("asset_type") @db.VarChar(50)
+  valuationSource          String?                    @map("valuation_source") @db.VarChar(100)
+  liquidityProfile         String?                    @map("liquidity_profile") @db.VarChar(50)
+  riskProfile              String?                    @map("risk_profile") @db.VarChar(50)
+  supportsStaking          Boolean                    @default(false) @map("supports_staking")
+  supportsCollateral       Boolean                    @default(false) @map("supports_collateral")
+  supportsBorrowing        Boolean                    @default(false) @map("supports_borrowing")
+  supportsYield            Boolean                    @default(false) @map("supports_yield")
+  metadata                 Json                       @default("{}")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peInstruments            PeInstruments[]
+  peLedgerAccounts         PeLedgerAccounts[]
+  peLedgerEntries          PeLedgerEntries[]
+  peSettlementInstructions PeSettlementInstructions[]
+
+  @@index([assetType], map: "ix_pe_assets_asset_type")
+  @@index([metadata], map: "ix_pe_assets_metadata", type: Gin)
+  @@map("pe_assets")
+}
+
+model PeAuditEvents {
+  id         String   @id @db.Uuid
+  entityType String   @map("entity_type") @db.VarChar(100)
+  entityId   String?  @map("entity_id") @db.VarChar(255)
+  action     String   @db.VarChar(100)
+  actorType  String   @default("system") @map("actor_type") @db.VarChar(50)
+  actorId    String?  @map("actor_id") @db.VarChar(255)
+  requestId  String?  @map("request_id") @db.VarChar(255)
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([action], map: "ix_pe_audit_events_action")
+  @@index([actorType, actorId], map: "ix_pe_audit_events_actor")
+  @@index([createdAt], map: "ix_pe_audit_events_created_at")
+  @@index([entityType, entityId], map: "ix_pe_audit_events_entity")
+  @@map("pe_audit_events")
+}
+
+model PeClients {
+  id                                    String                        @id @db.Uuid
+  /// Nullable (PR4) — index unique partiel SQL : voir migration 130.
+  email                                 String?                       @db.VarChar(255)
+  status                                String                        @default("pending") @db.VarChar(30)
+  kycStatus                             String                        @default("not_started") @map("kyc_status") @db.VarChar(30)
+  createdAt                             DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                             DateTime                      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  referenceCurrency                     String                        @default("EUR") @map("reference_currency") @db.VarChar(3)
+  personId                              String                        @unique(map: "uq_pe_clients_person_id") @map("person_id") @db.Uuid
+  borrowerInterestAccruals              BorrowerInterestAccruals[]
+  clientFavorites                       ClientFavorites[]
+  cryptoPositions                       CryptoPositions[]
+  custodyAccounts                       CustodyAccounts[]
+  exchangeOrders                        ExchangeOrders[]
+  lenderInterestAccruals                LenderInterestAccruals[]
+  lendingPoolProducts                   LendingPoolProducts[]
+  loansLoansBorrowerClientIdTopeClients Loans[]                       @relation("loans_borrower_client_idTope_clients")
+  loansLoansLenderClientIdTopeClients   Loans[]                       @relation("loans_lender_client_idTope_clients")
+  notifications                         Notifications[]
+  peAdvisorClientAssignments            PeAdvisorClientAssignments[]
+  persons                               Persons                       @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_pe_clients_person_id")
+  peLedgerAccounts                      PeLedgerAccounts[]
+  peOrders                              PeOrders[]
+  peProductSubscriptions                PeProductSubscriptions[]
+  poolBorrowPositions                   PoolBorrowPositions[]
+  poolSupplyCommitments                 PoolSupplyCommitments[]
+  priceAlerts                           PriceAlerts[]
+  registrationExecutionEvents           RegistrationExecutionEvents[]
+
+  /// Même logique que `admin_users.email` : index partiel Alembic `ix_pe_clients_email` + contrainte Prisma nommée à part.
+  @@unique([email], map: "uq_prisma_pe_clients_email")
+  @@index([personId], map: "ix_pe_clients_person_id")
+  @@map("pe_clients")
+}
+
+model PeExecutionInstructions {
+  id                           String                    @id @db.Uuid
+  orderId                      String                    @map("order_id") @db.Uuid
+  parentExecutionId            String?                   @map("parent_execution_id") @db.Uuid
+  venue                        String                    @db.VarChar(100)
+  executionType                String                    @map("execution_type") @db.VarChar(50)
+  instrumentId                 String?                   @map("instrument_id") @db.Uuid
+  side                         String?                   @db.VarChar(10)
+  quantity                     Decimal?                  @db.Decimal(30, 10)
+  amount                       Decimal?                  @db.Decimal(30, 10)
+  priceLimit                   Decimal?                  @map("price_limit") @db.Decimal(30, 10)
+  currency                     String?                   @db.VarChar(20)
+  status                       String                    @default("pending") @db.VarChar(30)
+  venueOrderId                 String?                   @map("venue_order_id") @db.VarChar(255)
+  filledQuantity               Decimal?                  @default(0) @map("filled_quantity") @db.Decimal(30, 10)
+  averageFillPrice             Decimal?                  @map("average_fill_price") @db.Decimal(30, 10)
+  requestedAt                  DateTime                  @map("requested_at") @db.Timestamptz(6)
+  sentAt                       DateTime?                 @map("sent_at") @db.Timestamptz(6)
+  acknowledgedAt               DateTime?                 @map("acknowledged_at") @db.Timestamptz(6)
+  executedAt                   DateTime?                 @map("executed_at") @db.Timestamptz(6)
+  rejectedAt                   DateTime?                 @map("rejected_at") @db.Timestamptz(6)
+  expiredAt                    DateTime?                 @map("expired_at") @db.Timestamptz(6)
+  cancelledAt                  DateTime?                 @map("cancelled_at") @db.Timestamptz(6)
+  failureReason                String?                   @map("failure_reason") @db.VarChar(500)
+  responsePayload              Json?                     @map("response_payload")
+  metadata                     Json                      @default("{}")
+  createdAt                    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peInstruments                PeInstruments?            @relation(fields: [instrumentId], references: [id], onUpdate: NoAction)
+  peOrders                     PeOrders                  @relation(fields: [orderId], references: [id], onUpdate: NoAction)
+  peExecutionInstructions      PeExecutionInstructions?  @relation("pe_execution_instructionsTope_execution_instructions", fields: [parentExecutionId], references: [id], onUpdate: NoAction)
+  otherPeExecutionInstructions PeExecutionInstructions[] @relation("pe_execution_instructionsTope_execution_instructions")
+  peTrades                     PeTrades[]
+
+  @@index([createdAt], map: "ix_pe_exec_created_at")
+  @@index([instrumentId], map: "ix_pe_exec_instrument_id")
+  @@index([orderId], map: "ix_pe_exec_order_id")
+  @@index([parentExecutionId], map: "ix_pe_exec_parent_id")
+  @@index([requestedAt], map: "ix_pe_exec_requested_at")
+  @@index([status], map: "ix_pe_exec_status")
+  @@index([venue], map: "ix_pe_exec_venue")
+  @@index([venueOrderId], map: "ix_pe_exec_venue_order_id")
+  @@map("pe_execution_instructions")
+}
+
+model PeIdempotencyKeys {
+  id             String    @id @db.Uuid
+  idempotencyKey String    @map("idempotency_key") @db.VarChar(255)
+  scope          String    @db.VarChar(255)
+  requestHash    String    @map("request_hash") @db.VarChar(64)
+  responseStatus Int?      @map("response_status")
+  responseBody   Json?     @map("response_body")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  @@unique([idempotencyKey, scope], map: "uq_pe_idempotency_key_scope")
+  @@index([expiresAt], map: "ix_pe_idempotency_keys_expires_at")
+  @@map("pe_idempotency_keys")
+}
+
+model PeInstruments {
+  id                      String                    @id @db.Uuid
+  assetId                 String                    @map("asset_id") @db.Uuid
+  code                    String                    @unique(map: "ix_pe_instruments_code") @db.VarChar(100)
+  name                    String                    @db.VarChar(255)
+  instrumentType          String                    @map("instrument_type") @db.VarChar(50)
+  liquidityProfile        String?                   @map("liquidity_profile") @db.VarChar(50)
+  lockupPeriodDays        Int?                      @map("lockup_period_days")
+  valuationMethod         String?                   @map("valuation_method") @db.VarChar(50)
+  yieldSource             String?                   @map("yield_source") @db.VarChar(100)
+  provider                String?                   @db.VarChar(100)
+  metadata                Json                      @default("{}")
+  createdAt               DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peExecutionInstructions PeExecutionInstructions[]
+  peAssets                PeAssets                  @relation(fields: [assetId], references: [id], onUpdate: NoAction)
+  peOrders                PeOrders[]
+  pePositionAtoms         PePositionAtoms[]
+  pePositionValuations    PePositionValuations[]
+  peRebalancePreviewItems PeRebalancePreviewItems[]
+  peTargetAllocations     PeTargetAllocations[]
+  peTemplateAllocations   PeTemplateAllocations[]
+  peTrades                PeTrades[]
+  peWalletContainers      PeWalletContainers[]
+
+  @@index([assetId], map: "ix_pe_instruments_asset_id")
+  @@index([instrumentType], map: "ix_pe_instruments_instrument_type")
+  @@index([metadata], map: "ix_pe_instruments_metadata", type: Gin)
+  @@map("pe_instruments")
+}
+
+model PeJobRuns {
+  id           String    @id @db.Uuid
+  jobType      String    @map("job_type") @db.VarChar(100)
+  scopeType    String    @map("scope_type") @db.VarChar(100)
+  scopeId      String?   @map("scope_id") @db.VarChar(255)
+  status       String    @default("started") @db.VarChar(30)
+  startedAt    DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  errorMessage String?   @map("error_message")
+  metadata     Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([jobType], map: "ix_pe_job_runs_job_type")
+  @@index([scopeType, scopeId], map: "ix_pe_job_runs_scope")
+  @@index([startedAt], map: "ix_pe_job_runs_started_at")
+  @@index([status], map: "ix_pe_job_runs_status")
+  @@map("pe_job_runs")
+}
+
+model PeLedgerAccounts {
+  id                                                                              String                     @id @db.Uuid
+  clientId                                                                        String?                    @map("client_id") @db.Uuid
+  accountType                                                                     String                     @map("account_type") @db.VarChar(50)
+  accountCode                                                                     String                     @unique @map("account_code") @db.VarChar(100)
+  label                                                                           String                     @db.VarChar(255)
+  currency                                                                        String                     @db.VarChar(20)
+  assetId                                                                         String?                    @map("asset_id") @db.Uuid
+  walletContainerId                                                               String?                    @map("wallet_container_id") @db.Uuid
+  balance                                                                         Decimal                    @default(0) @db.Decimal(30, 10)
+  status                                                                          String                     @default("active") @db.VarChar(30)
+  metadata                                                                        Json                       @default("{}")
+  createdAt                                                                       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                                                       DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  custodyAccounts                                                                 CustodyAccounts[]
+  peAssets                                                                        PeAssets?                  @relation(fields: [assetId], references: [id], onUpdate: NoAction)
+  peClients                                                                       PeClients?                 @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+  peWalletContainers                                                              PeWalletContainers?        @relation(fields: [walletContainerId], references: [id], onUpdate: NoAction)
+  peLedgerEntries                                                                 PeLedgerEntries[]
+  peSettlementInstructionsPeSettlementInstructionsFromAccountIdTopeLedgerAccounts PeSettlementInstructions[] @relation("pe_settlement_instructions_from_account_idTope_ledger_accounts")
+  peSettlementInstructionsPeSettlementInstructionsToAccountIdTopeLedgerAccounts   PeSettlementInstructions[] @relation("pe_settlement_instructions_to_account_idTope_ledger_accounts")
+
+  @@index([accountType], map: "ix_pe_ledger_accounts_account_type")
+  @@index([clientId], map: "ix_pe_ledger_accounts_client_id")
+  @@index([currency], map: "ix_pe_ledger_accounts_currency")
+  @@index([walletContainerId], map: "ix_pe_ledger_accounts_wallet_container_id")
+  @@map("pe_ledger_accounts")
+}
+
+model PeLedgerEntries {
+  id                 String           @id @db.Uuid
+  accountId          String           @map("account_id") @db.Uuid
+  entryType          String           @map("entry_type") @db.VarChar(10)
+  amount             Decimal          @db.Decimal(30, 10)
+  currency           String           @db.VarChar(20)
+  referenceType      String           @map("reference_type") @db.VarChar(50)
+  referenceId        String?          @map("reference_id") @db.Uuid
+  counterpartEntryId String?          @map("counterpart_entry_id") @db.Uuid
+  description        String?          @db.VarChar(500)
+  effectiveAt        DateTime         @map("effective_at") @db.Timestamptz(6)
+  metadata           Json             @default("{}")
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  assetId            String?          @map("asset_id") @db.Uuid
+  peAssets           PeAssets?        @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_pe_ledger_entries_asset_id")
+  peLedgerAccounts   PeLedgerAccounts @relation(fields: [accountId], references: [id], onUpdate: NoAction)
+
+  @@index([accountId, effectiveAt], map: "ix_pe_ledger_entries_account_effective")
+  @@index([assetId], map: "ix_pe_ledger_entries_asset_id")
+  @@index([counterpartEntryId], map: "ix_pe_ledger_entries_counterpart")
+  @@index([createdAt], map: "ix_pe_ledger_entries_created_at")
+  @@index([referenceType, referenceId], map: "ix_pe_ledger_entries_reference")
+  @@map("pe_ledger_entries")
+}
+
+model PeOrchestrationRuns {
+  id                  String               @id @db.Uuid
+  portfolioId         String               @map("portfolio_id") @db.Uuid
+  mode                String               @db.VarChar(20)
+  signalsDetected     Int                  @default(0) @map("signals_detected")
+  actionsTaken        Int                  @default(0) @map("actions_taken")
+  rebalancePreviewId  String?              @map("rebalance_preview_id") @db.Uuid
+  status              String               @db.VarChar(20)
+  abortReason         String?              @map("abort_reason")
+  startedAt           DateTime             @map("started_at") @db.Timestamptz(6)
+  completedAt         DateTime?            @map("completed_at") @db.Timestamptz(6)
+  metadata            Json                 @default("{}")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  pePortfolios        PePortfolios         @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peRebalancePreviews PeRebalancePreviews? @relation(fields: [rebalancePreviewId], references: [id], onUpdate: NoAction)
+
+  @@index([portfolioId], map: "ix_pe_orchestration_runs_portfolio_id")
+  @@index([startedAt], map: "ix_pe_orchestration_runs_started_at")
+  @@index([status], map: "ix_pe_orchestration_runs_status")
+  @@map("pe_orchestration_runs")
+}
+
+model PeOrders {
+  id                       String                     @id @db.Uuid
+  clientId                 String                     @map("client_id") @db.Uuid
+  portfolioId              String                     @map("portfolio_id") @db.Uuid
+  instrumentId             String?                    @map("instrument_id") @db.Uuid
+  orderType                String                     @map("order_type") @db.VarChar(50)
+  side                     String?                    @db.VarChar(10)
+  quantity                 Decimal?                   @db.Decimal(30, 10)
+  amount                   Decimal?                   @db.Decimal(30, 10)
+  currency                 String?                    @db.VarChar(20)
+  priceLimit               Decimal?                   @map("price_limit") @db.Decimal(30, 10)
+  status                   String                     @default("pending") @db.VarChar(30)
+  rejectionReason          String?                    @map("rejection_reason") @db.VarChar(500)
+  metadata                 Json                       @default("{}")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peExecutionInstructions  PeExecutionInstructions[]
+  peClients                PeClients                  @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+  peInstruments            PeInstruments?             @relation(fields: [instrumentId], references: [id], onUpdate: NoAction)
+  pePortfolios             PePortfolios               @relation(fields: [portfolioId], references: [id], onUpdate: NoAction)
+  peSettlementInstructions PeSettlementInstructions[]
+  peTrades                 PeTrades[]
+
+  @@index([clientId], map: "ix_pe_orders_client_id")
+  @@index([createdAt], map: "ix_pe_orders_created_at")
+  @@index([instrumentId], map: "ix_pe_orders_instrument_id")
+  @@index([orderType], map: "ix_pe_orders_order_type")
+  @@index([portfolioId], map: "ix_pe_orders_portfolio_id")
+  @@index([status], map: "ix_pe_orders_status")
+  @@map("pe_orders")
+}
+
+model PePortfolioReturnSeries {
+  id                    String                 @id @db.Uuid
+  portfolioId           String                 @map("portfolio_id") @db.Uuid
+  valuationId           String?                @map("valuation_id") @db.Uuid
+  timestamp             DateTime               @db.Timestamptz(6)
+  nav                   Decimal                @db.Decimal(30, 10)
+  periodReturn          Decimal?               @map("period_return") @db.Decimal(20, 10)
+  cumulativeReturn      Decimal?               @map("cumulative_return") @db.Decimal(20, 10)
+  drawdown              Decimal?               @db.Decimal(20, 10)
+  metadata              Json                   @default("{}")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  pePortfolios          PePortfolios           @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pePortfolioValuations PePortfolioValuations? @relation(fields: [valuationId], references: [id], onUpdate: NoAction)
+
+  @@index([portfolioId, timestamp], map: "ix_pe_portfolio_return_series_pf_ts")
+  @@index([portfolioId], map: "ix_pe_portfolio_return_series_portfolio_id")
+  @@index([timestamp], map: "ix_pe_portfolio_return_series_timestamp")
+  @@map("pe_portfolio_return_series")
+}
+
+model PePortfolioTemplates {
+  id                       String                  @id @db.Uuid
+  productId                String                  @map("product_id") @db.Uuid
+  templateCode             String                  @unique(map: "ix_pe_portfolio_templates_template_code") @map("template_code") @db.VarChar(100)
+  name                     String                  @db.VarChar(255)
+  description              String?
+  baseCurrency             String                  @default("EUR") @map("base_currency") @db.VarChar(20)
+  riskProfile              String?                 @map("risk_profile") @db.VarChar(50)
+  strategyDefinitionId     String?                 @map("strategy_definition_id") @db.Uuid
+  metadata                 Json                    @default("{}")
+  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  provisionedPortfolioType String                  @map("provisioned_portfolio_type") @db.VarChar(50)
+  peProductDefinitions     PeProductDefinitions    @relation(fields: [productId], references: [id], onUpdate: NoAction)
+  peStrategyDefinitions    PeStrategyDefinitions?  @relation(fields: [strategyDefinitionId], references: [id], onUpdate: NoAction)
+  peTemplateAllocations    PeTemplateAllocations[]
+
+  @@index([metadata], map: "ix_pe_portfolio_templates_metadata", type: Gin)
+  @@index([productId], map: "ix_pe_portfolio_templates_product_id")
+  @@map("pe_portfolio_templates")
+}
+
+model PePortfolioValuations {
+  id                      String                    @id @db.Uuid
+  portfolioId             String                    @map("portfolio_id") @db.Uuid
+  nav                     Decimal                   @db.Decimal(30, 10)
+  totalRealizedPnl        Decimal                   @map("total_realized_pnl") @db.Decimal(30, 10)
+  totalUnrealizedPnl      Decimal                   @map("total_unrealized_pnl") @db.Decimal(30, 10)
+  totalPnl                Decimal                   @map("total_pnl") @db.Decimal(30, 10)
+  pricedPositionsCount    Int                       @map("priced_positions_count")
+  unpricedPositionsCount  Int                       @map("unpriced_positions_count")
+  valuationSource         String                    @map("valuation_source") @db.VarChar(30)
+  valuationTimestamp      DateTime                  @map("valuation_timestamp") @db.Timestamptz(6)
+  metadata                Json                      @default("{}")
+  createdAt               DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  pePortfolioReturnSeries PePortfolioReturnSeries[]
+  pePortfolios            PePortfolios              @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([portfolioId], map: "ix_pe_portfolio_valuations_portfolio_id")
+  @@index([portfolioId, valuationTimestamp], map: "ix_pe_portfolio_valuations_portfolio_ts")
+  @@index([valuationTimestamp], map: "ix_pe_portfolio_valuations_valuation_ts")
+  @@map("pe_portfolio_valuations")
+}
+
+model PePortfolios {
+  id                      String                    @id @db.Uuid
+  clientId                String                    @map("client_id") @db.Uuid
+  parentPortfolioId       String?                   @map("parent_portfolio_id") @db.Uuid
+  portfolioType           String                    @map("portfolio_type") @db.VarChar(50)
+  name                    String                    @db.VarChar(255)
+  baseCurrency            String                    @default("EUR") @map("base_currency") @db.VarChar(20)
+  riskProfile             String?                   @map("risk_profile") @db.VarChar(50)
+  status                  String                    @default("active") @db.VarChar(30)
+  metadata                Json                      @default("{}")
+  createdAt               DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  originProductId         String?                   @map("origin_product_id") @db.Uuid
+  peOrchestrationRuns     PeOrchestrationRuns[]
+  peOrders                PeOrders[]
+  pePortfolioReturnSeries PePortfolioReturnSeries[]
+  pePortfolioValuations   PePortfolioValuations[]
+  peProductDefinitions    PeProductDefinitions?     @relation(fields: [originProductId], references: [id], onUpdate: NoAction)
+  pePortfolios            PePortfolios?             @relation("pe_portfoliosTope_portfolios", fields: [parentPortfolioId], references: [id], onUpdate: NoAction)
+  otherPePortfolios       PePortfolios[]            @relation("pe_portfoliosTope_portfolios")
+  pePositionAtoms         PePositionAtoms[]
+  pePositionValuations    PePositionValuations[]
+  peProductSubscriptions  PeProductSubscriptions[]
+  peRebalancePolicies     PeRebalancePolicies?
+  peRebalancePreviews     PeRebalancePreviews[]
+  peRiskPolicies          PeRiskPolicies?
+  peSleeves               PeSleeves[]
+  peStrategyEvaluations   PeStrategyEvaluations[]
+  peStrategyInstances     PeStrategyInstances[]
+  peTargetAllocations     PeTargetAllocations[]
+  peWalletContainers      PeWalletContainers[]
+
+  @@index([clientId], map: "ix_pe_portfolios_client_id")
+  @@index([originProductId], map: "ix_pe_portfolios_origin_product_id")
+  @@index([portfolioType], map: "ix_pe_portfolios_portfolio_type")
+  @@map("pe_portfolios")
+}
+
+model PePositionAtoms {
+  id                                                                      String                 @id @db.Uuid
+  portfolioId                                                             String                 @map("portfolio_id") @db.Uuid
+  sleeveId                                                                String?                @map("sleeve_id") @db.Uuid
+  walletId                                                                String?                @map("wallet_id") @db.Uuid
+  instrumentId                                                            String                 @map("instrument_id") @db.Uuid
+  strategyInstanceId                                                      String?                @map("strategy_instance_id") @db.Uuid
+  parentPositionId                                                        String?                @map("parent_position_id") @db.Uuid
+  positionType                                                            String                 @map("position_type") @db.VarChar(50)
+  status                                                                  String                 @default("open") @db.VarChar(30)
+  quantity                                                                Decimal                @default(0) @db.Decimal(30, 10)
+  availableQuantity                                                       Decimal                @default(0) @map("available_quantity") @db.Decimal(30, 10)
+  lockedQuantity                                                          Decimal                @default(0) @map("locked_quantity") @db.Decimal(30, 10)
+  marketValue                                                             Decimal?               @map("market_value") @db.Decimal(30, 10)
+  costBasis                                                               Decimal?               @map("cost_basis") @db.Decimal(30, 10)
+  averageEntryPrice                                                       Decimal?               @map("average_entry_price") @db.Decimal(30, 10)
+  accruedIncome                                                           Decimal                @default(0) @map("accrued_income") @db.Decimal(30, 10)
+  unrealizedPnl                                                           Decimal?               @map("unrealized_pnl") @db.Decimal(30, 10)
+  realizedPnl                                                             Decimal                @default(0) @map("realized_pnl") @db.Decimal(30, 10)
+  lockupStatus                                                            String?                @map("lockup_status") @db.VarChar(30)
+  openedAt                                                                DateTime?              @map("opened_at") @db.Timestamptz(6)
+  closedAt                                                                DateTime?              @map("closed_at") @db.Timestamptz(6)
+  metadata                                                                Json                   @default("{}")
+  createdAt                                                               DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                                               DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peInstruments                                                           PeInstruments          @relation(fields: [instrumentId], references: [id], onUpdate: NoAction)
+  pePositionAtoms                                                         PePositionAtoms?       @relation("pe_position_atomsTope_position_atoms", fields: [parentPositionId], references: [id], onUpdate: NoAction)
+  otherPePositionAtoms                                                    PePositionAtoms[]      @relation("pe_position_atomsTope_position_atoms")
+  pePortfolios                                                            PePortfolios           @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peSleeves                                                               PeSleeves?             @relation(fields: [sleeveId], references: [id], onUpdate: NoAction)
+  peWalletContainers                                                      PeWalletContainers?    @relation(fields: [walletId], references: [id], onUpdate: NoAction)
+  pePositionRelationsPePositionRelationsSourcePositionIdTopePositionAtoms PePositionRelations[]  @relation("pe_position_relations_source_position_idTope_position_atoms")
+  pePositionRelationsPePositionRelationsTargetPositionIdTopePositionAtoms PePositionRelations[]  @relation("pe_position_relations_target_position_idTope_position_atoms")
+  pePositionValuations                                                    PePositionValuations[]
+
+  @@index([instrumentId], map: "ix_pe_position_atoms_instrument_id")
+  @@index([parentPositionId], map: "ix_pe_position_atoms_parent_position_id")
+  @@index([portfolioId], map: "ix_pe_position_atoms_portfolio_id")
+  @@index([positionType], map: "ix_pe_position_atoms_position_type")
+  @@index([sleeveId], map: "ix_pe_position_atoms_sleeve_id")
+  @@index([status], map: "ix_pe_position_atoms_status")
+  @@index([strategyInstanceId], map: "ix_pe_position_atoms_strategy_instance_id")
+  @@index([walletId], map: "ix_pe_position_atoms_wallet_id")
+  @@map("pe_position_atoms")
+}
+
+model PePositionRelations {
+  id                                                                  String          @id @db.Uuid
+  sourcePositionId                                                    String          @map("source_position_id") @db.Uuid
+  targetPositionId                                                    String          @map("target_position_id") @db.Uuid
+  relationType                                                        String          @map("relation_type") @db.VarChar(50)
+  parameters                                                          Json            @default("{}")
+  createdAt                                                           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  pePositionAtomsPePositionRelationsSourcePositionIdTopePositionAtoms PePositionAtoms @relation("pe_position_relations_source_position_idTope_position_atoms", fields: [sourcePositionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pePositionAtomsPePositionRelationsTargetPositionIdTopePositionAtoms PePositionAtoms @relation("pe_position_relations_target_position_idTope_position_atoms", fields: [targetPositionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([sourcePositionId, targetPositionId, relationType], map: "uq_pe_position_relations_src_tgt_type")
+  @@index([sourcePositionId], map: "ix_pe_position_relations_source")
+  @@index([targetPositionId], map: "ix_pe_position_relations_target")
+  @@index([relationType], map: "ix_pe_position_relations_type")
+  @@map("pe_position_relations")
+}
+
+model PePositionValuations {
+  id                 String          @id @db.Uuid
+  positionId         String          @map("position_id") @db.Uuid
+  portfolioId        String          @map("portfolio_id") @db.Uuid
+  instrumentId       String          @map("instrument_id") @db.Uuid
+  quantity           Decimal         @db.Decimal(30, 10)
+  price              Decimal?        @db.Decimal(30, 10)
+  marketValue        Decimal?        @map("market_value") @db.Decimal(30, 10)
+  averageEntryPrice  Decimal?        @map("average_entry_price") @db.Decimal(30, 10)
+  unrealizedPnl      Decimal?        @map("unrealized_pnl") @db.Decimal(30, 10)
+  realizedPnl        Decimal         @default(0) @map("realized_pnl") @db.Decimal(30, 10)
+  pricingStatus      String          @map("pricing_status") @db.VarChar(20)
+  valuationTimestamp DateTime        @map("valuation_timestamp") @db.Timestamptz(6)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  peInstruments      PeInstruments   @relation(fields: [instrumentId], references: [id], onUpdate: NoAction)
+  pePortfolios       PePortfolios    @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pePositionAtoms    PePositionAtoms @relation(fields: [positionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([portfolioId], map: "ix_pe_position_valuations_portfolio_id")
+  @@index([portfolioId, valuationTimestamp], map: "ix_pe_position_valuations_portfolio_ts")
+  @@index([positionId], map: "ix_pe_position_valuations_position_id")
+  @@index([valuationTimestamp], map: "ix_pe_position_valuations_valuation_ts")
+  @@map("pe_position_valuations")
+}
+
+model PeProductDefinitions {
+  id                     String                   @id @db.Uuid
+  productCode            String                   @unique(map: "ix_pe_product_definitions_product_code") @map("product_code") @db.VarChar(100)
+  name                   String                   @db.VarChar(255)
+  description            String?
+  productType            String                   @map("product_type") @db.VarChar(50)
+  riskLabel              String?                  @map("risk_label") @db.VarChar(30)
+  baseCurrency           String                   @default("EUR") @map("base_currency") @db.VarChar(20)
+  isPublic               Boolean                  @default(false) @map("is_public")
+  status                 String                   @default("draft") @db.VarChar(30)
+  metadata               Json                     @default("{}")
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                 @default(now()) @map("updated_at") @db.Timestamptz(6)
+  pePortfolioTemplates   PePortfolioTemplates[]
+  pePortfolios           PePortfolios[]
+  peProductSubscriptions PeProductSubscriptions[]
+
+  @@index([metadata], map: "ix_pe_product_definitions_metadata", type: Gin)
+  @@index([productType], map: "ix_pe_product_definitions_product_type")
+  @@index([status], map: "ix_pe_product_definitions_status")
+  @@map("pe_product_definitions")
+}
+
+model PeProductSubscriptions {
+  id                   String               @id @db.Uuid
+  clientId             String               @map("client_id") @db.Uuid
+  productId            String               @map("product_id") @db.Uuid
+  portfolioId          String?              @map("portfolio_id") @db.Uuid
+  subscriptionAmount   Decimal?             @map("subscription_amount") @db.Decimal(30, 10)
+  subscriptionCurrency String               @default("EUR") @map("subscription_currency") @db.VarChar(20)
+  status               String               @default("pending") @db.VarChar(30)
+  metadata             Json                 @default("{}")
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peClients            PeClients            @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pePortfolios         PePortfolios?        @relation(fields: [portfolioId], references: [id], onUpdate: NoAction)
+  peProductDefinitions PeProductDefinitions @relation(fields: [productId], references: [id], onUpdate: NoAction)
+
+  @@index([clientId], map: "ix_pe_product_subscriptions_client_id")
+  @@index([metadata], map: "ix_pe_product_subscriptions_metadata", type: Gin)
+  @@index([productId], map: "ix_pe_product_subscriptions_product_id")
+  @@index([status], map: "ix_pe_product_subscriptions_status")
+  @@map("pe_product_subscriptions")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model PeRebalancePolicies {
+  id                   String                @id @db.Uuid
+  portfolioId          String?               @unique(map: "uq_pe_rebalance_policies_portfolio") @map("portfolio_id") @db.Uuid
+  sleeveId             String?               @unique(map: "uq_pe_rebalance_policies_sleeve") @map("sleeve_id") @db.Uuid
+  method               String                @db.VarChar(50)
+  frequency            String?               @db.VarChar(50)
+  driftThreshold       Decimal?              @map("drift_threshold") @db.Decimal(12, 6)
+  minTradeSize         Decimal?              @map("min_trade_size") @db.Decimal(30, 10)
+  transactionCostModel String?               @map("transaction_cost_model") @db.VarChar(50)
+  lockupAware          Boolean               @default(true) @map("lockup_aware")
+  cashFlowPriority     Boolean               @default(true) @map("cash_flow_priority")
+  parameters           Json                  @default("{}")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  pePortfolios         PePortfolios?         @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peSleeves            PeSleeves?            @relation(fields: [sleeveId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peRebalancePreviews  PeRebalancePreviews[]
+
+  @@index([portfolioId], map: "ix_pe_rebalance_policies_portfolio_id")
+  @@index([sleeveId], map: "ix_pe_rebalance_policies_sleeve_id")
+  @@map("pe_rebalance_policies")
+}
+
+model PeRebalancePreviewItems {
+  id                  String              @id @db.Uuid
+  previewId           String              @map("preview_id") @db.Uuid
+  instrumentId        String              @map("instrument_id") @db.Uuid
+  currentWeight       Decimal?            @map("current_weight") @db.Decimal(12, 6)
+  targetWeight        Decimal?            @map("target_weight") @db.Decimal(12, 6)
+  drift               Decimal?            @db.Decimal(12, 6)
+  tradeRequired       Decimal?            @map("trade_required") @db.Decimal(30, 10)
+  tradeDirection      String?             @map("trade_direction") @db.VarChar(10)
+  estimatedTradeSize  Decimal?            @map("estimated_trade_size") @db.Decimal(30, 10)
+  peInstruments       PeInstruments       @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peRebalancePreviews PeRebalancePreviews @relation(fields: [previewId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([instrumentId], map: "ix_pe_rebalance_preview_items_instrument_id")
+  @@index([previewId], map: "ix_pe_rebalance_preview_items_preview_id")
+  @@map("pe_rebalance_preview_items")
+}
+
+model PeRebalancePreviews {
+  id                      String                    @id @db.Uuid
+  portfolioId             String                    @map("portfolio_id") @db.Uuid
+  rebalancePolicyId       String?                   @map("rebalance_policy_id") @db.Uuid
+  generatedAt             DateTime                  @default(now()) @map("generated_at") @db.Timestamptz(6)
+  driftScore              Decimal?                  @map("drift_score") @db.Decimal(12, 6)
+  totalTurnover           Decimal?                  @map("total_turnover") @db.Decimal(12, 6)
+  estimatedCost           Decimal?                  @map("estimated_cost") @db.Decimal(30, 10)
+  status                  String                    @default("pending") @db.VarChar(30)
+  parameters              Json                      @default("{}")
+  createdAt               DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  peOrchestrationRuns     PeOrchestrationRuns[]
+  peRebalancePreviewItems PeRebalancePreviewItems[]
+  pePortfolios            PePortfolios              @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peRebalancePolicies     PeRebalancePolicies?      @relation(fields: [rebalancePolicyId], references: [id], onUpdate: NoAction)
+
+  @@index([generatedAt], map: "ix_pe_rebalance_previews_generated_at")
+  @@index([portfolioId], map: "ix_pe_rebalance_previews_portfolio_id")
+  @@map("pe_rebalance_previews")
+}
+
+model PeReconciliationReports {
+  id                 String   @id @db.Uuid
+  reconciliationType String   @map("reconciliation_type") @db.VarChar(100)
+  scopeType          String   @map("scope_type") @db.VarChar(100)
+  scopeId            String?  @map("scope_id") @db.VarChar(255)
+  status             String   @db.VarChar(30)
+  differencesFound   Int      @default(0) @map("differences_found")
+  metadata           Json     @default("{}")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt], map: "ix_pe_recon_reports_created_at")
+  @@index([scopeType, scopeId], map: "ix_pe_recon_reports_scope")
+  @@index([status], map: "ix_pe_recon_reports_status")
+  @@index([reconciliationType], map: "ix_pe_recon_reports_type")
+  @@map("pe_reconciliation_reports")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model PeRiskPolicies {
+  id                    String        @id @db.Uuid
+  portfolioId           String?       @unique(map: "uq_pe_risk_policies_portfolio") @map("portfolio_id") @db.Uuid
+  sleeveId              String?       @unique(map: "uq_pe_risk_policies_sleeve") @map("sleeve_id") @db.Uuid
+  maxAssetWeight        Decimal?      @map("max_asset_weight") @db.Decimal(12, 6)
+  maxAssetClassWeight   Decimal?      @map("max_asset_class_weight") @db.Decimal(12, 6)
+  maxPositionWeight     Decimal?      @map("max_position_weight") @db.Decimal(12, 6)
+  maxLeverage           Decimal?      @map("max_leverage") @db.Decimal(12, 6)
+  maxDrawdown           Decimal?      @map("max_drawdown") @db.Decimal(12, 6)
+  volatilityLimit       Decimal?      @map("volatility_limit") @db.Decimal(12, 6)
+  liquidityProfileLimit String?       @map("liquidity_profile_limit") @db.VarChar(50)
+  parameters            Json          @default("{}")
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  pePortfolios          PePortfolios? @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peSleeves             PeSleeves?    @relation(fields: [sleeveId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([portfolioId], map: "ix_pe_risk_policies_portfolio_id")
+  @@index([sleeveId], map: "ix_pe_risk_policies_sleeve_id")
+  @@map("pe_risk_policies")
+}
+
+model PeScheduledJobs {
+  id              String    @id @db.Uuid
+  jobName         String    @map("job_name") @db.VarChar(255)
+  jobType         String    @map("job_type") @db.VarChar(100)
+  scopeType       String    @map("scope_type") @db.VarChar(100)
+  scopeId         String?   @map("scope_id") @db.VarChar(255)
+  scheduleType    String    @default("interval") @map("schedule_type") @db.VarChar(30)
+  cronExpression  String?   @map("cron_expression") @db.VarChar(100)
+  intervalSeconds Int?      @map("interval_seconds")
+  isEnabled       Boolean   @default(true) @map("is_enabled")
+  lastRunAt       DateTime? @map("last_run_at") @db.Timestamptz(6)
+  nextRunAt       DateTime? @map("next_run_at") @db.Timestamptz(6)
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([isEnabled], map: "ix_pe_scheduled_jobs_is_enabled")
+  @@index([jobType], map: "ix_pe_scheduled_jobs_job_type")
+  @@index([nextRunAt], map: "ix_pe_scheduled_jobs_next_run_at")
+  @@index([scopeType, scopeId], map: "ix_pe_scheduled_jobs_scope")
+  @@map("pe_scheduled_jobs")
+}
+
+model PeSettlementInstructions {
+  id                                                                      String           @id @db.Uuid
+  orderId                                                                 String?          @map("order_id") @db.Uuid
+  tradeId                                                                 String?          @map("trade_id") @db.Uuid
+  settlementGroupId                                                       String?          @map("settlement_group_id") @db.Uuid
+  settlementType                                                          String           @map("settlement_type") @db.VarChar(50)
+  fromAccountId                                                           String           @map("from_account_id") @db.Uuid
+  toAccountId                                                             String           @map("to_account_id") @db.Uuid
+  assetId                                                                 String           @map("asset_id") @db.Uuid
+  amount                                                                  Decimal          @db.Decimal(30, 10)
+  status                                                                  String           @default("pending") @db.VarChar(30)
+  scheduledAt                                                             DateTime?        @map("scheduled_at") @db.Timestamptz(6)
+  settledAt                                                               DateTime?        @map("settled_at") @db.Timestamptz(6)
+  failedAt                                                                DateTime?        @map("failed_at") @db.Timestamptz(6)
+  failureReason                                                           String?          @map("failure_reason") @db.VarChar(500)
+  externalReference                                                       String?          @map("external_reference") @db.VarChar(255)
+  metadata                                                                Json             @default("{}")
+  createdAt                                                               DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                                               DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peAssets                                                                PeAssets         @relation(fields: [assetId], references: [id], onUpdate: NoAction)
+  peLedgerAccountsPeSettlementInstructionsFromAccountIdTopeLedgerAccounts PeLedgerAccounts @relation("pe_settlement_instructions_from_account_idTope_ledger_accounts", fields: [fromAccountId], references: [id], onUpdate: NoAction)
+  peOrders                                                                PeOrders?        @relation(fields: [orderId], references: [id], onUpdate: NoAction)
+  peLedgerAccountsPeSettlementInstructionsToAccountIdTopeLedgerAccounts   PeLedgerAccounts @relation("pe_settlement_instructions_to_account_idTope_ledger_accounts", fields: [toAccountId], references: [id], onUpdate: NoAction)
+  peTrades                                                                PeTrades?        @relation(fields: [tradeId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([assetId], map: "ix_pe_sett_asset_id")
+  @@index([fromAccountId], map: "ix_pe_sett_from_account")
+  @@index([settlementGroupId], map: "ix_pe_sett_group_id")
+  @@index([orderId], map: "ix_pe_sett_order_id")
+  @@index([scheduledAt], map: "ix_pe_sett_scheduled_at")
+  @@index([status], map: "ix_pe_sett_status")
+  @@index([toAccountId], map: "ix_pe_sett_to_account")
+  @@index([tradeId], map: "ix_pe_sett_trade_id")
+  @@map("pe_settlement_instructions")
+}
+
+model PeSleeves {
+  id                  String                @id @db.Uuid
+  portfolioId         String                @map("portfolio_id") @db.Uuid
+  name                String                @db.VarChar(255)
+  sleeveType          String                @map("sleeve_type") @db.VarChar(50)
+  allocationTarget    Decimal?              @map("allocation_target") @db.Decimal(12, 6)
+  metadata            Json                  @default("{}")
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  pePositionAtoms     PePositionAtoms[]
+  peRebalancePolicies PeRebalancePolicies?
+  peRiskPolicies      PeRiskPolicies?
+  pePortfolios        PePortfolios          @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peStrategyInstances PeStrategyInstances[]
+  peTargetAllocations PeTargetAllocations[]
+
+  @@index([portfolioId], map: "ix_pe_sleeves_portfolio_id")
+  @@map("pe_sleeves")
+}
+
+model PeStrategyDefinitions {
+  id                   String                 @id @db.Uuid
+  code                 String                 @unique(map: "uq_pe_strategy_definitions_code") @db.VarChar(100)
+  name                 String                 @db.VarChar(255)
+  strategyType         String                 @map("strategy_type") @db.VarChar(50)
+  description          String?
+  parametersSchema     Json                   @default("{}") @map("parameters_schema")
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  pePortfolioTemplates PePortfolioTemplates[]
+  peStrategyInstances  PeStrategyInstances[]
+
+  @@index([strategyType], map: "ix_pe_strategy_definitions_type")
+  @@map("pe_strategy_definitions")
+}
+
+model PeStrategyEvaluations {
+  id                  String              @id @db.Uuid
+  portfolioId         String              @map("portfolio_id") @db.Uuid
+  strategyInstanceId  String              @map("strategy_instance_id") @db.Uuid
+  strategyType        String              @map("strategy_type") @db.VarChar(50)
+  signalType          String              @map("signal_type") @db.VarChar(50)
+  actionType          String              @map("action_type") @db.VarChar(50)
+  severity            String              @default("info") @db.VarChar(20)
+  details             Json                @default("{}")
+  evaluationTimestamp DateTime            @map("evaluation_timestamp") @db.Timestamptz(6)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  pePortfolios        PePortfolios        @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peStrategyInstances PeStrategyInstances @relation(fields: [strategyInstanceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([evaluationTimestamp], map: "ix_pe_strategy_evaluations_eval_ts")
+  @@index([strategyInstanceId], map: "ix_pe_strategy_evaluations_instance_id")
+  @@index([portfolioId], map: "ix_pe_strategy_evaluations_portfolio_id")
+  @@index([signalType], map: "ix_pe_strategy_evaluations_signal_type")
+  @@map("pe_strategy_evaluations")
+}
+
+model PeStrategyInstances {
+  id                    String                  @id @db.Uuid
+  portfolioId           String                  @map("portfolio_id") @db.Uuid
+  sleeveId              String?                 @map("sleeve_id") @db.Uuid
+  strategyDefinitionId  String                  @map("strategy_definition_id") @db.Uuid
+  name                  String?                 @db.VarChar(255)
+  status                String                  @default("active") @db.VarChar(30)
+  priority              Int                     @default(100)
+  parameters            Json                    @default("{}")
+  metadata              Json                    @default("{}")
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peStrategyEvaluations PeStrategyEvaluations[]
+  pePortfolios          PePortfolios            @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peSleeves             PeSleeves?              @relation(fields: [sleeveId], references: [id], onUpdate: NoAction)
+  peStrategyDefinitions PeStrategyDefinitions   @relation(fields: [strategyDefinitionId], references: [id], onUpdate: NoAction)
+
+  @@index([strategyDefinitionId], map: "ix_pe_strategy_instances_definition_id")
+  @@index([portfolioId], map: "ix_pe_strategy_instances_portfolio_id")
+  @@index([sleeveId], map: "ix_pe_strategy_instances_sleeve_id")
+  @@map("pe_strategy_instances")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model PeTargetAllocations {
+  id                String        @id @db.Uuid
+  portfolioId       String?       @map("portfolio_id") @db.Uuid
+  sleeveId          String?       @map("sleeve_id") @db.Uuid
+  instrumentId      String        @map("instrument_id") @db.Uuid
+  targetWeight      Decimal       @map("target_weight") @db.Decimal(12, 6)
+  minWeight         Decimal?      @map("min_weight") @db.Decimal(12, 6)
+  maxWeight         Decimal?      @map("max_weight") @db.Decimal(12, 6)
+  rebalancePriority Int           @default(100) @map("rebalance_priority")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peInstruments     PeInstruments @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pePortfolios      PePortfolios? @relation(fields: [portfolioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peSleeves         PeSleeves?    @relation(fields: [sleeveId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([portfolioId, instrumentId], map: "uq_pe_target_allocations_portfolio_instrument")
+  @@unique([sleeveId, instrumentId], map: "uq_pe_target_allocations_sleeve_instrument")
+  @@index([instrumentId], map: "ix_pe_target_allocations_instrument_id")
+  @@index([portfolioId], map: "ix_pe_target_allocations_portfolio_id")
+  @@index([sleeveId], map: "ix_pe_target_allocations_sleeve_id")
+  @@map("pe_target_allocations")
+}
+
+model PeTemplateAllocations {
+  id                   String               @id @db.Uuid
+  templateId           String               @map("template_id") @db.Uuid
+  instrumentId         String               @map("instrument_id") @db.Uuid
+  targetWeight         Decimal              @map("target_weight") @db.Decimal(12, 6)
+  minWeight            Decimal?             @map("min_weight") @db.Decimal(12, 6)
+  maxWeight            Decimal?             @map("max_weight") @db.Decimal(12, 6)
+  allocationPriority   Int                  @default(100) @map("allocation_priority")
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peInstruments        PeInstruments        @relation(fields: [instrumentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pePortfolioTemplates PePortfolioTemplates @relation(fields: [templateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([templateId, instrumentId], map: "uq_pe_template_allocations_template_instrument")
+  @@index([instrumentId], map: "ix_pe_template_allocations_instrument_id")
+  @@index([templateId], map: "ix_pe_template_allocations_template_id")
+  @@map("pe_template_allocations")
+}
+
+model PeTrades {
+  id                       String                     @id @db.Uuid
+  orderId                  String                     @map("order_id") @db.Uuid
+  instrumentId             String                     @map("instrument_id") @db.Uuid
+  side                     String                     @db.VarChar(10)
+  quantity                 Decimal                    @db.Decimal(30, 10)
+  price                    Decimal                    @db.Decimal(30, 10)
+  grossAmount              Decimal                    @map("gross_amount") @db.Decimal(30, 10)
+  feeAmount                Decimal                    @default(0) @map("fee_amount") @db.Decimal(30, 10)
+  netAmount                Decimal                    @map("net_amount") @db.Decimal(30, 10)
+  currency                 String                     @db.VarChar(20)
+  counterparty             String?                    @db.VarChar(100)
+  externalTradeId          String?                    @map("external_trade_id") @db.VarChar(255)
+  executedAt               DateTime                   @map("executed_at") @db.Timestamptz(6)
+  metadata                 Json                       @default("{}")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  executionInstructionId   String?                    @map("execution_instruction_id") @db.Uuid
+  peSettlementInstructions PeSettlementInstructions[]
+  peExecutionInstructions  PeExecutionInstructions?   @relation(fields: [executionInstructionId], references: [id], onUpdate: NoAction, map: "fk_pe_trades_execution_instruction_id")
+  peInstruments            PeInstruments              @relation(fields: [instrumentId], references: [id], onUpdate: NoAction)
+  peOrders                 PeOrders                   @relation(fields: [orderId], references: [id], onUpdate: NoAction)
+
+  @@index([executedAt], map: "ix_pe_trades_executed_at")
+  @@index([executionInstructionId], map: "ix_pe_trades_execution_instruction_id")
+  @@index([externalTradeId], map: "ix_pe_trades_external_trade_id")
+  @@index([instrumentId], map: "ix_pe_trades_instrument_id")
+  @@index([orderId], map: "ix_pe_trades_order_id")
+  @@map("pe_trades")
+}
+
+model PeTradingFeeConfigs {
+  id        String    @id @db.Uuid
+  scopeType String    @map("scope_type") @db.VarChar(30)
+  scopeId   String?   @map("scope_id") @db.Uuid
+  feeType   String    @default("trading") @map("fee_type") @db.VarChar(30)
+  feeRate   Decimal   @map("fee_rate") @db.Decimal(12, 8)
+  minFee    Decimal?  @map("min_fee") @db.Decimal(30, 10)
+  maxFee    Decimal?  @map("max_fee") @db.Decimal(30, 10)
+  status    String    @default("active") @db.VarChar(20)
+  validFrom DateTime  @map("valid_from") @db.Timestamptz(6)
+  validTo   DateTime? @map("valid_to") @db.Timestamptz(6)
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([feeType], map: "ix_pe_trading_fee_configs_fee_type")
+  @@index([scopeType, scopeId], map: "ix_pe_trading_fee_configs_scope")
+  @@index([status], map: "ix_pe_trading_fee_configs_status")
+  @@map("pe_trading_fee_configs")
+}
+
+model PeWalletContainers {
+  id                String             @id @db.Uuid
+  clientId          String?            @map("client_id") @db.Uuid
+  portfolioId       String?            @map("portfolio_id") @db.Uuid
+  walletType        String             @map("wallet_type") @db.VarChar(50)
+  instrumentId      String?            @map("instrument_id") @db.Uuid
+  custodyProvider   String?            @map("custody_provider") @db.VarChar(100)
+  blockchainAddress String?            @map("blockchain_address") @db.VarChar(255)
+  ledgerAccountRef  String?            @map("ledger_account_ref") @db.VarChar(255)
+  jurisdiction      String?            @db.VarChar(50)
+  status            String             @default("active") @db.VarChar(30)
+  metadata          Json               @default("{}")
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @default(now()) @map("updated_at") @db.Timestamptz(6)
+  peLedgerAccounts  PeLedgerAccounts[]
+  pePositionAtoms   PePositionAtoms[]
+  peInstruments     PeInstruments?     @relation(fields: [instrumentId], references: [id], onUpdate: NoAction)
+  pePortfolios      PePortfolios?      @relation(fields: [portfolioId], references: [id], onUpdate: NoAction)
+
+  @@index([clientId], map: "ix_pe_wallet_containers_client_id")
+  @@index([portfolioId], map: "ix_pe_wallet_containers_portfolio_id")
+  @@index([walletType], map: "ix_pe_wallet_containers_wallet_type")
+  @@map("pe_wallet_containers")
+}
+
+model Persons {
+  id                          String                        @id @db.Uuid
+  status                      String                        @default("active")
+  jurisdiction                String?
+  profileJson                 Json                          @default("{}") @map("profile_json")
+  createdAt                   DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  clientId                    String?                       @unique(map: "uq_persons_client_id") @map("client_id") @db.Uuid
+  kycStatus                   String                        @default("not_started") @map("kyc_status")
+  auditEvents                 AuditEvents[]
+  documents                   Documents[]
+  peClients                   PeClients?
+  registrationExecutionEvents RegistrationExecutionEvents[]
+  registrationSession         RegistrationSession[]
+  twoFactorChallenges         TwoFactorChallenges[]
+
+  @@index([clientId], map: "ix_persons_client_id")
+  @@index([jurisdiction], map: "ix_persons_jurisdiction")
+  @@index([profileJson], map: "ix_persons_profile_json", type: Gin)
+  @@map("persons")
+}
+
+model PoolAllocations {
+  id                    String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplyCommitmentId    String                @map("supply_commitment_id") @db.Uuid
+  borrowPositionId      String                @map("borrow_position_id") @db.Uuid
+  amount                Decimal               @db.Decimal(30, 10)
+  lendingPositionAtomId String?               @map("lending_position_atom_id") @db.Uuid
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  poolBorrowPositions   PoolBorrowPositions   @relation(fields: [borrowPositionId], references: [id], onUpdate: NoAction)
+  poolSupplyCommitments PoolSupplyCommitments @relation(fields: [supplyCommitmentId], references: [id], onUpdate: NoAction)
+
+  @@index([borrowPositionId], map: "ix_pool_allocations_borrow_id")
+  @@index([supplyCommitmentId], map: "ix_pool_allocations_supply_id")
+  @@map("pool_allocations")
+}
+
+model PoolBorrowPositions {
+  id                      String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poolId                  String            @map("pool_id") @db.Uuid
+  clientId                String            @map("client_id") @db.Uuid
+  asset                   String            @db.VarChar(20)
+  borrowedAmount          Decimal           @map("borrowed_amount") @db.Decimal(30, 10)
+  status                  String            @default("active") @db.VarChar(30)
+  borrowingPositionAtomId String?           @map("borrowing_position_atom_id") @db.Uuid
+  createdAt               DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  poolAllocations         PoolAllocations[]
+  peClients               PeClients         @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+  lendingPools            LendingPools      @relation(fields: [poolId], references: [id], onUpdate: NoAction)
+
+  @@index([clientId], map: "ix_pool_borrow_positions_client_id")
+  @@index([poolId], map: "ix_pool_borrow_positions_pool_id")
+  @@index([status], map: "ix_pool_borrow_positions_status")
+  @@map("pool_borrow_positions")
+}
+
+model PoolInterestSnapshots {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poolId            String       @map("pool_id") @db.Uuid
+  date              DateTime     @db.Date
+  totalBorrowed     Decimal      @map("total_borrowed") @db.Decimal(30, 10)
+  borrowRateBps     Decimal      @map("borrow_rate_bps") @db.Decimal(10, 2)
+  supplyRateBps     Decimal      @map("supply_rate_bps") @db.Decimal(10, 2)
+  interestGenerated Decimal      @default(0) @map("interest_generated") @db.Decimal(30, 10)
+  interestToLenders Decimal      @default(0) @map("interest_to_lenders") @db.Decimal(30, 10)
+  platformFee       Decimal      @default(0) @map("platform_fee") @db.Decimal(30, 10)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  lendingPools      LendingPools @relation(fields: [poolId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([poolId, date], map: "ix_pool_interest_snapshots_pool_date")
+  @@map("pool_interest_snapshots")
+}
+
+model PoolSupplyCommitments {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poolId          String            @map("pool_id") @db.Uuid
+  clientId        String            @map("client_id") @db.Uuid
+  asset           String            @db.VarChar(20)
+  amount          Decimal           @db.Decimal(30, 10)
+  reservedAmount  Decimal           @default(0) @map("reserved_amount") @db.Decimal(30, 10)
+  availableAmount Decimal           @default(0) @map("available_amount") @db.Decimal(30, 10)
+  status          String            @default("active") @db.VarChar(30)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  poolAllocations PoolAllocations[]
+  peClients       PeClients         @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+  lendingPools    LendingPools      @relation(fields: [poolId], references: [id], onUpdate: NoAction)
+
+  @@index([clientId], map: "ix_pool_supply_commitments_client_id")
+  @@index([poolId], map: "ix_pool_supply_commitments_pool_id")
+  @@index([status], map: "ix_pool_supply_commitments_status")
+  @@map("pool_supply_commitments")
+}
+
+model PortfolioProductConfig {
+  id            String   @id @default(cuid())
+  productCode   String   @unique @map("product_code")
+  modules       Json     @default("[]")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  headerMediaId String?  @map("header_media_id")
+  sortOrder     Int      @default(999) @map("sort_order")
+  isPublished   Boolean  @default(false) @map("is_published")
+  detailMediaId String?  @map("detail_media_id")
+
+  @@index([sortOrder])
+  @@map("portfolio_product_configs")
+}
+
+model PresentationDeckVersions {
+  id                                                                           String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  presentationId                                                               String                      @map("presentation_id") @db.Uuid
+  versionNumber                                                                Int                         @map("version_number")
+  versionLabel                                                                 String                      @map("version_label")
+  status                                                                       String                      @default("draft")
+  isCurrent                                                                    Boolean                     @default(false) @map("is_current")
+  changelog                                                                    String?
+  snapshotJson                                                                 Json?                       @map("snapshot_json")
+  createdAt                                                                    DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                                                    DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  validatedAt                                                                  DateTime?                   @map("validated_at") @db.Timestamptz(6)
+  archivedAt                                                                   DateTime?                   @map("archived_at") @db.Timestamptz(6)
+  presentationDecksPresentationDeckVersionsPresentationIdTopresentationDecks   PresentationDecks           @relation("presentation_deck_versions_presentation_idTopresentation_decks", fields: [presentationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  presentationDecksPresentationDecksCurrentVersionIdTopresentationDeckVersions PresentationDecks[]         @relation("presentation_decks_current_version_idTopresentation_deck_versions")
+  presentationVersionSlides                                                    PresentationVersionSlides[]
+
+  @@unique([presentationId, versionNumber], map: "uq_presentation_deck_version_num")
+  @@map("presentation_deck_versions")
+}
+
+model PresentationDecks {
+  id                                                                                  String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                                                                                String
+  slug                                                                                String                     @unique(map: "uq_presentation_deck_slug")
+  description                                                                         String?
+  deckType                                                                            String?                    @map("deck_type")
+  createdAt                                                                           DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                                                           DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  archivedAt                                                                          DateTime?                  @map("archived_at") @db.Timestamptz(6)
+  currentVersionId                                                                    String?                    @map("current_version_id") @db.Uuid
+  presentationDeckVersionsPresentationDeckVersionsPresentationIdTopresentationDecks   PresentationDeckVersions[] @relation("presentation_deck_versions_presentation_idTopresentation_decks")
+  presentationDeckVersionsPresentationDecksCurrentVersionIdTopresentationDeckVersions PresentationDeckVersions?  @relation("presentation_decks_current_version_idTopresentation_deck_versions", fields: [currentVersionId], references: [id], onUpdate: NoAction)
+
+  @@map("presentation_decks")
+}
+
+model PresentationSlideTemplates {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key                       String                      @unique(map: "uq_presentation_slide_template_key")
+  name                      String
+  category                  String                      @default("general")
+  description               String?
+  status                    String                      @default("active")
+  previewImageUrl           String?                     @map("preview_image_url")
+  schemaJson                Json?                       @map("schema_json")
+  defaultContentJson        Json?                       @map("default_content_json")
+  designTokensJson          Json?                       @map("design_tokens_json")
+  createdAt                 DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  presentationVersionSlides PresentationVersionSlides[]
+
+  @@map("presentation_slide_templates")
+}
+
+model PresentationVersionSlides {
+  id                         String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  presentationVersionId      String                     @map("presentation_version_id") @db.Uuid
+  sortOrder                  Int                        @default(0) @map("sort_order")
+  slideTemplateId            String                     @map("slide_template_id") @db.Uuid
+  slideTitle                 String?                    @map("slide_title")
+  subtitle                   String?
+  contentJson                Json?                      @map("content_json")
+  styleOverridesJson         Json?                      @map("style_overrides_json")
+  notesJson                  Json?                      @map("notes_json")
+  metadataJson               Json?                      @map("metadata_json")
+  createdAt                  DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  presentationDeckVersions   PresentationDeckVersions   @relation(fields: [presentationVersionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  presentationSlideTemplates PresentationSlideTemplates @relation(fields: [slideTemplateId], references: [id], onUpdate: NoAction)
+
+  @@index([presentationVersionId], map: "ix_presentation_version_slides_version_id")
+  @@map("presentation_version_slides")
+}
+
+model PriceAlerts {
+  id              String    @id @db.Uuid
+  clientId        String    @map("client_id") @db.Uuid
+  asset           String    @db.VarChar(20)
+  targetPrice     Decimal   @map("target_price") @db.Decimal(20, 8)
+  direction       String    @db.VarChar(10)
+  priceSource     String    @default("mid") @map("price_source") @db.VarChar(10)
+  status          String    @default("active") @db.VarChar(20)
+  actionType      String    @default("alert") @map("action_type") @db.VarChar(20)
+  orderPayload    Json?     @map("order_payload")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  triggeredAt     DateTime? @map("triggered_at") @db.Timestamptz(6)
+  triggeredPrice  Decimal?  @map("triggered_price") @db.Decimal(20, 8)
+  cooldownSeconds Int       @default(0) @map("cooldown_seconds")
+  lastTriggeredAt DateTime? @map("last_triggered_at") @db.Timestamptz(6)
+  executionStatus String?   @map("execution_status") @db.VarChar(20)
+  metadata        Json?     @map("metadata_")
+  triggerMode     String    @default("once") @map("trigger_mode") @db.VarChar(20)
+  triggerCount    Int       @default(0) @map("trigger_count")
+  peClients       PeClients @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clientId, asset, status], map: "ix_price_alerts_client_asset_status")
+  @@map("price_alerts")
+}
+
+model ProjectI18n {
+  id                    String            @id @default(cuid())
+  projectId             String            @map("project_id")
+  locale                String
+  title                 String
+  shortDescription      String?           @map("short_description")
+  description           String?
+  metaTitle             String?           @map("meta_title")
+  metaDescription       String?           @map("meta_description")
+  location              String?
+  translationStatus     TranslationStatus @default(ORIGINAL) @map("translation_status")
+  descriptionLinks      Json?             @map("description_links")
+  competitiveAdvantages Json?             @map("competitive_advantages")
+  howItWorks            Json?             @map("how_it_works")
+  keyInformation        Json?             @map("key_information")
+  faq                   Json?
+  project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, locale])
+  @@index([projectId])
+  @@map("project_i18n")
+}
+
+model ProjectMedia {
+  id        String  @id @default(cuid())
+  projectId String  @map("project_id")
+  mediaId   String  @map("media_id")
+  order     Int     @default(0)
+  media     Media   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, order])
+  @@index([projectId])
+  @@map("project_media")
+}
+
+model Project {
+  id                    String           @id @default(cuid())
+  slug                  String           @unique
+  status                ContentStatus    @default(DRAFT)
+  coverMediaId          String?          @map("cover_media_id")
+  youtubeUrl            String?          @map("youtube_url")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  heroMediaId           String?          @map("hero_media_id")
+  investmentCategory    String?          @map("investment_category")
+  competitiveAdvantages Json?            @map("competitive_advantages")
+  articleProjects       ArticleProject[]
+  i18n                  ProjectI18n[]
+  projectMedia          ProjectMedia[]
+  coverMedia            Media?           @relation("ProjectCoverMedia", fields: [coverMediaId], references: [id])
+  heroMedia             Media?           @relation("ProjectHeroMedia", fields: [heroMediaId], references: [id])
+  packagedProductLegacy PackagedProduct? @relation("PackagedProductLegacyProject")
+
+  @@map("projects")
+}
+
+model RegistrationExecutionEvents {
+  id                           String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId                    String                        @map("session_id") @db.Uuid
+  flowId                       String?                       @map("flow_id") @db.Uuid
+  flowVersion                  Int?                          @map("flow_version")
+  stepId                       String?                       @map("step_id") @db.Uuid
+  screenId                     String?                       @map("screen_id") @db.Uuid
+  componentId                  String?                       @map("component_id") @db.Uuid
+  personId                     String?                       @map("person_id") @db.Uuid
+  clientId                     String?                       @map("client_id") @db.Uuid
+  eventType                    String                        @map("event_type")
+  eventSource                  String                        @default("runtime") @map("event_source")
+  eventStatus                  String?                       @map("event_status")
+  payloadJson                  Json?                         @map("payload_json")
+  createdAt                    DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  peClients                    PeClients?                    @relation(fields: [clientId], references: [id], onUpdate: NoAction)
+  registrationScreenComponents RegistrationScreenComponents? @relation(fields: [componentId], references: [id], onUpdate: NoAction)
+  registrationFlows            RegistrationFlows?            @relation(fields: [flowId], references: [id], onUpdate: NoAction)
+  persons                      Persons?                      @relation(fields: [personId], references: [id], onUpdate: NoAction)
+  registrationStepScreens      RegistrationStepScreens?      @relation(fields: [screenId], references: [id], onUpdate: NoAction)
+  registrationSession          RegistrationSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  registrationFlowSteps        RegistrationFlowSteps?        @relation(fields: [stepId], references: [id], onUpdate: NoAction)
+
+  @@index([clientId], map: "ix_reg_exec_events_client_id")
+  @@index([createdAt], map: "ix_reg_exec_events_created_at")
+  @@index([eventType], map: "ix_reg_exec_events_event_type")
+  @@index([flowId], map: "ix_reg_exec_events_flow_id")
+  @@index([personId], map: "ix_reg_exec_events_person_id")
+  @@index([sessionId], map: "ix_reg_exec_events_session_id")
+  @@map("registration_execution_events")
+}
+
+model RegistrationFlowSteps {
+  id                          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowId                      String                        @map("flow_id") @db.Uuid
+  stepKey                     String                        @map("step_key")
+  title                       String
+  description                 String?
+  position                    Int                           @default(0)
+  isOptional                  Boolean                       @default(false) @map("is_optional")
+  visibilityRuleJson          Json?                         @map("visibility_rule_json")
+  completionRuleJson          Json?                         @map("completion_rule_json")
+  createdAt                   DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  isBlocking                  Boolean                       @default(true) @map("is_blocking")
+  titleI18n                   Json?                         @map("title_i18n")
+  descriptionI18n             Json?                         @map("description_i18n")
+  registrationExecutionEvents RegistrationExecutionEvents[]
+  registrationFlows           RegistrationFlows             @relation(fields: [flowId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  registrationSessionSteps    RegistrationSessionSteps[]
+  registrationSession         RegistrationSession[]
+  registrationStepScreens     RegistrationStepScreens[]
+
+  @@unique([flowId, stepKey], map: "uq_reg_step_flow_key")
+  @@map("registration_flow_steps")
+}
+
+model RegistrationFlows {
+  id                          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jurisdictionId              String                        @map("jurisdiction_id") @db.Uuid
+  name                        String
+  version                     Int                           @default(1)
+  status                      String                        @default("draft")
+  entrypointType              String                        @default("individual") @map("entrypoint_type")
+  publishedAt                 DateTime?                     @map("published_at") @db.Timestamptz(6)
+  publishedBy                 String?                       @map("published_by")
+  createdAt                   DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  registrationExecutionEvents RegistrationExecutionEvents[]
+  registrationFlowSteps       RegistrationFlowSteps[]
+  registrationJurisdictions   RegistrationJurisdictions     @relation(fields: [jurisdictionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  registrationSession         RegistrationSession[]
+
+  @@unique([jurisdictionId, entrypointType, version], map: "uq_reg_flow_jurisdiction_entry_version")
+  @@map("registration_flows")
+}
+
+model RegistrationJurisdictions {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                String                @unique
+  name                String
+  entityName          String?               @map("entity_name")
+  defaultLanguage     String                @default("en") @map("default_language")
+  isActive            Boolean               @default(true) @map("is_active")
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  supportedLanguages  Json?                 @map("supported_languages")
+  registrationFlows   RegistrationFlows[]
+  registrationSession RegistrationSession[]
+
+  @@map("registration_jurisdictions")
+}
+
+model RegistrationRuntimeSettings {
+  id                      String   @id @db.Uuid
+  currentJurisdictionCode String   @map("current_jurisdiction_code")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("registration_runtime_settings")
+}
+
+model RegistrationScreenComponents {
+  id                          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  screenId                    String                        @map("screen_id") @db.Uuid
+  componentType               String                        @map("component_type")
+  componentKey                String                        @map("component_key")
+  position                    Int                           @default(0)
+  propsJson                   Json?                         @map("props_json")
+  bindingSlug                 String?                       @map("binding_slug")
+  visibilityRuleJson          Json?                         @map("visibility_rule_json")
+  validationRuleJson          Json?                         @map("validation_rule_json")
+  createdAt                   DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  fieldDefinitionId           String?                       @map("field_definition_id") @db.Uuid
+  registrationExecutionEvents RegistrationExecutionEvents[]
+  fieldDefinitions            FieldDefinitions?             @relation(fields: [fieldDefinitionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_reg_component_field_def")
+  registrationStepScreens     RegistrationStepScreens       @relation(fields: [screenId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([screenId, componentKey], map: "uq_reg_component_screen_key")
+  @@map("registration_screen_components")
+}
+
+model RegistrationSessionData {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId           String              @map("session_id") @db.Uuid
+  fieldSlug           String              @map("field_slug")
+  valueJson           Json?               @map("value_json")
+  source              String              @default("user_input")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  registrationSession RegistrationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([sessionId, fieldSlug], map: "uq_reg_session_data_slug")
+  @@map("registration_session_data")
+}
+
+model RegistrationSessionSteps {
+  id                      String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId               String                   @map("session_id") @db.Uuid
+  stepId                  String                   @map("step_id") @db.Uuid
+  status                  String                   @default("not_started")
+  startedAt               DateTime?                @map("started_at") @db.Timestamptz(6)
+  completedAt             DateTime?                @map("completed_at") @db.Timestamptz(6)
+  skippedAt               DateTime?                @map("skipped_at") @db.Timestamptz(6)
+  lastScreenId            String?                  @map("last_screen_id") @db.Uuid
+  metadataJson            Json?                    @map("metadata_json")
+  registrationStepScreens RegistrationStepScreens? @relation(fields: [lastScreenId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  registrationSession     RegistrationSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  registrationFlowSteps   RegistrationFlowSteps    @relation(fields: [stepId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([sessionId, stepId], map: "uq_reg_session_step")
+  @@map("registration_session_steps")
+}
+
+model RegistrationSession {
+  id                          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jurisdictionId              String                        @map("jurisdiction_id") @db.Uuid
+  flowId                      String                        @map("flow_id") @db.Uuid
+  personId                    String?                       @map("person_id") @db.Uuid
+  clientId                    String?                       @map("client_id") @db.Uuid
+  status                      String                        @default("in_progress")
+  currentStepId               String?                       @map("current_step_id") @db.Uuid
+  currentScreenId             String?                       @map("current_screen_id") @db.Uuid
+  progressPercent             Int                           @default(0) @map("progress_percent")
+  createdAt                   DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  flowVersion                 Int                           @default(1) @map("flow_version")
+  registrationExecutionEvents RegistrationExecutionEvents[]
+  registrationSessionData     RegistrationSessionData[]
+  registrationSessionSteps    RegistrationSessionSteps[]
+  registrationStepScreens     RegistrationStepScreens?      @relation(fields: [currentScreenId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  registrationFlowSteps       RegistrationFlowSteps?        @relation(fields: [currentStepId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  registrationFlows           RegistrationFlows             @relation(fields: [flowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  registrationJurisdictions   RegistrationJurisdictions     @relation(fields: [jurisdictionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  persons                     Persons?                      @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([personId], map: "ix_reg_session_person")
+  @@map("registration_sessions")
+}
+
+model RegistrationStepScreens {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stepId                       String                         @map("step_id") @db.Uuid
+  screenKey                    String                         @map("screen_key")
+  title                        String
+  subtitle                     String?
+  position                     Int                            @default(0)
+  layoutType                   String                         @default("form") @map("layout_type")
+  configJson                   Json?                          @map("config_json")
+  createdAt                    DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime                       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  titleI18n                    Json?                          @map("title_i18n")
+  subtitleI18n                 Json?                          @map("subtitle_i18n")
+  buttonLabel                  String?                        @map("button_label") @db.VarChar
+  buttonLabelI18n              Json?                          @map("button_label_i18n")
+  screenType                   String                         @default("form") @map("screen_type")
+  interactionType              String?                        @map("interaction_type")
+  interactionConfigJson        Json?                          @map("interaction_config_json")
+  visibilityRuleJson           Json?                          @map("visibility_rule_json")
+  registrationExecutionEvents  RegistrationExecutionEvents[]
+  registrationScreenComponents RegistrationScreenComponents[]
+  registrationSessionSteps     RegistrationSessionSteps[]
+  registrationSession          RegistrationSession[]
+  registrationFlowSteps        RegistrationFlowSteps          @relation(fields: [stepId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([stepId, screenKey], map: "uq_reg_screen_step_key")
+  @@map("registration_step_screens")
+}
+
+model SectionContent {
+  id                String            @id @default(cuid())
+  sectionId         String            @map("section_id")
+  locale            String
+  status            ContentStatus
+  data              Json
+  updatedAt         DateTime          @default(now()) @map("updated_at")
+  updatedByUserId   String?           @map("updated_by_user_id")
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  section           Section           @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  updatedBy         User?             @relation("SectionContentEditor", fields: [updatedByUserId], references: [id])
+
+  @@unique([sectionId, locale, status])
+  @@index([locale, status])
+  @@index([sectionId])
+  @@map("section_contents")
+}
+
+model Section {
+  id            String           @id @default(cuid())
+  pageId        String           @map("page_id")
+  key           String
+  order         Int
+  schemaVersion String           @default("v1") @map("schema_version")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  contents      SectionContent[]
+  page          Page             @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, key])
+  @@index([pageId])
+  @@map("sections")
 }
 
 model Session {
@@ -40,48 +3058,186 @@ model Session {
   @@map("sessions")
 }
 
+model TranslationLog {
+  id           String                @id @default(cuid())
+  entityType   TranslationEntityType @map("entity_type")
+  entityId     String                @map("entity_id")
+  sourceLocale String                @map("source_locale")
+  targetLocale String                @map("target_locale")
+  mode         String
+  status       TranslationLogStatus
+  model        String
+  errorMessage String?               @map("error_message")
+  createdAt    DateTime              @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([status])
+  @@index([targetLocale])
+  @@map("translation_logs")
+}
+
+model TwoFactorChallenges {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  personId  String   @map("person_id") @db.Uuid
+  channel   String
+  target    String?
+  codeHash  String   @map("code_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  attempts  Int      @default(0)
+  status    String   @default("pending")
+  purpose   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  sourceIp  String?  @map("source_ip")
+  persons   Persons  @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expiresAt], map: "ix_two_factor_challenges_expires_at")
+  @@index([personId, createdAt], map: "ix_two_factor_challenges_person_created")
+  @@index([personId], map: "ix_two_factor_challenges_person_id")
+  @@index([sourceIp, createdAt], map: "ix_two_factor_challenges_source_ip_created")
+  @@index([status], map: "ix_two_factor_challenges_status")
+  @@map("two_factor_challenges")
+}
+
+model User {
+  id                     String           @id @default(cuid())
+  email                  String           @unique
+  passwordHash           String           @map("password_hash")
+  role                   UserRole         @default(ADMIN)
+  createdAt              DateTime         @default(now()) @map("created_at")
+  /// FK vers `admin_users.id` (API Python). Le BFF JWT utilise uniquement cet ID, jamais un lookup par email.
+  adminUserId            Int?             @unique @map("admin_user_id")
+  adminUser              AdminUser?       @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  media                  Media[]
+  updatedSectionContents SectionContent[] @relation("SectionContentEditor")
+  sessions               Session[]
+
+  @@map("users")
+}
+
+enum ArticleBlockType {
+  HEADING
+  PARAGRAPH
+  QUOTE
+  BULLET_LIST
+  NUMBERED_LIST
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+enum ArticleLinkKind {
+  ASSET
+  VAULT
+}
+
 enum ContentStatus {
   DRAFT
   PUBLISHED
 }
 
-model Page {
-  id        String    @id @default(cuid())
-  slug      String    @unique
-  createdAt DateTime  @default(now()) @map("created_at")
-  sections  Section[]
-
-  @@map("pages")
+enum MenuItemType {
+  LINK
+  BUTTON
 }
 
-model Section {
-  id            String          @id @default(cuid())
-  pageId        String          @map("page_id")
-  key           String // e.g., "hero", "features"
-  order         Int
-  schemaVersion String          @default("v1") @map("schema_version")
-  createdAt     DateTime        @default(now()) @map("created_at")
-  page          Page             @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  contents      SectionContent[]
-
-  @@unique([pageId, key])
-  @@index([pageId])
-  @@map("sections")
+enum TranslationEntityType {
+  SECTION
+  PROJECT
+  ARTICLE
+  ARTICLE_CATEGORY
+  EMAIL
+  EMAIL_MODULE
+  HELP_CATEGORY
+  HELP_COLLECTION
+  HELP_ARTICLE
+  MENU
+  MENU_ITEM
 }
 
-model SectionContent {
-  id             String        @id @default(cuid())
-  sectionId      String        @map("section_id")
-  locale         String
-  status         ContentStatus
-  data           Json
-  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at")
-  updatedByUserId String?      @map("updated_by_user_id")
-  section        Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  updatedBy      User?         @relation(fields: [updatedByUserId], references: [id])
+enum TranslationLogStatus {
+  SUCCESS
+  ERROR
+  SKIPPED
+}
 
-  @@unique([sectionId, locale, status])
-  @@index([sectionId])
-  @@index([locale, status])
-  @@map("section_contents")
+enum TranslationStatus {
+  ORIGINAL
+  MACHINE
+  APPROVED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum Emailheropolicyenum {
+  REQUIRED
+  OPTIONAL
+
+  @@map("emailheropolicyenum")
+}
+
+enum Emailmoduletypeenum {
+  HEADER
+  FOOTER
+  LEGAL
+  SIGNATURE
+  SOCIAL
+  DISCLAIMER
+  CUSTOM
+
+  @@map("emailmoduletypeenum")
+}
+
+enum Emailstatusenum {
+  DRAFT
+  VALIDATED
+
+  @@map("emailstatusenum")
+}
+
+enum Statusenum {
+  DRAFT
+  PUBLISHED
+
+  @@map("statusenum")
+}
+
+enum Translationstatusenum {
+  ORIGINAL
+  MACHINE
+  APPROVED
+
+  @@map("translationstatusenum")
+}
+
+/// Type de produit packagé (catalogue).
+enum PackagedProductType {
+  VAULT_SIMPLE
+  EXCLUSIVE_OFFER
+  MANAGED_MANDATE
+  CRYPTO_BUNDLE
+}
+
+/// Cycle de vie commercial (registre), distinct du statut lending.
+enum PackagedCommercialStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PackagedVisibility {
+  PUBLIC
+  PRIVATE
+  HIDDEN
+}
+
+/// Moteur métier rattaché (données dynamiques hors CMS).
+enum PackagedEngineType {
+  LENDING
+  BUNDLE
+  MANAGED_PORTFOLIO
+  VAULT_ENGINE
 }

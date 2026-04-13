@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vancelian Dev Toolkit — Notice</title>
+<style>
+body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b1020;color:#eef2ff;margin:0}
+.wrap{max-width:1000px;margin:0 auto;padding:32px 20px 60px}
+h1,h2{line-height:1.2}
+.card{background:#121932;border:1px solid #2b3766;border-radius:18px;padding:20px;margin:14px 0}
+pre{background:#0a0f1f;border:1px solid #22305e;color:#f5f7ff;padding:16px;border-radius:14px;overflow:auto;white-space:pre-wrap}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+li{margin:8px 0;color:#c3cceb}
+strong{color:#9ef0c7}
+.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#1c274d;color:#7cc4ff;font-size:12px;font-weight:700;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="badge">Dev toolkit</div>
+    <h1>Vancelian Dev Toolkit — utilisation simple</h1>
+    <p>Cette boîte à outils te donne un menu interactif pour éviter de te battre avec le terminal. Elle gère le sync mobile local, le clean Flutter, CocoaPods, le lancement des serveurs, Xcode et la <strong>cible Flutter</strong> (iPhone USB, iPhone wireless, simulateur iOS).</p>
+    <p><strong>Emplacement dans le repo :</strong> <code>services/arquantix/tooling/vancelian_dev_toolkit.sh</code> — les chemins <code>mobile/</code>, <code>api/</code>, <code>web/</code> sont déduits automatiquement (parent du dossier <code>tooling/</code>).</p>
+  </div>
+
+  <div class="card">
+    <h2>1. Installation</h2>
+    <p>Depuis la racine du dépôt (ou le dossier <code>tooling</code>) :</p>
+    <pre><code>cd services/arquantix/tooling
+chmod +x vancelian_dev_toolkit.sh
+./vancelian_dev_toolkit.sh</code></pre>
+    <p>Copie pratique dans le home (comme avant) :</p>
+    <pre><code>cp services/arquantix/tooling/vancelian_dev_toolkit.sh ~/vancelian_dev_toolkit.sh
+chmod +x ~/vancelian_dev_toolkit.sh
+~/vancelian_dev_toolkit.sh</code></pre>
+  </div>
+
+  <div class="card">
+    <h2>2. Mode recommandé au quotidien</h2>
+    <ul>
+      <li><strong>Option 10</strong> = fast launch Flutter en <code>--profile</code> (sélection device smart)</li>
+      <li><strong>Option 11</strong> = clean complet + launch en <code>--profile</code></li>
+      <li><strong>Option 12</strong> = launch en <code>--release</code></li>
+      <li><strong>Option 15</strong> = afficher <code>flutter devices</code> + résumé JSON</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>3. Commandes directes sans menu</h2>
+    <pre><code>./vancelian_dev_toolkit.sh fast
+./vancelian_dev_toolkit.sh clean
+./vancelian_dev_toolkit.sh release
+./vancelian_dev_toolkit.sh api
+./vancelian_dev_toolkit.sh web
+./vancelian_dev_toolkit.sh status
+./vancelian_dev_toolkit.sh net
+./vancelian_dev_toolkit.sh xcode
+./vancelian_dev_toolkit.sh reset-xcode
+./vancelian_dev_toolkit.sh devices</code></pre>
+  </div>
+
+  <div class="card">
+    <h2>3 bis. iPhone USB, wireless et simulateur</h2>
+    <ul>
+      <li><strong>Détection</strong> : <code>flutter devices --machine</code> + sortie texte de <code>flutter devices</code> pour repérer les lignes <em>wireless</em> ; optionnellement <code>xcrun xcdevice list</code> pour USB/Wi‑Fi.</li>
+      <li><strong><code>DEVICE_ID</code> exporté</strong> et présent dans la liste → lancement direct sur cet UDID.</li>
+      <li><strong>Pas de <code>DEVICE_ID</code></strong> (ou <code>unset DEVICE_ID</code>) → sélection intelligente : un seul iPhone réel = auto ; plusieurs = menu ; sinon simulateur ou aide Xcode.</li>
+      <li><strong><code>DEVICE_ID_DEFAULT</code></strong> dans le script = tie-break si plusieurs appareils (pas un forçage si débranché).</li>
+      <li><strong><code>PREFER_WIRELESS=1</code></strong> / <strong><code>PREFER_USB=1</code></strong> pour départager plusieurs iPhones.</li>
+      <li><strong>Rapport détaillé</strong> : <code>FLUTTER_DEVICE_SELECTION.md</code> dans le même dossier.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>4. Aliases zsh recommandés</h2>
+    <pre><code>alias vmenu="$HOME/vancelian_dev_toolkit.sh"
+alias vrun="$HOME/vancelian_dev_toolkit.sh fast"
+alias vclean="$HOME/vancelian_dev_toolkit.sh clean"
+alias vrelease="$HOME/vancelian_dev_toolkit.sh release"</code></pre>
+    <p>Si tu lances depuis le clone sans copie dans <code>~</code>, pointe les alias vers le chemin absolu du script dans ton dépôt.</p>
+    <p>Ajoute-les dans <code>~/.zshrc</code> puis fais :</p>
+    <pre><code>source ~/.zshrc</code></pre>
+  </div>
+
+  <div class="card">
+    <h2>5. Ce que fait le script</h2>
+    <ul>
+      <li>détecte automatiquement l’IP locale du Mac</li>
+      <li>utilise <code>--profile</code> par défaut pour un rendu iPhone réel fluide</li>
+      <li>ajoute <code>TRACE_JANK=true</code> en profile pour tes traces</li>
+      <li>ouvre le bon workspace Xcode : <code>Runner.xcworkspace</code></li>
+      <li>choisit la cible Flutter (USB / wireless / simulateur) de façon smart ; <code>DEVICE_ID</code> prioritaire si exporté et présent</li>
+      <li>si aucun iPhone prêt : peut ouvrir Xcode et afficher une checklist (câble, confiance, mode développeur)</li>
+      <li>lance l’API avec <code>python -m uvicorn</code> (venv <code>api/.venv</code> ou <code>api/venv</code> prioritaire sur <code>python3</code> système)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>6. Fichiers fournis</h2>
+    <ul>
+      <li><code>vancelian_dev_toolkit.sh</code> — script principal</li>
+      <li><code>cursor_prompt_dev_tooling.txt</code> — prompt prêt à donner à Cursor</li>
+      <li><code>vancelian_dev_toolkit_README.html</code> — cette notice</li>
+      <li><code>FLUTTER_DEVICE_SELECTION.md</code> — stratégie de détection et limites</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

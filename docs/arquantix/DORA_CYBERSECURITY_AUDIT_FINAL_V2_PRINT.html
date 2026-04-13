@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rapport d'audit cybersécurité ICT — Arquantix API (FINAL V2)</title>
+<style>
+@page { size: A4; margin: 16mm 18mm; }
+html { font-size: 10pt; }
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  line-height: 1.45;
+  max-width: 100%;
+}
+h1 {
+  font-size: 18pt;
+  font-weight: 700;
+  border-bottom: 2px solid #0d47a1;
+  padding-bottom: 8px;
+  margin-top: 0;
+  page-break-after: avoid;
+}
+h2 {
+  font-size: 13pt;
+  font-weight: 700;
+  color: #0d47a1;
+  margin-top: 1.4em;
+  page-break-after: avoid;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 4px;
+}
+h3 {
+  font-size: 11pt;
+  font-weight: 600;
+  margin-top: 1.1em;
+  color: #333;
+  page-break-after: avoid;
+}
+p { margin: 0.55em 0; text-align: justify; }
+code, td code {
+  font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  font-size: 8.5pt;
+  background: #f5f5f5;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  margin: 0.8em 0;
+  page-break-inside: avoid;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+th {
+  background: #e3f2fd;
+  font-weight: 600;
+  text-align: left;
+}
+tr:nth-child(even) td { background: #fafafa; }
+hr {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 1.2em 0;
+}
+.meta {
+  font-size: 9pt;
+  color: #444;
+  margin-bottom: 1.5em;
+}
+.footer {
+  margin-top: 2em;
+  font-size: 8pt;
+  color: #666;
+  border-top: 1px solid #eee;
+  padding-top: 8px;
+}
+@media print {
+  h2 { page-break-before: auto; }
+  table { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<header class="meta">
+  <strong>Document :</strong> Rapport d'audit cybersécurité ICT — Backend Arquantix API<br />
+  <strong>Édition PDF :</strong> FINAL V2 (génération automatisée)<br />
+  <strong>Référence dépôt :</strong> docs/arquantix/DORA_CYBERSECURITY_AUDIT_REPORT_INSTITUTIONAL.md
+</header>
+<h1>Rapport d’audit cybersécurité ICT — Backend Arquantix API</h1>
+<p><strong>Référence technique :</strong> <code>services/arquantix/api</code><br />
+<strong>Type de document :</strong> audit technique fondé sur le code source et les migrations versionnées ; ne constitue pas une certification DORA, une déclaration réglementaire ni une opinion juridique.<br />
+<strong>Règle de preuve :</strong> toute affirmation non étayée par un fichier ou une table du dépôt est marquée <strong>NOT FOUND IN CODEBASE</strong>.</p>
+<hr />
+<h2>1. Executive Summary</h2>
+<h3>1.1 Finalité du système</h3>
+<p>L’API Arquantix fournit des services backend (authentification, sessions, opérations sensibles incluant custody et transferts internes) pour des opérateurs et flux métier reliés à des identités <code>AdminUser</code> liées à des personnes physiques. La surface d’authentification repose sur des jetons JWT (accès et refresh), des sessions persistantes en base, et des mécanismes optionnels de confiance device, d’attestation, de signature ECDSA et de scoring de risque multi-couches.</p>
+<h3>1.2 Posture de sécurité (synthèse factuelle)</h3>
+<p>Le code met en œuvre une <strong>défense en profondeur partielle et conditionnelle</strong> : les mécanismes les plus avancés (moteur de risque PR F, règles dynamiques, pseudo-ML, couche temporelle, moteur d’intention) sont <strong>derrière des variables d’environnement</strong> dont les valeurs par défaut désactivent souvent la fonction (voir section 11). La rotation des refresh tokens et la table des JTIs consommés constituent un socle solide contre la réutilisation naïve des jetons. En revanche, l’application uniforme du scoring PR F sur toutes les routes métier sensibles n’est <strong>pas</strong> réalisée : la dépendance FastAPI <code>require_low_risk_action</code> n’apparaît que dans <code>services/custody/router.py</code> (cinq endpoints), ce qui crée une <strong>hétérogénéité de couverture</strong> documentée en section 5.</p>
+<h3>1.3 Nomenclature des « PR » dans le dépôt</h3>
+<p>Les évolutions sont nommées dans les migrations et commentaires (PR D2 à PR F.7.2, etc.). Il n’existe pas de libellé unique « PR A » ou « PR G » dans un manifeste central. Pour ce rapport : <strong>PR A</strong> désigne la chaîne sessions + rotation refresh (migrations <code>108</code>, <code>131</code>, logique <code>refresh_session.py</code>) ; <strong>PR G</strong> désigne l’usage optionnel de Redis pour cache, rate limits et garde-fous distribués ; <strong>PR H</strong> n’est pas une migration séparée : le fichier <code>device_risk_engine_pr_f2.py</code> qualifie explicitement les <strong>règles combinées non linéaires</strong> de « PR H » au sein de <code>evaluate_combination_rules</code>, activées par <code>DEVICE_RISK_ENABLE_COMBINATION_RULES</code>. <strong>NOT FOUND IN CODEBASE :</strong> fichier ou révision Alembic intitulé uniquement « PR H ».</p>
+<h3>1.4 Évaluation de maturité globale (justification)</h3>
+<p>Une échelle qualitative <strong>1 à 5</strong> est appliquée par domaine en section 14. La <strong>maturité globale pondérée</strong> proposée est <strong>3,8 / 5</strong> : le code offre des capacités d’ingénierie avancées (sessions, signatures, attestation, empilement risque), mais l’effectivité en production, la couverture route par route, et la gouvernance hors code ne sont pas démontrables depuis le seul dépôt. Cette note est une <strong>indication technique</strong>, pas un score de conformité DORA.</p>
+<h3>1.5 Layered Defense Model (vue synthétique)</h3>
+<p>Le système implémente une <strong>architecture de défense en profondeur</strong> empilant des mécanismes partiellement redondants : la défaillance d’un seul contrôle ne doit pas, en conception, suffire à compromettre l’ensemble du périmètre — sous réserve que les flags soient activés et les routes couvertes (voir sections 5 et 6.8).</p>
+<table>
+<thead>
+<tr>
+<th>Ordre</th>
+<th>Couche</th>
+<th>Mécanisme principal (réf. code)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Identité</td>
+<td>Résolution de sujet JWT, rattachement utilisateur (<code>auth.py</code>, <code>jwt_subject_resolution.py</code>)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Sécurité de session</td>
+<td>Rotation refresh, suivi des JTI, révocation (<code>refresh_session.py</code>, <code>auth_spent_refresh_jti</code>)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Liaison device</td>
+<td><code>X-Device-ID</code>, profils <code>auth_user_device_profiles</code>, cohérence session</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Intégrité de requête</td>
+<td>ECDSA, nonces, portée par route (PR D2–D4)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Confiance device</td>
+<td>Attestation matérielle / logicielle (<code>device_attestation_*</code>)</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Analyse comportementale</td>
+<td>Pile moteur de risque PR F (F.2 à F.7.2 selon activation)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Détection d’intention</td>
+<td>PR F.6, motifs sur historique d’événements</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Contrôles distribués</td>
+<td>Redis optionnel : cache, rate limiting, anti-replay nonces</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Lecture régulateur / investisseur :</strong> cette pile offre une <strong>vision d’ensemble</strong> avant le détail architectural (section 3). Elle ne préjuge pas de l’<strong>effectivité opérationnelle</strong> : celle-ci est traitée en section 6.8.</p>
+<hr />
+<h2>2. Scope &amp; Methodology</h2>
+<h3>2.1 Périmètre du codebase</h3>
+<p>Inclus : arborescence Python sous <code>services/arquantix/api</code>, modèles SQLAlchemy dans <code>database.py</code>, migrations sous <code>alembic/versions/</code>, tests sous <code>tests/</code>. Exclus : déploiement réel, configuration des secrets, réseau (TLS, pare-feu), clients mobiles, autres services du monorepo non importés par cette API.</p>
+<h3>2.2 Méthode d’analyse</h3>
+<p>Analyse statique : lecture des routeurs principaux (<code>main.py</code>, routeurs inclus), des modules <code>services/auth/*</code> et <code>services/security/*</code> pertinents, recherche globale des symboles (<code>require_low_risk_action</code>, <code>evaluate_pr_f_for_request</code>, tables <code>auth_*</code>). Croisement avec les révisions Alembic récentes 131–142 pour les contrôles device et risque.</p>
+<h3>2.3 Limitations</h3>
+<p>Aucune exécution dynamique sur un environnement de production ; aucune vérification que les flags sont positionnés conformément à une politique interne. Les revendications légales « DORA compliant » au sens juridique sont <strong>hors scope</strong> : le présent document mappe des <strong>capacités techniques</strong> à des domaines de contrôle ICT usuels, sans interpréter le texte légal article par article.</p>
+<hr />
+<h2>3. System Architecture</h2>
+<h3>3.0 Renvoi au modèle défensif</h3>
+<p>La <strong>vue synthétique en huit couches</strong> est présentée en section 1.5. Les sous-sections 3.1 à 3.8 détaillent l’implémentation correspondante et les flux de confiance.</p>
+<h3>3.1 Couche identité et sujets JWT</h3>
+<p>Les sujets JWT sont résolus vers des utilisateurs applicatifs via les modules d’authentification (<code>auth.py</code>, <code>jwt_subject_resolution.py</code>). Les jetons d’accès portent des claims incluant notamment l’identifiant de session (<code>sid</code>) lorsque la session Phase 2 est utilisée, ce qui relie l’identité au modèle <code>AuthSession</code>.</p>
+<h3>3.2 Gestion de session et refresh</h3>
+<p>Les sessions sont stockées dans <code>auth_sessions</code> (migration <code>108</code>, évolutions ultérieures). La rotation des refresh tokens s’appuie sur <code>auth_refresh_tokens</code> (migration <code>131</code>) et sur <code>auth_spent_refresh_jti</code> pour enregistrer les JTIs consommés et détecter les réutilisations. La logique procédurale est centralisée dans <code>services/auth/refresh_session.py</code> (<code>perform_login</code>, <code>perform_refresh</code>, <code>perform_revoke</code>, etc.).</p>
+<h3>3.3 Liaison device</h3>
+<p>Le lien entre utilisateur et appareil repose sur <code>X-Device-ID</code> normalisé (<code>normalize_device_id</code>), sur les profils <code>auth_user_device_profiles</code> (migration <code>118</code>), et sur les champs <code>device_id</code> / empreintes dans <code>AuthSession</code>. Le moteur PR F exige un device non « legacy-unknown » lorsque <code>require_low_risk_action</code> est actif (<code>device_risk_pr_f_dependencies.py</code>).</p>
+<h3>3.4 Signature ECDSA (PR D2–D4)</h3>
+<p>Les clés publiques sont stockées dans <code>auth_device_credentials</code>. Les nonces de signature sensible sont dans <code>auth_device_signature_nonces</code> avec extension de portée par route (<code>134</code>). La vérification des requêtes sensibles passe par <code>device_sensitive_signature.py</code> et politiques dans <code>device_pr_d3_policy.py</code> / <code>device_security_pr_d2.py</code> (niveau <code>DEVICE_SECURITY_LEVEL</code>).</p>
+<h3>3.5 Attestation</h3>
+<p>Les en-têtes d’attestation sont traités par <code>device_attestation_service.py</code> et les dépendances <code>device_attestation_dependencies.py</code>. Des champs d’état d’attestation sont portés par <code>AuthSession</code> ; des migrations dédiées incluent <code>112</code> et <code>135</code>.</p>
+<h3>3.6 Pile moteur de risque</h3>
+<p>L’évaluation principale est <code>evaluate_pr_f_for_request</code> dans <code>device_risk_engine_pr_f.py</code>. L’ordre logique après résolution du cache éventuel est : <strong>règles dynamiques (F.4)</strong> → <strong>règles combinées « PR H » (F.2)</strong> → <strong>bonus baseline géographique et score temporel F.3</strong> → <strong>score de base pondéré ou legacy</strong> → <strong>overlay ML (F.7)</strong> → <strong>overlay temporel (F.7.2)</strong> → <strong>décision</strong> <code>decide_risk_action</code>. Ensuite, le résultat transite par <code>_risk_finish</code> qui invoque <strong><code>evaluate_intent_engine</code> (F.6)</strong> si activé, pouvant surclasser la décision.</p>
+<h3>3.7 Redis et infrastructure distribuée</h3>
+<p>Redis est optionnel (<code>REDIS_ENABLED</code> et dérivés dans <code>security_env.py</code>) : cache identité, rate limiting distribué, replay nonces, override dry-run des règles. <strong>NOT FOUND IN CODEBASE :</strong> configuration Terraform/Helm pour Redis dans ce dépôt.</p>
+<h3>3.8 Flux de données et frontières de confiance</h3>
+<p><strong>Frontière nord :</strong> client HTTP (en-têtes <code>Authorization</code>, <code>X-Device-ID</code>, <code>X-Forwarded-For</code>, <code>CF-IPCountry</code>, attestation, signatures). Le serveur <strong>fait confiance</strong> à ces en-têtes pour le scoring et la géolocalisation dérivée : c’est une hypothèse d’infrastructure (terminaison TLS, proxy de confiance). <strong>Frontière sud :</strong> PostgreSQL comme source de vérité pour sessions et règles ; Redis si activé comme cache / verrou distribué.</p>
+<hr />
+<h2>4. Security Control Framework</h2>
+<p>Le tableau suivant résume, pour chaque couche, l’objectif de contrôle, l’implémentation vérifiable, la menace adressée et le risque résiduel.</p>
+<table>
+<thead>
+<tr>
+<th>Couche</th>
+<th>Objectif de contrôle</th>
+<th>Implémentation (références)</th>
+<th>Menace atténuée</th>
+<th>Risque résiduel</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Identité</td>
+<td>Assurer que les actions authentifiées se rapportent à un utilisateur connu</td>
+<td><code>auth.py</code>, <code>jwt_subject_resolution.py</code>, <code>AdminUser</code></td>
+<td>Usurpation d’identité par sujet JWT mal formé</td>
+<td>Vol de secret de signature JWT ; compromission du <code>SECRET_KEY</code> (hors code)</td>
+</tr>
+<tr>
+<td>Session</td>
+<td>Limiter l’abus des jetons de longue durée</td>
+<td><code>refresh_session.py</code>, <code>AuthSession</code>, <code>AuthSpentRefreshJti</code></td>
+<td>Rejeu de refresh</td>
+<td>Courses parallèles documentées dans le code ; horloge</td>
+</tr>
+<tr>
+<td>Device</td>
+<td>Lier l’activité à un appareil connu</td>
+<td><code>AuthUserDeviceProfile</code>, PR F exige <code>X-Device-ID</code></td>
+<td>Device spoofing partiel</td>
+<td>Clients <code>legacy-unknown</code> ; incohérence de couverture PR F</td>
+</tr>
+<tr>
+<td>Signature</td>
+<td>Intégrité et fraîcheur des requêtes sensibles</td>
+<td><code>device_sensitive_signature.py</code>, PR D3/D4</td>
+<td>Replay API, MITM sur payload</td>
+<td>Niveau 0 de <code>DEVICE_SECURITY_LEVEL</code> : pas d’exigence de signature par cette politique</td>
+</tr>
+<tr>
+<td>Attestation</td>
+<td>Ancrer la confiance matérielle / OEM</td>
+<td><code>device_attestation_service.py</code>, champs session</td>
+<td>Clones logiciels, émulateurs</td>
+<td>Qualité variable selon client ; pas de garantie physique absolue</td>
+</tr>
+<tr>
+<td>Moteur de risque</td>
+<td>Agréger signaux et décider allow / step_up / block</td>
+<td><code>device_risk_engine_pr_f.py</code> et modules liés</td>
+<td>Fraude comportementale, scénarios combinés</td>
+<td>Heuristiques ; flags désactivés ; routes sans <code>require_low_risk_action</code></td>
+</tr>
+<tr>
+<td>Redis / infra</td>
+<td>État partagé pour limites et cache</td>
+<td><code>redis_client.py</code>, <code>security_env.py</code></td>
+<td>Déni de service distribué</td>
+<td>Indisponibilité Redis ; mauvaise segmentation réseau (hors code)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>5. Control Coverage Analysis</h2>
+<h3>5.1 Méthode</h3>
+<p>Recherche exhaustive de <code>require_low_risk_action</code> dans <code>services/arquantix/api/**/*.py</code>. Résultat : <strong>six</strong> occurrences — la définition dans <code>device_risk_pr_f_dependencies.py</code> et <strong>cinq</strong> injections dans <code>services/custody/router.py</code>.</p>
+<h3>5.2 Matrice de couverture (routes où PR F unifié est appliqué)</h3>
+<table>
+<thead>
+<tr>
+<th>Route (préfixe router)</th>
+<th>Handler (résumé)</th>
+<th><code>require_low_risk_action</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /api/admin/custody/accounts/client</code></td>
+<td>Création compte client</td>
+<td>Oui</td>
+</tr>
+<tr>
+<td><code>POST /api/admin/custody/accounts/client/canonical</code></td>
+<td>Création canonique</td>
+<td>Oui</td>
+</tr>
+<tr>
+<td><code>POST /api/admin/custody/webhook-events/{id}/replay</code></td>
+<td>Replay webhook</td>
+<td>Oui</td>
+</tr>
+<tr>
+<td><code>POST /api/admin/custody/simulate-withdrawal</code></td>
+<td>Simulation retrait</td>
+<td>Oui</td>
+</tr>
+<tr>
+<td><code>POST /api/internal-transfer</code></td>
+<td>Transfert interne</td>
+<td>Oui</td>
+</tr>
+</tbody>
+</table>
+<h3>5.3 Écart identifié (même famille métier)</h3>
+<p>Le endpoint <code>POST /api/admin/custody/accounts/client/simple-create</code> applique <code>require_continuous_auth_for_action("beneficiary_add")</code> et <code>require_device_attestation()</code> mais <strong>n’inclut pas</strong> <code>Depends(require_low_risk_action())</code> d’après le fichier <code>custody/router.py</code> analysé. Les autres créations de compte client sur le même routeur incluent PR F. <strong>C’est un écart de couverture explicite.</strong></p>
+<h3>5.4 Autres routes sensibles sans PR F unifié</h3>
+<p>Les endpoints d’authentification (<code>/auth/login</code>, <code>/auth/refresh</code>, <code>/auth/revoke</code>), les routes passkeys sous <code>/auth/passkeys</code>, et les flux OTP (<code>admin_email_otp_routes.py</code>, etc.) <strong>ne</strong> montent <strong>pas</strong> <code>require_low_risk_action</code> dans le périmètre analysé. Ils s’appuient sur d’autres mécanismes (rotation, middlewares globaux, auth continue). <strong>NOT FOUND IN CODEBASE :</strong> autre fichier que <code>custody/router.py</code> important <code>require_low_risk_action</code>.</p>
+<h3>5.5 Plan de remédiation (recommandation technique)</h3>
+<table>
+<thead>
+<tr>
+<th>Priorité</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Haute</td>
+<td>Décider si <code>simple-create</code> doit aligner ses <code>Depends</code> sur les autres routes <code>beneficiary_add</code> ; si oui, ajouter <code>require_low_risk_action()</code>.</td>
+</tr>
+<tr>
+<td>Haute</td>
+<td>Maintenir une matrice signée produit / sécurité listant chaque route sensible et ses dépendances.</td>
+</tr>
+<tr>
+<td>Moyenne</td>
+<td>Documenter explicitement pourquoi login/refresh ne doivent pas invoquer PR F (ou ajouter un pré-filtre léger si la menace l’exige).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>6. Risk Engine Deep Analysis</h2>
+<h3>6.1 PR F — score de base</h3>
+<p><strong>Logique :</strong> <code>compute_risk_score</code> agrège confiance device, état d’attestation, cohérence réseau, vélocité, échecs de signature, etc. <strong>Forces :</strong> explicabilité via raisons textuelles ; plafonnement du score. <strong>Faiblesses :</strong> sensibilité aux signaux fournis par en-têtes ; score sans PR F sur de nombreuses routes. <strong>Surface d’attaque :</strong> manipulation d’en-têtes si bordure non fiable.</p>
+<h3>6.2 PR F.2 et PR H (règles combinées)</h3>
+<p><strong>Logique :</strong> <code>evaluate_combination_rules</code> dans <code>device_risk_engine_pr_f2.py</code> ; commentaire de code « Règles non linéaires (PR H) ». Activation : <code>DEVICE_RISK_ENABLE_COMBINATION_RULES</code>. <strong>Forces :</strong> court-circuits stricts (ex. nouveau device et changement de pays). <strong>Faiblesses :</strong> désactivé par défaut ; règles statiques codées. <strong>Surface :</strong> contournement si combinaisons ne couvrent pas un scénario réel.</p>
+<h3>6.3 PR F.3 — baseline avancée</h3>
+<p><strong>Logique :</strong> <code>baseline_temporal_anomaly_score</code> et mises à jour dans <code>device_risk_engine_pr_f3.py</code>, persistance <code>auth_user_risk_baselines</code>. <strong>Forces :</strong> agrégats temporels (Welford). <strong>Faiblesses :</strong> besoin d’échantillons ; faux positifs sur changement de mode de vie.</p>
+<h3>6.4 PR F.4 — règles dynamiques</h3>
+<p><strong>Logique :</strong> <code>evaluate_dynamic_rules</code> ; table <code>auth_risk_rules</code> ; DSL JSON validé par <code>validate_risk_rule_conditions</code>. <strong>Forces :</strong> évolutivité sans redéploiement. <strong>Faiblesses :</strong> erreur humaine sur règles valides syntaxiquement mais dangereuses ; dry-run peut masquer une erreur de configuration si mal gouverné.</p>
+<h3>6.5 PR F.6 — intent engine</h3>
+<p><strong>Logique :</strong> <code>evaluate_intent_engine</code> ; motifs sur historique récent ; peut forcer <code>block</code> ou <code>step_up</code> ; journal <code>auth_user_intent_events</code> via <code>log_intent_event</code> dans la chaîne PR F. <strong>Forces :</strong> séquences métier explicites. <strong>Faiblesses :</strong> fenêtre temporelle fixe en code ; contournement par lenteur extrême.</p>
+<h3>6.6 PR F.7 — pseudo-ML</h3>
+<p><strong>Logique :</strong> <code>device_risk_ml_engine.py</code> ; features dérivées d’événements intent et session intelligence ; z-score vs EMA ; pas de bibliothèque ML externe dans ce module. <strong>Forces :</strong> pas de boîte noire externe ; gel EMA si score pré-ML élevé (F.7.1). <strong>Faiblesses :</strong> calibration empirique ; défaut <code>DEVICE_RISK_ML_ENABLED=false</code>.</p>
+<h3>6.7 PR F.7.2 — temporel</h3>
+<p><strong>Logique :</strong> <code>device_risk_temporal_features.py</code> / <code>device_risk_temporal_engine.py</code> ; distributions heure/jour/transitions ; table <code>auth_user_temporal_features</code>. <strong>Forces :</strong> explain strings ; plafond de contribution. <strong>Faiblesses :</strong> seuils internes fixes ; min samples configurable.</p>
+<h3>6.8 Control Effectiveness (Technical Assessment)</h3>
+<p>L’<strong>effectivité</strong> d’un contrôle ne se confond pas avec son <strong>existence</strong> dans le code. Elle dépend de facteurs que seule l’exploitation peut valider pleinement ; le tableau ci-dessous donne une <strong>appréciation technique</strong> fondée sur la logique implémentée et les dépendances déjà identifiées (sections 5 et 11).</p>
+<p><strong>Facteurs d’effectivité communs :</strong> (1) activation des feature flags et valeurs de seuils ; (2) montage correct des dépendances FastAPI sur chaque route sensible ; (3) qualité des signaux amont (<code>X-Device-ID</code>, en-têtes IP/pays derrière un proxy de confiance).</p>
+<table>
+<thead>
+<tr>
+<th>Contrôle ou famille</th>
+<th>Effectivité technique observée (à froid, code)</th>
+<th>Facteurs limitants</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rotation des refresh tokens et détection de reuse</td>
+<td><strong>Élevée</strong> — logique persistée (<code>auth_spent_refresh_jti</code>, révocation)</td>
+<td>Fenêtres concurrentielles documentées ; horloge serveur</td>
+</tr>
+<tr>
+<td>Liaison device (<code>device_id</code>, profils)</td>
+<td><strong>Moyenne</strong> — forte lorsque PR F est monté et <code>X-Device-ID</code> présent</td>
+<td>Intégrité du <code>device_id</code> côté client ; valeur <code>legacy-unknown</code></td>
+</tr>
+<tr>
+<td>Moteur de risque PR F (pile complète)</td>
+<td><strong>Variable</strong> — puissant lorsque activé sur la route</td>
+<td>Défauts de flags à <code>false</code> ; <strong>écart de couverture</strong> (ex. <code>simple-create</code>)</td>
+</tr>
+<tr>
+<td>Signature ECDSA + nonces sur routes sensibles</td>
+<td><strong>Conditionnelle</strong> — dépend de <code>DEVICE_SECURITY_LEVEL</code> et politiques PR D3</td>
+<td>À niveau 0, pas d’exigence de signature sensible via la politique documentée dans <code>device_pr_d3_policy.py</code></td>
+</tr>
+<tr>
+<td>Attestation</td>
+<td><strong>Moyenne à élevée</strong> selon client</td>
+<td>Variabilité des preuves OEM ; pas de garantie universelle</td>
+</tr>
+<tr>
+<td>Règles dynamiques F.4</td>
+<td><strong>Variable</strong> — dépend de <code>DEVICE_RISK_ENABLE_DYNAMIC_RULES</code></td>
+<td>Erreurs de conception de règle malgré DSL valide</td>
+</tr>
+<tr>
+<td>Couches F.7 / F.7.2 / F.6</td>
+<td><strong>Variable</strong> — dépend des flags respectifs</td>
+<td>Volume de données et calibration</td>
+</tr>
+<tr>
+<td>Redis (rate limit, cache, nonces)</td>
+<td><strong>Conditionnelle</strong> — utile si <code>REDIS_ENABLED</code> et réseau sain</td>
+<td>Indisponibilité ou exposition réseau du datastore</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Conclusion (lecture opérationnelle) :</strong> les mécanismes sont <strong>robustes sur le plan de l’ingénierie logicielle</strong>, mais l’<strong>effectivité en production</strong> repose sur une configuration cohérente, une <strong>couverture de routes complète</strong> là où le risque l’exige, et une <strong>infrastructure</strong> qui préserve la confiance dans les en-têtes et l’isolation Redis. Sans preuve runtime (section 13), cette appréciation reste <strong>technique</strong>, non <strong>mesurée</strong> sur trafic réel.</p>
+<hr />
+<h2>7. Threat Model &amp; Attack Simulation</h2>
+<p>Les scénarios ci-dessous décrivent le <strong>comportement attendu d’après le code</strong>, pas des résultats de pentest annexés (<strong>NOT FOUND IN CODEBASE</strong> pour un rapport d’intrusion).</p>
+<h3>7.1 Vol de refresh token après rotation</h3>
+<p><strong>Étapes :</strong> attaquant réutilise un JTI déjà marqué consommé. <strong>Réaction :</strong> insertion ou détection sur <code>auth_spent_refresh_jti</code>, révocation de session, erreur HTTP 401 avec message de reuse (<code>refresh_session.py</code>). <strong>Résultat attendu :</strong> session compromise clôturée. <strong>Faiblesse résiduelle :</strong> conditions de concurrence documentées dans les commentaires du module refresh.</p>
+<h3>7.2 Spoofing device / IP / pays</h3>
+<p><strong>Étapes :</strong> requêtes avec en-têtes falsifiés depuis un client contrôlé. <strong>Réaction :</strong> scoring PR F et baselines utilisent ces signaux. <strong>Résultat :</strong> possible adaptation du score si incohérences. <strong>Faiblesse :</strong> si le proxy n’est pas digne de confiance, les signaux sont toxiques.</p>
+<h3>7.3 Fraude lente</h3>
+<p><strong>Étapes :</strong> attaquant imite le rythme historique. <strong>Réaction :</strong> F.7 / F.7.2 peuvent ne pas dévier fortement. <strong>Faiblesse :</strong> faux négatifs inhérents aux heuristiques.</p>
+<h3>7.4 Contournement de règle</h3>
+<p><strong>Étapes :</strong> accès à une route sans <code>require_low_risk_action</code> alors qu’une route voisine l’a. <strong>Réaction :</strong> aucune évaluation PR F sur cette route. <strong>Faiblesse :</strong> <strong>gap architectural</strong> (ex. <code>simple-create</code>).</p>
+<h3>7.5 Manipulation Redis</h3>
+<p><strong>Étapes :</strong> effacement de clés de cache ou de nonce si Redis exposé. <strong>Réaction :</strong> dépend du déploiement ; le code ne sécurise pas le réseau Redis. <strong>Faiblesse :</strong> <strong>NOT ASSESSABLE IN CODEBASE</strong> — segmentation réseau et ACL Redis.</p>
+<hr />
+<h2>8. DORA Mapping (capacités techniques uniquement)</h2>
+<p>Aucune allégation de conformité légale. Correspondance indicative :</p>
+<table>
+<thead>
+<tr>
+<th>Domaine de contrôle ICT (formulation générique)</th>
+<th>Capacités présentes dans le code</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gestion des risques ICT</td>
+<td>Flags, seuils, règles paramétrables, simulation</td>
+</tr>
+<tr>
+<td>Contrôle d’accès</td>
+<td>JWT, sessions, rôles, auth continue, Zero Trust sur certaines routes</td>
+</tr>
+<tr>
+<td>Détection d’incidents / anomalies</td>
+<td>Moteur de risque, logs structurés, tables d’audit</td>
+</tr>
+<tr>
+<td>Résilience opérationnelle</td>
+<td>Dépendances optionnelles Redis ; persistance PostgreSQL</td>
+</tr>
+<tr>
+<td>Traçabilité</td>
+<td>Tables <code>auth_*</code>, événements sécurité si activés</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>9. Evidence &amp; Logging</h2>
+<h3>9.1 Tables d’audit pertinentes (liste non exhaustive)</h3>
+<p><code>auth_sessions</code>, <code>auth_refresh_tokens</code>, <code>auth_spent_refresh_jti</code>, <code>auth_user_device_profiles</code>, <code>auth_device_credentials</code>, <code>auth_device_signature_nonces</code>, <code>auth_user_risk_baselines</code>, <code>auth_risk_rules</code>, <code>auth_user_intent_events</code>, <code>auth_user_risk_features</code>, <code>auth_user_temporal_features</code>, <code>auth_security_events</code> (si persistance activée).</p>
+<h3>9.2 Journaux représentatifs</h3>
+<p>Exemples de noms d’événements ou de logs : <code>device_risk_evaluated</code>, <code>refresh_token_reuse_detected</code>, <code>device_risk_temporal_evaluated</code>, <code>device_intent_engine_block</code>, <code>device_intent_engine_step_up</code>. La présence effective dans les agrégateurs de logs de production n’est pas vérifiable dans le dépôt.</p>
+<hr />
+<h2>10. Residual Risks</h2>
+<p><strong>Limites architecturales :</strong> hétérogénéité de la couverture PR F ; intent appliqué après le calcul PR F dans <code>_risk_finish</code>, ce qui peut surclasser une décision mais ne s’applique pas aux routes sans chaîne PR F.</p>
+<p><strong>Limites anti-fraude comportementale :</strong> heuristiques non calibrées par un tiers ; dépendance à la volumétrie d’événements intent.</p>
+<p><strong>Dépendances de configuration :</strong> l’essentiel des défenses avancées est désactivé tant que les variables listées en section 11 restent à leurs valeurs par défaut « off ».</p>
+<hr />
+<h2>11. Runtime Configuration Requirements</h2>
+<p>Les <strong>valeurs par défaut</strong> ci-dessous proviennent de <code>security_env.py</code> et des modules PR D2 sauf mention contraire. Les <strong>valeurs requises</strong> pour une posture « défense activée » sont des <strong>recommandations d’exploitation</strong> ; elles ne sont pas prescrites par le seul dépôt.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Défaut (code)</th>
+<th>Valeur typique recommandée (exploitation)</th>
+<th>Impact si désactivé ou à 0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DEVICE_SECURITY_LEVEL</code></td>
+<td><code>0</code> (<code>device_security_pr_d2.py</code>)</td>
+<td><code>2</code> ou <code>3</code> si signatures et politiques étendues requises</td>
+<td>Pas d’exigence de signature sensible via <code>sensitive_routes_device_signature_enabled</code> (faux si niveau inférieur à 2)</td>
+</tr>
+<tr>
+<td><code>DEVICE_RISK_ENGINE_PR_F_ENABLED</code></td>
+<td><code>false</code></td>
+<td><code>true</code> sur routes protégées</td>
+<td>Aucune évaluation PR F sur routes qui appellent le Depends</td>
+</tr>
+<tr>
+<td><code>DEVICE_RISK_ENABLE_DYNAMIC_RULES</code></td>
+<td><code>false</code></td>
+<td><code>true</code> si règles DB</td>
+<td>Règles <code>auth_risk_rules</code> non appliquées dynamiquement</td>
+</tr>
+<tr>
+<td><code>DEVICE_RISK_ML_ENABLED</code></td>
+<td><code>false</code></td>
+<td><code>true</code> si couche F.7 voulue</td>
+<td>Pas d’overlay ML</td>
+</tr>
+<tr>
+<td><code>DEVICE_RISK_TEMPORAL_ENABLED</code></td>
+<td><code>false</code></td>
+<td><code>true</code> si F.7.2 voulue</td>
+<td>Pas de scoring temporel</td>
+</tr>
+<tr>
+<td><code>REDIS_ENABLED</code></td>
+<td><code>false</code></td>
+<td><code>true</code> si besoin distribué</td>
+<td>Cache et rate limits distribués limités</td>
+</tr>
+</tbody>
+</table>
+<p>Variables additionnelles documentées dans le code : <code>DEVICE_INTENT_ENGINE_ENABLED</code>, <code>DEVICE_RISK_ENABLE_COMBINATION_RULES</code>, <code>DEVICE_RISK_RULES_DRY_RUN</code>, <code>AUTH_SECURITY_EVENTS_ENABLED</code> (via modules concernés), etc.</p>
+<hr />
+<h2>12. Governance &amp; Operations</h2>
+<p><strong>Gestion des règles :</strong> API <code>/admin/risk</code> dans <code>risk_rules_admin_routes.py</code> : liste, création, patch, validation DSL (<code>POST /rules/validate</code>), simulation. Champs <code>enabled</code>, <code>is_active</code>, <code>ruleset</code>, <code>priority</code>, <code>version</code>.</p>
+<p><strong>Contrôles de gouvernance absents du code :</strong> workflow d’approbation à quatre yeux obligatoire ; séparation stricte des rôles sur les mutations de règles — <strong>NOT FOUND IN CODEBASE</strong> comme exigence codée ; seul <code>get_current_user</code> borne l’accès admin.</p>
+<hr />
+<h2>13. Required Evidence Package (hors dépôt)</h2>
+<p>Pour répondre à une demande régulateur ou due diligence, les éléments suivants doivent être <strong>assemblés en annexe</strong> ; ils ne sont pas générés par Git seul.</p>
+<table>
+<thead>
+<tr>
+<th>Artéfact</th>
+<th>Contenu attendu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Snapshot de configuration</td>
+<td>Variables d’environnement non secrètes pour les flags section 11</td>
+</tr>
+<tr>
+<td>Journaux d’exploitation</td>
+<td>Échantillons datés des événements listés section 9</td>
+</tr>
+<tr>
+<td>Rapport red team / pentest</td>
+<td><strong>NOT FOUND IN CODEBASE</strong> — à produire séparément</td>
+</tr>
+<tr>
+<td>Schéma d’infrastructure</td>
+<td>TLS, placement Redis, accès DB, WAF</td>
+</tr>
+<tr>
+<td>Procédure de changement</td>
+<td>Tickets, CAB, approbations pour règles et seuils</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>14. Final Maturity Assessment</h2>
+<p>Notation <strong>0 à 5</strong> par domaine (5 = capacité maximale observée au niveau <strong>code</strong>, indépendamment de la preuve production).</p>
+<table>
+<thead>
+<tr>
+<th>Domaine</th>
+<th>Score</th>
+<th>Justification succincte</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Identité &amp; JWT</td>
+<td>4,0</td>
+<td>Modèles et résolution structurés ; dépendance aux secrets hors repo</td>
+</tr>
+<tr>
+<td>Sessions &amp; refresh</td>
+<td>4,5</td>
+<td>Rotation, spent JTI, tests auth</td>
+</tr>
+<tr>
+<td>Device &amp; profils</td>
+<td>4,0</td>
+<td>Profils et PR F ; chemin legacy résiduel</td>
+</tr>
+<tr>
+<td>Signature &amp; nonces</td>
+<td>3,5</td>
+<td>Complet en code ; activation par <code>DEVICE_SECURITY_LEVEL</code></td>
+</tr>
+<tr>
+<td>Attestation</td>
+<td>3,5</td>
+<td>Intégration présente ; variabilité client</td>
+</tr>
+<tr>
+<td>Moteur de risque (pile F)</td>
+<td>4,0</td>
+<td>Riche mais flags et couverture route</td>
+</tr>
+<tr>
+<td>Redis / distribué</td>
+<td>3,0</td>
+<td>Optionnel ; pas de preuve infra</td>
+</tr>
+<tr>
+<td>Gouvernance des règles</td>
+<td>2,5</td>
+<td>API admin ; pas de workflow d’approbation codé</td>
+</tr>
+<tr>
+<td>Observabilité</td>
+<td>3,5</td>
+<td>Hooks nombreux ; désactivation par flags</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Score final (moyenne simple des neuf domaines) :</strong> <strong>3,7 / 5</strong>.</p>
+<p><strong>Clause de clôture :</strong> ce score mesure la <strong>maturité d’implémentation logicielle</strong> telle que visible dans le dépôt. Il ne constitue pas une notation de conformité DORA, ni un substitut à un audit tiers.</p>
+<hr />
+<p><em>Fin du rapport.</em></p>
+<p class="footer">Fin du document — Arquantix API — usage due diligence / audit interne. Non certification réglementaire.</p>
+</body>
+</html>

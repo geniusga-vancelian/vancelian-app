@@ -1,0 +1,174 @@
+# Recovery stack Arquantix — orchestration propre quand le projet « arquantix » est corrompu
+# (erreurs « No such container » / IDs fantômes) alors que les volumes nommés sont sains.
+#
+# Différences vs docker-compose.arquantix.yml :
+# - Pas de container_name : Compose génère des noms uniques (évite la réutilisation d’état fantôme
+#   lié aux anciens noms arquantix-db / arquantix-api / …).
+# - Volumes Postgres/Redis en external: true — pointent explicitement vers les volumes existants
+#   arquantix_arquantix-db-data et arquantix_arquantix-redis-data (aucune création d’un volume DB vide).
+# - Réseau avec un nom dédié — évite un réseau arquantix_arquantix-network bloqué ou incohérent.
+#
+# Usage (depuis la racine du dépôt) :
+#   docker compose --project-name arquantixrecovery --env-file .env.arquantix \
+#     -f docker-compose.arquantix-recovery.yml up -d
+#
+# Exec / logs par nom de service (inchangé) :
+#   docker compose --project-name arquantixrecovery --env-file .env.arquantix \
+#     -f docker-compose.arquantix-recovery.yml exec arquantix-db psql -U arquantix -d postgres -c '\l'
+#
+# Arrêt sans supprimer les volumes :
+#   docker compose --project-name arquantixrecovery --env-file .env.arquantix \
+#     -f docker-compose.arquantix-recovery.yml down
+#
+# Quand tout est rentré dans l’ordre (daemon Docker sain), tu peux repasser au compose standard
+# avec le même Makefile qu’avant ; les données restent dans les mêmes volumes nommés.
+
+services:
+  arquantix-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-arquantix}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-arquantix}
+      POSTGRES_DB: ${DB_NAME:-arquantix_fresh}
+    ports:
+      - "${DB_PORT:-5443}:5432"
+    volumes:
+      - arquantix-db-data:/var/lib/postgresql/data
+      - ./services/arquantix/db/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-arquantix}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arquantix_recovery_network
+
+  arquantix-redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - arquantix-redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arquantix_recovery_network
+
+  arquantix-api:
+    build:
+      context: ./services/arquantix/api
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env.arquantix
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-arquantix}:${DB_PASSWORD:-arquantix}@arquantix-db:5432/${DB_NAME:-arquantix_fresh}
+      REDIS_URL: redis://arquantix-redis:6379/0
+      AUTH_REDIS_URL: redis://arquantix-redis:6379/0
+    depends_on:
+      arquantix-db:
+        condition: service_healthy
+      arquantix-redis:
+        condition: service_healthy
+    networks:
+      - arquantix_recovery_network
+    restart: unless-stopped
+
+  arquantix-cms:
+    image: node:20-alpine
+    working_dir: /srv/app
+    environment:
+      DATABASE_CLIENT: ${CMS_DATABASE_CLIENT:-sqlite}
+      DATABASE_FILENAME: .tmp/data.db
+      HOST: 0.0.0.0
+      PORT: 1337
+      APP_KEYS: ${CMS_APP_KEYS:-toBeModified1,toBeModified2,toBeModified3,toBeModified4}
+      API_TOKEN_SALT: ${CMS_API_TOKEN_SALT:-toBeModified}
+      ADMIN_JWT_SECRET: ${CMS_ADMIN_JWT_SECRET:-toBeModified}
+      JWT_SECRET: ${CMS_JWT_SECRET:-toBeModified}
+      TRANSFER_TOKEN_SALT: ${CMS_TRANSFER_TOKEN_SALT:-toBeModified}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "${CMS_PORT:-1337}:1337"
+    volumes:
+      - ./services/arquantix/cms:/srv/app
+    command: >
+      sh -c "
+        if [ ! -f package.json ]; then
+          echo 'Initializing Strapi (this may take a few minutes)...';
+          npx --yes create-strapi-app@latest . --quickstart --no-run --skip-cloud || true;
+        fi;
+        if [ -f package.json ] && [ ! -d node_modules ]; then
+          echo 'Installing dependencies...';
+          npm install;
+        fi;
+        if [ -f package.json ]; then
+          echo 'Starting Strapi...';
+          npm run develop;
+        else
+          echo 'Error: Strapi initialization failed. Check logs.';
+          sleep 3600;
+        fi
+      "
+    networks:
+      - arquantix_recovery_network
+    restart: unless-stopped
+
+  arquantix-web:
+    build:
+      context: ./services/arquantix/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
+        NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO: ${NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      DATABASE_URL: postgresql://${DB_USER:-arquantix}:${DB_PASSWORD:-arquantix}@arquantix-db:5432/${DB_NAME:-arquantix_fresh}
+      BACKEND_URL: ${BACKEND_URL:-http://arquantix-api:8000}
+      BACKEND_API_URL: ${BACKEND_API_URL:-http://arquantix-api:8000}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://arquantix-api:8000}
+      NEXT_PUBLIC_STRAPI_URL: ${NEXT_PUBLIC_STRAPI_URL:-http://localhost:1337}
+      NEXT_PUBLIC_STRAPI_API_URL: ${NEXT_PUBLIC_STRAPI_API_URL:-http://localhost:1337/api}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
+      ADMIN_LOGIN0_BG_VIDEO: ${ADMIN_LOGIN0_BG_VIDEO:-}
+      NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO: ${NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO:-}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./services/arquantix/web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      arquantix-cms:
+        condition: service_started
+      arquantix-api:
+        condition: service_started
+    networks:
+      - arquantix_recovery_network
+    restart: unless-stopped
+
+volumes:
+  arquantix-db-data:
+    external: true
+    name: arquantix_arquantix-db-data
+  arquantix-redis-data:
+    external: true
+    name: arquantix_arquantix-redis-data
+
+# Réseau unique explicite : tous les services y sont attachés (DNS interne arquantix-db, arquantix-api, …).
+networks:
+  arquantix_recovery_network:
+    name: arquantix_recovery_network
+    driver: bridge

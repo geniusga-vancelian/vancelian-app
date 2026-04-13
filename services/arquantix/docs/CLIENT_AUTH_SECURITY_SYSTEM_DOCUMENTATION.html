@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Documentation — Authentification, session intelligence et sécurité client (Arquantix)</title>
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --text: #1a1d24;
+      --muted: #5c6370;
+      --border: #e2e6ed;
+      --accent: #1e3a5f;
+      --accent-light: #e8eef5;
+      --security: #7c2d12;
+      --security-bg: #fff7ed;
+      --key: #14532d;
+      --key-bg: #f0fdf4;
+      --example: #1e40af;
+      --example-bg: #eff6ff;
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    header.doc-header {
+      background: linear-gradient(135deg, var(--accent) 0%, #2d4a6f 100%);
+      color: #fff;
+      padding: 2.5rem 1.5rem;
+      margin: 0 0 2rem;
+    }
+    header.doc-header h1 { font-size: 1.65rem; font-weight: 600; margin: 0 0 0.5rem; line-height: 1.3; }
+    header.doc-header p { margin: 0; opacity: 0.92; font-size: 0.95rem; }
+    nav.toc {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    nav.toc h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.75rem; }
+    nav.toc ol { margin: 0; padding-left: 1.25rem; columns: 2; column-gap: 2rem; }
+    @media (max-width: 720px) { nav.toc ol { columns: 1; } }
+    nav.toc a { color: var(--accent); text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem 1.5rem 1.75rem;
+      margin-bottom: 1.5rem;
+    }
+    section h2 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 0 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--accent-light);
+    }
+    section h3 { font-size: 1.1rem; margin: 1.25rem 0 0.5rem; color: var(--text); }
+    section h4 { font-size: 0.95rem; margin: 1rem 0 0.35rem; color: var(--muted); font-weight: 600; }
+    p { margin: 0.65rem 0; }
+    ul, ol { margin: 0.5rem 0 0.75rem; padding-left: 1.35rem; }
+    li { margin: 0.35rem 0; }
+    code, .mono { font-family: ui-monospace, "Cascadia Code", monospace; font-size: 0.88em; background: #f1f3f6; padding: 0.12em 0.35em; border-radius: 4px; }
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 1rem 1.1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      margin: 0.75rem 0;
+    }
+    pre code { background: none; padding: 0; color: inherit; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--accent-light); font-weight: 600; color: var(--accent); }
+    tr:nth-child(even) td { background: #fafbfc; }
+    .box {
+      border-radius: 8px;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+      border-left: 4px solid;
+    }
+    .box .label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+    }
+    .key-takeaway { background: var(--key-bg); border-color: var(--key); }
+    .key-takeaway .label { color: var(--key); }
+    .security-note { background: var(--security-bg); border-color: var(--security); }
+    .security-note .label { color: var(--security); }
+    .example-flow { background: var(--example-bg); border-color: var(--example); }
+    .example-flow .label { color: var(--example); }
+    .diagram {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 0.75rem;
+      margin: 1rem 0;
+      justify-content: center;
+    }
+    .diagram .node {
+      background: var(--accent-light);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.88rem;
+      min-width: 120px;
+      text-align: center;
+    }
+    .diagram .arrow {
+      align-self: center;
+      color: var(--muted);
+      font-size: 1.2rem;
+    }
+    .muted { color: var(--muted); font-size: 0.92rem; }
+    .footnote { font-size: 0.85rem; color: var(--muted); margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header class="doc-header">
+    <div class="wrap">
+      <h1>Authentification client, 2FA, auth continue et session intelligence</h1>
+      <p>Documentation de référence interne — alignée sur le code du dépôt <span class="mono">services/arquantix</span> (API FastAPI, services sécurité, client mobile Flutter).</p>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <nav class="toc" aria-label="Table des matières">
+      <h2>Table des matières</h2>
+      <ol>
+        <li><a href="#s1">Introduction</a></li>
+        <li><a href="#s2">Vue d’ensemble de l’architecture</a></li>
+        <li><a href="#s3">Système de login</a></li>
+        <li><a href="#s4">Passkeys, OTP, 2FA</a></li>
+        <li><a href="#s5">Continuous Auth</a></li>
+        <li><a href="#s6">Actions sensibles</a></li>
+        <li><a href="#s7">Session intelligence</a></li>
+        <li><a href="#s8">Device trust et recent auth</a></li>
+        <li><a href="#s9">UX et expérience client</a></li>
+        <li><a href="#s10">Friction adaptative</a></li>
+        <li><a href="#s11">Exemples de flux</a></li>
+        <li><a href="#s12">Audit et observabilité</a></li>
+        <li><a href="#s13">Sécurité côté routes</a></li>
+        <li><a href="#s14">Flags et activation</a></li>
+        <li><a href="#s15">Limites connues</a></li>
+        <li><a href="#s16">Guide pratique</a></li>
+        <li><a href="#s17">Glossaire</a></li>
+        <li><a href="#s18">Annexes</a></li>
+      </ol>
+    </nav>
+
+    <!-- 1 -->
+    <section id="s1">
+      <h2>1. Introduction</h2>
+      <p>L’objectif global est de <strong>protéger le client</strong> au-delà du simple mot de passe initial : la plateforme distingue l’<strong>authentification initiale</strong> (login, passkey login, refresh) de la <strong>protection continue</strong> des actions sensibles (virements, retraits, paramètres de sécurité, données d’identité, etc.).</p>
+      <div class="box key-takeaway">
+        <div class="label">Key takeaway</div>
+        <p>La philosophie documentée dans le code est celle d’une <strong>protection progressive</strong> : session serveur (<span class="mono">AuthSession</span>) liée au JWT via <span class="mono">sid</span>, enrichissement par <strong>session intelligence</strong> (état de risque par session), puis <strong>continuous auth</strong> qui applique les politiques définies dans <span class="mono">sensitive_action_map</span>. Les escalades <strong>step-up</strong> (OTP / passkey) et <strong>reauth</strong> (nouvelle authentification complète) sont des réponses API structurées consommées par le mobile.</p>
+      </div>
+      <p><strong>Différence fondamentale :</strong> le login et les flux de pré-auth (ex. démarrage passkey login sans session utilisateur établie) ne passent pas par <span class="mono">require_continuous_auth_for_action</span>, car cette dépendance suppose un JWT utilisateur avec session liée — voir section&nbsp;3.</p>
+    </section>
+
+    <!-- 2 -->
+    <section id="s2">
+      <h2>2. Vue d’ensemble de l’architecture</h2>
+      <p>Les composants ci-dessous sont ceux explicitement présents dans le dépôt (fichiers Python / Dart cités).</p>
+      <div class="diagram" role="img" aria-label="Flux logique">
+        <div class="node">Login / refresh<br/><span class="mono">refresh_session.py</span></div>
+        <span class="arrow">→</span>
+        <div class="node"><span class="mono">AuthSession</span><br/>+ JWT <span class="mono">sid</span></div>
+        <span class="arrow">→</span>
+        <div class="node"><span class="mono">AuthSessionIntelligence</span><br/><span class="mono">session_intelligence_service</span></div>
+        <span class="arrow">→</span>
+        <div class="node"><span class="mono">continuous_auth_engine</span><br/>+ <span class="mono">sensitive_action_map</span></div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Composant</th><th>Rôle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="mono">AuthSession</span> / JWT</td><td>Session serveur persistée ; le claim <span class="mono">sid</span> lie le bearer token à une ligne <span class="mono">auth_sessions</span> (<span class="mono">database.py</span>, <span class="mono">auth.py</span>).</td></tr>
+          <tr><td><span class="mono">AuthSessionIntelligence</span></td><td>État 1:1 par session : confiance appareil/session, scores, <span class="mono">last_step_up_at</span>, raisons (<span class="mono">reason_codes_json</span>), etc.</td></tr>
+          <tr><td><span class="mono">session_intelligence_service.py</span></td><td>Initialisation à l’issue session, mise à jour sur requêtes, heuristiques <span class="mono">should_require_step_up</span>, <span class="mono">should_force_reauth</span>, <span class="mono">should_relock_local</span>.</td></tr>
+          <tr><td><span class="mono">session_intelligence_middleware.py</span></td><td>Middleware optionnel : après réponse, met à jour l’activité si JWT avec <span class="mono">sid</span> (chemins <span class="mono">/auth/login</span>, refresh, etc. exclus).</td></tr>
+          <tr><td><span class="mono">sensitive_action_map.py</span></td><td>Carte <span class="mono">ACTION_POLICIES</span> : par <span class="mono">action_key</span>, niveau LOW/MEDIUM/HIGH, step-up, fenêtre « recent auth », biométrie, trusted device only.</td></tr>
+          <tr><td><span class="mono">continuous_auth_engine.py</span></td><td>Agrège politique + intelligence (+ friction adaptative Phase 5B, moteur de risque Phase 5C si activé) → décision <span class="mono">allow</span> / step-up / reauth.</td></tr>
+          <tr><td><span class="mono">session_intelligence_dependencies.py</span></td><td><span class="mono">require_continuous_auth_for_action(action_key)</span> : dépendance FastAPI, payloads d’erreur 401/403 structurés.</td></tr>
+          <tr><td>Client Flutter</td><td><span class="mono">sensitive_action_http.dart</span> : parse des codes, <span class="mono">next_step</span>, champs UX ; <span class="mono">session_intelligence_manager.dart</span> pour relock / biométrie (cf. rapport <span class="mono">SESSION_INTELLIGENCE_CONTINUOUS_AUTH_REPORT.md</span>).</td></tr>
+        </tbody>
+      </table>
+      <div class="box security-note">
+        <div class="label">Security note</div>
+        <p>Aucune « deuxième pile » parallèle n’est prévue pour l’auth continue : les commentaires de code insistent sur une <strong>seule source de politique</strong> (<span class="mono">sensitive_action_map</span>) et un <strong>seul moteur de décision</strong> (<span class="mono">continuous_auth_engine</span>), documenté notamment dans <span class="mono">SENSITIVE_ACTIONS_HARDENING_REPORT.md</span>.</p>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section id="s3">
+      <h2>3. Système de login</h2>
+      <h3>3.1 Parcours authentifié vs pré-auth</h3>
+      <p>Le flux principal de session passe par <span class="mono">services/auth/refresh_session.py</span> : création ou renouvellement de <span class="mono">AuthSession</span>, émission access + refresh JWT. Lorsque <span class="mono">SESSION_INTELLIGENCE_ENABLED</span> est actif, <span class="mono">initialize_session_intelligence</span> crée la ligne <span class="mono">auth_session_intelligence</span> à l’issue d’une session réussie.</p>
+      <p>Les endpoints de <strong>login non authentifiés</strong> (ex. <span class="mono">POST /auth/login</span>, <span class="mono">POST /auth/passkeys/login/start</span> et <span class="mono">.../finish</span>) ne portent pas de Bearer utilisateur avec <span class="mono">sid</span> : ils ne sont pas concernés par <span class="mono">require_continuous_auth_for_action</span>.</p>
+      <h3>3.2 Pourquoi le continuous auth n’englobe pas le login</h3>
+      <p>La dépendance <span class="mono">require_continuous_auth_for_action</span> décode le JWT, exige un claim <span class="mono">sid</span>, charge <span class="mono">AuthSession</span> valide et la ligne intelligence. <strong>Sans <span class="mono">sid</span></strong>, le code <strong>laisse passer</strong> l’utilisateur (comportement de rétrocompatibilité documenté dans le docstring du module). Les flux login / pré-auth ne satisfont pas ce prérequis par définition.</p>
+      <h3>3.3 JWT, sid et cycle de vie</h3>
+      <ul>
+        <li><span class="mono">create_access_token</span> (<span class="mono">auth.py</span>) peut inclure <span class="mono">sid</span>, <span class="mono">dtrust</span>, <span class="mono">auth_str</span>, <span class="mono">strust</span>, <span class="mono">lstup</span>, <span class="mono">relock</span>, <span class="mono">bio_req</span>, etc.</li>
+        <li>La session « stable » côté serveur est <span class="mono">AuthSession</span> (refresh rotatif, révocation, expiration).</li>
+        <li>Les jetons courts type <span class="mono">create_registration_otp_token</span> (inscription 2FA) n’ont pas de <span class="mono">sid</span> de session applicative complète au sens <span class="mono">auth_sessions</span>.</li>
+      </ul>
+    </section>
+
+    <!-- 4 -->
+    <section id="s4">
+      <h2>4. Passkeys, OTP, 2FA et périmètre</h2>
+      <p>Les routes passkeys vivent sous <span class="mono">/auth/passkeys</span> (<span class="mono">passkeys_routes.py</span>) :</p>
+      <ul>
+        <li><strong>Login passkey</strong> (<span class="mono">login/start</span>, <span class="mono">login/finish</span>) : <strong>pas</strong> de <span class="mono">require_continuous_auth_for_action</span> — établissent une session comme le login classique.</li>
+        <li><strong>Enregistrement / révocation</strong> : protégés par <span class="mono">security_settings_change</span> (register start/finish, revoke).</li>
+        <li><strong>Liste des passkeys</strong> (<span class="mono">GET /auth/passkeys</span>) : protégée par <span class="mono">view_sensitive_data</span> + enregistrement d’événement métier <span class="mono">sensitive_action.completed</span> en lecture seule.</li>
+      </ul>
+      <p>Le <strong>step-up au login</strong> (OTP requis par l’orchestrateur adaptatif, flags sur <span class="mono">AuthSession.step_up_otp_required</span>) est une couche <strong>distincte</strong> du step-up <strong>sur action sensible</strong> décidé par <span class="mono">continuous_auth_engine</span> après coup.</p>
+      <div class="box key-takeaway">
+        <div class="label">Key takeaway</div>
+        <p>Les clés <span class="mono">api_key_create</span> et <span class="mono">data_export</span> existent dans <span class="mono">ACTION_POLICIES</span> mais des rapports d’audit (<span class="mono">PHASE_FINAL_API_KEYS_SENSITIVE_DATA_REPORT.md</span>) indiquent l’<strong>absence de routes métier dédiées</strong> correspondantes à ce jour — la politique est prête pour un branchement futur.</p>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section id="s5">
+      <h2>5. Continuous Auth</h2>
+      <p><strong>Définition :</strong> décision par requête pour une <span class="mono">action_key</span> sensible, à partir de la politique (<span class="mono">sensitive_action_map</span>) et de l’état <span class="mono">AuthSessionIntelligence</span> (et du moteur de risque si activé).</p>
+      <p><strong>Pourquoi :</strong> un token valide ne suffit pas si le contexte de session (risque, appareil, pays, etc.) exige une preuve fraîche d’identité.</p>
+      <h3>5.1 Fonctionnement de <span class="mono">require_continuous_auth_for_action</span></h3>
+      <p>Si <span class="mono">CONTINUOUS_AUTH_ENABLED</span> ou <span class="mono">SESSION_INTELLIGENCE_ENABLED</span> est faux → retour immédiat de l’utilisateur sans blocage. Sinon, évaluation via <span class="mono">evaluate_request_security_context</span> ; si <span class="mono">dec.allow</span> est faux, levée d’<span class="mono">HTTPException</span> avec <span class="mono">detail</span> structuré.</p>
+      <h3>5.2 Codes HTTP et champs <span class="mono">detail</span></h3>
+      <table>
+        <thead><tr><th>Statut</th><th><span class="mono">detail["code"]</span></th><th>Condition</th></tr></thead>
+        <tbody>
+          <tr><td>401</td><td><span class="mono">session.reauth_required</span></td><td><span class="mono">dec.require_reauth</span> (ex. risque très élevé, changement pays selon règles SI)</td></tr>
+          <tr><td>403</td><td><span class="mono">session.step_up_required</span></td><td><span class="mono">dec.require_step_up</span></td></tr>
+          <tr><td>403</td><td><span class="mono">session.continuous_auth_denied</span></td><td>refus sans step-up ni reauth explicites dans les branches précédentes</td></tr>
+        </tbody>
+      </table>
+      <p>Le payload inclut notamment : <span class="mono">message</span>, <span class="mono">action_key</span>, <span class="mono">reason_codes</span>, <span class="mono">next_step</span> (via <span class="mono">next_step_hint</span>), <span class="mono">policy</span> (extrait de <span class="mono">SensitiveActionPolicy</span>), et si le moteur de risque a tourné : <span class="mono">risk_score</span>, <span class="mono">risk_level</span>, <span class="mono">risk_factors</span>, <span class="mono">recommended_outcome</span>, éventuellement <span class="mono">final_action_key</span>.</p>
+      <h3>5.3 Valeurs de <span class="mono">next_step</span> (<span class="mono">next_step_hint</span>)</h3>
+      <ul>
+        <li><span class="mono">full_reauth</span> — reauth complète</li>
+        <li><span class="mono">otp_or_passkey_then_biometric</span> — step-up + biométrie</li>
+        <li><span class="mono">biometric_or_passcode</span> — biométrie / code local</li>
+        <li><span class="mono">otp_or_passkey</span> — OTP ou passkey</li>
+        <li><span class="mono">none</span> — aucune indication machine additionnelle</li>
+      </ul>
+      <div class="example-flow">
+        <div class="label">Example flow (schéma réponse)</div>
+        <pre><code>{
+  "code": "session.step_up_required",
+  "message": "Vérification supplémentaire requise (OTP / passkey).",
+  "action_key": "view_sensitive_data",
+  "reason_codes": ["step_up_required", "recent_auth_required"],
+  "next_step": "otp_or_passkey",
+  "policy": {
+    "required_auth_level": "MEDIUM",
+    "requires_step_up": true,
+    "requires_recent_auth_seconds": 600,
+    "requires_biometric": false,
+    "allowed_if_device_trusted_only": true
+  },
+  "ux_message": "…",
+  "ux_tone": "soft",
+  "ux_action_label": "Confirmer",
+  "ux_context": "data_access"
+}</code></pre>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section id="s6">
+      <h2>6. Actions sensibles</h2>
+      <p><span class="mono">sensitive_action_map.py</span> définit <span class="mono">ACTION_POLICIES</span> : chaque entrée est une <span class="mono">SensitiveActionPolicy</span> avec <span class="mono">required_auth_level</span>, <span class="mono">requires_step_up</span>, <span class="mono">requires_recent_auth_seconds</span>, <span class="mono">requires_biometric</span>, <span class="mono">allowed_if_device_trusted_only</span>.</p>
+      <p><strong>Protection d’une route :</strong> ajouter <span class="mono">Depends(require_continuous_auth_for_action("&lt;action_key&gt;"))</span> en plus des garde-fous métier (ownership, zero-trust sur certaines routes, etc.). Les handlers appelant <span class="mono">record_sensitive_action_completed</span> / <span class="mono">failed</span> enregistrent le résultat <strong>après</strong> exécution métier — une requête bloquée par la dépendance <strong>ne produit pas</strong> d’événement <span class="mono">sensitive_action.completed</span> côté métier (les audits <span class="mono">sensitive_action.requested</span> / step-up / reauth sont émis dans la dépendance).</p>
+      <p>Exemples de distinction : <span class="mono">view_sensitive_data</span> (accès données identité / KYC / listings sensibles) vs <span class="mono">withdrawal</span> / <span class="mono">wallet_transfer</span> (mouvements) vs <span class="mono">beneficiary_add</span> vs <span class="mono">security_settings_change</span> vs <span class="mono">session_revoke_all</span> (politique HIGH mais <span class="mono">requires_recent_auth_seconds</span> absent pour cette clé — la friction repose sur les autres règles moteur/SI).</p>
+      <p>Pour les transferts, des en-têtes optionnels sont lus par la dépendance : <span class="mono">X-Transfer-Amount-Eur</span>, <span class="mono">X-Transfer-Same-Owner</span>, <span class="mono">X-Recent-Similar-Actions</span> (friction adaptative / risque).</p>
+    </section>
+
+    <!-- 7 -->
+    <section id="s7">
+      <h2>7. Session intelligence</h2>
+      <p><strong>Définition :</strong> état persistant par session dans <span class="mono">auth_session_intelligence</span>, mis à jour lors des refresh/requêtes (service + middleware d’activité).</p>
+      <p><strong>Signaux pris en compte</strong> (d’après <span class="mono">session_intelligence_service.py</span> et <span class="mono">evaluate_session_risk</span>) : scores globaux utilisateur / fraude, raisons telles que <span class="mono">ip_changed</span>, <span class="mono">country_changed</span>, <span class="mono">fingerprint_changed</span>, niveau de confiance appareil (<span class="mono">device_trust_level</span>), niveau de confiance de session dérivé (<span class="mono">compute_session_trust</span>), <span class="mono">step_up_required</span>, <span class="mono">last_step_up_at</span>, <span class="mono">relock_required</span>.</p>
+      <p><strong>Influence sur l’auth continue :</strong> <span class="mono">should_require_step_up</span> et <span class="mono">should_force_reauth</span> utilisent le tier d’action et le score / raisons ; <span class="mono">should_relock_local</span> alimente l’exigence biométrique locale pour certains tiers HIGH sans passkey dans le jeton.</p>
+    </section>
+
+    <!-- 8 -->
+    <section id="s8">
+      <h2>8. Device trust et recent auth</h2>
+      <p>Dans le moteur, un appareil est considéré comme suffisamment fiable pour les heuristiques « trusted » si <span class="mono">device_trust_level</span> est <span class="mono">HIGH</span> ou <span class="mono">TRUSTED</span> (<span class="mono">_device_trusted_enough</span>).</p>
+      <p><strong>Recent auth :</strong> <span class="mono">last_step_up_at</span> est comparé aux fenêtres <span class="mono">requires_recent_auth_seconds</span> de la politique (et aux seuils « low risk » si friction adaptative active).</p>
+      <p>La politique <span class="mono">view_sensitive_data</span> combine <span class="mono">trusted_only</span> et fenêtre récente (600&nbsp;s dans la carte actuelle) : lecture sensible renforcée côté règles.</p>
+    </section>
+
+    <!-- 9 -->
+    <section id="s9">
+      <h2>9. UX et expérience client</h2>
+      <p>Le module <span class="mono">continuous_auth_ux.py</span> enrichit le <span class="mono">detail</span> sans modifier les décisions de sécurité. Champs :</p>
+      <ul>
+        <li><span class="mono">ux_message</span> — texte court non technique</li>
+        <li><span class="mono">ux_tone</span> — <span class="mono">soft</span> | <span class="mono">warning</span> | <span class="mono">critical</span> (peut être rehaussé si <span class="mono">risk_level</span> critique / élevé)</li>
+        <li><span class="mono">ux_action_label</span> — libellé de CTA suggéré</li>
+        <li><span class="mono">ux_context</span> — <span class="mono">withdrawal</span> | <span class="mono">security_change</span> | <span class="mono">data_access</span></li>
+      </ul>
+      <p>La priorité des <span class="mono">reason_codes</span> pour choisir un message unique est définie dans <span class="mono">_REASON_PRIORITY</span>. Côté Flutter, <span class="mono">SensitiveActionErrorShape.displayMessage</span> préfère <span class="mono">ux_message</span> au message API brut.</p>
+    </section>
+
+    <!-- 10 -->
+    <section id="s10">
+      <h2>10. Friction adaptative (Phase 5B)</h2>
+      <p>Activée par <span class="mono">ADAPTIVE_FRICTION_ENABLED</span> (<span class="mono">security_env.py</span>). Le moteur peut réduire la friction pour :</p>
+      <ul>
+        <li><span class="mono">wallet_transfer</span> — montant sous seuil EUR, appareil trusted, step-up récent, absence d’exigence SI contradictoire → raison <span class="mono">adaptive_low_friction_transfer</span></li>
+        <li><span class="mono">view_sensitive_data</span> en MEDIUM — device trusted + récence + pas d’imposition step-up par SI → <span class="mono">adaptive_low_friction_view_sensitive</span></li>
+      </ul>
+      <div class="box security-note">
+        <div class="label">Security note</div>
+        <p>Une <strong>reauth stricte</strong> déjà posée (<span class="mono">require_reauth</span>) n’est pas contournée par le moteur de risque (<span class="mono">_merge_risk_into_decision</span> dans <span class="mono">continuous_auth_engine.py</span>). Le moteur de risque (Phase 5C) peut encore augmenter la friction (step-up / reauth) mais respecte les refus durs préexistants.</p>
+      </div>
+    </section>
+
+    <!-- 11 -->
+    <section id="s11">
+      <h2>11. Exemples de flux bout en bout</h2>
+      <p>Les scénarios ci-dessous décrivent le comportement <strong>lorsque les flags sont actifs</strong> et qu’une ligne intelligence existe. Sinon, la dépendance est transparente.</p>
+
+      <h3>11.1 Lecture d’identité sensible</h3>
+      <p><strong>État initial :</strong> JWT avec <span class="mono">sid</span>, intelligence présente, device non trusted ou <span class="mono">last_step_up_at</span> absent / trop ancien pour la fenêtre.</p>
+      <p><strong>Appel :</strong> route protégée par <span class="mono">view_sensitive_data</span> (ex. identité portfolio selon route).</p>
+      <p><strong>Décision :</strong> 403, <span class="mono">session.step_up_required</span>, <span class="mono">reason_codes</span> incluant souvent <span class="mono">device_not_trusted</span> et/ou <span class="mono">recent_auth_required</span>.</p>
+      <p><strong>Client :</strong> interpréter <span class="mono">next_step</span> et afficher <span class="mono">ux_message</span>.</p>
+
+      <h3>11.2 Changement de paramètre sécurité</h3>
+      <p>Routes passkeys register/revoke : <span class="mono">security_settings_change</span>. Step-up fréquent car politique HIGH + fenêtres récentes + biométrie possible selon contexte.</p>
+
+      <h3>11.3 Listing passkeys</h3>
+      <p><span class="mono">GET /auth/passkeys</span> — <span class="mono">view_sensitive_data</span> ; succès → <span class="mono">sensitive_action.completed</span> avec métadonnée lecture seule.</p>
+
+      <h3>11.4 Révocation globale des sessions</h3>
+      <p><span class="mono">POST /auth/revoke-all</span> : <span class="mono">session_revoke_all</span> + <span class="mono">enforce_zero_trust_or_raise</span> dans <span class="mono">main.py</span> (hors mode test). Succès → <span class="mono">sensitive_action.completed</span>.</p>
+
+      <h3>11.5 Device non trusted</h3>
+      <p>Pour les actions avec <span class="mono">allowed_if_device_trusted_only</span>, l’absence de confiance HIGH/TRUSTED déclenche <span class="mono">device_not_trusted</span> et step-up.</p>
+
+      <h3>11.6 Recent auth trop ancien</h3>
+      <p><span class="mono">recent_auth_required</span> lorsque la politique définit <span class="mono">requires_recent_auth_seconds</span> et que <span class="mono">last_step_up_at</span> est hors fenêtre.</p>
+
+      <h3>11.7 Reauth complète</h3>
+      <p>Ex. score ou raisons déclenchant <span class="mono">should_force_reauth</span> (pays changé + tier medium/high, ou score ≥ 85 selon implémentation actuelle) → 401 <span class="mono">session.reauth_required</span>, audit <span class="mono">sensitive_action.reauth_required</span>.</p>
+    </section>
+
+    <!-- 12 -->
+    <section id="s12">
+      <h2>12. Audit, hooks et observabilité</h2>
+      <p>Service : <span class="mono">services/auth/security_events_service.py</span> (activation typique <span class="mono">AUTH_SECURITY_EVENTS_ENABLED</span>).</p>
+      <p><strong>Dans la dépendance</strong> <span class="mono">require_continuous_auth_for_action</span> : <span class="mono">sensitive_action.requested</span> au début ; puis selon cas <span class="mono">auth.session.reauth.triggered</span>, <span class="mono">sensitive_action.reauth_required</span>, <span class="mono">auth.session.step_up.triggered</span>, <span class="mono">sensitive_action.step_up_required</span>, ou <span class="mono">sensitive_action.blocked</span>.</p>
+      <p><strong>Dans les handlers métier</strong> (après succès ou échec logique) : <span class="mono">sensitive_action.completed</span> / <span class="mono">sensitive_action.failed</span> via <span class="mono">sensitive_action_events.py</span>.</p>
+      <p>Intérêt : corrélation SIEM, preuves pour conformité, diagnostic support (distinction « bloqué avant handler » vs « échec métier après »).</p>
+    </section>
+
+    <!-- 13 -->
+    <section id="s13">
+      <h2>13. Sécurité côté routes (aperçu)</h2>
+      <p>La dépendance est branchée notamment sur : <span class="mono">main.py</span> (revoke-all, liste sessions), <span class="mono">passkeys_routes.py</span>, <span class="mono">security_admin_routes.py</span>, <span class="mono">persons/routes.py</span>, routes <span class="mono">custody</span>, <span class="mono">portfolio_engine</span> (clients, execution, orders, settlement, trades, orchestrator). Référence grep <span class="mono">require_continuous_auth_for_action</span> pour la liste exhaustive à jour.</p>
+      <div class="box security-note">
+        <div class="label">Security note</div>
+        <p>Le rapport <span class="mono">PHASE_4A_PORTFOLIO_ENGINE_AUTH_ALIGNMENT_REPORT.md</span> documente une <strong>protection inégale</strong> : les routes qui ne reposent que sur <span class="mono">ActorContext</span> (en-têtes acteur portfolio) <strong>sans</strong> JWT utilisateur ne bénéficient pas de l’auth continue telle que décrite ici. C’est une dépendance structurelle connue, pas un oubli ponctuel dans un seul fichier.</p>
+      </div>
+    </section>
+
+    <!-- 14 -->
+    <section id="s14">
+      <h2>14. Flags et conditions d’activation</h2>
+      <table>
+        <thead><tr><th>Variable</th><th>Rôle (d’après <span class="mono">security_env.py</span>)</th><th>Défaut typique</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">SESSION_INTELLIGENCE_ENABLED</span></td><td>Active persistance et logique SI.</td><td>false</td></tr>
+          <tr><td><span class="mono">CONTINUOUS_AUTH_ENABLED</span></td><td>Active le blocage sur actions sensibles (avec SI).</td><td>false</td></tr>
+          <tr><td><span class="mono">SESSION_STEP_UP_ENABLED</span></td><td>Permet <span class="mono">should_require_step_up</span> (sinon toujours faux).</td><td>true (non falsy)</td></tr>
+          <tr><td><span class="mono">SESSION_REAUTH_ENABLED</span></td><td>Permet <span class="mono">should_force_reauth</span>.</td><td>true</td></tr>
+          <tr><td><span class="mono">ADAPTIVE_FRICTION_ENABLED</span></td><td>Friction adaptative 5B.</td><td>false</td></tr>
+          <tr><td><span class="mono">RISK_ENGINE_ENABLED</span></td><td>Scoring Phase 5C dans le moteur continu.</td><td>false</td></tr>
+          <tr><td><span class="mono">BEHAVIORAL_RISK_ENABLED</span></td><td>Signaux comportementaux pour le risque.</td><td>false</td></tr>
+          <tr><td><span class="mono">ADAPTIVE_INTELLIGENCE_ENABLED</span></td><td>Segmentation / seuils dynamiques.</td><td>false</td></tr>
+          <tr><td><span class="mono">AUTH_SECURITY_EVENTS_ENABLED</span></td><td>Événements d’audit sécurité.</td><td>true</td></tr>
+        </tbody>
+      </table>
+      <p>Si <span class="mono">CONTINUOUS_AUTH_ENABLED</span> ou <span class="mono">SESSION_INTELLIGENCE_ENABLED</span> est désactivé, <span class="mono">evaluate_request_security_context</span> renvoie <span class="mono">allow=True</span> avec <span class="mono">reason_codes=["continuous_auth_disabled"]</span> — comportement documenté pour rollout progressif.</p>
+    </section>
+
+    <!-- 15 -->
+    <section id="s15">
+      <h2>15. Limites connues / points d’attention</h2>
+      <ul>
+        <li><strong>ActorContext-only</strong> : voir section 13 et le rapport Phase 4A.</li>
+        <li><strong>Legacy</strong> : JWT sans <span class="mono">sid</span> — pas de blocage par la dépendance ; risque de divergence avec l’objectif Zero Trust si clients anciens.</li>
+        <li><strong>Mobile hors FastAPI</strong> : toute logique purement locale (relock, biométrie) complète mais ne remplace pas les réponses serveur.</li>
+        <li><strong>Qualité des signaux</strong> : SI dépend des mises à jour (IP, pays, empreinte) et de l’absence d’erreurs de configuration.</li>
+        <li><strong>Gaps documentés</strong> dans <span class="mono">SESSION_INTELLIGENCE_CONTINUOUS_AUTH_REPORT.md</span> : branchements métier additionnels, échantillonnage SIEM, API « step-up completed » pour poser <span class="mono">last_step_up_at</span> — à traiter selon roadmap.</li>
+      </ul>
+    </section>
+
+    <!-- 16 -->
+    <section id="s16">
+      <h2>16. Guide pratique pour les équipes</h2>
+      <h3>Backend</h3>
+      <ol>
+        <li>Choisir ou ajouter une <span class="mono">action_key</span> dans <span class="mono">ACTION_POLICIES</span> si besoin.</li>
+        <li>Ajouter <span class="mono">Depends(require_continuous_auth_for_action("ma_cle"))</span> à la route, avec <span class="mono">get_current_user</span> / auth existante.</li>
+        <li>Appeler <span class="mono">record_sensitive_action_completed</span> / <span class="mono">failed</span> selon le résultat métier.</li>
+        <li>Pour les transferts, documenter les en-têtes attendus par le client si la friction adaptative / risque doit les utiliser.</li>
+      </ol>
+      <h3>Mobile</h3>
+      <p>Utiliser <span class="mono">parseSensitiveActionError</span> ; guider l’utilisateur avec <span class="mono">displayMessage</span> ; router vers OTP / passkey / re-login selon <span class="mono">next_step</span> et <span class="mono">code</span>.</p>
+      <h3>Support</h3>
+      <p>Distinguer 401 reauth (session globalement insuffisante) vs 403 step-up (preuve fraîche). Croiser avec événements <span class="mono">sensitive_action.*</span> et métadonnées <span class="mono">reason_codes</span>.</p>
+      <h3>Produit</h3>
+      <p>La friction est la conjonction politique (<span class="mono">sensitive_action_map</span>) et contexte (<span class="mono">device_trust_level</span>, scores, fenêtres temps). Les textes UX sont ajustables côté <span class="mono">continuous_auth_ux.py</span> sans changer les règles dans le moteur.</p>
+    </section>
+
+    <!-- 17 -->
+    <section id="s17">
+      <h2>17. Glossaire</h2>
+      <table>
+        <tbody>
+          <tr><td><strong>Step-up</strong></td><td>Étape additionnelle d’authentification (OTP, passkey) avant d’autoriser l’action.</td></tr>
+          <tr><td><strong>Reauth</strong></td><td>Nouvelle authentification complète de session (souvent 401 <span class="mono">session.reauth_required</span>).</td></tr>
+          <tr><td><strong>Trusted device</strong></td><td>Appareil dont le niveau SI est HIGH/TRUSTED pour les heuristiques « trusted enough ».</td></tr>
+          <tr><td><strong>Recent auth</strong></td><td>Preuve récente via <span class="mono">last_step_up_at</span> dans les fenêtres définies.</td></tr>
+          <tr><td><strong>sid</strong></td><td>Claim JWT : identifiant de <span class="mono">AuthSession</span>.</td></tr>
+          <tr><td><strong>action_key</strong></td><td>Clé stable dans <span class="mono">ACTION_POLICIES</span> (audit, SIEM).</td></tr>
+          <tr><td><strong>Risk level</strong></td><td>Niveau du moteur de risque Phase 5C (<span class="mono">low</span> / <span class="mono">medium</span> / <span class="mono">high</span> / <span class="mono">critical</span>) lorsque le moteur est activé.</td></tr>
+          <tr><td><strong>Continuous auth</strong></td><td>Décision par requête sur action sensible, après login.</td></tr>
+          <tr><td><strong>Session intelligence</strong></td><td>État et scores attachés à la session dans <span class="mono">auth_session_intelligence</span>.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 18 -->
+    <section id="s18">
+      <h2>18. Annexes</h2>
+      <h3>18.1 Tableau des <span class="mono">action_key</span> (<span class="mono">sensitive_action_map.py</span>)</h3>
+      <table>
+        <thead><tr><th>action_key</th><th>Niveau</th><th>Notes brèves</th></tr></thead>
+        <tbody>
+          <tr><td>withdrawal</td><td>HIGH</td><td>step-up, recent 900s, biometric, trusted_only</td></tr>
+          <tr><td>wallet_transfer</td><td>HIGH</td><td>idem fenêtre 600s</td></tr>
+          <tr><td>beneficiary_add</td><td>HIGH</td><td>recent 900s</td></tr>
+          <tr><td>api_key_create</td><td>HIGH</td><td>policy prête ; routes métier à confirmer</td></tr>
+          <tr><td>security_settings_change</td><td>HIGH</td><td>recent 900s, biometric</td></tr>
+          <tr><td>contact_change</td><td>HIGH</td><td></td></tr>
+          <tr><td>passcode_reset</td><td>HIGH</td><td></td></tr>
+          <tr><td>biometric_disable</td><td>HIGH</td><td></td></tr>
+          <tr><td>data_export</td><td>HIGH</td><td>policy prête ; route dédiée à confirmer</td></tr>
+          <tr><td>session_revoke_all</td><td>HIGH</td><td>pas de fenêtre recent dans la carte</td></tr>
+          <tr><td>change_password</td><td>MEDIUM</td><td></td></tr>
+          <tr><td>view_sensitive_data</td><td>MEDIUM</td><td>trusted_only, recent 600s</td></tr>
+          <tr><td>view_portfolio</td><td>MEDIUM</td><td>sans step-up obligatoire dans la carte</td></tr>
+          <tr><td>internal_transfer_low</td><td>MEDIUM</td><td>trusted_only ; usage métier conditionnel</td></tr>
+          <tr><td>view_balances_summary</td><td>LOW</td><td></td></tr>
+          <tr><td>preferences_update</td><td>LOW</td><td></td></tr>
+        </tbody>
+      </table>
+      <p class="muted">Clé inconnue : politique LOW par défaut avec description « Non mappé explicitement ».</p>
+
+      <h3>18.2 Principaux <span class="mono">reason_codes</span></h3>
+      <p><span class="mono">reauth_required</span>, <span class="mono">step_up_required</span>, <span class="mono">biometric_recommended</span>, <span class="mono">recent_auth_required</span>, <span class="mono">policy_requires_step_up</span>, <span class="mono">device_not_trusted</span>, <span class="mono">adaptive_low_friction_transfer</span>, <span class="mono">adaptive_low_friction_view_sensitive</span>, <span class="mono">risk_engine_reauth</span>, <span class="mono">risk_engine_step_up</span>, <span class="mono">behavioral_force_reauth</span>, <span class="mono">behavioral_force_step_up</span>, <span class="mono">continuous_auth_disabled</span>, <span class="mono">no_session_intelligence</span>, <span class="mono">ok</span>.</p>
+
+      <h3>18.3 <span class="mono">next_step</span></h3>
+      <p>Voir section 5.3 — aligné sur <span class="mono">SensitiveActionNextStep</span> dans <span class="mono">sensitive_action_http.dart</span>.</p>
+
+      <h3>18.4 Champs UX</h3>
+      <table>
+        <thead><tr><th>Champ</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">ux_message</span></td><td>Message utilisateur prioritaire</td></tr>
+          <tr><td><span class="mono">ux_tone</span></td><td>soft / warning / critical</td></tr>
+          <tr><td><span class="mono">ux_action_label</span></td><td>Libellé bouton</td></tr>
+          <tr><td><span class="mono">ux_context</span></td><td>withdrawal / security_change / data_access</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <p class="footnote">Document généré à partir du code dans <span class="mono">services/arquantix</span> (notamment <span class="mono">api/services/security/</span>, <span class="mono">api/auth.py</span>, <span class="mono">api/services/auth/refresh_session.py</span>) et des rapports markdown du dépôt. Ne pas se substituer aux politiques internes de sécurité et aux revues légales.</p>
+  </div>
+</body>
+</html>

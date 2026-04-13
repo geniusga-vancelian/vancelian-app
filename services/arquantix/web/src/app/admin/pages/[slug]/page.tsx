@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import { Plus, Trash2, Copy, ArrowUp, ArrowDown } from 'lucide-react'
+import { PageSettings } from '@/components/admin/PageSettings'
+import { SectionLibraryModal } from '@/components/admin/SectionLibraryModal'
+import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
+import { toastSuccess, toastError } from '@/lib/admin/toast'
 
 interface Section {
   id: string
@@ -16,33 +22,171 @@ interface Section {
   }>
 }
 
+interface Page {
+  id: string
+  slug: string
+  urlPath: string
+  title: string | null
+  template: string
+  themeColor?: string
+  description: string | null
+}
+
 export default function AdminPageSectionsPage() {
   const router = useRouter()
   const params = useParams()
-  const slug = params.slug as string
+  const slug = (params?.slug as string | undefined) ?? ''
 
+  const [page, setPage] = useState<Page | null>(null)
   const [sections, setSections] = useState<Section[]>([])
   const [loading, setLoading] = useState(true)
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [sectionToDelete, setSectionToDelete] = useState<string | null>(null)
 
-  useEffect(() => {
+  const fetchPageData = async () => {
     if (!slug) return
 
-    fetch(`/api/admin/pages/${slug}/sections`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.sections) {
-          setSections(data.sections)
-        } else if (data.error === 'Unauthorized') {
+    try {
+      // Fetch page details
+      const pageRes = await fetch(`/api/admin/pages/${slug}`)
+      if (!pageRes.ok) {
+        if (pageRes.status === 401) {
           router.push('/admin/login')
-        } else if (data.error === 'Page not found') {
-          router.push('/admin/pages')
+          return
         }
-        setLoading(false)
-      })
-      .catch(() => {
-        setLoading(false)
-      })
+        if (pageRes.status === 404) {
+          router.push('/admin/pages')
+          return
+        }
+        throw new Error('Failed to fetch page')
+      }
+      const pageData = await pageRes.json()
+      setPage(pageData.page)
+
+      // Fetch sections
+      const sectionsRes = await fetch(`/api/admin/pages/${slug}/sections`)
+      if (!sectionsRes.ok) {
+        throw new Error('Failed to fetch sections')
+      }
+      const sectionsData = await sectionsRes.json()
+      setSections(sectionsData.sections || [])
+    } catch (error) {
+      console.error('Error fetching page data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchPageData()
   }, [slug, router])
+
+  const handleAddSection = async (typeKey: string) => {
+    setIsProcessing(true)
+    try {
+      const response = await fetch(`/api/admin/pages/${slug}/sections/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ typeKey }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to add section')
+      }
+
+      toastSuccess('Section added')
+      await fetchPageData()
+    } catch (error: any) {
+      toastError(error.message || 'Failed to add section')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleDeleteClick = (sectionId: string) => {
+    setSectionToDelete(sectionId)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!sectionToDelete) return
+
+    try {
+      const response = await fetch(`/api/admin/sections/${sectionToDelete}/delete`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete section')
+      }
+
+      toastSuccess('Deleted')
+      await fetchPageData()
+      setSectionToDelete(null)
+    } catch (error: any) {
+      throw error // Let ConfirmDialog handle the error toast
+    }
+  }
+
+  const handleDuplicateSection = async (sectionId: string) => {
+    setIsProcessing(true)
+    try {
+      const response = await fetch(`/api/admin/sections/${sectionId}/duplicate`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to duplicate section')
+      }
+
+      toastSuccess('Section duplicated')
+      await fetchPageData()
+    } catch (error: any) {
+      toastError(error.message || 'Failed to duplicate section')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleMoveSection = async (sectionId: string, direction: 'up' | 'down') => {
+    const currentIndex = sections.findIndex((s) => s.id === sectionId)
+    if (currentIndex === -1) return
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    if (newIndex < 0 || newIndex >= sections.length) return
+
+    const newOrder = [...sections]
+    const [moved] = newOrder.splice(currentIndex, 1)
+    newOrder.splice(newIndex, 0, moved)
+
+    setIsProcessing(true)
+    try {
+      const response = await fetch(`/api/admin/pages/${slug}/sections/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderedSectionIds: newOrder.map((s) => s.id),
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to reorder sections')
+      }
+
+      toastSuccess('Order updated')
+      await fetchPageData()
+    } catch (error: any) {
+      toastError(error.message || 'Failed to reorder sections')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -52,12 +196,21 @@ export default function AdminPageSectionsPage() {
     )
   }
 
+  if (!page) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Page not found.</div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Page: {slug}</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage sections</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {page.title || slug}
+          </h1>
         </div>
         <Link
           href="/admin/pages"
@@ -65,6 +218,18 @@ export default function AdminPageSectionsPage() {
         >
           ← Back to Pages
         </Link>
+      </div>
+
+      {/* Page Settings */}
+      <PageSettings page={page} onUpdate={fetchPageData} />
+
+      {/* Sections */}
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Sections</h2>
+        <Button onClick={() => setIsLibraryModalOpen(true)} disabled={isProcessing}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Section
+        </Button>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -113,12 +278,46 @@ export default function AdminPageSectionsPage() {
                     {section.contents.length} content(s)
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Link
-                      href={`/admin/sections/${section.id}`}
-                      className="text-indigo-600 hover:text-indigo-900"
-                    >
-                      Edit
-                    </Link>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleMoveSection(section.id, 'up')}
+                        disabled={isProcessing || sections.findIndex((s) => s.id === section.id) === 0}
+                        className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move up"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveSection(section.id, 'down')}
+                        disabled={isProcessing || sections.findIndex((s) => s.id === section.id) === sections.length - 1}
+                        className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move down"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDuplicateSection(section.id)}
+                        disabled={isProcessing}
+                        className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Duplicate"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(section.id)}
+                        disabled={isProcessing}
+                        className="p-1 text-gray-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <Link
+                        href={`/admin/sections/${section.id}`}
+                        className="text-indigo-600 hover:text-indigo-900 px-2 py-1"
+                      >
+                        Edit
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -126,6 +325,28 @@ export default function AdminPageSectionsPage() {
           </tbody>
         </table>
       </div>
+
+      <SectionLibraryModal
+        isOpen={isLibraryModalOpen}
+        onClose={() => setIsLibraryModalOpen(false)}
+        onSelect={handleAddSection}
+        pageTemplate={page?.template || 'homepage'}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open)
+          if (!open) setSectionToDelete(null)
+        }}
+        title="Confirmer la suppression"
+        description="Cette action supprime une section et sera irréversible si vous la validez. Êtes-vous sûr de vouloir continuer ?"
+        confirmLabel="Supprimer"
+        cancelLabel="Annuler"
+        onConfirm={handleDeleteConfirm}
+        destructive
+      />
     </div>
   )
 }

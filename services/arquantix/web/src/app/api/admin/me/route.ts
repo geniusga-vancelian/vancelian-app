@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         email: true,
         role: true,
         createdAt: true,
+        adminUserId: true,
       },
     })
 
@@ -40,4 +41,5 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
 

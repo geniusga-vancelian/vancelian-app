@@ -1,0 +1,147 @@
+.PHONY: arquantix-up arquantix-up-safe arquantix-down arquantix-recovery-up arquantix-recovery-down arquantix-db-redis arquantix-check arquantix-build arquantix-logs arquantix-shell-cms arquantix-shell-web arquantix-reset arquantix-seed arquantix-clean arquantix-backup-db arquantix-env-check arquantix-dev-start-clean arquantix-dev-stop arquantix-doctor dev dev-reset dev-stop dev-restart dev-status pdf-preview
+
+# Arquantix - Docker Compose Commands
+
+# Load .env.arquantix if it exists
+-include .env.arquantix
+# Source de vérité : COMPOSE_PROJECT_NAME + ARQUANTIX_COMPOSE_FILE dans .env.arquantix.
+# Défaut : projet arquantixrecovery + docker-compose.arquantix-recovery.yml (mêmes volumes nommés
+# arquantix_arquantix-db-data — voir compose). Namespace historique « arquantix » peut rester cassé.
+COMPOSE_PROJECT_NAME ?= arquantixrecovery
+export COMPOSE_PROJECT_NAME
+ARQUANTIX_COMPOSE_FILE ?= docker-compose.arquantix-recovery.yml
+export ARQUANTIX_COMPOSE_FILE
+export
+# Aligné sur .env.arquantix (WEB_PORT=3000) si le fichier est absent
+WEB_PORT ?= 3000
+CMS_PORT ?= 1337
+
+# Même couple que scripts/dev-reset.sh / start-arquantix.sh (ne pas dupliquer --project-name ad hoc).
+ARQUANTIX_DOCKER_COMPOSE = docker compose --project-name $(COMPOSE_PROJECT_NAME) --env-file .env.arquantix -f $(ARQUANTIX_COMPOSE_FILE)
+# Alias : même commande que la stack par défaut (recovery = officiel local depuis bascule namespace).
+ARQUANTIX_RECOVERY_PROJECT ?= arquantixrecovery
+export ARQUANTIX_RECOVERY_PROJECT
+ARQUANTIX_RECOVERY_COMPOSE = $(ARQUANTIX_DOCKER_COMPOSE)
+
+# Diagnostic alignement projet Compose + DB (lecture seule)
+arquantix-doctor:
+	@bash scripts/arquantix_local_doctor.sh
+
+# Cohérence .env.arquantix + env injecté dans le conteneur API (si up)
+arquantix-env-check:
+	@bash scripts/check_env_consistency.sh
+
+# DB + Redis uniquement (même chose que ./start-arquantix.sh avant API/Web)
+arquantix-db-redis:
+	@echo "🐘 PostgreSQL (arquantix-db) + Redis (arquantix-redis)…"
+	$(ARQUANTIX_DOCKER_COMPOSE) up -d arquantix-db arquantix-redis
+
+# Prérequis app Flutter : Postgres + FastAPI + Next (voir sortie du script).
+arquantix-check:
+	@bash services/arquantix/tooling/check_arquantix_dev_stack.sh
+
+# Prévisualisation PDF (design) — même pipeline que l’API. Exemple :
+#   make -f Makefile.arquantix pdf-preview ARGS='--email moi@exemple.com --type operation --latest'
+# Requiert Postgres joignable depuis l’hôte (DB_PORT) et WeasyPrint (souvent : via conteneur API Docker : compose exec arquantix-api …).
+pdf-preview:
+	@cd services/arquantix/api && PYTHONPATH=. \
+	  DATABASE_URL=postgresql://$${DB_USER:-arquantix}:$${DB_PASSWORD:-arquantix}@127.0.0.1:$${DB_PORT:-5443}/$${DB_NAME:-arquantix_fresh} \
+	  python3 scripts/generate_pdf_preview.py $(ARGS)
+
+# arquantix-up et arquantix-up-safe : même comportement (up -d --remove-orphans, volumes inchangés).
+arquantix-up arquantix-up-safe:
+	@echo "🚀 Starting Arquantix (up -d --remove-orphans, volumes inchangés)…"
+	$(ARQUANTIX_DOCKER_COMPOSE) up -d --remove-orphans
+	@echo "✅ Services started"
+	@echo "   API (FastAPI / WeasyPrint): http://127.0.0.1:$${API_PORT:-8000}"
+	@echo "   Web: http://localhost:$(WEB_PORT)"
+	@echo "   CMS: http://localhost:$(CMS_PORT)/admin"
+
+# Reprise de session : vérifs .env (DB_NAME), alignement projet Compose, nettoyage hôte/worker, arquantix-up, smoke tests, worker WS.
+arquantix-dev-start-clean:
+	@bash scripts/start-arquantix.sh
+
+# Arrêt worker Binance WS ; optionnellement stack (voir script --compose-down).
+arquantix-dev-stop:
+	@bash scripts/stop-arquantix.sh
+
+arquantix-down:
+	@echo "🛑 Stopping Arquantix services..."
+	$(ARQUANTIX_DOCKER_COMPOSE) down
+
+# Alias de arquantix-up : même stack par défaut (projet + fichier dans .env.arquantix).
+arquantix-recovery-up:
+	@echo "🧯 Arquantix (alias recovery-up = stack par défaut — project=$(COMPOSE_PROJECT_NAME), file=$(ARQUANTIX_COMPOSE_FILE))…"
+	$(ARQUANTIX_RECOVERY_COMPOSE) up -d --remove-orphans
+	@echo "✅ Services started — API: http://127.0.0.1:$${API_PORT:-8000}/health"
+
+arquantix-recovery-down:
+	@echo "🛑 Stopping stack (volumes conservés)…"
+	$(ARQUANTIX_RECOVERY_COMPOSE) down
+
+arquantix-build:
+	@echo "🔨 Building Arquantix services..."
+	$(ARQUANTIX_DOCKER_COMPOSE) build
+
+arquantix-logs:
+	$(ARQUANTIX_DOCKER_COMPOSE) logs -f
+
+arquantix-shell-cms:
+	$(ARQUANTIX_DOCKER_COMPOSE) exec arquantix-cms sh
+
+arquantix-shell-web:
+	$(ARQUANTIX_DOCKER_COMPOSE) exec arquantix-web sh
+
+arquantix-reset:
+	@echo "❌ Cible désactivée — supprimerait les volumes (down -v) et les données Postgres."
+	@echo "   Pour sauvegarder : bash scripts/backup_db.sh"
+	@echo "   Pour recovery : docs/LOCAL_DOCKER_RECOVERY.md"
+	@exit 1
+
+arquantix-seed:
+	@echo "🌱 Seeding Strapi CMS..."
+	$(ARQUANTIX_DOCKER_COMPOSE) exec arquantix-cms npm run seed
+	@echo "✅ Seed completed"
+
+arquantix-clean:
+	@echo "❌ Cible désactivée — down -v / suppression de données ou d’images localement risquée."
+	@echo "   Voir docs/LOCAL_DOCKER_RECOVERY.md et scripts/docker_safe_cleanup.sh (conteneurs arrêtés uniquement)."
+	@exit 1
+
+# Dump pg_dump -Fc de la base DB_NAME → $$HOME/backups/ (voir scripts/backup_db.sh).
+arquantix-backup-db:
+	@bash scripts/backup_db.sh
+
+# Stack complète : Docker (DB, Redis, API, CMS, Web) + Next local (npm run dev en arrière-plan).
+# Docker : scripts/dev-reset.sh vérifie le daemon (docker info), lance Docker Desktop sur macOS si besoin, attente ≤ 20 s.
+# Options : --no-next, --build, --stop (voir scripts/dev-reset.sh).
+dev dev-reset:
+	@bash scripts/dev-reset.sh
+
+# Arrêt propre sans relance (volumes conservés) + Next PID si présent.
+dev-stop:
+	@bash scripts/dev-reset.sh --stop
+
+# Nettoyage large (compose down ×2 projets, ports API/Next/DB/Redis/CMS) puis stack complète.
+dev-restart:
+	@bash scripts/dev-reset.sh --stop
+	@bash scripts/dev-reset.sh
+
+# Diagnostic rapide si « connection refused » sur 3000 / 8000 (Docker, ports, curl).
+dev-status:
+	@echo "=== Docker daemon ==="
+	@docker info >/dev/null 2>&1 && echo "OK (docker info)" || echo "INDISPONIBLE — lance Docker Desktop puis réessaie."
+	@echo ""
+	@echo "=== Conteneurs arquantix (docker ps) ==="
+	@docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null | grep -E 'NAMES|arquantix' || echo "(aucun ou docker off)"
+	@echo ""
+	@echo "=== Écoute TCP (3000, 3001, 8000) ==="
+	@-lsof -nP -iTCP:3000 -sTCP:LISTEN 2>/dev/null || echo "3000 : rien en écoute (Next npm absent ou autre port)"
+	@-lsof -nP -iTCP:3001 -sTCP:LISTEN 2>/dev/null || echo "3001 : rien en écoute"
+	@-lsof -nP -iTCP:8000 -sTCP:LISTEN 2>/dev/null || echo "8000 : rien en écoute (API Docker absente)"
+	@echo ""
+	@echo "=== HTTP (2 s max) ==="
+	@-curl -sS -o /dev/null -w "GET /health → %{http_code}\n" --connect-timeout 2 http://127.0.0.1:$${API_PORT:-8000}/health || echo "8000 : échec connexion"
+	@-curl -sS -o /dev/null -w "GET / (Next) → %{http_code}\n" --connect-timeout 2 http://127.0.0.1:3000/ || echo "3000 : échec connexion"
+	@echo ""
+	@echo "Log Next local (dev-reset) : tail -40 $${TMPDIR:-/tmp}/arquantix-next-dev.log"

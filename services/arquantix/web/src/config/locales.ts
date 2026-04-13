@@ -1,5 +1,5 @@
 export const defaultLocale = 'fr'
-export const supportedLocales = ['fr', 'en', 'ar', 'it'] as const
+export const supportedLocales = ['fr', 'en', 'it'] as const
 
 export type Locale = (typeof supportedLocales)[number]
 

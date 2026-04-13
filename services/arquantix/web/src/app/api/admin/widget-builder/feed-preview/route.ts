@@ -1,0 +1,485 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { ContentStatus } from '@prisma/client'
+
+import { prisma } from '@/lib/prisma'
+import { getSessionFromCookie } from '@/lib/auth'
+import { getPresignedUrl } from '@/lib/storage/storageClient'
+import { buildBackendUrl } from '@/lib/backend'
+import {
+  getAnonymousBackendAdminId,
+  signInternalBackendJwtAu,
+} from '@/lib/backend-jwt'
+import { getCompanyNewsArticleIds } from '@/lib/blog/articleService'
+
+type JsonRecord = Record<string, unknown>
+
+function asRecord(value: unknown): JsonRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as JsonRecord
+}
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function asInt(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.floor(value)
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return fallback
+}
+
+function estimateReadingTime(text: string): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length
+  if (words <= 0) return 1
+  return Math.max(1, Math.round(words / 200))
+}
+
+function categoryLabelsForSlugs(
+  categorySlugs: unknown,
+  labelBySlug: Map<string, string>,
+): string[] {
+  if (!Array.isArray(categorySlugs)) return []
+  const out: string[] = []
+  for (const raw of categorySlugs) {
+    const slug = String(raw).trim()
+    if (!slug) continue
+    const label = labelBySlug.get(slug)
+    if (label && label.trim().length > 0) out.push(label.trim())
+  }
+  return out
+}
+
+type BackendBundleInstrument = {
+  id?: number
+  symbol?: string
+}
+
+type BackendBundle = {
+  id?: string
+  name?: string
+  description?: string | null
+  asset_class?: string | null
+  type?: string | null
+  background_image?: string | null
+  backgroundImage?: string | null
+  image_url?: string | null
+  imageUrl?: string | null
+  instruments?: BackendBundleInstrument[]
+}
+
+async function fetchBackendBundles(): Promise<BackendBundle[]> {
+  const token = signInternalBackendJwtAu(getAnonymousBackendAdminId(), '10m')
+
+  const response = await fetch(buildBackendUrl('/api/bundles'), {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  })
+  if (!response.ok) return []
+  const json = await response.json().catch(() => [])
+  if (!Array.isArray(json)) return []
+  return json as BackendBundle[]
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getSessionFromCookie()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')?.trim()
+    const slug = searchParams.get('slug')?.trim()
+    const locale = searchParams.get('locale')?.trim() || 'fr'
+    if (!id && !slug) {
+      return NextResponse.json({ error: 'id or slug is required' }, { status: 400 })
+    }
+
+    const feed = await prisma.dsComponent.findFirst({
+      where: id ? { id } : { slug: slug! },
+      include: {
+        chapter: {
+          select: { slug: true },
+        },
+      },
+    })
+    if (!feed) return NextResponse.json({ error: 'Feed not found' }, { status: 404 })
+
+    const schema = asRecord(feed.schemaJson) ?? {}
+    const feedType = asString(schema.feedType).trim()
+    const source = asRecord(schema.source) ?? {}
+
+    /** `top10_news` (Vancelian News dashboard) = flux entreprise uniquement (cf. getCompanyNewsArticleIds). */
+    if (feedType === 'top10_news' || feedType === 'company_news') {
+      const limit = Math.max(1, Math.min(50, asInt(source.limit, 10)))
+      const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+      const companyIds = await getCompanyNewsArticleIds()
+      const raw =
+        companyIds.length === 0
+          ? []
+          : await prisma.article.findMany({
+              where: { id: { in: companyIds }, status: ContentStatus.PUBLISHED },
+              orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+              include: {
+                i18n: { where: { locale }, take: 1 },
+                coverMedia: true,
+              },
+              take: limit,
+            })
+
+      const allCategorySlugs = raw
+        .flatMap((a) => (Array.isArray(a.categorySlugs) ? a.categorySlugs : []))
+        .map((v) => String(v))
+        .filter(Boolean)
+      const uniqueCategorySlugs = Array.from(new Set(allCategorySlugs))
+      const categories = uniqueCategorySlugs.length
+        ? await prisma.articleCategory.findMany({
+            where: { slug: { in: uniqueCategorySlugs } },
+            include: {
+              i18n: {
+                where: { locale },
+                take: 1,
+              },
+            },
+          })
+        : []
+      const categoryLabelBySlug = new Map<string, string>()
+      for (const cat of categories) {
+        categoryLabelBySlug.set(cat.slug, cat.i18n[0]?.label ?? cat.label)
+      }
+
+      const items = await Promise.all(
+        raw.map(async (a) => {
+          let coverUrl = a.coverMedia?.url || ''
+          if (a.coverMedia?.key) {
+            try {
+              coverUrl = await getPresignedUrl(a.coverMedia.key, 3600)
+            } catch {
+              coverUrl = a.coverMedia.url
+            }
+          }
+          const publishedRef = a.publishedAt ?? a.createdAt
+          const categorySlug = Array.isArray(a.categorySlugs) && a.categorySlugs.length > 0
+            ? String(a.categorySlugs[0])
+            : ''
+          const categoryLabel = categorySlug ? (categoryLabelBySlug.get(categorySlug) ?? '') : ''
+          const categoryLabels = categoryLabelsForSlugs(a.categorySlugs, categoryLabelBySlug)
+          const standfirst = a.i18n[0]?.standfirst ?? ''
+          return {
+            id: a.id,
+            slug: a.slug,
+            title: a.i18n[0]?.title ?? a.slug,
+            publishedAt: a.publishedAt?.toISOString() ?? null,
+            publishedDate: publishedRef ? dateFormatter.format(publishedRef) : '',
+            coverUrl,
+            readingTime: estimateReadingTime(standfirst),
+            categorySlug: categorySlug || null,
+            categoryLabel: categoryLabel || null,
+            categoryLabels: categoryLabels.length > 0 ? categoryLabels : null,
+            articleType: a.articleType,
+            isCompanyNews: true,
+          }
+        })
+      )
+
+      return NextResponse.json({
+        feed: { id: feed.id, slug: feed.slug, name: feed.name, feedType },
+        params: { locale, limit },
+        count: items.length,
+        items,
+      })
+    }
+
+    if (feedType === 'top10_research') {
+      const limit = Math.max(1, Math.min(50, asInt(source.limit, 10)))
+      const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+      const raw = await prisma.article.findMany({
+        where: {
+          status: ContentStatus.PUBLISHED,
+          articleType: { in: ['ANALYSIS', 'RESEARCH'] },
+        },
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+        include: {
+          i18n: {
+            where: { locale },
+            take: 1,
+          },
+          coverMedia: true,
+        },
+        take: limit,
+      })
+
+      const allCategorySlugs = raw
+        .flatMap((a) => (Array.isArray(a.categorySlugs) ? a.categorySlugs : []))
+        .map((v) => String(v))
+        .filter(Boolean)
+      const uniqueCategorySlugs = Array.from(new Set(allCategorySlugs))
+      const categories = uniqueCategorySlugs.length
+        ? await prisma.articleCategory.findMany({
+            where: { slug: { in: uniqueCategorySlugs } },
+            include: {
+              i18n: {
+                where: { locale },
+                take: 1,
+              },
+            },
+          })
+        : []
+      const categoryLabelBySlug = new Map<string, string>()
+      for (const cat of categories) {
+        categoryLabelBySlug.set(cat.slug, cat.i18n[0]?.label ?? cat.label)
+      }
+
+      const items = await Promise.all(
+        raw.map(async (a) => {
+          let coverUrl = a.coverMedia?.url || ''
+          if (a.coverMedia?.key) {
+            try {
+              coverUrl = await getPresignedUrl(a.coverMedia.key, 3600)
+            } catch {
+              coverUrl = a.coverMedia.url
+            }
+          }
+          const publishedRef = a.publishedAt ?? a.createdAt
+          const categorySlug = Array.isArray(a.categorySlugs) && a.categorySlugs.length > 0
+            ? String(a.categorySlugs[0])
+            : ''
+          const categoryLabel = categorySlug ? (categoryLabelBySlug.get(categorySlug) ?? '') : ''
+          const categoryLabels = categoryLabelsForSlugs(a.categorySlugs, categoryLabelBySlug)
+          const standfirst = a.i18n[0]?.standfirst ?? ''
+          return {
+            id: a.id,
+            slug: a.slug,
+            title: a.i18n[0]?.title ?? a.slug,
+            publishedAt: a.publishedAt?.toISOString() ?? null,
+            publishedDate: publishedRef ? dateFormatter.format(publishedRef) : '',
+            coverUrl,
+            readingTime: estimateReadingTime(standfirst),
+            categorySlug: categorySlug || null,
+            categoryLabel: categoryLabel || null,
+            categoryLabels: categoryLabels.length > 0 ? categoryLabels : null,
+            articleType: a.articleType,
+          }
+        })
+      )
+
+      return NextResponse.json({
+        feed: { id: feed.id, slug: feed.slug, name: feed.name, feedType },
+        params: { locale, limit },
+        count: items.length,
+        items,
+      })
+    }
+
+    if (feedType === 'blog_articles') {
+      const categorySlug = asString(source.categorySlug).trim()
+      const limit = Math.max(1, Math.min(50, asInt(source.limit, 10)))
+      const raw = await prisma.article.findMany({
+        where: { status: ContentStatus.PUBLISHED },
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+        include: {
+          i18n: {
+            where: { locale },
+            take: 1,
+          },
+        },
+        take: 200,
+      })
+
+      const filtered = raw.filter((a) => {
+        if (!categorySlug) return true
+        const slugs = Array.isArray(a.categorySlugs) ? a.categorySlugs : []
+        return slugs.map((v) => String(v)).includes(categorySlug)
+      })
+      const items = filtered.slice(0, limit).map((a) => ({
+        id: a.id,
+        slug: a.slug,
+        title: a.i18n[0]?.title ?? a.slug,
+        standfirst: a.i18n[0]?.standfirst ?? '',
+        publishedAt: a.publishedAt,
+        articleType: a.articleType,
+      }))
+
+      return NextResponse.json({
+        feed: { id: feed.id, slug: feed.slug, name: feed.name, feedType },
+        params: { locale, categorySlug, limit },
+        count: items.length,
+        items,
+      })
+    }
+
+    if (feedType === 'vaults_by_investment_type') {
+      const investmentTypeSlug = asString(source.investmentTypeSlug).trim()
+      const limit = Math.max(1, Math.min(100, asInt(source.limit, 20)))
+      const pages = await prisma.page.findMany({
+        where: { template: 'vault_builder' },
+        include: {
+          sections: {
+            where: { key: 'vault_builder_v1' },
+            include: {
+              contents: {
+                where: { locale, status: ContentStatus.PUBLISHED },
+                take: 1,
+              },
+            },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+
+      const raw = pages
+        .map((p, index) => {
+          const data = asRecord(p.sections[0]?.contents[0]?.data) ?? {}
+          return {
+            id: p.id,
+            slug: p.slug,
+            title: p.title ?? p.slug,
+            investmentTypeSlug: asString(data.investmentTypeSlug) || null,
+            sortOrder: asInt(data.sortOrder, 999),
+            dbOrder: index,
+            pageCreatedAt: p.createdAt.toISOString(),
+          }
+        })
+        .filter((v) => !investmentTypeSlug || v.investmentTypeSlug === investmentTypeSlug)
+      const ordered = [...raw].sort((a, b) => {
+        if (investmentTypeSlug) {
+          const bySort = a.sortOrder - b.sortOrder
+          if (bySort !== 0) return bySort
+          return a.dbOrder - b.dbOrder
+        }
+        const catA = a.investmentTypeSlug ?? '__none__'
+        const catB = b.investmentTypeSlug ?? '__none__'
+        if (catA !== catB) return catA.localeCompare(catB)
+        const bySort = a.sortOrder - b.sortOrder
+        if (bySort !== 0) return bySort
+        return a.dbOrder - b.dbOrder
+      })
+      const items = ordered.slice(0, limit)
+
+      return NextResponse.json({
+        feed: { id: feed.id, slug: feed.slug, name: feed.name, feedType },
+        params: { locale, investmentTypeSlug, limit },
+        count: items.length,
+        items,
+      })
+    }
+
+    if (feedType === 'crypto_bundles') {
+      const limit = Math.max(1, Math.min(100, asInt(source.limit, 20)))
+      const placeholderPrefix = asString(source.backgroundPlaceholderPrefix).trim() || 'crypto-bundle'
+      const bundles = await fetchBackendBundles()
+
+      const items = bundles
+        .filter((b) => asString(b.asset_class).toLowerCase() === 'crypto')
+        .map((b) => {
+          const rawType = asString(b.type).trim()
+          const classification = rawType || 'uncategorized'
+          const instruments = Array.isArray(b.instruments) ? b.instruments : []
+          const instrumentCount = instruments.length
+          const imageUrl =
+            asString(b.backgroundImage).trim() ||
+            asString(b.background_image).trim() ||
+            asString(b.imageUrl).trim() ||
+            asString(b.image_url).trim() ||
+            `https://picsum.photos/seed/${placeholderPrefix}-${asString(b.id)}/800/600`
+          return {
+            id: asString(b.id),
+            slug: asString(b.id),
+            title: asString(b.name) || 'Crypto bundle',
+            description: asString(b.description) || null,
+            classification,
+            sortKey: `${classification}:${asString(b.name).toLowerCase()}`,
+            imageUrl,
+            redirectUrl: asString(b.id) ? `bundle://${asString(b.id)}` : '',
+            instrumentCount,
+            performance24h: null,
+          }
+        })
+        .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+        .slice(0, limit)
+        .map(({ sortKey: _sortKey, ...rest }) => rest)
+
+      return NextResponse.json({
+        feed: { id: feed.id, slug: feed.slug, name: feed.name, feedType },
+        params: { limit },
+        count: items.length,
+        items,
+      })
+    }
+
+    if (feedType === 'top_crypto_mock') {
+      const popular = [
+        { name: 'Bitcoin', ticker: 'BTC', price: '59 644 €', variationPercent: 3.25, redirectUrl: 'crypto://btc' },
+        { name: 'Ether', ticker: 'ETH', price: '1 744,19 €', variationPercent: 4.61, redirectUrl: 'crypto://eth' },
+        { name: 'Tether', ticker: 'USDT', price: '0,86 €', variationPercent: 0.22, redirectUrl: 'crypto://usdt' },
+        { name: 'XRP', ticker: 'XRP', price: '1,17 €', variationPercent: 1.71, redirectUrl: 'crypto://xrp' },
+        { name: 'USDC', ticker: 'USDC', price: '0,86 €', variationPercent: 0.21, redirectUrl: 'crypto://usdc' },
+      ]
+      const topGainers = [
+        { name: 'Solana', ticker: 'SOL', price: '178,90 €', variationPercent: 5.12, redirectUrl: 'crypto://sol' },
+        { name: 'Avalanche', ticker: 'AVAX', price: '42,30 €', variationPercent: 4.28, redirectUrl: 'crypto://avax' },
+        { name: 'Bitcoin', ticker: 'BTC', price: '59 644 €', variationPercent: 3.25, redirectUrl: 'crypto://btc' },
+        { name: 'Ether', ticker: 'ETH', price: '1 744,19 €', variationPercent: 4.61, redirectUrl: 'crypto://eth' },
+        { name: 'Cardano', ticker: 'ADA', price: '0,48 €', variationPercent: 1.56, redirectUrl: 'crypto://ada' },
+      ]
+      const topLosers = [
+        { name: 'Dogecoin', ticker: 'DOGE', price: '0,12 €', variationPercent: -2.15, redirectUrl: 'crypto://doge' },
+        { name: 'XRP', ticker: 'XRP', price: '1,17 €', variationPercent: -1.2, redirectUrl: 'crypto://xrp' },
+        { name: 'Polkadot', ticker: 'DOT', price: '7,85 €', variationPercent: -0.98, redirectUrl: 'crypto://dot' },
+        { name: 'Chainlink', ticker: 'LINK', price: '14,20 €', variationPercent: -0.65, redirectUrl: 'crypto://link' },
+        { name: 'Binance Coin', ticker: 'BNB', price: '612,40 €', variationPercent: -0.42, redirectUrl: 'crypto://bnb' },
+      ]
+
+      return NextResponse.json({
+        feed: { id: feed.id, slug: feed.slug, name: feed.name, feedType },
+        params: { limit: 5 },
+        count: popular.length + topGainers.length + topLosers.length,
+        items: { popular, topGainers, topLosers },
+      })
+    }
+
+    if (feedType === 'all_crypto_mock') {
+      const items = [
+        { slug: 'btc', name: 'Bitcoin', ticker: 'BTC', price: '59 979 €', variationPercent: -1.47, marketCapRank: 1, redirectUrl: 'crypto://btc' },
+        { slug: 'eth', name: 'Ether', ticker: 'ETH', price: '1 740,54 €', variationPercent: -2.18, marketCapRank: 2, redirectUrl: 'crypto://eth' },
+        { slug: 'usdt', name: 'Tether', ticker: 'USDT', price: '0,86 €', variationPercent: 0.39, marketCapRank: 3, redirectUrl: 'crypto://usdt' },
+        { slug: 'xrp', name: 'XRP', ticker: 'XRP', price: '1,18 €', variationPercent: -2.29, marketCapRank: 4, redirectUrl: 'crypto://xrp' },
+        { slug: 'usdc', name: 'USDC', ticker: 'USDC', price: '0,86 €', variationPercent: 0.40, marketCapRank: 5, redirectUrl: 'crypto://usdc' },
+        { slug: 'sol', name: 'Solana', ticker: 'SOL', price: '73,53 €', variationPercent: -2.65, marketCapRank: 6, redirectUrl: 'crypto://sol' },
+        { slug: 'trx', name: 'Tron', ticker: 'TRX', price: '0,24 €', variationPercent: 1.38, marketCapRank: 7, redirectUrl: 'crypto://trx' },
+        { slug: 'doge', name: 'Dogecoin', ticker: 'DOGE', price: '0,079 €', variationPercent: -6.21, marketCapRank: 8, redirectUrl: 'crypto://doge' },
+        { slug: 'ada', name: 'Cardano', ticker: 'ADA', price: '0,22 €', variationPercent: -3.91, marketCapRank: 9, redirectUrl: 'crypto://ada' },
+        { slug: 'dot', name: 'Polkadot', ticker: 'DOT', price: '7,85 €', variationPercent: -0.98, marketCapRank: 10, redirectUrl: 'crypto://dot' },
+        { slug: 'link', name: 'Chainlink', ticker: 'LINK', price: '14,20 €', variationPercent: -0.65, marketCapRank: 11, redirectUrl: 'crypto://link' },
+        { slug: 'bnb', name: 'Binance Coin', ticker: 'BNB', price: '612,40 €', variationPercent: -0.42, marketCapRank: 12, redirectUrl: 'crypto://bnb' },
+        { slug: 'avax', name: 'Avalanche', ticker: 'AVAX', price: '42,30 €', variationPercent: 4.28, marketCapRank: 13, redirectUrl: 'crypto://avax' },
+      ]
+      return NextResponse.json({
+        feed: { id: feed.id, slug: feed.slug, name: feed.name, feedType },
+        params: { limit: items.length },
+        count: items.length,
+        items,
+      })
+    }
+
+    return NextResponse.json(
+      { error: `Unsupported feedType "${feedType}". Supported: blog_articles, top10_news, company_news, top10_research, vaults_by_investment_type, crypto_bundles, top_crypto_mock, all_crypto_mock` },
+      { status: 400 }
+    )
+  } catch (error) {
+    console.error('[api/admin/widget-builder/feed-preview]', error)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}

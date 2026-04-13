@@ -1,0 +1,19 @@
+{
+  "@@locale": "en",
+  "activationJourneyHeadline": "Finish setting up",
+  "@activationJourneyHeadline": {
+    "description": "Activation journey card title on home"
+  },
+  "activationJourneySubtitle": "The new era on investment in a few steps",
+  "@activationJourneySubtitle": {
+    "description": "Activation journey card subtitle on home"
+  },
+  "activationHeroHeadline": "Your investment's new home",
+  "activationPreDepositHeroTagline": "everyone can easily invest in a single tap",
+  "@activationPreDepositHeroTagline": {
+    "description": "Subtitle under hero title on pre-deposit home header"
+  },
+  "activationHeroSubtitleVerify": "Complete your profile to unlock your account.",
+  "activationHeroSubtitleDeposit": "Add funds to start investing.",
+  "activationHeroSubtitleInvest": "Explore opportunities and build your portfolio."
+}

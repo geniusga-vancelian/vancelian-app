@@ -1,0 +1,99 @@
+/*
+ * Tableau relevé (.statement-table) — partagé IBAN + relevé d’opération (WeasyPrint).
+ * Colonnes figées (table-layout: fixed + <colgroup>) pour éviter le « grid cassé ».
+ */
+
+.operations__table-wrap {
+  background: #fff;
+  border-radius: var(--card-radius, 10px);
+  overflow: hidden;
+  border: 1px solid transparent;
+}
+
+table.statement-table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.statement-table__col-date {
+  width: 9%;
+}
+.statement-table__col-desc {
+  width: 41%;
+}
+.statement-table__col-debit {
+  width: 13%;
+}
+.statement-table__col-credit {
+  width: 13%;
+}
+.statement-table__col-balance {
+  width: 24%;
+}
+
+.statement-table thead {
+  display: table-header-group;
+}
+
+.statement-table th {
+  padding: 10px 10px 10px 0;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 2;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  text-align: left;
+  border-bottom: 1px solid var(--rule, #8e8e93);
+  vertical-align: bottom;
+}
+
+.statement-table th:first-child {
+  padding-left: 12px;
+}
+
+.statement-table th.col-debit,
+.statement-table th.col-credit {
+  text-align: right;
+}
+
+.statement-table th.col-balance {
+  text-align: right;
+  padding-right: 12px;
+}
+
+.statement-table td {
+  padding: 10px 6px 10px 0;
+  font-size: 11px;
+  line-height: calc(18 / 11);
+  vertical-align: top;
+  border-top: 1px solid var(--border, #d1d1d6);
+}
+
+.statement-table td:first-child {
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+.statement-table td.col-desc {
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: pre-line;
+}
+
+.statement-table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.statement-table td.col-balance {
+  padding-right: 12px;
+}
+
+.statement-table tbody tr {
+  break-inside: auto;
+  page-break-inside: auto;
+}

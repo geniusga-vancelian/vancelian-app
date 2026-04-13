@@ -1,0 +1,121 @@
+You are a senior backend engineer working inside an existing FastAPI + SQLAlchemy + Alembic project.
+
+Your mission is to implement ONLY step 1 of the market data V1 plan.
+
+## Scope of this task
+
+Implement ONLY the database foundation for latest crypto quotes.
+
+Do NOT implement Binance ingestion.
+Do NOT implement WebSocket.
+Do NOT implement REST endpoints.
+Do NOT implement OHLC / klines / intraday bars.
+Do NOT refactor unrelated files.
+
+## Goal
+
+Create the new persistent snapshot table for latest market quotes, the corresponding SQLAlchemy model, and the repository layer to read/write it safely.
+
+This is a strict additive change.
+
+## Context
+
+There is already an existing market_data domain with:
+- MarketDataInstrument
+- market_data_bars_d1
+- Yahoo-based historical ingestion
+- Alembic migrations
+- existing FastAPI routes
+
+We are adding Binance latest quotes in parallel, without breaking the existing Yahoo / D1 logic.
+
+## Required implementation
+
+### 1. Alembic migration
+Create a new Alembic migration that adds a new table:
+
+`market_data_latest_quotes`
+
+The table must be a snapshot table, not an append-only history table.
+
+Required columns:
+- instrument_id (PK, FK to market_data_instruments.id)
+- provider (string, nullable or non-null depending current conventions)
+- provider_symbol (string, nullable or non-null depending current conventions)
+- last_price (numeric)
+- bid_price (numeric, nullable)
+- ask_price (numeric, nullable)
+- volume (numeric, nullable)
+- quote_time (timestamptz, nullable)
+- updated_at (timestamptz, server default now, non-null)
+
+Constraints:
+- one row per instrument only
+- instrument_id is the primary key
+
+Do not create intraday OHLC tables in this task.
+
+### 2. SQLAlchemy model
+Add a new SQLAlchemy model in the existing database models file, following current project style and naming conventions:
+
+`MarketDataLatestQuote`
+
+It must:
+- map to `market_data_latest_quotes`
+- reference `MarketDataInstrument`
+- include a relationship back to the instrument if the existing style supports it
+
+### 3. Repository
+Create a new repository file:
+
+`api/services/market_data/quotes_repo.py`
+
+Implement only the following functions:
+- `get_latest_quotes_by_instrument_ids(session, instrument_ids)`
+- `get_latest_quotes_by_symbols(session, symbols)`
+- `upsert_latest_quote(session, *, instrument_id, provider, provider_symbol, last_price, bid_price=None, ask_price=None, volume=None, quote_time=None)`
+
+Requirements:
+- follow existing repository style in the market_data module
+- use safe SQLAlchemy patterns
+- upsert must update existing row if instrument already exists
+- commit behavior must match current project conventions (inspect existing repos first)
+
+### 4. Documentation
+Create or update a short markdown note at:
+
+`services/arquantix/docs/audit/MARKET_DATA_STEP1_IMPLEMENTED.md`
+
+Include:
+- files created
+- files modified
+- migration name
+- table schema summary
+- repository functions added
+- any assumptions made
+
+## Safety rules
+
+- No large refactor
+- No modification of Yahoo ingestion
+- No modification of existing market data routes
+- No WebSocket code
+- No Binance client code
+- No startup/background task code
+- No unrelated dependency changes
+- Prefer additive changes only
+
+## Output requirements
+
+Before writing code, inspect the current codebase and match:
+- naming conventions
+- SQLAlchemy style
+- Alembic style
+- repository conventions
+
+Then implement only the requested files and modifications.
+
+At the end, provide a concise summary of:
+- what was added
+- what was intentionally NOT implemented
+- any follow-up risks or notes
