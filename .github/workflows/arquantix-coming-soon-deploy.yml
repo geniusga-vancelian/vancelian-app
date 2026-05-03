@@ -32,11 +32,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: gha-arquantix-coming-soon-deploy-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
       
       - name: Login to Amazon ECR
@@ -116,35 +116,17 @@ jobs:
               --query "taskDefinition" \
               --output json > taskdef.json
             
-            # Remove taskRoleArn if it's null (ECS doesn't accept null)
-            python3 << 'PYEOF'
-import json
-import sys
-try:
-    with open('taskdef.json', 'r') as f:
-        td = json.load(f)
-    
-    # Remove null values that ECS doesn't accept
-    fields_to_check = ['taskRoleArn', 'proxyConfiguration']
-    for field in fields_to_check:
-        if field in td and td[field] is None:
-            del td[field]
-            print(f"✅ Removed null {field} from task definition")
-        elif field in td:
-            print(f"ℹ️  {field} exists: {td[field][:50] if isinstance(td[field], str) else td[field]}...")
-    
-    # Write cleaned task definition
-    with open('taskdef.json', 'w') as f:
-        json.dump(td, f, indent=2, sort_keys=True)
-    
-    # Validate JSON
-    with open('taskdef.json', 'r') as f:
-        json.load(f)  # Will raise if invalid
-    print("✅ Task definition cleaned and validated")
-except Exception as e:
-    print(f"❌ Error cleaning task definition: {e}", file=sys.stderr)
-    sys.exit(1)
-PYEOF
+            # ECS does not accept null values for some optional fields. Strip them
+            # using jq (pre-installed on ubuntu-latest). We only touch the keys
+            # that have caused issues in the past (taskRoleArn, proxyConfiguration);
+            # other fields are preserved verbatim so the task definition stays valid.
+            jq '
+              if .taskRoleArn == null then del(.taskRoleArn) else . end
+              | if .proxyConfiguration == null then del(.proxyConfiguration) else . end
+            ' taskdef.json > taskdef.cleaned.json
+            mv taskdef.cleaned.json taskdef.json
+            python3 -m json.tool taskdef.json >/dev/null
+            echo "✅ Task definition cleaned and validated"
           else
             echo "📋 No existing task definition found, using template"
             cp services/arquantix/.aws/task-definition.json taskdef.json
