@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma'
 import { r2Client } from '@/lib/storage/r2-client'
 import { isR2Configured, r2CredentialsNotConfiguredMessage } from '@/lib/storage/r2Env'
 
-const bucketName = process.env.R2_BUCKET_NAME || 'arquantix-media'
+const bucketName =
+  process.env.STORAGE_BUCKET_NAME?.trim() ||
+  process.env.R2_BUCKET_NAME?.trim() ||
+  'arquantix-media'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'

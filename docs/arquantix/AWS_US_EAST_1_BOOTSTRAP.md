@@ -34,9 +34,11 @@ Compte : `411714852748` · Région : `us-east-1` · Profil CLI admin : `arquanti
 
 - ECS cluster `arquantix-cluster` (Fargate).
 - Service `arquantix-web` :
-  - Task def `arquantix-web:2` (image `arquantix-web:latest`).
+  - Task def `arquantix-web:3` (image `arquantix-web:latest`).
   - Port container 3000.
-  - Command override : `npx prisma db push --skip-generate --accept-data-loss && npm run start`.
+  - Command override : `prisma db push --accept-data-loss` puis `prisma db seed` (idempotent, upsert)
+    puis `next start`. Le seed lit `ADMIN_SEED_EMAIL` (env) + `ADMIN_SEED_PASSWORD` (Secrets Manager).
+  - Storage media injecté via secrets `STORAGE_*` (S3 bucket privé + presigned URLs).
 - Service `arquantix-api` :
   - Task def `arquantix-api:5` (image `arquantix-api:latest`).
   - Port container 8000.
@@ -48,6 +50,9 @@ Compte : `411714852748` · Région : `us-east-1` · Profil CLI admin : `arquanti
 - RDS Postgres 16 `arquantix-db` (db.t4g.micro, 20 Go, encrypted, no public access, deletion-protected).
 - ElastiCache Redis 7.1 `arquantix-redis` (cache.t4g.micro, single node).
 - ECR : `arquantix-web`, `arquantix-api` (AES256 — pas KMS, contournement bug me-central-1).
+- S3 `arquantix-media-prod` (us-east-1, AES256, BlockPublicAccess ON, versioning enabled,
+  lifecycle = abort multipart > 7 j). Sert le storage media (uploads admin, blog, projets, mobile DS).
+  Accès via IAM user dédié `arquantix-media-uploader` (policy `arquantix-media-uploader-policy`).
 
 ### Secrets Manager (`arquantix/prod/*`)
 
@@ -58,7 +63,8 @@ Compte : `411714852748` · Région : `us-east-1` · Profil CLI admin : `arquanti
 | `jwt-secret-key` | aliasé en `JWT_SECRET_KEY`, `AUTH_SECRET`, `TWO_FACTOR_TOTP_MASTER_KEY` |
 | `admin-password`, `admin-seed-password` | bootstrap admin |
 | `openai-api-key` | clé OpenAI (placeholder à remplacer) |
-| `r2-endpoint`, `r2-access-key-id`, `r2-secret-access-key`, `r2-bucket-name` | Cloudflare R2 (placeholders) |
+| `storage-bucket-name`, `storage-region`, `storage-endpoint`, `storage-public-url`, `storage-access-key-id`, `storage-secret-access-key` | S3 media (utilisé par Next.js web — `STORAGE_*`) |
+| `r2-endpoint`, `r2-access-key-id`, `r2-secret-access-key`, `r2-bucket-name` | Legacy Cloudflare R2 (placeholders, conservés pour compat) |
 | `google-maps-api-key` | placeholder |
 | `db-password` | mdp brut RDS (debug) |
 
@@ -115,6 +121,26 @@ aws ecs describe-services --region us-east-1 \
   --services arquantix-api arquantix-web \
   --query 'services[].{Name:serviceName,Running:runningCount,Pending:pendingCount,Desired:desiredCount,TaskDef:taskDefinition}'
 ```
+
+## Storage media — S3 vs R2
+
+Le code applicatif (`services/arquantix/web/src/lib/storage/*`) est désormais agnostique :
+
+- `STORAGE_*` (priorité, prod AWS) : `STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`,
+  `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_REGION`, `STORAGE_BUCKET_NAME`, `STORAGE_PUBLIC_URL`.
+- `R2_*` (fallback, dev local Cloudflare R2) — conservé pour compat.
+
+Le `S3Client` détecte le backend (R2 si endpoint `*.r2.cloudflarestorage.com`, sinon S3) et adapte
+`region` et `forcePathStyle` automatiquement. `getPublicUrl()` retourne :
+1. `STORAGE_PUBLIC_URL` si défini, sinon
+2. URL R2 (`pub-<account>.r2.dev/<key>`) si backend R2, sinon
+3. URL S3 régionale (`<bucket>.s3.<region>.amazonaws.com/<key>`).
+
+Le bucket prod est privé : ces URLs sont utilisées en input du presigning ou du proxy
+`/api/site/media/[id]` ; un GET direct retourne 403 (attendu).
+
+Tests e2e validés (mai 2026) : login admin → `POST /api/admin/media/upload` → row en DB
++ objet en S3 → `GET /api/site/media/[id]` (200) → `GET /api/admin/media/[id]/file` (200).
 
 ## Limites / dette connues
 
