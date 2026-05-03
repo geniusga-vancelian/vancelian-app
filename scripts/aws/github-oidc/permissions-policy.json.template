@@ -64,6 +64,22 @@
         "logs:DescribeLogStreams"
       ],
       "Resource": "arn:aws:logs:__AWS_REGION__:__AWS_ACCOUNT_ID__:log-group:/ecs/arquantix-*"
+    },
+    {
+      "Sid": "KMSForECRDefaultEncryption",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "ecr.__AWS_REGION__.amazonaws.com"
+        }
+      }
     }
   ]
 }

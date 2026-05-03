@@ -291,3 +291,111 @@ Si tu veux restreindre à `main` :
 Pour donner accès à un nouveau service AWS (ex. S3 d'assets, CloudFront invalidation,
 RDS), édite `scripts/aws/github-oidc/permissions-policy.json.template` puis re-run
 `setup.sh`. Le `aws iam put-role-policy` remplace la policy in-place.
+
+---
+
+## Annexe B — Known issue : `me-central-1` post-suspension (AWS support ticket)
+
+**Symptôme** : tous les pushes ECR vers `me-central-1` échouent avec :
+
+```
+denied: The Amazon ECR action failed due to a KMS exception: AccessDenied
+```
+
+…même depuis un user IAM admin avec `AdministratorAccess`. L'erreur survient
+au push docker, après que `aws ecr get-login-password` + `docker login` aient
+réussi. Touche tous les repos ECR de la région (existants comme nouveaux),
+indépendamment du tag mutability ou de l'encryption type (AES256 ou KMS).
+
+**Cause confirmée par diagnostic** : l'infrastructure ECR de `me-central-1`
+sur le compte `411714852748` est dans un état dégradé suite à la suspension
+puis réactivation du compte (facture impayée puis payée). Les **AWS-owned
+KMS keys** que ECR utilise pour AES256 ne sont pas correctement provisionnées
+sur cette région.
+
+**Validation** : un push test vers `us-east-1` (sur un repo de test)
+fonctionne **sans aucun changement de policy**, prouvant que :
+
+- la policy IAM du role est correcte ;
+- l'OIDC GitHub ↔ AWS fonctionne ;
+- le bug est strictement régional, lié à l'état du compte AWS.
+
+### Comment ouvrir le ticket AWS Support
+
+URL : <https://console.aws.amazon.com/support/home#/case/create>
+
+- **Type** : *Technical*
+- **Service** : *Elastic Container Registry (ECR)*
+- **Category** : *Repository Issue*
+- **Severity** : *General guidance* ou *System impaired* selon l'urgence
+
+**Sujet suggéré** :
+
+> ECR push fails with "KMS exception: AccessDenied" in me-central-1 after account reactivation
+
+**Corps suggéré** (à coller / adapter) :
+
+```
+Hello AWS Support,
+
+After my AWS account 411714852748 was suspended for unpaid invoice and then
+reactivated (paid in full on 2026-05-XX), all ECR push operations in region
+me-central-1 fail with the following error:
+
+  denied: The Amazon ECR action failed due to a KMS exception: AccessDenied
+
+This happens for both pre-existing repositories and brand new ones, with
+encryption type AES256 (no customer KMS key involved). It also happens when
+the caller is the root user or an IAM user with full AdministratorAccess —
+so it cannot be a missing IAM permission on my side.
+
+Verified facts:
+
+- ECR Login (`aws ecr get-login-password` + `docker login`) succeeds.
+- The same `docker push` command using the same image succeeds in us-east-1
+  on a test repository created on the same account.
+- The IAM role used in the original failure has full ECR + KMS permissions
+  (verified via `aws iam simulate-principal-policy` — all actions return
+  "allowed" against the target ECR resource ARN).
+- ECR repos `arquantix-coming-soon`, `arquantix-web`, `arquantix-api` in
+  me-central-1 all exhibit the bug.
+
+Please verify the state of the AWS-owned KMS keys backing ECR default
+AES256 encryption in me-central-1 for this account, and reset/refresh them
+if needed. I suspect they were not correctly re-provisioned during account
+reactivation.
+
+Affected resources:
+- Account ID:        411714852748
+- Region:            me-central-1 (Bahrain)
+- ECR repositories:  arquantix-coming-soon, arquantix-web, arquantix-api
+
+Thanks!
+```
+
+### Que faire en attendant la résolution
+
+- **Le code est sain** : la migration OIDC + le fix du YAML cassé ont été
+  validés (toutes les étapes fonctionnent jusqu'au `Push Docker image to
+  ECR`). Dès qu'AWS répare la région, **les workflows passeront au vert
+  sans aucune intervention** — pas besoin de relancer un push.
+- Si les fails rouges sur la page Actions te dérangent, tu peux désactiver
+  temporairement les 4 workflows en ajoutant `if: false` au job, ou en
+  commentant le bloc `on.push` (ne garder que `workflow_dispatch`).
+- Tu peux re-trigger manuellement un workflow (`workflow_dispatch`) à tout
+  moment pour vérifier si AWS a réparé : <https://github.com/geniusga-vancelian/vancelian-app/actions>
+
+### Comment savoir si AWS a réparé
+
+Test minimal local (depuis ta machine, avec le profil `arquantix-admin`) :
+
+```bash
+aws ecr get-login-password --region me-central-1 \
+  | docker login --username AWS --password-stdin 411714852748.dkr.ecr.me-central-1.amazonaws.com
+docker pull alpine:3.19
+docker tag alpine:3.19 411714852748.dkr.ecr.me-central-1.amazonaws.com/arquantix-web:probe
+docker push 411714852748.dkr.ecr.me-central-1.amazonaws.com/arquantix-web:probe
+```
+
+Si le `docker push` réussit → AWS a réparé, tu peux re-trigger les workflows
+GitHub Actions et tout passera.
