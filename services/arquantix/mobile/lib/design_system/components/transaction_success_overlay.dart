@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../atoms/app_colors.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_primary_button.dart';
 import 'bottom_sheet_container.dart';
+import 'kalai_icon.dart';
 import 'sheet_title_bar.dart';
 
 /// Full-screen overlay with animated backdrop + floating success sheet.
@@ -360,8 +362,8 @@ class TransactionErrorOverlayState extends State<TransactionErrorOverlay>
                         color: AppColors.semanticDanger,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.close_rounded,
+                      child: const KalaiIcon(
+                        KalaiIcons.clear,
                         color: Colors.white,
                         size: 36,
                       ),

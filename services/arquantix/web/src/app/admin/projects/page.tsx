@@ -7,6 +7,7 @@ import { Plus, Search, Edit } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ContentStatus } from '@prisma/client'
 import { toastError } from '@/lib/admin/toast'
+import { adminMediaFileUrl } from '@/lib/admin/adminMediaFileUrl'
 
 interface Project {
   id: string
@@ -14,6 +15,7 @@ interface Project {
   status: ContentStatus
   updatedAt: string
   coverMedia: {
+    id: string
     url: string
   } | null
   i18n: Array<{
@@ -191,7 +193,7 @@ export default function AdminProjectsPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       {project.coverMedia ? (
                         <img
-                          src={project.coverMedia.url}
+                          src={adminMediaFileUrl(project.coverMedia.id)}
                           alt={title}
                           className="w-16 h-16 object-cover rounded"
                         />

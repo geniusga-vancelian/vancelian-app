@@ -6,6 +6,8 @@ import '../assets/ds_raster_assets.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// Symbole Face ID (SVG Figma) — teinte [AppColors.indigo].
 class DsFaceIdSymbol extends StatelessWidget {
@@ -119,11 +121,11 @@ class DsIosStatusBarPlaceholder extends StatelessWidget {
                     child: Text(time, textAlign: TextAlign.center, style: timeStyle),
                   ),
                   const Spacer(),
-                  Icon(Icons.signal_cellular_alt, size: 18, color: AppColors.black),
+                  const KalaiIcon(KalaiIcons.signal, size: 18, color: AppColors.black),
                   const SizedBox(width: 6),
-                  Icon(Icons.wifi, size: 18, color: AppColors.black),
+                  const KalaiIcon(KalaiIcons.wifi, size: 18, color: AppColors.black),
                   const SizedBox(width: 6),
-                  Icon(Icons.battery_full, size: 22, color: AppColors.black),
+                  const KalaiIcon(KalaiIcons.battery, size: 22, color: AppColors.black),
                   const SizedBox(width: 8),
                 ],
               ),

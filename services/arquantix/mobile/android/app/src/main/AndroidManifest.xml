@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- D.1.4.8 — Voice input dans le chat Assistance.
+         RECORD_AUDIO : moteur natif (speech_to_text) ET moteur Whisper
+         (record + upload). Demandé à la 1ère utilisation via
+         permission_handler — pas de modale au lancement. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
@@ -42,6 +47,13 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- D.1.4.8 — speech_to_text package : Android 11+ exige cette
+             entrée dans <queries> pour que le plugin puisse découvrir
+             le service de reconnaissance vocale du système. Sans ça,
+             SpeechToText.initialize() retourne false silencieusement. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 </manifest>

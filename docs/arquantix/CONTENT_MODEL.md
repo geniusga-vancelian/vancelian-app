@@ -1,13 +1,15 @@
-# Content Model - Arquantix CMS (Strapi)
+# Content Model — historique Strapi (**non utilisé**)
+
+> **Déprécié (2026).** Strapi n’est plus dans le runtime Docker. Le contenu produit passe par **Prisma + PostgreSQL** et l’API FastAPI. Ce document est conservé **à titre archivistique** ; ne pas l’utiliser comme spec active.
 
 **Date:** 2026-01-01  
-**Status:** 🚧 En cours de développement
+**Status:** archivé / référence historique
 
 ---
 
-## TL;DR
+## TL;DR (historique)
 
-Modèle de contenu Strapi pour Arquantix: Content Types, champs, exemples JSON.
+Ancien modèle de contenu Strapi (Content Types, champs, exemples JSON) — **non appliqué** dans la stack actuelle.
 
 ---
 

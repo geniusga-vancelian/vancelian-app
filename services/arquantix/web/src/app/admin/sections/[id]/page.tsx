@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { supportedLocales, type Locale } from '@/config/locales'
+import { supportedLocales, isValidLocale, type Locale } from '@/config/locales'
+import { useAdminEditingLocale } from '@/components/admin/AdminEditingLocaleContext'
+import { AdminEditingLocaleBar } from '@/components/admin/AdminEditingLocaleBar'
 import { SectionEditor } from '@/components/admin/SectionEditor'
 import { toastSuccess, toastError } from '@/lib/admin/toast'
 import { TranslateModal } from '@/components/admin/TranslateModal'
-import { getSectionType } from '@/lib/sections/library'
+import { getSectionType, resolveCanonicalSectionKey } from '@/lib/sections/library'
+import { getSectionLegacyWarnings } from '@/lib/sections/sectionLegacyWarnings'
 
 interface Section {
   id: string
@@ -30,6 +33,8 @@ interface Content {
 export default function AdminSectionEditorPage() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
+  const { locale: ctxLocale, setLocale: setGlobalLocale } = useAdminEditingLocale()
   const sectionId = (params?.id as string | undefined) ?? ''
 
   const [section, setSection] = useState<Section | null>(null)
@@ -44,14 +49,27 @@ export default function AdminSectionEditorPage() {
   const [approving, setApproving] = useState(false)
 
   useEffect(() => {
+    const q = searchParams?.get('locale') ?? searchParams?.get('editingLocale')
+    if (q && isValidLocale(q)) {
+      setGlobalLocale(q)
+    }
+  }, [searchParams, setGlobalLocale])
+
+  useEffect(() => {
+    setSelectedLocale(ctxLocale)
+  }, [ctxLocale])
+
+  useEffect(() => {
     if (!sectionId) return
     loadSection()
   }, [sectionId, selectedLocale, selectedStatus])
 
-  const loadSection = async () => {
+  /** `status` permet de forcer le jeu chargé (ex. brouillon après Save) sans dépendre du state encore non mis à jour. */
+  const loadSection = async (opts?: { status?: 'draft' | 'published' }) => {
     try {
+      const statusParam = opts?.status ?? selectedStatus
       const res = await fetch(
-        `/api/admin/sections/${sectionId}?locale=${selectedLocale}&status=${selectedStatus}`
+        `/api/admin/sections/${sectionId}?locale=${selectedLocale}&status=${statusParam}`
       )
       const result = await res.json()
 
@@ -93,7 +111,9 @@ export default function AdminSectionEditorPage() {
 
       if (res.ok) {
         toastSuccess('Saved')
-        loadSection()
+        // Toujours recharger le brouillon sauvegardé ; sinon avec « View: Published » on recharge l’ancien publié et les champs (ex. CTA Text) semblent perdus.
+        setSelectedStatus('draft')
+        await loadSection({ status: 'draft' })
       } else {
         const error = await res.json()
         toastError(error.error || 'Failed to save draft')
@@ -186,6 +206,54 @@ export default function AdminSectionEditorPage() {
     return null
   }
 
+  const sectionCanonical =
+    resolveCanonicalSectionKey(
+      typeof section.key === 'string' ? section.key.trim() : section.key,
+    ) ?? section.key
+
+  if (sectionCanonical === 'common_module_ref') {
+    const moduleId = typeof data?.commonModuleId === 'string' ? data.commonModuleId.trim() : ''
+    return (
+      <div className="max-w-2xl space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Référence module commun</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Bloc : <span className="font-mono">{section.key}</span> · page{' '}
+              <span className="font-mono">{section.page.slug}</span>
+            </p>
+          </div>
+          <Link
+            href={`/admin/pages/${section.page.slug}?editingLocale=${selectedLocale}`}
+            className="shrink-0 px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            ← Retour à la page
+          </Link>
+        </div>
+
+        <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-5 text-sm text-sky-950">
+          <p>
+            Ce module n’a pas de contenu propre : il affiche un <strong>module commun</strong> déjà rédigé et traduit
+            dans la zone 2 du site. Vous pouvez le retirer de la page (liste des modules) ou ouvrir la fiche du module
+            commun pour modifier textes et langues.
+          </p>
+          {moduleId ? (
+            <div className="mt-4">
+              <Link
+                href={`/admin/pages/common-module/${moduleId}`}
+                className="inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Ouvrir le module commun
+              </Link>
+            </div>
+          ) : (
+            <p className="mt-3 text-amber-900">Référence incomplète (aucun identifiant de module).</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   const previewUrl = `/preview/${section.page.slug}?locale=${selectedLocale}`
 
   const handleApproveTranslation = async () => {
@@ -214,8 +282,31 @@ export default function AdminSectionEditorPage() {
     }
   }
 
-  // Check if we have a structured editor for this section type
-  const hasStructuredEditor = section.key === 'hero' || section.key === 'projects' || section.key === 'project_grid' || section.key === 'faq'
+  const legacyWarnings = getSectionLegacyWarnings(sectionCanonical, data)
+
+  const structuredEditorCanonicalKeys = new Set([
+    'hero',
+    'hero_secondary',
+    'project_grid',
+    'feature_grid',
+    'faq',
+    'how_it_works',
+    'cta',
+    'figma_simple_hero',
+    'figma_stats_grid',
+    'key_figures',
+    'figma_testimonial_cards',
+    'media_text',
+    'company_map',
+    'testimonials',
+    'blog_article_hero',
+    'blog_article_reader',
+    'blog_mosaic',
+    'blog_hero',
+    'blog_feed',
+    'share_sm',
+  ])
+  const hasStructuredEditor = structuredEditorCanonicalKeys.has(sectionCanonical)
 
   return (
     <div>
@@ -229,11 +320,15 @@ export default function AdminSectionEditorPage() {
           </p>
         </div>
         <Link
-          href={`/admin/pages/${section.page.slug}`}
+          href={`/admin/pages/${section.page.slug}?editingLocale=${selectedLocale}`}
           className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
         >
           ← Back to Page
         </Link>
+      </div>
+
+      <div className="mb-4 max-w-xl">
+        <AdminEditingLocaleBar contextLabel="Section" />
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -245,7 +340,9 @@ export default function AdminSectionEditorPage() {
             <select
               value={selectedLocale}
               onChange={(e) => {
-                setSelectedLocale(e.target.value as Locale)
+                const loc = e.target.value as Locale
+                setSelectedLocale(loc)
+                setGlobalLocale(loc)
                 setSelectedStatus('draft')
               }}
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -354,8 +451,20 @@ export default function AdminSectionEditorPage() {
 
         {hasStructuredEditor ? (
           <div className="space-y-4">
+            {legacyWarnings.length > 0 ? (
+              <ul className="space-y-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                {legacyWarnings.map((w) => (
+                  <li
+                    key={w.code}
+                    className={w.level === 'warn' ? 'font-medium' : ''}
+                  >
+                    {w.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <SectionEditor
-              sectionKey={section.key}
+              sectionKey={typeof section.key === 'string' ? section.key.trim() : section.key}
               data={data}
               onChange={setData}
             />

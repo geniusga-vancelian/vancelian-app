@@ -2,6 +2,8 @@
 
 Application mobile Flutter affichant les articles de news du blog Arquantix.
 
+**Dev iOS local (simulateur vs iPhone, BFF :3000, API :8000)** : voir **[docs/LOCAL_IOS_AND_BFF.md](docs/LOCAL_IOS_AND_BFF.md)**.
+
 ## Prérequis
 
 - [Flutter](https://flutter.dev/docs/get-started/install) (SDK >= 3.2.0)
@@ -62,8 +64,14 @@ cd services/arquantix/mobile
 # Tout-en-un (émulateur + app)
 ./go.sh
 
-# Ou avec variable d’environnement
-API_BASE_URL=http://10.0.2.2:3001 ./run-android.sh
+# iOS — simulateur (BFF 127.0.0.1:3000, API :8000 par défaut)
+./run-ios.sh
+
+# iOS — iPhone physique (IP LAN automatique ou API_BASE_URL / AUTH_API_BASE_URL)
+./run-ios-device.sh
+
+# Android — avec variable d’environnement
+API_BASE_URL=http://10.0.2.2:3000 ./run-android.sh
 
 # Chrome
 ./run.sh -d chrome

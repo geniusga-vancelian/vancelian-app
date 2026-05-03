@@ -224,5 +224,112 @@ void main() {
       expect(merged.promoVideoUrls.length, 2);
       expect(merged.teaserVideoUrl, 'https://v.example.com/a');
     });
+
+    test('mergeWithDetail parses TagsModule and FundingModule (auto_product)', () {
+      const base = OfferProject(
+        id: 'x',
+        imageUrl: '',
+        title: 'T',
+        category: 'Real estate',
+        catalogSlug: 'slug',
+      );
+      final detail = CatalogProductDetail.fromJson({
+        'packagedProduct': {
+          'id': 'x',
+          'slug': 'slug',
+          'productType': 'exclusive_offer',
+        },
+        'presentation': {'title': 'T', 'subtitle': null, 'coverUrl': null},
+        'vault': {
+          'data': {
+            'modules': [
+              {
+                'type': 'TagsModule',
+                'enabled': true,
+                'content': {
+                  'tags': ['Tokyo', 'Chalet'],
+                },
+              },
+              {
+                'type': 'FundingModule',
+                'enabled': true,
+                'content': {
+                  'displayMode': 'auto_product',
+                  'title': 'Vue financement',
+                  'items': [
+                    {'key': 'progress', 'label': 'Levé', 'enabled': true},
+                    {'key': 'apr', 'label': 'Taux', 'enabled': true},
+                    {'key': 'target', 'label': 'Cible', 'enabled': true},
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        'engine': {
+          'type': 'lending',
+          'referenceId': 'r',
+          'snapshot': {
+            'supply_apr': 10.5,
+            'current_raised': 100000,
+            'target_size': 1000000,
+            'progress_pct': 10,
+            'investors_count': 5,
+            'asset': 'EUR',
+            'status': 'fundraising',
+          },
+        },
+      });
+      final merged = CatalogOfferMapper.mergeWithDetail(base, detail);
+      expect(merged.vaultHeroTags, ['Tokyo', 'Chalet']);
+      expect(merged.vaultFunding, isNotNull);
+      expect(merged.vaultFunding!.moduleTitle, 'Vue financement');
+      expect(merged.vaultFunding!.showProgressSection, isTrue);
+      expect(merged.vaultFunding!.showAprRow, isTrue);
+      expect(merged.vaultFunding!.showTargetRow, isTrue);
+      final aprNorm = merged.vaultFunding!.aprValue.replaceAll(',', '.').replaceAll('%', '').trim();
+      expect(double.parse(aprNorm), closeTo(10.5, 0.01));
+    });
+
+    test('mergeWithDetail has no vaultFunding without FundingModule', () {
+      const base = OfferProject(
+        id: 'x',
+        imageUrl: '',
+        title: 'T',
+        category: 'Real estate',
+        catalogSlug: 'slug',
+      );
+      final detail = CatalogProductDetail.fromJson({
+        'packagedProduct': {
+          'id': 'x',
+          'slug': 'slug',
+          'productType': 'exclusive_offer',
+        },
+        'presentation': {'title': 'T', 'subtitle': null, 'coverUrl': null},
+        'vault': {
+          'data': {
+            'modules': [
+              {
+                'type': 'SimpleMarkdownContentModule',
+                'content': {'moduleTitle': 'X', 'markdown': 'Y', 'links': []},
+              },
+            ],
+          },
+        },
+        'engine': {
+          'type': 'lending',
+          'snapshot': {
+            'supply_apr': 10,
+            'current_raised': 1,
+            'target_size': 100,
+            'progress_pct': 1,
+            'asset': 'EUR',
+            'status': 'fundraising',
+          },
+        },
+      });
+      final merged = CatalogOfferMapper.mergeWithDetail(base, detail);
+      expect(merged.vaultFunding, isNull);
+    });
   });
 }

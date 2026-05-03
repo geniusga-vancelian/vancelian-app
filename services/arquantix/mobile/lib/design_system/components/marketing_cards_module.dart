@@ -4,6 +4,7 @@ import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
 import 'app_section_title.dart';
+import 'ds_story_segment_bar.dart';
 import 'marketing_card.dart';
 
 /// Configuration d'une carte pour [MarketingCardsModule].
@@ -97,23 +98,24 @@ class _MarketingCardsModuleState extends State<MarketingCardsModule> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _scrollController.addListener(_onCarouselScroll);
+    _scrollController.addListener(_onHorizontalScroll);
   }
 
   @override
   void dispose() {
-    _scrollController.removeListener(_onCarouselScroll);
+    _scrollController.removeListener(_onHorizontalScroll);
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _onCarouselScroll() {
-    if (!_isSliding && widget.items.isNotEmpty) {
-      final screenWidth = MediaQuery.sizeOf(context).width;
-      final cardWidth = _computeCardWidth(screenWidth);
-      final index = (_scrollController.offset / (cardWidth + _gapBetweenCards)).round().clamp(0, widget.items.length - 1);
-      if (index != _currentPage && mounted) setState(() => _currentPage = index);
-    }
+  void _onHorizontalScroll() {
+    if (widget.items.isEmpty || !mounted) return;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final cardWidth = _computeCardWidth(screenWidth);
+    final stride = cardWidth + _gapBetweenCards;
+    if (!stride.isFinite || stride <= 0) return;
+    final index = (_scrollController.offset / stride).round().clamp(0, widget.items.length - 1);
+    if (index != _currentPage) setState(() => _currentPage = index);
   }
 
   bool get _isLandscape => widget.layout == MarketingCardsLayout.landscape;
@@ -159,6 +161,8 @@ class _MarketingCardsModuleState extends State<MarketingCardsModule> {
     final hasDescription =
         widget.description != null && widget.description!.trim().isNotEmpty;
 
+    final multi = widget.items.length > 1;
+
     if (_isSliding) {
       final cardWidth = _computeCardWidth(screenWidth);
       final cardHeight = cardWidth * _cardRatio;
@@ -185,6 +189,17 @@ class _MarketingCardsModuleState extends State<MarketingCardsModule> {
                 ),
               ),
             ],
+            if (multi) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+                child: DsStorySegmentBar(
+                  segmentCount: widget.items.length,
+                  activeIndex: _currentPage,
+                  variant: DsStorySegmentBarVariant.onSurface,
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.md),
           ] else if (hasDescription) ...[
             Padding(
@@ -197,11 +212,33 @@ class _MarketingCardsModuleState extends State<MarketingCardsModule> {
                 ),
               ),
             ),
+            if (multi) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+                child: DsStorySegmentBar(
+                  segmentCount: widget.items.length,
+                  activeIndex: _currentPage,
+                  variant: DsStorySegmentBarVariant.onSurface,
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+          ] else if (multi) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+              child: DsStorySegmentBar(
+                segmentCount: widget.items.length,
+                activeIndex: _currentPage,
+                variant: DsStorySegmentBarVariant.onSurface,
+              ),
+            ),
             const SizedBox(height: AppSpacing.md),
           ],
           SizedBox(
             height: cardHeight,
             child: ListView.separated(
+              controller: _scrollController,
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
               itemCount: widget.items.length,
@@ -221,7 +258,7 @@ class _MarketingCardsModuleState extends State<MarketingCardsModule> {
               },
             ),
           ),
-          if (widget.mode == MarketingCardsMode.carousel) ...[
+          if (widget.mode == MarketingCardsMode.carousel && !multi) ...[
             const SizedBox(height: AppSpacing.md),
             _buildDots(),
           ],
@@ -255,6 +292,17 @@ class _MarketingCardsModuleState extends State<MarketingCardsModule> {
               ),
             ),
           ],
+          if (multi) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+              child: DsStorySegmentBar(
+                segmentCount: widget.items.length,
+                activeIndex: _currentPage,
+                variant: DsStorySegmentBarVariant.onSurface,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
         ] else if (hasDescription) ...[
           Padding(
@@ -265,6 +313,27 @@ class _MarketingCardsModuleState extends State<MarketingCardsModule> {
                 color: AppColors.textSecondary,
                 height: 1.4,
               ),
+            ),
+          ),
+          if (multi) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+              child: DsStorySegmentBar(
+                segmentCount: widget.items.length,
+                activeIndex: _currentPage,
+                variant: DsStorySegmentBarVariant.onSurface,
+              ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+        ] else if (multi) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+            child: DsStorySegmentBar(
+              segmentCount: widget.items.length,
+              activeIndex: _currentPage,
+              variant: DsStorySegmentBarVariant.onSurface,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -291,7 +360,7 @@ class _MarketingCardsModuleState extends State<MarketingCardsModule> {
             },
           ),
         ),
-        if (widget.mode == MarketingCardsMode.carousel) ...[
+        if (widget.mode == MarketingCardsMode.carousel && !multi) ...[
           const SizedBox(height: AppSpacing.md),
           _buildDots(),
         ],

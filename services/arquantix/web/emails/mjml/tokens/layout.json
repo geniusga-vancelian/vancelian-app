@@ -1,0 +1,10 @@
+{
+  "contentWidthPx": 600,
+  "padX": 32,
+  "padY": 28,
+  "radius": {
+    "pill": 40,
+    "card": 10,
+    "chip": 2
+  }
+}

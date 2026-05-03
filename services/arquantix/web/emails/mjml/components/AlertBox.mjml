@@ -1,0 +1,14 @@
+<mj-section padding="0 32px 16px">
+  <mj-column background-color="{{#variant.warning}}#FEF3C7{{/variant.warning}}{{#variant.danger}}#FEE2E2{{/variant.danger}}{{#variant.info}}#E0F2FE{{/variant.info}}{{#variant.success}}#DCFCE7{{/variant.success}}" border-radius="10px" padding="16px 18px" css-class="arq-card">
+    {{#title}}
+      <mj-text font-size="14px" font-weight="600" color="#101113" padding="0 0 4px 0">
+        {{title}}
+      </mj-text>
+    {{/title}}
+    {{#body}}
+      <mj-text font-size="13px" line-height="1.55" color="#101113" padding="0">
+        {{body}}
+      </mj-text>
+    {{/body}}
+  </mj-column>
+</mj-section>

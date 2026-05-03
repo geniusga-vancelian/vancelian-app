@@ -1,0 +1,20 @@
+<mj-section padding="0 32px 16px">
+  <mj-column background-color="{{#dark}}#272727{{/dark}}{{^dark}}#FFFFFF{{/dark}}" border-radius="10px" padding="28px" css-class="arq-card">
+    {{#eyebrow}}
+      <mj-text padding="0 0 12px 0">
+        <span class="arq-eyebrow-chip{{#dark}} arq-eyebrow-chip--light{{/dark}}" style="font-family:'Barlow Semi Condensed','Avenir Next Condensed',Arial,sans-serif;letter-spacing:0.04em;text-transform:uppercase;font-size:11px;font-weight:500;color:{{#dark}}#FFFFFF{{/dark}}{{^dark}}#62656E{{/dark}};{{#dark}}border-color:rgba(255,255,255,0.6);{{/dark}}">{{eyebrow}}</span>
+      </mj-text>
+    {{/eyebrow}}
+    {{#title}}
+      <mj-text font-size="22px" font-weight="500" line-height="1.25" letter-spacing="-0.01em" color="{{#dark}}#FFFFFF{{/dark}}{{^dark}}#101113{{/dark}}" padding="0 0 12px 0">
+        {{title}}
+      </mj-text>
+    {{/title}}
+    {{#body}}
+      <mj-text font-size="14px" line-height="1.6" color="{{#dark}}rgba(255,255,255,0.78){{/dark}}{{^dark}}#62656E{{/dark}}" padding="0 0 18px 0">
+        {{body}}
+      </mj-text>
+    {{/body}}
+    {{#cta}}{{> Button}}{{/cta}}
+  </mj-column>
+</mj-section>

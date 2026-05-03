@@ -1,9 +1,22 @@
 # --- deps ---
 FROM node:20-alpine AS deps
+# libc6-compat : résolution binaire Prisma sur musl — ca-certificates : TLS fiables pour npm / téléchargement engines
+RUN apk add --no-cache libc6-compat ca-certificates
 WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm ci
+# postinstall @prisma/engines = téléchargement binaires — ECONNRESET fréquent en CI / VPN : reprises + retry npm
+RUN npm config set fetch-retries 7 \
+  && npm config set fetch-retry-mintimeout 20000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set fetch-timeout 300000 \
+  && for i in 1 2 3; do \
+       npm ci && exit 0; \
+       echo "[deps] npm ci a échoué (tentative $i/3), nouvel essai dans 8s…" >&2; \
+       sleep 8; \
+     done; \
+     echo "[deps] npm ci impossible après 3 essais" >&2; \
+     exit 1
 
 # --- build ---
 FROM node:20-alpine AS builder
@@ -23,6 +36,9 @@ ARG NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=
 ENV NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=$NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO
 # Collecte des données de route au build : les handlers importent le client OpenAI
 ENV OPENAI_API_KEY=sk-build-placeholder
+# Après le tree complet, régénérer le client Prisma (évite un @prisma/client
+# dérivé du seul `COPY prisma` de l’étape deps si le schéma a divergé en CI).
+RUN npx prisma generate
 RUN npm run build
 
 # --- runner ---
@@ -36,6 +52,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/next.config.js* ./
 COPY --from=builder /app/public ./public
+# Migrations : nécessaire pour `prisma migrate deploy` au démarrage (enum ArticleBlockType, etc. sur arquantix_fresh).
+COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
 ENV PORT=3000
@@ -43,5 +61,6 @@ ENV HOSTNAME="0.0.0.0"
 ENV HOST="0.0.0.0"
 ENV PATH="/app/node_modules/.bin:$PATH"
 
-# Next.js start with explicit hostname
-CMD ["node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
+# Applique d’abord les migrations (base Docker souvent en retard vs schéma Prisma), puis Next.
+# Sans cela, l’image rebuild ne met pas à jour l’enum PG si personne n’a lancé migrate sur arquantix_fresh.
+CMD ["sh", "-c", "set -e; npx prisma migrate deploy; exec node_modules/.bin/next start -H 0.0.0.0 -p 3000"]

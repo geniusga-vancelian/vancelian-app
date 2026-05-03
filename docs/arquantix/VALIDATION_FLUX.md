@@ -2,11 +2,13 @@
 
 **Date:** 2026-01-01
 
+> **Obsolète pour la stack locale actuelle.** Strapi n’est plus dans le compose ; le contenu passe par **Prisma + Next**. Pour valider l’environnement : **[LOCAL_SETUP.md](./LOCAL_SETUP.md)**. Ce fichier est conservé à titre d’archive.
+
 ---
 
 ## TL;DR
 
-Guide de validation pour vérifier que le flux Strapi → Next.js fonctionne correctement.
+Guide historique pour un flux Strapi → Next.js (**non** aligné sur le runtime documenté en 2026).
 
 ---
 

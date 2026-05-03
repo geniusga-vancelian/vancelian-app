@@ -1,27 +1,40 @@
+import { defaultLocale, type Locale } from '@/config/locales'
+import { VAULT_BUILDER_TEMPLATE } from '@/lib/catalog/packagedCatalogHelpers'
+import {
+  buildLocalizedCmsPagePath,
+  buildLocalizedHomePath,
+  buildLocalizedProjectDetailPath,
+} from '@/lib/i18n/publicLocalizedRouting'
+
 /**
- * Compute URL path for a menu item
- * - If isRoot => "/"
- * - Else if page.slug === "home" => "/"
- * - Else => "/" + page.slug
+ * Chemin menu aligné sur le routing public.
+ * - isRoot ou slug `home` → `/{locale}`
+ * - pages Vault Builder (`vault_builder`) → `/{locale}/projects/{slug}`
+ * - sinon → `/{locale}/{slug}`
  */
 export function computeMenuItemUrlPath(
   isRoot: boolean,
-  pageSlug: string | null | undefined
+  pageSlug: string | null | undefined,
+  locale: Locale = defaultLocale,
+  pageTemplate?: string | null,
 ): string {
   if (isRoot) {
-    return '/'
+    return buildLocalizedHomePath(locale)
   }
-  
+
   if (!pageSlug) {
-    // Invalid state: not root but no page
-    return '/'
+    return buildLocalizedHomePath(locale)
   }
-  
+
   if (pageSlug === 'home') {
-    return '/'
+    return buildLocalizedHomePath(locale)
   }
-  
-  return `/${pageSlug}`
+
+  if (pageTemplate === VAULT_BUILDER_TEMPLATE) {
+    return buildLocalizedProjectDetailPath(locale, pageSlug)
+  }
+
+  return buildLocalizedCmsPagePath(locale, pageSlug)
 }
 
 

@@ -1,0 +1,3 @@
+<mj-text align="{{#align}}{{align}}{{/align}}{{^align}}left{{/align}}" padding="0">
+  <span class="arq-eyebrow-chip{{#light}} arq-eyebrow-chip--light{{/light}}" style="font-family:'Barlow Semi Condensed','Avenir Next Condensed',Arial,sans-serif;letter-spacing:0.04em;text-transform:uppercase;font-size:11px;font-weight:500;color:{{#light}}#FFFFFF{{/light}}{{^light}}#62656E{{/light}};">{{label}}</span>
+</mj-text>

@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_back_button.dart';
+import 'kalai_icon.dart';
 
 /// Type de contenu à gauche de la barre : retour ou profil (avatar).
 enum AppTopNavBarLeading {
@@ -126,7 +128,7 @@ class AppTopNavBar extends StatelessWidget implements PreferredSizeWidget {
       case AppTopNavBarLeading.back:
         return _buildNavButton(
           context,
-          icon: Icons.arrow_back_rounded,
+          kalaiIcon: KalaiIcons.arrowLeft,
           fg: fg,
           diskSize: diskSize,
           onTap: onBackTap ?? () => Navigator.of(context).pop(),
@@ -136,7 +138,7 @@ class AppTopNavBar extends StatelessWidget implements PreferredSizeWidget {
       case AppTopNavBarLeading.close:
         return _buildNavButton(
           context,
-          icon: Icons.close_rounded,
+          kalaiIcon: KalaiIcons.clear,
           fg: fg,
           diskSize: diskSize,
           onTap: onCloseTap ?? () => Navigator.of(context).pop(),
@@ -148,25 +150,33 @@ class AppTopNavBar extends StatelessWidget implements PreferredSizeWidget {
 
   Widget _buildNavButton(
     BuildContext context, {
-    required IconData icon,
+    IconData? icon,
+    String? kalaiIcon,
     required Color fg,
     Color? iconColor,
     required double diskSize,
     VoidCallback? onTap,
   }) {
+    assert(
+      icon != null || kalaiIcon != null,
+      'Fournir soit `icon` (Material) soit `kalaiIcon` (KALAI).',
+    );
     final effectiveIconColor = iconColor ?? fg;
+    final iconWidget = kalaiIcon != null
+        ? KalaiIcon(kalaiIcon,
+            color: effectiveIconColor, size: _iconSizeDashboard)
+        : Icon(icon, color: effectiveIconColor, size: _iconSizeDashboard);
     if (useDashboardStyle) {
       return AppBackButton(
-        child: Icon(icon, color: effectiveIconColor, size: _iconSizeDashboard),
+        child: iconWidget,
         size: diskSize,
         onPressed: onTap,
         variant: AppBackButtonVariant.glass,
       );
     }
     return _standardDisk(
-      icon: icon,
+      iconWidget: iconWidget,
       fg: fg,
-      iconColor: effectiveIconColor,
       diskSize: diskSize,
       onTap: onTap,
     );
@@ -299,9 +309,8 @@ class AppTopNavBar extends StatelessWidget implements PreferredSizeWidget {
   // ─────────────── Standard opaque disk (non-dashboard) ───────────────
 
   Widget _standardDisk({
-    required IconData icon,
+    required Widget iconWidget,
     required Color fg,
-    required Color iconColor,
     required double diskSize,
     VoidCallback? onTap,
   }) {
@@ -323,7 +332,14 @@ class AppTopNavBar extends StatelessWidget implements PreferredSizeWidget {
                 : AppColors.cardBackground,
           ),
           alignment: Alignment.center,
-          child: Icon(icon, color: iconColor, size: _iconSizeStandard),
+          // L'icône fournie est déjà dimensionnée (KalaiIcon ou Icon, _iconSizeDashboard).
+          // Pour la variante non-dashboard on conserve une taille standard via FittedBox
+          // pour ne pas casser la mise en page existante.
+          child: SizedBox(
+            width: _iconSizeStandard,
+            height: _iconSizeStandard,
+            child: FittedBox(fit: BoxFit.contain, child: iconWidget),
+          ),
         ),
       ),
     );

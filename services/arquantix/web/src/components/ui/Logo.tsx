@@ -1,5 +1,6 @@
 import * as React from "react";
 import svgPaths from "@/imports/svg-uawwnp5dcp";
+import { cn } from "@/lib/utils";
 
 export interface LogoProps extends React.SVGAttributes<SVGSVGElement> {
   variant?: "default" | "icon";
@@ -12,7 +13,7 @@ export function Logo({ variant = "default", className, color = "white", ...props
   if (variant === "icon") {
     return (
       <svg
-        className={className}
+        className={cn("block max-h-full max-w-full", className)}
         fill="none"
         preserveAspectRatio="none"
         viewBox="0 0 178 85.7715"
@@ -25,8 +26,9 @@ export function Logo({ variant = "default", className, color = "white", ...props
 
   return (
     <svg
-      className={className}
+      className={cn("block max-h-full max-w-full", className)}
       fill="none"
+      xmlns="http://www.w3.org/2000/svg"
       preserveAspectRatio="xMidYMid meet"
       viewBox="0 0 178 85.7715"
       {...props}

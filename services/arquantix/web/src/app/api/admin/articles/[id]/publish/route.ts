@@ -2,20 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { ContentStatus, TranslationStatus } from '@prisma/client'
+import { awaitRouteParams } from '@/lib/api/routeParams'
 
 // POST /api/admin/articles/[id]/publish
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await awaitRouteParams(params)
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const article = await prisma.article.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         i18n: true,
       },
@@ -34,7 +36,7 @@ export async function POST(
     // Publish article
     // If publishedAt is null, set it to now. Otherwise keep the existing value.
     const updated = await prisma.article.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: ContentStatus.PUBLISHED,
         publishedAt: article.publishedAt || new Date(),

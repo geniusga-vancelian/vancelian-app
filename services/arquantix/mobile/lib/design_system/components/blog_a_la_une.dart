@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 import 'news_card.dart';
 
 /// Élément pour [BlogALaUne].
@@ -148,8 +150,8 @@ class _BlogALaUneState extends State<BlogALaUne> {
                             ),
                           ),
                           const SizedBox(width: AppSpacing.xs),
-                          Icon(
-                            Icons.chevron_right,
+                          const KalaiIcon(
+                            KalaiIcons.chevronRight,
                             size: 22,
                             color: AppColors.textPrimary,
                           ),

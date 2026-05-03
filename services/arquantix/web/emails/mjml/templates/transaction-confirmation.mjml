@@ -1,0 +1,30 @@
+<mjml>
+  {{> head}}
+  <mj-body background-color="#F4F4F4" width="600px" css-class="arq-bg-default">
+    {{> preheader}}
+
+    {{> HeaderL2}}
+
+    <mj-section padding="32px 32px 12px" background-color="#FFFFFF">
+      <mj-column>
+        <mj-text padding="0 0 12px 0">
+          <span class="arq-eyebrow-chip" style="font-family:'Barlow Semi Condensed','Avenir Next Condensed',Arial,sans-serif;letter-spacing:0.04em;text-transform:uppercase;font-size:11px;font-weight:500;color:#62656E;">{{eyebrow}}</span>
+        </mj-text>
+        <mj-text font-size="22px" font-weight="500" line-height="1.25" letter-spacing="-0.01em" color="#101113" padding="0 0 8px 0">
+          {{title}}
+        </mj-text>
+        <mj-text font-size="15px" line-height="1.6" color="#62656E" padding="0">
+          {{intro}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    {{#summary}}{{> TransactionSummary}}{{/summary}}
+
+    {{#cta}}{{> CTASection}}{{/cta}}
+
+    {{#legal}}{{> LegalDisclaimer}}{{/legal}}
+
+    {{> Footer}}
+  </mj-body>
+</mjml>

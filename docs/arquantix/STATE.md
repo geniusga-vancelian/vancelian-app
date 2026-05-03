@@ -3,11 +3,13 @@
 **Date:** 2026-01-01  
 **Status:** 🚧 En cours de création
 
+> **2026 — Stack locale actuelle** : Next.js + Prisma + FastAPI + PostgreSQL + Redis (voir [LOCAL_SETUP.md](./LOCAL_SETUP.md)). Les sections historiques ci‑dessous (Strapi, ports 3001/5433) ne décrivent **pas** l’environnement recommandé.
+
 ---
 
 ## TL;DR
 
-Ajout d'un site vitrine Arquantix (Next.js) + CMS (Strapi) dans le repo existant `vancelian-app`, en suivant les patterns existants (`services/`), sans casser l'existant.
+Site vitrine Arquantix (Next.js) dans le repo `vancelian-app` ; le contenu applicatif passe par **Prisma / PostgreSQL** et l’API FastAPI (plus de Strapi en runtime Docker).
 
 ---
 
@@ -87,13 +89,9 @@ services/arquantix/
 3. ✅ N'interfère pas avec les autres services
 4. ✅ Documentation dans `docs/arquantix/` (cohérent avec `docs/` global)
 
-### Ports Choisis
+### Ports (référence actuelle)
 
-Pour éviter les conflits avec les services existants:
-
-- **Next.js Web:** `3001` (évite conflit avec 3000 si utilisé ailleurs)
-- **Strapi CMS:** `1338` (évite conflit avec 1337 si utilisé ailleurs)
-- **Postgres CMS:** `5433` (évite conflit avec 5432 si utilisé ailleurs)
+Voir **[LOCAL_SETUP.md](./LOCAL_SETUP.md)** — en pratique : **WEB_PORT** (souvent **3000**), **API_PORT** (8000), **DB_PORT** hôte (souvent **5443**). Ne pas documenter **3001** ni **5433** comme cibles officielles.
 
 ---
 
@@ -101,9 +99,8 @@ Pour éviter les conflits avec les services existants:
 
 ### Conflits de Ports
 
-Si les ports 3001, 1338, ou 5433 sont déjà utilisés:
-- Vérifier: `lsof -i :3001`, `lsof -i :1338`, `lsof -i :5433`
-- Ajuster dans `docker-compose.arquantix.yml`
+- `lsof -nP -iTCP:3000 -sTCP:LISTEN` (web), `8000` (API), `5443` (Postgres hôte selon `.env.arquantix`)
+- Doctor : `make -f Makefile.arquantix local-doctor`
 
 ### Conflits avec l'Existant
 

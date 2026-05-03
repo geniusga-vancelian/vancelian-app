@@ -3,6 +3,77 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { isR2Configured } from '@/lib/storage/r2Env'
+
+/** URL same-origin pour charger un fichier depuis R2 via le serveur (bucket privé). */
+export function siteMediaProxyPath(mediaId: string): string {
+  return `/api/site/media/${mediaId}`
+}
+
+/**
+ * Remplace les `*MediaUrl` / `mediaUrl` par le proxy site pour chaque `*MediaId` / `mediaId`
+ * présent dans l’arbre (récursif). Utile pour l’iframe d’aperçu admin : les URLs présignées
+ * R2 peuvent être refusées (referrer, HEAD/GET, politique bucket) alors que le proxy marche.
+ */
+export function rewriteMediaUrlsToSiteProxyDeep(data: unknown): unknown {
+  if (data === null || data === undefined) {
+    return data
+  }
+  if (Array.isArray(data)) {
+    return data.map(rewriteMediaUrlsToSiteProxyDeep)
+  }
+  if (typeof data !== 'object') {
+    return data
+  }
+  const src = data as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(src)) {
+    out[k] = rewriteMediaUrlsToSiteProxyDeep(v) as never
+  }
+  const bg = out.backgroundMediaId
+  if (typeof bg === 'string' && bg.trim()) {
+    out.backgroundMediaUrl = siteMediaProxyPath(bg.trim())
+  }
+  const img = out.imageMediaId
+  if (typeof img === 'string' && img.trim()) {
+    out.imageMediaUrl = siteMediaProxyPath(img.trim())
+  }
+  const mid = out.mediaId
+  if (typeof mid === 'string' && mid.trim()) {
+    out.mediaUrl = siteMediaProxyPath(mid.trim())
+  }
+  const av = out.avatarMediaId
+  if (typeof av === 'string' && av.trim()) {
+    out.avatarMediaUrl = siteMediaProxyPath(av.trim())
+  }
+  return out
+}
+
+/**
+ * URL utilisable par le navigateur : présignature R2, sinon proxy `/api/site/media/[id]`
+ * (évite de retomber sur `media.url` « public » qui renvoie 403 si le bucket est privé).
+ */
+async function resolvePublicMediaFileUrl(m: {
+  id: string
+  key: string
+  url: string
+}): Promise<string> {
+  if (!isR2Configured()) {
+    return m.url
+  }
+  try {
+    const { getPresignedUrl } = await import('./storageClient')
+    return await Promise.race([
+      getPresignedUrl(m.key, 3600),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error('Presigned URL timeout')), 5000),
+      ),
+    ])
+  } catch (error) {
+    console.error('[resolvePublicMediaFileUrl] presign failed, using site proxy:', m.id, error)
+    return siteMediaProxyPath(m.id)
+  }
+}
 
 export interface MediaInfo {
   id: string
@@ -32,9 +103,11 @@ export async function resolveMedia(mediaId: string | null | undefined): Promise<
       return null
     }
 
+    const url = await resolvePublicMediaFileUrl(media)
+
     return {
       id: media.id,
-      url: media.url,
+      url,
       alt: media.alt,
       width: media.width,
       height: media.height,
@@ -75,6 +148,12 @@ export function extractMediaIds(data: any): string[] {
       }
       if (obj.backgroundMediaId && typeof obj.backgroundMediaId === 'string') {
         mediaIds.push(obj.backgroundMediaId)
+      }
+      if (obj.imageMediaId && typeof obj.imageMediaId === 'string') {
+        mediaIds.push(obj.imageMediaId)
+      }
+      if (obj.avatarMediaId && typeof obj.avatarMediaId === 'string') {
+        mediaIds.push(obj.avatarMediaId)
       }
 
       // Recursively traverse
@@ -119,37 +198,12 @@ export async function resolveMediaMap(
 
     const mediaMap = new Map<string, MediaInfo>()
     for (const m of media) {
-      let finalUrl = m.url
-      
-      // Always generate a fresh presigned URL since the bucket is not public
-      // This ensures URLs don't expire. Timeout 5s to avoid blocking page load.
-      try {
-        const { getPresignedUrl } = await import('./storageClient')
-        finalUrl = await Promise.race([
-          getPresignedUrl(m.key, 3600),
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error('Presigned URL timeout')), 5000)
-          ),
-        ])
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[resolveMediaMap] Generated fresh presigned URL for media:', {
-            id: m.id,
-            key: m.key,
-            url: finalUrl.substring(0, 100) + '...',
-          })
-        }
-      } catch (error) {
-        console.error('[resolveMediaMap] Failed to generate presigned URL for media:', m.id, error)
-        // Fallback to stored URL if presigned URL generation fails
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[resolveMediaMap] Using stored URL as fallback:', m.url.substring(0, 100) + '...')
-        }
-      }
-      
+      const finalUrl = await resolvePublicMediaFileUrl(m)
+
       if (process.env.NODE_ENV === 'development') {
-        console.log('[resolveMediaMap] Media:', m.id, 'Final URL:', finalUrl.substring(0, 100) + '...', 'Key:', m.key)
+        console.log('[resolveMediaMap] Media:', m.id, 'Final URL:', finalUrl.substring(0, 120) + '...', 'Key:', m.key)
       }
-      
+
       mediaMap.set(m.id, {
         id: m.id,
         url: finalUrl,

@@ -5,8 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/grabber.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_search_input.dart';
 import 'app_sheet_list_item.dart';
+import 'kalai_icon.dart';
 import 'sheet_title_bar.dart';
 
 /// Sélecteur de pays (liste ISO 3166-1 + recherche dans une bottom sheet).
@@ -153,8 +155,8 @@ class _AppCountryPickerState extends State<AppCountryPicker> {
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
+                KalaiIcon(
+                  KalaiIcons.chevronDown,
                   size: 24,
                   color: widget.enabled
                       ? _labelColor

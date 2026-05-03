@@ -538,13 +538,37 @@ class _LandingPagePreviewScreenState extends State<LandingPagePreviewScreen> {
           ),
         );
       case 'PARAGRAPH':
+        final paragraphText = block.data['text'] as String? ?? '';
+        if (paragraphText.trim().isEmpty) return const SizedBox.shrink();
+        final paragraphStyle = AppTypography.bodyMedium.copyWith(
+          height: 1.6,
+          color: AppColors.textPrimary,
+        );
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
-          child: Text(
-            block.data['text'] as String? ?? '',
-            style: AppTypography.bodyMedium.copyWith(
-              height: 1.6,
-              color: AppColors.textPrimary,
+          child: MarkdownBody(
+            data: paragraphText,
+            selectable: true,
+            onTapLink: (_, href, __) async {
+              if (href == null || href.trim().isEmpty) return;
+              final uri = Uri.tryParse(href.trim());
+              if (uri == null) return;
+              try {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } catch (_) {
+                // Lien externe non ouvrable : on ignore (cohérent avec les
+                // autres écrans qui ne remontent pas non plus l'erreur à
+                // l'utilisateur sur ce type d'action passive).
+              }
+            },
+            styleSheet: MarkdownStyleSheet(
+              p: paragraphStyle,
+              strong: paragraphStyle.copyWith(fontWeight: FontWeight.w600),
+              em: paragraphStyle.copyWith(fontStyle: FontStyle.italic),
+              a: paragraphStyle.copyWith(color: AppColors.accent),
+              listBullet: paragraphStyle,
+              blockSpacing: 0,
+              pPadding: EdgeInsets.zero,
             ),
           ),
         );
@@ -898,6 +922,19 @@ class _LandingPagePreviewScreenState extends State<LandingPagePreviewScreen> {
         return VideoBlockArticleModule(
           title: moduleTitle.isEmpty ? 'Vidéos' : moduleTitle,
           items: videoItems,
+        );
+      case 'localisationmodule':
+      case 'localisation_module':
+        final titleRaw = (content['moduleTitle'] ?? content['title'] ?? '').toString().trim();
+        final description = (content['description'] ?? '').toString().trim();
+        final embedUrl = (content['embedUrl'] ?? '').toString().trim();
+        if (!LocalisationModule.isAllowedEmbedUrl(embedUrl) && titleRaw.isEmpty && description.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return LocalisationModule(
+          moduleTitle: titleRaw.isEmpty ? 'Localisation' : titleRaw,
+          description: description,
+          embedUrl: embedUrl,
         );
       case 'allocationmodule':
         return _buildAllocationModule(content);

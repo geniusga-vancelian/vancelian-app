@@ -3,6 +3,7 @@
 import { ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
+import { AdminEditingLocaleProvider } from '@/components/admin/AdminEditingLocaleContext'
 
 const AdminSidebar = dynamic(
   () => import('@/components/admin/AdminSidebar').then(m => m.AdminSidebar),
@@ -28,9 +29,9 @@ export default function AdminLayout({
     <div className="min-h-screen bg-gray-50 flex">
       <AdminSidebar />
       <main className="flex-1 ml-64">
-        <div className="p-8">
-          {children}
-        </div>
+        <AdminEditingLocaleProvider>
+          <div className="p-8">{children}</div>
+        </AdminEditingLocaleProvider>
       </main>
     </div>
   )

@@ -1,5 +1,7 @@
 # Runbook — flavors iOS / Android (dev, staging, prod)
 
+**Réseau local (simulateur = `127.0.0.1:3000` / `:8000` ; iPhone = IP LAN ; deux URLs BFF vs auth)** : [LOCAL_IOS_AND_BFF.md](./LOCAL_IOS_AND_BFF.md).
+
 ## Correspondance des environnements
 
 | Environnement | iOS (Xcode) | Bundle ID | Nom affiché | Android `--flavor` | `applicationId` |
@@ -24,7 +26,7 @@ flutter run --flavor dev -d <id_iphone> \
   --dart-define=MARKET_DATA_BASE_URL=http://<IP_LAN>:8000
 ```
 
-Simulateur iOS (localhost) :
+Simulateur iOS (`127.0.0.1:3000` BFF, `:8000` API — voir [LOCAL_IOS_AND_BFF.md](./LOCAL_IOS_AND_BFF.md)) :
 
 ```bash
 flutter run --flavor dev -d iPhone

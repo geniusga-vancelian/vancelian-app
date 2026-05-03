@@ -64,11 +64,55 @@ Référence des tokens et composants pour garder une UI cohérente et maintenabl
 
 ---
 
+## Iconographie (`KalaiIcons` + `KalaiIcon`)
+
+L’app utilise **KALAI (line)** comme jeu d’icônes principal — 473 SVG `0 0 24 24`
+avec `fill="currentColor"`, livrés dans `assets/icons/kalai/line/`.
+
+### Utilisation
+
+```dart
+KalaiIcon(KalaiIcons.search, size: 24, color: AppColors.indigo)
+```
+
+- Toutes les constantes (camelCase) : `lib/design_system/atoms/kalai_icons.dart`.
+- Une `KalaiIcons.all` (kebab-case → asset) permet d’itérer pour des galeries.
+- Le widget `KalaiIcon` applique automatiquement un `ColorFilter.srcIn` pour
+  teinter l’icône, exactement comme `Icon` Material.
+
+### Galerie & recherche
+
+Voir l’écran **Design system** (`Iconographie — KALAI (line)`) :
+champ de recherche + grille filtrable. Tap sur une tuile copie
+`KalaiIcons.<nom>` dans le presse-papier.
+
+### Régénération
+
+Après ajout/suppression d’un SVG dans `assets/icons/kalai/line/` :
+
+```bash
+python3 scripts/regen_kalai_icons.py
+```
+
+### Bonnes pratiques
+
+- **Ne plus** introduire de `Icon(Icons.X)` Material dans le DS quand un
+  équivalent KALAI existe (chevrons, check, search, eye, calendar-today,
+  email, info, photo, video, exchange…).
+- Pour les API publiques de composant qui acceptaient `IconData`,
+  préférer ajouter un paramètre optionnel `kalaiAsset` (String) qui prend
+  le pas — voir `AppBackButton`, `CircleButtonItem`,
+  `CompetitiveAdvantagesRowData`, `ArticleDocumentCard`.
+
+---
+
 ## Fichiers principaux
 
 - `atoms/app_colors.dart` — couleurs
 - `atoms/app_typography.dart` — styles de texte (délègue à `typography.dart`)
 - `atoms/app_spacing.dart` — espacements
 - `atoms/app_radius.dart` — rayons
+- `atoms/kalai_icons.dart` — catalogue généré des icônes KALAI (473 entrées)
 - `typography.dart` — définition des styles (Inter, tailles, line height)
+- `components/kalai_icon.dart` — widget de rendu pour les icônes KALAI
 - `components/` — composants réutilisables

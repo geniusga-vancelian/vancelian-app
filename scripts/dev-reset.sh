@@ -78,19 +78,16 @@ load_arquantix_ports() {
   DEV_DOCKER_WEB_PORT=3000
   DEV_DB_PORT=5443
   DEV_REDIS_PORT=6379
-  DEV_CMS_PORT=1337
   if [ -f "$REPO_ROOT/.env.arquantix" ]; then
     # « grep » sans match → code ≠ 0 ; avec pipefail actif, protéger par « || true ».
     _ap="$( (grep -E '^[[:space:]]*API_PORT=' "$REPO_ROOT/.env.arquantix" || true) | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     _wp="$( (grep -E '^[[:space:]]*WEB_PORT=' "$REPO_ROOT/.env.arquantix" || true) | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     _db="$( (grep -E '^[[:space:]]*DB_PORT=' "$REPO_ROOT/.env.arquantix" || true) | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     _rd="$( (grep -E '^[[:space:]]*REDIS_PORT=' "$REPO_ROOT/.env.arquantix" || true) | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-    _cm="$( (grep -E '^[[:space:]]*CMS_PORT=' "$REPO_ROOT/.env.arquantix" || true) | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     [ -n "$_ap" ] && DEV_API_PORT="$_ap"
     [ -n "$_wp" ] && DEV_DOCKER_WEB_PORT="$_wp"
     [ -n "$_db" ] && DEV_DB_PORT="$_db"
     [ -n "$_rd" ] && DEV_REDIS_PORT="$_rd"
-    [ -n "$_cm" ] && DEV_CMS_PORT="$_cm"
   fi
   # Next lancé sur l’hôte par ce script (next dev) — port par défaut de Next.js.
   DEV_LOCAL_NEXT_PORT=3000
@@ -137,16 +134,15 @@ legacy_compose_teardown() {
 
 free_arquantix_host_ports() {
   load_arquantix_ports
-  log "Libération des ports hôte (Next, API, Postgres, Redis, CMS, variantes)…"
+  log "Libération des ports hôte (Next, API, Postgres, Redis, variantes)…"
   kill_port 3000
-  kill_port 3001
+  kill_port 3001 # orphelins éventuels — 3000 est le port web documenté (LOCAL_SETUP.md)
   kill_port "${DEV_API_PORT}"
   kill_port "${DEV_DOCKER_WEB_PORT}"
   kill_port "${DEV_DB_PORT}"
   kill_port "${DEV_REDIS_PORT}"
-  kill_port "${DEV_CMS_PORT}"
-  # Valeurs compose par défaut si .env différent / ancien setup
-  kill_port 5433
+  # Ancien port Postgres hôte erroné + port actuel (.env.arquantix)
+  kill_port 5433 # héritage — non documenté comme cible (voir LOCAL_SETUP.md)
   kill_port 5443
   kill_port 8000
 }
@@ -236,7 +232,7 @@ start_next_background() {
   fi
   stop_next_from_pidfile
   kill_port 3000
-  kill_port 3001
+  kill_port 3001 # idem — éviter double écoute avant npm run dev
 
   log "Démarrage Next.js (npm run dev) en arrière-plan…"
   : >"$NEXT_LOG_FILE"
@@ -246,7 +242,7 @@ start_next_background() {
   ) >>"$NEXT_LOG_FILE" 2>&1 &
   echo $! >"$NEXT_PID_FILE"
   log "Next PID $(cat "$NEXT_PID_FILE") — log : $NEXT_LOG_FILE"
-  log "URL attendue : http://localhost:3000 (ou 3001 si conflit — voir le log)"
+  log "URL attendue : http://localhost:3000 (WEB_PORT — voir .env.arquantix et docs/arquantix/LOCAL_SETUP.md)"
 }
 
 # --- stop only ---

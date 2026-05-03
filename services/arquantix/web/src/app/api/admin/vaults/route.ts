@@ -4,7 +4,11 @@ import { z } from 'zod'
 
 import { getSessionFromCookie } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { calculateUrlPath, isValidSlug } from '@/lib/utils/slugify'
+import {
+  nextChildSortOrderUnderHub,
+  resolveProjectsHubPageId,
+} from '@/lib/admin/projectsHubAttachment'
+import { calculateExclusiveOfferPageUrlPath, isValidSlug } from '@/lib/utils/slugify'
 
 const VAULT_TEMPLATE_DB = 'vault_builder'
 const VAULT_SECTION_KEY = 'vault_builder_v1'
@@ -168,7 +172,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const parsed = createVaultSchema.parse(body)
     const slug = parsed.slug
-    const urlPath = calculateUrlPath(slug)
+    const urlPath = calculateExclusiveOfferPageUrlPath(slug)
     const investmentTypeSlug = parsed.investmentTypeSlug?.trim() || undefined
     const config = parsed.config ?? buildDefaultConfig()
     const configWithMeta = {
@@ -190,6 +194,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const hubId = await resolveProjectsHubPageId(prisma)
+    const sortOrder = hubId != null ? await nextChildSortOrderUnderHub(prisma, hubId) : 0
+
     const created = await prisma.page.create({
       data: {
         slug,
@@ -197,6 +204,8 @@ export async function POST(request: NextRequest) {
         title: parsed.title ?? slug,
         description: parsed.description ?? null,
         template: VAULT_TEMPLATE_DB,
+        parentId: hubId,
+        sortOrder,
         sections: {
           create: {
             key: VAULT_SECTION_KEY,

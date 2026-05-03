@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_radius.dart';
 import '../atoms/app_spacing.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_radio_button.dart';
+import 'kalai_icon.dart';
 
 /// Padding entre le bord du module blanc et les tuiles — minimal (2px) pour limiter l’anneau blanc.
 const double kSelectionModuleInnerPadding = 2;
@@ -112,7 +114,7 @@ class _DsCheckboxLeadingVisual extends StatelessWidget {
         ),
         child: checked
             ? const Center(
-                child: Icon(Icons.check, size: 14, color: Colors.white),
+                child: KalaiIcon(KalaiIcons.check, size: 14, color: Colors.white),
               )
             : null,
       ),

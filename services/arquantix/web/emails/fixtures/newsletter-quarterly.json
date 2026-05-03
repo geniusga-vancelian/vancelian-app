@@ -1,0 +1,62 @@
+{
+  "vars": {
+    "preheader": "What we shipped in Q2 — and the architecture behind it.",
+    "assetOrigin": "https://www.arquantix.com",
+    "hero": {
+      "eyebrow": "Quarterly Letter",
+      "title": "The new architecture of private assets.",
+      "kicker": "Q2 · 2026 · 6 min read",
+      "imageUrl": "https://images.unsplash.com/photo-1494949360228-4e9bde560065?auto=format&fit=crop&w=1600&q=80",
+      "cta": { "label": "Read the letter", "href": "https://www.arquantix.com/letters/q2-2026", "dark": true }
+    },
+    "intro": {
+      "eyebrow": "Letter from the desk",
+      "heading": "Real assets, transparent rails.",
+      "paragraphs": [
+        "This quarter, we crossed the threshold most allocators have been watching for years: premium real assets — structured, audited, held in regulated custody — finally trade with the clarity of code.",
+        "Our Vault Builder now composes allocations across gold, emerging credit, private real estate and tokenized treasuries from a single subscription flow. Each position is mirrored on‑chain, reconciled nightly against the custodian ledger, and accessible to the client through one signed portfolio view — without ever touching a wallet."
+      ],
+      "cta": { "label": "Read the letter", "href": "https://www.arquantix.com/letters/q2-2026" }
+    },
+    "highlightsTwo": {
+      "columns": [
+        {
+          "eyebrow": "Vault · #017",
+          "title": "Gold Backed Yield",
+          "body": "Physical bullion in LBMA vaults, 4.6% target net yield, quarterly distributions.",
+          "cta": { "label": "Explore vault", "href": "https://www.arquantix.com/vaults/017" }
+        },
+        {
+          "eyebrow": "Exclusive Offer",
+          "title": "Geneva Prime Residential",
+          "body": "Co-investment in a CHF 28M residential asset, 7-year horizon, reserved allocation.",
+          "cta": { "label": "See offer", "href": "https://www.arquantix.com/offers/geneva-prime" }
+        }
+      ]
+    },
+    "darkBlock": {
+      "eyebrow": "On-chain Custody",
+      "title": "MiCA-ready by design.",
+      "body": "Segregated cold storage, weekly reserve attestations and chain-level traceability are now standard across every Arquantix vault.",
+      "cta": { "label": "Read the attestation", "href": "https://www.arquantix.com/custody" }
+    },
+    "signature": {
+      "closing": "Warmly,",
+      "name": "The Arquantix desk",
+      "role": "Geneva · Singapore · Bali"
+    },
+    "footer": {
+      "tagline": "Premium real assets, structured into transparent on-chain vaults.",
+      "social": [
+        { "label": "LinkedIn", "href": "https://www.linkedin.com/company/arquantix" },
+        { "label": "X", "href": "https://x.com/arquantix" },
+        { "label": "Telegram", "href": "https://t.me/arquantix" }
+      ],
+      "unsubscribeUrl": "https://www.arquantix.com/email/unsubscribe?token=PLACEHOLDER",
+      "unsubscribeLabel": "Unsubscribe",
+      "preferencesUrl": "https://www.arquantix.com/email/preferences",
+      "preferencesLabel": "Preferences",
+      "copyright": "© 2026 Arquantix SA. All rights reserved."
+    }
+  }
+}

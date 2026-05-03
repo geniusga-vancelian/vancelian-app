@@ -6,7 +6,9 @@ import '../atoms/app_radius.dart';
 import '../atoms/app_shadow.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import 'dot_spinner.dart';
+import 'kalai_icon.dart';
 import 'transaction_step_item.dart';
 
 /// Module "Transaction Steps" : carte blanche avec timeline verticale reliant
@@ -140,7 +142,7 @@ class _TimelineColumn extends StatelessWidget {
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
-        child: const Icon(Icons.check_rounded, size: 10, color: Colors.white),
+        child: const KalaiIcon(KalaiIcons.check, size: 10, color: Colors.white),
       );
     }
     if (step.state == TransactionStepState.processing) {

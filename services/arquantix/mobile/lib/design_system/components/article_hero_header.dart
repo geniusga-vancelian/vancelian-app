@@ -2,8 +2,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
-import 'category_badge.dart';
 import 'app_back_button.dart';
+import 'category_badge.dart';
+import 'kalai_icon.dart';
 
 /// Données d'un badge catégorie pour le hero header.
 class ArticleCategoryBadgeData {
@@ -69,6 +70,30 @@ class ArticleHeroHeader extends StatelessWidget {
   /// Fond du hero si [imageUrl] est vide ou en erreur de chargement (ex. couleur marque actif).
   final Color? heroFallbackColor;
 
+  /// Si `true` et [imageUrl] vide → bascule sur un layout **compact** :
+  /// hauteur intrinsèque (s'adapte au contenu), bloc puces+titre calé en haut
+  /// juste sous la nav bar, padding top réduit, **pas d'overlay noir**, fond
+  /// = [heroFallbackColor] (par défaut [AppColors.gray6]). Utilisé pour les
+  /// pages dont la cover est optionnelle / absente (Help, Academy, certains
+  /// articles News). Sans effet si [imageUrl] est non vide.
+  final bool compactWhenNoCover;
+  /// Couleur du titre / sous-titre / puces en mode compact (cf.
+  /// [compactWhenNoCover]). Par défaut [AppColors.textPrimary] (texte noir
+  /// sur fond clair). Mettre [AppColors.white] si le fond compact est foncé.
+  final Color compactTextColor;
+
+  /// Quand le hero est en mode compact ([compactWhenNoCover] + [imageUrl]
+  /// vide) : si `true` (défaut), le scroll passe **sous** la barre du haut
+  /// (`extendBodyBehindAppBar`) — padding top = safe area + toolbar + petit gap.
+  /// Si `false`, le corps commence **sous** [AppTopNavBar] : utiliser un simple
+  /// [compactTopGapBelowAppBar] pour espacer titre et barre — hauteur du bloc
+  /// hero ≈ contenu uniquement.
+  final bool compactBodyExtendsBehindAppBar;
+
+  /// Espace sous la barre du haut quand [compactBodyExtendsBehindAppBar] est
+  /// `false` (mode compact « light », sans image de fond).
+  final double compactTopGapBelowAppBar;
+
   const ArticleHeroHeader({
     super.key,
     required this.imageUrl,
@@ -86,10 +111,18 @@ class ArticleHeroHeader extends StatelessWidget {
     this.belowTitle,
     this.backgroundHeightScreenFraction = kArticleBackgroundHeightScreenFraction,
     this.heroFallbackColor,
+    this.compactWhenNoCover = false,
+    this.compactTextColor = AppColors.textPrimary,
+    this.compactBodyExtendsBehindAppBar = true,
+    this.compactTopGapBelowAppBar = AppSpacing.s4,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (compactWhenNoCover && imageUrl.isEmpty) {
+      return _buildCompactNoCover(context);
+    }
+
     final screenHeight = MediaQuery.sizeOf(context).height;
     final heroVisualHeight = screenHeight * backgroundHeightScreenFraction;
     final topPadding = MediaQuery.paddingOf(context).top;
@@ -117,10 +150,38 @@ class ArticleHeroHeader extends StatelessWidget {
             bottom: titleBottomInset,
             left: AppSpacing.s4,
             right: AppSpacing.s4,
-            child: _buildTitleArea(),
+            child: _buildTitleArea(AppColors.white),
           ),
         ],
       ),
+    );
+  }
+
+  /// Layout compact (pas de cover image) : hauteur intrinsèque, padding top
+  /// **réduit** au-dessus des puces (~8px sous la nav bar), texte sombre par
+  /// défaut sur fond clair. Pas d'overlay noir, pas de Stack — le screen
+  /// hôte fournit sa propre `AppTopNavBar` (cas Help/Academy/News sans
+  /// cover : `showNavBar: false` côté composant).
+  Widget _buildCompactNoCover(BuildContext context) {
+    final topPadding = MediaQuery.paddingOf(context).top;
+    final double padTop;
+    if (compactBodyExtendsBehindAppBar) {
+      // Scroll sous AppBar : même logique qu'avant (safe area + toolbar + gap).
+      padTop = topPadding + kToolbarHeight + AppSpacing.s2;
+    } else {
+      // Corps sous AppBar : léger écart sous la barre — hauteur ≈ contenu.
+      padTop = compactTopGapBelowAppBar;
+    }
+    return Container(
+      width: double.infinity,
+      color: heroFallbackColor ?? AppColors.gray6,
+      padding: EdgeInsets.only(
+        top: padTop,
+        left: AppSpacing.s4,
+        right: AppSpacing.s4,
+        bottom: compactTopGapBelowAppBar,
+      ),
+      child: _buildTitleArea(compactTextColor),
     );
   }
 
@@ -176,7 +237,7 @@ class ArticleHeroHeader extends StatelessWidget {
       children: [
         if (onBack != null)
           AppBackButton(
-            icon: Icons.arrow_back_ios_new_rounded,
+            kalaiIcon: KalaiIcons.arrowLeft,
             onPressed: onBack,
             variant: AppBackButtonVariant.glass,
           ),
@@ -186,7 +247,7 @@ class ArticleHeroHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildTitleArea() {
+  Widget _buildTitleArea(Color textColor) {
     final sub = subtitle?.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +266,7 @@ class ArticleHeroHeader extends StatelessWidget {
         Text(
           title,
           style: AppTypography.amountSecondary.copyWith(
-            color: AppColors.white,
+            color: textColor,
           ),
         ),
         if (sub != null && sub.isNotEmpty) ...[
@@ -213,7 +274,7 @@ class ArticleHeroHeader extends StatelessWidget {
           Text(
             sub,
             style: AppTypography.bodyRegular.copyWith(
-              color: AppColors.white.withValues(alpha: 0.92),
+              color: textColor.withValues(alpha: 0.92),
               height: 1.35,
             ),
           ),
@@ -226,12 +287,16 @@ class ArticleHeroHeader extends StatelessWidget {
           const SizedBox(height: AppSpacing.s2),
           Row(
             children: [
-              Icon(Icons.schedule_rounded, size: 12, color: AppColors.white.withValues(alpha: 0.7)),
+              KalaiIcon(
+                KalaiIcons.clock,
+                size: 12,
+                color: textColor.withValues(alpha: 0.7),
+              ),
               const SizedBox(width: AppSpacing.s1),
               Text(
                 readingTime!,
                 style: AppTypography.bodySmRegular.copyWith(
-                  color: AppColors.white.withValues(alpha: 0.7),
+                  color: textColor.withValues(alpha: 0.7),
                 ),
               ),
             ],

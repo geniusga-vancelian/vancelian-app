@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../atoms/app_colors.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_primary_button.dart';
 import 'bottom_sheet_container.dart';
+import 'kalai_icon.dart';
 import 'sheet_title_bar.dart';
 
 class ModaleIconConfig {
@@ -224,8 +226,8 @@ class _ModaleOverlayHostState extends State<_ModaleOverlayHost>
                             ),
                           ),
                           if (row.showChevron)
-                            const Icon(
-                              Icons.arrow_forward_ios,
+                            const KalaiIcon(
+                              KalaiIcons.chevronRight,
                               size: 16,
                               color: AppColors.textSecondary,
                             ),

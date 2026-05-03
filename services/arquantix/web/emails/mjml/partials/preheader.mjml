@@ -1,0 +1,6 @@
+<mj-raw>
+  <!-- Preheader caché : visible dans la liste des e-mails, pas dans le corps -->
+  <div style="display:none !important;visibility:hidden;mso-hide:all;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+    {{preheader}}
+  </div>
+</mj-raw>

@@ -1,111 +1,103 @@
-import * as React from "react";
-import { cn } from "@/lib/utils";
-import { Container } from "@/components/ui/Container";
-import { Logo } from "@/components/ui/Logo";
+'use client'
 
-export interface FooterProps extends React.HTMLAttributes<HTMLElement> {
-  copyright?: string;
-  description?: string;
-  links?: Array<{
-    label: string;
-    href: string;
-    category?: string;
-  }>;
+/**
+ * Adaptateur de présentation entre les données footer (`SiteFooterData`,
+ * éditées dans /admin) et le composant DS Footer.
+ *
+ * Tous les libellés génériques passent par `siteCommonCta` (FR / EN / IT) ;
+ * les valeurs CMS restent prioritaires via `getDefaultSiteFooterData(locale)`
+ * (cf. `lib/cms/site-footer.ts`). Aucun défaut hardcodé ici : la source
+ * unique des fallbacks est `getDefaultSiteFooterData`.
+ */
+
+import * as React from 'react'
+import { usePathname } from 'next/navigation'
+
+import { cn } from '@/lib/utils'
+import { Container } from '@/components/ui/Container'
+import DsFooter from '@/components/design-system/Footer'
+import type { FooterNavColumn } from '@/components/design-system/Footer'
+import { getDefaultSiteFooterData, type SiteFooterData } from '@/lib/cms/site-footer'
+import { getActiveLocaleFromPathname } from '@/lib/i18n/publicLocalizedRouting'
+import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
+
+function buildNavColumns(
+  links: Array<{ label: string; href: string; category?: string }> | undefined,
+  defaultCategoryLabel: string,
+): FooterNavColumn[] | undefined {
+  if (!links?.length) return undefined
+  const map = new Map<string, { label: string; href: string }[]>()
+  for (const link of links) {
+    const title = (link.category?.trim() || defaultCategoryLabel).replace(/\s+/g, ' ')
+    if (!map.has(title)) map.set(title, [])
+    map.get(title)!.push({ label: link.label, href: link.href })
+  }
+  return Array.from(map.entries()).map(([title, ls]) => ({ title, links: ls }))
 }
 
-export function Footer({ 
-  copyright,
-  description,
-  links = [],
-  className, 
-  ...props 
-}: FooterProps) {
-  // Group links by category if provided
-  const groupedLinks = links.reduce((acc, link) => {
-    const category = link.category || 'other'
-    if (!acc[category]) acc[category] = []
-    acc[category].push(link)
-    return acc
-  }, {} as Record<string, Array<{ label: string; href: string }>>)
+export interface FooterProps extends React.HTMLAttributes<HTMLElement> {
+  /** Données complètes du footer global (prioritaire sur les props legacy). */
+  data?: SiteFooterData
+  copyright?: string
+  description?: string
+  links?: Array<{
+    label: string
+    href: string
+    category?: string
+  }>
+}
 
-  const companyLinks = groupedLinks.company || []
-  const legalLinks = groupedLinks.legal || []
-  const contactLinks = groupedLinks.contact || []
+export function Footer({ data, copyright, description, links, className, ...props }: FooterProps) {
+  const pathname = usePathname() ?? ''
+  const loc = getActiveLocaleFromPathname(pathname)
+  const defaults = getDefaultSiteFooterData(loc)
+
+  const resolved: SiteFooterData = data
+    ? data
+    : {
+        ...defaults,
+        copyright: copyright ?? defaults.copyright,
+        description: description ?? defaults.description,
+        links: links ?? defaults.links,
+      }
+
+  const defaultCategoryLabel = siteCommonCta(loc, 'footer_links_default_category')
+  const navColumns = buildNavColumns(resolved.links, defaultCategoryLabel)
+  const bg = resolved.backgroundColor || '#000000'
+
   return (
-    <footer
-      className={cn("w-full bg-[#0D0D0D] border-t border-[#272727]", className)}
+    <div
+      data-testid="site-footer"
+      role="contentinfo"
+      className={cn('w-full', className)}
+      style={{ backgroundColor: bg }}
       {...props}
     >
       <Container>
-        {/* Top Section */}
-        <div className="py-16 md:py-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-          {/* Logo & Description */}
-          <div className="lg:col-span-2 flex flex-col gap-6">
-            <Logo className="h-16 w-auto" />
-            {description && (
-              <p className="text-[#E6E6E6] text-sm leading-relaxed max-w-md">
-                {description}
-              </p>
+        <div className="[&>footer]:w-full [&>footer]:!bg-transparent">
+          <DsFooter
+            copyrightText={resolved.copyright || defaults.copyright}
+            tagline={resolved.description || defaults.description}
+            navColumns={navColumns}
+            legalTexts={resolved.legalTexts}
+            logoUrl={resolved.logoUrl}
+            logoAlt={resolved.logoAlt}
+            newsletterVisible={resolved.newsletterVisible}
+            newsletterTitle={resolved.newsletterTitle}
+            newsletterPlaceholder={resolved.newsletterPlaceholder}
+            newsletterButtonLabel={resolved.newsletterButtonLabel}
+            newsletterSubmittingLabel={siteCommonCta(loc, 'footer_newsletter_submitting')}
+            newsletterSuccessMessage={siteCommonCta(loc, 'footer_newsletter_success')}
+            newsletterAlreadySubscribedMessage={siteCommonCta(
+              loc,
+              'footer_newsletter_already_subscribed',
             )}
-          </div>
-
-          {/* Links Columns */}
-          {companyLinks.length > 0 && (
-            <div className="flex flex-col gap-4">
-              <h4 className="text-white text-sm uppercase tracking-wider mb-2">
-                Company
-              </h4>
-              {companyLinks.map((link, idx) => (
-                <a
-                  key={idx}
-                  href={link.href}
-                  className="text-[#E6E6E6] text-sm hover:text-[#C6A47C] transition-colors"
-                >
-                  {link.label}
-                </a>
-              ))}
-            </div>
-          )}
-
-          {legalLinks.length > 0 && (
-            <div className="flex flex-col gap-4">
-              <h4 className="text-white text-sm uppercase tracking-wider mb-2">
-                Legal
-              </h4>
-              {legalLinks.map((link, idx) => (
-                <a
-                  key={idx}
-                  href={link.href}
-                  className="text-[#E6E6E6] text-sm hover:text-[#C6A47C] transition-colors"
-                >
-                  {link.label}
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Bottom Section */}
-        <div className="border-t border-[#272727] py-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-[#5F5F5F] text-sm">
-            {copyright || `© ${new Date().getFullYear()} Arquantix. All rights reserved.`}
-          </p>
-          
-          {contactLinks.length > 0 && (
-            <div className="flex items-center gap-6">
-              {contactLinks.map((link, idx) => (
-                <a
-                  key={idx}
-                  href={link.href}
-                  className="text-[#E6E6E6] text-sm hover:text-[#C6A47C] transition-colors"
-                >
-                  {link.label}
-                </a>
-              ))}
-            </div>
-          )}
+            newsletterInvalidEmailMessage={siteCommonCta(loc, 'footer_newsletter_invalid_email')}
+            newsletterErrorMessage={siteCommonCta(loc, 'footer_newsletter_error')}
+            socialLinks={resolved.socialLinks}
+          />
         </div>
       </Container>
-    </footer>
-  );
+    </div>
+  )
 }

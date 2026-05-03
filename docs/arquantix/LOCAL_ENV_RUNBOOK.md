@@ -1,8 +1,12 @@
 # Runbook — environnement local Arquantix (sécurisation opérationnelle)
 
+**Vue d’ensemble et onboarding court** : **[LOCAL_SETUP.md](./LOCAL_SETUP.md)** (à lire en premier).
+
 **Objectif** : un démarrage local **prévisible**, une **base logique unique**, et aucune surprise du type « autre projet Compose », « autre volume », ou « autre `DB_NAME` » sans intention explicite.
 
 **Périmètre** : configuration locale, Docker Compose, variables d’environnement, diagnostics. Hors fonctionnalités produit.
+
+**CMS Strapi** : **retiré** du dépôt (plus de service `arquantix-cms`, plus de port 1337 dans le compose). Le contenu applicatif passe par **Next.js + Prisma** et l’API FastAPI.
 
 ---
 
@@ -14,7 +18,7 @@
 | API Python lancée **hors** Docker | `services/arquantix/api/.env.local` |
 | Next / Prisma / BFF lancés **hors** Docker | `services/arquantix/web/.env.local` |
 | Variables chargées par Next **dans** Docker (ex. vidéo admin) | `.env` racine (aligner `DATABASE_URL` sur la même base que ci‑dessus) |
-| Compose | `docker-compose.arquantix.yml` uniquement pour le flux standard |
+| Compose | Dans ce dépôt : **`docker-compose.arquantix-recovery.yml`** (via `ARQUANTIX_COMPOSE_FILE`) — le fichier `docker-compose.arquantix.yml` est **legacy** / référence |
 
 **Base logique (dev local)** : le nom dans **`DB_NAME`** (`.env.arquantix`) doit être **strictement le même** que le segment de base dans **tous** les `DATABASE_URL` (API Alembic, Prisma, `.env` racine). Souvent `arquantix` ou `arquantix_fresh` selon l’historique du volume — **ne pas** changer ce nom dans un seul fichier sans aligner les autres (sinon l’app « voit » une base vide ou différente).
 
@@ -62,9 +66,9 @@ make -f Makefile.arquantix arquantix-up
 
 Cette commande utilise :
 
-- `--project-name` = valeur de `COMPOSE_PROJECT_NAME` dans `.env.arquantix` (par défaut `arquantix` si absent du fichier) ;
+- `--project-name` = valeur de `COMPOSE_PROJECT_NAME` dans `.env.arquantix` (dans ce dépôt, souvent **`arquantixrecovery`**) ;
 - `--env-file .env.arquantix` ;
-- `docker-compose.arquantix.yml` .
+- fichier compose = `ARQUANTIX_COMPOSE_FILE` dans `.env.arquantix` (souvent **`docker-compose.arquantix-recovery.yml`**).
 
 Les **volumes de données** Postgres et Redis ont des **noms fixes** dans le compose (`arquantix_arquantix-db-data`, `arquantix_arquantix-redis-data`). Un changement de nom de projet Compose **ne crée pas** silencieusement une nouvelle base vide sur ces chemins.
 
@@ -78,7 +82,7 @@ bash scripts/start-arquantix.sh
 
 ### Projet Compose officiel (`COMPOSE_PROJECT_NAME`)
 
-- **Valeur attendue** : `COMPOSE_PROJECT_NAME` dans `.env.arquantix` (par défaut **`arquantix`** si absent).
+- **Valeur attendue** : `COMPOSE_PROJECT_NAME` dans `.env.arquantix` (dans ce dépôt : **`arquantixrecovery`** — à ne pas confondre avec l’ancien namespace **`arquantix`**).
 - **Qui l'utilise** : `Makefile.arquantix`, `scripts/dev-reset.sh`, `scripts/start-arquantix.sh` (garde-fous avant `make arquantix-up`).
 - **Pourquoi c'est critique** : `docker compose` isole par **nom de projet**. Si la même `docker-compose.arquantix.yml` a été démarrée avec un autre `--project-name` (secours du type `arquantix_validate`, `arquantix_live`), le **Makefile** cible toujours le projet **lu dans `.env.arquantix`** — pas forcément la stack qui tourne. Les **volumes** Postgres/Redis restent les mêmes (noms figés dans le compose), mais les **conteneurs** actifs peuvent appartenir à un autre projet → désalignement `.env` / runtime.
 
@@ -142,12 +146,30 @@ Cause fréquente : métadonnées Docker / Compose désynchronisées (Docker Desk
 
 ## 5. Vérifications de santé
 
+**Doctor local (ports + Docker web vs Next hôte + HTTP + Postgres)** — Lot 1 stabilisation :
+
+```bash
+make -f Makefile.arquantix local-doctor
+```
+
+Voir [LOCAL_STACK_DOCTOR.md](./LOCAL_STACK_DOCTOR.md). Règle : **un seul** service sur le port web (3000 par défaut) — conteneur `arquantix-web` **ou** `npm run dev`, pas les deux en conflit.
+
+**Doctor DB (API · Alembic · Prisma, tables CMS)** — Lot 2 stabilisation :
+
+```bash
+make -f Makefile.arquantix local-db-doctor
+```
+
+Voir [LOCAL_DB_ALIGNMENT.md](./LOCAL_DB_ALIGNMENT.md) — qui lit quel `DATABASE_URL`, pourquoi l’API peut être OK alors que le web échoue, et procédure prudente si `prisma migrate deploy` ne suffit pas (base non vide).
+
 | Vérification | Commande / critère |
 |--------------|----------------------|
-| Diagnostic lecture seule | `bash scripts/arquantix_local_doctor.sh` ou `make -f Makefile.arquantix arquantix-doctor` |
+| Ports + conflit web Docker vs Next hôte | `make -f Makefile.arquantix local-doctor` — voir [LOCAL_STACK_DOCTOR.md](./LOCAL_STACK_DOCTOR.md) |
+| Cible DB API vs web + tables Prisma CMS (`page_i18n`, …) | `make -f Makefile.arquantix local-db-doctor` — voir [LOCAL_DB_ALIGNMENT.md](./LOCAL_DB_ALIGNMENT.md) |
+| Diagnostic lecture seule (Compose / labels) | `bash scripts/arquantix_local_doctor.sh` ou `make -f Makefile.arquantix arquantix-doctor` |
 | API | `curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:${API_PORT:-8000}/health` → **200** |
 | OpenAPI | `curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:${API_PORT:-8000}/openapi.json` → **200** |
-| Web (Next dans Docker) | `curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:${WEB_PORT:-3001}/` → **200** (ajuster `WEB_PORT`) |
+| Web (Next dans Docker) | `curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:${WEB_PORT:-3000}/` → **200** (ajuster `WEB_PORT`) |
 | Postgres (service compose) | `docker compose --project-name <COMPOSE_PROJECT_NAME> --env-file .env.arquantix -f docker-compose.arquantix.yml exec arquantix-db psql -U arquantix -d <DB_NAME> -c "SELECT current_database();"` |
 | Migrations API | `docker compose … exec arquantix-api alembic current` (stack up) |
 | Stack (script existant) | `make -f Makefile.arquantix arquantix-check` |

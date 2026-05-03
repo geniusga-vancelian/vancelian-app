@@ -17,7 +17,8 @@ Le service PostgreSQL `arquantix-db` existe déjà dans votre environnement Dock
 Vérifier qu'il est démarré :
 
 ```bash
-cd /Users/gael/Library/CloudStorage/OneDrive-Vancelian/Documents/vancelian-app
+# Remplace par la racine de ton dépôt (ex. clone local)
+cd ~/dev/vancelian-app
 docker compose ps arquantix-db
 ```
 

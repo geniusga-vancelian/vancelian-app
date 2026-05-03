@@ -1,14 +1,22 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Search, Edit, Trash2, Eye, EyeOff } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Eye, EyeOff, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ContentStatus } from '@prisma/client'
 import { toastError, toastSuccess } from '@/lib/admin/toast'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
+import CreateHelpArticleModal from '@/components/admin/CreateHelpArticleModal'
+import CreateAcademyArticleModal from '@/components/admin/CreateAcademyArticleModal'
 import { defaultLocale } from '@/config/locales'
+import {
+  ARTICLE_TYPES,
+  ARTICLE_TYPE_KEYS,
+  type ArticleTypeKey,
+  normalizeArticleType,
+} from '@/lib/admin/articleTypes'
 
 interface Article {
   id: string
@@ -24,7 +32,7 @@ interface Article {
   locale: string
   isFeatured: boolean
   isHighlighted: boolean
-  articleType: 'NEWS' | 'ANALYSIS'
+  articleType: ArticleTypeKey
 }
 
 export default function AdminArticlesPage() {
@@ -34,10 +42,32 @@ export default function AdminArticlesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ContentStatus | 'ALL'>('ALL')
   const [localeFilter, setLocaleFilter] = useState<string>(defaultLocale)
+  const [typeFilter, setTypeFilter] = useState<ArticleTypeKey | 'ALL'>('ALL')
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; articleId: string | null }>({
     open: false,
     articleId: null,
   })
+  const [helpCreateOpen, setHelpCreateOpen] = useState(false)
+  const [academyCreateOpen, setAcademyCreateOpen] = useState(false)
+  const [createMenuOpen, setCreateMenuOpen] = useState(false)
+  const createMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!createMenuOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (!createMenuRef.current) return
+      if (!createMenuRef.current.contains(e.target as Node)) setCreateMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCreateMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [createMenuOpen])
 
   const fetchArticles = async () => {
     setLoading(true)
@@ -45,6 +75,7 @@ export default function AdminArticlesPage() {
       const params = new URLSearchParams()
       if (searchQuery) params.set('search', searchQuery)
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
+      if (typeFilter !== 'ALL') params.set('articleType', typeFilter)
       params.set('locale', localeFilter)
 
       const response = await fetch(`/api/admin/articles?${params.toString()}`)
@@ -60,7 +91,7 @@ export default function AdminArticlesPage() {
       setArticles(
         (data.articles || []).map((article: any) => ({
           ...article,
-          articleType: article?.articleType === 'ANALYSIS' ? 'ANALYSIS' : 'NEWS',
+          articleType: normalizeArticleType(article?.articleType),
         }))
       )
     } catch (error) {
@@ -73,12 +104,24 @@ export default function AdminArticlesPage() {
 
   useEffect(() => {
     fetchArticles()
-  }, [searchQuery, statusFilter, localeFilter, router])
+  }, [searchQuery, statusFilter, localeFilter, typeFilter, router])
 
-  const handleCreateArticle = async (articleType: 'NEWS' | 'ANALYSIS') => {
+  const handleCreateArticle = async (articleType: ArticleTypeKey) => {
+    if (articleType === 'HELP') {
+      // HELP nécessite collection + category + helpSlug → modal dédié
+      // (Phase 3.3.C). Ne pas faire un POST direct.
+      setHelpCreateOpen(true)
+      return
+    }
+    if (articleType === 'ACADEMY') {
+      // ACADEMY nécessite collection + category + academySlug → modal dédié
+      // (Phase 4 — symétrique HELP). Ne pas faire un POST direct.
+      setAcademyCreateOpen(true)
+      return
+    }
     try {
-      const prefix = articleType === 'ANALYSIS' ? 'analysis' : 'news'
-      const slug = `${prefix}-${Date.now()}`
+      const descriptor = ARTICLE_TYPES[articleType]
+      const slug = `${descriptor.slugPrefix}-${Date.now()}`
       const response = await fetch('/api/admin/articles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -175,21 +218,55 @@ export default function AdminArticlesPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Articles</h1>
-        <div className="flex gap-2">
-          <Button onClick={() => handleCreateArticle('NEWS')}>
+        <div className="relative" ref={createMenuRef}>
+          <Button
+            type="button"
+            onClick={() => setCreateMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={createMenuOpen}
+          >
             <Plus className="w-4 h-4 mr-2" />
-            New News
+            Nouvel article
+            <ChevronDown className="w-4 h-4 ml-2" />
           </Button>
-          <Button variant="outline" onClick={() => handleCreateArticle('ANALYSIS')}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Analysis
-          </Button>
+          {createMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-gray-200 bg-white p-1 shadow-lg"
+            >
+              {ARTICLE_TYPE_KEYS.map((key) => {
+                const descriptor = ARTICLE_TYPES[key]
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setCreateMenuOpen(false)
+                      handleCreateArticle(key)
+                    }}
+                    className="flex w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left hover:bg-gray-100"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${descriptor.badgeClassName}`}
+                      >
+                        {descriptor.label}
+                      </span>
+                      <span className="text-sm font-medium">{descriptor.createLabel}</span>
+                    </div>
+                    <span className="text-xs text-gray-500 leading-tight">{descriptor.description}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
@@ -200,6 +277,18 @@ export default function AdminArticlesPage() {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as ArticleTypeKey | 'ALL')}
+            className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            <option value="ALL">All Types</option>
+            {ARTICLE_TYPE_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {ARTICLE_TYPES[key].label}
+              </option>
+            ))}
+          </select>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as ContentStatus | 'ALL')}
@@ -303,13 +392,9 @@ export default function AdminArticlesPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          article.articleType === 'ANALYSIS'
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-sky-100 text-sky-800'
-                        }`}
+                        className={`px-2 py-1 text-xs font-semibold rounded-full ${ARTICLE_TYPES[article.articleType].badgeClassName}`}
                       >
-                        {article.articleType === 'ANALYSIS' ? 'Analysis' : 'News'}
+                        {ARTICLE_TYPES[article.articleType].label}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -439,13 +524,9 @@ export default function AdminArticlesPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          article.articleType === 'ANALYSIS'
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-sky-100 text-sky-800'
-                        }`}
+                        className={`px-2 py-1 text-xs font-semibold rounded-full ${ARTICLE_TYPES[article.articleType].badgeClassName}`}
                       >
-                        {article.articleType === 'ANALYSIS' ? 'Analysis' : 'News'}
+                        {ARTICLE_TYPES[article.articleType].label}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -516,6 +597,21 @@ export default function AdminArticlesPage() {
         destructive
       />
 
+      <CreateHelpArticleModal
+        open={helpCreateOpen}
+        onClose={() => {
+          setHelpCreateOpen(false)
+          fetchArticles()
+        }}
+      />
+
+      <CreateAcademyArticleModal
+        open={academyCreateOpen}
+        onClose={() => {
+          setAcademyCreateOpen(false)
+          fetchArticles()
+        }}
+      />
     </div>
   )
 }

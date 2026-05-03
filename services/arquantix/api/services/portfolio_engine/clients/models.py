@@ -1,8 +1,8 @@
 """SQLAlchemy model for the pe_clients table (Portfolio Engine — ownership layer)."""
 import uuid
 
-from sqlalchemy import Column, ForeignKey, String, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, ForeignKey, String, DateTime, Text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -29,6 +29,16 @@ class Client(Base):
     )
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    # ── Palier 2 D.2.3 — Mémoire long-terme cross-conversations (migration 146)
+    # Agrégat des faits extraits de toutes les conversations d'assistance du
+    # client. Format : `{ "facts": [...], "updated_at": "..." }`. Maintenu
+    # par services.assistance.memory.consolidate_conversation et réinjecté
+    # dans le system prompt à chaque tour pour offrir une vraie continuité
+    # d'expérience cross-conv.
+    assistance_long_memory = Column(
+        JSONB(astext_type=Text), nullable=False, server_default="{}"
+    )
 
     person = relationship(
         "Person",

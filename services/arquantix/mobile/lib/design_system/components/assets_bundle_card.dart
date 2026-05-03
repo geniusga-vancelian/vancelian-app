@@ -4,6 +4,8 @@ import '../atoms/app_colors.dart';
 import '../atoms/app_radius.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// Carte "Assets Bundle" : cercles crypto en décalé, titre, description 2 lignes, perf 24h, pas de bouton.
 class AssetsBundleCard extends StatelessWidget {
@@ -254,8 +256,8 @@ class AssetsBundleCard extends StatelessWidget {
 
   Widget _placeholder() => Container(
         color: AppColors.placeholderBg,
-        child: Icon(
-          Icons.image_not_supported,
+        child: const KalaiIcon(
+          KalaiIcons.photoOff,
           color: AppColors.placeholderIcon,
           size: 32,
         ),

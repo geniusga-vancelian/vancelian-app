@@ -1,0 +1,41 @@
+{
+  "vars": {
+    "preheader": "Welcome to Arquantix — here is how to get started.",
+    "assetOrigin": "https://www.arquantix.com",
+    "recipientName": "Sarah",
+    "hero": {
+      "eyebrow": "Welcome",
+      "title": "Welcome to Arquantix.",
+      "kicker": "Premium real assets, structured into transparent on-chain vaults.",
+      "imageUrl": "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80",
+      "cta": { "label": "Open your client space", "href": "https://www.arquantix.com/login", "dark": true }
+    },
+    "greetingTitle": "Glad to have you on board, Sarah.",
+    "greetingBody": "Your account is ready. From now on, you can browse vaults, simulate allocations, and subscribe to exclusive offers — all from one secured client space, without ever managing a wallet.",
+    "stepsTitle": "Three steps to get started",
+    "steps": [
+      { "index": "1", "title": "Complete your KYC profile", "body": "We ask a few documents to comply with EU and Swiss regulations. Most clients finish this in under 5 minutes." },
+      { "index": "2", "title": "Compose your first vault", "body": "Use Vault Builder to allocate across gold, real estate, credit and tokenized treasuries — with simulated performance." },
+      { "index": "3", "title": "Talk to a desk advisor", "body": "Our Geneva desk is available for a 30-minute call to walk you through your portfolio and answer your questions." }
+    ],
+    "cta": {
+      "eyebrow": "Need help?",
+      "title": "We answer in less than 4 hours.",
+      "body": "Reach the Arquantix desk directly — by email, secure chat or scheduled call.",
+      "dark": true,
+      "cta": { "label": "Contact the desk", "href": "https://www.arquantix.com/support", "dark": true }
+    },
+    "footer": {
+      "tagline": "Premium real assets, structured into transparent on-chain vaults.",
+      "social": [
+        { "label": "LinkedIn", "href": "https://www.linkedin.com/company/arquantix" },
+        { "label": "X", "href": "https://x.com/arquantix" }
+      ],
+      "unsubscribeUrl": "https://www.arquantix.com/email/unsubscribe?token=PLACEHOLDER",
+      "unsubscribeLabel": "Unsubscribe",
+      "preferencesUrl": "https://www.arquantix.com/email/preferences",
+      "preferencesLabel": "Preferences",
+      "copyright": "© 2026 Arquantix SA. All rights reserved."
+    }
+  }
+}

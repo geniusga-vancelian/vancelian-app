@@ -5,8 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_primary_button.dart';
 import 'app_tag.dart';
+import 'kalai_icon.dart';
 
 // ---------------------------------------------------------------------------
 // Data model
@@ -352,8 +354,8 @@ class _SetupStepRow extends StatelessWidget {
             if (step.onTap != null)
               const Padding(
                 padding: EdgeInsets.only(left: 8),
-                child: Icon(
-                  Icons.chevron_right_rounded,
+                child: KalaiIcon(
+                  KalaiIcons.chevronRight,
                   size: 20,
                   color: Color(0xFFC7C7CC),
                 ),
@@ -374,7 +376,7 @@ class _SetupStepRow extends StatelessWidget {
             color: Color(0xFF34C759),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.check_rounded, size: 18, color: Colors.white),
+          child: const KalaiIcon(KalaiIcons.check, size: 18, color: Colors.white),
         );
 
       case SetupStepStatus.inProgress:
@@ -409,11 +411,13 @@ class _SetupStepRow extends StatelessWidget {
             color: const Color(0xFFF5F5F5),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            step.icon ?? Icons.photo_library_outlined,
-            size: 18,
-            color: AppColors.textSecondary,
-          ),
+          child: step.icon != null
+              ? Icon(step.icon, size: 18, color: AppColors.textSecondary)
+              : const KalaiIcon(
+                  KalaiIcons.photo,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
         );
     }
   }

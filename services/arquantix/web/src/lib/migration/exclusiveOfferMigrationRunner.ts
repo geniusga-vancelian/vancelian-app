@@ -351,7 +351,8 @@ async function migrateOneProject(
   let pageId = pageBySlug?.id
 
   if (!pageId) {
-    const urlPath = project.slug === 'home' ? '/' : `/${project.slug}`
+    const urlPath =
+      project.slug === 'home' ? '/' : `/projects/${project.slug}`
     const created = await prisma.page.create({
       data: {
         slug: project.slug,

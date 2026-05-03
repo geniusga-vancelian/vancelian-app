@@ -1,14 +1,19 @@
 import { redirect } from 'next/navigation'
 import { getPageSections } from '@/lib/cms/content'
 import { getSessionFromCookie } from '@/lib/auth'
-import { getLocaleOrDefault } from '@/config/locales'
+import { cookies } from 'next/headers'
+import { resolvePublicLocale } from '@/lib/i18n/resolvePublicLocale'
 import { SectionRenderer } from '@/components/cms/SectionRenderer'
-import { Navigation } from '@/components/sections/Navigation'
-import { getPrimaryMenu } from '@/lib/menu/getPrimaryMenu'
+import { resolveCanonicalSectionKey } from '@/lib/sections/library'
+import { figmaDsSiteShellLightClassName } from '@/components/design-system/extracted/tokens/surfaces'
+import { cn } from '@/lib/utils'
+import { prisma } from '@/lib/prisma'
+import { BlogTemplatePageView } from '@/components/cms/BlogTemplatePageView'
+import { parseBlogListingSearchParams } from '@/lib/blog/parseBlogListingSearchParams'
 
 interface PreviewPageProps {
   params: { slug: string }
-  searchParams: { locale?: string; raw?: string }
+  searchParams: Record<string, string | string[] | undefined>
 }
 
 export default async function PreviewPage({
@@ -21,22 +26,52 @@ export default async function PreviewPage({
     redirect('/admin/login')
   }
 
-  const locale = getLocaleOrDefault(searchParams.locale)
+  const cookieStore = await cookies()
+  const locale = resolvePublicLocale({
+    cookieStore,
+    searchParams,
+    preferQueryLocaleOverCookie: true,
+  })
+
+  const cmsPage = await prisma.page.findUnique({
+    where: { slug: params.slug },
+    select: { template: true },
+  })
+
+  /** Même enveloppe et props que la page publique — contenu résolu en brouillon. */
+  if (cmsPage?.template === 'blog') {
+    const { category, pageNum, mosaicPageNum, segment } = parseBlogListingSearchParams(searchParams)
+    return (
+      <BlogTemplatePageView
+        locale={locale}
+        category={category}
+        pageNum={pageNum}
+        mosaicPageNum={mosaicPageNum}
+        segment={segment}
+        contentStatus="draft"
+      />
+    )
+  }
+
   const sections = await getPageSections(params.slug, locale, 'draft')
-  const menuItems = await getPrimaryMenu(locale)
 
   const showRaw = searchParams.raw === 'true'
+  const firstCanonical =
+    sections.length > 0
+      ? resolveCanonicalSectionKey(sections[0]!.key) ?? sections[0]!.key
+      : null
+  const blogHeroBleedsFirst =
+    firstCanonical === 'blog_hero' || firstCanonical === 'blog_article_hero'
 
   return (
-    <div className="min-h-screen bg-black text-white">
-
+    <div className={cn(figmaDsSiteShellLightClassName)}>
       {sections.length === 0 ? (
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex min-h-screen items-center justify-center">
           <div className="text-center">
-            <p className="text-xl text-gray-400 mb-4">No sections found for this page.</p>
+            <p className="mb-4 text-xl text-gray-400">No sections found for this page.</p>
             <a
               href="/admin/pages"
-              className="text-indigo-400 hover:text-indigo-300 underline"
+              className="text-indigo-400 underline hover:text-indigo-300"
             >
               Go to Admin
             </a>
@@ -44,19 +79,20 @@ export default async function PreviewPage({
         </div>
       ) : showRaw ? (
         // Raw JSON view
-        <div className="max-w-4xl mx-auto p-8">
+        <div className="mx-auto max-w-4xl p-8">
           <div className="space-y-6">
             {sections.map((section) => (
-              <div key={section.id} className="bg-gray-900 rounded-lg shadow p-6">
-                <div className="flex justify-between items-start mb-4">
+              <div key={section.id} className="rounded-lg bg-gray-900 p-6 shadow">
+                <div className="mb-4 flex items-start justify-between">
                   <div>
                     <h2 className="text-xl font-semibold">{section.key}</h2>
                     <p className="text-sm text-gray-400">
-                      Order: {section.order} • Schema: {section.schemaVersion} • Status: {section.status}
+                      Order: {section.order} • Schema: {section.schemaVersion} • Status:{' '}
+                      {section.status}
                     </p>
                   </div>
                 </div>
-                <pre className="bg-gray-800 p-4 rounded text-sm overflow-auto text-gray-300">
+                <pre className="overflow-auto rounded bg-gray-800 p-4 text-sm text-gray-300">
                   {JSON.stringify(section.data, null, 2)}
                 </pre>
               </div>
@@ -64,17 +100,17 @@ export default async function PreviewPage({
           </div>
         </div>
       ) : (
-        // Rendered view
-        <>
-          <Navigation menuItems={menuItems} />
-          <main>
-            {sections.map((section) => (
-              <SectionRenderer key={section.id} section={section} />
-            ))}
-          </main>
-        </>
+        <main>
+          {sections.map((section, index) => (
+            <SectionRenderer
+              key={section.id}
+              section={section}
+              locale={locale}
+              blogHeroBleedUnderNav={blogHeroBleedsFirst && index === 0}
+            />
+          ))}
+        </main>
       )}
     </div>
   )
 }
-

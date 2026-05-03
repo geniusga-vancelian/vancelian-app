@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_radius.dart';
 import '../atoms/app_spacing.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// List item for bottom-sheet selection lists.
 ///
@@ -121,8 +123,8 @@ class AppSheetListItem extends StatelessWidget {
                 ],
                 if (showChevron) ...[
                   const SizedBox(width: AppSpacing.sm),
-                  const Icon(
-                    Icons.chevron_right_rounded,
+                  const KalaiIcon(
+                    KalaiIcons.chevronRight,
                     size: 16,
                     color: _chevronColor,
                   ),

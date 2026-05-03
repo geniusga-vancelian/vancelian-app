@@ -4,11 +4,14 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, Search, Copy, Trash2, Image as ImageIcon, Loader2, FileText, Video } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { adminMediaFileUrl } from '@/lib/admin/adminMediaFileUrl'
 
 interface Media {
   id: string
   key: string
   url: string
+  /** URL publique stockée (préférable pour « Copy URL ») */
+  publicUrl?: string
   filename: string
   mimeType: string
   size: number
@@ -306,14 +309,14 @@ export default function AdminMediaPage() {
               >
                 {isImage ? (
                   <img
-                    src={item.url}
+                    src={adminMediaFileUrl(item.id)}
                     alt={item.alt || item.filename}
                     className="w-full h-48 object-cover"
                   />
                 ) : isVideo ? (
                   <div className="w-full h-48 bg-gray-900 flex items-center justify-center relative">
                     <video
-                      src={item.url}
+                      src={adminMediaFileUrl(item.id)}
                       className="w-full h-full object-contain"
                       controls={false}
                       preload="metadata"
@@ -329,7 +332,7 @@ export default function AdminMediaPage() {
                       PDF
                     </div>
                     <a
-                      href={item.url}
+                      href={adminMediaFileUrl(item.id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-3 text-xs text-indigo-600 hover:text-indigo-800 underline"
@@ -354,12 +357,16 @@ export default function AdminMediaPage() {
                   </p>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleCopyUrl(item.url)}
+                      onClick={() =>
+                        handleCopyUrl(item.publicUrl ?? item.url)
+                      }
                       className="flex-1 text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 flex items-center justify-center"
                       title="Copy URL"
                     >
                       <Copy className="w-3 h-3 mr-1" />
-                      {copiedUrl === item.url ? 'Copied!' : 'Copy URL'}
+                      {copiedUrl === (item.publicUrl ?? item.url)
+                        ? 'Copied!'
+                        : 'Copy URL'}
                     </button>
                     <button
                       onClick={() => handleDelete(item.id)}

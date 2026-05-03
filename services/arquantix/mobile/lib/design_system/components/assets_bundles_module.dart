@@ -5,9 +5,11 @@ import '../atoms/app_colors.dart';
 import '../atoms/app_radius.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_section_title.dart';
 import 'app_small_button.dart';
 import 'basket_card.dart';
+import 'kalai_icon.dart';
 import 'bundle_ticker_avatar_row.dart';
 
 /// Performance mockée quand l'API n'envoie pas de perf (vert/rouge alterné).
@@ -285,8 +287,8 @@ class _BundleCard extends StatelessWidget {
 
   Widget _placeholder() => Container(
         color: AppColors.placeholderBg,
-        child: Icon(
-          Icons.image_not_supported,
+        child: const KalaiIcon(
+          KalaiIcons.photoOff,
           color: AppColors.placeholderIcon,
           size: 48,
         ),

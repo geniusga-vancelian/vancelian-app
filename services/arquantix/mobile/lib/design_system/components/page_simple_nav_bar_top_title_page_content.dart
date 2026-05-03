@@ -48,7 +48,9 @@ class PageSimpleNavBarTopTitlePageContent extends StatefulWidget {
 class _PageSimpleNavBarTopTitlePageContentState
     extends State<PageSimpleNavBarTopTitlePageContent> {
   final ScrollController _scrollController = ScrollController();
-  double _navTitleOpacity = 0;
+  /// Fade du titre navbar : isolé du corps pour ne pas reconstruire le [ListView]
+  /// (évite sur iOS une réinitialisation gênante de la sélection dans les champs).
+  final ValueNotifier<double> _navTitleOpacity = ValueNotifier<double>(0);
 
   @override
   void initState() {
@@ -60,6 +62,7 @@ class _PageSimpleNavBarTopTitlePageContentState
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _navTitleOpacity.dispose();
     super.dispose();
   }
 
@@ -68,8 +71,8 @@ class _PageSimpleNavBarTopTitlePageContentState
     final next = ((offset - widget.fadeStartOffset) /
             (widget.fadeEndOffset - widget.fadeStartOffset))
         .clamp(0.0, 1.0);
-    if ((next - _navTitleOpacity).abs() > 0.02) {
-      setState(() => _navTitleOpacity = next);
+    if ((next - _navTitleOpacity.value).abs() > 0.02) {
+      _navTitleOpacity.value = next;
     }
   }
 
@@ -77,19 +80,27 @@ class _PageSimpleNavBarTopTitlePageContentState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: widget.backgroundColor,
-      appBar: AppTopNavBar(
-        leadingType: AppTopNavBarLeading.back,
-        title: widget.pageTitle,
-        onBackTap: widget.onBackTap,
-        centerTitle: false,
-        actions: widget.navBarActions,
-        titleTextStyle: widget.navBarTitleTextStyle ??
-            AppTypography.paragraph.copyWith(
-              color: AppColors.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-        titleOpacity: _navTitleOpacity,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: ValueListenableBuilder<double>(
+          valueListenable: _navTitleOpacity,
+          builder: (context, opacity, _) {
+            return AppTopNavBar(
+              leadingType: AppTopNavBarLeading.back,
+              title: widget.pageTitle,
+              onBackTap: widget.onBackTap,
+              centerTitle: false,
+              actions: widget.navBarActions,
+              titleTextStyle: widget.navBarTitleTextStyle ??
+                  AppTypography.paragraph.copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+              titleOpacity: opacity,
+            );
+          },
+        ),
       ),
       body: SafeArea(
         child: Padding(

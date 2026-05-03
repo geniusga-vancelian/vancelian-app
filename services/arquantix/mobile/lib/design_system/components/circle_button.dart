@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'kalai_icon.dart';
 
 /// Variante visuelle du [CircleButton].
 enum CircleButtonVariant {
@@ -171,6 +172,7 @@ class CircleButtonItem {
     this.onTap,
     this.isPrimary = false,
     this.variant,
+    this.kalaiAsset,
   });
 
   final IconData icon;
@@ -181,6 +183,11 @@ class CircleButtonItem {
   final bool isPrimary;
 
   final CircleButtonVariant? variant;
+
+  /// Asset SVG d'une icône KALAI (ex: `KalaiIcons.add`).
+  ///
+  /// Si fourni, prend le pas sur [icon] (Material) lors du rendu.
+  final String? kalaiAsset;
 }
 
 /// Ligne de [CircleButton] répartis dans une grille de 4 colonnes égales.
@@ -224,7 +231,14 @@ class CircleButtonRow extends StatelessWidget {
                 width: slotWidth,
                 child: Center(
                   child: CircleButton(
-                    icon: Icon(items[i].icon, color: iconColor, size: iconSize),
+                    icon: items[i].kalaiAsset != null
+                        ? KalaiIcon(
+                            items[i].kalaiAsset!,
+                            color: iconColor,
+                            size: iconSize,
+                          )
+                        : Icon(items[i].icon,
+                            color: iconColor, size: iconSize),
                     label: items[i].label,
                     variant: items[i].variant,
                     buttonSize: buttonSize,

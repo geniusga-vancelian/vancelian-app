@@ -6,5 +6,55 @@
   "activationPreDepositHeroTagline": "Investir en un seul geste, simplement.",
   "activationHeroSubtitleVerify": "Complétez votre profil pour activer votre compte.",
   "activationHeroSubtitleDeposit": "Ajoutez des fonds pour commencer à investir.",
-  "activationHeroSubtitleInvest": "Découvrez les opportunités et constituez votre portefeuille."
+  "activationHeroSubtitleInvest": "Découvrez les opportunités et constituez votre portefeuille.",
+  "exclusiveOfferInvestUnavailableTitle": "Investissement indisponible",
+  "exclusiveOfferInvestUnavailableBodyFunded": "Cette offre a atteint son objectif de financement.",
+  "exclusiveOfferInvestUnavailableBodyOther": "Cette offre n'est pas ouverte à l'investissement pour le moment.",
+  "exclusiveOfferClose": "Fermer",
+  "exclusiveOfferInvestCtaDefault": "Investir",
+  "exclusiveOfferDocuments": "Documents",
+  "exclusiveOfferGallery": "Galerie",
+  "exclusiveOfferVideosTitle": "Vidéos",
+  "exclusiveOfferVideoItemTitle": "Vidéo {videoNumber}",
+  "@exclusiveOfferVideoItemTitle": {
+    "placeholders": {
+      "videoNumber": {
+        "type": "int"
+      }
+    }
+  },
+  "exclusiveOfferFaqDefaultTitle": "FAQ",
+  "exclusiveOfferModalInfoDefaultTitle": "Information",
+  "exclusiveOfferFaqArticleLoadError": "Impossible de charger le contenu de cet article.",
+  "exclusiveOfferFaqArticleEmptyFallback": "Aucun contenu disponible.",
+  "exclusiveOfferFaqModalClose": "Fermé",
+  "exclusiveOfferStepsMilestoneDay": "Étape {stepNumber}",
+  "@exclusiveOfferStepsMilestoneDay": {
+    "placeholders": {
+      "stepNumber": {
+        "type": "int"
+      }
+    }
+  },
+  "exclusiveOfferStepsCountLabel": "{count} étapes",
+  "@exclusiveOfferStepsCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "articleReadingTimeMinutes": "{count} min de lecture",
+  "@articleReadingTimeMinutes": {
+    "description": "Durée de lecture d'un article (ex. « 5 min de lecture »)",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "articleAuthorByPrefix": "Par",
+  "@articleAuthorByPrefix": {
+    "description": "Préfixe placé devant le nom de l'auteur d'un article (ex. « Par Gael Itier »)"
+  }
 }

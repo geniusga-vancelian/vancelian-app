@@ -69,6 +69,10 @@ from services.aml_risk.routes import router as aml_risk_router
 from services.field_definitions.routes import router as field_definitions_router
 from services.finance_strategy_chat.routes import router as finance_strategy_chat_router
 from services.chatbot_epargne.routes import router as chatbot_epargne_router
+from services.assistance import router as assistance_router
+from services.assistance.admin_knowledge_router import (
+    admin_router as assistance_admin_knowledge_router,
+)
 from services.migrations.routes import router as migrations_router
 from services.portfolio_engine import router as portfolio_engine_router
 from services.customers_admin import customers_admin_router
@@ -185,6 +189,8 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(field_definitions_router)
     app.include_router(finance_strategy_chat_router)
     app.include_router(chatbot_epargne_router)
+    app.include_router(assistance_router)
+    app.include_router(assistance_admin_knowledge_router)
     app.include_router(migrations_router)
     app.include_router(portfolio_engine_router)
     app.include_router(customers_admin_router)

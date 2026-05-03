@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../atoms/app_colors.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// State of the text input field.
 enum AppTextInputState { idle, focused, error }
@@ -141,7 +143,7 @@ class _AppTextInputState extends State<AppTextInput> {
               if (widget.showEmailIcon)
                 const Padding(
                   padding: EdgeInsets.only(right: 8),
-                  child: Icon(Icons.email_outlined,
+                  child: KalaiIcon(KalaiIcons.email,
                       size: 24, color: _labelColor),
                 ),
               Expanded(
@@ -295,7 +297,7 @@ class _AppTextInputState extends State<AppTextInput> {
               color: Color(0xFFE5E5EA),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.close_rounded,
+            child: const KalaiIcon(KalaiIcons.clear,
                 size: 16, color: Colors.white),
           ),
         ),
@@ -306,10 +308,8 @@ class _AppTextInputState extends State<AppTextInput> {
         padding: const EdgeInsets.only(left: 8),
         child: GestureDetector(
           onTap: () => setState(() => _obscured = !_obscured),
-          child: Icon(
-            _obscured
-                ? Icons.visibility_outlined
-                : Icons.visibility_off_outlined,
+          child: KalaiIcon(
+            _obscured ? KalaiIcons.eye : KalaiIcons.eyeOff,
             size: 24,
             color: _labelColor,
           ),

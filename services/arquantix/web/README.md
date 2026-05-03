@@ -1,53 +1,37 @@
 # Arquantix Web (Next.js)
 
-Site vitrine Arquantix construit avec Next.js 14, TypeScript, Tailwind CSS, et intégration Strapi CMS.
+Site vitrine Arquantix : Next.js 14, TypeScript, Tailwind CSS, **Prisma** sur PostgreSQL, BFF vers l’API FastAPI. **Strapi n’est plus utilisé** ; `src/lib/strapi.ts` est un **stub** (pas d’appel réseau CMS).
 
 ## 🚀 Démarrage Rapide
 
 ### Avec Docker Compose (recommandé)
 
-Depuis la racine du repo:
+Depuis la racine du repo :
 
 ```bash
-# Créer .env.arquantix si nécessaire
-cp .env.arquantix.example .env.arquantix
-# Éditer .env.arquantix avec vos valeurs
+# Configurer .env.arquantix (COMPOSE_PROJECT_NAME, ARQUANTIX_COMPOSE_FILE, DB_*, ports…)
 
-# Démarrer tous les services
 make -f Makefile.arquantix arquantix-up
-
-# Ou directement
-docker compose -f docker-compose.arquantix.yml up -d
+# ou
+make -f Makefile.arquantix arquantix-recovery-up
 ```
 
-Le site sera accessible sur: http://localhost:3001
+Le site est exposé sur le port **`WEB_PORT`** (souvent **3000**) : `http://localhost:${WEB_PORT}`.
 
-### Développement Local (sans Docker)
+### Développement local (sans Docker)
 
 ```bash
 cd services/arquantix/web
-
-# Installer les dépendances
 npm install
-
-# Créer .env.local (optionnel)
-echo "NEXT_PUBLIC_STRAPI_URL=http://localhost:1338" > .env.local
-echo "NEXT_PUBLIC_STRAPI_API_URL=http://localhost:1338/api" >> .env.local
-
-# Démarrer le serveur de développement
+# Configurer .env.local (DATABASE_URL, BACKEND_*, etc.) — aligné sur .env.arquantix
 npm run dev
 ```
 
-Le site sera accessible sur: http://localhost:3000 (ou port configuré)
-
 ## 📋 Configuration
 
-### Variables d'Environnement
+### Variables d'environnement
 
-- `NEXT_PUBLIC_STRAPI_URL`: URL de base du CMS Strapi (ex: http://localhost:1338)
-- `NEXT_PUBLIC_STRAPI_API_URL`: URL de l'API Strapi (ex: http://localhost:1338/api)
-
-En production, ces variables doivent être configurées dans l'environnement de déploiement.
+Principales : `DATABASE_URL` (Prisma), `BACKEND_URL` / `NEXT_PUBLIC_*` vers l’API — voir `.env.arquantix` et la doc [LOCAL_ENV_RUNBOOK.md](../../../docs/arquantix/LOCAL_ENV_RUNBOOK.md). **Pas de variables Strapi** requises.
 
 ## 🗺️ Routes
 
@@ -61,37 +45,9 @@ En production, ces variables doivent être configurées dans l'environnement de 
 - `/fr/contact` → Formulaire de contact (FR)
 - `/en/contact` → Formulaire de contact (EN)
 
-## 🔌 Intégration Strapi
+## 🔌 Ancien module `strapi` (stub)
 
-Le client Strapi est défini dans `lib/strapi.ts`.
-
-Exemple d'utilisation:
-
-```typescript
-import { strapi } from '@/lib/strapi'
-
-// Récupérer une page
-const response = await strapi.get('/pages', {
-  'filters[slug][$eq]': 'home',
-  'filters[locale][$eq]': 'fr',
-  populate: '*'
-})
-
-// Récupérer les news
-const news = await strapi.get('/news', {
-  'filters[locale][$eq]': 'fr',
-  'pagination[limit]': 10,
-  sort: 'publishedAt:desc',
-  populate: '*'
-})
-
-// Soumettre un formulaire de contact
-await strapi.post('/contact-submissions', {
-  name: 'John Doe',
-  email: 'john@example.com',
-  message: 'Hello!'
-})
-```
+`lib/strapi.ts` exporte un **stub** (méthodes vides / données par défaut) pour éviter de casser d’anciens imports. Le contenu éditable passe par **Prisma** (pages, sections, blog, etc.) et les routes **FastAPI** pour le métier.
 
 ## 🎨 Styling
 
@@ -111,7 +67,7 @@ src/
 │   ├── layout.tsx   # Layout racine
 │   └── page.tsx     # Page d'accueil (redirection)
 ├── components/       # Composants React réutilisables
-├── lib/             # Utilitaires (client Strapi, helpers)
+├── lib/             # Utilitaires (backend URL, Prisma, auth, stub strapi, …)
 └── styles/          # Styles globaux
 ```
 
@@ -144,12 +100,9 @@ Le Dockerfile est configuré pour une production optimisée avec:
 
 ## 🐛 Dépannage
 
-### Erreur de connexion à Strapi
+### Erreur de connexion à l’API / à la base
 
-Vérifier que:
-1. Strapi est démarré et accessible
-2. `NEXT_PUBLIC_STRAPI_URL` et `NEXT_PUBLIC_STRAPI_API_URL` sont correctement configurés
-3. Les permissions API sont configurées dans Strapi
+Vérifier que la stack Docker est up, que `DATABASE_URL` et `BACKEND_*` sont alignés sur `.env.arquantix`, et que `curl http://127.0.0.1:${API_PORT}/health` répond **200**.
 
 ### Erreur de build
 

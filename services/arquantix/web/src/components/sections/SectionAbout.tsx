@@ -1,8 +1,15 @@
+/**
+ * @deprecated Legacy grid replaced by design-system BlockLeftAndRight; API stable for CMS.
+ */
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import {
+  BlockLeftAndRight,
+  TextBlock,
+  ImageBlock,
+  TextBlockWithChecklist,
+} from "@/components/design-system/BlockLeftAndRight";
 import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { Button } from "@/components/ui/button";
 
 export interface SectionAboutProps extends React.HTMLAttributes<HTMLElement> {
   title?: string;
@@ -17,78 +24,50 @@ export interface SectionAboutProps extends React.HTMLAttributes<HTMLElement> {
   ctaLink?: string;
 }
 
-export function SectionAbout({ 
-  title, 
+export function SectionAbout({
+  title = "",
   description,
   items = [],
   imageUrl,
   content,
-  ctaText,
-  ctaLink,
-  className, 
-  ...props 
+  className,
+  ...props
 }: SectionAboutProps) {
+  const bodyText = [description, content].filter(Boolean).join("\n\n");
+  const checklist = items.map((item) => ({
+    text: `${item.title}: ${item.description}`,
+  }));
+
+  const left =
+    checklist.length > 0 ? (
+      <TextBlockWithChecklist
+        title={title || " "}
+        description={bodyText || " "}
+        items={checklist}
+      />
+    ) : (
+      <TextBlock
+        title={title || " "}
+        description={bodyText || description || ""}
+      />
+    );
+
   return (
     <section
-      className={cn("w-full bg-[#1A1A1A] py-16 md:py-20", className)}
+      className={cn("w-full bg-white py-12 md:py-16", className)}
       {...props}
     >
       <Container>
-        <div className="flex flex-col items-center gap-10">
-          {/* Section Header */}
-          {title && (
-            <SectionHeader
-              tag={title}
-              title={title}
-              description={description}
+        <div className="flex w-full min-w-0 justify-center">
+          {imageUrl ? (
+            <BlockLeftAndRight
+              leftContent={left}
+              rightContent={
+                <ImageBlock src={imageUrl} alt={title || ""} imageStyle="cover" />
+              }
             />
-          )}
-
-          {/* Content Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 w-full">
-            {/* Left - Image */}
-            {imageUrl && (
-              <div className="relative h-[311px] overflow-hidden">
-                <img
-                  src={imageUrl}
-                  alt={title || "About"}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/30" />
-              </div>
-            )}
-
-            {/* Middle - Description */}
-            {content && (
-              <div className="border-x border-[#5F5F5F] p-7 md:p-8 flex flex-col justify-center bg-[#0D0D0D]">
-                <div className="space-y-4 text-[#E6E6E6] text-sm leading-relaxed whitespace-pre-line">
-                  {content}
-                </div>
-              </div>
-            )}
-
-            {/* Right - Features */}
-            {items.length > 0 && (
-              <div className="p-7 md:p-8 flex flex-col justify-center gap-14 bg-[#0D0D0D]">
-                {items.map((item, idx) => (
-                  <div key={idx} className="flex flex-col gap-5">
-                    <h3 className="text-white text-lg uppercase">
-                      {item.title}
-                    </h3>
-                    <p className="text-[#E6E6E6] text-sm leading-relaxed">
-                      {item.description}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* CTA Button */}
-          {ctaText && (
-            <Button variant="arquantixOutline" size="arquantix" asChild={!!ctaLink}>
-              {ctaLink ? <a href={ctaLink}>{ctaText}</a> : ctaText}
-            </Button>
+          ) : (
+            <div className="w-full min-w-0 py-6">{left}</div>
           )}
         </div>
       </Container>

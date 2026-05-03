@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import 'amount_display.dart';
 import 'dot_spinner.dart';
+import 'kalai_icon.dart';
 
 /// Unified page layout for all confirmation / preview screens.
 ///
@@ -232,7 +234,7 @@ class _BackDisk extends StatelessWidget {
             ],
           ),
           alignment: Alignment.center,
-          child: const Icon(Icons.arrow_back_rounded,
+          child: const KalaiIcon(KalaiIcons.arrowLeft,
               size: 20, color: AppColors.textPrimary),
         ),
       ),
@@ -297,7 +299,7 @@ class _BottomBar extends StatelessWidget {
                 ],
               ),
               alignment: Alignment.center,
-              child: const Icon(Icons.info_outline_rounded,
+              child: const KalaiIcon(KalaiIcons.info,
                   size: 22, color: AppColors.textSecondary),
             ),
             const SizedBox(width: 12),
@@ -386,8 +388,8 @@ class _ErrorView extends StatelessWidget {
                 color: AppColors.textPrimary,
               ),
               alignment: Alignment.center,
-              child:
-                  const Icon(Icons.close_rounded, size: 32, color: Colors.white),
+              child: const KalaiIcon(KalaiIcons.clear,
+                  size: 32, color: Colors.white),
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(

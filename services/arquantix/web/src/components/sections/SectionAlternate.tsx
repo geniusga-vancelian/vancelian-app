@@ -1,3 +1,8 @@
+// i18n-allow-file: showcase /figma uniquement (jamais rendu en prod publique).
+// Ce composant est conservé pour le maquettage interne (cf. /figma/page.tsx) ;
+// son contenu marketing en EN est inline volontairement et n'est pas pris en
+// compte par le garde-fou i18n du site public (siteHardcodedStringsScanner).
+// @deprecated Pour un rendu en prod, utiliser une section CMS (Page + Section).
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/Container";

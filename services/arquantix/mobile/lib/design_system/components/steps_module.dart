@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/app_colors.dart';
+import '../atoms/app_radius.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
-import 'app_section_title.dart';
-import 'content_card_compact.dart';
+import 'ds_timeline_step_dot.dart';
 import 'step_item.dart';
 
-/// Largeur de la colonne timeline (bloc date 3 lignes + ligne verticale).
-const double _timelineColumnWidth = 44;
-
-/// Espacement vertical entre deux étapes (sous la card).
-const double _stepBottomPadding = 18;
-
-/// Largeur de la ligne verticale du chemin.
-const double _timelineLineWidth = 2;
-
-/// Module "Steps" (Itinerary / Étapes) : liste verticale d’étapes avec timeline à gauche et cartes plates à droite.
+/// Module "Steps" (itinéraire) : carte arrondie, timeline pointillée + texte direct.
+///
+/// Design aligné Figma « Funding Timeline » :
+/// - Carte blanche `AppRadius.xxl`, padding intérieur **16 px**
+/// - Pastille gauche **20×20 px**, alignée sur la **1re ligne** du titre (haut de ligne)
+/// - **28 px** entre la description d’une étape et le titre de la suivante ([AppSpacing.s7])
+/// - Ligne verticale **pointillée** entre les pastilles ; **aucun** segment sous la dernière pastille
+/// - Tag « EN COURS » : **4 px** après le titre (même ligne si place), `labelEmphasized` + fond clair
+/// - Titre = `itemPrimary`, description = `itemSupporting`, gap titre → texte **4 px**
 class StepsModuleWidget extends StatelessWidget {
   const StepsModuleWidget({
     required this.title,
@@ -28,29 +27,17 @@ class StepsModuleWidget extends StatelessWidget {
     this.horizontalMargin,
   });
 
-  /// Titre du module (ex. "Itinerary").
   final String title;
-
-  /// Sous-titre ou résumé optionnel sous le titre.
   final String? subtitle;
-
-  /// Info à droite du header (ex. "5 Places").
   final String? rightLabel;
-
-  /// Liste des étapes.
   final List<StepItem> steps;
-
-  /// Callback au tap sur une card (index 0-based).
   final void Function(int index)? onStepTap;
-
-  /// Marge horizontale (null = utiliser la constante du dashboard).
   final double? horizontalMargin;
 
   static const double _defaultHorizontalMargin = 16;
 
-  /// Crée un [StepsModuleWidget] à partir d’un JSON (chargement dynamique de modules).
-  /// Structure attendue : { "type": "steps", "title": "...", "rightLabel"?:"...", "items": [...] }
-  static StepsModuleWidget? fromJson(dynamic json, {void Function(int index)? onStepTap}) {
+  static StepsModuleWidget? fromJson(dynamic json,
+      {void Function(int index)? onStepTap}) {
     if (json is! Map<String, dynamic>) return null;
     if (json['type'] != 'steps') return null;
     final title = json['title'] as String?;
@@ -71,206 +58,273 @@ class StepsModuleWidget extends StatelessWidget {
     if (steps.isEmpty) {
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: margin),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              'No steps yet',
-              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
-            ),
-          ],
+        child: Text(
+          'No steps yet',
+          style:
+              AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
         ),
       );
     }
 
-    final stepRows = steps.asMap().entries.map((entry) {
-      final index = entry.key;
-      final step = entry.value;
-      final resolvedIndex = step.index ?? (index + 1);
-      final isLast = index == steps.length - 1;
-      return _StepRow(
-        step: step.withIndex(resolvedIndex),
-        isLast: isLast,
-        onTap: onStepTap != null ? () => onStepTap!(index) : null,
-      );
-    }).toList();
+    final statuses = _resolveStatuses(steps);
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: margin),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildHeader(context),
-          const SizedBox(height: AppSpacing.lg),
-          Stack(
-            children: [
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: _timelineColumnWidth,
-                child: Center(
-                  child: Container(
-                    width: _timelineLineWidth,
-                    color: AppColors.border,
-                    height: double.infinity,
-                  ),
-                ),
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: stepRows,
-              ),
-            ],
-          ),
-        ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(AppRadius.xxl),
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 20,
+              spreadRadius: -10,
+              color: Color(0x1F000000),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(AppSpacing.s4), // 16 px
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List.generate(steps.length, (i) {
+            return _StepRow(
+              step: steps[i],
+              status: statuses[i],
+              isFirst: i == 0,
+              isLast: i == steps.length - 1,
+              onTap: onStepTap != null ? () => onStepTap!(i) : null,
+            );
+          }),
+        ),
       ),
     );
   }
-
-  Widget _buildHeader(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppSectionTitle(title),
-              if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  subtitle!,
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
-        ),
-        if (rightLabel != null && rightLabel!.trim().isNotEmpty) ...[
-          const SizedBox(width: AppSpacing.md),
-          Text(
-            rightLabel!,
-            style: AppTypography.meta,
-          ),
-        ],
-      ],
-    );
-  }
 }
 
-/// Parse une date type "15 mars 2025" en (jour, mois abrégé, année). Retourne null si format invalide.
-({String day, String month, String year})? _parseDateToDayMonthYear(String? dateStr) {
-  if (dateStr == null || dateStr.trim().isEmpty) return null;
-  final parts = dateStr.trim().split(RegExp(r'\s+'));
-  if (parts.length < 3) return null;
-  final day = parts[0];
-  final monthRaw = parts[1];
-  final year = parts[2];
-  if (day.isEmpty || monthRaw.isEmpty || year.isEmpty) return null;
-  final monthAbbr = monthRaw.length >= 3
-      ? '${monthRaw[0].toUpperCase()}${monthRaw.substring(1, 3).toLowerCase()}'
-      : monthRaw;
-  return (day: day, month: monthAbbr, year: year);
+// ---------------------------------------------------------------------------
+// Résolution des statuts
+// ---------------------------------------------------------------------------
+
+List<DsTimelineStepStatus> _resolveStatuses(List<StepItem> steps) {
+  final firstPending = steps.indexWhere((s) => !s.isCompleted);
+  return List<DsTimelineStepStatus>.generate(steps.length, (i) {
+    if (steps[i].isCompleted) return DsTimelineStepStatus.completed;
+    if (firstPending == -1) return DsTimelineStepStatus.completed;
+    if (i == firstPending) return DsTimelineStepStatus.active;
+    return DsTimelineStepStatus.upcoming;
+  });
 }
 
-/// Une ligne : timeline (bloc date 3 lignes + ligne) + card compacte.
+// ---------------------------------------------------------------------------
+// Step row
+// ---------------------------------------------------------------------------
+
+/// Diamètre exact de la pastille d’étape (avatar gauche).
+const double _kDotSize = 20;
+
+/// Espace horizontal entre la colonne timeline et le texte.
+const double _kDotTextGap = 16;
+
 class _StepRow extends StatelessWidget {
   const _StepRow({
     required this.step,
+    required this.status,
+    required this.isFirst,
     required this.isLast,
     this.onTap,
   });
 
   final StepItem step;
+  final DsTimelineStepStatus status;
+  final bool isFirst;
   final bool isLast;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return IntrinsicHeight(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TimelineSpine(status: status, isFirst: isFirst, isLast: isLast),
+            const SizedBox(width: _kDotTextGap),
+            Expanded(child: _buildContent()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    final desc = step.description?.trim();
+    final statusLabel = step.date?.trim();
+    final titleStyle = AppTypography.itemPrimary.copyWith(
+      color: AppColors.textPrimary,
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : AppSpacing.s7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Titre + tag « EN COURS » : 4 px après le titre (Wrap), pas poussé à droite.
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.s1,
+            runSpacing: AppSpacing.s1,
             children: [
-          SizedBox(
-            width: _timelineColumnWidth,
-            child: Center(child: _StepDateBlock(step: step)),
-          ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: ContentCardCompact(
-                    dateLabel: null,
-                    title: step.title,
-                    description: step.description,
-                    tags: step.tags,
-                    imageUrl: step.imageUrl,
-                    alwaysShowImageArea: true,
-                    onTap: onTap,
-                  ),
+              Text(
+                step.title,
+                style: titleStyle,
+                strutStyle: StrutStyle.fromTextStyle(
+                  titleStyle,
+                  forceStrutHeight: true,
                 ),
               ),
+              if (status == DsTimelineStepStatus.active) const _EnCoursTag(),
             ],
           ),
-        ),
-        if (!isLast) const SizedBox(height: _stepBottomPadding),
-      ],
+
+          if (statusLabel != null && statusLabel.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.s1),
+            Text(
+              statusLabel,
+              style: AppTypography.itemSupporting.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+          if (desc != null && desc.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.s1),
+            Text(
+              desc,
+              style: AppTypography.itemSupporting.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
 
-/// Bloc date 3 lignes : Jour (agrandi + gras), Mois (plus grand, majuscules), Année (comme le jour).
-/// Centré horizontalement sur la ligne et verticalement avec la carte.
-class _StepDateBlock extends StatelessWidget {
-  const _StepDateBlock({required this.step});
-
-  final StepItem step;
-
-  static const double _lineHeight = 1.2;
+/// Tag « EN COURS » : label/Emphasized SM + fond gris clair (Figma Gray5 fill).
+class _EnCoursTag extends StatelessWidget {
+  const _EnCoursTag();
 
   @override
   Widget build(BuildContext context) {
-    final parsed = _parseDateToDayMonthYear(step.date);
-    final day = parsed?.day ?? step.dayLabel ?? '-';
-    final month = (parsed?.month ?? '-').toUpperCase();
-    final year = parsed?.year ?? '-';
-
-    final dayStyle = AppTypography.titleSmall.copyWith(
-      color: AppColors.textSecondary,
-      height: _lineHeight,
-      fontWeight: FontWeight.w700,
-    );
-    final monthStyle = AppTypography.titleSmall.copyWith(
-      color: AppColors.textSecondary,
-      height: _lineHeight,
-      fontWeight: FontWeight.w600,
-    );
-    final yearStyle = AppTypography.bodySmall.copyWith(
-      color: AppColors.textSecondary,
-      height: _lineHeight,
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(day, style: dayStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
-        Text(month, style: monthStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
-        Text(year, style: yearStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.progressTrackLight,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Text(
+          'EN COURS',
+          style: AppTypography.labelEmphasized.copyWith(
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ),
     );
   }
 }
 
+// ---------------------------------------------------------------------------
+// Timeline : pastille 20×20 en haut + pointillés (jamais sous la dernière pastille)
+// ---------------------------------------------------------------------------
+
+class _TimelineSpine extends StatelessWidget {
+  const _TimelineSpine({
+    required this.status,
+    required this.isFirst,
+    required this.isLast,
+  });
+
+  final DsTimelineStepStatus status;
+  final bool isFirst;
+  final bool isLast;
+
+  static double get _lineLeft => (_kDotSize - 2) / 2;
+
+  static double get _dotCenterY => _kDotSize / 2;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: _kDotSize,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final h = constraints.maxHeight;
+          return SizedBox(
+            width: _kDotSize,
+            height: h.isFinite ? h : _kDotSize,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Segment au-dessus de la pastille (depuis l’étape précédente jusqu’au centre du point).
+                if (!isFirst)
+                  Positioned(
+                    left: _lineLeft,
+                    top: 0,
+                    width: 2,
+                    height: _dotCenterY,
+                    child: CustomPaint(painter: _DottedLinePainter()),
+                  ),
+                // Segment sous la pastille (du centre du point vers l’étape suivante) — absent sur la dernière ligne.
+                if (!isLast)
+                  Positioned(
+                    left: _lineLeft,
+                    top: _dotCenterY,
+                    width: 2,
+                    bottom: 0,
+                    child: CustomPaint(painter: _DottedLinePainter()),
+                  ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  width: _kDotSize,
+                  height: _kDotSize,
+                  child: DsTimelineStepDot(
+                    status: status,
+                    size: _kDotSize,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Ligne verticale en points rapprochés (pas un trait plein).
+class _DottedLinePainter extends CustomPainter {
+  _DottedLinePainter();
+
+  static const double _dotRadius = 1.1;
+  static const double _gap = 2.5;
+  static final Paint _paint = Paint()..color = AppColors.border;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    var y = _dotRadius;
+    while (y < size.height - _dotRadius) {
+      canvas.drawCircle(Offset(cx, y), _dotRadius, _paint);
+      y += _dotRadius * 2 + _gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}

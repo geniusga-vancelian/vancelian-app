@@ -50,46 +50,7 @@ services:
       - arquantix-network
     restart: unless-stopped
 
-  # Strapi CMS (Admin)
-  arquantix-cms:
-    image: node:20-alpine
-    working_dir: /srv/app
-    environment:
-      DATABASE_CLIENT: ${CMS_DATABASE_CLIENT:-sqlite}
-      DATABASE_FILENAME: .tmp/data.db
-      HOST: 0.0.0.0
-      PORT: 1337
-      APP_KEYS: ${CMS_APP_KEYS:-toBeModified1,toBeModified2,toBeModified3,toBeModified4}
-      API_TOKEN_SALT: ${CMS_API_TOKEN_SALT:-toBeModified}
-      ADMIN_JWT_SECRET: ${CMS_ADMIN_JWT_SECRET:-toBeModified}
-      JWT_SECRET: ${CMS_JWT_SECRET:-toBeModified}
-      TRANSFER_TOKEN_SALT: ${CMS_TRANSFER_TOKEN_SALT:-toBeModified}
-      NODE_ENV: ${NODE_ENV:-development}
-    ports:
-      - "${CMS_PORT:-1337}:1337"
-    volumes:
-      - ./services/arquantix/cms:/srv/app
-    command: >
-      sh -c "
-        if [ ! -f package.json ]; then
-          echo 'Initializing Strapi (this may take a few minutes)...';
-          npx --yes create-strapi-app@latest . --quickstart --no-run --skip-cloud || true;
-        fi;
-        if [ -f package.json ] && [ ! -d node_modules ]; then
-          echo 'Installing dependencies...';
-          npm install;
-        fi;
-        if [ -f package.json ]; then
-          echo 'Starting Strapi...';
-          npm run develop;
-        else
-          echo 'Error: Strapi initialization failed. Check logs.';
-          sleep 3600;
-        fi
-      "
-    networks:
-      - arquantix-network
-    restart: unless-stopped
+  # Strapi (arquantix-cms) retiré — même stack que recovery ; cf. docker-compose.arquantix-recovery.yml.
 
   # Next.js Site Vitrine
   arquantix-web:
@@ -106,6 +67,8 @@ services:
       - "host.docker.internal:host-gateway"
     # Charge les variables du .env à la racine du repo (ex. ADMIN_LOGIN0_BG_VIDEO) ;
     # les clés ci-dessous écrasent en cas de doublon.
+    # Médias (Prisma, R2) : R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME
+    # doivent être dans ce .env racine — sinon upload médias et GET /api/admin/media/*/file répondent 503.
     env_file:
       - .env
     environment:
@@ -119,8 +82,6 @@ services:
       # Routes API Next (server) — résolution via getBackendBaseUrl() (priorité BACKEND_API_URL → …)
       BACKEND_API_URL: ${BACKEND_API_URL:-http://arquantix-api:8000}
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://arquantix-api:8000}
-      NEXT_PUBLIC_STRAPI_URL: ${NEXT_PUBLIC_STRAPI_URL:-http://localhost:1337}
-      NEXT_PUBLIC_STRAPI_API_URL: ${NEXT_PUBLIC_STRAPI_API_URL:-http://localhost:1337/api}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
       # Vidéo fond /admin/login0 — lu au runtime (pas besoin de rebuild si tu utilises ADMIN_LOGIN0_BG_VIDEO)
@@ -133,8 +94,6 @@ services:
       - /app/node_modules
       - /app/.next
     depends_on:
-      arquantix-cms:
-        condition: service_started
       arquantix-api:
         condition: service_started
     networks:

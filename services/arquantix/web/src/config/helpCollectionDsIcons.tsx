@@ -1,0 +1,102 @@
+'use client'
+
+import type { LucideIcon } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  Bell,
+  BookOpen,
+  Briefcase,
+  Building2,
+  Calculator,
+  ClipboardList,
+  Clock,
+  CreditCard,
+  DollarSign,
+  FileText,
+  Gift,
+  Globe,
+  Heart,
+  HelpCircle,
+  Home,
+  Info,
+  Key,
+  Landmark,
+  Lightbulb,
+  Lock,
+  Mail,
+  MapPin,
+  Megaphone,
+  Package,
+  Percent,
+  Phone,
+  PieChart,
+  Receipt,
+  Search,
+  Settings,
+  Shield,
+  Sparkles,
+  Star,
+  TrendingUp,
+  Truck,
+  Umbrella,
+  User,
+  Users,
+  Wallet,
+  Zap,
+} from 'lucide-react'
+
+/** Clés persistées en DB (`HelpCollection.iconKey`) — alignées avec les préfixes DS admin (Lucide) et le mapping Flutter (`help_center_screen.dart`). */
+export type HelpCollectionIconKey = (typeof HELP_COLLECTION_DS_ICONS)[number]['key']
+
+export const HELP_COLLECTION_DS_ICONS: {
+  key: string
+  label: string
+  Icon: LucideIcon
+}[] = [
+  { key: 'article', label: 'Article', Icon: FileText },
+  { key: 'book', label: 'Livre', Icon: BookOpen },
+  { key: 'help-circle', label: 'Aide', Icon: HelpCircle },
+  { key: 'account-balance', label: 'Banque / compte', Icon: Landmark },
+  { key: 'shield', label: 'Sécurité', Icon: Shield },
+  { key: 'credit-card', label: 'Carte', Icon: CreditCard },
+  { key: 'swap', label: 'Transfert', Icon: ArrowRightLeft },
+  { key: 'trending-up', label: 'Investissement', Icon: TrendingUp },
+  { key: 'wallet', label: 'Portefeuille', Icon: Wallet },
+  { key: 'users', label: 'Utilisateurs', Icon: Users },
+  { key: 'user', label: 'Profil', Icon: User },
+  { key: 'bell', label: 'Notifications', Icon: Bell },
+  { key: 'settings', label: 'Paramètres', Icon: Settings },
+  { key: 'home', label: 'Accueil', Icon: Home },
+  { key: 'star', label: 'Favori', Icon: Star },
+  { key: 'zap', label: 'Éclair', Icon: Zap },
+  { key: 'lock', label: 'Verrou', Icon: Lock },
+  { key: 'key', label: 'Clé', Icon: Key },
+  { key: 'mail', label: 'E-mail', Icon: Mail },
+  { key: 'phone', label: 'Téléphone', Icon: Phone },
+  { key: 'globe', label: 'International', Icon: Globe },
+  { key: 'pie-chart', label: 'Répartition', Icon: PieChart },
+  { key: 'briefcase', label: 'Briefcase', Icon: Briefcase },
+  { key: 'calculator', label: 'Calcul', Icon: Calculator },
+  { key: 'clipboard-list', label: 'Liste', Icon: ClipboardList },
+  { key: 'clock', label: 'Temps', Icon: Clock },
+  { key: 'building', label: 'Immeuble', Icon: Building2 },
+  { key: 'landmark', label: 'Landmark', Icon: Landmark },
+  { key: 'receipt', label: 'Reçu', Icon: Receipt },
+  { key: 'percent', label: 'Pourcent', Icon: Percent },
+  { key: 'dollar-sign', label: 'Dollar', Icon: DollarSign },
+  { key: 'gift', label: 'Cadeau', Icon: Gift },
+  { key: 'heart', label: 'Cœur', Icon: Heart },
+  { key: 'info', label: 'Info', Icon: Info },
+  { key: 'lightbulb', label: 'Idée', Icon: Lightbulb },
+  { key: 'map-pin', label: 'Lieu', Icon: MapPin },
+  { key: 'megaphone', label: 'Annonce', Icon: Megaphone },
+  { key: 'package', label: 'Colis', Icon: Package },
+  { key: 'search', label: 'Recherche', Icon: Search },
+  { key: 'sparkles', label: 'Sparkles', Icon: Sparkles },
+  { key: 'truck', label: 'Livraison', Icon: Truck },
+  { key: 'umbrella', label: 'Protection', Icon: Umbrella },
+]
+
+export function helpCollectionIconMeta(key: string) {
+  return HELP_COLLECTION_DS_ICONS.find((e) => e.key === key)
+}

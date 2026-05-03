@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../design_system/design_system.dart';
 import '../../../security/passcode/presentation/screens/passcode_setup_screen.dart';
@@ -25,6 +26,14 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
               const AppPageTitle('Design system'),
               const SizedBox(height: AppSpacing.xxl),
               _Section('Sécurité — Code PIN & biométrie', const _SecurityPinSection()),
+
+              // ══════════════════════════════════════════════
+              // ░░░  ICONOGRAPHIE  ░░░
+              // ══════════════════════════════════════════════
+              _Section(
+                'Iconographie — KALAI (line)',
+                const _KalaiIconsGallerySection(),
+              ),
 
               // ══════════════════════════════════════════════
               // ░░░  ATOMES  ░░░
@@ -95,12 +104,18 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
               _Section('Composants — TransactionListCard', _buildTransactionListCardSection()),
               _Section('Composants — PropertyCard', _buildPropertyCardSection()),
               _Section('Composants — InvestmentCard', _buildInvestmentCardSection()),
+              _Section('Composants — Localisation (Vault)', _buildLocalisationSection()),
 
               // ── Marketing ──
               _Section('Composants — Marketing Card', _buildMarketingCardsSection()),
               _Section('Composants — Marketing Card Portrait', _buildMarketingCardPortraitSection()),
               _Section('Composants — Marketing Cards (carousel)', _buildMarketingCardsCarouselSection()),
               _Section('Composants — Marketing Cards (sliding)', _buildMarketingCardsSlidingSection()),
+              _Section('Composants — How it works (carousel + bullets bas)', _buildHowItWorksCarouselSection()),
+              _Section(
+                'Composants — Timeline & barre stories (export Figma)',
+                _buildFigmaTimelineStoriesSection(),
+              ),
 
               // ── Blog / News ──
               _Section('Composants — Blog A la une', _buildBlogALaUneSection()),
@@ -1176,37 +1191,151 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
   }
 
   Widget _buildListCardSection() {
+    final mutedStyle =
+        AppTypography.bodySmall.copyWith(color: AppColors.textMuted);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ListCard(
-          icon: const IconContainer(
-            child: Icon(Icons.currency_bitcoin, size: 17, color: Color(0xFF8E8E93)),
-          ),
-          title: 'Panier Crypto',
-          description: 'Cum saepe multa, tum memini domi in hemicyclio sedentem',
-          onTap: () {},
+        // ── Cas 1 : titres 1 et 2 lignes, sans description, AVEC chevron ──
+        Text(
+          'Cas 1 — Module multi-lignes, titres 1 & 2 lignes, sans description, avec chevron',
+          style: mutedStyle,
         ),
-        const SizedBox(height: AppSpacing.md),
-        ListCard(
-          icon: IconContainer(
-            backgroundColor: const Color(0xFFE5F5FF),
-            child: Container(width: 16, height: 16, decoration: const BoxDecoration(color: AppColors.blue, shape: BoxShape.circle)),
-          ),
-          title: 'Sans chevron',
-          description: 'Cette carte n\'a pas de flèche à droite',
-          showChevron: false,
+        const SizedBox(height: AppSpacing.sm),
+        ListCardModule(
+          items: [
+            ListCardItem(
+              icon: Icons.shield_outlined,
+              title: 'Sécurité du compte',
+              showChevron: true,
+              onTap: () {},
+            ),
+            ListCardItem(
+              icon: Icons.notifications_none_rounded,
+              title:
+                  'Notifications push, e-mails et alertes en temps réel sur mes opérations',
+              showChevron: true,
+              onTap: () {},
+            ),
+            ListCardItem(
+              icon: Icons.language_rounded,
+              title: 'Langue & région',
+              showChevron: true,
+              onTap: () {},
+            ),
+            ListCardItem(
+              icon: Icons.credit_card_rounded,
+              title:
+                  'Moyens de paiement enregistrés et abonnements de prélèvement automatique',
+              showChevron: true,
+              onTap: () {},
+            ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.md),
-        ListCard(
-          icon: IconContainer(
-            size: IconContainerSize.lg,
-            backgroundColor: const Color(0xFFE5FFE5),
-            child: Container(width: 24, height: 24, decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle)),
-          ),
-          title: 'Grande icône',
-          description: 'Avec un container d\'icône plus grand',
-          onTap: () {},
+        const SizedBox(height: AppSpacing.xl),
+
+        // ── Cas 2 : titres 1 et 2 lignes, sans description, SANS chevron ──
+        Text(
+          'Cas 2 — Module multi-lignes, titres 1 & 2 lignes, sans description, sans chevron',
+          style: mutedStyle,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ListCardModule(
+          items: [
+            ListCardItem(
+              icon: Icons.check_circle_outline_rounded,
+              iconColor: AppColors.green,
+              avatarBackgroundColor: const Color(0xFFE5FFE5),
+              title: 'Identité vérifiée',
+              showChevron: false,
+            ),
+            ListCardItem(
+              icon: Icons.lock_outline_rounded,
+              title:
+                  'Authentification à deux facteurs activée sur tous mes appareils de confiance',
+              showChevron: false,
+            ),
+            const ListCardItem(
+              icon: Icons.email_outlined,
+              title: 'Adresse e-mail confirmée',
+              showChevron: false,
+            ),
+            const ListCardItem(
+              icon: Icons.phone_iphone_rounded,
+              title:
+                  'Numéro de téléphone vérifié et associé au compte principal',
+              showChevron: false,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        // ── Cas 3 : titres 1 ligne, AVEC description, AVEC chevron ──
+        Text(
+          'Cas 3 — Module multi-lignes, titres 1 ligne, avec description, avec chevron',
+          style: mutedStyle,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ListCardModule(
+          items: [
+            ListCardItem(
+              icon: Icons.account_balance_wallet_outlined,
+              title: 'Mes portefeuilles',
+              description: 'Suivre la valeur totale de vos actifs en temps réel',
+              showChevron: true,
+              onTap: () {},
+            ),
+            ListCardItem(
+              icon: Icons.swap_horiz_rounded,
+              title: 'Échanger des cryptos',
+              description: 'Convertir BTC, ETH ou EUR en quelques secondes',
+              showChevron: true,
+              onTap: () {},
+            ),
+            ListCardItem(
+              icon: Icons.savings_outlined,
+              title: 'Projets d\'épargne',
+              description: 'Démarrez votre premier projet d\'investissement',
+              showChevron: true,
+              onTap: () {},
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        // ── Cas 4 : sans avatar, avec chevron (Centre d'aide : catégories,
+        //          articles…) ──
+        Text(
+          'Cas 4 — Sans avatar, avec chevron (Centre d\'aide : catégories / articles)',
+          style: mutedStyle,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ListCardModule(
+          items: [
+            ListCardItem(
+              title: 'Comment vérifier mon identité ?',
+              showChevron: true,
+              onTap: () {},
+            ),
+            ListCardItem(
+              title:
+                  'Que faire si je ne reçois pas le code de confirmation par SMS ou e-mail ?',
+              showChevron: true,
+              onTap: () {},
+            ),
+            ListCardItem(
+              title: 'Délais de virement SEPA',
+              showChevron: true,
+              onTap: () {},
+            ),
+            ListCardItem(
+              title:
+                  'Frais appliqués lors de l\'achat ou de la vente de cryptomonnaies',
+              showChevron: true,
+              onTap: () {},
+            ),
+          ],
         ),
       ],
     );
@@ -1223,7 +1352,8 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
               iconColor: const Color(0xFF8E8E93),
               avatarBackgroundColor: const Color(0xFFE5E5EA),
               badgeStatus: TransactionBadgeStatus.pending,
-              title: 'To Starbuck coffee',
+              title:
+                  'Paiement marchand Starbucks Reserve Roastery — Boulevard Haussmann, Paris 9ème — café latte et croissant aux amandes',
               subtitle: '29 Feb, 20:37 · Merchant',
               amount: '€27.19',
               amountPrefix: '-',
@@ -1311,6 +1441,64 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.xl),
+        Text(
+          'Titres longs — l\'avatar reste à sa position d\'origine (alignée avec la 1ère ligne du titre)',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TransactionListCard(
+          items: [
+            TransactionListItemData(
+              icon: Icons.storefront_rounded,
+              iconColor: const Color(0xFF8E8E93),
+              avatarBackgroundColor: const Color(0xFFE5E5EA),
+              badgeStatus: TransactionBadgeStatus.pending,
+              title:
+                  'Paiement marchand Starbucks Reserve Roastery — Boulevard Haussmann, Paris 9ème — café latte vanille et croissant aux amandes (commande #45821)',
+              subtitle: '29 Feb, 20:37 · Merchant',
+              amount: '€27.19',
+              amountPrefix: '-',
+              onTap: () {},
+            ),
+            TransactionListItemData(
+              initial: 'M',
+              iconColor: const Color(0xFF8E8E93),
+              avatarBackgroundColor: const Color(0xFFE5E5EA),
+              badgeStatus: TransactionBadgeStatus.completed,
+              title:
+                  'Virement instantané SEPA vers Marc Léopold pour remboursement dîner restaurant Le Procope',
+              subtitle: '29 Feb, 20:37',
+              amount: '€127.50',
+              amountPrefix: '-',
+              onTap: () {},
+            ),
+            TransactionListItemData(
+              icon: Icons.arrow_downward_rounded,
+              iconColor: Colors.white,
+              avatarBackgroundColor: const Color(0xFF22C55E),
+              badgeStatus: TransactionBadgeStatus.completed,
+              title:
+                  'Réception salaire mensuel — Vancelian SAS — virement automatique récurrent',
+              subtitle: '28 Feb, 14:12 · SEPA',
+              amount: '€3 250.00',
+              amountPrefix: '+',
+              amountColor: const Color(0xFF22C55E),
+              onTap: () {},
+            ),
+            TransactionListItemData(
+              icon: Icons.euro_rounded,
+              iconColor: Colors.white,
+              avatarBackgroundColor: AppColors.blue,
+              badgeStatus: TransactionBadgeStatus.completed,
+              title: 'Référence courte',
+              subtitle: '28 Feb, 09:00 · Référence d\'1 ligne pour comparaison',
+              amount: '€42.00',
+              amountPrefix: '-',
+              onTap: () {},
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1353,6 +1541,32 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
       progress: 0.6,
       onInvest: () {},
       onFavorite: () {},
+    );
+  }
+
+  /// Embed public Google Maps (même contrat que le web : `output=embed` ou `/maps/embed`).
+  static const String _kDsLocalisationDemoEmbedUrl =
+      'https://www.google.com/maps?q=48.8566,2.3522&z=14&hl=fr&output=embed';
+
+  Widget _buildLocalisationSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('LocalisationCard', style: AppTypography.itemPrimary),
+        const SizedBox(height: AppSpacing.sm),
+        const LocalisationCard(
+          embedUrl: _kDsLocalisationDemoEmbedUrl,
+          complement: 'Complément d’adresse (étage, accès, etc.)',
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        Text('LocalisationModule', style: AppTypography.itemPrimary),
+        const SizedBox(height: AppSpacing.sm),
+        const LocalisationModule(
+          moduleTitle: 'Localisation',
+          description: '12 rue des Champs, 75001 Paris',
+          embedUrl: _kDsLocalisationDemoEmbedUrl,
+        ),
+      ],
     );
   }
 
@@ -1425,6 +1639,39 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildHowItWorksCarouselSection() {
+    final items = [
+      HowItWorksCarouselItem(
+        stepLabel: 'STEP 1',
+        title: 'Incenderat autem audaces usque ad insaniam',
+        imageUrl: 'https://picsum.photos/300/300?random=20',
+        ctaLabel: 'Call to action',
+        onCtaTap: () {},
+        onTap: () {},
+      ),
+      HowItWorksCarouselItem(
+        stepLabel: 'STEP 2',
+        title: 'Confirmez votre identité en quelques clics',
+        imageUrl: 'https://picsum.photos/300/300?random=21',
+        ctaLabel: 'Call to action',
+        onCtaTap: () {},
+        onTap: () {},
+      ),
+      HowItWorksCarouselItem(
+        stepLabel: 'STEP 3',
+        title: 'Activez votre coffre et recevez vos accès',
+        imageUrl: 'https://picsum.photos/300/300?random=22',
+        ctaLabel: 'Call to action',
+        onCtaTap: () {},
+        onTap: () {},
+      ),
+    ];
+    return HowItWorksCarousel(
+      title: 'How it works',
+      items: items,
+    );
+  }
+
   Widget _buildMarketingCardsSlidingSection() {
     final items = [
       MarketingCardsCarouselItem(
@@ -1449,6 +1696,89 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
     return MarketingCardsSlidingModule(
       title: 'À la une',
       items: items,
+    );
+  }
+
+  /// Pastilles + barres segments (ZIP Figma → Flutter) + mini module Steps.
+  Widget _buildFigmaTimelineStoriesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Pastilles (completed / active / upcoming)',
+          style: AppTypography.labelSmall.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        const Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.sm,
+          children: [
+            DsTimelineStepDot(status: DsTimelineStepStatus.completed),
+            DsTimelineStepDot(status: DsTimelineStepStatus.active),
+            DsTimelineStepDot(status: DsTimelineStepStatus.upcoming),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Text(
+          'Barre type stories — onSurface (fond page)',
+          style: AppTypography.labelSmall.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        const DsStorySegmentBar(
+          segmentCount: 4,
+          activeIndex: 1,
+          variant: DsStorySegmentBarVariant.onSurface,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'Barre type stories — onMedia (sur image sombre)',
+          style: AppTypography.labelSmall.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ColoredBox(
+          color: AppColors.gray5,
+          child: const Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: DsStorySegmentBar(
+              segmentCount: 3,
+              activeIndex: 2,
+              variant: DsStorySegmentBarVariant.onMedia,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        StepsModuleWidget(
+          title: 'Itinéraire',
+          horizontalMargin: 0,
+          steps: const [
+            StepItem(
+              title: 'Période de souscription',
+              date: 'Over',
+              isCompleted: true,
+            ),
+            StepItem(
+              title: 'Clôture de la période de souscription',
+              date: 'Over',
+              isCompleted: true,
+            ),
+            StepItem(
+              title: 'Versement des intérêts*',
+              description:
+                  'Tous les mois après la date de clôture de la période de souscription.',
+            ),
+            StepItem(
+              title: 'À partir de 6 mois',
+              description:
+                  'Les frais de sortie anticipée seront de 5 %, que vous choisissiez de quitter partiellement ou totalement le programme.',
+            ),
+            StepItem(
+              title: 'À partir de 18 mois',
+              description:
+                  'Les frais de sortie anticipée seront sans frais, que vous choisissiez de quitter partiellement ou totalement le programme.',
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -2022,6 +2352,35 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
         const ArticleDocumentCard(
           title: 'Titre du document',
           subtitle: 'PDF - 3.4Mo',
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        Text('MediaImageCarouselStory', style: AppTypography.itemPrimary),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Tap = image suivante (sens unique). Swipe = avant / arrière. '
+          'Loader pendant le chargement de chaque image.',
+          style: AppTypography.itemSupporting.copyWith(color: AppColors.gray),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        const MediaImageCarouselStory(
+          items: [
+            MediaImageCarouselItem(
+              url: 'https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0?w=1200',
+              alt: 'Mountain landscape',
+            ),
+            MediaImageCarouselItem(
+              url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200',
+              alt: 'Forest path',
+            ),
+            MediaImageCarouselItem(
+              url: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200',
+              alt: 'Sunset over hills',
+            ),
+            MediaImageCarouselItem(
+              url: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200',
+              alt: 'Forest from below',
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.xxl),
         Text('ArticleAuthorRow', style: AppTypography.itemPrimary),
@@ -3093,6 +3452,10 @@ Widget _buildAlertSection() {
 }
 
 Widget _buildDsSuccessIconSection() {
+  final bulletStyle = AppTypography.bodyRegular.copyWith(
+    color: AppColors.black,
+    height: 1.45,
+  );
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -3113,6 +3476,31 @@ Widget _buildDsSuccessIconSection() {
           const SizedBox(width: AppSpacing.sm),
           const DsSuccessIcon(),
         ],
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      Text(
+        'DsSuccessBulletItem — avatar à gauche, texte aligné sur la 1re ligne '
+        '(utilisé par les blocs BULLET_LIST des articles).',
+        style: AppTypography.itemSupporting.copyWith(color: AppColors.gray),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      DsSuccessBulletItem(
+        text: 'Item court : avatar parfaitement aligné au centre vertical de la ligne.',
+        style: bulletStyle,
+      ),
+      const SizedBox(height: AppSpacing.s2),
+      DsSuccessBulletItem(
+        text:
+            'Item plus long qui passe sur deux ou trois lignes pour vérifier que la '
+            'gouttière reste droite et que le texte s’écoule sous l’avatar sans le '
+            'décaler — l’icône doit rester calée sur la première ligne uniquement.',
+        style: bulletStyle,
+      ),
+      const SizedBox(height: AppSpacing.s2),
+      DsSuccessBulletItem(
+        text: 'Variante avec un avatar 20 px (paramètre iconSize).',
+        style: bulletStyle,
+        iconSize: 20,
       ),
     ],
   );
@@ -3350,5 +3738,189 @@ class _DsFormCheckboxRowInteractiveDemoState
       );
     }
     return _dsWhiteSelectionModule(children: rows);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ░░░  GALERIE D'ICONES KALAI (LINE)  ░░░
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Galerie filtrable des icones KALAI (line) avec leur nom kebab-case.
+///
+/// Tap court sur une icone : copie dans le presse-papier le nom de la
+/// constante Dart correspondante (ex: `KalaiIcons.add`) prête a être collée
+/// dans le code.
+class _KalaiIconsGallerySection extends StatefulWidget {
+  const _KalaiIconsGallerySection();
+
+  @override
+  State<_KalaiIconsGallerySection> createState() =>
+      _KalaiIconsGallerySectionState();
+}
+
+class _KalaiIconsGallerySectionState extends State<_KalaiIconsGallerySection> {
+  final TextEditingController _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Convertit un nom kebab-case (`add-photo-camera`) vers son identifiant
+  /// Dart camelCase (`addPhotoCamera`), pour cohérence avec `KalaiIcons`.
+  String _toCamel(String name) {
+    final parts = name.split('-');
+    if (parts.isEmpty) return name;
+    final head = parts.first;
+    final tail = parts.skip(1).map((p) {
+      if (p.isEmpty) return '';
+      return p[0].toUpperCase() + p.substring(1);
+    }).join();
+    return '$head$tail';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = KalaiIcons.all.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final q = _query.trim().toLowerCase();
+    final filtered = q.isEmpty
+        ? entries
+        : entries
+            .where(
+              (e) =>
+                  e.key.toLowerCase().contains(q) ||
+                  _toCamel(e.key).toLowerCase().contains(q),
+            )
+            .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${filtered.length} icônes / ${entries.length} — '
+          'tap pour copier `KalaiIcons.<nom>` dans le presse-papier.',
+          style: AppTypography.bodySmRegular
+              .copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppSearchInput(
+          controller: _controller,
+          placeholder: 'Filtrer (ex: arrow, chevron, calendar…)',
+          onChanged: (v) => setState(() => _query = v),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (filtered.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Text(
+              'Aucune icône ne correspond à « $_query ».',
+              style: AppTypography.bodyRegular
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const tileWidth = 92.0;
+              const spacing = AppSpacing.sm;
+              final columns =
+                  (constraints.maxWidth / (tileWidth + spacing)).floor().clamp(2, 8);
+              final cellWidth =
+                  (constraints.maxWidth - (columns - 1) * spacing) / columns;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (final entry in filtered)
+                    SizedBox(
+                      width: cellWidth,
+                      child: _KalaiIconTile(
+                        kebabName: entry.key,
+                        camelName: _toCamel(entry.key),
+                        assetPath: entry.value,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _KalaiIconTile extends StatelessWidget {
+  const _KalaiIconTile({
+    required this.kebabName,
+    required this.camelName,
+    required this.assetPath,
+  });
+
+  final String kebabName;
+  final String camelName;
+  final String assetPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final dartRef = 'KalaiIcons.$camelName';
+    return Tooltip(
+      message: '$kebabName\n$dartRef',
+      preferBelow: false,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: () async {
+            await Clipboard.setData(ClipboardData(text: dartRef));
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Copié : $dartRef'),
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: AppSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(
+                color: AppColors.textPrimary.withValues(alpha: 0.08),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                KalaiIcon(
+                  assetPath,
+                  size: 28,
+                  color: AppColors.textPrimary,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  kebabName,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelRegular.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 10,
+                    height: 1.15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

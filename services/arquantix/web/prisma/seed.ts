@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, ContentStatus, ArticleBlockType } from '@prisma/client'
+import { Prisma, PrismaClient, UserRole, ContentStatus, ArticleBlockType } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 import { seedDsComponents } from './seed-ds-components'
@@ -144,11 +144,28 @@ async function main() {
     },
   })
 
+  // Metadata EN pilote (Phase 2A — table `page_i18n`)
+  await prisma.pageI18n.upsert({
+    where: {
+      pageId_locale: { pageId: homePage.id, locale: 'en' },
+    },
+    update: {
+      title: 'Home (EN)',
+      description: 'Arquantix — EN metadata seed (Phase 2A)',
+    },
+    create: {
+      pageId: homePage.id,
+      locale: 'en',
+      title: 'Home (EN)',
+      description: 'Arquantix — EN metadata seed (Phase 2A)',
+    },
+  })
+
   const sections = [
     { key: 'hero', order: 0 },
     { key: 'features', order: 1 },
     { key: 'projects', order: 2 },
-    { key: 'pricing', order: 3 },
+    { key: 'cta', order: 3 },
     { key: 'footer', order: 4 },
   ]
 
@@ -378,6 +395,80 @@ async function main() {
     console.log(`  ℹ️  Blog article "${blogSlug}" already exists`)
   }
 
+  // Page CMS dédiée aux tests E2E Playwright (multilingue) — voir services/arquantix/web/e2e/
+  console.log('🌱 Seeding E2E smoke CMS page (e2e-smoke)...')
+  const e2eSmokePage = await prisma.page.upsert({
+    where: { slug: 'e2e-smoke' },
+    update: {},
+    create: {
+      slug: 'e2e-smoke',
+      urlPath: '/e2e-smoke',
+      template: 'default',
+      title: 'E2E smoke',
+      description: 'Seed pour tests Playwright (multilingue)',
+    },
+  })
+  const e2eSection = await prisma.section.upsert({
+    where: {
+      pageId_key: {
+        pageId: e2eSmokePage.id,
+        key: 'hero',
+      },
+    },
+    update: {},
+    create: {
+      pageId: e2eSmokePage.id,
+      key: 'hero',
+      order: 0,
+      schemaVersion: 'v1',
+    },
+  })
+  const e2eHeroData = getDefaultSectionData('hero')
+  for (const st of [ContentStatus.DRAFT, ContentStatus.PUBLISHED] as const) {
+    await prisma.sectionContent.upsert({
+      where: {
+        sectionId_locale_status: {
+          sectionId: e2eSection.id,
+          locale: 'fr',
+          status: st,
+        },
+      },
+      update: {},
+      create: {
+        sectionId: e2eSection.id,
+        locale: 'fr',
+        status: st,
+        data: e2eHeroData,
+        ...(cmsUserId !== undefined ? { updatedByUserId: cmsUserId } : {}),
+      },
+    })
+  }
+  console.log('  ✅ e2e-smoke page OK')
+
+  // Footer global FR/EN distincts pour les E2E Playwright (voir e2e/multilingual.spec.ts).
+  // Écrase `global_settings.footer_json` à chaque seed : rééditer depuis l’admin si besoin hors E2E.
+  console.log('🌱 Seeding E2E footer markers (global_settings.footer_json v2)...')
+  const e2eFooterJson: Prisma.InputJsonValue = {
+    version: 2,
+    defaultLocale: 'fr',
+    locales: {
+      fr: { copyright: '© E2E-FOOTER-FR' },
+      en: { copyright: '© E2E-FOOTER-EN' },
+    },
+  }
+  const gsRow = await prisma.globalSettings.findFirst()
+  if (gsRow) {
+    await prisma.globalSettings.update({
+      where: { id: gsRow.id },
+      data: { footerJson: e2eFooterJson },
+    })
+  } else {
+    await prisma.globalSettings.create({
+      data: { footerJson: e2eFooterJson },
+    })
+  }
+  console.log('  ✅ E2E footer markers OK')
+
   console.log('🌱 Seeding Flutter DS + widget builder (dashboard, offers, vaults, bundles)…')
   await seedDsComponents(prisma)
   await seedWidgetBuilderCore(prisma)
@@ -392,10 +483,21 @@ function getDefaultSectionData(key: string): any {
   switch (key) {
     case 'hero':
       return {
-        title: 'Bienvenue sur Arquantix',
-        subtitle: 'Fractional Real Estate, Institutional Rigor.',
-        ctaText: 'En savoir plus',
-        ctaLink: '#',
+        title: 'Premium Real Estate Yield,\nDelivered On-Chain.',
+        subtitle:
+          'Earn reliable yield backed by premium real estate operations. Built with institutional-grade transparency and real asset backing.',
+        ctaText: 'Explore projects',
+        ctaLink: '#projects',
+        backgroundImageOpacity: 1,
+      }
+    case 'hero_secondary':
+      return {
+        title: 'Page title,\nSecond line',
+        subtitle: '',
+        ctaText: 'Explore projects',
+        ctaLink: '#contact',
+        backgroundImageOpacity: 1,
+        hideCta: false,
       }
     case 'features':
       return {
@@ -406,15 +508,46 @@ function getDefaultSectionData(key: string): any {
           { title: 'Service 3', description: 'Description du service 3' },
         ],
       }
+    case 'how_it_works':
+      return {
+        label: 'HOW IT WORKS',
+        title: '',
+        subtitle: '',
+        surface: 'light',
+        steps: [
+          {
+            number: '01',
+            title: 'Access the platform',
+            description:
+              "Create an account or connect a wallet. A simple, secure onboarding. In a few guided steps, you're in.",
+          },
+          {
+            number: '02',
+            title: 'Explore the Projects',
+            description:
+              'Browse curated real estate projects with full documentation: location, expected return, maturity, risk profile. Everything you need to decide with confidence.',
+          },
+          {
+            number: '03',
+            title: 'Deposit and Start Earning',
+            description:
+              'Choose a project, deposit in one click, and start earning immediately. Your returns are backed by real assets.',
+          },
+        ],
+        primaryCtaText: 'START EARNING',
+        primaryCtaHref: '#projects',
+      }
     case 'projects':
       return {
         title: 'Nos Projets',
         items: [],
       }
-    case 'pricing':
+    case 'cta':
       return {
-        title: 'Tarifs',
-        plans: [],
+        title: 'Prêt à investir ?',
+        description: '',
+        primaryButtonText: 'Nous contacter',
+        primaryButtonHref: '#contact',
       }
     case 'footer':
       return {

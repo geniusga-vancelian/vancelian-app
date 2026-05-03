@@ -238,47 +238,55 @@ class _IbanScreenState extends State<IbanScreen> {
   }
 
   Widget _buildBankingDetailsCard(IbanDetails d) {
-    return SettingsCard(
-      sectionTitle: 'Virements SEPA',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        SettingsListItem(
-          compact: true,
-          title: 'Destinataire',
-          trailing: SettingsActionButton(
-            label: d.accountHolderName,
-            actionType: SettingsActionType.copy,
-            onTap: () => _copyToClipboard(d.accountHolderName, 'Destinataire'),
-          ),
-        ),
-        SettingsListItem(
-          compact: true,
-          title: 'Devise',
-          trailing: SettingsActionButton(
-            label: d.currency,
-            actionType: SettingsActionType.copy,
-            onTap: () => _copyToClipboard(d.currency, 'Devise'),
-          ),
-        ),
-        if (d.iban != null)
-          SettingsListItem(
-            compact: true,
-            title: 'IBAN',
-            trailing: SettingsActionButton(
-              label: _formatIban(d.iban!),
-              actionType: SettingsActionType.copy,
-              onTap: () => _copyToClipboard(d.iban!, 'IBAN'),
+        const AppSectionTitle('Virements SEPA'),
+        const SizedBox(height: AppSpacing.md),
+        SettingsCard(
+          children: [
+            SettingsListItem(
+              compact: true,
+              title: 'Destinataire',
+              trailing: SettingsActionButton(
+                label: d.accountHolderName,
+                actionType: SettingsActionType.copy,
+                onTap: () =>
+                    _copyToClipboard(d.accountHolderName, 'Destinataire'),
+              ),
             ),
-          ),
-        if (d.bic != null)
-          SettingsListItem(
-            compact: true,
-            title: 'BIC',
-            trailing: SettingsActionButton(
-              label: d.bic!,
-              actionType: SettingsActionType.copy,
-              onTap: () => _copyToClipboard(d.bic!, 'BIC'),
+            SettingsListItem(
+              compact: true,
+              title: 'Devise',
+              trailing: SettingsActionButton(
+                label: d.currency,
+                actionType: SettingsActionType.copy,
+                onTap: () => _copyToClipboard(d.currency, 'Devise'),
+              ),
             ),
-          ),
+            if (d.iban != null)
+              SettingsListItem(
+                compact: true,
+                title: 'IBAN',
+                trailing: SettingsActionButton(
+                  label: _formatIban(d.iban!),
+                  actionType: SettingsActionType.copy,
+                  onTap: () => _copyToClipboard(d.iban!, 'IBAN'),
+                ),
+              ),
+            if (d.bic != null)
+              SettingsListItem(
+                compact: true,
+                title: 'BIC',
+                trailing: SettingsActionButton(
+                  label: d.bic!,
+                  actionType: SettingsActionType.copy,
+                  onTap: () => _copyToClipboard(d.bic!, 'BIC'),
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }

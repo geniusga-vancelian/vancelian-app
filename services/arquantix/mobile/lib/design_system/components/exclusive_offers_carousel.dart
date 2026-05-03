@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_section_title.dart';
 import 'investment_card.dart';
+import 'kalai_icon.dart';
 
 /// Élément pour [ExclusiveOffersCarousel].
 class ExclusiveOfferCarouselItem {
@@ -122,8 +124,8 @@ class _ExclusiveOffersCarouselState extends State<ExclusiveOffersCarousel> {
                         children: [
                           Text(widget.title, style: AppTypography.sectionTitle),
                           const SizedBox(width: AppSpacing.xs),
-                          Icon(
-                            Icons.chevron_right,
+                          const KalaiIcon(
+                            KalaiIcons.chevronRight,
                             size: 22,
                             color: AppColors.textPrimary,
                           ),

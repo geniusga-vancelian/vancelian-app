@@ -5,8 +5,10 @@ import '../atoms/atoms.dart';
 /// Bloc citation pour un article (news, aide, etc.).
 ///
 /// - **Card** ([asCard] = true) : carte blanche arrondie, **barre d’accent** indigo à gauche
-///   qui épouse les coins (comme Figma), guillemets, citation en [AppTypography.bodyItalic],
-///   auteur en [AppTypography.bodySmItalic] gris **aligné à droite** sous la citation.
+///   qui épouse les coins (comme Figma). Avec [author] : **guillemets** + citation en
+///   [AppTypography.bodyItalic], auteur en [AppTypography.bodySmItalic] gris **aligné à droite**.
+///   Sans auteur (note / encadré informatif) : **pas de guillemets**, corps en
+///   [AppTypography.bodyRegular].
 /// - **Inline** ([asCard] = false) : bordure gauche indigo, texte italique (variante compacte).
 class ArticleQuoteBlock extends StatelessWidget {
   final String quote;
@@ -28,6 +30,12 @@ class ArticleQuoteBlock extends StatelessWidget {
 
   Widget _buildInline() {
     final authorTrimmed = author?.trim();
+    final isNote =
+        authorTrimmed == null || authorTrimmed.isEmpty;
+    final bodyStyle = isNote
+        ? AppTypography.bodyRegular
+        : AppTypography.bodyItalic;
+
     return Container(
       decoration: const BoxDecoration(
         border: Border(
@@ -40,7 +48,7 @@ class ArticleQuoteBlock extends StatelessWidget {
         children: [
           Text(
             quote.trim(),
-            style: AppTypography.bodyItalic.copyWith(
+            style: bodyStyle.copyWith(
               color: AppColors.black,
             ),
           ),
@@ -70,6 +78,12 @@ class ArticleQuoteBlock extends StatelessWidget {
     final q = quote.trim();
     if (q.isEmpty) return const SizedBox.shrink();
 
+    final isNote =
+        authorTrimmed == null || authorTrimmed.isEmpty;
+    final bodyStyle = isNote
+        ? AppTypography.bodyRegular
+        : AppTypography.bodyItalic;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(_cardRadius),
       child: ColoredBox(
@@ -95,11 +109,13 @@ class ArticleQuoteBlock extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const _QuoteIcon(color: AppColors.accent),
-                      const SizedBox(height: AppSpacing.s2),
+                      if (!isNote) ...[
+                        const _QuoteIcon(color: AppColors.accent),
+                        const SizedBox(height: AppSpacing.s2),
+                      ],
                       Text(
                         q,
-                        style: AppTypography.bodyItalic.copyWith(
+                        style: bodyStyle.copyWith(
                           color: AppColors.black,
                         ),
                       ),

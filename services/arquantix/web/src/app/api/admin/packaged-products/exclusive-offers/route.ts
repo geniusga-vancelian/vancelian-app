@@ -11,7 +11,7 @@ import {
 } from '@/lib/admin/exclusiveOffersAdminQuery'
 import { getSessionFromCookie } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { calculateUrlPath, isValidSlug, slugify } from '@/lib/utils/slugify'
+import { calculateExclusiveOfferPageUrlPath, isValidSlug, slugify } from '@/lib/utils/slugify'
 
 const querySchema = z.object({
   q: z.string().optional(),
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Slug invalide' }, { status: 400 })
     }
 
-    const urlPath = calculateUrlPath(slug)
+    const urlPath = calculateExclusiveOfferPageUrlPath(slug)
     const title = (parsed.data.title ?? '').trim() || 'Exclusive Offer'
     const description = parsed.data.description ?? null
 

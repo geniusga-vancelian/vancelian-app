@@ -17,7 +17,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ContentStatus } from '@prisma/client'
 import { supportedLocales, type Locale, defaultLocale } from '@/config/locales'
-import { getPresignedUrl } from '@/lib/storage/storageClient'
+import { localizedExclusiveOfferDetailPath } from '@/lib/i18n/localizedExclusiveOfferPath'
+import { adminMediaFileUrl } from '@/lib/admin/adminMediaFileUrl'
 import { toastSuccess, toastError } from '@/lib/admin/toast'
 import { TranslateModal } from '@/components/admin/TranslateModal'
 
@@ -1066,7 +1067,7 @@ export default function AdminProjectEditorPage() {
     )
   }
 
-  const publicUrl = `/projects/${project.slug}`
+  const publicUrl = localizedExclusiveOfferDetailPath(selectedLocale, project.slug)
 
   return (
     <div className="space-y-6">
@@ -1533,7 +1534,7 @@ export default function AdminProjectEditorPage() {
                     <p className="text-xs text-gray-500 mb-2">Preview:</p>
                     <div className="w-32 h-48 border border-gray-300 rounded overflow-hidden bg-white">
                       <img
-                        src={project.coverMedia.url}
+                        src={adminMediaFileUrl(project.coverMedia.id)}
                         alt={project.coverMedia.filename}
                         className="w-full h-full object-cover"
                       />
@@ -1567,7 +1568,7 @@ export default function AdminProjectEditorPage() {
                     <p className="text-xs text-gray-500 mb-2">Preview:</p>
                     <div className="w-full h-32 border border-gray-300 rounded overflow-hidden bg-white">
                       <img
-                        src={project.heroMedia.url}
+                        src={adminMediaFileUrl(project.heroMedia.id)}
                         alt={project.heroMedia.filename}
                         className="w-full h-full object-cover"
                       />
@@ -2459,7 +2460,7 @@ export default function AdminProjectEditorPage() {
               <div key={item.id} className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
                 <div className="flex-shrink-0">
                   <img
-                    src={item.media.url}
+                    src={adminMediaFileUrl(item.media.id)}
                     alt={item.media.filename}
                     className="w-20 h-20 object-cover rounded border border-gray-300"
                   />

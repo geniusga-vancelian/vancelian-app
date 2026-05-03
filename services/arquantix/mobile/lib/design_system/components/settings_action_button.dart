@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'kalai_icon.dart';
 
 /// Small action button with label + icon, used inside [SettingsListItem].
 ///
@@ -26,20 +27,22 @@ class SettingsActionButton extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? color;
 
-  IconData get _resolvedIcon {
-    if (icon != null) return icon!;
+  String get _resolvedKalaiAsset {
     return switch (actionType) {
-      SettingsActionType.copy => Icons.copy_rounded,
-      SettingsActionType.edit => Icons.edit_rounded,
-      SettingsActionType.info => Icons.info_outline_rounded,
-      SettingsActionType.help => Icons.help_outline_rounded,
-      null => Icons.arrow_forward_rounded,
+      SettingsActionType.copy => KalaiIcons.clipboard,
+      SettingsActionType.edit => KalaiIcons.edit,
+      SettingsActionType.info => KalaiIcons.info,
+      SettingsActionType.help => KalaiIcons.help,
+      null => KalaiIcons.arrowRight,
     };
   }
 
   @override
   Widget build(BuildContext context) {
     final c = color ?? AppColors.indigo;
+    final iconWidget = icon != null
+        ? Icon(icon, size: 16, color: c)
+        : KalaiIcon(_resolvedKalaiAsset, size: 16, color: c);
 
     return GestureDetector(
       onTap: onTap,
@@ -52,7 +55,7 @@ class SettingsActionButton extends StatelessWidget {
             style: AppTypography.itemSupportingBd.copyWith(color: c),
           ),
           const SizedBox(width: 4),
-          Icon(_resolvedIcon, size: 16, color: c),
+          iconWidget,
         ],
       ),
     );

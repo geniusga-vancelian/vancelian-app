@@ -4,6 +4,8 @@ import '../atoms/app_colors.dart';
 import '../atoms/app_radius.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// Composant : carte news horizontale (contenu à gauche, image à droite).
 /// Si [showImage] est false, l'image est masquée et le contenu occupe toute la largeur.
@@ -78,7 +80,7 @@ class NewsRowCard extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        Icon(Icons.schedule, size: 16, color: AppColors.accent),
+                        const KalaiIcon(KalaiIcons.clock, size: 16, color: AppColors.accent),
                         const SizedBox(width: AppSpacing.xs),
                         Text(
                           '$readingTime min de lecture',
@@ -115,7 +117,7 @@ class NewsRowCard extends StatelessWidget {
 
   Widget _placeholder() => Container(
         color: AppColors.placeholderBg,
-        child: Icon(Icons.image_not_supported,
+        child: const KalaiIcon(KalaiIcons.photoOff,
             color: AppColors.placeholderIcon, size: 32),
       );
 }

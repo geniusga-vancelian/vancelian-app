@@ -15,14 +15,7 @@ const createCollectionSchema = z.object({
   colorHex: colorHexSchema.default('#0F172A'),
   order: z.number().int().default(0),
   isPublished: z.boolean().default(true),
-})
-
-const updateCollectionSchema = z.object({
-  slug: z.string().min(1).optional(),
-  iconKey: z.string().min(1).optional(),
-  colorHex: colorHexSchema.optional(),
-  order: z.number().int().optional(),
-  isPublished: z.boolean().optional(),
+  coverMediaId: z.string().min(1).nullable().optional(),
 })
 
 // GET /api/admin/help/collections
@@ -61,6 +54,7 @@ export async function GET() {
         slug: col.slug,
         iconKey: col.iconKey,
         colorHex: col.colorHex,
+        coverMediaId: col.coverMediaId,
         order: col.order,
         isPublished: col.isPublished,
         i18n: col.i18n,
@@ -112,6 +106,9 @@ export async function POST(request: NextRequest) {
         colorHex: validated.colorHex,
         order: validated.order,
         isPublished: validated.isPublished,
+        ...(validated.coverMediaId !== undefined
+          ? { coverMediaId: validated.coverMediaId }
+          : {}),
         i18n: {
           create: {
             locale: defaultLocale,

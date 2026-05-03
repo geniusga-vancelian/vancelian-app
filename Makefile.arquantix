@@ -1,4 +1,4 @@
-.PHONY: arquantix-up arquantix-up-safe arquantix-down arquantix-recovery-up arquantix-recovery-down arquantix-db-redis arquantix-check arquantix-build arquantix-logs arquantix-shell-cms arquantix-shell-web arquantix-reset arquantix-seed arquantix-clean arquantix-backup-db arquantix-env-check arquantix-dev-start-clean arquantix-dev-stop arquantix-doctor dev dev-reset dev-stop dev-restart dev-status pdf-preview
+.PHONY: setup doctor doctor-fix local-doctor local-db-doctor local-env-guard status status-watch arquantix-up arquantix-up-safe arquantix-down arquantix-recovery-up arquantix-recovery-down arquantix-db-redis arquantix-check arquantix-build arquantix-build-web arquantix-logs arquantix-shell-cms arquantix-shell-web arquantix-reset arquantix-seed arquantix-clean arquantix-backup-db arquantix-env-check arquantix-dev-start-clean arquantix-dev-stop arquantix-doctor dev dev-reset dev-stop dev-restart dev-status pdf-preview
 
 # Arquantix - Docker Compose Commands
 
@@ -14,7 +14,6 @@ export ARQUANTIX_COMPOSE_FILE
 export
 # Aligné sur .env.arquantix (WEB_PORT=3000) si le fichier est absent
 WEB_PORT ?= 3000
-CMS_PORT ?= 1337
 
 # Même couple que scripts/dev-reset.sh / start-arquantix.sh (ne pas dupliquer --project-name ad hoc).
 ARQUANTIX_DOCKER_COMPOSE = docker compose --project-name $(COMPOSE_PROJECT_NAME) --env-file .env.arquantix -f $(ARQUANTIX_COMPOSE_FILE)
@@ -23,7 +22,50 @@ ARQUANTIX_RECOVERY_PROJECT ?= arquantixrecovery
 export ARQUANTIX_RECOVERY_PROJECT
 ARQUANTIX_RECOVERY_COMPOSE = $(ARQUANTIX_DOCKER_COMPOSE)
 
-# Diagnostic alignement projet Compose + DB (lecture seule)
+# Onboarding : stack officielle (recovery), sans down -v, smoke API. Alembic s’exécute au démarrage du conteneur API.
+setup:
+	@test -f .env.arquantix || (echo "❌ Fichier .env.arquantix manquant — copier .env.arquantix.example puis éditer." >&2; exit 1)
+	@docker info >/dev/null 2>&1 || (echo "❌ Docker n’est pas prêt — lancez Docker Desktop." >&2; exit 1)
+	@echo "🚀 Démarrage Arquantix (up -d --remove-orphans, volumes inchangés)…"
+	@$(ARQUANTIX_DOCKER_COMPOSE) up -d --remove-orphans
+	@echo "⏳ Attente API (Alembic au démarrage du conteneur)…"
+	@sleep 5
+	@n=0; until curl -sf --max-time 3 "http://127.0.0.1:$${API_PORT:-8000}/health" >/dev/null 2>&1; do \
+	  n=$$((n+1)); if [ "$$n" -ge 24 ]; then echo "❌ /health non joignant — voir: make -f Makefile.arquantix arquantix-logs" >&2; exit 1; fi; \
+	  sleep 2; \
+	done
+	@echo "✅ API OK — http://127.0.0.1:$${API_PORT:-8000}/health"
+	@echo "🌐 Web — http://localhost:$(WEB_PORT)"
+
+# DX : diagnostic lisible (OK / WARNING / ERROR) + verdict SAFE|WARNING|CRITICAL
+doctor:
+	@bash scripts/doctor.sh
+
+# Lot 1 stabilisation : ports 3000/8000/5443, Docker web vs Next hôte, HTTP, Postgres — lecture seule
+local-doctor:
+	@bash scripts/arquantix_local_stack_doctor.sh
+
+# Lot 2 stabilisation : DATABASE_URL API/Alembic vs Web/Prisma + tables CMS Prisma (page_i18n, …) — lecture seule
+local-db-doctor:
+	@bash scripts/arquantix_db_visibility_doctor.sh
+
+# Lot 4 stabilisation : :3001 / :5433 dans les fichiers env listés — lecture seule
+local-env-guard:
+	@bash scripts/arquantix_lot4_env_guard.sh
+
+# DX : correctifs sûrs uniquement (up idempotent, restart api/web ciblé) — jamais down -v
+# DRY_RUN=1 : affiche les commandes sans les exécuter (ex. DRY_RUN=1 make doctor-fix)
+doctor-fix:
+	@DRY_RUN=$${DRY_RUN:-0} bash scripts/doctor_fix.sh
+
+# DX : tableau recovery (lecture seule) — snapshot ou watch (STATUS_REFRESH_SEC, défaut 3)
+status:
+	@bash scripts/status.sh
+
+status-watch:
+	@STATUS_REFRESH_SEC=$${STATUS_REFRESH_SEC:-3} bash scripts/status.sh --watch
+
+# Diagnostic alignement projet Compose + DB (lecture seule, détaillé)
 arquantix-doctor:
 	@bash scripts/arquantix_local_doctor.sh
 
@@ -55,7 +97,6 @@ arquantix-up arquantix-up-safe:
 	@echo "✅ Services started"
 	@echo "   API (FastAPI / WeasyPrint): http://127.0.0.1:$${API_PORT:-8000}"
 	@echo "   Web: http://localhost:$(WEB_PORT)"
-	@echo "   CMS: http://localhost:$(CMS_PORT)/admin"
 
 # Reprise de session : vérifs .env (DB_NAME), alignement projet Compose, nettoyage hôte/worker, arquantix-up, smoke tests, worker WS.
 arquantix-dev-start-clean:
@@ -83,11 +124,17 @@ arquantix-build:
 	@echo "🔨 Building Arquantix services..."
 	$(ARQUANTIX_DOCKER_COMPOSE) build
 
+# Image Next uniquement (après changement du Dockerfile web ou du code — produit .next dans l image).
+arquantix-build-web:
+	@echo "🔨 Building arquantix-web image..."
+	$(ARQUANTIX_DOCKER_COMPOSE) build arquantix-web
+
 arquantix-logs:
 	$(ARQUANTIX_DOCKER_COMPOSE) logs -f
 
 arquantix-shell-cms:
-	$(ARQUANTIX_DOCKER_COMPOSE) exec arquantix-cms sh
+	@echo "❌ Strapi (arquantix-cms) a été retiré du compose — plus de shell CMS."
+	@exit 1
 
 arquantix-shell-web:
 	$(ARQUANTIX_DOCKER_COMPOSE) exec arquantix-web sh
@@ -99,9 +146,8 @@ arquantix-reset:
 	@exit 1
 
 arquantix-seed:
-	@echo "🌱 Seeding Strapi CMS..."
-	$(ARQUANTIX_DOCKER_COMPOSE) exec arquantix-cms npm run seed
-	@echo "✅ Seed completed"
+	@echo "❌ Strapi retiré — plus de seed CMS via Docker (contenu Prisma / scripts web si besoin)."
+	@exit 1
 
 arquantix-clean:
 	@echo "❌ Cible désactivée — down -v / suppression de données ou d’images localement risquée."
@@ -112,7 +158,7 @@ arquantix-clean:
 arquantix-backup-db:
 	@bash scripts/backup_db.sh
 
-# Stack complète : Docker (DB, Redis, API, CMS, Web) + Next local (npm run dev en arrière-plan).
+# Stack complète : Docker (DB, Redis, API, Web) + Next local (npm run dev en arrière-plan).
 # Docker : scripts/dev-reset.sh vérifie le daemon (docker info), lance Docker Desktop sur macOS si besoin, attente ≤ 20 s.
 # Options : --no-next, --build, --stop (voir scripts/dev-reset.sh).
 dev dev-reset:
@@ -122,7 +168,7 @@ dev dev-reset:
 dev-stop:
 	@bash scripts/dev-reset.sh --stop
 
-# Nettoyage large (compose down ×2 projets, ports API/Next/DB/Redis/CMS) puis stack complète.
+# Nettoyage large (compose down ×2 projets, ports API/Next/DB/Redis) puis stack complète.
 dev-restart:
 	@bash scripts/dev-reset.sh --stop
 	@bash scripts/dev-reset.sh

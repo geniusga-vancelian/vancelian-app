@@ -1,0 +1,40 @@
+{
+  "vars": {
+    "preheader": "Your subscription has been processed successfully.",
+    "assetOrigin": "https://www.arquantix.com",
+    "eyebrow": "Operation confirmed",
+    "title": "Your subscription has been processed.",
+    "intro": "We confirm the following operation on your Arquantix portfolio. A signed PDF receipt is available in your client space.",
+    "reference": "ARQ-2026-04-000247",
+    "summary": {
+      "title": "Operation summary",
+      "rows": [
+        { "label": "Reference", "value": "ARQ-2026-04-000247" },
+        { "label": "Type", "value": "Subscription" },
+        { "label": "Product", "value": "Vault Builder · Gold Backed Yield" },
+        { "label": "Status", "value": "Settled" },
+        { "label": "Executed at", "value": "Apr 27, 2026 · 16:42 UTC" },
+        { "label": "Gross amount", "value": "USD 25,000.00" },
+        { "label": "Fees", "value": "USD 125.00" },
+        { "label": "Net amount", "value": "USD 24,875.00" }
+      ]
+    },
+    "cta": {
+      "eyebrow": "Next step",
+      "title": "Download your contract package.",
+      "body": "Your signed subscription agreement, KYC certificate and operation receipt are bundled in a single PDF.",
+      "dark": true,
+      "cta": { "label": "Open contract package", "href": "https://www.arquantix.com/portfolio/contracts/000247", "dark": true }
+    },
+    "legal": {
+      "body": "This confirmation is for information only. The legal record of your operation is the signed subscription agreement available in your client space. Tax treatment depends on your individual circumstances and may change."
+    },
+    "footer": {
+      "tagline": "",
+      "social": [],
+      "unsubscribeUrl": "https://www.arquantix.com/email/unsubscribe?token=PLACEHOLDER",
+      "unsubscribeLabel": "Manage notifications",
+      "copyright": "© 2026 Arquantix SA."
+    }
+  }
+}

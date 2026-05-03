@@ -3,7 +3,15 @@ import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { ContentStatus } from '@prisma/client'
 import { z } from 'zod'
-import { slugify, isValidSlug, calculateUrlPath } from '@/lib/utils/slugify'
+import {
+  slugify,
+  isValidSlug,
+  calculateUrlPath,
+  calculateExclusiveOfferPageUrlPath,
+} from '@/lib/utils/slugify'
+import { VAULT_BUILDER_TEMPLATE } from '@/lib/catalog/packagedCatalogHelpers'
+import { ensureBlogCmsPresence } from '@/lib/cms/ensureBlogCmsPresence'
+import { ensurePrimaryMenuIdWithTx } from '@/lib/cms/ensurePrimaryMenuTx'
 
 const createPageSchema = z.object({
   template: z.string().default('homepage'),
@@ -12,7 +20,11 @@ const createPageSchema = z.object({
     message: 'Slug must be lowercase, alphanumeric with hyphens only',
   }),
   description: z.string().max(1000).optional(),
+  /** null / absent = racine CMS ; une entrée menu primaire est alors créée (sauf pages système). */
+  parentId: z.string().cuid().nullable().optional(),
 })
+
+const SLUGS_SKIP_AUTO_PRIMARY_LINK = new Set(['home', 'blog'])
 
 // GET /api/admin/pages - List all pages
 export async function GET() {
@@ -21,6 +33,8 @@ export async function GET() {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    await ensureBlogCmsPresence()
 
     const pages = await prisma.page.findMany({
       orderBy: { createdAt: 'asc' },
@@ -36,7 +50,12 @@ export async function GET() {
       id: page.id,
       slug: page.slug,
       title: page.title,
-      computedUrlPath: page.slug === 'home' ? '/' : `/${page.slug}`,
+      computedUrlPath:
+        page.template === VAULT_BUILDER_TEMPLATE
+          ? calculateExclusiveOfferPageUrlPath(page.slug)
+          : page.slug === 'home'
+            ? '/'
+            : `/${page.slug}`,
       urlPath: page.urlPath,
       template: page.template,
       description: page.description,
@@ -64,7 +83,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { template, title, slug, description } = createPageSchema.parse(body)
+    const { template, title, slug, description, parentId: parentIdRaw } =
+      createPageSchema.parse(body)
+    const parentId = parentIdRaw ?? null
 
     const urlPath = calculateUrlPath(slug)
 
@@ -82,14 +103,70 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const page = await prisma.page.create({
-      data: {
-        slug,
-        urlPath,
-        title: title || null,
-        template,
-        description: description || null,
-      },
+    if (parentId) {
+      const parent = await prisma.page.findUnique({
+        where: { id: parentId },
+        select: { id: true },
+      })
+      if (!parent) {
+        return NextResponse.json({ error: 'Parent page not found' }, { status: 400 })
+      }
+    }
+
+    const sortAgg = await prisma.page.aggregate({
+      where: { parentId },
+      _max: { sortOrder: true },
+    })
+    const sortOrder = (sortAgg._max.sortOrder ?? -1) + 1
+
+    const { page, primaryMenuItemCreated } = await prisma.$transaction(async (tx) => {
+      const created = await tx.page.create({
+        data: {
+          slug,
+          urlPath,
+          title: title || null,
+          template,
+          description: description || null,
+          parentId,
+          sortOrder,
+        },
+      })
+
+      let menuCreated = false
+      const atRoot = parentId === null
+      const skipMenuLink = SLUGS_SKIP_AUTO_PRIMARY_LINK.has(slug)
+      if (atRoot && !skipMenuLink) {
+        const dup = await tx.menuItem.findFirst({
+          where: { pageId: created.id },
+          select: { id: true },
+        })
+        if (!dup) {
+          const menuId = await ensurePrimaryMenuIdWithTx(tx)
+          const lastItem = await tx.menuItem.findFirst({
+            where: { menuId },
+            orderBy: { order: 'desc' },
+            select: { order: true },
+          })
+          const order = lastItem ? lastItem.order + 1 : 0
+          const label =
+            (title && title.trim()) ||
+            slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+          await tx.menuItem.create({
+            data: {
+              menuId,
+              label,
+              type: 'LINK',
+              isRoot: false,
+              pageId: created.id,
+              order,
+              enabled: true,
+            },
+          })
+          menuCreated = true
+        }
+      }
+
+      return { page: created, primaryMenuItemCreated: menuCreated }
     })
 
     // If creating "home" page, create default sections
@@ -100,7 +177,7 @@ export async function POST(request: NextRequest) {
         { key: 'hero', order: 0, schemaVersion: 'v1', data: { title: 'Bienvenue sur Arquantix', subtitle: 'Fractional Real Estate, Institutional Rigor.', ctaText: 'Découvrir', ctaLink: '/projects' } },
         { key: 'features', order: 1, schemaVersion: 'v1', data: { title: 'Nos Avantages', items: [{ title: 'Service 1', description: 'Description du service 1' }] } },
         { key: 'projects', order: 2, schemaVersion: 'v1', data: { title: 'Nos Projets', description: 'Découvrez nos opportunités', items: [] } },
-        { key: 'pricing', order: 3, schemaVersion: 'v1', data: { title: 'Tarification Simple', plans: [] } },
+        { key: 'cta', order: 3, schemaVersion: 'v1', data: { title: 'Prêt à investir ?', description: '', primaryButtonText: 'Nous contacter', primaryButtonHref: '#contact' } },
         { key: 'footer', order: 4, schemaVersion: 'v1', data: { copyright: '© 2026 Arquantix. Tous droits réservés.', links: [] } },
       ]
 
@@ -132,7 +209,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ page }, { status: 201 })
+    return NextResponse.json({ page, primaryMenuItemCreated }, { status: 201 })
   } catch (error) {
     console.error('Error creating page:', error)
     

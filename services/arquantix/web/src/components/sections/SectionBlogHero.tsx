@@ -1,15 +1,10 @@
-import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { ContentStatus } from '@prisma/client'
 import { getPresignedUrl } from '@/lib/storage/storageClient'
 import { calculateReadingTime } from '@/lib/blog/readingTime'
-import { formatArticleDateShort } from '@/lib/blog/formatDates'
-import { resolveLabelWithFallback, DEFAULT_LOCALE } from '@/lib/i18n/resolveLabel'
-
-function categorySlugList(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return []
-  return raw.filter((s): s is string => typeof s === 'string')
-}
+import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
+import { getLocaleOrDefault } from '@/config/locales'
+import { BlogFeaturedModule, type DsBlogArticle } from '@/components/design-system/Blog/BlogModules'
 
 interface SectionBlogHeroProps {
   eyebrow?: string
@@ -17,6 +12,8 @@ interface SectionBlogHeroProps {
   showStandfirst?: boolean
   showMeta?: boolean
   locale: string
+  /** Premier bloc blog : fond gray100 jusqu’en haut, sous le menu primaire. */
+  bleedUnderPrimaryNav?: boolean
 }
 
 export async function SectionBlogHero({ 
@@ -24,147 +21,106 @@ export async function SectionBlogHero({
   showEyebrow = true, 
   showStandfirst = true, 
   showMeta = true,
-  locale 
+  locale,
+  bleedUnderPrimaryNav = false,
 }: SectionBlogHeroProps) {
-  // Fetch featured article
+  const activeLocale = getLocaleOrDefault(locale)
+  const blogBasePath = `/${activeLocale}/blog`
+
+  const articleQuery = {
+    include: {
+      coverMedia: true,
+      i18n: {
+        where: { locale },
+        take: 1,
+      },
+      blocks: {
+        orderBy: { order: 'asc' as const },
+        take: 20,
+      },
+    },
+  }
+
   const featuredArticle = await prisma.article.findFirst({
     where: {
       status: ContentStatus.PUBLISHED,
       isFeatured: true,
     },
-    include: {
-      coverMedia: true,
-      i18n: {
-        where: { locale },
-        take: 1,
-      },
-      blocks: {
-        orderBy: { order: 'asc' },
-        take: 20,
-      },
-    },
+    ...articleQuery,
   })
 
-  // Fallback to latest if no featured
-  const articleToUse = featuredArticle || await prisma.article.findFirst({
+  const latestArticles = await prisma.article.findMany({
     where: {
       status: ContentStatus.PUBLISHED,
     },
-    include: {
-      coverMedia: true,
-      i18n: {
-        where: { locale },
-        take: 1,
-      },
-      blocks: {
-        orderBy: { order: 'asc' },
-        take: 20,
-      },
-    },
+    ...articleQuery,
     orderBy: { publishedAt: 'desc' },
+    take: 8,
   })
 
+  const articleToUse = featuredArticle ?? latestArticles[0] ?? null
   if (!articleToUse) {
     return null
   }
 
-  const i18n = articleToUse.i18n[0]
-  if (!i18n) {
-    return null
-  }
+  const articlePool = [articleToUse, ...latestArticles].reduce<typeof latestArticles>((acc, curr) => {
+    if (acc.some((a) => a.id === curr.id)) return acc
+    return [...acc, curr]
+  }, [])
 
-  // Get cover URL
-  let coverUrl: string | null = null
-  if (articleToUse.coverMedia) {
-    try {
-      coverUrl = await getPresignedUrl(articleToUse.coverMedia.key)
-    } catch (error) {
-      console.error('Error getting presigned URL for cover:', error)
+  const toDsArticle = async (article: (typeof latestArticles)[number]): Promise<DsBlogArticle | null> => {
+    const i18n = article.i18n[0]
+    if (!i18n) return null
+    let coverUrl = ''
+    if (article.coverMedia?.key) {
+      try {
+        coverUrl = await getPresignedUrl(article.coverMedia.key)
+      } catch {
+        coverUrl = ''
+      }
+    }
+    return {
+      id: article.id,
+      slug: `${blogBasePath}/${article.slug}`,
+      title: i18n.title,
+      standfirst: i18n.standfirst || '',
+      coverUrl,
+      authorName: article.authorName,
+      publishedAt: article.publishedAt ? article.publishedAt.toISOString() : null,
+      readingTime: calculateReadingTime(article.blocks),
     }
   }
 
-  // Calculate reading time
-  const readingTime = calculateReadingTime(articleToUse.blocks)
+  const mapped = (await Promise.all(articlePool.map(toDsArticle))).filter(
+    (a): a is DsBlogArticle => a !== null,
+  )
+  if (mapped.length === 0) return null
 
-  // Get category labels
-  const categoriesRaw = await prisma.articleCategory.findMany({
-    where: { isActive: true },
-    include: { i18n: true },
-  })
-
-  const catSlugs = categorySlugList(articleToUse.categorySlugs)
-  const categoryLabel =
-    catSlugs.length > 0
-      ? resolveLabelWithFallback({
-          requestedLocale: locale,
-          baseLabel: categoriesRaw.find((c) => c.slug === catSlugs[0])?.label || '',
-          i18nRows:
-            categoriesRaw.find((c) => c.slug === catSlugs[0])?.i18n.map((i) => ({
-              locale: i.locale,
-              label: i.label,
-            })) || [],
-        })
-      : null
+  const featured = mapped[0]
+  const sidebar = mapped.slice(1, 5)
+  const computedTag = eyebrow?.trim()
+    ? eyebrow
+    : articleToUse.articleType === 'ANALYSIS'
+      ? siteCommonCta(locale, 'blog_segment_analysis')
+      : articleToUse.isCompanyNews
+        ? siteCommonCta(locale, 'blog_segment_company_news')
+        : siteCommonCta(locale, 'blog_segment_market_news')
 
   return (
-    <div className="mb-16">
-      <Link
-        href={`/blog/${articleToUse.slug}`}
-        className="group block bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
-      >
-        <div className="grid md:grid-cols-2 gap-0 md:items-stretch">
-          <div className="aspect-video md:aspect-auto overflow-hidden bg-gray-100 relative">
-            {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt={i18n.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                No image
-              </div>
-            )}
-          </div>
-          <div className="p-8 md:p-12 flex flex-col justify-center bg-white">
-            {showEyebrow && eyebrow && (
-              <div className="mb-4">
-                <span className="text-sm font-semibold text-indigo-600 uppercase tracking-wide">
-                  {eyebrow}
-                </span>
-              </div>
-            )}
-            {categoryLabel && (
-              <div className="mb-4">
-                <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">
-                  {categoryLabel}
-                </span>
-              </div>
-            )}
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 group-hover:text-indigo-600 transition-colors">
-              {i18n.title}
-            </h2>
-            {showStandfirst && i18n.standfirst && (
-              <p className="text-lg text-gray-600 mb-6 line-clamp-3 leading-relaxed">
-                {i18n.standfirst}
-              </p>
-            )}
-            {showMeta && (
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                <span className="font-semibold">{articleToUse.authorName}</span>
-                {articleToUse.publishedAt && (
-                  <time dateTime={articleToUse.publishedAt.toISOString()}>
-                    {formatArticleDateShort(articleToUse.publishedAt, locale)}
-                  </time>
-                )}
-                <span>•</span>
-                <span>{readingTime} min read</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </Link>
-    </div>
+    <BlogFeaturedModule
+      featuredTitle={featured.title}
+      featuredHref={featured.slug}
+      featuredTag={showEyebrow ? computedTag : ''}
+      featuredArticle={featured}
+      sideTitle={siteCommonCta(locale, 'blog_featured_stories')}
+      sideArticles={sidebar}
+      locale={locale}
+      showStandfirst={showStandfirst}
+      showMeta={showMeta}
+      minReadLabel={siteCommonCta(locale, 'blog_min_read')}
+      noImageLabel={siteCommonCta(locale, 'no_image')}
+      bleedUnderPrimaryNav={bleedUnderPrimaryNav}
+    />
   )
 }
 

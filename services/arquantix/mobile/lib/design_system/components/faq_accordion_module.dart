@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// Données pour un item FAQ. Soit [articleSlug] (charge l'article Help), soit [question]+[answer] (legacy).
 class FaqAccordionItemData {
@@ -157,8 +159,8 @@ class FaqAccordionModule extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          const Icon(
-                            Icons.arrow_forward_ios_rounded,
+                          const KalaiIcon(
+                            KalaiIcons.chevronRight,
                             size: 14,
                             color: AppColors.accent,
                           ),
@@ -259,8 +261,8 @@ class _FaqAccordionTileWithSlug extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Icon(
-                    Icons.chevron_right_rounded,
+                  const KalaiIcon(
+                    KalaiIcons.chevronRight,
                     size: 24,
                     color: AppColors.textSecondary,
                   ),
@@ -527,8 +529,8 @@ class _FaqAccordionCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(
-                            Icons.chevron_right,
+                          const KalaiIcon(
+                            KalaiIcons.chevronRight,
                             size: 20,
                             color: AppColors.accent,
                           ),
@@ -619,8 +621,8 @@ class _FaqAccordionTile extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(
-                          Icons.chevron_right,
+                        const KalaiIcon(
+                          KalaiIcons.chevronRight,
                           size: 20,
                           color: AppColors.accent,
                         ),

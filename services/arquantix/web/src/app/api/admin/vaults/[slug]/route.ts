@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ContentStatus } from '@prisma/client'
 import { z } from 'zod'
 
+import { defaultLocale, type Locale } from '@/config/locales'
+import { isValidLocale } from '@/config/locales'
 import { getSessionFromCookie } from '@/lib/auth'
+import { computePageLocaleCompleteness } from '@/lib/admin/pageLocaleCompleteness'
+import { computeVaultLocaleLayerInfos } from '@/lib/admin/vaultLocaleSectionStatus'
+import { getVaultPageTextFieldsForLocale, parseAdminVaultLocale } from '@/lib/admin/vaultAdminLocale'
 import { prisma } from '@/lib/prisma'
 
 const VAULT_TEMPLATE_DB = 'vault_builder'
 const VAULT_SECTION_KEY = 'vault_builder_v1'
-const VAULT_DEFAULT_LOCALE = 'fr'
 
 const navbarActionSchema = z.object({
   icon: z.enum(['none', 'favorite', 'share', 'notifications']).default('none'),
@@ -59,6 +63,8 @@ const vaultConfigSchema = z.object({
 })
 
 const updateVaultSchema = z.object({
+  /** Locale éditée (SectionContent + PageI18n pour cette langue). */
+  locale: z.enum(['fr', 'en', 'it']),
   title: z.string().max(200).optional(),
   description: z.string().max(1000).nullable().optional(),
   config: vaultConfigSchema,
@@ -105,8 +111,47 @@ function normalizeModulesFromRaw(raw: unknown): z.infer<typeof vaultConfigSchema
   })
 }
 
+function parseVaultConfigFromRaw(rawData: unknown): z.infer<typeof vaultConfigSchema> {
+  let config: z.infer<typeof vaultConfigSchema>
+  try {
+    const draftData =
+      rawData == null
+        ? {}
+        : typeof rawData === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(rawData) as unknown
+              } catch {
+                return {}
+              }
+            })()
+          : typeof rawData === 'object' && rawData !== null
+            ? { ...(rawData as Record<string, unknown>) }
+            : {}
+    const validated = vaultConfigSchema.safeParse(draftData)
+    if (validated.success) {
+      config = validated.data
+    } else {
+      config = getDefaultVaultConfig()
+      config.modules = normalizeModulesFromRaw(draftData)
+      const raw = draftData as Record<string, unknown>
+      if (typeof raw.investmentTypeSlug === 'string') config.investmentTypeSlug = raw.investmentTypeSlug
+      if (typeof raw.sortOrder === 'number') config.sortOrder = raw.sortOrder
+      if (typeof raw.headerMediaId === 'string' || raw.headerMediaId === null) config.headerMediaId = raw.headerMediaId
+    }
+  } catch {
+    config = getDefaultVaultConfig()
+    config.modules = normalizeModulesFromRaw(rawData)
+    const raw = rawData as Record<string, unknown> | null
+    if (raw && typeof raw.investmentTypeSlug === 'string') config.investmentTypeSlug = raw.investmentTypeSlug
+    if (raw && typeof raw.sortOrder === 'number') config.sortOrder = raw.sortOrder
+    if (raw && (typeof raw.headerMediaId === 'string' || raw.headerMediaId === null)) config.headerMediaId = raw.headerMediaId
+  }
+  return config
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> | { slug: string } }
 ) {
   try {
@@ -115,6 +160,8 @@ export async function GET(
     if (!slug) {
       return NextResponse.json({ error: 'Invalid slug' }, { status: 400 })
     }
+
+    const editingLocale = parseAdminVaultLocale(request.nextUrl.searchParams.get('locale'))
 
     let session
     try {
@@ -134,16 +181,11 @@ export async function GET(
       },
       include: {
         packagedProduct: true,
+        pageI18n: true,
         sections: {
           where: { key: VAULT_SECTION_KEY },
           include: {
-            contents: {
-              where: {
-                locale: VAULT_DEFAULT_LOCALE,
-                status: ContentStatus.DRAFT,
-              },
-              take: 1,
-            },
+            contents: true,
           },
           take: 1,
         },
@@ -154,54 +196,61 @@ export async function GET(
       return NextResponse.json({ error: 'Vault not found' }, { status: 404 })
     }
 
-    const content = page.sections[0]?.contents[0]
-    const rawData = content?.data
+    const section = page.sections[0]
+    const contents = section?.contents ?? []
+    const draftForLocale = contents.find(
+      (c) => c.locale === editingLocale && c.status === ContentStatus.DRAFT,
+    )
+    const publishedForLocale = contents.find(
+      (c) => c.locale === editingLocale && c.status === ContentStatus.PUBLISHED,
+    )
+    const rawData = draftForLocale?.data
+    const config = parseVaultConfigFromRaw(rawData)
+    const publishedRaw = publishedForLocale?.data
+    const publishedConfig = publishedRaw != null ? parseVaultConfigFromRaw(publishedRaw) : null
 
-    let config: z.infer<typeof vaultConfigSchema>
-    try {
-      const draftData =
-        rawData == null
-          ? {}
-          : typeof rawData === 'string'
-            ? (() => {
-                try {
-                  return JSON.parse(rawData) as unknown
-                } catch {
-                  return {}
-                }
-              })()
-            : typeof rawData === 'object' && rawData !== null
-              ? { ...(rawData as Record<string, unknown>) }
-              : {}
-      const validated = vaultConfigSchema.safeParse(draftData)
-      if (validated.success) {
-        config = validated.data
-      } else {
-        config = getDefaultVaultConfig()
-        config.modules = normalizeModulesFromRaw(draftData)
-        const raw = draftData as Record<string, unknown>
-        if (typeof raw.investmentTypeSlug === 'string') config.investmentTypeSlug = raw.investmentTypeSlug
-        if (typeof raw.sortOrder === 'number') config.sortOrder = raw.sortOrder
-        if (typeof raw.headerMediaId === 'string' || raw.headerMediaId === null) config.headerMediaId = raw.headerMediaId
-      }
-    } catch {
-      config = getDefaultVaultConfig()
-      config.modules = normalizeModulesFromRaw(rawData)
-      const raw = rawData as Record<string, unknown> | null
-      if (raw && typeof raw.investmentTypeSlug === 'string') config.investmentTypeSlug = raw.investmentTypeSlug
-      if (raw && typeof raw.sortOrder === 'number') config.sortOrder = raw.sortOrder
-      if (raw && (typeof raw.headerMediaId === 'string' || raw.headerMediaId === null)) config.headerMediaId = raw.headerMediaId
-    }
+    const localeVaultLayers = computeVaultLocaleLayerInfos(
+      contents.map((c) => ({
+        locale: c.locale,
+        status: c.status,
+        data: c.data,
+      })),
+    )
 
     const updatedAt = page.updatedAt
+    const i18nRows = page.pageI18n.map((r) => ({
+      locale: r.locale,
+      title: r.title,
+      description: r.description,
+    }))
+    const { title: displayTitle, description: displayDescription } = getVaultPageTextFieldsForLocale(
+      { title: page.title, description: page.description },
+      i18nRows,
+      editingLocale,
+    )
+
     const pagePayload = {
       id: page.id,
       slug: page.slug,
-      title: page.title ?? null,
-      description: page.description ?? null,
+      title: displayTitle,
+      description: displayDescription,
       urlPath: page.urlPath,
       updatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt),
     }
+
+    const completeness = computePageLocaleCompleteness({
+      id: page.id,
+      template: page.template,
+      title: page.title,
+      description: page.description,
+      pageI18n: i18nRows,
+      sections: [
+        {
+          id: section?.id ?? page.id,
+          contents: contents.map((c) => ({ locale: c.locale, status: c.status })),
+        },
+      ],
+    })
 
     const pp = page.packagedProduct
     const lendingRow =
@@ -239,7 +288,15 @@ export async function GET(
         }
       : null
 
-    return NextResponse.json({ page: pagePayload, config, packagedProduct })
+    return NextResponse.json({
+      page: pagePayload,
+      config,
+      publishedConfig,
+      localeVaultLayers,
+      packagedProduct,
+      editingLocale,
+      localeCompleteness: completeness.locales,
+    })
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error))
     console.error('[api/admin/vaults/GET]', err.message, err.stack)
@@ -268,6 +325,10 @@ export async function PUT(
 
     const body = await request.json()
     const parsed = updateVaultSchema.parse(body)
+    const loc = parsed.locale as Locale
+    if (!isValidLocale(loc)) {
+      return NextResponse.json({ error: 'Invalid locale' }, { status: 400 })
+    }
 
     const page = await prisma.page.findFirst({
       where: {
@@ -293,38 +354,55 @@ export async function PUT(
       )
     }
 
-    await prisma.page.update({
-      where: { id: page.id },
-      data: {
-        title: parsed.title ?? page.title,
-        description:
-          parsed.description !== undefined ? parsed.description : page.description,
-      },
-    })
+    const titleVal = parsed.title !== undefined ? parsed.title : undefined
+    const descVal = parsed.description !== undefined ? parsed.description : undefined
 
-    const statuses: ContentStatus[] = [ContentStatus.DRAFT, ContentStatus.PUBLISHED]
-    for (const status of statuses) {
-      await prisma.sectionContent.upsert({
-        where: {
-          sectionId_locale_status: {
-            sectionId: section.id,
-            locale: VAULT_DEFAULT_LOCALE,
-            status,
-          },
+    if (titleVal !== undefined || descVal !== undefined) {
+      await prisma.pageI18n.upsert({
+        where: { pageId_locale: { pageId: page.id, locale: loc } },
+        create: {
+          pageId: page.id,
+          locale: loc,
+          title: titleVal ?? null,
+          description: descVal ?? null,
         },
         update: {
-          data: parsed.config,
-          updatedByUserId: session.userId,
-        },
-        create: {
-          sectionId: section.id,
-          locale: VAULT_DEFAULT_LOCALE,
-          status,
-          data: parsed.config,
-          updatedByUserId: session.userId,
+          ...(titleVal !== undefined ? { title: titleVal } : {}),
+          ...(descVal !== undefined ? { description: descVal } : {}),
         },
       })
+
+      if (loc === defaultLocale) {
+        await prisma.page.update({
+          where: { id: page.id },
+          data: {
+            ...(titleVal !== undefined ? { title: titleVal } : {}),
+            ...(descVal !== undefined ? { description: descVal } : {}),
+          },
+        })
+      }
     }
+
+    await prisma.sectionContent.upsert({
+      where: {
+        sectionId_locale_status: {
+          sectionId: section.id,
+          locale: loc,
+          status: ContentStatus.DRAFT,
+        },
+      },
+      update: {
+        data: parsed.config,
+        updatedByUserId: session.userId,
+      },
+      create: {
+        sectionId: section.id,
+        locale: loc,
+        status: ContentStatus.DRAFT,
+        data: parsed.config,
+        updatedByUserId: session.userId,
+      },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

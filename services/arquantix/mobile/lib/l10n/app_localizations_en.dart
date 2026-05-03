@@ -32,4 +32,69 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get activationHeroSubtitleInvest =>
       'Explore opportunities and build your portfolio.';
+
+  @override
+  String get exclusiveOfferInvestUnavailableTitle => 'Investment unavailable';
+
+  @override
+  String get exclusiveOfferInvestUnavailableBodyFunded =>
+      'This offer has reached its funding target.';
+
+  @override
+  String get exclusiveOfferInvestUnavailableBodyOther =>
+      'This offer is not open for investment at the moment.';
+
+  @override
+  String get exclusiveOfferClose => 'Close';
+
+  @override
+  String get exclusiveOfferInvestCtaDefault => 'Invest';
+
+  @override
+  String get exclusiveOfferDocuments => 'Documents';
+
+  @override
+  String get exclusiveOfferGallery => 'Gallery';
+
+  @override
+  String get exclusiveOfferVideosTitle => 'Videos';
+
+  @override
+  String exclusiveOfferVideoItemTitle(int videoNumber) {
+    return 'Video $videoNumber';
+  }
+
+  @override
+  String get exclusiveOfferFaqDefaultTitle => 'FAQ';
+
+  @override
+  String get exclusiveOfferModalInfoDefaultTitle => 'Information';
+
+  @override
+  String get exclusiveOfferFaqArticleLoadError =>
+      'Could not load this article.';
+
+  @override
+  String get exclusiveOfferFaqArticleEmptyFallback => 'No content available.';
+
+  @override
+  String get exclusiveOfferFaqModalClose => 'Close';
+
+  @override
+  String exclusiveOfferStepsMilestoneDay(int stepNumber) {
+    return 'Step $stepNumber';
+  }
+
+  @override
+  String exclusiveOfferStepsCountLabel(int count) {
+    return '$count steps';
+  }
+
+  @override
+  String articleReadingTimeMinutes(int count) {
+    return '$count min read';
+  }
+
+  @override
+  String get articleAuthorByPrefix => 'By';
 }

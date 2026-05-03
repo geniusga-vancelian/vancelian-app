@@ -1,7 +1,7 @@
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center">
-      <div className="animate-pulse text-lg">Chargement…</div>
+    <div className="flex min-h-screen items-center justify-center bg-neutral-100 text-neutral-600">
+      <div className="animate-pulse text-sm">Chargement…</div>
     </div>
   )
 }

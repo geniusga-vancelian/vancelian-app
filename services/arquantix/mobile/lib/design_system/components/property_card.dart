@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'app_back_button.dart';
 import 'circle_button.dart';
 import 'glass_badge.dart';
-import 'app_back_button.dart';
 
 /// Carte immersive plein écran avec image de fond, overlay dégradé,
 /// badges, titre, description et boutons d'action.
@@ -102,7 +102,7 @@ class PropertyCard extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         AppBackButton(
-          icon: Icons.arrow_back_ios_new_rounded,
+          kalaiIcon: KalaiIcons.arrowLeft,
           variant: AppBackButtonVariant.glassDark,
           onPressed: onBackPress,
         ),
@@ -158,21 +158,25 @@ class PropertyCard extends StatelessWidget {
             items: [
               CircleButtonItem(
                 icon: Icons.add_rounded,
+                kalaiAsset: KalaiIcons.add,
                 label: 'Investir',
                 onTap: onInvest,
               ),
               CircleButtonItem(
                 icon: Icons.description_outlined,
+                kalaiAsset: KalaiIcons.file,
                 label: 'Brochure',
                 onTap: onBrochure,
               ),
               CircleButtonItem(
                 icon: Icons.photo_library_outlined,
+                kalaiAsset: KalaiIcons.photo,
                 label: 'Photos',
                 onTap: onPhotos,
               ),
               CircleButtonItem(
                 icon: Icons.videocam_outlined,
+                kalaiAsset: KalaiIcons.video,
                 label: 'Vidéos',
                 onTap: onVideos,
               ),

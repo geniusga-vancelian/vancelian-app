@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import { ContentStatus } from '@prisma/client'
 
+import { defaultLocale, getLocaleOrDefault } from '@/config/locales'
 import { prisma } from '@/lib/prisma'
+import { resolvePageSeoFields } from '@/lib/cms/resolvePageI18nMetadata'
+import { resolveVaultSectionContent } from '@/lib/cms/resolveVaultSectionContent'
 import { getPresignedUrl } from '@/lib/storage/storageClient'
 
 const VAULT_TEMPLATE_DB = 'vault_builder'
 const VAULT_SECTION_KEY = 'vault_builder_v1'
-const VAULT_DEFAULT_LOCALE = 'fr'
 
 async function resolveMediaUrl(mediaId: string | null | undefined): Promise<string | null> {
   if (!mediaId) return null
@@ -44,24 +46,23 @@ function extractCoverImage(data: unknown): string | null {
 }
 
 /**
- * GET /api/mobile/flutter/vaults
+ * GET /api/mobile/flutter/vaults?locale=fr
  * Liste publique des vaults pour l'app mobile.
+ * Contenu éditorial : même résolution de locale que le détail (`resolveVaultSectionContent`, PUBLISHED uniquement).
+ * Sans param `locale` : `defaultLocale` du site (comportement historique ~ FR).
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url)
+    const requestedLocale = getLocaleOrDefault(searchParams.get('locale') ?? undefined)
+
     const pages = await prisma.page.findMany({
       where: { template: VAULT_TEMPLATE_DB },
       include: {
         sections: {
           where: { key: VAULT_SECTION_KEY },
           include: {
-            contents: {
-              where: {
-                locale: VAULT_DEFAULT_LOCALE,
-                status: ContentStatus.PUBLISHED,
-              },
-              take: 1,
-            },
+            contents: true,
           },
           take: 1,
         },
@@ -71,7 +72,12 @@ export async function GET() {
 
     const vaultsRaw = await Promise.all(
       pages.map(async (page) => {
-        const content = page.sections[0]?.contents[0]
+        const contents = page.sections[0]?.contents ?? []
+        const content = resolveVaultSectionContent(contents, {
+          requestedLocale,
+          defaultLocale,
+          mode: ContentStatus.PUBLISHED,
+        })
         const data = content?.data as Record<string, unknown> | null
         const headerMediaId = typeof data?.headerMediaId === 'string' ? data.headerMediaId : null
         const coverFromMedia = headerMediaId ? await resolveMediaUrl(headerMediaId) : null
@@ -80,11 +86,12 @@ export async function GET() {
           coverFromMedia ?? coverFromModules ?? `https://picsum.photos/seed/vault-${page.slug}/600/400`
         const investmentTypeSlug = typeof data?.investmentTypeSlug === 'string' ? data.investmentTypeSlug : null
         const sortOrder = typeof data?.sortOrder === 'number' ? data.sortOrder : 999
+        const seo = await resolvePageSeoFields(page.id, requestedLocale)
         return {
           id: page.id,
           slug: page.slug,
-          title: page.title ?? page.slug,
-          description: page.description ?? null,
+          title: seo.title?.trim() || page.slug,
+          description: seo.description ?? null,
           urlPath: page.urlPath,
           coverImage,
           investmentTypeSlug,

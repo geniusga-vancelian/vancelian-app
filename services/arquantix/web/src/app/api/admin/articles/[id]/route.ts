@@ -6,6 +6,9 @@ import { z } from 'zod'
 import { isValidSlug } from '@/lib/utils/slugify'
 import { ContentStatus, Prisma } from '@prisma/client'
 import { getPresignedUrl } from '@/lib/storage/storageClient'
+import { awaitRouteParams } from '@/lib/api/routeParams'
+import { ARTICLE_TYPE_KEYS, normalizeArticleType } from '@/lib/admin/articleTypes'
+import { normalizeCollectionTagsList } from '@/lib/articles/collectionTags'
 
 const updateArticleSchema = z.object({
   slug: z.string().min(1).max(255).refine(isValidSlug, {
@@ -34,11 +37,39 @@ const updateArticleSchema = z.object({
   authorName: z.string().min(1).optional(),
   authorRole: z.string().optional().nullable(),
   allowComments: z.boolean().optional(),
-  articleType: z.enum(['NEWS', 'ANALYSIS']).optional(),
-  /** Uniquement pour les NEWS ; forcé à false pour ANALYSIS côté serveur. */
+  articleType: z.enum(ARTICLE_TYPE_KEYS).optional(),
+  /** Uniquement pour les NEWS ; forcé à false pour les autres types côté serveur. */
   isCompanyNews: z.boolean().optional(),
   status: z.enum(['DRAFT', 'PUBLISHED']).optional(),
   publishedAt: z.string().datetime().optional().nullable(),
+  // -------- Champs HELP (Phase 3.3) --------
+  helpCollectionId: z.string().min(1).optional().nullable(),
+  helpCategoryId: z.string().min(1).optional().nullable(),
+  helpSlug: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine(isValidSlug, {
+      message: 'helpSlug must be lowercase, alphanumeric with hyphens only',
+    })
+    .optional()
+    .nullable(),
+  allowAnchors: z.boolean().optional(),
+  targetTags: z.array(z.string().min(1).max(64)).max(50).optional().nullable(),
+  // -------- Champs ACADEMY (Phase 4 — symétrique HELP) --------
+  academyCollectionId: z.string().min(1).optional().nullable(),
+  academyCategoryId: z.string().min(1).optional().nullable(),
+  academySlug: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine(isValidSlug, {
+      message: 'academySlug must be lowercase, alphanumeric with hyphens only',
+    })
+    .optional()
+    .nullable(),
+  /** Tags de regroupement sous collection (Help, Academy, NEWS, …). */
+  collectionTags: z.array(z.string()).max(20).optional().nullable(),
 })
 
 async function ensureArticleMilestoneColumn() {
@@ -89,9 +120,10 @@ function isUnknownCompanyNewsArgumentError(error: unknown): boolean {
 // GET /api/admin/articles/[id]
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await awaitRouteParams(params)
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -113,7 +145,7 @@ export async function GET(
     }
 
     const article = await prisma.article.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         coverMedia: true,
         projects: {
@@ -175,20 +207,19 @@ export async function GET(
     if (typeof resolvedIsMilestone !== 'boolean') {
       const milestoneRows = await prisma.$queryRawUnsafe<Array<{ is_milestone: boolean }>>(
         `SELECT "is_milestone" FROM "articles" WHERE "id" = $1 LIMIT 1`,
-        params.id
+        id
       )
       resolvedIsMilestone = milestoneRows[0]?.is_milestone ?? false
     }
 
-    let resolvedArticleType = 'NEWS'
+    let resolvedArticleType: string = 'NEWS'
     try {
       await ensureArticleTypeColumn()
       const typeRows = await prisma.$queryRawUnsafe<Array<{ article_type: string | null }>>(
         `SELECT "article_type" FROM "articles" WHERE "id" = $1 LIMIT 1`,
-        params.id
+        id
       )
-      const dbType = typeRows[0]?.article_type
-      resolvedArticleType = dbType === 'ANALYSIS' ? 'ANALYSIS' : 'NEWS'
+      resolvedArticleType = normalizeArticleType(typeRows[0]?.article_type)
     } catch {
       resolvedArticleType = 'NEWS'
     }
@@ -198,7 +229,7 @@ export async function GET(
       await ensureArticleCompanyNewsColumn()
       const cnRows = await prisma.$queryRawUnsafe<Array<{ is_company_news: boolean }>>(
         `SELECT "is_company_news" FROM "articles" WHERE "id" = $1 LIMIT 1`,
-        params.id
+        id
       )
       resolvedIsCompanyNews = cnRows[0]?.is_company_news === true
     } catch {
@@ -227,9 +258,10 @@ export async function GET(
 // PUT /api/admin/articles/[id]
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await awaitRouteParams(params)
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -248,7 +280,7 @@ export async function PUT(
     }
 
     const article = await prisma.article.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!article) {
@@ -280,12 +312,18 @@ export async function PUT(
     const normalizedGalleryMediaIds = validated.galleryMediaIds === undefined ? undefined : (validated.galleryMediaIds === null || validated.galleryMediaIds.length === 0 ? null : validated.galleryMediaIds)
     const normalizedCategorySlugs = validated.categorySlugs === undefined ? undefined : (validated.categorySlugs === null || validated.categorySlugs.length === 0 ? null : validated.categorySlugs)
     const normalizedDocuments = validated.documents === undefined ? undefined : (validated.documents === null || validated.documents.length === 0 ? null : validated.documents)
+    const normalizedCollectionTags =
+      validated.collectionTags === undefined
+        ? undefined
+        : validated.collectionTags === null || validated.collectionTags.length === 0
+          ? []
+          : normalizeCollectionTagsList(validated.collectionTags)
 
     await ensureArticleCompanyNewsColumn()
     await ensureArticleTypeColumn()
     const articleTypeRows = await prisma.$queryRawUnsafe<Array<{ article_type: string | null }>>(
       `SELECT "article_type" FROM "articles" WHERE "id" = $1 LIMIT 1`,
-      params.id
+      id
     )
     const currentArticleType = (articleTypeRows[0]?.article_type || 'NEWS').toUpperCase()
     const nextArticleType =
@@ -346,13 +384,111 @@ export async function PUT(
     if (validated.isFeatured === true) {
       await prisma.article.updateMany({
         where: {
-          id: { not: params.id },
+          id: { not: id },
           isFeatured: true,
         },
         data: {
           isFeatured: false,
         },
       })
+    }
+
+    // -------- Validation HELP : collection + helpSlug ; tags dans collection_tags.
+    const nextHelpCollectionId =
+      validated.helpCollectionId !== undefined
+        ? validated.helpCollectionId
+        : (article as any).helpCollectionId
+    const nextHelpCategoryId =
+      validated.helpCategoryId !== undefined
+        ? validated.helpCategoryId
+        : (article as any).helpCategoryId
+    const nextHelpSlug =
+      validated.helpSlug !== undefined ? validated.helpSlug : (article as any).helpSlug
+    const nextAllowAnchors =
+      validated.allowAnchors !== undefined
+        ? validated.allowAnchors
+        : (article as any).allowAnchors
+
+    if (nextArticleType === 'HELP') {
+      if (!nextHelpCollectionId || !nextHelpSlug) {
+        return NextResponse.json(
+          {
+            error:
+              'For articleType=HELP, helpCollectionId + helpSlug are required.',
+          },
+          { status: 400 },
+        )
+      }
+      if (
+        validated.helpSlug !== undefined ||
+        validated.helpCollectionId !== undefined
+      ) {
+        const collision = await prisma.article.findFirst({
+          where: {
+            articleType: 'HELP',
+            helpCollectionId: nextHelpCollectionId,
+            helpSlug: nextHelpSlug,
+            id: { not: id },
+          },
+          select: { id: true, slug: true },
+        })
+        if (collision) {
+          return NextResponse.json(
+            {
+              error: `Un autre article HELP existe déjà dans cette collection avec helpSlug="${nextHelpSlug}" (id=${collision.id}).`,
+            },
+            { status: 400 },
+          )
+        }
+      }
+    }
+
+    // -------- Validation ACADEMY : collection + academySlug (symétrique HELP).
+    const nextAcademyCollectionId =
+      validated.academyCollectionId !== undefined
+        ? validated.academyCollectionId
+        : (article as any).academyCollectionId
+    const nextAcademyCategoryId =
+      validated.academyCategoryId !== undefined
+        ? validated.academyCategoryId
+        : (article as any).academyCategoryId
+    const nextAcademySlug =
+      validated.academySlug !== undefined
+        ? validated.academySlug
+        : (article as any).academySlug
+
+    if (nextArticleType === 'ACADEMY') {
+      if (!nextAcademyCollectionId || !nextAcademySlug) {
+        return NextResponse.json(
+          {
+            error:
+              'For articleType=ACADEMY, academyCollectionId + academySlug are required.',
+          },
+          { status: 400 },
+        )
+      }
+      if (
+        validated.academySlug !== undefined ||
+        validated.academyCollectionId !== undefined
+      ) {
+        const collision = await prisma.article.findFirst({
+          where: {
+            articleType: 'ACADEMY',
+            academyCollectionId: nextAcademyCollectionId,
+            academySlug: nextAcademySlug,
+            id: { not: id },
+          },
+          select: { id: true, slug: true },
+        })
+        if (collision) {
+          return NextResponse.json(
+            {
+              error: `Un autre article ACADEMY existe déjà dans cette collection avec academySlug="${nextAcademySlug}" (id=${collision.id}).`,
+            },
+            { status: 400 },
+          )
+        }
+      }
     }
 
     // Build update data object
@@ -376,6 +512,82 @@ export async function PUT(
     if (normalizedPublishedAt !== undefined) updateData.publishedAt = normalizedPublishedAt
     updateData.isCompanyNews = nextIsCompanyNews
 
+    if (normalizedCollectionTags !== undefined) {
+      updateData.collectionTags = normalizedCollectionTags
+    }
+    // Champs HELP : on les set/clear selon le type final.
+    if (nextArticleType === 'HELP') {
+      updateData.helpCollectionId = nextHelpCollectionId
+      updateData.helpCategoryId = nextHelpCategoryId
+      updateData.helpSlug = nextHelpSlug
+      if (validated.allowAnchors !== undefined) updateData.allowAnchors = nextAllowAnchors
+      if (validated.targetTags !== undefined) {
+        updateData.targetTags =
+          validated.targetTags === null || validated.targetTags.length === 0
+            ? null
+            : validated.targetTags
+      }
+    } else if (
+      validated.articleType !== undefined &&
+      currentArticleType === 'HELP' &&
+      validated.articleType !== 'HELP'
+    ) {
+      // Switch HELP → autre type : détache les liens HELP pour rester cohérent
+      // avec la sémantique « N'ont de sens que lorsque articleType=HELP ».
+      updateData.helpCollectionId = null
+      updateData.helpCategoryId = null
+      updateData.helpSlug = null
+      updateData.targetTags = null
+    } else {
+      if (validated.helpCollectionId !== undefined)
+        updateData.helpCollectionId = validated.helpCollectionId
+      if (validated.helpCategoryId !== undefined)
+        updateData.helpCategoryId = validated.helpCategoryId
+      if (validated.helpSlug !== undefined) updateData.helpSlug = validated.helpSlug
+      if (validated.allowAnchors !== undefined)
+        updateData.allowAnchors = validated.allowAnchors
+      if (validated.targetTags !== undefined) {
+        updateData.targetTags =
+          validated.targetTags === null || validated.targetTags.length === 0
+            ? null
+            : validated.targetTags
+      }
+    }
+
+    // Champs ACADEMY (Phase 4 — symétrique HELP) : set/clear selon le type final.
+    if (nextArticleType === 'ACADEMY') {
+      updateData.academyCollectionId = nextAcademyCollectionId
+      updateData.academyCategoryId = nextAcademyCategoryId
+      updateData.academySlug = nextAcademySlug
+      // allowAnchors + targetTags sont partagés entre HELP/ACADEMY ;
+      // on les applique aussi côté ACADEMY si le client les envoie.
+      if (validated.allowAnchors !== undefined && updateData.allowAnchors === undefined) {
+        updateData.allowAnchors = validated.allowAnchors
+      }
+      if (validated.targetTags !== undefined && updateData.targetTags === undefined) {
+        updateData.targetTags =
+          validated.targetTags === null || validated.targetTags.length === 0
+            ? null
+            : validated.targetTags
+      }
+    } else if (
+      validated.articleType !== undefined &&
+      currentArticleType === 'ACADEMY' &&
+      validated.articleType !== 'ACADEMY'
+    ) {
+      // Switch ACADEMY → autre type : détache les liens ACADEMY pour rester
+      // cohérent avec la sémantique du schéma.
+      updateData.academyCollectionId = null
+      updateData.academyCategoryId = null
+      updateData.academySlug = null
+    } else {
+      if (validated.academyCollectionId !== undefined)
+        updateData.academyCollectionId = validated.academyCollectionId
+      if (validated.academyCategoryId !== undefined)
+        updateData.academyCategoryId = validated.academyCategoryId
+      if (validated.academySlug !== undefined) updateData.academySlug = validated.academySlug
+    }
+
     // Prisma rejette `update({ data: {} })`. Ex. : body avec seulement `articleType: "NEWS"` sans
     // `isCompanyNews` → aucun champ dans updateData avant le SQL `article_type`.
     const hasPrismaUpdates = Object.keys(updateData).length > 0
@@ -385,14 +597,14 @@ export async function PUT(
     try {
       if (!hasPrismaUpdates) {
         updated = await prisma.article.findUnique({
-          where: { id: params.id },
+          where: { id: id },
         })
         if (!updated) {
           return NextResponse.json({ error: 'Article not found' }, { status: 404 })
         }
       } else {
         updated = await prisma.article.update({
-          where: { id: params.id },
+          where: { id: id },
           data: updateData,
         })
       }
@@ -402,21 +614,21 @@ export async function PUT(
         await prisma.$executeRawUnsafe(
           `UPDATE "articles" SET "is_company_news" = $1 WHERE "id" = $2`,
           nextIsCompanyNews,
-          params.id
+          id
         )
         const { isCompanyNews: _ignoredCompanyNews, ...updateDataWithoutCompanyNews } = updateData
         const hasAfterCn = Object.keys(updateDataWithoutCompanyNews).length > 0
         try {
           if (!hasAfterCn) {
             updated = await prisma.article.findUnique({
-              where: { id: params.id },
+              where: { id: id },
             })
             if (!updated) {
               return NextResponse.json({ error: 'Article not found' }, { status: 404 })
             }
           } else {
             updated = await prisma.article.update({
-              where: { id: params.id },
+              where: { id: id },
               data: updateDataWithoutCompanyNews,
             })
           }
@@ -427,7 +639,7 @@ export async function PUT(
               await prisma.$executeRawUnsafe(
                 `UPDATE "articles" SET "is_milestone" = $1 WHERE "id" = $2`,
                 validated.isMilestone,
-                params.id
+                id
               )
             }
             const { isMilestone: _ignoredMilestone2, ...updateDataWithoutMilestone2 } =
@@ -435,12 +647,12 @@ export async function PUT(
             const hasOther2 = Object.keys(updateDataWithoutMilestone2).length > 0
             if (hasOther2) {
               updated = await prisma.article.update({
-                where: { id: params.id },
+                where: { id: id },
                 data: updateDataWithoutMilestone2,
               })
             } else {
               updated = await prisma.article.findUnique({
-                where: { id: params.id },
+                where: { id: id },
               })
             }
           } else {
@@ -452,7 +664,7 @@ export async function PUT(
             if (isMissingMilestoneColumn2) {
               await ensureArticleMilestoneColumn()
               updated = await prisma.article.update({
-                where: { id: params.id },
+                where: { id: id },
                 data: updateDataWithoutCompanyNews,
               })
             } else {
@@ -468,7 +680,7 @@ export async function PUT(
           await prisma.$executeRawUnsafe(
             `UPDATE "articles" SET "is_milestone" = $1 WHERE "id" = $2`,
             validated.isMilestone,
-            params.id
+            id
           )
         }
 
@@ -477,12 +689,12 @@ export async function PUT(
 
         if (hasOtherUpdates) {
           updated = await prisma.article.update({
-            where: { id: params.id },
+            where: { id: id },
             data: updateDataWithoutMilestone,
           })
         } else {
           updated = await prisma.article.findUnique({
-            where: { id: params.id },
+            where: { id: id },
           })
         }
       } else {
@@ -495,7 +707,7 @@ export async function PUT(
         if (isMissingMilestoneColumn) {
           await ensureArticleMilestoneColumn()
           updated = await prisma.article.update({
-            where: { id: params.id },
+            where: { id: id },
             data: updateData,
           })
         } else {
@@ -509,13 +721,15 @@ export async function PUT(
       await prisma.$executeRawUnsafe(
         `UPDATE "articles" SET "article_type" = $1 WHERE "id" = $2`,
         validated.articleType,
-        params.id
+        id
       )
-      if (validated.articleType === 'ANALYSIS') {
+      // `is_company_news` n'a de sens que pour `NEWS` — on le désarme pour
+      // tous les autres types (ANALYSIS, RESEARCH, ACADEMY, USER_BLOG…).
+      if (validated.articleType !== 'NEWS') {
         await ensureArticleCompanyNewsColumn()
         await prisma.$executeRawUnsafe(
           `UPDATE "articles" SET "is_company_news" = false WHERE "id" = $1`,
-          params.id
+          id
         )
       }
     }
@@ -545,16 +759,17 @@ export async function PUT(
 // DELETE /api/admin/articles/[id]
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await awaitRouteParams(params)
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const article = await prisma.article.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!article) {
@@ -562,7 +777,7 @@ export async function DELETE(
     }
 
     await prisma.article.delete({
-      where: { id: params.id },
+      where: { id },
     })
 
     return NextResponse.json({ message: 'Article deleted' })

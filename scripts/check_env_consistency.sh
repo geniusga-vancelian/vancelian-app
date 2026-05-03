@@ -106,6 +106,31 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     ylw "arquantix-web absent ou BACKEND_* non lisibles."
   fi
 
+  echo ""
+  echo "=== Médias R2 (Next — env_file .env racine) ==="
+  ROOT_ENV="$REPO_ROOT/.env"
+  if [[ -f "$ROOT_ENV" ]]; then
+    if grep -qE '^[[:space:]]*R2_ENDPOINT=' "$ROOT_ENV" \
+      && grep -qE '^[[:space:]]*R2_ACCESS_KEY_ID=' "$ROOT_ENV" \
+      && grep -qE '^[[:space:]]*R2_SECRET_ACCESS_KEY=' "$ROOT_ENV"; then
+      grn "Fichier .env racine : R2_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY présents"
+    else
+      ylw "Fichier .env racine : R2 incomplet — médias admin (proxy /api/admin/media/*/file) en 503 sans ces clés"
+    fi
+  else
+    ylw "Pas de .env à la racine — arquantix-web (compose) n’injecte pas les secrets R2"
+  fi
+  set +e
+  _r2e="$(web_exec printenv R2_ENDPOINT 2>/dev/null | tr -d '\r')"
+  set -e
+  if [[ -n "$(arquantix_cid_for_service arquantix-web)" ]] || [[ -n "$(arquantix_cid_for_service_recovery arquantix-web)" ]]; then
+    if [[ -n "$_r2e" ]]; then
+      grn "Conteneur arquantix-web : R2_ENDPOINT défini (aperçu : ${_r2e:0:24}…)"
+    else
+      ylw "Conteneur arquantix-web : R2_ENDPOINT vide — vérifier env_file .env racine puis recreate du service"
+    fi
+  fi
+
 else
   ylw "Docker indisponible."
 fi

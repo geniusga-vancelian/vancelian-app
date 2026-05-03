@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
 
 interface SectionHelpBreadcrumbsProps {
   rootLabel?: string
@@ -42,7 +43,7 @@ export function SectionHelpBreadcrumbs({
   }
 
   return (
-    <nav aria-label="Breadcrumb">
+    <nav aria-label={siteCommonCta(locale, 'breadcrumb_aria')}>
       <ol className="flex items-center space-x-2 text-sm text-gray-500">
         {items.map((item, index) => (
           <li key={index} className="flex items-center">

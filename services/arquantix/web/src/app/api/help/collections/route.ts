@@ -1,53 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { getLocaleOrDefault } from '@/config/locales'
-import { cookies } from 'next/headers'
-import { ContentStatus } from '@prisma/client'
+import { getHelpCollections } from '@/lib/help/get-help-data'
 
+/**
+ * Liste publique des Help Collections (web + mobile Flutter).
+ *
+ * Phase 3.3 : passe par `getHelpCollections()` qui agrège les comptes
+ * `Article(HELP)` unifiés ET `HelpArticle` legacy (dédup `helpSlug`).
+ * Avant ce refactor, la route ne lisait QUE le legacy, donc l'app mobile ne
+ * voyait pas les nouveaux articles créés via le builder unifié.
+ */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const localeParam = searchParams.get('locale')
-    const cookieStore = await cookies()
-    const locale = localeParam || getLocaleOrDefault(cookieStore.get('arquantix-locale')?.value)
+    const localeParam = searchParams.get('locale') || undefined
 
-    const collections = await prisma.helpCollection.findMany({
-      where: { isPublished: true },
-      orderBy: { order: 'asc' },
-      include: {
-        i18n: { where: { locale }, take: 1 },
-        categories: {
-          where: { isPublished: true },
-          include: {
-            articles: {
-              where: { status: ContentStatus.PUBLISHED },
-              select: { id: true },
-            },
-          },
-        },
-      },
+    const collections = await getHelpCollections(localeParam)
+
+    return NextResponse.json({
+      collections: collections.map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        iconKey: c.iconKey,
+        colorHex: c.colorHex,
+        order: c.order,
+        title: c.title,
+        subtitle: c.subtitle,
+        description: c.description,
+        articleCount: c.articleCount,
+        coverImageUrl: c.coverImageUrl,
+      })),
     })
-
-    const payload = collections
-      .map((collection) => {
-        const i18n = collection.i18n[0]
-        if (!i18n) return null
-        const articleCount = collection.categories.reduce((sum, cat) => sum + cat.articles.length, 0)
-        return {
-          id: collection.id,
-          slug: collection.slug,
-          iconKey: collection.iconKey,
-          colorHex: collection.colorHex,
-          order: collection.order,
-          title: i18n.title,
-          subtitle: i18n.subtitle ?? null,
-          description: i18n.description ?? null,
-          articleCount,
-        }
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null)
-
-    return NextResponse.json({ collections: payload })
   } catch (error) {
     console.error('[Help Collections API] Error:', error)
     return NextResponse.json({ error: 'Internal server error', collections: [] }, { status: 500 })

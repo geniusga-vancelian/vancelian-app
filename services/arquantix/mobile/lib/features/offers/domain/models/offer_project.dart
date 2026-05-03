@@ -1,3 +1,5 @@
+import 'vault_offer_builder_models.dart';
+
 /// Projet / offre exclusive (données CMS + enrichissement lending).
 class OfferProject {
   final String id;
@@ -41,6 +43,12 @@ class OfferProject {
   /// Identifiant `packaged_products.id` côté registry (liste catalogue).
   final String? packagedProductId;
 
+  /// Puces hero : premier [TagsModule] du vault (locale CMS), builder-first.
+  final List<String> vaultHeroTags;
+
+  /// Bloc funding : premier [FundingModule] résolu (builder + lending), sans injection implicite.
+  final VaultFundingUiModel? vaultFunding;
+
   const OfferProject({
     required this.id,
     required this.imageUrl,
@@ -72,7 +80,47 @@ class OfferProject {
     this.entryAssetsAllowed,
     this.catalogSlug,
     this.packagedProductId,
+    this.vaultHeroTags = const [],
+    this.vaultFunding,
   });
+
+  /// Copie pour attacher le funding résolu après construction du projet fusionné.
+  OfferProject withBuilderVault(VaultFundingUiModel? funding) {
+    return OfferProject(
+      id: id,
+      imageUrl: imageUrl,
+      title: title,
+      category: category,
+      shortDescription: shortDescription,
+      description: description,
+      descriptionLinks: descriptionLinks,
+      descriptionModuleTitle: descriptionModuleTitle,
+      howItWorks: howItWorks,
+      keyInformation: keyInformation,
+      teaserVideoUrl: teaserVideoUrl,
+      promoVideoUrls: promoVideoUrls,
+      hasGallery: hasGallery,
+      competitiveAdvantages: competitiveAdvantages,
+      faq: faq,
+      bottomPageMarkdown: bottomPageMarkdown,
+      apy: apy,
+      raised: raised,
+      target: target,
+      progress: progress,
+      investorsCount: investorsCount,
+      durationMonths: durationMonths,
+      lendingAsset: lendingAsset,
+      lendingStatus: lendingStatus,
+      isInvestable: isInvestable,
+      lendingProductId: lendingProductId,
+      entryAssetDefault: entryAssetDefault,
+      entryAssetsAllowed: entryAssetsAllowed,
+      catalogSlug: catalogSlug,
+      packagedProductId: packagedProductId,
+      vaultHeroTags: vaultHeroTags,
+      vaultFunding: funding,
+    );
+  }
 
   /// True if this project has linked lending product data.
   bool get hasLendingData => target != null && target! > 0;

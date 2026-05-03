@@ -2,20 +2,20 @@ import { getHelpCollection } from '@/lib/help/get-help-data'
 import { SectionHelpHero } from '@/components/sections/SectionHelpHero'
 import { SectionHelpBreadcrumbs } from '@/components/sections/SectionHelpBreadcrumbs'
 import { SectionHelpCollectionBody } from '@/components/sections/SectionHelpCollectionBody'
-import { getLocaleFromCookies } from '@/lib/i18n/locale-server'
-import { defaultLocale } from '@/config/locales'
 import { cookies } from 'next/headers'
+import { resolvePublicLocale } from '@/lib/i18n/resolvePublicLocale'
 import { notFound } from 'next/navigation'
-import { getPrimaryMenu } from '@/lib/menu/getPrimaryMenu'
-import { Navigation } from '@/components/sections/Navigation'
 import { prisma } from '@/lib/prisma'
 import { getPageSections } from '@/lib/cms/content'
 import { SectionRenderer } from '@/components/cms/SectionRenderer'
+import { shouldUseHeroSecondaryImageOverlay } from '@/lib/cms/heroSecondaryNav'
+import { cn } from '@/lib/utils'
 
 interface PageProps {
   params: {
     collection: string
   }
+  searchParams?: Record<string, string | string[] | undefined>
 }
 
 export async function generateMetadata({ params }: PageProps) {
@@ -31,10 +31,9 @@ export async function generateMetadata({ params }: PageProps) {
   }
 }
 
-export default async function HelpCollectionPage({ params }: PageProps) {
+export default async function HelpCollectionPage({ params, searchParams }: PageProps) {
   const cookieStore = await cookies()
-  const locale = await getLocaleFromCookies(cookieStore) || defaultLocale
-  const menuItems = await getPrimaryMenu(locale)
+  const locale = resolvePublicLocale({ cookieStore, searchParams })
   const collection = await getHelpCollection(params.collection)
 
   if (!collection) {
@@ -46,39 +45,36 @@ export default async function HelpCollectionPage({ params }: PageProps) {
     where: { slug: 'help-collection' },
   })
 
-  const themeColor = (cmsPage?.themeColor && (cmsPage.themeColor === 'dark' || cmsPage.themeColor === 'light')) 
-    ? cmsPage.themeColor as 'dark' | 'light'
-    : 'light'
-
   // If CMS page exists, render via CMS sections
   if (cmsPage) {
     const sections = await getPageSections('help-collection', locale, 'published')
+    const overlayHero = shouldUseHeroSecondaryImageOverlay(sections)
 
     if (sections.length > 0) {
       return (
-        <>
-          <Navigation menuItems={menuItems} themeColor={themeColor} />
-          <div className="min-h-screen bg-white pt-20 md:pt-24">
-            {sections.map((section) => (
-              <SectionRenderer
-                key={section.id}
-                section={section}
-                locale={locale}
-                collectionSlug={params.collection}
-                categorySlug={undefined}
-              />
-            ))}
-          </div>
-        </>
+        <div
+          className={cn(
+            'min-h-screen bg-white',
+            !overlayHero && 'pt-20 md:pt-24',
+          )}
+        >
+          {sections.map((section) => (
+            <SectionRenderer
+              key={section.id}
+              section={section}
+              locale={locale}
+              collectionSlug={params.collection}
+              categorySlug={undefined}
+            />
+          ))}
+        </div>
       )
     }
   }
 
   // Fallback: render with hardcoded sections
   return (
-    <>
-      <Navigation menuItems={menuItems} themeColor={themeColor} />
-      <div className="min-h-screen bg-white pt-20 md:pt-24">
+    <div className="min-h-screen bg-white pt-20 md:pt-24">
         <SectionHelpHero
           title={collection.title}
           placeholderSearch="Rechercher un article…"
@@ -98,8 +94,7 @@ export default async function HelpCollectionPage({ params }: PageProps) {
           locale={locale}
           collectionSlug={params.collection}
         />
-      </div>
-    </>
+    </div>
   )
 }
 

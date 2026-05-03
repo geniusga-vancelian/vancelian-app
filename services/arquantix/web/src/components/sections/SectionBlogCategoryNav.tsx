@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { resolveLabelWithFallback, DEFAULT_LOCALE } from '@/lib/i18n/resolveLabel'
+import { getLocaleOrDefault } from '@/config/locales'
 
 interface SectionBlogCategoryNavProps {
   title?: string
@@ -17,6 +18,9 @@ export async function SectionBlogCategoryNav({
   locale,
   currentCategory,
 }: SectionBlogCategoryNavProps) {
+  const activeLocale = getLocaleOrDefault(locale)
+  const blogBasePath = `/${activeLocale}/blog`
+
   // Fetch categories with i18n
   const categoriesRaw = await prisma.articleCategory.findMany({
     where: { isActive: true },
@@ -51,7 +55,7 @@ export async function SectionBlogCategoryNav({
       )}
       <nav className="flex flex-wrap gap-2">
         <Link
-          href="/blog"
+          href={blogBasePath}
           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
             !currentCategory
               ? 'bg-indigo-600 text-white'
@@ -63,7 +67,7 @@ export async function SectionBlogCategoryNav({
         {categories.map((cat) => (
           <Link
             key={cat.id}
-            href={`/blog?category=${cat.slug}`}
+            href={`${blogBasePath}?category=${cat.slug}`}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               currentCategory === cat.slug
                 ? 'bg-indigo-600 text-white'

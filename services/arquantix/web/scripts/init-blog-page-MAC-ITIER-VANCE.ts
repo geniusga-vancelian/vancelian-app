@@ -32,7 +32,7 @@ async function main() {
   console.log(`✅ Blog page created/updated: ${blogPage.slug}`)
 
   // Define default sections in order
-  const sectionKeys = ['blog_hero', 'blog_category_nav', 'blog_mosaic', 'blog_feed']
+  const sectionKeys = ['blog_hero', 'blog_mosaic', 'blog_feed']
 
   for (let i = 0; i < sectionKeys.length; i++) {
     const sectionKey = sectionKeys[i]

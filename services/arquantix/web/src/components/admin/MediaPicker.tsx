@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react'
 import { X, Upload, Search, Copy, Trash2, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { adminMediaFileUrl } from '@/lib/admin/adminMediaFileUrl'
 
 interface Media {
   id: string
   key: string
   url: string
+  publicUrl?: string
   filename: string
   mimeType: string
   size: number
@@ -202,7 +204,7 @@ export function MediaPicker({
                   >
                     {isImage ? (
                       <img
-                        src={item.url}
+                        src={adminMediaFileUrl(item.id)}
                         alt={item.alt || item.filename}
                         className="w-full h-32 object-cover"
                       />
@@ -219,7 +221,7 @@ export function MediaPicker({
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleCopyUrl(item.url)
+                          handleCopyUrl(item.publicUrl ?? item.url)
                         }}
                         className="bg-white/90 hover:bg-white p-1 rounded"
                         title="Copy URL"

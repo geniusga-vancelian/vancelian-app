@@ -22,6 +22,27 @@ class TransactionScreen extends StatefulWidget {
     required this.iconColor,
   });
 
+  /// Construit un [TransactionScreen] uniquement à partir d'un
+  /// `transactionId`. Tous les champs UI (merchant, montant…) sont
+  /// initialisés à des placeholders neutres : ils seront remplacés au
+  /// premier frame par les vraies données chargées via
+  /// [TransactionDetailApi.fetchDetail] (cf. `_loadDetail`).
+  ///
+  /// Phase 2c.2 — utilisé par
+  /// `AssistanceDeepLinkResolver` pour résoudre
+  /// `vancelian://app/transactions/{id}` quand la cible n'est pas la
+  /// liste mais une transaction précise (issue d'une carte
+  /// `transaction_detail` de l'assistance).
+  const TransactionScreen.fromId(
+    String id, {
+    super.key,
+  })  : transactionId = id,
+        merchant = 'Transaction',
+        dateTime = '',
+        amount = '',
+        icon = Icons.receipt_long,
+        iconColor = const Color(0xFF64748B);
+
   final String? transactionId;
   final String merchant;
   final String dateTime;

@@ -15,5 +15,55 @@
   },
   "activationHeroSubtitleVerify": "Complete your profile to unlock your account.",
   "activationHeroSubtitleDeposit": "Add funds to start investing.",
-  "activationHeroSubtitleInvest": "Explore opportunities and build your portfolio."
+  "activationHeroSubtitleInvest": "Explore opportunities and build your portfolio.",
+  "exclusiveOfferInvestUnavailableTitle": "Investment unavailable",
+  "exclusiveOfferInvestUnavailableBodyFunded": "This offer has reached its funding target.",
+  "exclusiveOfferInvestUnavailableBodyOther": "This offer is not open for investment at the moment.",
+  "exclusiveOfferClose": "Close",
+  "exclusiveOfferInvestCtaDefault": "Invest",
+  "exclusiveOfferDocuments": "Documents",
+  "exclusiveOfferGallery": "Gallery",
+  "exclusiveOfferVideosTitle": "Videos",
+  "exclusiveOfferVideoItemTitle": "Video {videoNumber}",
+  "@exclusiveOfferVideoItemTitle": {
+    "placeholders": {
+      "videoNumber": {
+        "type": "int"
+      }
+    }
+  },
+  "exclusiveOfferFaqDefaultTitle": "FAQ",
+  "exclusiveOfferModalInfoDefaultTitle": "Information",
+  "exclusiveOfferFaqArticleLoadError": "Could not load this article.",
+  "exclusiveOfferFaqArticleEmptyFallback": "No content available.",
+  "exclusiveOfferFaqModalClose": "Close",
+  "exclusiveOfferStepsMilestoneDay": "Step {stepNumber}",
+  "@exclusiveOfferStepsMilestoneDay": {
+    "placeholders": {
+      "stepNumber": {
+        "type": "int"
+      }
+    }
+  },
+  "exclusiveOfferStepsCountLabel": "{count} steps",
+  "@exclusiveOfferStepsCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "articleReadingTimeMinutes": "{count} min read",
+  "@articleReadingTimeMinutes": {
+    "description": "Reading time of an article (e.g. \"5 min read\")",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "articleAuthorByPrefix": "By",
+  "@articleAuthorByPrefix": {
+    "description": "Prefix placed before the article author's name (e.g. \"By Gael Itier\")"
+  }
 }

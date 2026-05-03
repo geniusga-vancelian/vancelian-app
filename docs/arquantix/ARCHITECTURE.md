@@ -1,4 +1,6 @@
-# Architecture - Arquantix Vitrine + CMS
+# Architecture — Arquantix (Next.js + API)
+
+> **Stack active (2026) :** Next.js (site + BFF + **CMS admin Prisma**), FastAPI, PostgreSQL, Redis. **Aucun Strapi** en runtime — l’ancien CMS n’entre plus dans le périmètre opérationnel.
 
 **Date:** 2026-02-18  
 **Status:** 🚧 En cours de développement
@@ -7,67 +9,75 @@
 
 ## TL;DR
 
-Architecture avec Next.js (frontend) + FastAPI (API quant) + PostgreSQL. Le blog utilise le modèle **Article** (Prisma, base `arquantix_admin`). L’API News (base `arquantix_quant`) est **dépréciée** — le front consomme `/api/blog` et `/blog/[slug]`.
+Architecture avec Next.js (frontend / BFF, port hôte **typique 3000** via `WEB_PORT`) + FastAPI (**8000** dans le conteneur, hôte via `API_PORT`) + PostgreSQL (hôte **typique 5443** via `DB_PORT`) + Redis. Le blog utilise le modèle **Article** (Prisma). L’API News (base `arquantix_quant`) est **dépréciée** — le front consomme `/api/blog` et `/blog/[slug]`.
 
 ---
 
 ## Ce qui est vrai aujourd'hui
 
-### Architecture Locale (Docker Compose)
+### Architecture locale (Docker Compose — typ. recovery)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Docker Network                        │
-│                  (arquantix-network)                     │
+│              Réseau Compose (ex. recovery)               │
 │                                                          │
-│  ┌──────────────┐         ┌──────────────┐             │
-│  │  Next.js Web │────────▶│  Strapi CMS  │             │
-│  │  (Port 3001) │         │  (Port 1338) │             │
-│  └──────────────┘         └──────┬───────┘             │
-│                                   │                      │
-│                          ┌────────▼────────┐            │
-│                          │  PostgreSQL     │            │
-│                          │  (Port 5433)    │            │
-│                          └─────────────────┘            │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐          │
+│  │ Next.js  │───▶│ FastAPI  │───▶│ Postgres │          │
+│  │  :WEB    │    │  :8000   │    │  :5432   │          │
+│  └────┬─────┘    └────┬─────┘    └──────────┘          │
+│       │               │                                  │
+│       └───────────────┴──────── Redis (cache / tasks)   │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Flux de Données
+*(Ports **hôte** : `WEB_PORT` / `API_PORT` / `DB_PORT` dans `.env.arquantix` — en pratique souvent **3000** / **8000** / **5443**. Le **3001** n’est pas le port de référence du web.)*
 
-1. **Utilisateur** → `http://localhost:3001`
-2. **Next.js** récupère les données depuis **Strapi API** (`http://arquantix-cms:1338/api`)
-3. **Strapi** interroge **PostgreSQL** pour les données
-4. **Next.js** affiche le contenu rendu
+### Flux de données (aperçu)
+
+1. Navigateur → Next.js (ex. `http://localhost:${WEB_PORT}`)
+2. Next.js (serveur) → FastAPI (`arquantix-api:8000`) pour les routes proxy / BFF
+3. Next.js (Prisma) et FastAPI → **PostgreSQL** (`arquantix-db`)
+4. Redis pour besoins cache / auth selon configuration
 
 ### Composants
 
 #### 1. Next.js Web (services/arquantix/web/)
 
 - **Technologie:** Next.js 14 (App Router), TypeScript, Tailwind CSS
-- **Port:** 3001 (dev local), 3000 (container)
+- **Port hôte:** `WEB_PORT` (`.env.arquantix`) — **référence locale 3000** (mappé sur le port d’écoute du conteneur web, souvent aussi 3000)
 - **Responsabilités:**
   - Rendu des pages (SSR/SSG)
-  - Intégration avec Strapi API
+  - Prisma (CMS : pages, sections, menus, articles, etc.) et BFF vers FastAPI
   - Gestion du routing i18n (FR/EN)
   - UI/UX premium sobre
 
-#### 2. Strapi CMS (services/arquantix/cms/)
+#### 2. FastAPI (arquantix-api)
 
-- **Technologie:** Strapi 4.18, Node.js 20, PostgreSQL
-- **Port:** 1338
-- **Responsabilités:**
-  - Gestion du contenu (Content Types)
-  - API REST pour le contenu
-  - Administration du contenu (Admin UI)
-  - Internationalisation (i18n FR/EN)
+- **Rôle :** API métier (auth, custody, mobile, PDF, market data, etc.)
+- **Port conteneur :** **8000** ; port hôte : `API_PORT` (`.env.arquantix`, souvent **8000**)
 
 #### 3. PostgreSQL (arquantix-db)
 
 - **Technologie:** PostgreSQL 15 (Alpine)
-- **Port:** 5443 (host), 5432 (container)
+- **Port hôte :** **`DB_PORT`** (souvent **5443**) ; **port conteneur :** **5432**
 - **Bases :**
   - `arquantix_admin` : CMS (pages, sections, articles, help, media) — utilisée par Next.js
   - `arquantix_quant` : API quant (market data, backtest, news déprécié)
+
+### CMS admin (Pages, Menus, Footer, structure)
+
+- **Surface admin** (`/admin/...`, Next.js) : édition des **pages** (contenu), **menu primaire**, **footer** global, et bloc **Structure du site** (arborescence `Page`).
+- Données en base **`arquantix_admin`** via **Prisma** — pas de headless CMS tiers dans la stack active.
+- **Lot 4 — menu ↔ arbre** : l’arborescence `Page` est la **source de vérité structurelle** ; le menu est une **couche navigation**. Onglet Menus : analyse des écarts (`GET /api/admin/menus/primary/structure-alignment`) et synchronisation **manuelle** (`POST` même route : ajout des liens manquants pour les pages `showInNav` hors home, réordonnancement optionnel). **Pas** de menu 100 % auto, **pas** de suppression des CTA / liens externes, **pas** de dérivation silencieuse.
+
+### CMS — hiérarchie `Page` (lots 1–3, 2026-04)
+
+- **Champs** (additifs) : `parentId`, `sortOrder`, `pageRole` (`STANDARD` | `HOME` | `PROJECTS_HUB`), `showInNav`, `isSystemPage`. Le `template` (ex. `vault_builder`) reste la vérité du rendu ; `pageRole` décrit le rôle structurel dans l’arbre.
+- **API** : `GET /api/admin/site-tree` (auth admin) — arbre en **lecture seule**. Édition parent / ordre : `PATCH /api/admin/pages/[slug]/structure` (validations serveur : cycles, parent vault interdit, accueil / hub projets à la racine).
+- **Menu primaire** : reste une couche distincte ; alignement **volontaire** via l’action admin (lot 4), pas de sync en tâche de fond.
+- **Backfill migration** : `home` → `pageRole = HOME`, `isSystemPage = true` ; slug `projects` → `PROJECTS_HUB` ; pages `template = vault_builder` (hors `home` / `projects`) → `parentId` vers la page `slug = projects` **si** elle existe. Sinon les vaults restent à la racine de l’arbre jusqu’édition manuelle.
+- **UX admin** : pas de glisser-déposer sur la structure dans le périmètre actuel ; édition par formulaire (parent + ordre + monter/descendre parmi frères).
+- **Règle structurelle vault (lot 3)** : une page `template = vault_builder` **ne peut pas** être choisie comme parent ; un vault peut en revanche être enfant d’un hub non-vault (ex. `projects`). Aucune autre inférence métier sur les offres.
 
 ### Blog / Articles
 
@@ -81,12 +91,12 @@ L’API News (`/public/news/*`, base `arquantix_quant`) est **dépréciée** et 
 
 ### Ports et Chemins
 
-| Service      | Port (Host) | Port (Container) | URL                          |
-|--------------|-------------|------------------|------------------------------|
-| Next.js Web  | 3001        | 3000             | http://localhost:3001        |
-| Strapi CMS   | 1338        | 1338             | http://localhost:1338        |
-| Strapi Admin | 1338        | 1338             | http://localhost:1338/admin  |
-| PostgreSQL   | 5433        | 5432             | localhost:5433               |
+| Service      | Port (hôte, typique) | Port (conteneur) | URL (exemple)                          |
+|--------------|----------------------|------------------|----------------------------------------|
+| Next.js Web  | **3000** (`WEB_PORT`) | 3000             | `http://localhost:${WEB_PORT}`         |
+| FastAPI      | **8000** (`API_PORT`) | **8000**         | `http://127.0.0.1:${API_PORT}`         |
+| PostgreSQL   | **5443** (`DB_PORT`)  | **5432**         | `localhost:${DB_PORT}`                 |
+| Redis        | `REDIS_PORT`         | 6379             | (souvent interne au réseau Compose)    |
 
 ### Chemins API
 
@@ -100,20 +110,17 @@ L’API News (`/public/news/*`, base `arquantix_quant`) est **dépréciée** et 
 | `/api/blog`                      | GET     | API feed (featured, highlighted, pagination) |
 | `/fr/contact`                     | GET     | Formulaire de contact (FR)     |
 | `/en/contact`                     | GET     | Formulaire de contact (EN)     |
-| `http://localhost:1338/api/*`     | GET/POST| API Strapi (endpoints CMS)    |
-| `http://localhost:1338/admin`     | GET     | Admin UI Strapi                |
+| OpenAPI FastAPI                   | GET     | `/docs` sur l’API              |
 
 ### Observabilité
 
 **Logs:**
-- Docker Compose: `docker compose -f docker-compose.arquantix.yml logs -f`
-- Logs spécifiques: `docker compose -f docker-compose.arquantix.yml logs -f arquantix-web`
-- Logs Strapi: Accessibles via Admin UI ou logs Docker
+- Docker : `docker compose … logs -f` (voir `.env.arquantix` pour projet / fichier)
+- Service web : `… logs -f arquantix-web`
 
 **Health Checks:**
-- Next.js: Pas de healthcheck spécifique (retourne 200 sur n'importe quelle route)
-- Strapi: `/api/health` (si configuré)
-- PostgreSQL: Healthcheck Docker configuré (pg_isready)
+- API : `GET /health` sur le port `API_PORT`
+- PostgreSQL : healthcheck Docker (`pg_isready`)
 
 ---
 
@@ -123,40 +130,34 @@ L’API News (`/public/news/*`, base `arquantix_quant`) est **dépréciée** et 
 
 Si les ports sont déjà utilisés:
 ```bash
-# Vérifier les ports
-lsof -i :3001
-lsof -i :1338
-lsof -i :5433
-
-# Ajuster dans docker-compose.arquantix.yml ou .env.arquantix
+# Vérifier les ports (adapter selon .env.arquantix)
+lsof -nP -iTCP:${WEB_PORT:-3000} -sTCP:LISTEN
+lsof -nP -iTCP:${API_PORT:-8000} -sTCP:LISTEN
+lsof -nP -iTCP:${DB_PORT:-5443} -sTCP:LISTEN
 ```
 
-### Problèmes de Connexion Next.js → Strapi
+### Problèmes de connexion Next.js → API (BFF)
 
-1. Vérifier que Strapi est démarré: `docker ps | grep arquantix-cms`
-2. Vérifier les variables d'environnement: `NEXT_PUBLIC_STRAPI_URL`, `NEXT_PUBLIC_STRAPI_API_URL`
-3. Vérifier le réseau Docker: Les services doivent être sur le même réseau (`arquantix-network`)
+1. Vérifier que `arquantix-api` tourne : `docker ps` (service `arquantix-api`)
+2. Vérifier `BACKEND_URL` / `BACKEND_API_URL` dans l’env du conteneur web (réseau compose : `http://arquantix-api:8000`)
+3. Tester : `curl -sS http://127.0.0.1:${API_PORT:-8000}/health`
 
-### Problèmes de Connexion Strapi → PostgreSQL
+### Problèmes de connexion API / Prisma → PostgreSQL
 
-1. Vérifier que PostgreSQL est démarré: `docker ps | grep arquantix-cms-db`
-2. Vérifier les variables d'environnement: `DATABASE_HOST`, `DATABASE_NAME`, etc.
-3. Vérifier les logs: `docker compose -f docker-compose.arquantix.yml logs arquantix-cms-db`
+1. Vérifier `arquantix-db` : `docker compose … ps arquantix-db`
+2. Vérifier `DATABASE_URL` (même `DB_NAME` partout — voir `.env.arquantix`)
+3. Logs : `docker compose … logs arquantix-db` / `arquantix-api`
 
-### Problèmes de Build
+### Problèmes de build
 
-1. **Next.js build échoue:**
-   - Vérifier les dépendances: `npm install` dans `services/arquantix/web/`
-   - Vérifier TypeScript: `npm run lint`
-   - Vérifier les variables d'environnement
-
-2. **Strapi build échoue:**
-   - Vérifier les dépendances: `npm install` dans `services/arquantix/cms/`
-   - Vérifier la configuration: `config/database.js`, etc.
+1. **Next.js build échoue :** dépendances dans `services/arquantix/web/`, `npm run lint`, variables d’environnement.
+2. **API :** image Docker `services/arquantix/api` — voir Dockerfile et logs conteneur.
 
 ---
 
 ## Architecture Future (Déploiement)
+
+> Section **vision / hors détail local** — ne pas la confondre avec les ports dev ci-dessus.
 
 ### Architecture Production (prévue)
 
@@ -179,13 +180,35 @@ lsof -i :5433
 └─────────────────┘
 
 ┌─────────────────┐
-│  RDS PostgreSQL │  (Optionnel: si Strapi en prod)
+│  RDS PostgreSQL │
 └─────────────────┘
 ```
 
-**Note:** Strapi reste en développement local pour le moment. Déploiement Strapi optionnel (voir DEPLOYMENT.md).
+**Note :** déploiement selon pipeline ops (voir [DEPLOYMENT.md](./DEPLOYMENT.md)).
+
+### Résolution locale Vault (web + mobile)
+
+Le contenu éditorial Vault (`section` `vault_builder_v1`) est sélectionné par **`resolveVaultSectionContent`** (`services/arquantix/web/src/lib/cms/resolveVaultSectionContent.ts`). Même fonction pour :
+
+- le rendu web détail offre (`getExclusiveOfferVaultPayload`) ;
+- `GET /api/mobile/flutter/vaults` (liste, param optionnel `locale`) ;
+- `GET /api/mobile/flutter/vaults/[slug]` (détail, `locale` + `status`).
+
+**Fallback (mode `either`, page publique web)** : locale demandée (pub → brouillon) → locale par défaut du site (pub → brouillon) → toute locale (pub → brouillon). **Modes liste/détail mobile (statut strict)** : mêmes paliers de locale, sans mélanger les statuts ; dernier recours : statut demandé sur une autre locale.
+
+**Titres / descriptions d’offre (page)** : `resolvePageSeoFields` / `resolvePageTitleDescriptionWithFallback` — `PageI18n` pour la locale demandée, puis locale par défaut, puis champs racine `Page` (aligné sur le reste du CMS).
+
+### Admin Vault Builder — édition multi-locale (Lot 3)
+
+- **Sélecteur de langue** : barre `AdminEditingLocaleBar` (même pattern que `/admin/pages`), synchronisée avec l’URL `?slug=…&editingLocale=fr|en|it`.
+- **Chargement** : `GET /api/admin/vaults/[slug]?locale=` — contenu édité = `SectionContent` **DRAFT** ; la réponse inclut aussi `publishedConfig` (snapshot publié) et `localeVaultLayers` (état brouillon/publié par langue).
+- **Sauvegarde brouillon** : `PUT` met à jour **uniquement le DRAFT** pour la locale (modules vault) + `PageI18n` si titre/description envoyés.
+- **Publication explicite** : `POST /api/admin/vaults/[slug]/publish-locale` avec `{ locale }` — copie le DRAFT → **PUBLISHED** pour cette langue seule.
+- **Complétude** : badges réutilisant `computePageLocaleCompleteness` (même grille que le CMS pages).
+- **Duplication FR → EN / IT** : `POST /api/admin/vaults/[slug]/copy-locale` — copie `PageI18n` depuis le FR ; copie le JSON vault en **brouillon uniquement** pour la langue cible (ne modifie pas le publié de cette langue).
+- **Aperçu** : liens vers `/{locale}/projects/{slug}` — rendu public : publié prioritaire, sinon brouillon (`resolveVaultSectionContent` mode `either`).
 
 ---
 
-**Dernière mise à jour:** 2026-01-01
+**Dernière mise à jour:** 2026-04-16
 

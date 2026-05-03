@@ -69,7 +69,6 @@ fi
 WEB_PORT="${WEB_PORT:-3000}"
 API_PORT="${API_PORT:-8000}"
 DB_PORT="${DB_PORT:-5443}"
-CMS_PORT="${CMS_PORT:-1337}"
 
 WORKER_LOG="${ARQUANTIX_BINANCE_WS_LOG:-/tmp/run_binance_ws_ingestion.log}"
 
@@ -170,12 +169,7 @@ need_service_up arquantix-api
 need_service_up arquantix-web
 need_service_up arquantix-db
 need_service_up arquantix-redis
-if docker ps -q --filter "label=com.docker.compose.project=${_expected_cp}" --filter "label=com.docker.compose.service=arquantix-cms" | grep -q .; then
-  need_service_up arquantix-cms
-  ok "Services : api, web, db, redis, cms."
-else
-  ok "Services : api, web, db, redis (cms non présent — ignorer si attendu)."
-fi
+ok "Services : api, web, db, redis."
 
 # ── 5. Ports TCP ──────────────────────────────────────────────────────────
 echo ""
@@ -194,7 +188,6 @@ check_listen() {
 check_listen "$WEB_PORT" "Next / Web"
 check_listen "$API_PORT" "FastAPI"
 check_listen "$DB_PORT" "Postgres (hôte)"
-check_listen "$CMS_PORT" "Strapi (optionnel)"
 
 # ── 6. DATABASE_URL dans les conteneurs ───────────────────────────────────
 echo ""
@@ -239,10 +232,6 @@ wr="$(code "http://127.0.0.1:${WEB_PORT}/")"
 ad="$(code "http://127.0.0.1:${WEB_PORT}/admin/login")"
 [[ "$ad" == "200" ]] && WEB_ADMIN=1 || warn "GET /admin/login → $ad (attendu 200)"
 
-cms_ok=0
-cm="$(code "http://127.0.0.1:${CMS_PORT}/")"
-[[ "$cm" =~ ^(200|302|301)$ ]] && cms_ok=1
-
 # ── 8. Worker Binance WS ──────────────────────────────────────────────────
 WORKER_OK=0
 if [[ "$SKIP_WORKER" -eq 1 ]]; then
@@ -283,7 +272,6 @@ echo "  API /health     : $([[ "$API_HEALTH" -eq 1 ]] && echo OK || echo KO)"
 echo "  API /openapi    : $([[ "$API_OPENAPI" -eq 1 ]] && echo OK || echo KO)"
 echo "  Web /           : $([[ "$WEB_ROOT" -eq 1 ]] && echo OK || echo KO)"
 echo "  Web /admin/login: $([[ "$WEB_ADMIN" -eq 1 ]] && echo OK || echo KO)"
-echo "  Strapi :$CMS_PORT      : $([[ "$cms_ok" -eq 1 ]] && echo OK || echo skip/KO)"
 echo "  Worker Binance WS : $([[ "$SKIP_WORKER" -eq 1 ]] && echo ignoré || ([[ "$WORKER_OK" -eq 1 ]] && echo OK || echo KO))"
 echo ""
 echo "  Web    : http://127.0.0.1:${WEB_PORT}"

@@ -6,6 +6,10 @@ import { prisma } from '@/lib/prisma'
 import { ContentStatus } from '@prisma/client'
 import { getLocaleOrDefault, defaultLocale } from '@/config/locales'
 import { getPresignedUrl } from '@/lib/storage/storageClient'
+import type { ProjectGalleryOfferPhase } from './galleryOfferPhase'
+
+export type { ProjectGalleryOfferPhase } from './galleryOfferPhase'
+export { offerGalleryPhaseToImageLabel } from './galleryOfferPhase'
 
 export interface ProjectShrink {
   id: string
@@ -72,6 +76,16 @@ export interface ProjectShrink {
       description: string
     }>
   } | null
+
+  /** Offres exclusives (CMS) : URL publique page vault (`urlPath`, ex. `/projects/[slug]`). */
+  detailUrl?: string | null
+  /** Tags affichés sur la carte (offres exclusives). */
+  cardTags?: string[] | null
+  fundingProgressPct?: number | null
+  fundingProgressLabel?: string | null
+  fundingAmountLine?: string | null
+  /** Renseigné pour les offres exclusives résolues depuis `packaged_products` (onglets statut). */
+  galleryOfferPhase?: ProjectGalleryOfferPhase | null
 }
 
 function buildI18nCompetitiveAdvantagesKey(projectId: string, locale: string) {

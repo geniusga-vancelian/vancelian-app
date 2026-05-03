@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../design_system/design_system.dart';
 import '../../data/help_api.dart';
 import '../../domain/models/help_center_models.dart';
-import 'help_article_detail_screen.dart';
+import '../../../news/presentation/screens/article_detail_screen.dart';
+import 'help_search_layer.dart';
 import 'help_widgets.dart';
 
 class HelpTaggedArticlesScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class _HelpTaggedArticlesScreenState
     extends State<HelpTaggedArticlesScreen> {
   final HelpApi _api = HelpApi();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   bool _loading = true;
   String? _error;
@@ -36,12 +38,12 @@ class _HelpTaggedArticlesScreenState
   void initState() {
     super.initState();
     _load();
-    _searchController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -69,16 +71,6 @@ class _HelpTaggedArticlesScreenState
     }
   }
 
-  List<HelpTaggedArticleItem> get _filtered {
-    final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return _articles;
-    return _articles.where((item) {
-      final base =
-          '${item.question} ${item.standfirst ?? ''}'.toLowerCase();
-      return base.contains(q);
-    }).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     return PageSimpleNavBarTopTitlePageContent(
@@ -86,9 +78,17 @@ class _HelpTaggedArticlesScreenState
       onBackTap: () => Navigator.of(context).pop(),
       onRefresh: _load,
       content: [
-        HelpSearchBar(controller: _searchController),
+        HelpSearchBar(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+        ),
         const SizedBox(height: AppSpacing.xxl),
-        _buildBody(),
+        HelpDualSearchBody(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+          helpApi: _api,
+          normalBody: _buildBody(),
+        ),
       ],
     );
   }
@@ -113,14 +113,14 @@ class _HelpTaggedArticlesScreenState
       );
     }
     return HelpChevronCardList(
-      items: _filtered
+      items: _articles
           .map(
             (item) => HelpChevronCardItem(
               title: item.question,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => HelpArticleDetailScreen(
+                    builder: (_) => ArticleDetailScreen.help(
                       collectionSlug: item.collectionSlug,
                       categorySlug: item.categorySlug,
                       articleSlug: item.slug,

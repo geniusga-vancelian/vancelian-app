@@ -32,6 +32,7 @@ class HelpCollectionItem {
     this.description,
     this.iconKey,
     this.colorHex,
+    this.coverImageUrl,
     this.articleCount = 0,
   });
 
@@ -42,6 +43,8 @@ class HelpCollectionItem {
   final String? description;
   final String? iconKey;
   final String? colorHex;
+  /// Illustration optionnelle (API liste collections).
+  final String? coverImageUrl;
   final int articleCount;
 
   factory HelpCollectionItem.fromJson(Map<String, dynamic> json) {
@@ -53,6 +56,7 @@ class HelpCollectionItem {
       description: json['description']?.toString(),
       iconKey: json['iconKey']?.toString(),
       colorHex: json['colorHex']?.toString(),
+      coverImageUrl: json['coverImageUrl']?.toString(),
       articleCount: (json['articleCount'] as num?)?.toInt() ?? 0,
     );
   }
@@ -110,12 +114,62 @@ class HelpCategoryListResponse {
   }
 }
 
+enum HelpBrowseDisplayMode { flat, grouped }
+
+/// Réponse `/api/help/collections/:collection/browse` — hub tags dérivés des articles.
+class HelpCollectionBrowseResponse {
+  const HelpCollectionBrowseResponse({
+    required this.collectionSlug,
+    required this.collectionTitle,
+    required this.displayMode,
+    required this.tagGroups,
+    required this.articles,
+  });
+
+  final String collectionSlug;
+  final String collectionTitle;
+  final HelpBrowseDisplayMode displayMode;
+  /// Libellés alignés sur les catégories Help quand le slug matche.
+  final List<HelpCategoryItem> tagGroups;
+  /// Rempli uniquement en mode `flat` (liste directe sans étape « catégories »).
+  final List<HelpArticleItem> articles;
+
+  factory HelpCollectionBrowseResponse.fromJson(Map<String, dynamic> json) {
+    final collection = (json['collection'] as Map<String, dynamic>? ?? const {});
+    final modeRaw = (json['displayMode'] ?? '').toString();
+    final displayMode =
+        modeRaw == 'flat' ? HelpBrowseDisplayMode.flat : HelpBrowseDisplayMode.grouped;
+    final tagGroupsRaw = (json['tagGroups'] as List<dynamic>? ?? const []);
+    final articlesRaw = (json['articles'] as List<dynamic>? ?? const []);
+    return HelpCollectionBrowseResponse(
+      collectionSlug: (collection['slug'] ?? '').toString(),
+      collectionTitle: (collection['title'] ?? '').toString(),
+      displayMode: displayMode,
+      tagGroups: tagGroupsRaw.whereType<Map<String, dynamic>>().map((row) {
+        final slug = (row['slug'] ?? '').toString();
+        return HelpCategoryItem(
+          id: slug,
+          slug: slug,
+          title: (row['title'] ?? '').toString(),
+          articleCount: (row['articleCount'] as num?)?.toInt() ?? 0,
+        );
+      }).where((item) => item.slug.isNotEmpty && item.title.isNotEmpty).toList(),
+      articles: articlesRaw
+          .whereType<Map<String, dynamic>>()
+          .map(HelpArticleItem.fromJson)
+          .where((item) => item.slug.isNotEmpty && item.question.isNotEmpty)
+          .toList(),
+    );
+  }
+}
+
 class HelpArticleItem {
   const HelpArticleItem({
     required this.id,
     required this.slug,
     required this.question,
     this.targetTags = const [],
+    this.collectionTags = const [],
     this.standfirst,
     this.updatedAt,
     this.publishedAt,
@@ -125,6 +179,8 @@ class HelpArticleItem {
   final String slug;
   final String question;
   final List<HelpTargetTag> targetTags;
+  /// Slugs de regroupement (`collection_tags` / catégorie legacy), pour filtre API et navigation détail.
+  final List<String> collectionTags;
   final String? standfirst;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
@@ -138,6 +194,10 @@ class HelpArticleItem {
           .whereType<Map<String, dynamic>>()
           .map(HelpTargetTag.fromJson)
           .where((tag) => tag.type.isNotEmpty && tag.id.isNotEmpty && tag.label.isNotEmpty)
+          .toList(),
+      collectionTags: (json['collectionTags'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .where((s) => s.isNotEmpty)
           .toList(),
       standfirst: json['standfirst']?.toString(),
       updatedAt: DateTime.tryParse((json['updatedAt'] ?? '').toString()),
@@ -175,6 +235,44 @@ class HelpArticleListResponse {
           .map(HelpArticleItem.fromJson)
           .where((item) => item.slug.isNotEmpty && item.question.isNotEmpty)
           .toList(),
+    );
+  }
+}
+
+/// Résultat public `/api/help/search` (titres + collection / catégorie d’affichage).
+class HelpSearchResultItem {
+  const HelpSearchResultItem({
+    required this.id,
+    required this.slug,
+    required this.question,
+    required this.snippet,
+    required this.collectionSlug,
+    required this.collectionTitle,
+    required this.categorySlug,
+    required this.categoryTitle,
+  });
+
+  final String id;
+  final String slug;
+  final String question;
+  final String snippet;
+  final String collectionSlug;
+  final String collectionTitle;
+  final String categorySlug;
+  final String categoryTitle;
+
+  factory HelpSearchResultItem.fromJson(Map<String, dynamic> json) {
+    final collection = (json['collection'] as Map<String, dynamic>? ?? const {});
+    final category = (json['category'] as Map<String, dynamic>? ?? const {});
+    return HelpSearchResultItem(
+      id: (json['id'] ?? '').toString(),
+      slug: (json['slug'] ?? '').toString(),
+      question: (json['question'] ?? '').toString(),
+      snippet: (json['snippet'] ?? '').toString(),
+      collectionSlug: (collection['slug'] ?? '').toString(),
+      collectionTitle: (collection['title'] ?? '').toString(),
+      categorySlug: (category['slug'] ?? '').toString(),
+      categoryTitle: (category['title'] ?? '').toString(),
     );
   }
 }
@@ -257,6 +355,9 @@ class HelpArticleDetail {
     required this.categorySlug,
     required this.categoryTitle,
     required this.blocks,
+    this.coverUrl = '',
+    this.collectionIconKey,
+    this.collectionColorHex,
     this.updatedAt,
     this.publishedAt,
   });
@@ -265,9 +366,13 @@ class HelpArticleDetail {
   final String slug;
   final String question;
   final String standfirst;
+  /// URL cover résolue par l’API (`coverMedia` pré-signé comme pour les articles News).
+  final String coverUrl;
   final String markdownContent;
   final String collectionSlug;
   final String collectionTitle;
+  final String? collectionIconKey;
+  final String? collectionColorHex;
   final String categorySlug;
   final String categoryTitle;
   final List<HelpArticleBlock> blocks;
@@ -283,9 +388,12 @@ class HelpArticleDetail {
       slug: (json['slug'] ?? '').toString(),
       question: (json['question'] ?? '').toString(),
       standfirst: (json['standfirst'] ?? '').toString(),
+      coverUrl: (json['coverUrl'] ?? '').toString(),
       markdownContent: (json['markdownContent'] ?? '').toString(),
       collectionSlug: (collection['slug'] ?? '').toString(),
       collectionTitle: (collection['title'] ?? '').toString(),
+      collectionIconKey: collection['iconKey']?.toString(),
+      collectionColorHex: collection['colorHex']?.toString(),
       categorySlug: (category['slug'] ?? '').toString(),
       categoryTitle: (category['title'] ?? '').toString(),
       blocks: blocksRaw

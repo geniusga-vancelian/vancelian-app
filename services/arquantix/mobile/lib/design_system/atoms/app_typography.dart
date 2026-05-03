@@ -165,6 +165,16 @@ class AppTypography {
 
   // ── Section ────────────────────────────────────────────────────────────
 
+  /// Title 1 (24px / w700 / -0.45 / lh 30) — un cran au-dessus de
+  /// [sectionTitle], utilisé comme `# titre` Markdown / titre principal
+  /// d'un bloc rich text quand on veut un palier supérieur à la section.
+  static TextStyle get title1 => GoogleFonts.inter(
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.45,
+        height: 30 / 24,
+      );
+
   /// Section title (20px / w700 / -0.45 / lh 25)
   static TextStyle get sectionTitle => GoogleFonts.inter(
         fontSize: 20,

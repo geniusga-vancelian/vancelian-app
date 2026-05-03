@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { z } from 'zod'
+import { commonModuleRefSchema, resolveCanonicalSectionKey } from '@/lib/sections/library'
+
+function extractCommonModuleRefId(section: {
+  key: string
+  contents: Array<{ data: unknown }>
+}): string | null {
+  const canon = resolveCanonicalSectionKey(section.key.trim())
+  if (canon !== 'common_module_ref') return null
+  for (const c of section.contents) {
+    const p = commonModuleRefSchema.safeParse(c.data)
+    if (p.success) {
+      const id = String(p.data.commonModuleId ?? '').trim()
+      if (id) return id
+    }
+  }
+  return null
+}
 
 const createSectionSchema = z.object({
   key: z.string().min(1),
@@ -38,7 +55,12 @@ export async function GET(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ sections: page.sections })
+    const sections = page.sections.map((s) => ({
+      ...s,
+      commonModuleRefId: extractCommonModuleRefId(s),
+    }))
+
+    return NextResponse.json({ sections })
   } catch (error) {
     console.error('Error fetching sections:', error)
     return NextResponse.json(

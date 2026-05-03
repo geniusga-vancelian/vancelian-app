@@ -6,11 +6,14 @@ class HelpSearchBar extends StatefulWidget {
   const HelpSearchBar({
     super.key,
     required this.controller,
+    this.focusNode,
     this.hintText = 'Obtenez de l\'aide',
     this.onChanged,
   });
 
   final TextEditingController controller;
+  /// Si null, un [FocusNode] interne est créé et disposé avec ce widget.
+  final FocusNode? focusNode;
   final String hintText;
   final ValueChanged<String>? onChanged;
 
@@ -19,17 +22,16 @@ class HelpSearchBar extends StatefulWidget {
 }
 
 class _HelpSearchBarState extends State<HelpSearchBar> {
-  late final FocusNode _focusNode;
+  FocusNode? _ownedFocus;
 
-  @override
-  void initState() {
-    super.initState();
-    _focusNode = FocusNode();
+  FocusNode get _effectiveFocus {
+    if (widget.focusNode != null) return widget.focusNode!;
+    return _ownedFocus ??= FocusNode();
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    _ownedFocus?.dispose();
     super.dispose();
   }
 
@@ -37,7 +39,7 @@ class _HelpSearchBarState extends State<HelpSearchBar> {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _focusNode.requestFocus(),
+      onTap: () => _effectiveFocus.requestFocus(),
       child: Container(
         constraints: const BoxConstraints(minHeight: 48),
         decoration: BoxDecoration(
@@ -59,9 +61,17 @@ class _HelpSearchBarState extends State<HelpSearchBar> {
             const SizedBox(width: AppSpacing.xs),
             Expanded(
               child: TextField(
-                focusNode: _focusNode,
+                focusNode: _effectiveFocus,
                 controller: widget.controller,
                 onChanged: widget.onChanged,
+                // Évite sur iOS le surlignage / sélection large liée à l’autocorrection
+                // et aux suggestions pendant la frappe dans une recherche.
+                autocorrect: false,
+                enableSuggestions: false,
+                smartDashesType: SmartDashesType.disabled,
+                smartQuotesType: SmartQuotesType.disabled,
+                spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
+                textInputAction: TextInputAction.search,
                 decoration: InputDecoration.collapsed(
                   hintText: widget.hintText,
                   hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
@@ -71,6 +81,28 @@ class _HelpSearchBarState extends State<HelpSearchBar> {
             ),
             const SizedBox(width: AppSpacing.md),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// État vide partagé pour les listes du Centre d'aide ("Aucun résultat").
+class HelpEmptyResults extends StatelessWidget {
+  const HelpEmptyResults({super.key, this.label = 'Aucun résultat'});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s10),
+        child: Text(
+          label,
+          style: AppTypography.itemSupporting.copyWith(
+            color: AppColors.textMuted,
+          ),
         ),
       ),
     );
@@ -91,38 +123,30 @@ class HelpChevronCardList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.s10),
-          child: Text(
-            'Aucun résultat',
-            style: AppTypography.itemSupporting.copyWith(
-              color: AppColors.textMuted,
-            ),
-          ),
-        ),
-      );
+      return const HelpEmptyResults();
     }
 
     return SettingsCard(
       children: items
           .map(
             (item) => SettingsListItem(
-              leading: item.leadingIcon != null
-                  ? IconContainer(
-                      size: IconContainerSize.md,
-                      borderRadius: 10,
-                      backgroundColor:
-                          item.leadingBackgroundColor ?? const Color(0xFFF1F5F9),
-                      child: Icon(
-                        item.leadingIcon,
-                        size: 18,
-                        color: item.leadingIconColor ?? AppColors.textPrimary,
-                      ),
-                    )
-                  : null,
+              leading: item.customLeading ??
+                  (item.leadingIcon != null
+                      ? IconContainer(
+                          size: IconContainerSize.md,
+                          shape: IconContainerShape.circle,
+                          backgroundColor:
+                              item.leadingBackgroundColor ?? const Color(0xFFF1F5F9),
+                          child: Icon(
+                            item.leadingIcon,
+                            size: 18,
+                            color: item.leadingIconColor ?? AppColors.textPrimary,
+                          ),
+                        )
+                      : null),
               title: item.title,
-              showChevron: true,
+              titleMaxLines: null,
+              showChevron: false,
               onTap: item.onTap,
             ),
           )
@@ -135,6 +159,7 @@ class HelpChevronCardItem {
   const HelpChevronCardItem({
     required this.title,
     required this.onTap,
+    this.customLeading,
     this.leadingIcon,
     this.leadingBackgroundColor,
     this.leadingIconColor,
@@ -142,6 +167,8 @@ class HelpChevronCardItem {
 
   final String title;
   final VoidCallback onTap;
+  /// Si défini, remplace la construction depuis [leadingIcon].
+  final Widget? customLeading;
   final IconData? leadingIcon;
   final Color? leadingBackgroundColor;
   final Color? leadingIconColor;

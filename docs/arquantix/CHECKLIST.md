@@ -3,6 +3,8 @@
 **Date:** 2026-01-01  
 **Status:** 🚧 En cours de développement
 
+> **2026** — Strapi n’est plus la stack locale de référence. Utiliser **[LOCAL_SETUP.md](./LOCAL_SETUP.md)** pour le dev-ready (Docker, ports, fichiers d’env). Les cases historiques Strapi ci‑dessous sont **obsolètes** pour le flux courant.
+
 ---
 
 ## TL;DR
@@ -13,83 +15,20 @@ Checklists pour vérifier que l'environnement est prêt pour le développement e
 
 ## Ce qui est vrai aujourd'hui
 
-### Checklist Dev-Ready
+### Checklist Dev-Ready (courant)
 
-Vérifier avant de commencer le développement local:
+Suivre **[LOCAL_SETUP.md](./LOCAL_SETUP.md)** — en résumé :
 
-- [ ] **Docker & Docker Compose installés**
-  ```bash
-  docker --version
-  docker compose version
-  ```
+- [ ] `.env.arquantix` présent ; `make setup` ou `make -f Makefile.arquantix arquantix-up`
+- [ ] `make -f Makefile.arquantix local-doctor` et `local-db-doctor` sans erreur bloquante
+- [ ] Web sur `http://127.0.0.1:${WEB_PORT:-3000}/fr` (ou route équivalente)
+- [ ] Ports : `lsof -nP -iTCP:3000 -sTCP:LISTEN` (adapter si `WEB_PORT` différent)
 
-- [ ] **Node.js installé** (optionnel, si développement sans Docker)
-  ```bash
-  node --version  # >= 18.0.0
-  npm --version
-  ```
+### Archive — Strapi (non applicable au runtime Docker actuel)
 
-- [ ] **Fichiers de configuration présents**
-  - [ ] `.env.arquantix` existe (copier depuis `.env.arquantix.example` si disponible)
-  - [ ] `docker-compose.arquantix.yml` existe
-  - [ ] `Makefile.arquantix` existe (optionnel)
+Les points ci‑dessous concernaient un **ancien** scénario Strapi — **ne pas** les utiliser comme checklist du jour.
 
-- [ ] **Secrets Strapi générés** (si `.env.arquantix` existe)
-  - [ ] `CMS_APP_KEYS` contient 4 valeurs séparées par des virgules
-  - [ ] `CMS_API_TOKEN_SALT` est défini
-  - [ ] `CMS_ADMIN_JWT_SECRET` est défini
-  - [ ] `CMS_JWT_SECRET` est défini
-  - [ ] `CMS_TRANSFER_TOKEN_SALT` est défini
-  
-  **Générer les secrets:**
-  ```bash
-  # Générer un secret
-  openssl rand -base64 32
-  
-  # Pour APP_KEYS, répéter 4 fois et séparer par des virgules
-  # Exemple: key1,key2,key3,key4
-  ```
-
-- [ ] **Ports disponibles**
-  ```bash
-  lsof -i :3001  # Doit être vide
-  lsof -i :1338  # Doit être vide
-  lsof -i :5433  # Doit être vide
-  ```
-
-- [ ] **Code source présent**
-  - [ ] `services/arquantix/web/` existe
-  - [ ] `services/arquantix/cms/` existe
-  - [ ] `services/arquantix/web/package.json` existe
-  - [ ] `services/arquantix/cms/package.json` existe
-
-- [ ] **Services démarrent correctement**
-  ```bash
-  make -f Makefile.arquantix arquantix-up
-  # Attendre 30-60 secondes
-  docker compose -f docker-compose.arquantix.yml ps
-  # Tous les services doivent être "Up"
-  ```
-
-- [ ] **URLs accessibles**
-  - [ ] http://localhost:3001 (Next.js) → 200 OK
-  - [ ] http://localhost:1338/admin (Strapi Admin) → Page de login/création admin
-  - [ ] http://localhost:1338/api (Strapi API) → JSON response
-
-- [ ] **Strapi Admin créé**
-  - [ ] Accéder à http://localhost:1338/admin
-  - [ ] Créer un compte admin (premier démarrage)
-
-- [ ] **Content Types créés** (optionnel pour démarrer, mais recommandé)
-  - [ ] `global` (singleton)
-  - [ ] `page` (collection)
-  - [ ] `news` (collection)
-  - [ ] `contactSubmission` (collection)
-  - Voir CONTENT_MODEL.md pour les détails
-
-- [ ] **Permissions API configurées** (optionnel pour démarrer, mais recommandé)
-  - [ ] Aller dans Strapi Admin: Settings → Users & Permissions Plugin → Roles → Public
-  - [ ] Activer: `global` (find), `page` (find, findOne), `news` (find, findOne), `contactSubmission` (create)
+- [ ] ~~Secrets Strapi / ports 1338 / 3001~~ — voir LOCAL_SETUP et RUNBOOK.md
 
 ---
 

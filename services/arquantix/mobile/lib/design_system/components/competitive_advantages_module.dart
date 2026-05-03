@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'kalai_icon.dart';
 
 /// Catégorie sémantique pour une ligne (couleur de fond de la bulle).
 /// - content: fond blanc (défaut)
@@ -23,6 +24,7 @@ class CompetitiveAdvantagesRowData {
     required this.title,
     required this.description,
     this.category = CompetitiveAdvantageCategory.content,
+    this.kalaiAsset,
   });
 
   final IconData icon;
@@ -30,6 +32,11 @@ class CompetitiveAdvantagesRowData {
   final String title;
   final String description;
   final CompetitiveAdvantageCategory category;
+
+  /// Asset SVG d'une icône KALAI (ex: `KalaiIcons.thumbsUp`).
+  ///
+  /// Si fourni, prend le pas sur [icon] (Material) lors du rendu.
+  final String? kalaiAsset;
 }
 
 /// Module blanc avec titre optionnel et lignes "avantages competitifs".
@@ -65,6 +72,26 @@ class CompetitiveAdvantagesModule extends StatelessWidget {
       default:
         return Icons.check_circle_rounded;
     }
+  }
+
+  /// Mapping clé JSON → icône **KALAI** correspondante.
+  ///
+  /// Permet aux backends de basculer vers les icônes du nouveau design system
+  /// sans casser l'API : si le rendu trouve une correspondance KALAI, il
+  /// l'utilise, sinon il retombe sur Material.
+  static String? kalaiAssetFromKey(String? key) {
+    final k = (key ?? '').trim().toLowerCase();
+    if (k.isEmpty) return null;
+    return switch (k) {
+      'assignment_turned_in_rounded' || 'check_clipboard' =>
+        KalaiIcons.checkClipboard,
+      'favorite_rounded' || 'heart' => KalaiIcons.heart,
+      'trending_up_rounded' || 'trending_up' => KalaiIcons.trendingUp,
+      'apartment_rounded' || 'building' => KalaiIcons.layout1,
+      'check_circle_rounded' || 'check_circle' => KalaiIcons.checkCircle,
+      'insights_rounded' || 'bar_chart' => KalaiIcons.barChart,
+      _ => null,
+    };
   }
 
   static Color colorFromHex(String? raw, {Color fallback = const Color(0xFF1E88E5)}) {
@@ -106,9 +133,11 @@ class CompetitiveAdvantagesModule extends StatelessWidget {
       final title = (row['title'] ?? '').toString().trim();
       final description = (row['description'] ?? '').toString().trim();
       if (title.isEmpty || description.isEmpty) continue;
+      final iconKey = (row['icon'] ?? '').toString();
       out.add(
         CompetitiveAdvantagesRowData(
-          icon: iconFromKey((row['icon'] ?? '').toString()),
+          icon: iconFromKey(iconKey),
+          kalaiAsset: kalaiAssetFromKey(iconKey),
           iconBackgroundColor: colorFromHex(
             (row['iconBackgroundColor'] ?? '').toString(),
             fallback: const Color(0xFF1E88E5),
@@ -178,11 +207,17 @@ class CompetitiveAdvantagesModule extends StatelessWidget {
                           color: rows[i].iconBackgroundColor,
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Icon(
-                          rows[i].icon,
-                          size: _iconSize,
-                          color: Colors.white,
-                        ),
+                        child: rows[i].kalaiAsset != null
+                            ? KalaiIcon(
+                                rows[i].kalaiAsset!,
+                                size: _iconSize,
+                                color: Colors.white,
+                              )
+                            : Icon(
+                                rows[i].icon,
+                                size: _iconSize,
+                                color: Colors.white,
+                              ),
                       ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(

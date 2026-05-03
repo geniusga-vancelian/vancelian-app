@@ -139,6 +139,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Explore opportunities and build your portfolio.'**
   String get activationHeroSubtitleInvest;
+
+  /// No description provided for @exclusiveOfferInvestUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Investment unavailable'**
+  String get exclusiveOfferInvestUnavailableTitle;
+
+  /// No description provided for @exclusiveOfferInvestUnavailableBodyFunded.
+  ///
+  /// In en, this message translates to:
+  /// **'This offer has reached its funding target.'**
+  String get exclusiveOfferInvestUnavailableBodyFunded;
+
+  /// No description provided for @exclusiveOfferInvestUnavailableBodyOther.
+  ///
+  /// In en, this message translates to:
+  /// **'This offer is not open for investment at the moment.'**
+  String get exclusiveOfferInvestUnavailableBodyOther;
+
+  /// No description provided for @exclusiveOfferClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get exclusiveOfferClose;
+
+  /// No description provided for @exclusiveOfferInvestCtaDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Invest'**
+  String get exclusiveOfferInvestCtaDefault;
+
+  /// No description provided for @exclusiveOfferDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get exclusiveOfferDocuments;
+
+  /// No description provided for @exclusiveOfferGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get exclusiveOfferGallery;
+
+  /// No description provided for @exclusiveOfferVideosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get exclusiveOfferVideosTitle;
+
+  /// No description provided for @exclusiveOfferVideoItemTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Video {videoNumber}'**
+  String exclusiveOfferVideoItemTitle(int videoNumber);
+
+  /// No description provided for @exclusiveOfferFaqDefaultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'FAQ'**
+  String get exclusiveOfferFaqDefaultTitle;
+
+  /// No description provided for @exclusiveOfferModalInfoDefaultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Information'**
+  String get exclusiveOfferModalInfoDefaultTitle;
+
+  /// No description provided for @exclusiveOfferFaqArticleLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this article.'**
+  String get exclusiveOfferFaqArticleLoadError;
+
+  /// No description provided for @exclusiveOfferFaqArticleEmptyFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'No content available.'**
+  String get exclusiveOfferFaqArticleEmptyFallback;
+
+  /// No description provided for @exclusiveOfferFaqModalClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get exclusiveOfferFaqModalClose;
+
+  /// No description provided for @exclusiveOfferStepsMilestoneDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {stepNumber}'**
+  String exclusiveOfferStepsMilestoneDay(int stepNumber);
+
+  /// No description provided for @exclusiveOfferStepsCountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} steps'**
+  String exclusiveOfferStepsCountLabel(int count);
+
+  /// Reading time of an article (e.g. "5 min read")
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min read'**
+  String articleReadingTimeMinutes(int count);
+
+  /// Prefix placed before the article author's name (e.g. "By Gael Itier")
+  ///
+  /// In en, this message translates to:
+  /// **'By'**
+  String get articleAuthorByPrefix;
 }
 
 class _AppLocalizationsDelegate

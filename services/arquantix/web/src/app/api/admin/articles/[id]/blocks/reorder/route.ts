@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { z } from 'zod'
-import { Prisma } from '@prisma/client'
+import { awaitRouteParams } from '@/lib/api/routeParams'
+import { adminRouteErrorBody } from '@/lib/api/adminRouteErrorBody'
 
 const reorderSchema = z.object({
   orderedBlockIds: z.array(z.string()).min(1),
@@ -11,15 +12,21 @@ const reorderSchema = z.object({
 // POST /api/admin/articles/[id]/blocks/reorder
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id: articleId } = await awaitRouteParams(params)
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await request.json()
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
     const { orderedBlockIds } = reorderSchema.parse(body)
 
     // Verify all blocks belong to this article and the list is complete (évite ordres dupliqués).
@@ -27,10 +34,10 @@ export async function POST(
       prisma.articleBlock.findMany({
         where: {
           id: { in: orderedBlockIds },
-          articleId: params.id,
+          articleId,
         },
       }),
-      prisma.articleBlock.count({ where: { articleId: params.id } }),
+      prisma.articleBlock.count({ where: { articleId } }),
     ])
 
     if (blocks.length !== orderedBlockIds.length) {
@@ -73,16 +80,7 @@ export async function POST(
       )
     }
     console.error('Error reordering blocks:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    const code =
-      error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        ...(process.env.NODE_ENV === 'development' && { message, code }),
-      },
-      { status: 500 }
-    )
+    return NextResponse.json(adminRouteErrorBody(error), { status: 500 })
   }
 }
 

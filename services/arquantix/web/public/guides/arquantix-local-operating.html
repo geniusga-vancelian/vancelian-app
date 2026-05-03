@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fiche pratique — Arquantix en local</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --surface: #ffffff;
+      --text: #1a1d26;
+      --muted: #5c6370;
+      --border: #e2e5ec;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --success: #059669;
+      --success-bg: #ecfdf5;
+      --warn: #b45309;
+      --warn-bg: #fffbeb;
+      --danger: #b91c1c;
+      --danger-bg: #fef2f2;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06);
+      --font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .wrap {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      color: #fff;
+      padding: 2rem 1.25rem 2.5rem;
+      border-radius: 0 0 var(--radius) var(--radius);
+      margin: -0rem -1.25rem 2rem;
+      box-shadow: var(--shadow);
+    }
+    header h1 {
+      font-size: 1.65rem;
+      font-weight: 700;
+      margin: 0 0 0.75rem;
+      letter-spacing: -0.02em;
+    }
+    header p.lead {
+      margin: 0;
+      opacity: 0.95;
+      font-size: 1.05rem;
+      max-width: 52ch;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      background: rgba(255,255,255,.2);
+      margin-bottom: 0.75rem;
+    }
+    h2 {
+      font-size: 1.35rem;
+      margin: 2.25rem 0 1rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 2px solid var(--border);
+      letter-spacing: -0.02em;
+    }
+    h3 {
+      font-size: 1.1rem;
+      margin: 1.5rem 0 0.65rem;
+      color: #111827;
+    }
+    p { margin: 0 0 1rem; }
+    ul, ol { margin: 0 0 1rem; padding-left: 1.35rem; }
+    li { margin-bottom: 0.4rem; }
+    a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    a:hover { color: #1d4ed8; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.35rem;
+      margin: 1rem 0;
+      box-shadow: var(--shadow);
+    }
+    .card h3 { margin-top: 0; }
+    .muted { color: var(--muted); font-size: 0.95rem; }
+    .kbd {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.88em;
+      background: #f1f3f8;
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    pre {
+      margin: 0.75rem 0 1rem;
+      padding: 1rem 1.1rem;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+    pre code { background: none; border: none; padding: 0; color: inherit; }
+    .note {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 1rem 1.1rem;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      margin: 1rem 0;
+    }
+    .note strong { color: #1e40af; }
+    .recommended {
+      border: 2px solid var(--success);
+      background: var(--success-bg);
+      border-radius: var(--radius);
+      padding: 1rem 1.15rem;
+      margin: 1rem 0;
+    }
+    .recommended::before {
+      content: "Recommandé";
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--success);
+      margin-bottom: 0.5rem;
+    }
+    .recommended p:first-of-type { margin-top: 0; }
+    .alert-danger {
+      background: var(--danger-bg);
+      border: 2px solid #fecaca;
+      color: #7f1d1d;
+      border-radius: var(--radius);
+      padding: 1.1rem 1.2rem;
+      margin: 1.25rem 0;
+    }
+    .alert-danger h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+      color: var(--danger);
+    }
+    .alert-warn {
+      background: var(--warn-bg);
+      border: 1px solid #fcd34d;
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+      color: #78350f;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 1rem 0;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    th, td {
+      text-align: left;
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      background: #f8fafc;
+      font-weight: 600;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    tr:last-child td { border-bottom: none; }
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+    .tag.safe { background: var(--success-bg); color: #047857; }
+    .tag.read { background: #f1f5f9; color: #475569; }
+    .scenario-grid {
+      display: grid;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    @media (min-width: 600px) {
+      .scenario-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .scenario {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.15rem;
+      box-shadow: var(--shadow);
+    }
+    .scenario h4 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+      color: #0f172a;
+    }
+    .scenario .cmd { margin-top: 0.65rem; }
+    .checklist {
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin: 1rem 0;
+    }
+    .checklist ol { margin: 0; }
+    .checklist li { margin-bottom: 0.65rem; }
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0;
+    }
+    .toc ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+    .toc a { text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .universal-fix {
+      border: 3px solid var(--accent);
+      background: linear-gradient(180deg, var(--accent-soft) 0%, var(--surface) 48%);
+      border-radius: var(--radius);
+      padding: 1.35rem 1.4rem;
+      margin: 1.5rem 0;
+      box-shadow: var(--shadow);
+    }
+    .universal-fix h3 {
+      margin: 0 0 0.75rem;
+      font-size: 1.15rem;
+      color: #1e3a8a;
+    }
+    .compact-table td:first-child { font-weight: 600; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="badge">Guide local</span>
+    <h1>Fiche pratique — utiliser Arquantix sur votre Mac</h1>
+    <p class="lead">
+      Cette page vous aide à <strong>relancer le projet</strong>, à comprendre les commandes utiles
+      et à savoir <strong>quoi faire selon la situation</strong> — sans jargon inutile.
+      Ouvrez ce fichier dans votre navigateur (double-clic ou glisser-déposer), ou depuis l’admin connecté : page <strong>/guide</strong>.
+    </p>
+  </header>
+
+  <div class="wrap">
+    <nav class="toc" aria-label="Sommaire">
+      <strong>Sommaire</strong>
+      <ul>
+        <li><a href="#simple">Le plus simple au quotidien</a></li>
+        <li><a href="#etat-ok">État attendu quand tout marche</a></li>
+        <li><a href="#demarrage">Quand j’allume mon Mac</a></li>
+        <li><a href="#code">Après une modification de code</a></li>
+        <li><a href="#zero">Repartir à zéro sans casser la base</a></li>
+        <li><a href="#diag">Diagnostic (doctor, status…)</a></li>
+        <li><a href="#scenarios">Scénarios concrets</a></li>
+        <li><a href="#checklist">Checklist ultra simple</a></li>
+        <li><a href="#mots">Mots à ne pas oublier</a></li>
+      </ul>
+    </nav>
+
+    <section id="simple">
+      <h2>Le plus simple au quotidien</h2>
+      <div class="universal-fix" role="region" aria-label="Commande universelle">
+        <h3>Si vous ne savez pas quoi faire</h3>
+        <p style="margin-top:0">Une seule commande, la plus sûre pour remettre le projet en état <strong>sans rien casser</strong> (pas de suppression de base, pas de volumes effacés) :</p>
+        <pre><code>make doctor-fix</code></pre>
+        <p class="muted" style="margin-bottom:0">Elle remet les conteneurs au propre (redémarrage ciblé si besoin). Pour le détail, voir la section <a href="#diag">Diagnostic</a>.</p>
+      </div>
+      <p>
+        Si tout va bien après le démarrage de votre Mac, vous n’avez souvent qu’à <strong>vérifier que l’application répond</strong>.
+        Inutile de tout relancer « au cas où » : cela peut même ralentir votre travail.
+      </p>
+      <p><strong>Adresses utiles</strong> (ports par défaut ; les vôtres peuvent différer si le fichier <span class="kbd">.env.arquantix</span> dit autre chose) :</p>
+      <ul>
+        <li><strong>API (santé)</strong> — <a href="http://127.0.0.1:8000/health" target="_blank" rel="noopener">http://127.0.0.1:8000/health</a></li>
+        <li><strong>Web (interface admin)</strong> — <a href="http://127.0.0.1:3000/" target="_blank" rel="noopener">http://127.0.0.1:3000/</a></li>
+      </ul>
+      <p class="muted">Toutes les commandes ci-dessous se lancent <strong>depuis la racine du dossier du projet</strong> (là où se trouve le <span class="kbd">Makefile</span>).</p>
+      <div class="recommended">
+        <p><strong>Vérification rapide recommandée</strong> — un tableau de bord lisible dans le terminal :</p>
+        <pre><code>make status</code></pre>
+        <p class="muted" style="margin-bottom:0">Lecture seule : rien n’est modifié sur votre machine ni sur Docker.</p>
+      </div>
+
+      <h3>make doctor-fix ou make setup ?</h3>
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th>Commande</th>
+            <th>Quand l’utiliser</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>make doctor-fix</code></td>
+            <td>Quelque chose cloche (service, page blanche, API qui ne répond plus), ou après une modif de code : remise en route <strong>sûre</strong>, sans tout réinstaller.</td>
+          </tr>
+          <tr>
+            <td><code>make setup</code></td>
+            <td>Première installation, <strong>gros changement</strong> dans <span class="kbd">.env.arquantix</span>, ou vous voulez <strong>tout relancer proprement</strong> après un long arrêt / un changement d’environnement (en gardant vos données).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="muted"><strong>À retenir :</strong> en cas de doute sur un bug ou un service à « réparer », commencez par <span class="kbd">make doctor-fix</span>. Gardez <span class="kbd">make setup</span> pour les situations plus larges (install, gros changement de config).</p>
+
+      <p><strong>Surveillance en direct :</strong> <code>make status-watch</code> = suivi local en temps réel, comme un <strong>mini tableau de bord live</strong> dans le terminal (rafraîchissement automatique ; <span class="kbd">Ctrl+C</span> pour arrêter).</p>
+    </section>
+
+    <section id="etat-ok">
+      <h2>État attendu quand tout marche</h2>
+      <p>Vous pouvez cocher mentalement ces trois points :</p>
+      <ul>
+        <li><strong>API</strong> — l’adresse <a href="http://127.0.0.1:8000/health" target="_blank" rel="noopener">/health</a> répond (souvent une réponse « OK » ou JSON, pas une erreur).</li>
+        <li><strong>Web admin</strong> — la page d’accueil charge sans erreur bloquante (ex. <a href="http://127.0.0.1:3000/" target="_blank" rel="noopener">http://127.0.0.1:3000/</a>).</li>
+        <li><strong>Terminal</strong> — <code>make status</code> affiche les services en vert / OK, sans erreurs critiques.</li>
+      </ul>
+      <p class="muted">Si l’un de ces trois éléments échoue, enchaînez avec <span class="kbd">make doctor</span> puis, si besoin, <span class="kbd">make doctor-fix</span>.</p>
+    </section>
+
+    <section id="demarrage">
+      <h2>Quand j’allume mon Mac</h2>
+      <p>Normalement :</p>
+      <ol>
+        <li><strong>Docker Desktop</strong> démarre (souvent avec la session).</li>
+        <li>Si vous avez installé l’<strong>autostart</strong> (LaunchAgent), la stack officielle peut se lancer automatiquement au login — voir <span class="kbd">docs/LOCAL_MAC_AUTOSTART.md</span>.</li>
+        <li>Sinon, vous pouvez lancer vous-même une remise en route propre (voir ci-dessous).</li>
+      </ol>
+
+      <h3>Option A — Regarder l’état (sans rien changer)</h3>
+      <div class="recommended">
+        <pre><code>make status</code></pre>
+        <p style="margin-bottom:0">Idéal pour voir d’un coup d’œil si les services tournent et si l’API / le web répondent.</p>
+      </div>
+
+      <h3>Option B — Relancer proprement la stack recovery (recommandé si Docker était arrêté ou si rien ne répond)</h3>
+      <p>Script prévu pour le démarrage / login : il attend que Docker soit prêt, puis lance la stack <strong>sans</strong> supprimer les données.</p>
+      <pre><code>bash scripts/start_arquantix_recovery_boot.sh</code></pre>
+      <p class="muted">Équivalent documenté côté Makefile : <span class="kbd">make -f Makefile.arquantix arquantix-recovery-up</span> — même famille de commandes, même projet officiel.</p>
+
+      <h3>Option C — Forcer le LaunchAgent à rejouer son script (Mac avec autostart installé)</h3>
+      <p>À utiliser si l’agent est chargé mais que vous voulez <strong>déclencher à nouveau</strong> le même démarrage que lors du login :</p>
+      <pre><code>launchctl kickstart -k gui/$(id -u)/com.arquantix.autostart</code></pre>
+      <div class="alert-warn">
+        <strong>Quand laquelle choisir ?</strong>
+        <ul style="margin:0.5rem 0 0;">
+          <li>Doute ou contrôle → <strong>make status</strong> d’abord.</li>
+          <li>Stack arrêtée ou après réveil du Mac → <strong>start_arquantix_recovery_boot.sh</strong> (ou autostart au prochain login).</li>
+          <li>Autostart installé mais pas relancé → <strong>kickstart</strong> sur le label <span class="kbd">com.arquantix.autostart</span>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="code">
+      <h2>Quand j’ai modifié du code et je veux repartir proprement</h2>
+      <p>
+        Ici, « repartir proprement » veut dire : <strong>les conteneurs voient vos derniers changements ou sont redémarrés</strong>,
+        <strong>sans</strong> effacer la base de données.
+      </p>
+
+      <h3>Backend (API Python)</h3>
+      <p>Souvent, un redémarrage du service API suffit après une modif. Le moyen <strong>sûr et intégré au projet</strong> :</p>
+      <div class="recommended">
+        <pre><code>make doctor-fix</code></pre>
+        <p style="margin-bottom:0">Fait un <span class="kbd">compose up</span> idempotent puis, si besoin, redémarre seulement <span class="kbd">arquantix-api</span> ou <span class="kbd">arquantix-web</span>. Jamais de <span class="kbd">down -v</span>.</p>
+      </div>
+      <p class="muted">Si vous avez changé des fichiers Docker (Dockerfile, dépendances système), il peut falloir une reconstruction d’images — voir avec l’équipe ou <span class="kbd">make -f Makefile.arquantix arquantix-build</span> (cas avancé).</p>
+
+      <h3>Web admin (Next.js)</h3>
+      <p>Même logique : <strong>make doctor-fix</strong> peut redémarrer le service web si l’API est OK mais pas l’interface. Sinon, un simple rechargement de la page suffit souvent.</p>
+
+      <h3>Configuration (.env, ports)</h3>
+      <p>Après changement dans <span class="kbd">.env.arquantix</span>, il faut que Docker relise la config :</p>
+      <pre><code>make setup</code></pre>
+      <p class="muted"><span class="kbd">make setup</span> relance la stack proprement (volumes conservés) et attend que l’API réponde sur <span class="kbd">/health</span>. C’est la voie simple pour « tout remettre d’aplomb » après un changement d’environnement.</p>
+
+      <h3>Quand un simple test suffit</h3>
+      <p>Si vous n’avez touché qu’au code déjà pris en charge par le rechargement à chaud dans le conteneur, ouvrez simplement :</p>
+      <ul>
+        <li><a href="http://127.0.0.1:8000/health" target="_blank" rel="noopener">/health</a> pour l’API</li>
+        <li><a href="http://127.0.0.1:3000/" target="_blank" rel="noopener">/</a> pour le web</li>
+      </ul>
+
+      <div class="note">
+        <strong>Rappel :</strong> <span class="kbd">make doctor-fix</span> est pensé pour corriger sans casser les données.
+        <span class="kbd">make setup</span> est utile pour une remise en route complète après install ou gros changement de config.
+      </div>
+    </section>
+
+    <section id="zero">
+      <h2>Quand je veux « repartir à zéro » sans casser la base</h2>
+      <p>
+        Dans ce guide, « repartir à zéro » signifie : <strong>redémarrer les services</strong>, <strong>recharger le code</strong>,
+        retrouver un état cohérent — <em>sans</em> supprimer vos données PostgreSQL locales.
+      </p>
+      <div class="recommended">
+        <p><strong>Commande simple et sûre pour remettre la stack en route</strong> (données conservées) :</p>
+        <pre><code>make setup</code></pre>
+      </div>
+      <p>Si le souci est plutôt « un service coince » que « tout est à refaire » :</p>
+      <pre><code>make doctor-fix</code></pre>
+
+      <div class="alert-danger">
+        <h3>Ne jamais faire ceci (perte ou risque pour les données)</h3>
+        <ul style="margin:0;">
+          <li><code>docker compose down -v</code> — supprime les volumes liés, souvent la base.</li>
+          <li><code>docker volume prune</code> — peut effacer des volumes non utilisés, dangereux si mal compris.</li>
+          <li><code>docker system prune --volumes</code> — encore plus large et risqué.</li>
+        </ul>
+        <p style="margin:0.75rem 0 0;"><strong>Ne pas utiliser l’ancien projet Docker « arquantix »</strong> pour le quotidien — la stack officielle locale est <span class="kbd">arquantixrecovery</span> + <span class="kbd">docker-compose.arquantix-recovery.yml</span>.</p>
+      </div>
+    </section>
+
+    <section id="diag">
+      <h2>Diagnostic : doctor, correctifs, tableau de bord</h2>
+      <p>Toutes ces commandes sont lancées <strong>depuis la racine du dépôt</strong>.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Commande</th>
+            <th>À quoi ça sert</th>
+            <th>Quand l’utiliser</th>
+            <th>Sécurité</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>make doctor</code></td>
+            <td>Diagnostic détaillé (Docker, fichiers, services, HTTP, base, Redis…). Affiche un verdict et une suggestion si problème grave.</td>
+            <td>Dès que quelque chose semble « cassé » ou avant une démo.</td>
+            <td><span class="tag read">Lecture seule</span> Ne modifie rien.</td>
+          </tr>
+          <tr>
+            <td><code>make doctor-fix</code></td>
+            <td>Actions de remise en route <strong>sûres</strong> : <span class="kbd">compose up</span> idempotent, redémarrage ciblé API ou web si besoin.</td>
+            <td>Après <span class="kbd">make doctor</span> qui signale des erreurs, ou pour relancer proprement sans tout casser.</td>
+            <td><span class="tag safe">Sûr</span> Pas de <span class="kbd">down -v</span>, pas de prune volumes.</td>
+          </tr>
+          <tr>
+            <td><code>DRY_RUN=1 make doctor-fix</code></td>
+            <td>Même logique que <span class="kbd">doctor-fix</span>, mais affiche seulement ce qui serait exécuté (simulation).</td>
+            <td>Pour comprendre ce qui se passerait sans rien lancer.</td>
+            <td><span class="tag read">Simulation</span> Aucune action Docker réelle.</td>
+          </tr>
+          <tr>
+            <td><code>make status</code></td>
+            <td>Tableau de bord texte : projet compose, services, ports, santé API/web/DB/Redis, alertes (legacy…).</td>
+            <td>Vue rapide « tout va bien ? ».</td>
+            <td><span class="tag read">Lecture seule</span></td>
+          </tr>
+          <tr>
+            <td><code>make status-watch</code></td>
+            <td><strong>Mini tableau de bord live</strong> dans le terminal : même contenu que <span class="kbd">make status</span>, mis à jour en boucle (rafraîchissement régulier ; <span class="kbd">Ctrl+C</span> pour arrêter). Intervalle optionnel : <span class="kbd">STATUS_REFRESH_SEC=5 make status-watch</span>.</td>
+            <td>Pour surveiller pendant un démarrage ou pendant que vous testez une modification.</td>
+            <td><span class="tag read">Lecture seule</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="scenarios">
+      <h2>Scénarios concrets</h2>
+      <div class="scenario-grid">
+        <div class="scenario">
+          <h4>Mon Mac vient de démarrer</h4>
+          <p>Ouvrir les URLs ou lancer <span class="kbd">make status</span>. Si vide ou erreur, <span class="kbd">bash scripts/start_arquantix_recovery_boot.sh</span>.</p>
+          <div class="cmd"><pre><code>make status</code></pre></div>
+        </div>
+        <div class="scenario">
+          <h4>L’API ne répond pas</h4>
+          <p>Vérifier <span class="kbd">/health</span>, puis <span class="kbd">make doctor</span>. Ensuite <span class="kbd">make doctor-fix</span> si besoin.</p>
+          <div class="cmd"><pre><code>make doctor
+make doctor-fix</code></pre></div>
+        </div>
+        <div class="scenario">
+          <h4>Le web admin affiche une erreur</h4>
+          <p>Vérifier l’API d’abord. Puis <span class="kbd">make doctor-fix</span> (redémarrage web possible).</p>
+          <div class="cmd"><pre><code>make doctor-fix</code></pre></div>
+        </div>
+        <div class="scenario">
+          <h4>Je viens de modifier le backend</h4>
+          <p>Tester <span class="kbd">/health</span>. Si besoin : <span class="kbd">make doctor-fix</span>.</p>
+          <div class="cmd"><pre><code>make doctor-fix</code></pre></div>
+        </div>
+        <div class="scenario">
+          <h4>Je veux vérifier que tout est sain</h4>
+          <p>Diagnostic complet, sans modification :</p>
+          <div class="cmd"><pre><code>make doctor</code></pre></div>
+        </div>
+        <div class="scenario">
+          <h4>Je veux voir l’état en direct</h4>
+          <p>Tableau qui se rafraîchit (quitter avec Ctrl+C) :</p>
+          <div class="cmd"><pre><code>make status-watch</code></pre></div>
+        </div>
+        <div class="scenario">
+          <h4>Je veux relancer sans rien casser</h4>
+          <p>Remise en route douce : <span class="kbd">make doctor-fix</span>. Remise en route complète avec attente API : <span class="kbd">make setup</span>.</p>
+          <div class="cmd"><pre><code>make doctor-fix</code></pre></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="checklist">
+      <h2>Checklist ultra simple</h2>
+      <div class="checklist">
+        <p><strong>Chaque matin (ou après une pause longue)</strong></p>
+        <ol>
+          <li><code>make status</code> — coup d’œil sur les services.</li>
+          <li>Ouvrir <a href="http://127.0.0.1:8000/health" target="_blank" rel="noopener">/health</a> — l’API doit répondre.</li>
+          <li>Ouvrir <a href="http://127.0.0.1:3000/" target="_blank" rel="noopener">le web admin</a>.</li>
+        </ol>
+        <p><strong>Après une modification de code ou de config</strong></p>
+        <ol>
+          <li>Relancer proprement si besoin : <code>make doctor-fix</code> ou <code>make setup</code> (gros changement d’environnement).</li>
+          <li>Vérifier l’API (<span class="kbd">/health</span>).</li>
+          <li>Retester l’interface web ou votre appli mobile (ex. Flutter) pointant sur la même API.</li>
+        </ol>
+        <p><strong>En cas de doute</strong></p>
+        <ol>
+          <li><code>make doctor</code> — comprendre le problème.</li>
+          <li><code>DRY_RUN=1 make doctor-fix</code> — voir ce qui serait fait.</li>
+          <li><code>make doctor-fix</code> — appliquer les correctifs sûrs.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="mots">
+      <h2>Mots à ne pas oublier</h2>
+      <div class="card">
+        <ul style="margin:0;">
+          <li><strong>Stack officielle locale</strong> — projet Compose : <span class="kbd">arquantixrecovery</span></li>
+          <li><strong>Fichier Compose</strong> — <span class="kbd">docker-compose.arquantix-recovery.yml</span></li>
+          <li><strong>Base locale utile (nom courant dans la doc)</strong> — <span class="kbd">arquantix_fresh</span> (souvent dans <span class="kbd">.env.arquantix</span>)</li>
+          <li><strong>À éviter au quotidien</strong> — l’ancien namespace / projet <span class="kbd">arquantix</span> (legacy), qui n’est pas la stack recommandée</li>
+          <li><strong>Strapi / CMS</strong> — retiré du projet ; la stack utile est : <span class="kbd">arquantix-db</span>, <span class="kbd">arquantix-redis</span>, <span class="kbd">arquantix-api</span>, <span class="kbd">arquantix-web</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <footer>
+      <p>Document généré pour le dépôt Arquantix — guide d’exploitation locale. Pour le détail technique (autostart, chemins, logs launchd), voir aussi <span class="kbd">docs/LOCAL_MAC_AUTOSTART.md</span>, <span class="kbd">docs/arquantix/QUICK_START.md</span> et <span class="kbd">docs/arquantix/RUNBOOK.md</span>.</p>
+    </footer>
+  </div>
+</body>
+</html>

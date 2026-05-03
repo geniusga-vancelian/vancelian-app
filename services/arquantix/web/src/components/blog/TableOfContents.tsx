@@ -1,6 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  InThisArticleNav,
+} from '@/components/design-system/extracted'
 
 interface Heading {
   id: string
@@ -10,20 +13,36 @@ interface Heading {
 
 interface TableOfContentsProps {
   headings: Heading[]
+  title?: string
+  minCount?: number
+  className?: string
+  navClassName?: string
 }
 
-export function TableOfContents({ headings }: TableOfContentsProps) {
+export function TableOfContents({
+  headings,
+  title = 'Sommaire',
+  minCount = 3,
+  className,
+  navClassName,
+}: TableOfContentsProps) {
   const [activeId, setActiveId] = useState<string>('')
+  /** Après un clic, on fixe l’item actif et on ignore l’observer le temps du scroll (sinon 1ʳᵉ / dernière section ne « rentrent » pas dans la bande rootMargin). */
+  const ignoreObserverUntilRef = useRef(0)
 
   useEffect(() => {
     if (headings.length === 0) return
 
     const observerOptions = {
-      rootMargin: '-20% 0px -60% 0px',
+      /* Bande un peu plus haute qu’avant pour mieux capter le haut de page et les sections courtes */
+      rootMargin: '-12% 0px -52% 0px',
       threshold: 0,
     }
 
     const observerCallback = (entries: IntersectionObserverEntry[]) => {
+      if (Date.now() < ignoreObserverUntilRef.current) {
+        return
+      }
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           setActiveId(entry.target.id)
@@ -52,47 +71,52 @@ export function TableOfContents({ headings }: TableOfContentsProps) {
 
   const handleClick = (id: string) => {
     const element = document.getElementById(id)
-    if (element) {
-      const offset = 100 // Account for fixed header
-      const elementPosition = element.getBoundingClientRect().top
-      const offsetPosition = elementPosition + window.pageYOffset - offset
+    if (!element) return
 
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth',
-      })
+    setActiveId(id)
+    const lockMs = 1200
+    ignoreObserverUntilRef.current = Date.now() + lockMs
+
+    const headerOffset = 100
+    const rect = element.getBoundingClientRect()
+    const y = rect.top + window.scrollY - headerOffset
+    const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+    const top = Math.min(Math.max(0, y), maxY)
+
+    window.scrollTo({
+      top,
+      behavior: 'smooth',
+    })
+
+    const releaseObserver = () => {
+      ignoreObserverUntilRef.current = 0
     }
+    if (typeof window !== 'undefined' && 'onscrollend' in window) {
+      window.addEventListener('scrollend', releaseObserver, { once: true })
+    }
+    window.setTimeout(releaseObserver, lockMs)
   }
 
-  if (headings.length < 3) {
+  if (headings.length < minCount) {
     return null
   }
 
+  /** Tant que l’observer n’a pas posé d’`activeId`, on met en avant le 1ʳᵉ lien (comportement maquette). */
+  const resolvedActiveId = activeId || headings[0]?.id || ''
+
   return (
-    <nav className="sticky top-24 self-start w-64 ml-8 hidden lg:block">
-      <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
-          Sommaire
-        </h3>
-        <ul className="space-y-2">
-          {headings.map((heading) => (
-            <li key={heading.id}>
-              <button
-                onClick={() => handleClick(heading.id)}
-                className={`text-left text-sm transition-colors w-full ${
-                  activeId === heading.id
-                    ? 'text-indigo-600 font-semibold'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                style={{ paddingLeft: `${(heading.level - 1) * 12}px` }}
-              >
-                {heading.text}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </nav>
+    <InThisArticleNav
+      title={title}
+      items={headings.map((heading) => ({
+        id: heading.id,
+        label: heading.text,
+        level: heading.level,
+        isActive: heading.id === resolvedActiveId,
+      }))}
+      onItemClick={handleClick}
+      className={navClassName ?? 'sticky top-28 ml-0 hidden w-full self-start lg:ml-0 lg:block'}
+      panelClassName={className}
+    />
   )
 }
 

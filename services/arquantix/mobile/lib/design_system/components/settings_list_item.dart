@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'kalai_icon.dart';
 import 'list_card.dart';
 
 /// Highly configurable list-item row for settings / profile screens.
@@ -45,7 +46,12 @@ class SettingsListItem extends StatelessWidget {
   final bool showChevron;
   final bool compact;
   final VoidCallback? onTap;
-  final int titleMaxLines;
+
+  /// Nombre max de lignes pour le titre.
+  ///
+  /// `null` = illimité (le titre wrappe sur autant de lignes que nécessaire,
+  /// utile pour les libellés longs comme les collections du centre d'aide).
+  final int? titleMaxLines;
   final int subtitleMaxLines;
   final int descriptionMaxLines;
   final CrossAxisAlignment crossAxisAlignment;
@@ -73,7 +79,13 @@ class SettingsListItem extends StatelessWidget {
           ],
           if (showChevron) ...[
             const SizedBox(width: 8),
-            const ChevronRight(size: 12, color: Color(0xFFC7C7CC)),
+            // Aligné sur [TransactionListCard] / [ListCardModule] : même
+            // chevron KALAI 20px en `textMuted` partout dans le DS.
+            const KalaiIcon(
+              KalaiIcons.chevronRight,
+              size: 20,
+              color: AppColors.textMuted,
+            ),
           ],
         ],
       ),
@@ -106,7 +118,9 @@ class SettingsListItem extends StatelessWidget {
           title,
           style: titleStyle,
           maxLines: titleMaxLines,
-          overflow: TextOverflow.ellipsis,
+          overflow: titleMaxLines == null
+              ? TextOverflow.visible
+              : TextOverflow.ellipsis,
         ),
         if (subtitle != null)
           Text(

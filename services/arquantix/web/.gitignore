@@ -2,6 +2,14 @@ node_modules/
 .next/
 package-lock.json
 
+# MJML rendered HTML (générés à la build)
+emails/rendered/
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
 /src/generated/prisma
 .env
 .env.local

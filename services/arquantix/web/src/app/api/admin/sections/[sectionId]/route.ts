@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { z } from 'zod'
 import { isValidLocale, supportedLocales } from '@/config/locales'
+import { resolveCanonicalSectionKey } from '@/lib/sections/library'
 
 const updateContentSchema = z.object({
   locale: z.string().refine(isValidLocale, {
@@ -100,6 +101,17 @@ export async function PUT(
 
     if (!section) {
       return NextResponse.json({ error: 'Section not found' }, { status: 404 })
+    }
+
+    const canon = resolveCanonicalSectionKey(section.key.trim()) ?? section.key
+    if (canon === 'common_module_ref') {
+      return NextResponse.json(
+        {
+          error:
+            'Cette section est une référence vers un module commun : modifiez le contenu sur la fiche du module commun (Structure du site → Zone 2).',
+        },
+        { status: 400 },
+      )
     }
 
     // Upsert draft content

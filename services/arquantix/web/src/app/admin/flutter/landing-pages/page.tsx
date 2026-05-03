@@ -234,7 +234,6 @@ const MODULE_CATALOG: ModuleCatalogItem[] = [
       items: [
         {
           title: 'Titre de la vidéo',
-          posterImageUrl: 'https://picsum.photos/800/450',
           videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           date: '7 avril 2026',
         },

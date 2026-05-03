@@ -151,21 +151,16 @@ Utiliser PostgreSQL 15 (Alpine) comme base de données pour Strapi, même en dé
 ### ADR-006: Ports Personnalisés (3001, 1338, 5433)
 
 **Date:** 2026-01-01  
-**Status:** ✅ Adopté
+**Status:** ⚠️ **Supplanté (2026)** — la vérité opérationnelle est dans **`.env.arquantix`** et **[LOCAL_SETUP.md](./LOCAL_SETUP.md)** (web typ. **3000**, Postgres hôte typ. **5443**, pas de Strapi en compose).
 
-**Contexte:**
-Les ports par défaut (3000, 1337, 5432) peuvent être utilisés par d'autres services. Il faut éviter les conflits.
+**Contexte (historique) :**
+Les ports par défaut (3000, 1337, 5432) pouvaient entrer en conflit avec d’autres services.
 
-**Décision:**
-Utiliser des ports personnalisés:
-- Next.js Web: 3001 (host) / 3000 (container)
-- Strapi CMS: 1338 (host) / 1338 (container)
-- PostgreSQL: 5433 (host) / 5432 (container)
+**Décision d’origine (ne pas appliquer comme doc active) :**
+Ports personnalisés listés ci‑dessous — **remplacés** en pratique par la stack recovery documentée.
 
 **Conséquences:**
-- ✅ Évite les conflits de ports avec d'autres services
-- ✅ Facilement identifiable (ports Arquantix)
-- ⚠️ Nécessite de se souvenir des ports (documenté dans README)
+- Conserver cette ADR comme archive ; pour tout nouveau dev, suivre **LOCAL_SETUP.md**.
 
 ---
 

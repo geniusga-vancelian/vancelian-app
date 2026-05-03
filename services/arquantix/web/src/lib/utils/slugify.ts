@@ -42,6 +42,17 @@ export function calculateUrlPath(slug: string): string {
   return `/${slug}`
 }
 
+/**
+ * URL publique canonique pour une page **Vault Builder / offre exclusive** : sous `/projects/[slug]`.
+ * (Les pages CMS classiques continuent d’utiliser `calculateUrlPath`.)
+ */
+export function calculateExclusiveOfferPageUrlPath(slug: string): string {
+  if (slug === 'home') {
+    return '/'
+  }
+  return `/projects/${slug}`
+}
+
 
 
 

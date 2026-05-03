@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { z } from 'zod'
 import { computeMenuItemUrlPath } from '@/lib/menu/computeUrlPath'
+import { defaultLocale } from '@/config/locales'
 
 const createMenuItemSchema = z.object({
   label: z.string().min(1, 'Label is required'),
@@ -121,7 +122,12 @@ export async function POST(request: NextRequest) {
     // Add computedUrlPath
     const menuItemWithUrl = {
       ...menuItem,
-      computedUrlPath: computeMenuItemUrlPath(menuItem.isRoot, menuItem.page?.slug || null),
+      computedUrlPath: computeMenuItemUrlPath(
+        menuItem.isRoot,
+        menuItem.page?.slug || null,
+        defaultLocale,
+        menuItem.page?.template,
+      ),
     }
 
     return NextResponse.json({ menuItem: menuItemWithUrl }, { status: 201 })

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getHelpCategories, getHelpArticles } from '@/lib/help/get-help-data'
+import { getHelpPublishedGroupedForCollection } from '@/lib/help/get-help-data'
 import { ChevronRight } from 'lucide-react'
 
 interface SectionHelpCollectionBodyProps {
@@ -12,16 +12,16 @@ interface SectionHelpCollectionBodyProps {
 }
 
 export async function SectionHelpCollectionBody({
-  emptyCategoriesTitle = 'Aucune catégorie',
-  emptyCategoriesSubtitle = 'Aucune catégorie disponible dans cette collection.',
+  emptyCategoriesTitle = 'Aucun regroupement',
+  emptyCategoriesSubtitle = 'Ajoutez des tags catégorie sur les articles de cette collection pour les organiser ici.',
   emptyArticlesTitle = 'Aucun article',
-  emptyArticlesSubtitle = 'Aucun article disponible dans cette catégorie.',
+  emptyArticlesSubtitle = 'Aucun article dans ce regroupement.',
   locale,
   collectionSlug,
 }: SectionHelpCollectionBodyProps) {
-  const categories = await getHelpCategories(collectionSlug)
+  const groups = await getHelpPublishedGroupedForCollection(collectionSlug, locale)
 
-  if (categories.length === 0) {
+  if (groups.length === 0) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center py-12">
@@ -32,23 +32,13 @@ export async function SectionHelpCollectionBody({
     )
   }
 
-  // Fetch articles for all categories in parallel
-  const categoriesWithArticles = await Promise.all(
-    categories.map(async (category) => {
-      const articles = await getHelpArticles(collectionSlug, category.slug)
-      return { category, articles }
-    })
-  )
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="space-y-12">
-        {categoriesWithArticles.map(({ category, articles }) => (
-          <div key={category.id} className="space-y-4">
-            {/* Category Title */}
-            <h2 className="text-2xl font-bold text-gray-900">{category.title}</h2>
+        {groups.map(({ tagSlug, title, articles }) => (
+          <div key={tagSlug} id={`tag-${tagSlug}`} className="space-y-4 scroll-mt-24">
+            <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
 
-            {/* Articles List */}
             {articles.length === 0 ? (
               <div className="py-6">
                 <p className="text-gray-500 text-sm">{emptyArticlesTitle}</p>
@@ -62,7 +52,7 @@ export async function SectionHelpCollectionBody({
                   {articles.map((article) => (
                     <Link
                       key={article.id}
-                      href={`/help/${collectionSlug}/${category.slug}/${article.slug}`}
+                      href={`/help/${collectionSlug}/${article.slug}`}
                       className="block px-6 py-4 hover:bg-gray-50 transition-colors group"
                     >
                       <div className="flex items-center justify-between">
@@ -82,4 +72,3 @@ export async function SectionHelpCollectionBody({
     </div>
   )
 }
-

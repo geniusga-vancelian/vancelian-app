@@ -3,36 +3,62 @@ import { prisma } from '@/lib/prisma'
 import { getLocaleOrDefault } from '@/config/locales'
 import { cookies } from 'next/headers'
 import { ArticleBlockType, ContentStatus } from '@prisma/client'
+import { mergeArticleBlockLocalizedData } from '@/lib/blog/normalizeArticleBlocks'
+import { deriveGroupingTags, tagSlugToDisplayTitle } from '@/lib/articles/collectionTags'
+
+function matchesHelpCategoryFilter(
+  categorySlug: string | null,
+  collectionTagsRaw: unknown,
+  helpCategorySlug: string | null,
+): boolean {
+  if (!categorySlug) return true
+  const tags = deriveGroupingTags(collectionTagsRaw, helpCategorySlug)
+  return tags.includes(categorySlug)
+}
 
 /**
- * Extract plain text from a block's JSON data
+ * GET /api/help/search?q=&locale=&collection=&category=&limit=&titleOnly=&minLength=
+ *
+ * Uniquement contenu **Help** (`Article` type HELP + `HelpArticle` legacy) —
+ * pas News ni Academy.
+ *
+ * Phase 3.3 : recherche fulltext (côté JS, sur titre + standfirst + texte
+ * des blocs) qui agrège `Article(articleType='HELP')` unifié ET
+ * `HelpArticle` legacy. Dédup par `helpSlug` (priorité unifié). Tri :
+ * matches dans le titre d'abord, puis par `updatedAt desc`.
  */
-function extractTextFromBlock(block: any): string {
-  const data = block.data as any
-  switch (block.type) {
+
+function extractTextFromBlock(type: string, dataInput: unknown): string {
+  const data = (dataInput as Record<string, unknown> | null | undefined) ?? {}
+  switch (type) {
     case ArticleBlockType.PARAGRAPH:
     case ArticleBlockType.QUOTE:
-      return data.text || ''
     case ArticleBlockType.HEADING:
-      return data.text || ''
+      return typeof data.text === 'string' ? data.text : ''
     case ArticleBlockType.BULLET_LIST:
-      return Array.isArray(data.items) ? data.items.join(' ') : ''
+      return Array.isArray(data.items) ? (data.items as unknown[]).join(' ') : ''
     default:
       return ''
   }
 }
 
-/**
- * Generate a snippet from article blocks (first paragraph or heading)
- */
-function generateSnippet(blocks: any[]): string {
-  for (const block of blocks) {
-    const text = extractTextFromBlock(block)
+function generateSnippet(blocksTexts: string[]): string {
+  for (const text of blocksTexts) {
     if (text && text.length > 20) {
       return text.substring(0, 150) + (text.length > 150 ? '...' : '')
     }
   }
   return ''
+}
+
+interface SearchHit {
+  id: string
+  slug: string
+  question: string
+  snippet: string
+  collection: { slug: string; title: string }
+  category: { slug: string; title: string }
+  updatedAt: Date
 }
 
 export async function GET(request: NextRequest) {
@@ -43,159 +69,126 @@ export async function GET(request: NextRequest) {
     const collectionSlug = searchParams.get('collection')
     const categorySlug = searchParams.get('category')
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50)
+    const titleOnly =
+      searchParams.get('titleOnly') === '1' || searchParams.get('titleOnly') === 'true'
+    const minLengthRaw = parseInt(searchParams.get('minLength') || '2', 10)
+    const minLength = Number.isFinite(minLengthRaw)
+      ? Math.min(Math.max(minLengthRaw, 1), 20)
+      : 2
 
-    if (!query.trim() || query.trim().length < 2) {
+    if (!query.trim() || query.trim().length < minLength) {
       return NextResponse.json({ query: query.trim(), results: [] })
     }
 
     const cookieStore = await cookies()
     const locale = localeParam || getLocaleOrDefault(cookieStore.get('arquantix-locale')?.value)
+    const queryLower = query.toLowerCase().trim()
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[Help Search API] Starting search:', {
-        query: query.trim(),
-        queryLength: query.trim().length,
-        locale,
-        collectionSlug,
-        categorySlug,
-        limit,
-      })
-    }
-
-    // Build where clause for articles
-    const where: any = {
-      status: ContentStatus.PUBLISHED,
-      i18n: {
-        some: {
-          locale,
-        },
-      },
-    }
-
-    // Filter by collection if provided
-    if (collectionSlug) {
-      where.category = {
-        collection: {
-          slug: collectionSlug,
-          isPublished: true,
-        },
-        isPublished: true,
-      }
-    }
-
-    // Filter by category if provided
-    if (categorySlug) {
-      where.category = {
-        ...where.category,
-        slug: categorySlug,
-        isPublished: true,
-      }
-    }
-
-    // Fetch all published articles with their blocks and i18n
-    const articles = await prisma.helpArticle.findMany({
-      where,
-      include: {
-        i18n: {
-          where: { locale },
-          take: 1,
-        },
-        blocks: {
-          where: { locale },
-          orderBy: { order: 'asc' },
-        },
-        category: {
-          include: {
-            collection: {
-              include: {
-                i18n: {
-                  where: { locale },
-                  take: 1,
-                },
-              },
-            },
-            i18n: {
-              where: { locale },
-              take: 1,
+    const [legacyArticles, unifiedArticles] = await Promise.all([
+      prisma.helpArticle.findMany({
+        where: buildLegacyWhere(collectionSlug, categorySlug),
+        include: {
+          i18n: { where: { locale }, take: 1 },
+          blocks: { where: { locale }, orderBy: { order: 'asc' } },
+          category: {
+            include: {
+              collection: { include: { i18n: { where: { locale }, take: 1 } } },
+              i18n: { where: { locale }, take: 1 },
             },
           },
         },
-      },
-      orderBy: { publishedAt: 'desc' },
-    })
+        orderBy: { publishedAt: 'desc' },
+      }),
+      prisma.article.findMany({
+        where: buildUnifiedWhere(collectionSlug, categorySlug),
+        include: {
+          i18n: { where: { locale }, take: 1 },
+          blocks: {
+            orderBy: { order: 'asc' },
+            include: { i18n: { where: { locale }, take: 1 } },
+          },
+          helpCollection: { include: { i18n: { where: { locale }, take: 1 } } },
+          helpCategory: { include: { i18n: { where: { locale }, take: 1 } } },
+        },
+        orderBy: { publishedAt: 'desc' },
+      }),
+    ])
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[Help Search API] Found', articles.length, 'articles to search through')
-    }
+    const hits: SearchHit[] = []
+    const taken = new Set<string>()
 
-    const queryLower = query.toLowerCase().trim()
-    const results: Array<{
-      id: string
-      slug: string
-      question: string
-      snippet: string
-      collection: { slug: string; title: string }
-      category: { slug: string; title: string }
-      updatedAt: Date
-    }> = []
-
-    // Search through articles
-    for (const article of articles) {
+    for (const article of unifiedArticles) {
+      if (!article.helpCollection) continue
+      if (
+        !matchesHelpCategoryFilter(
+          categorySlug,
+          article.collectionTags,
+          article.helpCategory?.slug ?? null,
+        )
+      ) {
+        continue
+      }
       const i18n = article.i18n[0]
       if (!i18n) continue
-
-      const title = i18n.title || ''
-      const standfirst = i18n.standfirst || ''
-      const titleLower = title.toLowerCase()
-      const standfirstLower = standfirst.toLowerCase()
-
-      // Check if query matches title or standfirst
-      let matches = titleLower.includes(queryLower) || standfirstLower.includes(queryLower)
-
-      // If not, search in blocks
-      if (!matches) {
-        for (const block of article.blocks) {
-          const blockText = extractTextFromBlock(block).toLowerCase()
-          if (blockText.includes(queryLower)) {
-            matches = true
-            break
-          }
-        }
-      }
-
-      if (matches) {
-        // Generate snippet
-        let snippet = standfirst || ''
-        if (!snippet) {
-          snippet = generateSnippet(article.blocks)
-        }
-        if (snippet.length > 200) {
-          snippet = snippet.substring(0, 200) + '...'
-        }
-
-        const collectionI18n = article.category.collection.i18n[0]
-        const categoryI18n = article.category.i18n[0]
-
-        results.push({
-          id: article.id,
-          slug: article.slug,
-          question: title,
-          snippet: snippet || title,
-          collection: {
-            slug: article.category.collection.slug,
-            title: collectionI18n?.title || article.category.collection.slug,
-          },
-          category: {
-            slug: article.category.slug,
-            title: categoryI18n?.title || article.category.slug,
-          },
-          updatedAt: article.updatedAt,
-        })
+      const slug = article.helpSlug ?? article.slug
+      const blocksTexts = article.blocks.map((b) =>
+        extractTextFromBlock(String(b.type), mergeArticleBlockLocalizedData(b)),
+      )
+      const tags = deriveGroupingTags(article.collectionTags, article.helpCategory?.slug ?? null)
+      const catSlug = tags[0] ?? article.helpCategory?.slug ?? 'general'
+      const catTitle = article.helpCategory?.i18n[0]?.title ?? tagSlugToDisplayTitle(catSlug)
+      const hit = matchAndBuildHit({
+        id: article.id,
+        slug,
+        title: i18n.title,
+        standfirst: i18n.standfirst ?? '',
+        blocksTexts,
+        queryLower,
+        updatedAt: article.updatedAt,
+        titleOnly,
+        collection: {
+          slug: article.helpCollection.slug,
+          title: article.helpCollection.i18n[0]?.title ?? article.helpCollection.slug,
+        },
+        category: {
+          slug: catSlug,
+          title: catTitle,
+        },
+      })
+      if (hit) {
+        hits.push(hit)
+        taken.add(slug)
       }
     }
 
-    // Sort by relevance (title matches first, then by date)
-    results.sort((a, b) => {
+    for (const article of legacyArticles) {
+      if (categorySlug && article.category.slug !== categorySlug) continue
+      if (taken.has(article.slug)) continue
+      const i18n = article.i18n[0]
+      if (!i18n) continue
+      const blocksTexts = article.blocks.map((b) => extractTextFromBlock(String(b.type), b.data))
+      const hit = matchAndBuildHit({
+        id: article.id,
+        slug: article.slug,
+        title: i18n.title,
+        standfirst: i18n.standfirst ?? '',
+        blocksTexts,
+        queryLower,
+        updatedAt: article.updatedAt,
+        titleOnly,
+        collection: {
+          slug: article.category.collection.slug,
+          title: article.category.collection.i18n[0]?.title || article.category.collection.slug,
+        },
+        category: {
+          slug: article.category.slug,
+          title: article.category.i18n[0]?.title || article.category.slug,
+        },
+      })
+      if (hit) hits.push(hit)
+    }
+
+    hits.sort((a, b) => {
       const aTitleMatch = a.question.toLowerCase().includes(queryLower)
       const bTitleMatch = b.question.toLowerCase().includes(queryLower)
       if (aTitleMatch && !bTitleMatch) return -1
@@ -203,32 +196,94 @@ export async function GET(request: NextRequest) {
       return b.updatedAt.getTime() - a.updatedAt.getTime()
     })
 
-    const limitedResults = results.slice(0, limit)
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[Help Search API] Search completed:', {
-        totalMatches: results.length,
-        limitedResults: limitedResults.length,
-        query: query.trim(),
-      })
-    }
-
     return NextResponse.json({
       query: query.trim(),
-      results: limitedResults,
+      results: hits.slice(0, limit),
     })
   } catch (error) {
     console.error('[Help Search API] Error:', error)
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[Help Search API] Error stack:', error instanceof Error ? error.stack : 'No stack trace')
-    }
     return NextResponse.json(
-      { 
-        error: 'Internal server error', 
+      {
+        error: 'Internal server error',
         query: '',
-        results: [] 
+        results: [],
       },
       { status: 500 }
     )
+  }
+}
+
+function buildLegacyWhere(collectionSlug: string | null, categorySlug: string | null) {
+  const where: Record<string, unknown> = {
+    status: ContentStatus.PUBLISHED,
+  }
+  if (collectionSlug || categorySlug) {
+    where.category = {
+      ...(categorySlug ? { slug: categorySlug } : {}),
+      isPublished: true,
+      collection: {
+        ...(collectionSlug ? { slug: collectionSlug } : {}),
+        isPublished: true,
+      },
+    }
+  }
+  return where
+}
+
+function buildUnifiedWhere(collectionSlug: string | null, _categorySlug: string | null) {
+  const where: Record<string, unknown> = {
+    articleType: 'HELP',
+    status: ContentStatus.PUBLISHED,
+    helpCollectionId: { not: null },
+  }
+  if (collectionSlug) {
+    where.helpCollection = { slug: collectionSlug, isPublished: true }
+  }
+  return where
+}
+
+function matchAndBuildHit(params: {
+  id: string
+  slug: string
+  title: string
+  standfirst: string
+  blocksTexts: string[]
+  queryLower: string
+  updatedAt: Date
+  titleOnly: boolean
+  collection: { slug: string; title: string }
+  category: { slug: string; title: string }
+}): SearchHit | null {
+  const titleLower = params.title.toLowerCase()
+  const standfirstLower = params.standfirst.toLowerCase()
+
+  let matches: boolean
+  if (params.titleOnly) {
+    matches = titleLower.includes(params.queryLower)
+  } else {
+    matches = titleLower.includes(params.queryLower) || standfirstLower.includes(params.queryLower)
+    if (!matches) {
+      for (const text of params.blocksTexts) {
+        if (text.toLowerCase().includes(params.queryLower)) {
+          matches = true
+          break
+        }
+      }
+    }
+  }
+  if (!matches) return null
+
+  let snippet = params.standfirst || ''
+  if (!snippet) snippet = generateSnippet(params.blocksTexts)
+  if (snippet.length > 200) snippet = snippet.substring(0, 200) + '...'
+
+  return {
+    id: params.id,
+    slug: params.slug,
+    question: params.title,
+    snippet: snippet || params.title,
+    collection: params.collection,
+    category: params.category,
+    updatedAt: params.updatedAt,
   }
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../atoms/app_colors.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// Date picker that shows a tappable card (matching AppTextInput style)
 /// and opens the native Material date picker on tap.
@@ -101,8 +103,8 @@ class AppDatePicker extends StatelessWidget {
                           ),
                         ),
                 ),
-                Icon(
-                  Icons.calendar_today_rounded,
+                KalaiIcon(
+                  KalaiIcons.calendarToday,
                   size: 20,
                   color: enabled ? _placeholderColor : const Color(0xFF808080),
                 ),

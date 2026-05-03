@@ -1,28 +1,32 @@
 import type { ReactNode } from 'react'
-import { Navigation } from '@/components/sections/Navigation'
 import { ReadingProgress } from '@/components/blog/ReadingProgress'
-import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
+import { cn } from '@/lib/utils'
 
 /**
- * Coquille commune aux pages « lecture » type article blog :
- * barre de progression, nav claire, conteneur blanc avec offset sous le header fixe.
+ * Gabarit lecture (blog, offre exclusive) : progression + contenu sous le header fixe du layout.
+ * La barre de navigation est fournie une seule fois par {@link SiteChrome}.
  */
 export function ArticleReadingLayout({
-  menuItems,
-  themeColor = 'light',
   showReadingProgress = true,
+  /** Premier module = bandeau blog sous nav (`blog_article_hero`) : le module gère le décalage — pas de `pt-20` ici. */
+  suppressHeaderOffset = false,
   children,
 }: {
-  menuItems: MenuItem[]
-  themeColor?: 'dark' | 'light'
   showReadingProgress?: boolean
+  suppressHeaderOffset?: boolean
   children: ReactNode
 }) {
   return (
     <>
       {showReadingProgress ? <ReadingProgress /> : null}
-      <Navigation menuItems={menuItems} themeColor={themeColor} />
-      <article className="min-h-screen bg-white pt-20 md:pt-24">{children}</article>
+      <article
+        className={cn(
+          'min-h-screen bg-white',
+          !suppressHeaderOffset && 'pt-20 md:pt-24',
+        )}
+      >
+        {children}
+      </article>
     </>
   )
 }

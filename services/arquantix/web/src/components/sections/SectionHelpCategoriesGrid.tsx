@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getHelpCollectionWithCategories, getHelpArticlesInCategory } from '@/lib/help/get-help-data'
 import { resolveLabelWithFallback } from '@/lib/i18n/resolveLabel'
+import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
 
 interface SectionHelpCategoriesGridProps {
   sectionTitle?: string
@@ -25,7 +26,7 @@ export async function SectionHelpCategoriesGrid({
   if (!collection) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <p className="text-gray-500">Collection introuvable</p>
+        <p className="text-gray-500">{siteCommonCta(locale, 'collection_not_found')}</p>
       </div>
     )
   }

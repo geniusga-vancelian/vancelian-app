@@ -1,0 +1,19 @@
+<mj-section padding="20px 32px 36px" background-color="#FFFFFF">
+  <mj-column>
+    {{#closing}}
+      <mj-text font-size="15px" line-height="1.6" color="#101113" padding="0 0 4px 0">
+        {{closing}}
+      </mj-text>
+    {{/closing}}
+    {{#name}}
+      <mj-text font-size="15px" line-height="1.6" color="#101113" font-weight="600" padding="0">
+        {{name}}
+      </mj-text>
+    {{/name}}
+    {{#role}}
+      <mj-text font-size="13px" line-height="1.6" color="#62656E" padding="0">
+        {{role}}
+      </mj-text>
+    {{/role}}
+  </mj-column>
+</mj-section>

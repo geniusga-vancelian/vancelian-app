@@ -1,17 +1,91 @@
+@import './design-system-theme.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-:root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --color-black: #0B0D10;
-  --color-bronze: #742232;
-  --color-neutral: #E6E6E6;
-}
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: "Avenir Next", Avenir, "Avenir Next Condensed", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+/* Méga-menu desktop : glissement horizontal pur (pas d’opacité). */
+/* Premier affichage : le panneau arrive par la droite. */
+@keyframes megaMenuEnterInitial {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.mega-menu-enter-initial {
+  animation: megaMenuEnterInitial 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Vers un item plus à droite : l’ancien part vers la droite, le nouveau arrive par la droite (slide vers la gauche). */
+@keyframes megaMenuExitForward {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes megaMenuEnterForward {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Vers un item plus à gauche : l’ancien part vers la gauche, le nouveau arrive par la gauche (slide vers la droite). */
+@keyframes megaMenuExitBackward {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes megaMenuEnterBackward {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.mega-menu-exit-forward {
+  animation: megaMenuExitForward 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.mega-menu-enter-forward {
+  animation: megaMenuEnterForward 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mega-menu-exit-backward {
+  animation: megaMenuExitBackward 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.mega-menu-enter-backward {
+  animation: megaMenuEnterBackward 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mega-menu-enter-initial,
+  .mega-menu-exit-forward,
+  .mega-menu-enter-forward,
+  .mega-menu-exit-backward,
+  .mega-menu-enter-backward {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

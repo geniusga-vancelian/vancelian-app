@@ -16,6 +16,8 @@ const approveTranslationSchema = z.object({
     'HELP_COLLECTION',
     'HELP_CATEGORY',
     'HELP_ARTICLE',
+    'ACADEMY_COLLECTION',
+    'ACADEMY_CATEGORY',
     'EMAIL',
     'EMAIL_MODULE',
   ]),
@@ -309,6 +311,80 @@ export async function POST(request: NextRequest) {
       }
 
       await prisma.helpCategoryI18n.update({
+        where: {
+          categoryId_locale: {
+            categoryId: entityId,
+            locale,
+          },
+        },
+        data: {
+          translationStatus: TranslationStatus.APPROVED,
+        },
+      })
+
+      return NextResponse.json({ message: 'Translation approved' })
+    } else if (entityType === 'ACADEMY_COLLECTION') {
+      const i18n = await prisma.academyCollectionI18n.findUnique({
+        where: {
+          collectionId_locale: {
+            collectionId: entityId,
+            locale,
+          },
+        },
+      })
+
+      if (!i18n) {
+        return NextResponse.json(
+          { error: 'Academy collection i18n not found for this locale' },
+          { status: 404 }
+        )
+      }
+
+      if (i18n.translationStatus !== TranslationStatus.MACHINE) {
+        return NextResponse.json(
+          { error: 'Translation is not in MACHINE status' },
+          { status: 400 }
+        )
+      }
+
+      await prisma.academyCollectionI18n.update({
+        where: {
+          collectionId_locale: {
+            collectionId: entityId,
+            locale,
+          },
+        },
+        data: {
+          translationStatus: TranslationStatus.APPROVED,
+        },
+      })
+
+      return NextResponse.json({ message: 'Translation approved' })
+    } else if (entityType === 'ACADEMY_CATEGORY') {
+      const i18n = await prisma.academyCategoryI18n.findUnique({
+        where: {
+          categoryId_locale: {
+            categoryId: entityId,
+            locale,
+          },
+        },
+      })
+
+      if (!i18n) {
+        return NextResponse.json(
+          { error: 'Academy category i18n not found for this locale' },
+          { status: 404 }
+        )
+      }
+
+      if (i18n.translationStatus !== TranslationStatus.MACHINE) {
+        return NextResponse.json(
+          { error: 'Translation is not in MACHINE status' },
+          { status: 400 }
+        )
+      }
+
+      await prisma.academyCategoryI18n.update({
         where: {
           categoryId_locale: {
             categoryId: entityId,

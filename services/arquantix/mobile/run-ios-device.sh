@@ -1,14 +1,19 @@
 #!/bin/bash
 # Lance Flutter sur un iPhone / iPad PHYSIQUE (USB ou réseau).
-# Passe API_BASE_URL + AUTH_API_BASE_URL vers l’IP LAN du Mac — obligatoire car
-# localhost / 127.0.0.1 sur l’appareil pointe vers le téléphone, pas votre Mac.
 #
-# Prérequis : API FastAPI sur le Mac avec --host 0.0.0.0 --port 8000, Next sur :3000,
-# même Wi‑Fi (ou USB avec tunnel si vous savez ce que vous faites).
+# Modèle officiel :
+#   BFF Next     → http://<IP_LAN_DU_MAC>:3000   (API_BASE_URL)
+#   FastAPI auth → http://<IP_LAN_DU_MAC>:8000   (AUTH_API_BASE_URL)
+#   Jamais localhost / 127.0.0.1 : sur l’iPhone ils désignent le téléphone, pas le Mac.
+#
+# Prérequis : Next sur le port 3000 et API sur 8000 joignables depuis le LAN
+# (Docker compose publie en général ces ports sur 0.0.0.0). Mac et iPhone sur le même Wi‑Fi
+# (sauf tunnel USB avancé).
 #
 # Usage :
 #   ./run-ios-device.sh
 #   FLUTTER_DEVICE_ID=<udid> ./run-ios-device.sh   # forcer un appareil
+#   API_BASE_URL=http://192.168.1.10:3000 AUTH_API_BASE_URL=http://192.168.1.10:8000 ./run-ios-device.sh
 #
 set -e
 
@@ -16,15 +21,47 @@ export PATH="/opt/homebrew/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Détection IP LAN pour les défauts (en0 / en1) — voir scripts/ios_dev_network.sh
+export ARQUANTIX_IOS_USE_LAN_DEFAULT=1
+
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/scripts/ios_dev_network.sh"
 
-echo "→ API URL (BFF):     $API_URL"
-echo "→ Auth API URL:      $AUTH_URL"
+echo ""
+echo "━━ iPhone physique — cibles attendues ━━"
+echo "  BFF Next.js   : http://<IP_LAN_MAC>:3000"
+echo "  FastAPI auth  : http://<IP_LAN_MAC>:8000"
+echo "  Doc : docs/LOCAL_IOS_AND_BFF.md"
+echo ""
+
+echo "→ API URL (BFF) :     $API_URL"
+echo "→ Auth API URL :      $AUTH_URL"
+echo ""
+
 if [[ "$API_URL" == *"127.0.0.1"* ]] || [[ "$API_URL" == *"localhost"* ]]; then
+  echo "❌ Refus : localhost / 127.0.0.1 ne permettent pas d’atteindre le Mac depuis un iPhone réel."
+  echo "   Le script n’a pas trouvé d’IP LAN (en0/en1). Vérifiez le Wi‑Fi ou définissez :"
+  echo "     export API_BASE_URL=http://<IP_DU_MAC>:3000"
+  echo "     export AUTH_API_BASE_URL=http://<IP_DU_MAC>:8000"
   echo ""
-  echo "⚠️  URL en localhost : un iPhone réel ne pourra pas joindre le Mac."
-  echo "   Branchez le Wi‑Fi ou exportez API_BASE_URL=http://<IP_LAN>:3000"
+  echo "   Exemples corrects :"
+  echo "     API_BASE_URL=http://192.168.1.42:3000 AUTH_API_BASE_URL=http://192.168.1.42:8000 ./run-ios-device.sh"
+  echo ""
+  echo "   IP(s) souvent utiles sur ce Mac :"
+  for _iface in en0 en1; do
+    _ip=$(ipconfig getifaddr "$_iface" 2>/dev/null || true)
+    if [ -n "$_ip" ]; then
+      echo "     $_iface → $_ip"
+    fi
+  done
+  echo ""
+  echo "   Pour ignorer ce blocage (rare) : ARQUANTIX_ALLOW_LOCALHOST_ON_DEVICE=1"
+  echo ""
+  if [[ "${ARQUANTIX_ALLOW_LOCALHOST_ON_DEVICE:-}" != "1" ]]; then
+    exit 1
+  fi
+  echo "⚠️  Poursuite avec URL locale — comportement probablement cassé sur appareil physique."
   echo ""
 fi
 echo ""

@@ -7,12 +7,14 @@ import '../../../../core/profile_leading_preference.dart';
 import '../../../../core/secure_api_config.dart';
 import '../../data/mobile_app_profile.dart';
 import '../../../../design_system/design_system.dart';
+import '../../../academy/presentation/screens/academy_center_screen.dart';
 import '../../../help/presentation/screens/help_center_screen.dart';
 import '../../../notifications/presentation/screens/notification_center_screen.dart';
 import '../../../registration/screens/registration_flow_launcher_screen.dart';
 import '../../../security/login/presentation/login_phone_screen.dart';
 import '../../../security/passkeys/presentation/passkey_management_screen.dart';
-import '../../../search/presentation/screens/search_screen.dart';
+import '../../../news/presentation/screens/blog_screen.dart';
+import '../../../search/presentation/screens/assistance_conversations_screen.dart';
 import 'account_info_screen.dart';
 import 'notification_settings_screen.dart';
 import 'security_screen.dart';
@@ -63,14 +65,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       content: [
         _buildProfileHeader(),
         const SizedBox(height: AppSpacing.xxl),
+        const AppSectionTitle('Devise de référence'),
+        const SizedBox(height: AppSpacing.md),
         _buildCurrencyCard(),
         const SizedBox(height: AppSpacing.xxl),
+        const AppSectionTitle('Paramètres'),
+        const SizedBox(height: AppSpacing.md),
         _buildPreferencesCard(),
         const SizedBox(height: AppSpacing.xxl),
+        const AppSectionTitle('Support'),
+        const SizedBox(height: AppSpacing.md),
         _buildSupportCard(),
         const SizedBox(height: AppSpacing.xxl),
+        const AppSectionTitle('Développement'),
+        const SizedBox(height: AppSpacing.md),
         _buildDevToolsCard(),
         const SizedBox(height: AppSpacing.xxl),
+        const AppSectionTitle('Informations'),
+        const SizedBox(height: AppSpacing.md),
         _buildLegalCard(),
         const SizedBox(height: AppSpacing.xxl),
       ],
@@ -121,7 +133,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildCurrencyCard() {
     final current = _pref.currency;
     return SettingsCard(
-      sectionTitle: 'Devise de référence',
       children: [
         Text(
           'Les prix et valorisations seront affichés dans la devise choisie.',
@@ -165,7 +176,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildPreferencesCard() {
     return SettingsCard(
-      sectionTitle: 'Paramètres',
       children: [
         SettingsListItem(
           leading: const Icon(
@@ -203,7 +213,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildSupportCard() {
     return SettingsCard(
-      sectionTitle: 'Support',
       children: [
         SettingsListItem(
           leading: const Icon(
@@ -217,13 +226,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         SettingsListItem(
           leading: const Icon(
+            Icons.school_outlined,
+            size: 24,
+            color: AppColors.textPrimary,
+          ),
+          title: 'Academy',
+          showChevron: true,
+          onTap: () => _push(const AcademyCenterScreen()),
+        ),
+        SettingsListItem(
+          leading: const Icon(
+            Icons.article_outlined,
+            size: 24,
+            color: AppColors.textPrimary,
+          ),
+          title: 'Blog',
+          showChevron: true,
+          onTap: () => _push(const BlogScreen()),
+        ),
+        SettingsListItem(
+          leading: const Icon(
             Icons.forum_outlined,
             size: 24,
             color: AppColors.textPrimary,
           ),
-          title: 'Assistance sur mesure',
+          title: 'Assistance de compte sur mesure',
           showChevron: true,
-          onTap: () => _push(const SearchScreen()),
+          onTap: () =>
+              _push(const AssistanceConversationsScreen(standalone: true)),
         ),
         SettingsListItem(
           leading: const Icon(
@@ -241,7 +271,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildDevToolsCard() {
     return SettingsCard(
-      sectionTitle: 'Développement',
       children: [
         SettingsListItem(
           leading: const Icon(
@@ -260,7 +289,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildLegalCard() {
     return SettingsCard(
-      sectionTitle: 'Informations',
       children: [
         SettingsListItem(
           leading: const Icon(Icons.description_outlined, size: 24, color: AppColors.textPrimary),

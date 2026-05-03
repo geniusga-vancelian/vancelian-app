@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../atoms/kalai_icons.dart';
 import 'crypto_avatar.dart';
+import 'kalai_icon.dart';
 
 /// Capsule affichant deux crypto-avatars superposés avec une icône d'échange.
 ///
@@ -63,7 +65,7 @@ class CryptoExchangeWidget extends StatelessWidget {
           const Positioned(
             left: 49,
             top: 12,
-            child: Icon(Icons.swap_horiz_rounded, size: 24, color: Colors.black),
+            child: KalaiIcon(KalaiIcons.exchange, size: 24, color: Colors.black),
           ),
         ],
       ),

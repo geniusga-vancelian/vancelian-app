@@ -1,25 +1,87 @@
-import * as React from "react";
-import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { Tag } from "@/components/ui/Tag";
-import svgPaths from "@/imports/svg-uawwnp5dcp";
+"use client";
 
-export interface ProjectShrink {
-  id: string;
-  slug: string;
+/**
+ * @deprecated Legacy ProjectCard grid replaced by design-system ProjetGallery; API stable for CMS.
+ */
+import * as React from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import {
+  buildLocalizedProjectDetailPath,
+  buildLocalizedProjectHubPath,
+  getActiveLocaleFromPathname,
+  localizePublicInternalHref,
+} from "@/lib/i18n/publicLocalizedRouting";
+import ProjetGallery, {
+  type Project,
+} from "@/components/design-system/ProjetGallery/ProjetGallery";
+import { Container } from "@/components/ui/Container";
+import type { ProjectShrink } from "@/lib/cms/projects";
+import {
+  offerGalleryPhaseToImageLabel,
+  type ProjectGalleryOfferPhase,
+} from "@/lib/cms/galleryOfferPhase";
+import { siteCommonCta } from "@/lib/i18n/siteCommonCta";
+
+const OFFER_TAB_ALL = "all" as const;
+type OfferTabId = typeof OFFER_TAB_ALL | ProjectGalleryOfferPhase;
+
+type GalleryRow = {
+  /** Identifiant stable (ex. packaged_product id ou slug legacy). */
+  id?: string;
   title: string;
-  location: string | null;
-  shortDescription: string | null;
-  coverUrl: string | null;
-  coverAlt: string | null;
+  location?: string;
+  tags?: string[];
+  description?: string;
+  backgroundImage?: string;
+  slug?: string;
+  detailUrl?: string;
+  fundedPct?: number;
+  fundedText?: string;
+  amountLine?: string;
+  /** Phase offre (pool) → pastille image + onglets « toutes les offres ». */
+  offerPhase?: ProjectGalleryOfferPhase | null;
+};
+
+/** Ordre aligné sur la maquette : toutes → en cours → à venir → clôturées.
+ *  Les libellés sont localisés au moment du rendu via `siteCommonCta`. */
+const OFFER_STATUS_TAB_IDS: OfferTabId[] = [
+  OFFER_TAB_ALL,
+  "in_progress",
+  "upcoming",
+  "delivered",
+];
+
+function offerStatusTabLabel(
+  id: OfferTabId,
+  locale: string | null | undefined,
+): string {
+  switch (id) {
+    case "in_progress":
+      return siteCommonCta(locale, "offer_status_in_progress");
+    case "upcoming":
+      return siteCommonCta(locale, "offer_status_upcoming");
+    case "delivered":
+      return siteCommonCta(locale, "offer_status_delivered");
+    case OFFER_TAB_ALL:
+    default:
+      return siteCommonCta(locale, "offer_status_all");
+  }
 }
 
+function rowMatchesOfferTab(row: GalleryRow, tab: OfferTabId): boolean {
+  if (tab === OFFER_TAB_ALL) return true;
+  return row.offerPhase === tab;
+}
+
+/** @deprecated Utiliser `@/lib/cms/projects` — réexport pour compat imports historiques. */
+export type { ProjectShrink };
+
 export interface SectionProjectsProps extends React.HTMLAttributes<HTMLElement> {
+  /** Surtitre / ligne au-dessus du titre (CMS). */
+  eyebrow?: string;
   title?: string;
   description?: string;
-  // Legacy: hardcoded items
   items?: Array<{
     title: string;
     location?: string;
@@ -29,10 +91,14 @@ export interface SectionProjectsProps extends React.HTMLAttributes<HTMLElement> 
     mediaUrl?: string;
     backgroundImage?: string;
   }>;
-  // New: resolved projects from DB
   resolvedProjects?: ProjectShrink[];
+  /** Si true (CMS), la grille liste déjà toutes les offres : masquer le CTA « Voir toutes les offres ». */
+  showAllExclusiveOffers?: boolean;
+  /** Libellé CTA « Voir toutes les offres » (CMS, traduisible). Fallback : `siteCommonCta(locale, 'view_all_offers')`. */
+  viewAllButtonText?: string;
 }
 
+/** @deprecated Conservé pour compat ; la homepage utilise ProjetGallery. */
 export interface ProjectCardProps {
   title: string;
   location?: string;
@@ -40,184 +106,165 @@ export interface ProjectCardProps {
   description?: string;
   backgroundImage?: string;
   className?: string;
-  slug?: string; // For linking to project detail page
+  slug?: string;
 }
 
-export function ProjectCard({
-  title,
-  location,
-  tags,
-  description,
-  backgroundImage,
-  className,
-  slug,
-}: ProjectCardProps) {
-  const cardContent = (
-    <div
-      className={cn(
-        "relative w-full h-[700px] overflow-hidden bg-[#363636]",
-        "flex flex-col justify-between p-7 md:p-8",
-        "group transition-transform hover:scale-[1.02]",
-        slug ? "cursor-pointer" : "",
-        className
-      )}
-    >
-      {/* Cover Image with Overlay */}
-      {backgroundImage && (
-        <div className="absolute inset-0 z-0">
-          <img 
-            src={backgroundImage} 
-            alt={title} 
-            className="w-full h-full object-cover"
-          />
-          {/* Overlay for text readability */}
-          <div 
-            className="absolute inset-0"
-            style={{ 
-              backgroundColor: 'rgba(0, 0, 0, 0.25)',
-            }}
-          />
-        </div>
-      )}
-
-      {/* Decorative Pattern */}
-      <div className="absolute inset-0 z-[2] pointer-events-none opacity-40">
-        <svg
-          className="absolute bottom-0 right-0 w-[200%] h-[80%]"
-          fill="none"
-          preserveAspectRatio="none"
-          viewBox="0 0 1314.34 255.609"
-          style={{ transform: "rotate(296deg)" }}
-        >
-          <path d={svgPaths.p3d131400} stroke="#C6A47C" strokeMiterlimit="10" />
-          <path d={svgPaths.p37eb1c40} stroke="#C6A47C" strokeMiterlimit="10" />
-        </svg>
-      </div>
-
-      {/* Content - Top */}
-      <div className="relative z-10 flex flex-col gap-2.5">
-        {tags && tags.length > 0 && (
-          <div className="flex gap-1 opacity-50">
-            {tags.map((tag, idx) => (
-              <Tag key={idx}>{tag}</Tag>
-            ))}
-          </div>
-        )}
-
-        <h3 className="text-white text-2xl md:text-[26px] uppercase leading-tight">
-          {title}
-        </h3>
-      </div>
-
-      {/* Location Label (Vertical) - Vertically centered, horizontally aligned with description padding */}
-      {location && (
-        <div className="absolute left-7 md:left-8 top-1/2 -translate-y-1/2 z-10 flex flex-col items-start gap-2.5">
-          <div className="flex items-center justify-center h-5 w-2">
-            <p className="text-white text-[11px] uppercase whitespace-nowrap origin-center -rotate-90">
-              {location}
-            </p>
-          </div>
-          <div className="w-px h-20 bg-white" />
-        </div>
-      )}
-
-      {/* Description + Arrow - Bottom */}
-      {description && (
-        <div className="relative z-10 flex items-end gap-6">
-          <p className="flex-1 text-[#E6E6E6] text-sm leading-relaxed">
-            {description}
-          </p>
-          <svg 
-            className="w-5 h-5 text-white flex-shrink-0 group-hover:translate-x-1 transition-transform" 
-            fill="currentColor"
-            viewBox="0 0 20 8"
-          >
-            <path d={svgPaths.p3d2fd000} />
-          </svg>
-        </div>
-      )}
-    </div>
-  );
-
-  // Wrap in Link if slug is provided
-  if (slug) {
-    return (
-      <Link href={`/projects/${slug}`} className="block" style={{ position: 'relative' }}>
-        {cardContent}
-      </Link>
-    );
+/**
+ * Tags Product Registry (admin) : entrées séparées ou une chaîne « A, B » ;
+ * max 2 libellés pour la ligne au-dessus du titre.
+ */
+function normalizeCardInfoTags(tags: string[] | undefined): string[] {
+  if (!tags?.length) return [];
+  const out: string[] = [];
+  for (const raw of tags) {
+    const s = String(raw).trim();
+    if (!s) continue;
+    if (s.includes(",")) {
+      out.push(...s.split(",").map((t) => t.trim()).filter(Boolean));
+    } else {
+      out.push(s);
+    }
   }
-
-  return cardContent;
+  return out.slice(0, 2);
 }
 
-export function SectionProjects({ 
-  title, 
-  description, 
+function mapToGalleryProjects(
+  rows: GalleryRow[],
+  pathLocale: ReturnType<typeof getActiveLocaleFromPathname>,
+): Project[] {
+  return rows.map((p, index) => {
+    const infoTags = normalizeCardInfoTags(p.tags);
+    const rawAmount = (p.amountLine ?? "").trim()
+    const amount = rawAmount && rawAmount !== "—" ? rawAmount : ""
+    const fallbackDetail =
+      p.slug != null && p.slug !== ""
+        ? buildLocalizedProjectDetailPath(pathLocale, p.slug)
+        : undefined
+    const rawDetail = typeof p.detailUrl === "string" ? p.detailUrl.trim() : ""
+    const ctaLink = rawDetail
+      ? localizePublicInternalHref(rawDetail, pathLocale)
+      : fallbackDetail
+    return {
+      id: p.id || p.slug || `project-${index}`,
+      image:
+        p.backgroundImage ||
+        "https://placehold.co/378x220/f3f3f3/62656e/png?text=Arquantix",
+      imageStatusLabel: offerGalleryPhaseToImageLabel(p.offerPhase),
+      infoTags,
+      amount,
+      title: p.title,
+      description: p.description || "",
+      fundedPercentage: p.fundedPct ?? 0,
+      fundedText: p.fundedText ?? "—",
+      ctaLink,
+    }
+  })
+}
+
+export function SectionProjects({
+  eyebrow,
+  title,
+  description,
   items = [],
   resolvedProjects,
-  className, 
-  ...props 
+  showAllExclusiveOffers = false,
+  viewAllButtonText,
+  className,
+  ...props
 }: SectionProjectsProps) {
-  // Priority: resolvedProjects (from DB) > items (legacy)
-  let projectsToRender: Array<{
-    title: string;
-    location?: string;
-    tags?: string[];
-    description?: string;
-    backgroundImage?: string;
-    slug?: string;
-  }> = [];
+  const router = useRouter();
+  const pathname = usePathname();
+  const pathLocale = getActiveLocaleFromPathname(pathname);
+  const [offerTab, setOfferTab] = React.useState<OfferTabId>(OFFER_TAB_ALL);
+  const resolvedTitle = title?.trim() || siteCommonCta(pathLocale, "projects_default_title");
+  const resolvedViewAllLabel =
+    viewAllButtonText?.trim() || siteCommonCta(pathLocale, "view_all_offers");
+
+  let rows: GalleryRow[] = [];
 
   if (resolvedProjects && resolvedProjects.length > 0) {
-    // Convert resolvedProjects to ProjectCard format
-    projectsToRender = resolvedProjects.map((p) => ({
+    rows = resolvedProjects.map((p) => ({
+      id: p.id,
       title: p.title,
       location: p.location || undefined,
-      tags: [],
-      description: p.shortDescription || '',
+      tags:
+        p.cardTags && p.cardTags.length > 0
+          ? p.cardTags
+          : undefined,
+      description: p.shortDescription || "",
       backgroundImage: p.coverUrl || undefined,
       slug: p.slug,
+      detailUrl: p.detailUrl || undefined,
+      fundedPct: p.fundingProgressPct ?? undefined,
+      fundedText: p.fundingProgressLabel ?? undefined,
+      amountLine: p.fundingAmountLine ?? undefined,
+      offerPhase: p.galleryOfferPhase ?? null,
     }));
   } else if (items.length > 0) {
-    projectsToRender = items;
+    rows = items;
   }
+
+  const rowsForView =
+    showAllExclusiveOffers && rows.length > 0
+      ? rows.filter((r) => rowMatchesOfferTab(r, offerTab))
+      : rows;
+
+  const projects = mapToGalleryProjects(rowsForView, pathLocale);
+  const sectionLabelText = eyebrow?.trim() ? eyebrow.trim() : undefined;
+
+  const statusTabs =
+    showAllExclusiveOffers && rows.length > 0
+      ? OFFER_STATUS_TAB_IDS.map((id) => ({
+          id,
+          label: offerStatusTabLabel(id, pathLocale),
+          isActive: id === offerTab,
+        }))
+      : [];
 
   return (
     <section
-      className={cn("w-full bg-black py-16 md:py-20", className)}
+      id="projects"
+      className={cn(
+        "w-full bg-white pb-8 pt-0 md:pb-12",
+        className,
+      )}
       {...props}
     >
       <Container>
-        <div className="flex flex-col items-center gap-12">
-          {/* Section Header */}
-          {title && (
-            <SectionHeader
-              tag={title}
-              title={title}
-              description={description}
-            />
-          )}
-
-          {/* Projects Grid */}
-          {projectsToRender.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-              {projectsToRender.map((project, idx) => (
-                <ProjectCard 
-                  key={project.slug || idx} 
-                  title={project.title}
-                  location={project.location}
-                  tags={project.tags}
-                  description={project.description}
-                  backgroundImage={project.backgroundImage}
-                  slug={project.slug}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-400 text-center">No projects available.</p>
-          )}
-        </div>
+        <ProjetGallery
+          sectionLabel={sectionLabelText}
+          title={resolvedTitle}
+          subtitle={description}
+          tabs={statusTabs}
+          projects={projects}
+          viewAllButtonText={resolvedViewAllLabel}
+          viewAllButtonLink={buildLocalizedProjectHubPath(pathLocale)}
+          showViewAllButton={!showAllExclusiveOffers}
+          onTabChange={(id) => setOfferTab(id as OfferTabId)}
+          onProjectClick={(projectId) => {
+            const row = rowsForView.find(
+              (r, i) => (r.id || r.slug || `project-${i}`) === projectId,
+            );
+            if (row?.detailUrl?.trim()) {
+              router.push(
+                localizePublicInternalHref(row.detailUrl.trim(), pathLocale),
+              );
+              return;
+            }
+            const slug = row?.slug;
+            if (slug) router.push(buildLocalizedProjectDetailPath(pathLocale, slug));
+          }}
+        />
+        {rows.length === 0 ? (
+          <p className="mx-auto mt-4 max-w-xl text-center text-sm text-neutral-500">
+            {siteCommonCta(pathLocale, "no_offers_to_display")}
+          </p>
+        ) : null}
+        {rows.length > 0 && projects.length === 0 && showAllExclusiveOffers ? (
+          <p className="mx-auto mt-4 max-w-xl text-center text-sm text-muted-foreground">
+            {siteCommonCta(pathLocale, "no_offers_in_category")}
+          </p>
+        ) : null}
       </Container>
     </section>
   );

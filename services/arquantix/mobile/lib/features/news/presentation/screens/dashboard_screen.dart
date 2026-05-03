@@ -113,7 +113,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _errorMessage() {
     final e = _error ?? 'Erreur';
     if (e.contains('404')) {
-      return 'API non disponible (404).\n\nVérifiez que le serveur Next.js du projet Arquantix tourne sur le port 3001 :\n  cd services/arquantix/web && npm run dev';
+      return 'API non disponible (404).\n\nVérifiez que le serveur Next.js du projet Arquantix tourne sur le port 3000 :\n  cd services/arquantix/web && npm run dev';
     }
     // Éviter d'afficher du HTML ou des réponses énormes
     final noHtml = e.replaceAll(RegExp(r'<[^>]*>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'kalai_icon.dart';
 
 class ChevronLinkListItem {
   const ChevronLinkListItem({
@@ -85,8 +86,8 @@ class ChevronLinkListModule extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
-                      const Icon(
-                        Icons.chevron_right,
+                      const KalaiIcon(
+                        KalaiIcons.chevronRight,
                         color: Color(0xFFD1D5DB),
                         size: 24,
                       ),

@@ -65,7 +65,7 @@ export async function SectionHelpSearchResults({
             {articles.map((article) => (
               <Link
                 key={article.id}
-                href={`/help/${collectionSlug}/${categorySlug}/${article.slug}`}
+                href={`/help/${collectionSlug}/${article.slug}`}
                 className="block p-4 border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all"
               >
                 <h3 className="text-lg font-semibold text-gray-900 mb-2 hover:text-indigo-600">

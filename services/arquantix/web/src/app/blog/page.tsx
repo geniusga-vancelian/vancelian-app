@@ -1,18 +1,28 @@
 import { cookies } from 'next/headers'
-import { getLocaleFromCookies } from '@/lib/i18n/locale-server'
-import { defaultLocale } from '@/config/locales'
-import { getPrimaryMenu } from '@/lib/menu/getPrimaryMenu'
-import { Navigation } from '@/components/sections/Navigation'
+import { resolvePublicLocale } from '@/lib/i18n/resolvePublicLocale'
 import { Metadata } from 'next'
 import { prisma } from '@/lib/prisma'
-import { getPageSections } from '@/lib/cms/content'
-import { SectionRenderer } from '@/components/cms/SectionRenderer'
+import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { formatArticleDateShort } from '@/lib/blog/formatDates'
+import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
+import { Paragraph, SectionTitle, Titlepage, figmaDsLinksClassName } from '@/components/design-system/extracted'
+import { getLocaleOrDefault } from '@/config/locales'
+import { BlogTemplatePageView } from '@/components/cms/BlogTemplatePageView'
+import { parseBlogListingSearchParams } from '@/lib/blog/parseBlogListingSearchParams'
+import {
+  BlogFeaturedModule,
+  BlogRecentPostsModule,
+  type DsBlogArticle,
+} from '@/components/design-system/Blog/BlogModules'
 
-export const metadata: Metadata = {
-  title: 'Blog — Vancelian',
-  description: 'Actualités de l’entreprise, analyses et perspectives Vancelian.',
+export async function generateMetadata(): Promise<Metadata> {
+  const cookieStore = await cookies()
+  const locale = resolvePublicLocale({ cookieStore, searchParams: {} })
+  return {
+    title: siteCommonCta(locale, 'blog_meta_title'),
+    description: siteCommonCta(locale, 'blog_meta_description'),
+  }
 }
 
 interface ArticlePreview {
@@ -59,17 +69,18 @@ function categoryLabel(slug: string | undefined | null, data: BlogData): string 
   return fromInvestment?.label || slug
 }
 
-function editorialPill(article: ArticlePreview): string {
-  if (article.articleType === 'ANALYSIS') return 'Analysis'
-  if (article.isCompanyNews) return 'Company News'
-  return 'Market News'
+function editorialPill(article: ArticlePreview, locale: string): string {
+  if (article.articleType === 'ANALYSIS') return siteCommonCta(locale, 'blog_segment_analysis')
+  if (article.isCompanyNews) return siteCommonCta(locale, 'blog_segment_company_news')
+  return siteCommonCta(locale, 'blog_segment_market_news')
 }
 
 async function getBlogData(
   locale: string,
   category?: string,
   page: number = 1,
-  segment?: string
+  segment?: string,
+  pageSize: number = 10,
 ): Promise<BlogData> {
   // Use relative URL for server-side fetch
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
@@ -82,6 +93,7 @@ async function getBlogData(
     url.searchParams.set('segment', segment)
   }
   url.searchParams.set('page', page.toString())
+  url.searchParams.set('pageSize', String(pageSize))
 
   try {
     const response = await fetch(url.toString(), {
@@ -117,429 +129,341 @@ async function getBlogData(
 export default async function BlogPage({
   searchParams,
 }: {
-  searchParams: { category?: string; page?: string; segment?: string }
+  searchParams: {
+    category?: string | string[]
+    page?: string | string[]
+    mosaicPage?: string | string[]
+    segment?: string | string[]
+    locale?: string | string[]
+  }
 }) {
   const cookieStore = await cookies()
-  const locale = await getLocaleFromCookies(cookieStore) || defaultLocale
-  const menuItems = await getPrimaryMenu(locale)
+  const locale = resolvePublicLocale({ cookieStore, searchParams })
+
+  const { category, pageNum, mosaicPageNum, segment } = parseBlogListingSearchParams(searchParams)
 
   // Check if a CMS page with template "blog" exists
   const cmsPage = await prisma.page.findUnique({
     where: { slug: 'blog' },
   })
 
-  // Get theme color from CMS page or default to 'light' for blog
-  const themeColor = (cmsPage?.themeColor && (cmsPage.themeColor === 'dark' || cmsPage.themeColor === 'light')) 
-    ? cmsPage.themeColor as 'dark' | 'light'
-    : 'light'
-
   // If CMS page exists with blog template, render via CMS sections
   // The template "blog" uses CMS sections for i18n-ready UI labels
   if (cmsPage && cmsPage.template === 'blog') {
-    // Get sections from CMS
-    const sections = await getPageSections('blog', locale, 'published')
-    const category = searchParams.category
-    const pageNum = parseInt(searchParams.page || '1')
-
-    if (sections.length === 0) {
-      // Fallback if no sections configured
-      return (
-        <>
-          <Navigation menuItems={menuItems} themeColor={themeColor} />
-          <div className="min-h-screen bg-white pt-20 md:pt-24">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-              <div className="text-center py-12">
-                <p className="text-gray-500">Blog page is not configured. Please add sections in the admin.</p>
-              </div>
-            </div>
-          </div>
-        </>
-      )
-    }
-
     return (
-      <>
-        <Navigation menuItems={menuItems} themeColor={themeColor} />
-        <div className="min-h-screen bg-white pt-20 md:pt-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            {sections.map((section) => (
-              <SectionRenderer
-                key={section.id}
-                section={section}
-                locale={locale}
-                category={category}
-                page={pageNum}
-              />
-            ))}
-          </div>
-        </div>
-      </>
+      <BlogTemplatePageView
+        locale={locale}
+        category={category}
+        pageNum={pageNum}
+        mosaicPageNum={mosaicPageNum}
+        segment={segment}
+        contentStatus="published"
+      />
     )
   }
 
   // Fallback: if no CMS page with blog template, render default blog template
-  const category = searchParams.category
-  const page = parseInt(searchParams.page || '1')
-  const segment = searchParams.segment
-
-  const data = await getBlogData(locale, category, page, segment)
+  const data = await getBlogData(locale, category, pageNum, segment, 24)
+  const page = pageNum
 
   const filterCategories =
     data.articleCategories.length > 0 ? data.articleCategories : data.categories
 
+  const activeLocale = getLocaleOrDefault(locale)
+  const blogBasePath = `/${activeLocale}/blog`
+  const featured = data.featured
+  const articleHref = (slug: string) => `${blogBasePath}/${slug}`
+  const uniqueArticles = (items: ArticlePreview[]): ArticlePreview[] => {
+    const seen = new Set<string>()
+    return items.filter((item) => {
+      if (seen.has(item.id)) return false
+      seen.add(item.id)
+      return true
+    })
+  }
+  const sortByMostRecent = (items: ArticlePreview[]): ArticlePreview[] =>
+    [...items].sort((a, b) => {
+      const aTs = a.publishedAt ? new Date(a.publishedAt).getTime() : 0
+      const bTs = b.publishedAt ? new Date(b.publishedAt).getTime() : 0
+      return bTs - aTs
+    })
+
+  const allPosts = sortByMostRecent(
+    uniqueArticles([...(featured ? [featured] : []), ...data.highlighted, ...data.articles, ...data.companyNews]),
+  )
+  const nonFeaturedPool = sortByMostRecent(
+    uniqueArticles([...data.highlighted, ...data.articles, ...data.companyNews]).filter(
+      (item) => item.id !== featured?.id,
+    ),
+  )
+
+  const heroSidebar = !category && page === 1 ? nonFeaturedPool.slice(0, 4) : []
+  const recentPosts = !category && page === 1 ? allPosts.slice(0, 3) : nonFeaturedPool.slice(0, 3)
+  const categoryFeed = !category && page === 1 ? nonFeaturedPool.slice(7) : nonFeaturedPool
+
+  const categoryBuckets = new Map<string, ArticlePreview[]>()
+  for (const article of categoryFeed) {
+    const firstSlug = article.categorySlugs?.[0]
+    if (!firstSlug) continue
+    const list = categoryBuckets.get(firstSlug) ?? []
+    list.push(article)
+    categoryBuckets.set(firstSlug, list)
+  }
+
+  const topCategorySections = filterCategories
+    .map((cat) => ({
+      ...cat,
+      items: categoryBuckets.get(cat.slug) ?? [],
+    }))
+    .filter((section) => section.items.length > 0)
+    .slice(0, 2)
+
+  const toDsArticle = (article: ArticlePreview): DsBlogArticle => ({
+    id: article.id,
+    slug: articleHref(article.slug),
+    title: article.title,
+    standfirst: article.standfirst,
+    coverUrl: article.coverUrl,
+    authorName: article.authorName,
+    publishedAt: article.publishedAt,
+    readingTime: article.readingTime,
+  })
+
+  const renderImage = (article: ArticlePreview, className: string) => {
+    if (!article.coverUrl) {
+      return (
+        <div className={cn('flex items-center justify-center bg-[#d9e2f8] text-[#8893b0]', className)}>
+          {siteCommonCta(locale, 'no_image')}
+        </div>
+      )
+    }
+    return <img src={article.coverUrl} alt={article.title} className={cn('object-cover', className)} />
+  }
+
+  const renderMeta = (article: ArticlePreview) => (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[#62656e]">
+      <span>{article.authorName}</span>
+      {article.publishedAt && (
+        <>
+          <span>•</span>
+          <time dateTime={article.publishedAt}>
+            {formatArticleDateShort(new Date(article.publishedAt), locale)}
+          </time>
+        </>
+      )}
+      <span>•</span>
+      <span>
+        {article.readingTime} {siteCommonCta(locale, 'blog_min_read')}
+      </span>
+    </div>
+  )
+
+  const segmentLinks = [
+    { key: 'market', label: siteCommonCta(locale, 'blog_segment_market_news'), href: blogBasePath },
+    {
+      key: 'company',
+      label: siteCommonCta(locale, 'blog_segment_company_news'),
+      href: `${blogBasePath}?segment=company`,
+    },
+    {
+      key: 'analysis',
+      label: siteCommonCta(locale, 'blog_segment_analysis'),
+      href: `${blogBasePath}?segment=analysis`,
+    },
+  ] as const
+
+  const categoryQuerySuffix = segment ? `&segment=${segment}` : ''
+
   return (
-    <>
-      <Navigation menuItems={menuItems} themeColor={themeColor} />
-      <div className="min-h-screen bg-white pt-20 md:pt-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Header */}
-          <header className="mb-12">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Blog</h1>
-            <p className="text-lg text-gray-600">
-              Actualités Vancelian, analyses marché et perspectives du groupe.
-            </p>
-            <nav className="mt-6 flex flex-wrap gap-2" aria-label="Editorial segments">
+    <div className="min-h-screen bg-white pt-20 md:pt-24">
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+        <header className="mb-10">
+          <Titlepage align="left" className="text-black">
+            {siteCommonCta(locale, 'blog_default_title')}
+          </Titlepage>
+          <Paragraph className="mt-3 max-w-3xl text-[#62656e]">
+            {siteCommonCta(locale, 'blog_default_subtitle')}
+          </Paragraph>
+          <nav className="mt-5 flex flex-wrap gap-2" aria-label={siteCommonCta(locale, 'blog_segments_aria')}>
+            {segmentLinks.map((segmentLink) => {
+              const isActive =
+                (!segment && segmentLink.key === 'market') || segment === segmentLink.key
+              return (
+                <Link
+                  key={segmentLink.key}
+                  href={segmentLink.href}
+                  className={cn(
+                    'rounded-full px-4 py-2 text-sm transition-colors',
+                    isActive
+                      ? "bg-black text-white font-['Avenir:Heavy',sans-serif]"
+                      : "bg-[#eff2fb] text-[#62656e] hover:text-black font-['Avenir:Roman',sans-serif]",
+                  )}
+                >
+                  {segmentLink.label}
+                </Link>
+              )
+            })}
+          </nav>
+        </header>
+
+        {filterCategories.length > 0 && (
+          <div className="mb-10">
+            <nav className="flex flex-wrap gap-2">
               <Link
-                href="/blog"
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  !segment || segment === 'market'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                href={`${blogBasePath}${segment ? `?segment=${segment}` : ''}`}
+                className={cn(
+                  'rounded-full px-4 py-2 text-sm transition-colors',
+                  !category
+                    ? "bg-black text-white font-['Avenir:Heavy',sans-serif]"
+                    : "bg-[#eff2fb] text-[#62656e] hover:text-black font-['Avenir:Roman',sans-serif]",
+                )}
               >
-                Market News
+                {siteCommonCta(locale, 'blog_filter_all')}
               </Link>
-              <Link
-                href="/blog?segment=company"
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  segment === 'company'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Company News
-              </Link>
-              <Link
-                href="/blog?segment=analysis"
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  segment === 'analysis'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Analysis
-              </Link>
+              {filterCategories.map((cat) => (
+                <Link
+                  key={cat.id}
+                  href={`${blogBasePath}?category=${cat.slug}${categoryQuerySuffix}`}
+                  className={cn(
+                    'rounded-full px-4 py-2 text-sm transition-colors',
+                    category === cat.slug
+                      ? "bg-black text-white font-['Avenir:Heavy',sans-serif]"
+                      : "bg-[#eff2fb] text-[#62656e] hover:text-black font-['Avenir:Roman',sans-serif]",
+                  )}
+                >
+                  {cat.label}
+                </Link>
+              ))}
             </nav>
-          </header>
+          </div>
+        )}
 
-          {/* Categories Navigation (tags ArticleCategory si disponibles) */}
-          {filterCategories.length > 0 && (
-            <div className="mb-12">
-              <nav className="flex flex-wrap gap-2">
+        {featured && !category && page === 1 && (
+          <BlogFeaturedModule
+            featuredTitle={featured.title}
+            featuredHref={articleHref(featured.slug)}
+            featuredTag={editorialPill(featured, locale)}
+            featuredArticle={toDsArticle(featured)}
+            sideTitle={siteCommonCta(locale, 'blog_featured_stories')}
+            sideArticles={heroSidebar.map(toDsArticle)}
+            locale={locale}
+            minReadLabel={siteCommonCta(locale, 'blog_min_read')}
+            noImageLabel={siteCommonCta(locale, 'no_image')}
+          />
+        )}
+
+        {!category && page === 1 && recentPosts.length > 0 && (
+          <BlogRecentPostsModule
+            title={siteCommonCta(locale, 'blog_latest_articles')}
+            ctaLabel="Voir tous les articles"
+            ctaHref={blogBasePath}
+            articles={recentPosts.map(toDsArticle)}
+            locale={locale}
+            minReadLabel={siteCommonCta(locale, 'blog_min_read')}
+            noImageLabel={siteCommonCta(locale, 'no_image')}
+          />
+        )}
+
+        {!category &&
+          page === 1 &&
+          topCategorySections.map((section, index) => (
+            <section key={section.id} className="mb-14">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <SectionTitle align="left" size="small" className="text-black">
+                  {section.label}
+                </SectionTitle>
                 <Link
-                  href="/blog"
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                    !category
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  href={`${blogBasePath}?category=${section.slug}`}
+                  className="rounded-full border border-black px-4 py-2 text-[11px] uppercase tracking-[0.08em] text-black hover:bg-black hover:text-white"
                 >
-                  Tout
-                </Link>
-                {filterCategories.map((cat) => (
-                  <Link
-                    key={cat.id}
-                    href={`/blog?category=${cat.slug}`}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                      category === cat.slug
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {cat.label}
-                  </Link>
-                ))}
-              </nav>
-            </div>
-          )}
-
-          {/* Featured Article Hero */}
-          {data.featured && !category && page === 1 && (
-            <div className="mb-16">
-              <Link
-                href={`/blog/${data.featured.slug}`}
-                className="group block bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
-              >
-                <div className="grid md:grid-cols-2 gap-0 md:items-stretch">
-                  <div className="aspect-video md:aspect-auto overflow-hidden bg-gray-100 relative">
-                    {data.featured.coverUrl ? (
-                      <img
-                        src={data.featured.coverUrl}
-                        alt={data.featured.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        No image
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-8 md:p-12 flex flex-col justify-center bg-white">
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800">
-                        {editorialPill(data.featured)}
-                      </span>
-                      {data.featured.categorySlugs && data.featured.categorySlugs.length > 0 && (
-                        <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">
-                          {categoryLabel(data.featured!.categorySlugs![0], data)}
-                        </span>
-                      )}
-                    </div>
-                    <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 group-hover:text-indigo-600 transition-colors">
-                      {data.featured.title}
-                    </h2>
-                    <p className="text-lg text-gray-600 mb-6 line-clamp-3 leading-relaxed">{data.featured.standfirst}</p>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span className="font-semibold">{data.featured.authorName}</span>
-                      {data.featured.publishedAt && (
-                        <time dateTime={data.featured.publishedAt}>
-                          {formatArticleDateShort(new Date(data.featured.publishedAt), locale)}
-                        </time>
-                      )}
-                      <span>•</span>
-                      <span>{data.featured.readingTime} min read</span>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            </div>
-          )}
-
-          {/* Highlighted Mosaic */}
-          {data.highlighted.length > 0 && !category && page === 1 && (
-            <div className="mb-16">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Featured Stories</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {data.highlighted.map((article, index) => (
-                  <Link
-                    key={article.id}
-                    href={`/blog/${article.slug}`}
-                    className={`group block bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow ${
-                      index === 0 ? 'md:col-span-1' : ''
-                    }`}
-                  >
-                    <div className="aspect-video overflow-hidden bg-gray-100">
-                      {article.coverUrl ? (
-                        <img
-                          src={article.coverUrl}
-                          alt={article.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          No image
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-6">
-                      {article.categorySlugs && article.categorySlugs.length > 0 && (
-                        <div className="mb-2">
-                          <span className="text-xs text-indigo-600 font-semibold uppercase tracking-wide">
-                            {categoryLabel(article.categorySlugs![0], data)}
-                          </span>
-                        </div>
-                      )}
-                      <h3 className="text-xl font-semibold text-gray-900 mb-3 group-hover:text-indigo-600 transition-colors line-clamp-2">
-                        {article.title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
-                        {article.standfirst}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <span className="font-medium">{article.authorName}</span>
-                        {article.publishedAt && (
-                          <>
-                            <span>•</span>
-                            <time dateTime={article.publishedAt}>
-                              {formatArticleDateShort(new Date(article.publishedAt), locale)}
-                            </time>
-                          </>
-                        )}
-                        <span>•</span>
-                        <span>{article.readingTime} min read</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* News entreprise Vancelian */}
-          {data.companyNews.length > 0 &&
-            !category &&
-            page === 1 &&
-            (!segment || segment === 'market') && (
-            <section
-              className="mb-16 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/90 to-white p-6 shadow-sm md:p-10"
-              aria-labelledby="vancelian-company-news-heading"
-            >
-              <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
-                    Vancelian
-                  </p>
-                  <h2
-                    id="vancelian-company-news-heading"
-                    className="text-2xl font-bold tracking-tight text-gray-900 md:text-3xl"
-                  >
-                    Actualités de l&apos;entreprise
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm text-gray-600">
-                    Communiqués officiels, réglementation et annonces du groupe — distinct des contenus
-                    éditoriaux généraux.
-                  </p>
-                </div>
-                <Link
-                  href="/blog?segment=company"
-                  className="shrink-0 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
-                >
-                  Fil Company News →
+                  Lire + d'articles
                 </Link>
               </div>
-              <div className="grid gap-6 md:grid-cols-2">
-                {data.companyNews.map((article) => (
-                  <Link
-                    key={article.id}
-                    href={`/blog/${article.slug}`}
-                    className="group flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md"
-                  >
-                    <div className="aspect-[16/9] overflow-hidden bg-gray-100">
-                      {article.coverUrl ? (
-                        <img
-                          src={article.coverUrl}
-                          alt=""
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-gray-400">
-                          —
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col p-5">
-                      {article.categorySlugs && article.categorySlugs.length > 0 && (
-                        <div className="mb-2 flex flex-wrap gap-1">
-                          {article.categorySlugs.slice(0, 3).map((slug) => (
-                            <span
-                              key={slug}
-                              className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-800"
-                            >
-                              {categoryLabel(slug, data)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <h3 className="text-lg font-semibold leading-snug text-gray-900 group-hover:text-indigo-700">
-                        {article.title}
-                      </h3>
-                      <p className="mt-2 line-clamp-2 text-sm text-gray-600">{article.standfirst}</p>
-                      <div className="mt-auto pt-4 text-xs text-gray-500">
-                        <span className="font-medium text-gray-700">{article.authorName}</span>
-                        {article.publishedAt && (
-                          <>
-                            <span className="mx-2">·</span>
-                            <time dateTime={article.publishedAt}>
-                              {formatArticleDateShort(new Date(article.publishedAt), locale)}
-                            </time>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
 
-          {/* Main Feed */}
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              {category
-                ? `Articles : ${categoryLabel(category, data)}`
-                : 'Derniers articles'}
-            </h2>
-            {data.articles.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No articles found.</p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-8">
-                  {data.articles.map((article) => (
-                    <Link
-                      key={article.id}
-                      href={`/blog/${article.slug}`}
-                      className="group block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-                    >
-                      <div className="grid md:grid-cols-3 gap-0">
-                        <div className="md:col-span-1 aspect-video md:aspect-auto md:h-48 overflow-hidden bg-gray-100">
-                          {article.coverUrl ? (
-                            <img
-                              src={article.coverUrl}
-                              alt={article.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              No image
-                            </div>
-                          )}
-                        </div>
-                        <div className="md:col-span-2 p-6">
-                          {article.categorySlugs && article.categorySlugs.length > 0 && (
-                            <div className="mb-2">
-                              <span className="inline-block px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-semibold">
-                                {categoryLabel(article.categorySlugs![0], data)}
-                              </span>
-                            </div>
-                          )}
-                          <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">
-                            {article.title}
-                          </h3>
-                          <p className="text-gray-600 text-sm mb-4 line-clamp-2">{article.standfirst}</p>
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
-                            <span className="font-medium">{article.authorName}</span>
-                            {article.publishedAt && (
-                              <time dateTime={article.publishedAt}>
-                                {formatArticleDateShort(new Date(article.publishedAt), locale)}
-                              </time>
-                            )}
-                            <span>•</span>
-                            <span>{article.readingTime} min read</span>
-                          </div>
-                        </div>
+              {index === 0 ? (
+                <div className="space-y-5">
+                  {section.items.slice(0, 3).map((article) => (
+                    <Link key={article.id} href={articleHref(article.slug)} className="grid gap-4 rounded-[10px] border border-[#edf0f8] p-4 md:grid-cols-[1fr_180px]">
+                      <div>
+                        <h3 className={cn(figmaDsLinksClassName, 'text-[26px] leading-[1.1] text-black')}>
+                          {article.title}
+                        </h3>
+                        <Paragraph className="mt-2 line-clamp-3 text-[#62656e]">{article.standfirst}</Paragraph>
+                        {renderMeta(article)}
+                      </div>
+                      <div className="h-[120px] overflow-hidden rounded-[8px] bg-[#d9e2f8] md:h-full">
+                        {renderImage(article, 'h-full w-full')}
                       </div>
                     </Link>
                   ))}
                 </div>
-
-                {/* Pagination */}
-                {data.pagination.hasMore && (
-                  <div className="mt-12 text-center">
-                    <Link
-                      href={`/blog${category ? `?category=${category}&` : '?'}page=${page + 1}`}
-                      className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                    >
-                      Load More
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {section.items.slice(0, 6).map((article) => (
+                    <Link key={article.id} href={articleHref(article.slug)} className="grid grid-cols-[1fr_110px] items-center gap-3 rounded-[10px] border border-[#edf0f8] p-3">
+                      <div className="min-w-0">
+                        <h3 className={cn(figmaDsLinksClassName, 'line-clamp-2 text-[18px] text-black')}>
+                          {article.title}
+                        </h3>
+                        <Paragraph className="mt-1 line-clamp-2 text-[#62656e]">{article.standfirst}</Paragraph>
+                        {renderMeta(article)}
+                      </div>
+                      <div className="h-[72px] overflow-hidden rounded-[8px] bg-[#d9e2f8]">
+                        {renderImage(article, 'h-full w-full')}
+                      </div>
                     </Link>
-                  </div>
-                )}
-              </>
+                  ))}
+                </div>
+              )}
+            </section>
+          ))}
+
+        {(category || page > 1) && (
+          <section>
+            <SectionTitle align="left" size="small" className="mb-6 text-black">
+              {category
+                ? siteCommonCta(locale, 'blog_articles_in_category').replace(
+                    '{category}',
+                    categoryLabel(category, data),
+                  )
+                : siteCommonCta(locale, 'blog_latest_articles')}
+            </SectionTitle>
+            {data.articles.length === 0 ? (
+              <Paragraph className="text-[#62656e]">
+                {siteCommonCta(locale, 'blog_no_articles_found')}
+              </Paragraph>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {data.articles.map((article) => (
+                  <Link key={article.id} href={articleHref(article.slug)} className="overflow-hidden rounded-[10px] border border-[#edf0f8]">
+                    <div className="h-[180px] overflow-hidden bg-[#d9e2f8]">
+                      {renderImage(article, 'h-full w-full')}
+                    </div>
+                    <div className="p-4">
+                      <h3 className={cn(figmaDsLinksClassName, 'line-clamp-2 text-[22px] leading-[1.1] text-black')}>
+                        {article.title}
+                      </h3>
+                      <Paragraph className="mt-2 line-clamp-2 text-[#62656e]">{article.standfirst}</Paragraph>
+                      {renderMeta(article)}
+                    </div>
+                  </Link>
+                ))}
+              </div>
             )}
+          </section>
+        )}
+
+        {data.pagination.hasMore && (
+          <div className="mt-10 text-center">
+            <Link
+              href={`${blogBasePath}${category ? `?category=${category}${categoryQuerySuffix}&` : segment ? `?segment=${segment}&` : '?'}page=${page + 1}`}
+              className="inline-block rounded-full bg-black px-6 py-3 text-sm text-white transition-opacity hover:opacity-85"
+            >
+              {siteCommonCta(locale, 'load_more')}
+            </Link>
           </div>
-        </div>
+        )}
       </div>
-    </>
+    </div>
   )
 }

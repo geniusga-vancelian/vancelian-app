@@ -4,6 +4,8 @@ Ce document complète `docs/arquantix/LOCAL_ENV_RUNBOOK.md` avec une procédure 
 
 **État du dépôt (bascule namespace)** : la stack **par défaut** est `COMPOSE_PROJECT_NAME=arquantixrecovery` avec `ARQUANTIX_COMPOSE_FILE=docker-compose.arquantix-recovery.yml` (mêmes volumes nommés `arquantix_arquantix-db-data`, etc.). Les cibles `make arquantix-up` et `make arquantix-recovery-up` sont équivalentes. Le namespace historique `arquantix` peut rester **cassé** côté Docker Desktop sans bloquer le travail local.
 
+**Services Compose (runtime)** : `arquantix-db`, `arquantix-redis`, `arquantix-api`, `arquantix-web`. **Aucun** service Strapi / `arquantix-cms` (retiré du projet).
+
 ## Volumes de référence (compose actuel)
 
 | Rôle   | Nom Docker                         |

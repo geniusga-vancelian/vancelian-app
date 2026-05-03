@@ -8,14 +8,25 @@ datasource db {
 }
 
 model AdminUser {
-  id             Int       @id @default(autoincrement())
+  id                         Int       @id @default(autoincrement())
   /// Nullable (PR4) — index unique partiel SQL : voir migration 130.
-  email          String?   @db.VarChar(255)
-  hashedPassword String    @map("hashed_password") @db.VarChar(255)
-  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  email                      String?   @db.VarChar(255)
+  hashedPassword             String    @map("hashed_password") @db.VarChar(255)
+  createdAt                  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  /// -------- Colonnes ajoutées par migrations Alembic (114, 116, 117, 119, 120, 127) --------
+  /// Mirrorées ici pour que `prisma db push` ne les supprime pas — non utilisées
+  /// directement par le code TypeScript (gérées par le backend Python).
+  securityAccountLockedUntil DateTime? @map("security_account_locked_until") @db.Timestamptz(6)
+  securityFlagged            Boolean   @default(false) @map("security_flagged")
+  securityRefreshBlocked     Boolean   @default(false) @map("security_refresh_blocked")
+  zeroTrustRole              String    @default("admin") @map("zero_trust_role") @db.VarChar(32)
+  mobileE164                 String?   @map("mobile_e164") @db.VarChar(24)
+  personId                   String?   @unique(map: "ix_admin_users_person_id") @map("person_id") @db.Uuid
+  mobileAppAllowed           Boolean   @default(true) @map("mobile_app_allowed")
   /// Compte CMS Next (au plus un) lié pour le BFF — pas de résolution JWT par email.
-  cmsUser        User?
+  cmsUser                    User?
+  person                     Persons?  @relation("AdminUserPerson", fields: [personId], references: [id], onUpdate: NoAction, map: "fk_admin_users_person_id_persons")
 
   /// Unicité côté Prisma Client. En base Alembic 130, l’index partiel reste `ix_admin_users_email` ; ce nom Prisma évite le conflit `db push` (CREATE … already exists).
   @@unique([email], map: "uq_prisma_admin_users_email")
@@ -181,35 +192,65 @@ model ArticleProject {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Article {
-  id              String           @id @default(cuid())
-  slug            String           @unique
-  status          ContentStatus    @default(DRAFT)
-  publishedAt     DateTime?        @map("published_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  coverMediaId    String?          @map("cover_media_id")
-  authorName      String           @map("author_name")
-  authorRole      String?          @map("author_role")
-  allowComments   Boolean          @default(false) @map("allow_comments")
-  coverTitle      String?          @map("cover_title")
-  coverCredit     String?          @map("cover_credit")
-  coverSource     String?          @map("cover_source")
-  galleryMediaIds Json?            @map("gallery_media_ids")
-  videoUrl        String?          @map("video_url")
-  categorySlugs   Json?            @map("category_slugs")
-  documents       Json?
-  isFeatured      Boolean          @default(false) @map("is_featured")
-  isHighlighted   Boolean          @default(false) @map("is_highlighted")
-  isMilestone     Boolean          @default(false) @map("is_milestone")
+  id                  String             @id @default(cuid())
+  slug                String             @unique
+  status              ContentStatus      @default(DRAFT)
+  publishedAt         DateTime?          @map("published_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  coverMediaId        String?            @map("cover_media_id")
+  authorName          String             @map("author_name")
+  authorRole          String?            @map("author_role")
+  allowComments       Boolean            @default(false) @map("allow_comments")
+  coverTitle          String?            @map("cover_title")
+  coverCredit         String?            @map("cover_credit")
+  coverSource         String?            @map("cover_source")
+  galleryMediaIds     Json?              @map("gallery_media_ids")
+  videoUrl            String?            @map("video_url")
+  categorySlugs       Json?              @map("category_slugs")
+  documents           Json?
+  isFeatured          Boolean            @default(false) @map("is_featured")
+  isHighlighted       Boolean            @default(false) @map("is_highlighted")
+  isMilestone         Boolean            @default(false) @map("is_milestone")
   /// Actualité entreprise (Vancelian). Uniquement pour `articleType` NEWS ; ANALYSIS/RESEARCH restent false.
-  isCompanyNews   Boolean          @default(false) @map("is_company_news")
-  articleType     String           @default("NEWS") @map("article_type")
-  blocks          ArticleBlock[]
-  i18n            ArticleI18n[]
-  articleLinks    ArticleLink[]
-  projects        ArticleProject[]
-  coverMedia      Media?           @relation(fields: [coverMediaId], references: [id], onDelete: Restrict)
+  isCompanyNews       Boolean            @default(false) @map("is_company_news")
+  articleType         String             @default("NEWS") @map("article_type")
+  // -------- Champs spécifiques HELP (Phase 3 unification) --------
+  // N'ont de sens que lorsque `articleType = 'HELP'`. Garantis cohérents
+  // côté API ; aucune contrainte CHECK SQL pour rester réversible.
+  helpCollectionId    String?            @map("help_collection_id")
+  helpCategoryId      String?            @map("help_category_id")
+  /// Slug d'origine côté hiérarchie Help (avant préfixage technique du `slug` global).
+  /// Utilisé par l'URL publique `/help/[collection]/[helpSlug]`.
+  helpSlug            String?            @map("help_slug")
+  allowAnchors        Boolean            @default(true) @map("allow_anchors")
+  targetTags          Json?              @map("target_tags")
+  /// Slugs de « tags catégorie » pour regrouper les articles sous une collection (Help, Academy, etc.).
+  /// Tableau JSON `["slug-tag", …]` ; pas de table admin séparée — les tags émergent du contenu.
+  collectionTags      Json               @default("[]") @map("collection_tags")
+  // ---------------------------------------------------------------
+  // -------- Champs spécifiques ACADEMY (Phase 4 — pédagogie produit) --------
+  // N'ont de sens que lorsque `articleType = 'ACADEMY'`. Symétriques aux
+  // champs `help*` ci-dessus. Pas d'AcademyArticle legacy : Academy démarre
+  // directement sur Article unifié.
+  academyCollectionId String?            @map("academy_collection_id")
+  academyCategoryId   String?            @map("academy_category_id")
+  /// Slug d'origine côté hiérarchie Academy (URL publique
+  /// `/academy/[collection]/[academySlug]`).
+  academySlug         String?            @map("academy_slug")
+  // -------------------------------------------------------------------------
+  blocks              ArticleBlock[]
+  i18n                ArticleI18n[]
+  articleLinks        ArticleLink[]
+  projects            ArticleProject[]
+  coverMedia          Media?             @relation(fields: [coverMediaId], references: [id], onDelete: Restrict)
+  helpCollection      HelpCollection?    @relation("HelpCollectionUnifiedArticles", fields: [helpCollectionId], references: [id], onDelete: Restrict)
+  helpCategory        HelpCategory?      @relation("HelpCategoryUnifiedArticles", fields: [helpCategoryId], references: [id], onDelete: Restrict)
+  academyCollection   AcademyCollection? @relation("AcademyCollectionUnifiedArticles", fields: [academyCollectionId], references: [id], onDelete: Restrict)
+  academyCategory     AcademyCategory?   @relation("AcademyCategoryUnifiedArticles", fields: [academyCategoryId], references: [id], onDelete: Restrict)
 
+  /// Unicité `(help_collection_id, help_slug)` et `(academy_collection_id, academy_slug)` :
+  /// index partiels SQL — voir migration `20260501140000_article_collection_tags`.
   @@index([articleType])
   @@index([isCompanyNews])
   @@index([isFeatured])
@@ -217,6 +258,10 @@ model Article {
   @@index([isMilestone])
   @@index([publishedAt])
   @@index([status])
+  @@index([helpCategoryId])
+  @@index([helpCollectionId])
+  @@index([academyCategoryId])
+  @@index([academyCollectionId])
   @@map("articles")
 }
 
@@ -237,6 +282,92 @@ model AuditEvents {
   @@index([payload], map: "ix_audit_events_payload", type: Gin)
   @@index([personId, createdAt], map: "ix_audit_events_person_id_created_at")
   @@map("audit_events")
+}
+
+/// Assistance « sur mesure » mobile (Search Screen Flutter) — MVP D.1.1.
+/// Tables miroir Alembic 144 ; lecture/écriture via FastAPI Python uniquement,
+/// déclarées ici pour que `prisma db push` ne les supprime pas.
+model AssistanceConversation {
+  id                     String              @id @db.Uuid
+  clientId               String              @map("client_id") @db.Uuid
+  title                  String?
+  status                 String              @default("active") @db.VarChar(16)
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  lastMessageAt          DateTime?           @map("last_message_at") @db.Timestamptz(6)
+  lastAssistantMessageAt DateTime?           @map("last_assistant_message_at") @db.Timestamptz(6)
+  lastReadAt             DateTime?           @map("last_read_at") @db.Timestamptz(6)
+  /// Palier 2 D.2.1 — résumé narratif (rolling summary) maintenu par un agent LLM.
+  conversationSummary    String?             @map("conversation_summary")
+  /// Palier 2 D.2.2 — faits structurés extraits ([{type, value, confidence, source_turn}]).
+  conversationFacts      Json                @default("[]") @map("conversation_facts")
+  /// Palier 2 D.2.1 — turn_index du dernier tour absorbé par le summary.
+  summarizedUntilTurn    Int?                @map("summarized_until_turn")
+  /// Palier 2 D.2.1 — horodatage de la dernière consolidation mémoire.
+  summaryUpdatedAt       DateTime?           @map("summary_updated_at") @db.Timestamptz(6)
+  peClients              PeClients           @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  assistanceMessages     AssistanceMessage[]
+
+  @@index([clientId, lastMessageAt], map: "ix_assistance_conversations_client_last")
+  @@index([clientId, status], map: "ix_assistance_conversations_client_status")
+  @@map("assistance_conversations")
+}
+
+model AssistanceMessage {
+  id                     String                 @id @db.Uuid
+  conversationId         String                 @map("conversation_id") @db.Uuid
+  turnIndex              Int                    @map("turn_index")
+  role                   String                 @db.VarChar(16)
+  content                String
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Multi-agents Phase 1 (cf. docs/arquantix/MULTI_AGENTS.md, migration 147).
+  agentUsed              String?                @map("agent_used") @db.VarChar(32)
+  messageType            String                 @default("text") @map("message_type") @db.VarChar(16)
+  messagePayload         Json?                  @map("message_payload")
+  assistanceConversation AssistanceConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([conversationId, turnIndex], map: "uq_assistance_messages_conversation_turn")
+  @@index([conversationId, createdAt], map: "ix_assistance_messages_conversation_created")
+  @@index([agentUsed], map: "ix_assistance_messages_agent_used")
+  @@map("assistance_messages")
+}
+
+/// Phase 2a multi-agents — audit trail des décisions agentiques.
+/// Cf. `docs/arquantix/MULTI_AGENTS_RUNTIME.md` § 4 et migration Alembic 148.
+/// Table « miroir » : gérée par Alembic côté Python, déclarée ici pour
+/// que `prisma db push` ne la supprime pas.
+model AssistanceAgentDecision {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId    String    @map("conversation_id") @db.Uuid
+  messageId         String?   @map("message_id") @db.Uuid
+  agentId           String    @map("agent_id") @db.VarChar(32)
+  iteration         Int       @db.SmallInt
+  toolName          String    @map("tool_name") @db.VarChar(64)
+  /// Niveau d'autonomie : 'L0' | 'L1' | 'L2' | 'L3' (CHECK contraint en SQL).
+  autonomyLevel     String    @map("autonomy_level") @db.VarChar(4)
+  argumentsJson     Json      @default("{}") @map("arguments_json")
+  resultSummary     Json?     @map("result_summary")
+  proposedAction    String?   @map("proposed_action") @db.VarChar(64)
+  targetClientId    String?   @map("target_client_id") @db.Uuid
+  targetPersonId    String?   @map("target_person_id") @db.Uuid
+  /// Résumé sanitizé anti-tipping-off (cf. RUNTIME § 4.3).
+  reasoningSummary  String?   @map("reasoning_summary")
+  /// Statut review : 'auto' (L0/L2 immédiat) | 'pending' (L1 attend humain)
+  ///                 | 'approved' | 'rejected' (CHECK contraint en SQL).
+  reviewStatus      String    @default("auto") @map("review_status") @db.VarChar(16)
+  reviewedBy        Int?      @map("reviewed_by")
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  durationMs        Int?      @map("duration_ms")
+  errorCode         String?   @map("error_code") @db.VarChar(32)
+  correlationId     String?   @map("correlation_id") @db.VarChar(64)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([conversationId, iteration], map: "ix_assistance_agent_decisions_conv_iter")
+  @@index([agentId, createdAt], map: "ix_assistance_agent_decisions_agent_created")
+  @@index([toolName], map: "ix_assistance_agent_decisions_tool_name")
+  @@index([autonomyLevel], map: "ix_assistance_agent_decisions_autonomy_level")
+  @@index([targetClientId, createdAt], map: "ix_assistance_agent_decisions_target_client")
+  @@map("assistance_agent_decisions")
 }
 
 model BacktestInstrumentSeries {
@@ -821,17 +952,23 @@ model EmailI18n {
 }
 
 model HelpCollection {
-  id          String               @id @default(cuid())
-  slug        String               @unique
-  iconKey     String               @default("article") @map("icon_key")
-  colorHex    String               @default("#0F172A") @map("color_hex")
-  order       Int                  @default(0)
-  isPublished Boolean              @default(true) @map("is_published")
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt @map("updated_at")
-  i18n        HelpCollectionI18n[]
-  categories  HelpCategory[]
+  id              String               @id @default(cuid())
+  slug            String               @unique
+  iconKey         String               @default("article") @map("icon_key")
+  colorHex        String               @default("#0F172A") @map("color_hex")
+  order           Int                  @default(0)
+  isPublished     Boolean              @default(true) @map("is_published")
+  /// Illustration optionnelle (cartes liste FAQ mobile / highlights CMS).
+  coverMediaId    String?              @map("cover_media_id")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  coverMedia      Media?               @relation("HelpCollectionCoverMedia", fields: [coverMediaId], references: [id], onDelete: SetNull)
+  i18n            HelpCollectionI18n[]
+  categories      HelpCategory[]
+  /// Articles unifiés (Phase 3) — `Article(articleType='HELP')` rattachés à cette collection.
+  unifiedArticles Article[]            @relation("HelpCollectionUnifiedArticles")
 
+  @@index([coverMediaId], map: "ix_help_collections_cover_media_id")
   @@map("help_collections")
 }
 
@@ -852,16 +989,18 @@ model HelpCollectionI18n {
 }
 
 model HelpCategory {
-  id           String             @id @default(cuid())
-  collectionId String             @map("collection_id")
-  slug         String
-  order        Int                @default(0)
-  isPublished  Boolean            @default(true) @map("is_published")
-  createdAt    DateTime           @default(now()) @map("created_at")
-  updatedAt    DateTime           @updatedAt @map("updated_at")
-  collection   HelpCollection     @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  articles     HelpArticle[]
-  i18n         HelpCategoryI18n[]
+  id              String             @id @default(cuid())
+  collectionId    String             @map("collection_id")
+  slug            String
+  order           Int                @default(0)
+  isPublished     Boolean            @default(true) @map("is_published")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  collection      HelpCollection     @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  articles        HelpArticle[]
+  i18n            HelpCategoryI18n[]
+  /// Articles unifiés (Phase 3) — `Article(articleType='HELP')` rattachés à cette catégorie.
+  unifiedArticles Article[]          @relation("HelpCategoryUnifiedArticles")
 
   @@unique([collectionId, slug])
   @@index([collectionId])
@@ -936,6 +1075,82 @@ model HelpArticleBlock {
   @@map("help_article_blocks")
 }
 
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  ACADEMY — pédagogie produit (Phase 4)                                    ║
+// ╠═══════════════════════════════════════════════════════════════════════════╣
+// ║  Hiérarchie symétrique au Centre d'aide (HelpCollection / HelpCategory)   ║
+// ║  mais dédiée aux contenus Academy (tutoriels, parcours produit, etc.).    ║
+// ║  Articles : Article(articleType='ACADEMY') unifié, rattaché via           ║
+// ║  Article.academyCollectionId + academyCategoryId + academySlug.           ║
+// ║  Pas d'équivalent AcademyArticle legacy — démarrage direct sur Article.   ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+model AcademyCollection {
+  id              String                  @id @default(cuid())
+  slug            String                  @unique
+  iconKey         String                  @default("school") @map("icon_key")
+  colorHex        String                  @default("#0F172A") @map("color_hex")
+  order           Int                     @default(0)
+  isPublished     Boolean                 @default(true) @map("is_published")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  i18n            AcademyCollectionI18n[]
+  categories      AcademyCategory[]
+  /// Articles ACADEMY rattachés à cette collection.
+  unifiedArticles Article[]               @relation("AcademyCollectionUnifiedArticles")
+
+  @@map("academy_collections")
+}
+
+model AcademyCollectionI18n {
+  id                String            @id @default(cuid())
+  collectionId      String            @map("collection_id")
+  locale            String
+  title             String
+  subtitle          String?
+  description       String?
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  collection        AcademyCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, locale])
+  @@map("academy_collection_i18n")
+}
+
+model AcademyCategory {
+  id              String                @id @default(cuid())
+  collectionId    String                @map("collection_id")
+  slug            String
+  order           Int                   @default(0)
+  isPublished     Boolean               @default(true) @map("is_published")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  collection      AcademyCollection     @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  i18n            AcademyCategoryI18n[]
+  /// Articles ACADEMY rattachés à cette catégorie.
+  unifiedArticles Article[]             @relation("AcademyCategoryUnifiedArticles")
+
+  @@unique([collectionId, slug])
+  @@index([collectionId])
+  @@map("academy_categories")
+}
+
+model AcademyCategoryI18n {
+  id                String            @id @default(cuid())
+  categoryId        String            @map("category_id")
+  locale            String
+  title             String
+  description       String?
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  category          AcademyCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, locale])
+  @@map("academy_category_i18n")
+}
+
 model ExchangeFeeConfig {
   id        String   @id @db.Uuid
   asset     String   @unique(map: "uq_exchange_fee_config_asset") @db.VarChar(20)
@@ -1002,12 +1217,21 @@ model FieldDefinitions {
 }
 
 model GlobalSettings {
-  id          Int       @id @default(autoincrement())
-  siteName    String    @default("Arquantix") @map("site_name") @db.VarChar(255)
-  tagline     String?   @db.VarChar(500)
-  socialsJson Json?     @default("{}") @map("socials_json") @db.Json
-  seoJson     Json?     @default("{}") @map("seo_json") @db.Json
-  updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  id                Int       @id @default(autoincrement())
+  siteName          String    @default("Arquantix") @map("site_name") @db.VarChar(255)
+  tagline           String?   @db.VarChar(500)
+  socialsJson       Json?     @default("{}") @map("socials_json") @db.Json
+  seoJson           Json?     @default("{}") @map("seo_json") @db.Json
+  /**
+   * Contenu du footer global du site (édité via /admin/pages, onglet Footer).
+   */
+  footerJson        Json?     @map("footer_json") @db.Json
+  /**
+   * Modules communs réutilisables (CTA, etc.) — Zone 2 Structure du site.
+   * Format : `{ version: 1, modules: [...] }` — voir `src/lib/cms/commonModulesStorage.ts`.
+   */
+  commonModulesJson Json?     @map("common_modules_json") @db.Json
+  updatedAt         DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@index([id], map: "ix_global_settings_id")
   @@map("global_settings")
@@ -1477,6 +1701,8 @@ model Media {
   projectCovers        Project[]            @relation("ProjectCoverMedia")
   projectHeroes        Project[]            @relation("ProjectHeroMedia")
   helpArticleCovers    HelpArticle[]        @relation("HelpArticleCover")
+  helpCollectionCovers HelpCollection[]     @relation("HelpCollectionCoverMedia")
+  pagesNavMegaIcon     Page[]               @relation("PageNavMegaIcon")
 
   @@index([mimeType])
   @@index([uploadedByUserId])
@@ -1516,20 +1742,24 @@ model MenuItemI18n {
 }
 
 model MenuItem {
-  id           String         @id @default(cuid())
-  menuId       String         @map("menu_id")
-  label        String
-  order        Int            @default(0)
-  enabled      Boolean        @default(true)
-  isRoot       Boolean        @default(false) @map("is_root")
-  pageId       String?        @map("page_id")
-  type         MenuItemType   @default(LINK)
-  buttonStyle  String?        @map("button_style")
-  buttonAction String?        @map("button_action")
-  externalUrl  String?        @map("external_url")
-  i18n         MenuItemI18n[]
-  menu         Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  page         Page?          @relation(fields: [pageId], references: [id])
+  id                 String                 @id @default(cuid())
+  menuId             String                 @map("menu_id")
+  label              String
+  order              Int                    @default(0)
+  enabled            Boolean                @default(true)
+  isRoot             Boolean                @default(false) @map("is_root")
+  pageId             String?                @map("page_id")
+  type               MenuItemType           @default(LINK)
+  /// Sémantique navigation (page cliquable, groupe, lien externe). Défaut `PAGE` = rétrocompatible.
+  navigationNodeKind MenuNavigationNodeKind @default(PAGE) @map("navigation_node_kind")
+  /// Pour `EXTERNAL_LINK` : ouvrir dans un nouvel onglet.
+  openInNewTab       Boolean                @default(false) @map("open_in_new_tab")
+  buttonStyle        String?                @map("button_style")
+  buttonAction       String?                @map("button_action")
+  externalUrl        String?                @map("external_url")
+  i18n               MenuItemI18n[]
+  menu               Menu                   @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  page               Page?                  @relation(fields: [pageId], references: [id])
 
   @@unique([menuId, order])
   @@index([menuId])
@@ -1581,21 +1811,67 @@ model Notifications {
   @@map("notifications")
 }
 
-model Page {
-  id              String           @id @default(cuid())
-  slug            String           @unique
-  createdAt       DateTime         @default(now()) @map("created_at")
-  urlPath         String           @unique @map("url_path")
-  title           String?
-  template        String           @default("homepage")
-  description     String?
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  themeColor      String           @default("dark") @map("theme_color")
-  menuItems       MenuItem[]
-  sections        Section[]
-  packagedProduct PackagedProduct?
+/// Rôle structurel dans l’arborescence CMS (indépendant du `template` de contenu).
+enum PageRole {
+  STANDARD
+  HOME
+  PROJECTS_HUB
+}
 
+model Page {
+  id                 String           @id @default(cuid())
+  slug               String           @unique
+  createdAt          DateTime         @default(now()) @map("created_at")
+  urlPath            String           @unique @map("url_path")
+  title              String?
+  template           String           @default("homepage")
+  description        String?
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  themeColor         String           @default("dark") @map("theme_color")
+  /// Parent dans l’arborescence éditoriale (null = racine). Pas encore utilisé par le routing public.
+  parentId           String?          @map("parent_id")
+  parent             Page?            @relation("PageHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children           Page[]           @relation("PageHierarchy")
+  /// Ordre parmi les enfants d’un même parent (0 par défaut).
+  sortOrder          Int              @default(0) @map("sort_order")
+  pageRole           PageRole         @default(STANDARD) @map("page_role")
+  /// Indique si la page doit apparaître dans la nav quand celle-ci sera synchronisée sur l’arbre (lot futur).
+  showInNav          Boolean          @default(true) @map("show_in_nav")
+  /// Si false, la page n’apparaît pas comme enfant dans le méga-menu (reste éligible ailleurs selon `show_in_nav`).
+  showInMegaMenu     Boolean          @default(true) @map("show_in_mega_menu")
+  /// Icône optionnelle (médiathèque) pour les entrées du méga-menu — pages enfants d’un item primaire.
+  navMegaIconMediaId String?          @map("nav_mega_icon_media_id")
+  navMegaIconMedia   Media?           @relation("PageNavMegaIcon", fields: [navMegaIconMediaId], references: [id], onDelete: SetNull)
+  /// Pages système (ex. home) — garde-fou éditorial.
+  isSystemPage       Boolean          @default(false) @map("is_system_page")
+  menuItems          MenuItem[]
+  sections           Section[]
+  packagedProduct    PackagedProduct?
+  /// Métadonnées SEO par locale (Phase 2A+) — fallback sur `title` / `description` si absent.
+  pageI18n           PageI18n[]
+
+  @@index([parentId], map: "ix_pages_parent_id")
+  @@index([parentId, sortOrder], map: "ix_pages_parent_sort")
   @@map("pages")
+}
+
+/// Titres / descriptions SEO par langue — unicité `(pageId, locale)`.
+model PageI18n {
+  id                 String  @id @default(cuid())
+  pageId             String  @map("page_id")
+  locale             String  @db.VarChar(5)
+  title              String?
+  description        String?
+  ogTitle            String? @map("og_title")
+  ogDescription      String? @map("og_description")
+  /// Libellé de colonne du méga-menu (ex. « Produits ») — optionnel, localisé.
+  navMegaCategory    String? @map("nav_mega_category") @db.VarChar(120)
+  /// Sous-titre court méga-menu ; si vide, repli sur `description` SEO.
+  navMegaDescription String? @map("nav_mega_description") @db.VarChar(500)
+  page               Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, locale], map: "page_i18n_page_id_locale_key")
+  @@map("page_i18n")
 }
 
 /// Registre catalogue des produits packagés (contenu editorial = Page Vault Builder).
@@ -1696,6 +1972,11 @@ model PeClients {
   updatedAt                             DateTime                      @default(now()) @map("updated_at") @db.Timestamptz(6)
   referenceCurrency                     String                        @default("EUR") @map("reference_currency") @db.VarChar(3)
   personId                              String                        @unique(map: "uq_pe_clients_person_id") @map("person_id") @db.Uuid
+  /// Palier 2 D.2.3 — mémoire long-terme cross-conversations (faits agrégés
+  /// + métadonnées). Format : `{ "facts": [...], "updated_at": "..." }`.
+  /// Réinjectée dans le system prompt à chaque tour.
+  assistanceLongMemory                  Json                          @default("{}") @map("assistance_long_memory")
+  assistanceConversations               AssistanceConversation[]
   borrowerInterestAccruals              BorrowerInterestAccruals[]
   clientFavorites                       ClientFavorites[]
   cryptoPositions                       CryptoPositions[]
@@ -2545,6 +2826,11 @@ model Persons {
   updatedAt                   DateTime                      @default(now()) @map("updated_at") @db.Timestamptz(6)
   clientId                    String?                       @unique(map: "uq_persons_client_id") @map("client_id") @db.Uuid
   kycStatus                   String                        @default("not_started") @map("kyc_status")
+  /// Colonnes ajoutées par migrations Alembic 128 / 129 — mirrorées pour
+  /// que `prisma db push` ne les supprime pas.
+  loginFrozen                 Boolean                       @default(false) @map("login_frozen")
+  accountState                String?                       @map("account_state") @db.VarChar(16)
+  adminUser                   AdminUser?                    @relation("AdminUserPerson")
   auditEvents                 AuditEvents[]
   documents                   Documents[]
   peClients                   PeClients?
@@ -3017,6 +3303,7 @@ model SectionContent {
   sectionId         String            @map("section_id")
   locale            String
   status            ContentStatus
+  /// JSON validé côté app (`lib/sections/library.ts` / Zod). Ex. hero_secondary : title, backgroundMediaId, hideCta, tags, etc. — pas de colonne dédiée par champ.
   data              Json
   updatedAt         DateTime          @default(now()) @map("updated_at")
   updatedByUserId   String?           @map("updated_by_user_id")
@@ -3033,6 +3320,7 @@ model SectionContent {
 model Section {
   id            String           @id @default(cuid())
   pageId        String           @map("page_id")
+  /// Clé de section CMS (ex. hero, figma_stats_grid). Non énumérée : les types sont définis dans `lib/sections/library.ts`.
   key           String
   order         Int
   schemaVersion String           @default("v1") @map("schema_version")
@@ -3124,6 +3412,23 @@ enum ArticleBlockType {
   IMAGE
   VIDEO
   DOCUMENT
+  /// Aligné Vault Builder `MediaImageCarouselModule` (carrousel médiathèque)
+  MEDIA_IMAGE_CAROUSEL
+  /// Aligné `LocalisationModule` (titre, description, iframe Google)
+  LOCALISATION
+  /// Aligné `DocumentsListModule` (liste de fichiers médiathèque)
+  DOCUMENTS_LIST
+  /// Aligné `KeyInformationModule` (lignes label / valeur + CTA optionnel)
+  KEY_INFORMATION
+  /// Aligné `VideoBlockArticleModule` (cartes poster + YouTube, même JSON que le vault)
+  VIDEO_BLOCK_ARTICLE
+  /// Aligné Vault Builder `StepsModule` (timeline : titre, items avec statuts)
+  STEPS_MODULE
+  /// Aligné section CMS `how_it_works` (carrousel d'étapes : steps avec image
+  /// optionnelle + bouton par étape + CTAs globaux). Web : rendu via
+  /// `SectionHowItWorksCms`. Mobile : rendu via DS `HowItWorksCarousel`
+  /// (mapping `steps[]` → `HowItWorksCarouselItem[]`).
+  HOW_IT_WORKS_CAROUSEL
 }
 
 enum ArticleLinkKind {
@@ -3139,6 +3444,18 @@ enum ContentStatus {
 enum MenuItemType {
   LINK
   BUTTON
+  /// Sélecteur de langue dans la zone droite du menu (ordre géré avec les boutons d’action).
+  LANGUAGE_SWITCHER
+}
+
+/// Comportement de l’entrée dans la barre de navigation (niveau 1), indépendamment du type technique `MenuItemType`.
+enum MenuNavigationNodeKind {
+  /// Page CMS cliquable (comportement historique par défaut).
+  PAGE
+  /// Rubrique non cliquable (méga-menu uniquement si ≥ 2 enfants visibles).
+  GROUP
+  /// Lien externe (URL dans `external_url`), optionnellement avec page rattachée pour le méga-menu.
+  EXTERNAL_LINK
 }
 
 enum TranslationEntityType {
@@ -3151,6 +3468,9 @@ enum TranslationEntityType {
   HELP_CATEGORY
   HELP_COLLECTION
   HELP_ARTICLE
+  ACADEMY_COLLECTION
+  ACADEMY_CATEGORY
+  ACADEMY_ARTICLE
   MENU
   MENU_ITEM
 }
@@ -3240,4 +3560,372 @@ enum PackagedEngineType {
   BUNDLE
   MANAGED_PORTFOLIO
   VAULT_ENGINE
+}
+
+// ============================================================================
+//  TABLES « MIROIR » — gérées par Alembic (backend Python FastAPI), déclarées
+//  ici uniquement pour empêcher `prisma db push` de les supprimer.
+//  Ne pas modifier manuellement : régénérer via `prisma db pull` après chaque
+//  migration Alembic qui ajoute / modifie une de ces tables.
+//  Les `@relation` cross-model vers `admin_users` / `persons` / `pe_clients`
+//  ont été retirées (les FK sont conservées comme champs simples) pour éviter
+//  les conflits de nommage avec les models PascalCase Prisma existants.
+// ============================================================================
+
+model auth_admin_email_otp_challenges {
+  id               String   @id @db.Uuid
+  email_normalized String   @unique(map: "uq_auth_admin_email_otp_email") @db.VarChar(255)
+  code_hash        String
+  expires_at       DateTime @db.Timestamptz(6)
+  attempt_count    Int      @default(0)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([expires_at], map: "ix_auth_admin_email_otp_expires_at")
+}
+
+model auth_device_attest_artifacts {
+  digest     String   @id @db.VarChar(64)
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([expires_at], map: "ix_auth_device_attest_artifacts_expires_at")
+}
+
+model auth_device_attest_nonces {
+  nonce_hash       String    @id @db.VarChar(64)
+  platform         String?   @db.VarChar(32)
+  device_id_prefix String?   @db.VarChar(16)
+  expires_at       DateTime  @db.Timestamptz(6)
+  consumed_at      DateTime? @db.Timestamptz(6)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([expires_at], map: "ix_auth_device_attest_nonces_expires_at")
+}
+
+model auth_device_blacklist {
+  id            String    @id @db.Uuid
+  device_hash   String    @db.VarChar(64)
+  reason        String    @db.VarChar(512)
+  blocked_until DateTime? @db.Timestamptz(6)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  created_by    Int?
+
+  @@index([device_hash], map: "ix_auth_device_blacklist_device_hash")
+}
+
+model auth_device_credentials {
+  id                    String    @id @db.Uuid
+  user_id               Int
+  device_id             String    @db.VarChar(128)
+  public_key_spki_b64   String
+  key_alg               String    @default("EC_P256") @db.VarChar(32)
+  attestation_level     String?   @db.VarChar(32)
+  created_at            DateTime  @default(now()) @db.Timestamptz(6)
+  last_used_at          DateTime  @default(now()) @db.Timestamptz(6)
+  revoked_at            DateTime? @db.Timestamptz(6)
+  device_label          String?   @db.VarChar(128)
+  public_key_sha256_hex String?   @db.VarChar(64)
+  attestation_bound_at  DateTime? @db.Timestamptz(6)
+
+  @@unique([user_id, device_id], map: "uq_auth_device_credentials_user_device")
+  @@index([user_id], map: "ix_auth_device_credentials_user_id")
+}
+
+model auth_device_graph_findings {
+  id            String   @id @db.Uuid
+  device_hash   String?  @db.VarChar(64)
+  user_id       Int?
+  finding_type  String   @db.VarChar(128)
+  severity      String   @db.VarChar(16)
+  metadata_json Json     @default("{}")
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at], map: "ix_auth_device_graph_findings_created_at")
+  @@index([device_hash], map: "ix_auth_device_graph_findings_device_hash")
+}
+
+model auth_device_reputation {
+  device_hash            String    @id @db.VarChar(64)
+  global_risk_score      Int       @default(0)
+  reputation_level       String    @default("LOW") @db.VarChar(16)
+  total_sessions         Int       @default(0)
+  unique_user_count      Int       @default(0)
+  unique_ip_count        Int       @default(0)
+  suspicious_event_count Int       @default(0)
+  blocked_until          DateTime? @db.Timestamptz(6)
+  first_seen_at          DateTime  @default(now()) @db.Timestamptz(6)
+  last_seen_at           DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime  @default(now()) @db.Timestamptz(6)
+}
+
+model auth_device_signature_nonces {
+  id          String    @id @db.Uuid
+  user_id     Int
+  device_id   String    @db.VarChar(128)
+  nonce_hash  String    @unique(map: "uq_auth_device_signature_nonces_hash") @db.VarChar(64)
+  purpose     String    @db.VarChar(32)
+  expires_at  DateTime  @db.Timestamptz(6)
+  consumed_at DateTime? @db.Timestamptz(6)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  route_path  String?   @db.VarChar(512)
+
+  @@index([expires_at], map: "ix_auth_device_signature_nonces_expires")
+  @@index([user_id, device_id], map: "ix_auth_device_signature_nonces_user_device")
+}
+
+model auth_device_usage_edges {
+  id            String         @id @db.Uuid
+  device_hash   String         @db.VarChar(64)
+  user_id       Int?
+  session_id    String?        @db.Uuid
+  ip_address    String?        @db.VarChar(45)
+  event_type    String         @db.VarChar(128)
+  created_at    DateTime       @default(now()) @db.Timestamptz(6)
+  auth_sessions auth_sessions? @relation(fields: [session_id], references: [id], onUpdate: NoAction)
+
+  @@index([created_at], map: "ix_auth_device_usage_edges_created_at")
+  @@index([device_hash], map: "ix_auth_device_usage_edges_device_hash")
+  @@index([user_id], map: "ix_auth_device_usage_edges_user_id")
+}
+
+model auth_global_risk_score {
+  user_id    Int      @id
+  score      Int      @default(0)
+  level      String   @default("LOW") @db.VarChar(32)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model auth_mobile_login_otp_challenges {
+  id                    String   @id @db.Uuid
+  phone_e164_normalized String   @unique(map: "uq_auth_mobile_login_otp_phone") @db.VarChar(24)
+  code_hash             String
+  expires_at            DateTime @db.Timestamptz(6)
+  attempt_count         Int      @default(0)
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([expires_at], map: "ix_auth_mobile_login_otp_expires_at")
+}
+
+model auth_passkeys {
+  id                String    @id @db.Uuid
+  user_id           Int
+  credential_id_b64 String    @unique(map: "uq_auth_passkeys_credential_id_b64") @db.VarChar(512)
+  public_key_b64    String
+  sign_count        BigInt    @default(0)
+  transports_json   Json?
+  device_label      String?   @db.VarChar(255)
+  aaguid            String?   @db.VarChar(64)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  last_used_at      DateTime? @db.Timestamptz(6)
+  revoked_at        DateTime? @db.Timestamptz(6)
+
+  @@index([user_id], map: "ix_auth_passkeys_user_id")
+}
+
+model auth_refresh_tokens {
+  id              String        @id @db.Uuid
+  session_id      String        @db.Uuid
+  jti             String        @unique(map: "ix_auth_refresh_tokens_jti") @db.VarChar(64)
+  issued_at       DateTime      @default(now()) @db.Timestamptz(6)
+  rotated_at      DateTime?     @db.Timestamptz(6)
+  revoked_at      DateTime?     @db.Timestamptz(6)
+  replaced_by_jti String?       @db.VarChar(64)
+  auth_sessions   auth_sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([session_id], map: "ix_auth_refresh_tokens_session_id")
+}
+
+model auth_security_decisions {
+  id                    String         @id @db.Uuid
+  user_id               Int?
+  session_id            String?        @db.Uuid
+  device_id             String?        @db.VarChar(128)
+  action                String         @db.VarChar(256)
+  resource              String         @db.VarChar(512)
+  allow                 Boolean
+  require_step_up       Boolean        @default(false)
+  deny_reason           String?
+  policy_id             String         @db.VarChar(128)
+  context_snapshot_json Json           @default("{}")
+  created_at            DateTime       @default(now()) @db.Timestamptz(6)
+  auth_sessions         auth_sessions? @relation(fields: [session_id], references: [id], onUpdate: NoAction)
+
+  @@index([action], map: "ix_auth_security_decisions_action")
+  @@index([created_at], map: "ix_auth_security_decisions_created_at")
+  @@index([user_id], map: "ix_auth_security_decisions_user_id")
+}
+
+model auth_security_events {
+  id         String   @id @db.Uuid
+  user_id    Int?
+  device_id  String   @db.VarChar(128)
+  event_type String   @db.VarChar(128)
+  ip_address String?  @db.VarChar(45)
+  user_agent String?  @db.VarChar(512)
+  metadata   Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at], map: "ix_auth_security_events_created_at")
+  @@index([device_id], map: "ix_auth_security_events_device_id")
+  @@index([event_type], map: "ix_auth_security_events_event_type")
+  @@index([ip_address], map: "ix_auth_security_events_ip_address")
+  @@index([user_id], map: "ix_auth_security_events_user_id")
+}
+
+model auth_session_intelligence {
+  id                       String        @id @db.Uuid
+  session_id               String        @unique(map: "uq_auth_session_intelligence_session_id") @db.Uuid
+  user_id                  Int
+  auth_strength            String        @default("password") @db.VarChar(64)
+  session_trust_level      String        @default("UNKNOWN") @db.VarChar(32)
+  device_trust_level       String        @default("UNKNOWN") @db.VarChar(32)
+  last_risk_score          Int           @default(0)
+  last_fraud_score         Float?
+  last_activity_at         DateTime      @default(now()) @db.Timestamptz(6)
+  last_sensitive_action_at DateTime?     @db.Timestamptz(6)
+  last_ip                  String?       @db.VarChar(45)
+  last_country             String?       @db.VarChar(8)
+  relock_required          Boolean       @default(false)
+  step_up_required         Boolean       @default(false)
+  last_step_up_at          DateTime?     @db.Timestamptz(6)
+  reason_codes_json        Json          @default("[]")
+  created_at               DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime      @default(now()) @db.Timestamptz(6)
+  auth_sessions            auth_sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "ix_auth_session_intelligence_user_id")
+}
+
+model auth_sessions {
+  id                        String                     @id @db.Uuid
+  user_id                   Int
+  device_id                 String                     @db.VarChar(128)
+  refresh_jti               String                     @unique(map: "ix_auth_sessions_refresh_jti") @db.VarChar(64)
+  created_at                DateTime                   @default(now()) @db.Timestamptz(6)
+  last_used_at              DateTime                   @default(now()) @db.Timestamptz(6)
+  expires_at                DateTime                   @db.Timestamptz(6)
+  revoked_at                DateTime?                  @db.Timestamptz(6)
+  revoke_reason             String?                    @db.VarChar(255)
+  ip_address                String?                    @db.VarChar(45)
+  user_agent                String?                    @db.VarChar(512)
+  fingerprint_hash          String?                    @db.VarChar(64)
+  fingerprint_metadata      Json?
+  attestation_type          String?                    @db.VarChar(64)
+  attestation_verified_at   DateTime?                  @db.Timestamptz(6)
+  attestation_metadata      Json?
+  device_trust_level        String                     @default("UNKNOWN") @db.VarChar(32)
+  step_up_otp_required      Boolean                    @default(false)
+  auth_strength             String                     @default("password") @db.VarChar(64)
+  device_attestation_tier   String?                    @db.VarChar(16)
+  auth_device_usage_edges   auth_device_usage_edges[]
+  auth_refresh_tokens       auth_refresh_tokens[]
+  auth_security_decisions   auth_security_decisions[]
+  auth_session_intelligence auth_session_intelligence?
+
+  @@index([user_id, device_id], map: "ix_auth_sessions_user_device")
+  @@index([user_id], map: "ix_auth_sessions_user_id")
+}
+
+model auth_spent_refresh_jti {
+  jti      String   @id @db.VarChar(64)
+  spent_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model auth_user_device_profiles {
+  id                     String   @id @db.Uuid
+  user_id                Int
+  device_hash            String   @db.VarChar(64)
+  device_id              String?  @db.VarChar(128)
+  fingerprint_hash       String?  @db.VarChar(64)
+  first_seen_at          DateTime @default(now()) @db.Timestamptz(6)
+  last_seen_at           DateTime @default(now()) @db.Timestamptz(6)
+  login_count            Int      @default(0)
+  successful_login_count Int      @default(0)
+  failed_login_count     Int      @default(0)
+  last_ip                String?  @db.VarChar(45)
+  last_country           String?  @db.VarChar(8)
+  trust_score            Int      @default(0)
+  trust_level            String   @default("LOW") @db.VarChar(16)
+  is_primary             Boolean?
+  last_auth_strength     String?  @db.VarChar(64)
+  last_attestation_level String?  @db.VarChar(64)
+  updated_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([user_id, device_hash], map: "uq_auth_user_device_profiles_user_device")
+  @@index([device_hash], map: "ix_auth_user_device_profiles_device_hash")
+  @@index([user_id], map: "ix_auth_user_device_profiles_user_id")
+}
+
+model auth_user_intent_events {
+  id          String   @id @db.Uuid
+  user_id     Int
+  device_id   String   @db.VarChar(128)
+  action_type String   @db.VarChar(64)
+  metadata    Json     @default("{}")
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([user_id, created_at(sort: Desc)], map: "ix_auth_user_intent_events_user_created")
+}
+
+model auth_user_risk_baselines {
+  user_id                  Int      @id
+  primary_country          String?  @db.VarChar(8)
+  countries_json           Json     @default("{}")
+  frequent_ips_json        Json     @default("[]")
+  device_count_ema         Float    @default(1.0)
+  actions_per_hour_ema     Float    @default(0.0)
+  baseline_sample_count    Int      @default(0)
+  updated_at               DateTime @default(now()) @db.Timestamptz(6)
+  avg_hour_of_day          Float?
+  std_hour_of_day          Float?
+  avg_weekday              Float?
+  std_weekday              Float?
+  avg_session_duration_sec Float?
+  std_session_duration_sec Float?
+  last_10_actions_types    Json     @default("[]")
+  temporal_welford_json    Json     @default("{}")
+}
+
+model auth_user_risk_features {
+  user_id    Int      @id
+  features   Json     @default("{}")
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model auth_user_temporal_features {
+  user_id                  Int      @id
+  hour_distribution        Json     @default("{}")
+  weekday_distribution     Json     @default("{}")
+  action_transition_matrix Json     @default("{}")
+  ema_activity_drift       Float?
+  activity_rate_ema        Float?
+  sample_count             Int      @default(0)
+  updated_at               DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model auth_webauthn_challenges {
+  id            String   @id @db.Uuid
+  challenge_b64 String   @unique(map: "ix_auth_webauthn_challenges_challenge_b64") @db.VarChar(512)
+  flow_type     String   @db.VarChar(32)
+  user_id       Int?
+  identifier    String?  @db.VarChar(255)
+  expires_at    DateTime @db.Timestamptz(6)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([expires_at], map: "ix_auth_webauthn_challenges_expires_at")
+}
+
+model client_operation_statement_snapshots {
+  id             String   @id @db.Uuid
+  client_id      String   @db.Uuid
+  source_system  String   @db.VarChar(20)
+  source_id      String   @db.Uuid
+  schema_version String   @db.VarChar(32)
+  payload_json   Json
+  content_sha256 String
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  pdf_sha256     String?
+
+  @@unique([client_id, source_system, source_id], map: "uq_client_operation_statement_snapshots_client_source")
+  @@index([client_id], map: "ix_client_operation_statement_snapshots_client_id")
 }

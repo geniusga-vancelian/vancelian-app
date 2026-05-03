@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/config.dart';
 import '../../../../design_system/design_system.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../../../l10n/app_localizations_en.dart';
 import '../../../favorites/data/favorites_api.dart';
 import '../../../help/data/help_api.dart';
 import '../../../help/domain/models/help_center_models.dart';
@@ -21,14 +23,16 @@ import '../../data/offer_layout_api.dart';
 import '../../data/offers_api.dart';
 import '../../domain/catalog_offer_mapper.dart';
 import '../../domain/models/offer_project.dart';
+import '../../domain/models/vault_offer_builder_models.dart';
 import 'lending_invest_flow/lending_invest_source_screen.dart';
 import 'offer_documents_screen.dart';
 
 /// Sous-titre hero : premier module Vault Builder [TitlePage] (`content.subtitle`).
 /// Premier module [StepsModule] du vault (offre exclusive) : titre + étapes pour [StepsModuleWidget].
 ({String title, String rightLabel, List<StepItem> steps})? stepsModuleFromVault(
-  Map<String, dynamic>? vaultData,
-) {
+  Map<String, dynamic>? vaultData, {
+  String Function(int itemCount)? defaultStepsCountLabel,
+}) {
   if (vaultData == null) return null;
   final modules = vaultData['modules'];
   if (modules is! List) return null;
@@ -44,8 +48,9 @@ import 'offer_documents_screen.dart';
     final items = StepItem.listFromJson(content['items']);
     if (title.isEmpty || items.isEmpty) return null;
     final rightRaw = (content['rightLabel'] ?? '').toString().trim();
-    final rightLabel =
-        rightRaw.isNotEmpty ? rightRaw : '${items.length} etapes';
+    final rightLabel = rightRaw.isNotEmpty
+        ? rightRaw
+        : (defaultStepsCountLabel?.call(items.length) ?? '${items.length}');
     return (title: title, rightLabel: rightLabel, steps: items);
   }
   return null;
@@ -61,8 +66,9 @@ Future<void> _launchExclusiveOfferExternalUrl(String raw) async {
 
 /// Module Vault [VideoBlockArticleModule] : cartes poster + ouverture [videoUrl] au tap.
 ({String title, List<VideoBlockArticleItemData> items})? videoBlockArticleModuleFromVault(
-  Map<String, dynamic>? vaultData,
-) {
+  Map<String, dynamic>? vaultData, {
+  String defaultModuleTitle = 'Videos',
+}) {
   if (vaultData == null) return null;
   final modules = vaultData['modules'];
   if (modules is! List) return null;
@@ -103,8 +109,33 @@ Future<void> _launchExclusiveOfferExternalUrl(String raw) async {
       );
     }
     if (out.isEmpty) return null;
-    final moduleTitle = title.isNotEmpty ? title : 'Vidéos';
+    final moduleTitle = title.isNotEmpty ? title : defaultModuleTitle;
     return (title: moduleTitle, items: out);
+  }
+  return null;
+}
+
+/// Module Vault [LocalisationModule] : titre, description, carte Google (embed).
+({String moduleTitle, String description, String embedUrl})? localisationModuleFromVault(
+  Map<String, dynamic>? vaultData,
+) {
+  if (vaultData == null) return null;
+  final modules = vaultData['modules'];
+  if (modules is! List) return null;
+  for (final raw in modules) {
+    if (raw is! Map) continue;
+    final m = Map<String, dynamic>.from(raw);
+    if (m['enabled'] == false) continue;
+    final rawType = (m['type'] ?? m['module'])?.toString().trim() ?? '';
+    if (rawType.toLowerCase() != 'localisationmodule') continue;
+    final c = m['content'];
+    if (c is! Map) continue;
+    final content = Map<String, dynamic>.from(c);
+    final titleRaw = (content['moduleTitle'] ?? content['title'] ?? 'Localisation').toString().trim();
+    final moduleTitle = titleRaw.isEmpty ? 'Localisation' : titleRaw;
+    final description = (content['description'] ?? '').toString().trim();
+    final embedUrl = (content['embedUrl'] ?? '').toString().trim();
+    return (moduleTitle: moduleTitle, description: description, embedUrl: embedUrl);
   }
   return null;
 }
@@ -211,7 +242,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     return const [];
   }
 
-  Future<void> _openPromoVideos(List<String> urls) async {
+  Future<void> _openPromoVideos(AppLocalizations l10n, List<String> urls) async {
     if (urls.isEmpty) return;
     if (urls.length == 1) {
       final uri = Uri.tryParse(urls.first);
@@ -230,7 +261,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
               child: Text(
-                'Vidéos',
+                l10n.exclusiveOfferVideosTitle,
                 style: AppTypography.sectionTitle.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -241,7 +272,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
               ListTile(
                 leading: Icon(Icons.play_circle_outline_rounded, color: AppColors.indigo),
                 title: Text(
-                  'Vidéo ${i + 1}',
+                  l10n.exclusiveOfferVideoItemTitle(i + 1),
                   style: AppTypography.itemPrimary.copyWith(color: AppColors.textPrimary),
                 ),
                 onTap: () async {
@@ -481,16 +512,17 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
 
   Future<void> _openInvestFlow() async {
     final project = _p;
+    final l10n = AppLocalizations.of(context) ?? AppLocalizationsEn();
     if (!project.isInvestable) {
       Modale.show<void>(
         context,
         ModaleParams(
-          title: 'Investissement indisponible',
+          title: l10n.exclusiveOfferInvestUnavailableTitle,
           description: project.lendingStatus == 'funded'
-              ? 'Cette offre a atteint son objectif de financement.'
-              : 'Cette offre n\'est pas ouverte à l\'investissement pour le moment.',
+              ? l10n.exclusiveOfferInvestUnavailableBodyFunded
+              : l10n.exclusiveOfferInvestUnavailableBodyOther,
           secondaryButton: ModaleButtonConfig(
-            label: 'Fermer',
+            label: l10n.exclusiveOfferClose,
             onTap: () {},
           ),
         ),
@@ -540,17 +572,8 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
   Map<String, dynamic> get _headerConfigFromLayout =>
       _asMap(_offerStructureConfig['header']) ?? const {};
 
-  Map<String, dynamic> get _headerCategoryBadgeConfig =>
-      _asMap(_headerConfigFromLayout['categoryBadge']) ?? const {};
-
   Map<String, dynamic> get _headerCtaConfig =>
       _asMap(_headerConfigFromLayout['cta']) ?? const {};
-
-  bool get _headerShowCategoryBadge {
-    final raw = _headerCategoryBadgeConfig['show'];
-    if (raw is bool) return raw && _p.category.trim().isNotEmpty;
-    return false;
-  }
 
   List<String> get _headerSecondaryButtonKeys {
     final raw = _asList(_headerCtaConfig['secondaryButtons']);
@@ -562,10 +585,6 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     final primary = _asMap(_headerCtaConfig['primaryButton']);
     return (primary?['label'] ?? '').toString().trim();
   }
-
-  /// Libellé affiché : défaut « Investir » si le layout ne fournit pas de label.
-  String get _headerPrimaryButtonLabelResolved =>
-      _headerPrimaryButtonLabel.isNotEmpty ? _headerPrimaryButtonLabel : 'Investir';
 
   bool get _headerPrimaryButtonEnabled {
     final primary = _asMap(_headerCtaConfig['primaryButton']);
@@ -614,9 +633,6 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
 
   Map<String, dynamic> get _videoBlockArticleConfigFromLayout =>
       _asMap(_offerBodyConfig['videoBlockArticle']) ?? const {};
-
-  Map<String, dynamic> get _collectionProgressConfigFromLayout =>
-      _asMap(_offerBodyConfig['collectionProgress']) ?? const {};
 
   int _asInt(dynamic value, {required int fallback}) {
     if (value is int) return value;
@@ -690,14 +706,17 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     return list;
   }
 
-  List<StepItem> _stepsFromMilestoneArticles(List<ArticlePreview> milestones) {
+  List<StepItem> _stepsFromMilestoneArticles(
+    List<ArticlePreview> milestones,
+    AppLocalizations l10n,
+  ) {
     final out = <StepItem>[];
     for (int i = 0; i < milestones.length; i++) {
       final article = milestones[i];
       out.add(
         StepItem(
           index: i + 1,
-          dayLabel: 'Step ${i + 1}',
+          dayLabel: l10n.exclusiveOfferStepsMilestoneDay(i + 1),
           date: _formatMilestoneDate(article.publishedAt),
           title: article.title,
           description: article.standfirst,
@@ -710,13 +729,14 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
   }
 
   void _showKeyInformationModal({required String title, required String content}) {
+    final l10n = AppLocalizations.of(context) ?? AppLocalizationsEn();
     Modale.show<void>(
       context,
       ModaleParams(
-        title: title.trim().isEmpty ? 'Information' : title.trim(),
+        title: title.trim().isEmpty ? l10n.exclusiveOfferModalInfoDefaultTitle : title.trim(),
         description: content.trim(),
         secondaryButton: ModaleButtonConfig(
-          label: 'Fermer',
+          label: l10n.exclusiveOfferClose,
           onTap: () {},
         ),
       ),
@@ -814,13 +834,16 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
   }
 
   /// CTA hero : [AppPrimaryButton] medium + bouton rond lecture si vidéo(s) promo.
-  Widget? _buildExclusiveOfferHeroBelowTitleActions() {
+  Widget? _buildExclusiveOfferHeroBelowTitleActions(AppLocalizations l10n) {
+    final primaryLabel = _headerPrimaryButtonLabel.isNotEmpty
+        ? _headerPrimaryButtonLabel
+        : l10n.exclusiveOfferInvestCtaDefault;
     const ctaHorizontalPadding = AppSpacing.s4;
     final children = <Widget>[];
     if (_headerPrimaryButtonEnabled) {
       children.add(
         AppPrimaryButton(
-          label: _headerPrimaryButtonLabelResolved,
+          label: primaryLabel,
           size: AppPrimaryButtonSize.medium,
           variant: AppPrimaryButtonVariant.primary,
           shrinkWrap: true,
@@ -837,7 +860,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     if (_headerHasSecondaryButton('documents')) {
       children.add(
         AppPrimaryButton(
-          label: 'Documents',
+          label: l10n.exclusiveOfferDocuments,
           size: AppPrimaryButtonSize.medium,
           variant: AppPrimaryButtonVariant.secondary,
           shrinkWrap: true,
@@ -860,7 +883,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     if (_headerHasSecondaryButton('gallery') && _p.hasGallery) {
       children.add(
         AppPrimaryButton(
-          label: 'Galerie',
+          label: l10n.exclusiveOfferGallery,
           size: AppPrimaryButtonSize.medium,
           variant: AppPrimaryButtonVariant.secondary,
           shrinkWrap: true,
@@ -884,7 +907,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           shape: const CircleBorder(),
           child: InkWell(
             customBorder: const CircleBorder(),
-            onTap: () => unawaited(_openPromoVideos(promos)),
+            onTap: () => unawaited(_openPromoVideos(l10n, promos)),
             child: const SizedBox(
               width: 48,
               height: 48,
@@ -909,10 +932,11 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
   }
 
   Future<void> _openFaqArticleModal(_ProjectFaqArticle article) async {
+    final l10n = AppLocalizations.of(context) ?? AppLocalizationsEn();
     await ModaleFullHeightPage.show<void>(
       context,
       title: article.question,
-      closeLabel: 'Fermé',
+      closeLabel: l10n.exclusiveOfferFaqModalClose,
       contentInWhiteModule: true,
       child: FutureBuilder<HelpArticleDetail>(
         future: _helpApi.getArticleDetail(
@@ -921,6 +945,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           articleSlug: article.articleSlug,
         ),
         builder: (context, snapshot) {
+          final loc = AppLocalizations.of(context) ?? AppLocalizationsEn();
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -928,7 +953,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
               child: Text(
-                'Impossible de charger le contenu de cet article.',
+                loc.exclusiveOfferFaqArticleLoadError,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.errorText,
                   height: 1.4,
@@ -941,7 +966,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           final markdown = detail.markdownContent.trim();
           final fallbackText = detail.standfirst.trim().isNotEmpty
               ? detail.standfirst.trim()
-              : 'Aucun contenu disponible.';
+              : loc.exclusiveOfferFaqArticleEmptyFallback;
 
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.xs),
@@ -996,13 +1021,21 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context) ?? AppLocalizationsEn();
     final stepsTitle = (_stepsDateConfigFromLayout['title'] ?? '').toString().trim();
     final milestoneArticles = _milestoneArticlesAscending();
-    final stepsItems = _stepsFromMilestoneArticles(milestoneArticles);
+    final stepsItems = _stepsFromMilestoneArticles(milestoneArticles, l10n);
     final hasMilestoneSteps = stepsItems.isNotEmpty;
-    final stepsRightLabel = '${stepsItems.length} etapes';
-    final vaultStepsModule = stepsModuleFromVault(_vaultData);
-    final vaultVideoBlock = videoBlockArticleModuleFromVault(_vaultData);
+    final stepsRightLabel = l10n.exclusiveOfferStepsCountLabel(stepsItems.length);
+    final vaultStepsModule = stepsModuleFromVault(
+      _vaultData,
+      defaultStepsCountLabel: l10n.exclusiveOfferStepsCountLabel,
+    );
+    final vaultVideoBlock = videoBlockArticleModuleFromVault(
+      _vaultData,
+      defaultModuleTitle: l10n.exclusiveOfferVideosTitle,
+    );
+    final vaultLocalisation = localisationModuleFromVault(_vaultData);
     final videoBlockLayoutTitle = (_videoBlockArticleConfigFromLayout['title'] ?? '').toString().trim();
     final videoBlockTitleResolved = videoBlockLayoutTitle.isNotEmpty
         ? videoBlockLayoutTitle
@@ -1032,7 +1065,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
             .trim();
     final tableInfoRows = _tableInformationRowsFromLayout();
     var moduleOrder = _moduleOrderFromLayout;
-    if (_p.hasLendingData && !moduleOrder.contains('collection_progress')) {
+    if (_p.vaultFunding != null && !moduleOrder.contains('collection_progress')) {
       moduleOrder = ['collection_progress', ...moduleOrder];
     }
     moduleOrder = _orderKeyInfoBeforeDescription(moduleOrder);
@@ -1049,6 +1082,22 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
         ];
       } else {
         moduleOrder = [...moduleOrder, 'video_block_article'];
+      }
+    }
+    final showVaultLocalisation = vaultLocalisation != null &&
+        (LocalisationModule.isAllowedEmbedUrl(vaultLocalisation.embedUrl) ||
+            vaultLocalisation.moduleTitle.isNotEmpty ||
+            vaultLocalisation.description.isNotEmpty);
+    if (showVaultLocalisation && !moduleOrder.contains('localisation')) {
+      final iNews = moduleOrder.indexOf('project_news');
+      if (iNews >= 0) {
+        moduleOrder = [
+          ...moduleOrder.sublist(0, iNews),
+          'localisation',
+          ...moduleOrder.sublist(iNews),
+        ];
+      } else {
+        moduleOrder = [...moduleOrder, 'localisation'];
       }
     }
     final descriptionContent =
@@ -1101,41 +1150,16 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     for (final key in moduleOrder) {
       switch (key) {
         case 'collection_progress':
-          double progress;
-          String raisedAmount;
-          int investorsCount;
-          String totalFundingAmount;
-
-          if (_p.hasLendingData) {
-            progress = _p.progressRatio;
-            raisedAmount = '${_p.raisedFormatted} ${_p.lendingAsset ?? 'EUR'}';
-            investorsCount = _p.investorsCount ?? 0;
-            totalFundingAmount = '${_p.targetFormatted} ${_p.lendingAsset ?? 'EUR'}';
-          } else {
-            progress =
-                _asDouble(_collectionProgressConfigFromLayout['progress'], fallback: -1).clamp(-1, 1).toDouble();
-            raisedAmount = (_collectionProgressConfigFromLayout['raisedAmount'] ?? '').toString().trim();
-            investorsCount = _asInt(_collectionProgressConfigFromLayout['investorsCount'], fallback: -1);
-            totalFundingAmount =
-                (_collectionProgressConfigFromLayout['totalFundingAmount'] ?? '').toString().trim();
-            if (progress < 0 ||
-                raisedAmount.isEmpty ||
-                investorsCount < 0 ||
-                totalFundingAmount.isEmpty) {
-              break;
-            }
-          }
-
+          final vf = _p.vaultFunding;
+          if (vf == null) break;
           orderedModules.add(
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: DashboardLayoutConstants.moduleHorizontalMargin,
               ),
               child: _CollectionProgressModule(
-                progress: progress,
-                raisedAmount: raisedAmount,
-                investorsCount: investorsCount,
-                totalFundingAmount: totalFundingAmount,
+                model: vf,
+                investorsLabel: l10n.exclusiveOfferStepsCountLabel(vf.investorsCount),
               ),
             ),
           );
@@ -1320,7 +1344,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
                 horizontal: DashboardLayoutConstants.moduleHorizontalMargin,
               ),
               child: _FaqModule(
-                title: faqTitle.isEmpty ? 'FAQ' : faqTitle,
+                title: faqTitle.isEmpty ? l10n.exclusiveOfferFaqDefaultTitle : faqTitle,
                 readMoreLabel: faqReadMoreLabel,
                 readMoreUrl: faqReadMoreUrl,
                 onReadMoreTap: faqTagRedirectEnabled
@@ -1379,12 +1403,22 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
             );
           }
           break;
+        case 'localisation':
+          if (!showVaultLocalisation) break;
+          orderedModules.add(
+            LocalisationModule(
+              moduleTitle: vaultLocalisation.moduleTitle,
+              description: vaultLocalisation.description,
+              embedUrl: vaultLocalisation.embedUrl,
+            ),
+          );
+          break;
         default:
           break;
       }
     }
 
-    final heroBelowTitle = _buildExclusiveOfferHeroBelowTitleActions();
+    final heroBelowTitle = _buildExclusiveOfferHeroBelowTitleActions(l10n);
 
     final scrollChild = SingleChildScrollView(
       controller: _scrollController,
@@ -1397,14 +1431,10 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
             title: _p.title,
             subtitle: _heroDescriptionLine,
             badges: [
-              ArticleCategoryBadgeData(
-                label: 'Offre exclusive',
-                dotColor: AppColors.accent,
-              ),
-              if (_headerShowCategoryBadge)
+              for (var i = 0; i < _p.vaultHeroTags.length; i++)
                 ArticleCategoryBadgeData(
-                  label: _p.category,
-                  dotColor: AppColors.gray,
+                  label: _p.vaultHeroTags[i],
+                  dotColor: i.isEven ? AppColors.accent : AppColors.gray,
                 ),
             ],
             showNavBar: false,
@@ -1417,6 +1447,8 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (orderedModules.isNotEmpty)
+                  const SizedBox(height: _kExclusiveOfferBodyModuleSpacing),
                 for (int i = 0; i < orderedModules.length; i++) ...[
                   orderedModules[i],
                   if (i < orderedModules.length - 1)
@@ -1485,22 +1517,15 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
   }
 }
 
-/// Premier module : informations de collecte (titre, montant, investisseurs, barre de progression, financement total).
+/// Bloc funding — données [VaultFundingUiModel] (Vault Builder `FundingModule` + lending).
 class _CollectionProgressModule extends StatelessWidget {
   const _CollectionProgressModule({
-    required this.progress,
-    required this.raisedAmount,
-    required this.investorsCount,
-    required this.totalFundingAmount,
-    this.trailing,
+    required this.model,
+    required this.investorsLabel,
   });
 
-  final double progress;
-  final String raisedAmount;
-  final int investorsCount;
-  final String totalFundingAmount;
-  /// Widget affiché en bas du module (ex. lien « En savoir plus sur le projet »).
-  final Widget? trailing;
+  final VaultFundingUiModel model;
+  final String investorsLabel;
 
   static const double _horizontalPadding = 20;
   static const double _verticalPadding = 16;
@@ -1508,7 +1533,104 @@ class _CollectionProgressModule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final title = model.moduleTitle?.trim();
+
+    final cardBody = <Widget>[];
+    if (model.showProgressSection) {
+      cardBody.add(
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Flexible(
+              child: Text(
+                model.raisedAmount,
+                style: AppTypography.sectionTitle.copyWith(fontSize: 22),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              investorsLabel,
+              style: AppTypography.meta,
+            ),
+          ],
+        ),
+      );
+      if (model.progressLabel.isNotEmpty) {
+        cardBody.add(const SizedBox(height: AppSpacing.xs));
+        cardBody.add(
+          Text(
+            model.progressLabel,
+            style: AppTypography.meta.copyWith(color: AppColors.textSecondary),
+          ),
+        );
+      }
+      cardBody.add(const SizedBox(height: AppSpacing.xs));
+      cardBody.add(
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: model.progress.clamp(0.0, 1.0),
+            minHeight: _progressBarHeight,
+            backgroundColor: AppColors.placeholderBg,
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.textPrimary),
+          ),
+        ),
+      );
+    }
+
+    if (model.showAprRow) {
+      if (cardBody.isNotEmpty) cardBody.add(const SizedBox(height: AppSpacing.sm));
+      cardBody.add(
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (model.aprLabel.isNotEmpty)
+              Expanded(
+                child: Text(
+                  model.aprLabel,
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+                ),
+              )
+            else
+              const Spacer(),
+            Text(
+              model.aprValue,
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (model.showTargetRow) {
+      if (cardBody.isNotEmpty) cardBody.add(const SizedBox(height: AppSpacing.sm));
+      cardBody.add(
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (model.targetLabel.isNotEmpty)
+              Expanded(
+                child: Text(
+                  model.targetLabel,
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+                ),
+              )
+            else
+              const Spacer(),
+            Text(
+              model.totalFundingAmount,
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final card = Container(
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(24),
@@ -1528,61 +1650,41 @@ class _CollectionProgressModule extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Flexible(
-                  child: Text(
-                    raisedAmount,
-                    style: AppTypography.sectionTitle.copyWith(fontSize: 22),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Text(
-                  '$investorsCount investisseur${investorsCount > 1 ? 's' : ''}',
-                  style: AppTypography.meta,
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress.clamp(0.0, 1.0),
-                minHeight: _progressBarHeight,
-                backgroundColor: AppColors.placeholderBg,
-                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.textPrimary),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  'Financement total',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  totalFundingAmount,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-            if (trailing != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              trailing!,
-            ],
-          ],
+          children: cardBody,
         ),
       ),
+    );
+
+    final foot = model.footnoteMarkdown?.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (title != null && title.isNotEmpty) ...[
+          Text(
+            title,
+            style: AppTypography.sectionTitle.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        card,
+        if (foot != null && foot.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          MarkdownBody(
+            data: foot,
+            styleSheet: MarkdownStyleSheet(
+              p: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

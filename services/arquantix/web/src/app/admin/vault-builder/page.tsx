@@ -1,11 +1,53 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Save, Trash2, ArrowUp, ArrowDown, LayoutTemplate, Package, ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  Plus,
+  Save,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  LayoutTemplate,
+  Package,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  UploadCloud,
+  Eye,
+  Sparkles,
+  Languages,
+} from 'lucide-react'
 
 import { buildPackagedPutBodyFromDraft } from '@/lib/admin/packagedProductSchemas'
+import type { LocaleCompletenessLevel } from '@/lib/admin/pageLocaleCompleteness'
+import { AdminEditingLocaleBar } from '@/components/admin/AdminEditingLocaleBar'
+import { useAdminEditingLocale } from '@/components/admin/AdminEditingLocaleContext'
+import {
+  AdminOperationProgressModal,
+  type AdminProgressStep,
+} from '@/components/admin/AdminOperationProgressModal'
+import {
+  I18nFindingsTable,
+  vaultCheckReportAggregate,
+  vaultCheckReportToRows,
+} from '@/components/admin/I18nFindingsTable'
+import {
+  buildAutoTranslateSuccessModal,
+  buildVaultApplySuccessModal,
+  buildVaultScanSuccessModal,
+  initialApplyRunningSteps,
+  initialAutoTranslateRunningSteps,
+  initialScanRunningSteps,
+} from '@/components/admin/vaultLanguageOpModalState'
+import { LocaleCompletenessStrip } from '@/components/admin/LocaleCompletenessStrip'
+import { isValidLocale, supportedLocales, type Locale } from '@/config/locales'
+import {
+  type VaultLocaleLayerInfo,
+  vaultLocaleLayerBadgeLabel,
+} from '@/lib/admin/vaultLocaleSectionStatus'
 import { toastError, toastSuccess, toastWarning } from '@/lib/admin/toast'
 import { isValidSlug, slugify } from '@/lib/utils/slugify'
 import { PackagedEngineLendingSection } from '@/components/admin/PackagedEngineLendingSection'
@@ -15,6 +57,10 @@ import {
   type ProductRegistryDraft,
 } from '@/components/admin/PackagedProductSettingsPanel'
 import { MediaField } from '@/components/admin/MediaField'
+import { VaultDocumentsListModuleEditor } from '@/components/admin/VaultDocumentsListModuleEditor'
+import { VaultLocalisationModuleEditor } from '@/components/admin/VaultLocalisationModuleEditor'
+import { VaultMediaCarouselModuleEditor } from '@/components/admin/VaultMediaCarouselModuleEditor'
+import { VaultVideoBlockArticleModuleEditor } from '@/components/admin/VaultVideoBlockArticleModuleEditor'
 
 /**
  * Attempt to fix JSON strings that contain raw newlines inside quoted values.
@@ -128,7 +174,13 @@ interface VaultDetails {
     urlPath: string
   }
   config: LandingConfig
+  /** Snapshot publié pour la langue éditée (lecture / comparaison). */
+  publishedConfig?: LandingConfig | null
   packagedProduct?: AdminPackagedProductView | null
+  editingLocale?: Locale
+  localeCompleteness?: Record<Locale, LocaleCompletenessLevel>
+  /** Brouillon / publié par langue (section vault). */
+  localeVaultLayers?: Record<Locale, VaultLocaleLayerInfo>
 }
 
 interface ModuleCatalogItem {
@@ -146,6 +198,32 @@ const MODULE_CATALOG: ModuleCatalogItem[] = [
       subtitle: '',
       promoVideoUrl: '',
       promoVideoUrls: [],
+    },
+  },
+  {
+    type: 'TagsModule',
+    label: 'Tags (puces hero DS)',
+    defaultContent: {
+      tags: ['Japan', '2 chalets'],
+    },
+  },
+  {
+    type: 'FundingModule',
+    label: 'Funding (métriques)',
+    defaultContent: {
+      title: '',
+      displayMode: 'auto_product',
+      footnote: '',
+      items: [
+        { key: 'progress', label: '', enabled: true },
+        { key: 'apr', label: '', enabled: true },
+        { key: 'target', label: '', enabled: true },
+      ],
+      manual: {
+        progressPct: 0,
+        rateDisplay: '',
+        totalDisplay: '',
+      },
     },
   },
   {
@@ -188,6 +266,7 @@ const MODULE_CATALOG: ModuleCatalogItem[] = [
     label: 'FAQ Accordion Module',
     defaultContent: {
       title: 'FAQ',
+      intro: '',
       footerLinkLabel: 'Voir les FAQ du projet',
       footerCollectionSlug: 'getting-started',
       footerCategorySlug: 'investing-basics',
@@ -294,11 +373,65 @@ const MODULE_CATALOG: ModuleCatalogItem[] = [
     type: 'KeyInformationModule',
     label: 'Key Information',
     defaultContent: {
-      title: 'Infos clés',
+      title: 'Informations clés',
+      ctaLabel: '',
+      ctaHref: '',
       rows: [
-        { label: 'Montant', value: '10M €', showInfoIcon: false, infoLinkArticle: '' },
-        { label: 'Durée', value: '2 ans', showInfoIcon: true, infoLinkArticle: 'article-faq-duree' },
+        {
+          label: "Type d'investissement",
+          value: 'Co-financement en actif numérique',
+          showInfoIcon: false,
+          infoLinkArticle: '',
+        },
+        {
+          label: 'Rendement annuel fixe',
+          value: '10,7% à 11,5 % APR',
+          showInfoIcon: false,
+          infoLinkArticle: '',
+        },
+        {
+          label: 'Paiement des intérêts',
+          value: 'Quotidien',
+          showInfoIcon: false,
+          infoLinkArticle: '',
+        },
+        {
+          label: "Période d'engagement",
+          value: '18 mois',
+          showInfoIcon: false,
+          infoLinkArticle: '',
+        },
+        {
+          label: 'Montant de souscription',
+          value: "Pas de ticket d'entrée minimum",
+          showInfoIcon: false,
+          infoLinkArticle: '',
+        },
+        {
+          label: 'Date de livraison',
+          value: '2025',
+          showInfoIcon: false,
+          infoLinkArticle: '',
+        },
       ],
+    },
+  },
+  {
+    type: 'MediaImageCarouselModule',
+    label: 'Carrousel d’images (médiathèque)',
+    defaultContent: {
+      moduleTitle: '',
+      description: '',
+      imageMediaIds: [],
+    },
+  },
+  {
+    type: 'DocumentsListModule',
+    label: 'Liste de documents (médiathèque)',
+    defaultContent: {
+      moduleTitle: '',
+      description: '',
+      documentEntries: [],
     },
   },
   {
@@ -341,11 +474,19 @@ const MODULE_CATALOG: ModuleCatalogItem[] = [
       items: [
         {
           title: 'Titre de la vidéo',
-          posterImageUrl: 'https://picsum.photos/800/450',
           videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           date: '7 avril 2026',
         },
       ],
+    },
+  },
+  {
+    type: 'LocalisationModule',
+    label: 'Localisation (titre + description + carte Google)',
+    defaultContent: {
+      moduleTitle: 'Localisation',
+      description: 'Retrouvez l’emplacement du projet sur la carte ci-dessous.',
+      embedUrl: '',
     },
   },
 ]
@@ -465,8 +606,25 @@ function AdminVaultBuilderPageInner() {
   const searchParams = useSearchParams()
   const slugFromQuery = searchParams?.get('slug') ?? null
   const eoWorkspace = searchParams?.get('eo') === '1'
+  const { locale: editingLocale, setLocale: setEditingLocale } = useAdminEditingLocale()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [copyLocaleBusy, setCopyLocaleBusy] = useState(false)
+  const [autoTranslateBusy, setAutoTranslateBusy] = useState(false)
+  const [checkLangBusy, setCheckLangBusy] = useState(false)
+  const [checkLangApplyBusy, setCheckLangApplyBusy] = useState(false)
+  const [checkLangReport, setCheckLangReport] = useState<unknown>(null)
+  const [vaultOpModal, setVaultOpModal] = useState<{
+    title: string
+    subtitle?: string
+    phase: 'running' | 'success' | 'error'
+    steps: AdminProgressStep[]
+    summaryLines: string[]
+    errorMessage?: string
+    footerHint?: string
+  } | null>(null)
+  const [publishVaultBusy, setPublishVaultBusy] = useState(false)
+  const [showPublishedPeek, setShowPublishedPeek] = useState(false)
   const [packagedPublishBusy, setPackagedPublishBusy] = useState(false)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -543,6 +701,88 @@ function AdminVaultBuilderPageInner() {
     }
     return map
   }, [investmentTypes])
+
+  useEffect(() => {
+    const q = searchParams?.get('editingLocale')
+    if (q && isValidLocale(q)) setEditingLocale(q)
+  }, [searchParams, setEditingLocale])
+
+  const fetchVaultPayload = useCallback(
+    async (
+      slug: string,
+      localeOverride?: Locale,
+    ): Promise<{ ok: true; data: VaultDetails } | { ok: false }> => {
+      const normalizedSlug = slug?.trim().replace(/\/+$/, '') || ''
+      if (!normalizedSlug) return { ok: false }
+      const loc = localeOverride ?? editingLocale
+      const res = await fetch(
+        `/api/admin/vaults/${encodeURIComponent(normalizedSlug)}?locale=${loc}`,
+        { credentials: 'include' },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const message = body?.error || body?.detail || `Erreur ${res.status}`
+        toastError(`Détails de la page : ${message}`)
+        return { ok: false }
+      }
+      const data = (await res.json()) as VaultDetails
+      return { ok: true, data }
+    },
+    [editingLocale],
+  )
+
+  const reloadVaultDetails = useCallback(
+    async (slug: string, localeOverride?: Locale) => {
+      const result = await fetchVaultPayload(slug, localeOverride)
+      if (!result.ok) return
+      setDetails({
+        ...result.data,
+        config: withConfigDefaults(result.data.config),
+        publishedConfig:
+          result.data.publishedConfig != null
+            ? withConfigDefaults(result.data.publishedConfig)
+            : null,
+      })
+    },
+    [fetchVaultPayload],
+  )
+
+  useEffect(() => {
+    if (!selectedSlug) {
+      setDetails(null)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const result = await fetchVaultPayload(selectedSlug)
+      if (cancelled) return
+      if (!result.ok) {
+        setDetails(null)
+        setSelectedSlug(null)
+        return
+      }
+      setDetails({
+        ...result.data,
+        config: withConfigDefaults(result.data.config),
+        publishedConfig:
+          result.data.publishedConfig != null
+            ? withConfigDefaults(result.data.publishedConfig)
+            : null,
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedSlug, editingLocale, fetchVaultPayload])
+
+  useEffect(() => {
+    if (!selectedSlug) return
+    const params = new URLSearchParams()
+    params.set('slug', selectedSlug)
+    params.set('editingLocale', editingLocale)
+    if (eoWorkspace) params.set('eo', '1')
+    router.replace(`/admin/vault-builder?${params.toString()}`, { scroll: false })
+  }, [selectedSlug, editingLocale, eoWorkspace, router])
 
   useEffect(() => {
     let mounted = true
@@ -628,34 +868,13 @@ function AdminVaultBuilderPageInner() {
           ? selectedSlug
           : rows[0]?.slug ?? null
     if (nextSlug) {
-      await loadDetails(nextSlug, mounted)
+      if (mounted) setSelectedSlug(nextSlug)
     } else {
-      setDetails(null)
-      setSelectedSlug(null)
-    }
-  }
-
-  const loadDetails = async (slug: string, mounted = true) => {
-    const normalizedSlug = slug?.trim().replace(/\/+$/, '') || ''
-    if (!normalizedSlug) return
-    const res = await fetch(`/api/admin/vaults/${normalizedSlug}`, { credentials: 'include' })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      const message = body?.error || body?.detail || `Erreur ${res.status}`
-      toastError(`Détails de la page : ${message}`)
       if (mounted) {
         setDetails(null)
         setSelectedSlug(null)
       }
-      return
     }
-    const payload = (await res.json()) as VaultDetails
-    if (!mounted) return
-    setSelectedSlug(normalizedSlug)
-    setDetails({
-      ...payload,
-      config: withConfigDefaults(payload.config),
-    })
   }
 
   const packagedSyncKey = details?.packagedProduct
@@ -715,10 +934,7 @@ function AdminVaultBuilderPageInner() {
       setNewTitle('')
       setNewDescription('')
       setNewInvestmentTypeSlug('')
-      await refreshVaults()
-      if (payload.vault?.slug) {
-        await loadDetails(payload.vault.slug)
-      }
+      await refreshVaults(true, payload.vault?.slug ?? null)
     } catch (e: any) {
       setCreateError(e?.message || 'Création impossible')
       toastError(e?.message || 'Création impossible')
@@ -795,6 +1011,19 @@ function AdminVaultBuilderPageInner() {
     }
   }
 
+  const handlePatchModuleContentObject = (moduleId: string, patch: Record<string, unknown>) => {
+    if (!details) return
+    updateDetails((prev) => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        modules: prev.config.modules.map((m) =>
+          m.id === moduleId ? { ...m, content: { ...m.content, ...patch } } : m
+        ),
+      },
+    }))
+  }
+
   const moveModule = (moduleId: string, direction: 'up' | 'down') => {
     if (!details) return
     const modules = [...details.config.modules]
@@ -854,6 +1083,7 @@ function AdminVaultBuilderPageInner() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
+          locale: editingLocale,
           title: details.page.title ?? '',
           description: details.page.description ?? '',
           config: details.config,
@@ -889,12 +1119,12 @@ function AdminVaultBuilderPageInner() {
             ? ppPayload.error
             : `Erreur produit packagé (${ppRes.status})`
         toastError(errMsg)
-        toastWarning('Le contenu Vault a été enregistré, mais pas le registre produit.')
+        toastWarning('Brouillon vault enregistré, mais pas le registre produit packagé.')
         await refreshVaults()
         return
       }
 
-      toastSuccess('Vault et registre produit enregistrés.')
+      toastSuccess('Brouillon vault et registre produit enregistrés.')
       await refreshVaults()
     } catch (e: any) {
       toastError(e?.message || 'Sauvegarde impossible')
@@ -946,11 +1176,326 @@ function AdminVaultBuilderPageInner() {
           ? 'Offre exclusive publiée (catalogue / app mobile).'
           : 'Offre repassée en brouillon.',
       )
-      await loadDetails(details.page.slug)
+      await reloadVaultDetails(details.page.slug)
     } catch (e: unknown) {
       toastError(e instanceof Error ? e.message : 'Mise à jour impossible')
     } finally {
       setPackagedPublishBusy(false)
+    }
+  }
+
+  const handleCopyVaultLocale = async (toLocale: Locale) => {
+    if (!details?.page.slug) return
+    const fromLocale: Locale = 'fr'
+    if (
+      !window.confirm(
+        `Copier le français (${fromLocale.toUpperCase()}) vers ${toLocale.toUpperCase()} ?\n\n` +
+          'Les titres et descriptions PageI18n seront copiés. Le JSON du vault sera écrit en brouillon (DRAFT) pour la langue cible ; le contenu publié existant pour cette langue ne sera pas modifié par cette action.',
+      )
+    ) {
+      return
+    }
+    setCopyLocaleBusy(true)
+    try {
+      const res = await fetch(
+        `/api/admin/vaults/${encodeURIComponent(details.page.slug)}/copy-locale`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ fromLocale, toLocale }),
+        },
+      )
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          typeof payload.error === 'string' ? payload.error : 'Copie impossible',
+        )
+      }
+      toastSuccess(`Contenu ${toLocale.toUpperCase()} : brouillon mis à jour depuis le FR.`)
+      setEditingLocale(toLocale)
+      await reloadVaultDetails(details.page.slug, toLocale)
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : 'Copie impossible')
+    } finally {
+      setCopyLocaleBusy(false)
+    }
+  }
+
+  const handleAutoTranslateVaultLocale = async (toLocale: Locale) => {
+    if (toLocale === 'fr') return
+    if (!details?.page.slug) return
+    if (
+      !window.confirm(
+        `Auto-traduction FR → ${toLocale.toUpperCase()} (brouillon uniquement) ?\n\n` +
+          'Étapes : lecture du contenu FR → traduction OpenAI des champs autorisés → contrôle linguistique → enregistrement du DRAFT et PageI18n cible.\n\n' +
+          'Le PUBLISHED de cette langue ne sera pas modifié. Une relecture humaine reste nécessaire.',
+      )
+    ) {
+      return
+    }
+    const slug = details.page.slug
+    const locLabel = toLocale.toUpperCase()
+    setAutoTranslateBusy(true)
+    setVaultOpModal({
+      title: `Auto-traduction FR → ${locLabel}`,
+      subtitle: slug,
+      phase: 'running',
+      steps: initialAutoTranslateRunningSteps(locLabel),
+      summaryLines: [],
+    })
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
+    try {
+      const res = await fetch(
+        `/api/admin/vaults/${encodeURIComponent(slug)}/auto-translate-locale`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ targetLocale: toLocale }),
+        },
+      )
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          typeof payload.error === 'string'
+            ? [payload.error, payload.detail].filter(Boolean).join(' — ')
+            : 'Auto-traduction impossible',
+        )
+      }
+      const built = buildAutoTranslateSuccessModal(payload, locLabel, slug)
+      setVaultOpModal({
+        title: `Auto-traduction FR → ${locLabel}`,
+        subtitle: slug,
+        phase: 'success',
+        ...built,
+      })
+      setEditingLocale(toLocale)
+      await reloadVaultDetails(slug, toLocale)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Auto-traduction impossible'
+      setVaultOpModal({
+        title: `Auto-traduction FR → ${locLabel}`,
+        subtitle: slug,
+        phase: 'error',
+        steps: [
+          {
+            id: 'fail',
+            label: 'Traduction ou enregistrement',
+            detail: msg,
+            status: 'error',
+          },
+        ],
+        summaryLines: [],
+        errorMessage: msg,
+      })
+      toastError(msg)
+    } finally {
+      setAutoTranslateBusy(false)
+    }
+  }
+
+  const handleCheckModuleLanguageScan = async () => {
+    if (!details?.page.slug) return
+    const slug = details.page.slug
+    const locLabel = editingLocale.toUpperCase()
+    setCheckLangBusy(true)
+    setCheckLangReport(null)
+    setVaultOpModal({
+      title: `Analyser les modules — ${locLabel}`,
+      subtitle: slug,
+      phase: 'running',
+      steps: initialScanRunningSteps(locLabel),
+      summaryLines: [],
+    })
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
+    try {
+      const res = await fetch(
+        `/api/admin/vaults/${encodeURIComponent(slug)}/check-module-language/scan`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ targetLocale: editingLocale }),
+        },
+      )
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(typeof payload.error === 'string' ? payload.error : 'Scan impossible')
+      }
+      setCheckLangReport(payload)
+      const built = buildVaultScanSuccessModal(payload, locLabel, slug)
+      setVaultOpModal({
+        title: `Analyser les modules — ${locLabel}`,
+        subtitle: slug,
+        phase: 'success',
+        ...built,
+      })
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Scan impossible'
+      setVaultOpModal({
+        title: `Analyser les modules — ${locLabel}`,
+        subtitle: slug,
+        phase: 'error',
+        steps: [
+          {
+            id: 'scan-fail',
+            label: 'Analyse linguistique',
+            detail: msg,
+            status: 'error',
+          },
+        ],
+        summaryLines: [],
+        errorMessage: msg,
+      })
+      toastError(msg)
+    } finally {
+      setCheckLangBusy(false)
+    }
+  }
+
+  const handleCheckModuleLanguageApply = async () => {
+    if (!details?.page.slug) return
+    const slug = details.page.slug
+    const locLabel = editingLocale.toUpperCase()
+    if (
+      !window.confirm(
+        `Corriger automatiquement le brouillon ${locLabel} ?\n\n` +
+          'Seuls les champs détectés comme mauvaise langue ou mixtes (allowlist) seront retraduits vers cette langue. ' +
+          'Écriture DRAFT (+ PageI18n) uniquement — pas le PUBLISHED.\n\n' +
+          'Les textes NEEDS_REVIEW (trop courts) ne sont pas modifiés.',
+      )
+    ) {
+      return
+    }
+    setCheckLangApplyBusy(true)
+    setVaultOpModal({
+      title: `Corriger le brouillon — ${locLabel}`,
+      subtitle: slug,
+      phase: 'running',
+      steps: initialApplyRunningSteps(locLabel),
+      summaryLines: [],
+    })
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
+    try {
+      const res = await fetch(
+        `/api/admin/vaults/${encodeURIComponent(slug)}/check-module-language/apply`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ targetLocale: editingLocale }),
+        },
+      )
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          [payload.error, payload.detail].filter(Boolean).join(' — ') || 'Correction impossible',
+        )
+      }
+      const built = buildVaultApplySuccessModal(payload, locLabel, slug)
+      setVaultOpModal({
+        title: `Corriger le brouillon — ${locLabel}`,
+        subtitle: slug,
+        phase: 'success',
+        ...built,
+      })
+      setCheckLangReport({ ...payload, mode: 'afterApply' })
+      await reloadVaultDetails(slug, editingLocale)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Correction impossible'
+      setVaultOpModal({
+        title: `Corriger le brouillon — ${locLabel}`,
+        subtitle: slug,
+        phase: 'error',
+        steps: [
+          {
+            id: 'apply-fail',
+            label: 'Correction ou enregistrement du brouillon',
+            detail: msg,
+            status: 'error',
+          },
+        ],
+        summaryLines: [],
+        errorMessage: msg,
+      })
+      toastError(msg)
+    } finally {
+      setCheckLangApplyBusy(false)
+    }
+  }
+
+  const activeVaultLayer = useMemo(
+    () => details?.localeVaultLayers?.[editingLocale],
+    [details?.localeVaultLayers, editingLocale],
+  )
+
+  const canPublishVaultLocale = useMemo(() => {
+    if (!activeVaultLayer) return false
+    return (
+      activeVaultLayer.kind === 'draft_only' || activeVaultLayer.kind === 'draft_and_published'
+    )
+  }, [activeVaultLayer])
+
+  const vaultModuleLangRows = useMemo(() => {
+    if (!details?.page.slug || checkLangReport == null) return []
+    return vaultCheckReportToRows(checkLangReport, details.page.slug, editingLocale, {
+      exclusiveOfferWorkspace: details.packagedProduct?.productType === 'EXCLUSIVE_OFFER',
+    })
+  }, [checkLangReport, details?.page.slug, details?.packagedProduct?.productType, editingLocale])
+
+  const vaultModuleLangAggregate = useMemo(
+    () => vaultCheckReportAggregate(checkLangReport),
+    [checkLangReport],
+  )
+
+  const handlePublishVaultLocale = async () => {
+    if (!details?.page.slug) return
+    if (!canPublishVaultLocale) {
+      toastWarning('Enregistrez d’abord un brouillon pour cette langue.')
+      return
+    }
+    if (
+      !window.confirm(
+        `Publier le contenu vault (modules) pour ${editingLocale.toUpperCase()} ?\n\n` +
+          'Le brouillon actuel remplacera la version publiée pour cette langue uniquement. ' +
+          'Les autres langues ne sont pas modifiées.\n\n' +
+          'Rappel : titre et description (PageI18n) sont enregistrés à chaque « Enregistrer le brouillon » et peuvent déjà être visibles côté SEO ; seul le corps du vault suit ce bouton « Publier la langue ».',
+      )
+    ) {
+      return
+    }
+    setPublishVaultBusy(true)
+    try {
+      const res = await fetch(
+        `/api/admin/vaults/${encodeURIComponent(details.page.slug)}/publish-locale`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ locale: editingLocale }),
+        },
+      )
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          typeof payload.error === 'string' ? payload.error : 'Publication impossible',
+        )
+      }
+      toastSuccess(
+        `Langue ${editingLocale.toUpperCase()} : version publiée du vault (modules) mise à jour.`,
+      )
+      await reloadVaultDetails(details.page.slug)
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : 'Publication impossible')
+    } finally {
+      setPublishVaultBusy(false)
     }
   }
 
@@ -1414,6 +1959,14 @@ function AdminVaultBuilderPageInner() {
     } catch {
       toastError('JSON invalide — vérifiez la syntaxe (guillemets, virgules, accolades).')
     }
+  }
+
+  const handlePatchProductModuleContent = (moduleId: string, patch: Record<string, unknown>) => {
+    setProductModules((prev) =>
+      prev.map((m) =>
+        m.id === moduleId ? { ...m, content: { ...m.content, ...patch } } : m
+      ),
+    )
   }
 
   const moveProductModule = (moduleId: string, direction: 'up' | 'down') => {
@@ -2049,16 +2602,48 @@ function AdminVaultBuilderPageInner() {
                                     )}
                                   </div>
                                 </div>
-                                <textarea
-                                  defaultValue={JSON.stringify(module.content, null, 2)}
-                                  onBlur={(e) =>
-                                    handleUpdateProductModuleContent(module.id, e.target.value)
-                                  }
-                                  className="w-full min-h-[120px] p-2 border rounded-md font-mono text-xs"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Édite le JSON puis quitte le champ pour appliquer.
-                                </p>
+                                {module.type === 'MediaImageCarouselModule' ? (
+                                  <VaultMediaCarouselModuleEditor
+                                    content={module.content}
+                                    onPatch={(patch) =>
+                                      handlePatchProductModuleContent(module.id, patch)
+                                    }
+                                  />
+                                ) : module.type === 'DocumentsListModule' ? (
+                                  <VaultDocumentsListModuleEditor
+                                    content={module.content}
+                                    onPatch={(patch) =>
+                                      handlePatchProductModuleContent(module.id, patch)
+                                    }
+                                  />
+                                ) : module.type === 'VideoBlockArticleModule' ? (
+                                  <VaultVideoBlockArticleModuleEditor
+                                    content={module.content}
+                                    onPatch={(patch) =>
+                                      handlePatchProductModuleContent(module.id, patch)
+                                    }
+                                  />
+                                ) : module.type === 'LocalisationModule' ? (
+                                  <VaultLocalisationModuleEditor
+                                    content={module.content}
+                                    onPatch={(patch) =>
+                                      handlePatchProductModuleContent(module.id, patch)
+                                    }
+                                  />
+                                ) : (
+                                  <>
+                                    <textarea
+                                      defaultValue={JSON.stringify(module.content, null, 2)}
+                                      onBlur={(e) =>
+                                        handleUpdateProductModuleContent(module.id, e.target.value)
+                                      }
+                                      className="w-full min-h-[120px] p-2 border rounded-md font-mono text-xs"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Édite le JSON puis quitte le champ pour appliquer.
+                                    </p>
+                                  </>
+                                )}
                               </div>
                               )
                             })}
@@ -2116,7 +2701,7 @@ function AdminVaultBuilderPageInner() {
                           </div>
                           <button
                             type="button"
-                            onClick={() => loadDetails(row.slug)}
+                            onClick={() => setSelectedSlug(row.slug)}
                             className={`flex-1 text-left rounded-md border px-3 py-2 ${
                               active ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'
                             }`}
@@ -2143,6 +2728,256 @@ function AdminVaultBuilderPageInner() {
             <p className="text-gray-500">Sélectionne un vault pour l'éditer.</p>
           ) : (
             <div className="space-y-6">
+              <AdminEditingLocaleBar contextLabel="Vault" />
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                {details.localeVaultLayers && (
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                      Vault — brouillon / publié (par langue)
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {supportedLocales.map((loc) => {
+                        const info = details.localeVaultLayers![loc]
+                        const active = loc === editingLocale
+                        return (
+                          <span
+                            key={loc}
+                            className={`inline-flex max-w-full flex-col rounded-lg border px-2 py-1.5 text-left ${
+                              active
+                                ? 'border-indigo-400 bg-indigo-50/80 ring-1 ring-indigo-300'
+                                : 'border-slate-200 bg-white'
+                            }`}
+                          >
+                            <span className="text-[10px] font-bold text-slate-700">{loc.toUpperCase()}</span>
+                            <span className="text-[10px] text-slate-600 leading-tight">
+                              {vaultLocaleLayerBadgeLabel(info)}
+                            </span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                    {activeVaultLayer && (
+                      <p className="text-[11px] text-slate-700 leading-snug rounded-md bg-white/80 border border-slate-200/80 px-2 py-1.5">
+                        <strong className="text-slate-800">Langue active ({editingLocale.toUpperCase()}) :</strong>{' '}
+                        {activeVaultLayer.kind === 'draft_and_published' &&
+                        activeVaultLayer.draftMatchesPublished === false
+                          ? 'Le brouillon diffère du publié — utilisez « Publier la langue » pour mettre le site à jour.'
+                          : activeVaultLayer.kind === 'draft_and_published' &&
+                              activeVaultLayer.draftMatchesPublished === true
+                            ? 'Brouillon et publié sont identiques pour cette langue.'
+                            : activeVaultLayer.kind === 'draft_only'
+                              ? 'Seul un brouillon existe : le site utilise encore une autre langue en secours ou aucune version publiée pour cette langue.'
+                              : activeVaultLayer.kind === 'published_only'
+                                ? 'Publié sans brouillon séparé (rare) — enregistrez pour créer un brouillon.'
+                                : 'Aucun contenu pour cette langue.'}
+                      </p>
+                    )}
+                    <div className="rounded-md border border-sky-200 bg-sky-50/90 px-2 py-2 text-[11px] text-sky-950 leading-snug">
+                      <strong>Site public (aperçu) :</strong> le rendu utilise d’abord la version{' '}
+                      <span className="font-mono">PUBLISHED</span>, sinon le <span className="font-mono">DRAFT</span>{' '}
+                      (résolution <span className="font-mono">either</span> — voir{' '}
+                      <span className="font-mono">resolveVaultSectionContent</span>). L’aperçu ouvre la même URL que
+                      les visiteurs : si seul le brouillon existe, c’est lui qui peut s’afficher.
+                    </div>
+                    {details.publishedConfig != null && (
+                      <div className="border border-dashed border-slate-200 rounded-md bg-white/70">
+                        <button
+                          type="button"
+                          onClick={() => setShowPublishedPeek((v) => !v)}
+                          className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[11px] font-medium text-slate-700 hover:bg-slate-50/80"
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <Eye className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                            Voir le publié ({editingLocale.toUpperCase()}) — lecture seule
+                          </span>
+                          <span className="text-slate-400">{showPublishedPeek ? '▼' : '▶'}</span>
+                        </button>
+                        {showPublishedPeek && (
+                          <div className="border-t border-slate-100 px-2 py-2 text-[11px] text-slate-600 space-y-1">
+                            <p>
+                              Modules publiés :{' '}
+                              <strong>{details.publishedConfig.modules?.length ?? 0}</strong> · Template :{' '}
+                              <span className="font-mono">{details.publishedConfig.templateKey}</span>
+                            </p>
+                            <p>
+                              Brouillon en cours :{' '}
+                              <strong>{details.config.modules?.length ?? 0}</strong> module(s) — comparez avec la
+                              liste ci-dessus.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <LocaleCompletenessStrip levels={details.localeCompleteness} />
+                <p className="text-[11px] text-slate-600 leading-snug">
+                  Complétude par langue : même logique que le CMS pages (contenu publié par section +
+                  titre ou description renseignée). « Partiel » inclut un brouillon sans publication.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+                    Aperçu public
+                  </span>
+                  {supportedLocales.map((loc) => (
+                    <a
+                      key={loc}
+                      href={`/${loc}/projects/${encodeURIComponent(details.page.slug)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-slate-50"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {loc.toUpperCase()}
+                    </a>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 border-t border-slate-200/80 pt-3">
+                  <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide w-full">
+                    Dupliquer depuis le français
+                  </span>
+                  <p className="text-[10px] text-slate-500 w-full -mt-1 mb-1">
+                    Copie PageI18n + contenu modules : écrit uniquement le <span className="font-mono">DRAFT</span>{' '}
+                    de la langue cible. Le <span className="font-mono">PUBLISHED</span> de cette langue n’est pas
+                    modifié — publiez ensuite avec « Publier la langue ».
+                  </p>
+                  <button
+                    type="button"
+                    disabled={copyLocaleBusy ||
+                      autoTranslateBusy ||
+                      checkLangBusy ||
+                      checkLangApplyBusy ||
+                      saving ||
+                      publishVaultBusy}
+                    onClick={() => handleCopyVaultLocale('en')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    {copyLocaleBusy ? '…' : 'FR → EN (brouillon)'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={copyLocaleBusy ||
+                      autoTranslateBusy ||
+                      checkLangBusy ||
+                      checkLangApplyBusy ||
+                      saving ||
+                      publishVaultBusy}
+                    onClick={() => handleCopyVaultLocale('it')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    {copyLocaleBusy ? '…' : 'FR → IT (brouillon)'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 border-t border-slate-200/80 pt-3">
+                  <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide w-full">
+                    Auto-traduction (OpenAI)
+                  </span>
+                  <p className="text-[10px] text-slate-500 w-full -mt-1 mb-1">
+                    Pipeline : lecture FR → traduction des champs autorisés (allowlist) → contrôle
+                    linguistique → enregistrement du <span className="font-mono">DRAFT</span> + PageI18n cible
+                    uniquement. Relecture humaine recommandée.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={copyLocaleBusy ||
+                      autoTranslateBusy ||
+                      checkLangBusy ||
+                      checkLangApplyBusy ||
+                      saving ||
+                      publishVaultBusy}
+                    onClick={() => handleAutoTranslateVaultLocale('en')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-1.5 text-xs font-medium text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {autoTranslateBusy ? '…' : 'FR → EN auto-trad. (brouillon)'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={copyLocaleBusy ||
+                      autoTranslateBusy ||
+                      checkLangBusy ||
+                      checkLangApplyBusy ||
+                      saving ||
+                      publishVaultBusy}
+                    onClick={() => handleAutoTranslateVaultLocale('it')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-1.5 text-xs font-medium text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {autoTranslateBusy ? '…' : 'FR → IT auto-trad. (brouillon)'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 border-t border-slate-200/80 pt-3">
+                  <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide w-full">
+                    Check all module language
+                  </span>
+                  <p className="text-[10px] text-slate-500 w-full -mt-1 mb-1">
+                    Langue analysée = langue d’édition actuelle ({editingLocale.toUpperCase()}). Scan des champs
+                    allowlistés, détection (franc), puis correction optionnelle des champs{' '}
+                    <span className="font-mono">WRONG_LANGUAGE</span> /{' '}
+                    <span className="font-mono">MIXED_LANGUAGE</span> vers cette langue —{' '}
+                    <span className="font-mono">DRAFT</span> uniquement. Voir{' '}
+                    <code className="text-[10px]">docs/arquantix/VAULT_CHECK_MODULE_LANGUAGE.md</code>.
+                  </p>
+                  <div className="flex flex-wrap gap-2 w-full">
+                    <button
+                      type="button"
+                      disabled={
+                        copyLocaleBusy ||
+                        autoTranslateBusy ||
+                        checkLangBusy ||
+                        checkLangApplyBusy ||
+                        saving ||
+                        publishVaultBusy
+                      }
+                      onClick={handleCheckModuleLanguageScan}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Languages className="h-3.5 w-3.5" />
+                      {checkLangBusy ? 'Scan…' : `Analyser les modules (${editingLocale.toUpperCase()})`}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        copyLocaleBusy ||
+                        autoTranslateBusy ||
+                        checkLangBusy ||
+                        checkLangApplyBusy ||
+                        saving ||
+                        publishVaultBusy
+                      }
+                      onClick={handleCheckModuleLanguageApply}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50/90 px-3 py-1.5 text-xs font-medium text-emerald-950 hover:bg-emerald-100 disabled:opacity-50"
+                    >
+                      <Languages className="h-3.5 w-3.5" />
+                      {checkLangApplyBusy
+                        ? 'Correction…'
+                        : `Corriger le brouillon (${editingLocale.toUpperCase()})`}
+                    </button>
+                  </div>
+                  {checkLangReport != null && typeof checkLangReport === 'object' ? (
+                    <div className="w-full rounded-md border border-slate-200 bg-white p-3">
+                      <I18nFindingsTable
+                        layout="single-page"
+                        title="Dernier rapport — langue des modules"
+                        rows={vaultModuleLangRows}
+                        aggregate={vaultModuleLangAggregate}
+                        className="[&_table]:text-[11px]"
+                      />
+                      <details className="mt-3 rounded border border-slate-100 bg-slate-50/80 p-2 text-[10px] text-slate-600">
+                        <summary className="cursor-pointer font-medium text-slate-700">
+                          JSON brut (debug)
+                        </summary>
+                        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words">
+                          {JSON.stringify(checkLangReport, null, 2)}
+                        </pre>
+                      </details>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -2178,7 +3013,9 @@ function AdminVaultBuilderPageInner() {
                       <button
                         type="button"
                         onClick={handleToggleExclusiveOfferCatalogPublish}
-                        disabled={packagedPublishBusy || saving}
+                        disabled={
+                          packagedPublishBusy || saving || publishVaultBusy || copyLocaleBusy || autoTranslateBusy
+                        }
                         className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border ${
                           productDraft.commercialStatus === 'PUBLISHED'
                             ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
@@ -2197,7 +3034,7 @@ function AdminVaultBuilderPageInner() {
                   <button
                     type="button"
                     onClick={handleDeletePage}
-                    disabled={deleting}
+                    disabled={deleting || publishVaultBusy}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -2205,12 +3042,35 @@ function AdminVaultBuilderPageInner() {
                   </button>
                   <button
                     type="button"
+                    onClick={handlePublishVaultLocale}
+                    disabled={
+                      publishVaultBusy ||
+                      saving ||
+                      packagedPublishBusy ||
+                      copyLocaleBusy ||
+                      autoTranslateBusy ||
+                      !canPublishVaultLocale
+                    }
+                    title={
+                      !canPublishVaultLocale
+                        ? 'Enregistrez un brouillon vault pour cette langue avant de publier.'
+                        : 'Copie le brouillon vers PUBLISHED pour cette langue uniquement.'
+                    }
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    {publishVaultBusy ? 'Publication…' : 'Publier la langue'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleSave}
-                    disabled={saving || packagedPublishBusy}
+                    disabled={
+                      saving || packagedPublishBusy || publishVaultBusy || copyLocaleBusy || autoTranslateBusy
+                    }
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    {saving ? 'Sauvegarde…' : 'Enregistrer'}
+                    {saving ? 'Enregistrement…' : 'Enregistrer le brouillon'}
                   </button>
                 </div>
               </div>
@@ -2239,6 +3099,13 @@ function AdminVaultBuilderPageInner() {
                   className="px-3 py-2 border rounded-md"
                 />
               </div>
+              <p className="text-xs text-slate-500">
+                Titre et description : <span className="font-mono">PageI18n</span> pour{' '}
+                {editingLocale.toUpperCase()} — enregistrés à chaque « Enregistrer le brouillon » (pas de statut
+                brouillon/publié séparé en base). Les <strong>modules</strong> du vault suivent le couple{' '}
+                <span className="font-mono">DRAFT</span> / <span className="font-mono">PUBLISHED</span> ; seul le
+                bouton « Publier la langue » promeut le brouillon vers le publié pour cette langue.
+              </p>
 
               {productDraft && (
                 <PackagedProductSettingsPanel
@@ -2256,7 +3123,7 @@ function AdminVaultBuilderPageInner() {
                 }
                 hasPackagedRow={Boolean(details.packagedProduct)}
                 onRefresh={async () => {
-                  if (selectedSlug) await loadDetails(selectedSlug)
+                  if (selectedSlug) await reloadVaultDetails(selectedSlug)
                 }}
               />
 
@@ -2756,24 +3623,48 @@ function AdminVaultBuilderPageInner() {
                             </button>
                           </div>
                         </div>
-                        <textarea
-                          defaultValue={JSON.stringify(module.content, null, 2)}
-                          onBlur={(e) => handleUpdateModuleContent(module.id, e.target.value)}
-                          className="w-full min-h-[160px] p-2 border rounded-md font-mono text-xs"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Édite le JSON puis quitte le champ pour appliquer.
-                        </p>
-                        {module.type === 'CompetitiveAdvantagesModule' && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Options pour la catégorie (par row) : content (blanc, comportement actuel) ; work (jaune clair #FEF9C3) ; note (bleu clair #DBEAFE) ; success (vert clair #D1FAE5) ; danger (rouge clair #FEE2E2).
-                          </p>
-                        )}
-                        {(module.type === 'MarketingCardsSmallSlidingCarrousel_Portrait' ||
-                          module.type === 'MarketingCardsSmallSlidingCarrousel_Paysage') && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Options de taille des cartes : `visibleCardsCount` (ex: 1, 1.2, 1.5, 1.8; virgule acceptee) et `cardAspectRatio` au format largeur:hauteur (ex: 1:1, 1:4, 3:4, 1:1.4).
-                          </p>
+                        {module.type === 'MediaImageCarouselModule' ? (
+                          <VaultMediaCarouselModuleEditor
+                            content={module.content}
+                            onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                          />
+                        ) : module.type === 'DocumentsListModule' ? (
+                          <VaultDocumentsListModuleEditor
+                            content={module.content}
+                            onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                          />
+                        ) : module.type === 'VideoBlockArticleModule' ? (
+                          <VaultVideoBlockArticleModuleEditor
+                            content={module.content}
+                            onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                          />
+                        ) : module.type === 'LocalisationModule' ? (
+                          <VaultLocalisationModuleEditor
+                            content={module.content}
+                            onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                          />
+                        ) : (
+                          <>
+                            <textarea
+                              defaultValue={JSON.stringify(module.content, null, 2)}
+                              onBlur={(e) => handleUpdateModuleContent(module.id, e.target.value)}
+                              className="w-full min-h-[160px] p-2 border rounded-md font-mono text-xs"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Édite le JSON puis quitte le champ pour appliquer.
+                            </p>
+                            {module.type === 'CompetitiveAdvantagesModule' && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                Options pour la catégorie (par row) : content (blanc, comportement actuel) ; work (jaune clair #FEF9C3) ; note (bleu clair #DBEAFE) ; success (vert clair #D1FAE5) ; danger (rouge clair #FEE2E2).
+                              </p>
+                            )}
+                            {(module.type === 'MarketingCardsSmallSlidingCarrousel_Portrait' ||
+                              module.type === 'MarketingCardsSmallSlidingCarrousel_Paysage') && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                Options de taille des cartes : `visibleCardsCount` (ex: 1, 1.2, 1.5, 1.8; virgule acceptee) et `cardAspectRatio` au format largeur:hauteur (ex: 1:1, 1:4, 3:4, 1:1.4).
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                     ))}
@@ -2784,6 +3675,19 @@ function AdminVaultBuilderPageInner() {
           )}
         </section>
       </div>
+      {vaultOpModal ? (
+        <AdminOperationProgressModal
+          open
+          title={vaultOpModal.title}
+          subtitle={vaultOpModal.subtitle}
+          phase={vaultOpModal.phase}
+          steps={vaultOpModal.steps}
+          summaryLines={vaultOpModal.summaryLines}
+          errorMessage={vaultOpModal.errorMessage}
+          footerHint={vaultOpModal.footerHint}
+          onClose={() => setVaultOpModal(null)}
+        />
+      ) : null}
     </div>
   )
 }

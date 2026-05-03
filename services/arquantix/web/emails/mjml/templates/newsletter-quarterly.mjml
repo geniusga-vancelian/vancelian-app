@@ -1,0 +1,24 @@
+<mjml>
+  {{> head}}
+  <mj-body background-color="#F4F4F4" width="600px" css-class="arq-bg-default">
+    {{> preheader}}
+
+    {{#hero}}{{> HeaderL1}}{{/hero}}
+
+    {{#intro}}{{> TextBlock}}{{/intro}}
+
+    <mj-section padding="8px 0 0 0"><mj-column><mj-divider border-color="rgba(59,63,99,0.2)" border-width="1px" padding="0 32px" /></mj-column></mj-section>
+
+    {{#highlightsTwo}}{{> TwoColumns}}{{/highlightsTwo}}
+
+    <mj-section padding="8px 0 0 0"><mj-column><mj-divider border-color="rgba(59,63,99,0.2)" border-width="1px" padding="0 32px" /></mj-column></mj-section>
+
+    {{#darkBlock}}{{> CTASection}}{{/darkBlock}}
+
+    <mj-section padding="8px 0 0 0"><mj-column><mj-divider border-color="rgba(59,63,99,0.2)" border-width="1px" padding="0 32px" /></mj-column></mj-section>
+
+    {{#signature}}{{> Signature}}{{/signature}}
+
+    {{> Footer}}
+  </mj-body>
+</mjml>

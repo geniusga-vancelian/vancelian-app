@@ -16,6 +16,10 @@ import type { PrismaClient } from '@prisma/client'
 export const VAULT_BUILDER_TEMPLATE = 'vault_builder'
 export const VAULT_SECTION_KEY = 'vault_builder_v1'
 
+/** Page CMS gabarit détail offre exclusive (slug réservé — pas une offre publique). */
+export const EXCLUSIVE_OFFER_GABARIT_SLUG = 'exclusive-offer'
+export const EXCLUSIVE_OFFER_GABARIT_TEMPLATE = 'exclusive_offer'
+
 /** Locale par défaut pour section_contents (aligné vaults/route.ts). */
 export const CATALOG_DEFAULT_LOCALE = 'fr'
 
@@ -161,7 +165,12 @@ export async function resolveVaultPresentation(args: {
   pageId: string
   locale: string
 }): Promise<{ title: string; subtitle: string | null; coverUrl: string | null }> {
-  const { prisma, pageId, locale } = args
+  const { prisma, pageId } = args
+  const requestedLocale = (args.locale || '').trim() || CATALOG_DEFAULT_LOCALE
+  const localeCandidates =
+    requestedLocale === CATALOG_DEFAULT_LOCALE
+      ? [CATALOG_DEFAULT_LOCALE]
+      : [requestedLocale, CATALOG_DEFAULT_LOCALE]
   const page = await prisma.page.findUnique({
     where: { id: pageId },
     include: {
@@ -170,10 +179,10 @@ export async function resolveVaultPresentation(args: {
         include: {
           contents: {
             where: {
-              locale,
+              locale: { in: localeCandidates },
               status: ContentStatus.PUBLISHED,
             },
-            take: 1,
+            take: 4,
           },
         },
         take: 1,
@@ -187,17 +196,33 @@ export async function resolveVaultPresentation(args: {
       ? page.description.trim()
       : null
 
-  const content = page?.sections[0]?.contents[0]
-  const data = content?.data as Record<string, unknown> | null | undefined
-  const headerMediaId =
-    data && typeof data.headerMediaId === 'string' ? data.headerMediaId : null
-  const coverFromMedia = headerMediaId
-    ? await resolveMediaUrl(prisma, headerMediaId)
-    : null
-  const coverFromModules = extractCoverFromVaultData(data)
-  const coverUrl = coverFromMedia ?? coverFromModules
+  const sectionContents = page?.sections[0]?.contents ?? []
+  const preferredContent =
+    sectionContents.find((c) => c.locale === requestedLocale) ?? sectionContents[0]
+  const defaultContent =
+    sectionContents.find((c) => c.locale === CATALOG_DEFAULT_LOCALE) ?? null
 
-  const modules = data && Array.isArray(data.modules) ? data.modules : []
+  const preferredData = preferredContent?.data as Record<string, unknown> | null | undefined
+  const defaultData = defaultContent?.data as Record<string, unknown> | null | undefined
+
+  async function coverFromSectionData(data: Record<string, unknown> | null | undefined) {
+    const headerMediaId = data && typeof data.headerMediaId === 'string' ? data.headerMediaId : null
+    const fromMedia = headerMediaId ? await resolveMediaUrl(prisma, headerMediaId) : null
+    const fromModules = extractCoverFromVaultData(data)
+    return fromMedia ?? fromModules
+  }
+
+  /**
+   * Règle produit : une image de carte peut venir de la locale par défaut si la locale active
+   * n’a pas encore de média traduit — on ne cache pas la carte pour un manque de traduction.
+   */
+  const coverUrl =
+    (await coverFromSectionData(preferredData)) ??
+    (requestedLocale !== CATALOG_DEFAULT_LOCALE
+      ? await coverFromSectionData(defaultData)
+      : null)
+
+  const modules = preferredData && Array.isArray(preferredData.modules) ? preferredData.modules : []
   for (const m of modules) {
     if (m == null || typeof m !== 'object') continue
     const mod = m as Record<string, unknown>
@@ -206,6 +231,23 @@ export async function resolveVaultPresentation(args: {
       if (c && typeof c.subtitle === 'string' && c.subtitle.trim()) {
         subtitle = c.subtitle.trim()
         break
+      }
+    }
+  }
+
+  // Fallback sous-titre sur locale par défaut quand la locale active ne l’a pas encore.
+  if (!subtitle && requestedLocale !== CATALOG_DEFAULT_LOCALE) {
+    const defaultModules =
+      defaultData && Array.isArray(defaultData.modules) ? defaultData.modules : []
+    for (const m of defaultModules) {
+      if (m == null || typeof m !== 'object') continue
+      const mod = m as Record<string, unknown>
+      if (mod.type === 'TitlePage' || mod.module === 'TitlePage') {
+        const c = mod.content as Record<string, unknown> | undefined
+        if (c && typeof c.subtitle === 'string' && c.subtitle.trim()) {
+          subtitle = c.subtitle.trim()
+          break
+        }
       }
     }
   }

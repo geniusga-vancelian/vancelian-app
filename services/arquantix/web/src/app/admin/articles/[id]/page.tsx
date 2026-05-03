@@ -1,17 +1,33 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import ReactMarkdown from 'react-markdown'
+import { Plus, Save, ArrowLeft, Languages, FileText, Tag, Link2, Star, AlignLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { MediaField } from '@/components/admin/MediaField'
+import { CollapsibleAdminSection } from '@/components/admin/CollapsibleAdminSection'
+import { MediaTile } from '@/components/admin/MediaTile'
+import { ContentBlocksSection } from '@/components/admin/ContentBlocksSection'
+import HelpHierarchyPicker from '@/components/admin/HelpHierarchyPicker'
+import AcademyHierarchyPicker from '@/components/admin/AcademyHierarchyPicker'
 import { ContentStatus, ArticleBlockType } from '@prisma/client'
 import { supportedLocales, type Locale, defaultLocale } from '@/config/locales'
 import { toastSuccess, toastError } from '@/lib/admin/toast'
 import { TranslateModal } from '@/components/admin/TranslateModal'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
-import { MediaPicker } from '@/components/admin/MediaPicker'
+import { PagePreviewPanel } from '@/components/admin/PagePreviewPanel'
+import { adminMediaFileUrl } from '@/lib/admin/adminMediaFileUrl'
+import {
+  getDefaultBlockData,
+  type AddableBlockType,
+} from '@/lib/admin/articleBlockCatalog'
+import { messageFromAdminApiError as sharedMessageFromAdminApiError } from '@/lib/admin/messageFromAdminApiError'
+import {
+  ARTICLE_TYPES,
+  ARTICLE_TYPE_KEYS,
+  type ArticleTypeKey,
+  normalizeArticleType,
+} from '@/lib/admin/articleTypes'
 
 interface Article {
   id: string
@@ -32,9 +48,23 @@ interface Article {
   authorName: string
   authorRole: string | null
   allowComments: boolean
-  articleType: 'NEWS' | 'ANALYSIS'
+  articleType: ArticleTypeKey
   /** Champ serveur ; actualité entreprise (NEWS uniquement). */
   isCompanyNews?: boolean
+  // -------- Champs HELP (Phase 3.3) --------
+  // Pertinents uniquement quand `articleType === 'HELP'`.
+  helpCollectionId?: string | null
+  helpCategoryId?: string | null
+  helpSlug?: string | null
+  /** Tags regroupement (collection → sections). */
+  collectionTags?: string[]
+  allowAnchors?: boolean
+  targetTags?: string[] | null
+  // -------- Champs ACADEMY (Phase 4 — symétrique HELP) --------
+  // Pertinents uniquement quand `articleType === 'ACADEMY'`.
+  academyCollectionId?: string | null
+  academyCategoryId?: string | null
+  academySlug?: string | null
   coverUrl: string
   projects?: Array<{
     id: string
@@ -64,6 +94,9 @@ interface Article {
     data: any
   }>
 }
+
+/** Alias local : la fonction est définie dans `@/lib/admin/messageFromAdminApiError` (extraction Lot E). */
+const messageFromAdminApiError = sharedMessageFromAdminApiError
 
 export default function AdminArticleEditorPage() {
   const router = useRouter()
@@ -102,8 +135,6 @@ export default function AdminArticleEditorPage() {
   const [relatedSearchDebounce, setRelatedSearchDebounce] = useState<NodeJS.Timeout | null>(null)
   const relatedSectionRef = useRef<HTMLDivElement>(null)
   const [documents, setDocuments] = useState<Array<{ mediaId: string; title: string }>>([])
-  const [isGalleryPickerOpen, setIsGalleryPickerOpen] = useState(false)
-  const [isDocumentPickerOpen, setIsDocumentPickerOpen] = useState(false)
   const [galleryMediaMap, setGalleryMediaMap] = useState<Record<string, { url: string; filename: string }>>({})
   const [documentMediaMap, setDocumentMediaMap] = useState<Record<string, { url: string; filename: string }>>({})
   const [isFeatured, setIsFeatured] = useState(false)
@@ -112,6 +143,11 @@ export default function AdminArticleEditorPage() {
   const [showFeaturedConfirm, setShowFeaturedConfirm] = useState(false)
   const [blocksDraft, setBlocksDraft] = useState<Article['blocks']>([])
   const [blocksDirty, setBlocksDirty] = useState(false)
+
+  // Aperçu live (split éditeur ↔ preview iframe — même méthodologie que le page builder)
+  const [previewLocale, setPreviewLocale] = useState<Locale>(defaultLocale)
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const [previewReloadEpoch, setPreviewReloadEpoch] = useState(0)
 
   useEffect(() => {
     if (!articleId) return
@@ -179,9 +215,14 @@ export default function AdminArticleEditorPage() {
       }
 
       const data = await response.json()
+      const rawTags = data.article?.collectionTags
+      const collectionTags = Array.isArray(rawTags)
+        ? rawTags.filter((x: unknown): x is string => typeof x === 'string')
+        : []
       setArticle({
         ...data.article,
-        articleType: data.article?.articleType === 'ANALYSIS' ? 'ANALYSIS' : 'NEWS',
+        collectionTags,
+        articleType: normalizeArticleType(data.article?.articleType),
         isCompanyNews: data.article?.isCompanyNews === true,
       })
       setIsCompanyNews(data.article?.isCompanyNews === true)
@@ -338,12 +379,17 @@ export default function AdminArticleEditorPage() {
     return () => document.removeEventListener('mousedown', handleMouseDown)
   }, [relatedOptionsOpen])
 
-  const handleSaveSettings = async () => {
+  /**
+   * Sauvegarde unifiée : envoie d'abord le payload complet des settings
+   * (slug, cover, gallery, video, categories, documents, flags éditoriaux,
+   * publishedAt) puis l'i18n du locale courant et les blocs modifiés.
+   * Remplace les boutons « Save Settings » / « Save Content » séparés.
+   */
+  const handleSaveAll = async () => {
     if (!article) return
-
     setSaving(true)
     try {
-      const payload: any = {
+      const settingsPayload: any = {
         slug: article.slug,
         coverMediaId:
           article.coverMediaId && String(article.coverMediaId).trim() !== ''
@@ -362,82 +408,57 @@ export default function AdminArticleEditorPage() {
         isCompanyNews: article.articleType === 'NEWS' ? isCompanyNews : false,
         publishedAt: article.publishedAt ? new Date(article.publishedAt).toISOString() : null,
       }
+      if (typeof isFeatured === 'boolean') settingsPayload.isFeatured = isFeatured
+      if (typeof isHighlighted === 'boolean') settingsPayload.isHighlighted = isHighlighted
+      if (typeof isMilestone === 'boolean') settingsPayload.isMilestone = isMilestone
 
-      // Only include isFeatured and isHighlighted if they are explicitly set
-      if (typeof isFeatured === 'boolean') {
-        payload.isFeatured = isFeatured
-      }
-      if (typeof isHighlighted === 'boolean') {
-        payload.isHighlighted = isHighlighted
-      }
-      if (typeof isMilestone === 'boolean') {
-        payload.isMilestone = isMilestone
-      }
-
-      const response = await fetch(`/api/admin/articles/${articleId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        const details = error.issues
-          ? error.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
-          : error.message || error.error
-        throw new Error(details || 'Failed to save settings')
+      // Champs HELP : envoyés systématiquement (l'API les ignore / clear si
+      // articleType ≠ HELP, voir route handler).
+      if (article.articleType === 'HELP') {
+        settingsPayload.helpCollectionId = article.helpCollectionId ?? null
+        settingsPayload.helpSlug = article.helpSlug ?? null
+        settingsPayload.collectionTags = Array.isArray(article.collectionTags)
+          ? article.collectionTags
+          : []
+        settingsPayload.allowAnchors =
+          typeof article.allowAnchors === 'boolean' ? article.allowAnchors : true
+        settingsPayload.targetTags =
+          Array.isArray(article.targetTags) && article.targetTags.length > 0
+            ? article.targetTags
+            : null
       }
 
-      toastSuccess('Settings saved')
-      await fetchArticle()
-    } catch (error: any) {
-      toastError(error.message || 'Failed to save settings')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleSaveContent = async () => {
-    if (!article) return
-
-    setSaving(true)
-    try {
-      // Save editorial flags first with a minimal payload.
-      // This avoids unrelated settings validation issues blocking milestone persistence.
-      const settingsPayload: any = {}
-
-      // Only include isFeatured and isHighlighted if they are explicitly set
-      if (typeof isFeatured === 'boolean') {
-        settingsPayload.isFeatured = isFeatured
+      // Champs ACADEMY (Phase 4 — symétrique HELP) : même logique.
+      if (article.articleType === 'ACADEMY') {
+        settingsPayload.academyCollectionId = article.academyCollectionId ?? null
+        settingsPayload.academySlug = article.academySlug ?? null
+        settingsPayload.collectionTags = Array.isArray(article.collectionTags)
+          ? article.collectionTags
+          : []
+        settingsPayload.allowAnchors =
+          typeof article.allowAnchors === 'boolean' ? article.allowAnchors : true
+        settingsPayload.targetTags =
+          Array.isArray(article.targetTags) && article.targetTags.length > 0
+            ? article.targetTags
+            : null
       }
-      if (typeof isHighlighted === 'boolean') {
-        settingsPayload.isHighlighted = isHighlighted
-      }
-      if (typeof isMilestone === 'boolean') {
-        settingsPayload.isMilestone = isMilestone
-      }
-      settingsPayload.articleType = article.articleType
-      settingsPayload.isCompanyNews = article.articleType === 'NEWS' ? isCompanyNews : false
 
       const settingsResponse = await fetch(`/api/admin/articles/${articleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsPayload),
       })
-
       if (!settingsResponse.ok) {
         const error = await settingsResponse.json()
         const details = error.issues
           ? error.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
-          : error.message || error.error
+          : error.message || messageFromAdminApiError(error, 'Failed to save settings')
         throw new Error(details || 'Failed to save settings')
       }
 
-      // Save localized content after settings.
-      // If i18n validation fails, settings remain persisted.
-      const hasRequiredI18nFields = i18nData.title.trim().length > 0 && i18nData.standfirst.trim().length > 0
+      // Seul le titre est requis ; le standfirst est optionnel.
+      const hasRequiredI18nFields = i18nData.title.trim().length > 0
       let i18nErrorMessage: string | null = null
-
       if (hasRequiredI18nFields) {
         const i18nResponse = await fetch(`/api/admin/articles/${articleId}/i18n`, {
           method: 'PUT',
@@ -451,38 +472,33 @@ export default function AdminArticleEditorPage() {
             metaDescription: i18nData.metaDescription || undefined,
           }),
         })
-
         if (!i18nResponse.ok) {
           const error = await i18nResponse.json()
-          console.error('Save i18n content error:', error)
           i18nErrorMessage = error.issues
             ? error.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
-            : error.error || 'Failed to save content'
+            : messageFromAdminApiError(error, 'Failed to save content')
         }
       } else {
-        i18nErrorMessage = 'Title and Standfirst are required to save localized content.'
+        i18nErrorMessage = 'Title is required to save localized content.'
       }
 
       let blocksErrorMessage: string | null = null
       if (blocksDirty) {
         try {
-          // Persist edited block drafts only when user explicitly clicks Save Content.
           const changedBlocks = blocksDraft.filter((draftBlock) => {
             const originalBlock = article.blocks.find((b) => b.id === draftBlock.id)
             if (!originalBlock) return false
             return JSON.stringify(originalBlock.data ?? {}) !== JSON.stringify(draftBlock.data ?? {})
           })
-
           for (const block of changedBlocks) {
             const response = await fetch(`/api/admin/articles/${articleId}/blocks/${block.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ data: block.data }),
+              body: JSON.stringify({ data: block.data ?? {}, locale: selectedLocale }),
             })
-
             if (!response.ok) {
               const error = await response.json()
-              throw new Error(error.error || `Failed to save block ${block.id}`)
+              throw new Error(messageFromAdminApiError(error, `Failed to save block ${block.id}`))
             }
           }
         } catch (error: any) {
@@ -494,11 +510,12 @@ export default function AdminArticleEditorPage() {
         const parts = [i18nErrorMessage, blocksErrorMessage].filter(Boolean)
         toastError(`Settings saved, but content was not fully updated: ${parts.join(' | ')}`)
       } else {
-        toastSuccess('Content saved')
+        toastSuccess('All changes saved')
       }
+      setPreviewReloadEpoch((n) => n + 1)
       await fetchArticle()
     } catch (error: any) {
-      toastError(error.message || 'Failed to save content')
+      toastError(error.message || 'Failed to save changes')
     } finally {
       setSaving(false)
     }
@@ -515,7 +532,7 @@ export default function AdminArticleEditorPage() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to publish article')
+        throw new Error(messageFromAdminApiError(error, 'Failed to publish article'))
       }
 
       const data = await response.json()
@@ -524,6 +541,7 @@ export default function AdminArticleEditorPage() {
       } else {
         toastSuccess('Article published')
       }
+      setPreviewReloadEpoch((n) => n + 1)
       await fetchArticle()
     } catch (error: any) {
       toastError(error.message || 'An error occurred')
@@ -543,10 +561,11 @@ export default function AdminArticleEditorPage() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to unpublish article')
+        throw new Error(messageFromAdminApiError(error, 'Failed to unpublish article'))
       }
 
       toastSuccess('Article set to draft')
+      setPreviewReloadEpoch((n) => n + 1)
       await fetchArticle()
       setShowUnpublishDialog(false)
     } catch (error: any) {
@@ -567,7 +586,7 @@ export default function AdminArticleEditorPage() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to delete article')
+        throw new Error(messageFromAdminApiError(error, 'Failed to delete article'))
       }
 
       toastSuccess('Article deleted')
@@ -593,9 +612,10 @@ export default function AdminArticleEditorPage() {
       })
       if (!res.ok) {
         const error = await res.json()
-        throw new Error(error.error || 'Failed to approve translation')
+        throw new Error(messageFromAdminApiError(error, 'Failed to approve translation'))
       }
       toastSuccess('Translation approved')
+      setPreviewReloadEpoch((n) => n + 1)
       await fetchArticle()
     } catch (error: any) {
       toastError(error.message || 'Failed to approve translation')
@@ -604,35 +624,30 @@ export default function AdminArticleEditorPage() {
     }
   }
 
-  const handleAddBlock = async (type: ArticleBlockType) => {
+  /**
+   * Conservé pour rétro-compat / API utilisée par d'autres handlers internes.
+   * L'UI principale d'ajout passe désormais par la page modale dédiée
+   * `/admin/articles/[id]/add-block` (cf. lot bouton Link).
+   */
+  const handleAddBlock = async (type: AddableBlockType) => {
     if (!article) return
-
-    const defaultData: any = {
-      HEADING: { text: '' },
-      PARAGRAPH: { text: '' },
-      QUOTE: { text: '', author: '' },
-      BULLET_LIST: { items: [''] },
-      IMAGE: { mediaId: '', caption: '' },
-      VIDEO: { url: '', caption: '' },
-      DOCUMENT: { mediaId: '', title: '' },
-    }
-
     try {
       const response = await fetch(`/api/admin/articles/${articleId}/blocks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type,
-          data: defaultData[type] || {},
+          data: getDefaultBlockData(type),
         }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to add block')
+        throw new Error(messageFromAdminApiError(error, 'Failed to add block'))
       }
 
       toastSuccess('Block added')
+      setPreviewReloadEpoch((n) => n + 1)
       await fetchArticle()
     } catch (error: any) {
       toastError(error.message || 'Failed to add block')
@@ -649,10 +664,11 @@ export default function AdminArticleEditorPage() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to delete block')
+        throw new Error(messageFromAdminApiError(error, 'Failed to delete block'))
       }
 
       toastSuccess('Block deleted')
+      setPreviewReloadEpoch((n) => n + 1)
       await fetchArticle()
     } catch (error: any) {
       toastError(error.message || 'Failed to delete block')
@@ -662,6 +678,21 @@ export default function AdminArticleEditorPage() {
   const handleUpdateBlock = (blockId: string, data: any) => {
     setBlocksDraft((prev) =>
       prev.map((block) => (block.id === blockId ? { ...block, data } : block))
+    )
+    setBlocksDirty(true)
+  }
+
+  /** Fusion champs (éditeurs type Vault = patch partiel). */
+  const handlePatchBlock = (blockId: string, patch: Record<string, unknown>) => {
+    setBlocksDraft((prev) =>
+      prev.map((block) => {
+        if (block.id !== blockId) return block
+        const base =
+          block.data && typeof block.data === 'object' && !Array.isArray(block.data)
+            ? (block.data as Record<string, unknown>)
+            : {}
+        return { ...block, data: { ...base, ...patch } }
+      })
     )
     setBlocksDirty(true)
   }
@@ -676,10 +707,11 @@ export default function AdminArticleEditorPage() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to reorder blocks')
+        throw new Error(messageFromAdminApiError(error, 'Failed to reorder blocks'))
       }
 
       toastSuccess('Blocks reordered')
+      setPreviewReloadEpoch((n) => n + 1)
       await fetchArticle()
     } catch (error: any) {
       toastError(error.message || 'Failed to reorder blocks')
@@ -701,244 +733,322 @@ export default function AdminArticleEditorPage() {
   const currentI18n = article.i18n.find((i) => i.locale === selectedLocale)
   const translationStatus = currentI18n?.translationStatus
 
+  const previewUrl = articleId
+    ? `/preview/article/${encodeURIComponent(articleId)}?locale=${encodeURIComponent(previewLocale)}`
+    : ''
+  const previewBaseTitle = i18nData.title?.trim() || article.slug || 'Article'
+  const previewPanelTitle = `${previewBaseTitle} (${previewLocale.toUpperCase()})`
+  const previewToolbar = {
+    locale: previewLocale,
+    onLocaleChange: setPreviewLocale,
+    device: previewDevice,
+    onDeviceChange: setPreviewDevice,
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <Link href="/admin/articles" className="text-indigo-600 hover:text-indigo-900 mb-2 inline-block">
-            ← Back to Articles
+    <section className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:divide-x lg:divide-slate-200">
+      <div className="space-y-3 lg:min-w-0 lg:pr-6">
+      {/* Sticky compact header + actions globales */}
+      <div className="sticky top-0 z-20 -mx-2 mb-1 border-b border-gray-200 bg-white/95 px-2 py-2 backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin/articles"
+            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-900"
+            title="Back to Articles"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Articles
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Edit Article</h1>
-          <div className="mt-2">
-            <span
-              className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
-                article.articleType === 'ANALYSIS'
-                  ? 'bg-purple-100 text-purple-800'
-                  : 'bg-sky-100 text-sky-800'
-              }`}
-            >
-              {article.articleType === 'ANALYSIS' ? 'Analysis' : 'News'}
-            </span>
-          </div>
-        </div>
-        <div className="flex gap-2">
+          <h1 className="text-base font-semibold text-gray-900">Edit Article</h1>
           <span
-            className={`px-3 py-1 text-sm font-semibold rounded-full ${
-              article.status === 'PUBLISHED'
-                ? 'bg-green-100 text-green-800'
-                : 'bg-gray-100 text-gray-800'
+            className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full ${ARTICLE_TYPES[article.articleType].badgeClassName}`}
+          >
+            {ARTICLE_TYPES[article.articleType].label}
+          </span>
+          <span
+            className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+              article.status === 'PUBLISHED' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
             }`}
           >
             {article.status}
           </span>
-          {article.status === 'DRAFT' ? (
-            <Button onClick={handlePublish} disabled={saving} className="bg-green-600 hover:bg-green-700">
-              Publish
-            </Button>
-          ) : (
-            <Button
-              onClick={() => setShowUnpublishDialog(true)}
-              disabled={saving}
-              className="bg-orange-600 hover:bg-orange-700"
+
+          <span className="mx-1 h-4 w-px bg-gray-200" aria-hidden />
+
+          {/* Locale d'édition + traduction inline */}
+          <div className="flex items-center gap-1.5">
+            <Languages className="h-3.5 w-3.5 text-gray-500" />
+            <select
+              value={selectedLocale}
+              onChange={(e) => setSelectedLocale(e.target.value as Locale)}
+              className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+              title="Edit locale"
             >
-              Set to Draft
+              {supportedLocales.map((locale) => (
+                <option key={locale} value={locale}>
+                  {locale.toUpperCase()}
+                </option>
+              ))}
+            </select>
+            {translationStatus && (
+              <span
+                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                  translationStatus === 'ORIGINAL'
+                    ? 'bg-gray-100 text-gray-700'
+                    : translationStatus === 'MACHINE'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-green-100 text-green-800'
+                }`}
+                title="Translation status"
+              >
+                {translationStatus}
+              </span>
+            )}
+            {translationStatus === 'MACHINE' && (
+              <button
+                onClick={handleApproveTranslation}
+                disabled={approving}
+                className="rounded bg-green-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {approving ? '…' : 'Approve'}
+              </button>
+            )}
+            {currentI18n && (
+              <button
+                onClick={() => setShowTranslateModal(true)}
+                disabled={saving}
+                className="rounded bg-purple-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                title="Auto-translate"
+              >
+                Auto-translate
+              </button>
+            )}
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button
+              onClick={handleSaveAll}
+              disabled={saving}
+              size="sm"
+              className="bg-indigo-600 hover:bg-indigo-700"
+              title="Save all changes (settings + content + blocks)"
+            >
+              <Save className="mr-1 h-3.5 w-3.5" />
+              {saving ? 'Saving…' : 'Save'}
             </Button>
-          )}
-          <Button
-            onClick={() => setShowDeleteDialog(true)}
-            disabled={saving}
-            className="bg-red-600 hover:bg-red-700"
-          >
-            Delete
-          </Button>
+            {article.status === 'DRAFT' ? (
+              <Button
+                onClick={handlePublish}
+                disabled={saving}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Publish
+              </Button>
+            ) : (
+              <Button
+                onClick={() => setShowUnpublishDialog(true)}
+                disabled={saving}
+                size="sm"
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                Set to Draft
+              </Button>
+            )}
+            <Button
+              onClick={() => setShowDeleteDialog(true)}
+              disabled={saving}
+              size="sm"
+              variant="ghost"
+              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+            >
+              Delete
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Translation Controls - Global for entire article */}
-      {article && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-medium text-gray-700">Language & Translation</h3>
-            <div className="flex gap-2 items-center">
-              <select
-                value={selectedLocale}
-                onChange={(e) => setSelectedLocale(e.target.value as Locale)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm"
-              >
-                {supportedLocales.map((locale) => (
-                  <option key={locale} value={locale}>
-                    {locale.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-              {translationStatus && (
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded ${
-                      translationStatus === 'ORIGINAL'
-                        ? 'bg-gray-100 text-gray-700'
-                        : translationStatus === 'MACHINE'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}
-                  >
-                    {translationStatus}
-                  </span>
-                  {translationStatus === 'MACHINE' && (
-                    <button
-                      onClick={handleApproveTranslation}
-                      disabled={approving}
-                      className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {approving ? 'Approving...' : 'Approve'}
-                    </button>
-                  )}
-                </div>
-              )}
-              {currentI18n && (
-                <button
-                  onClick={() => setShowTranslateModal(true)}
-                  disabled={saving}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 text-sm"
-                >
-                  Auto-translate
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Settings Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Settings</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Slug</label>
-            <input
-              type="text"
-              value={article.slug}
-              onChange={(e) => setArticle({ ...article, slug: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Article Type</label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setArticle({ ...article, articleType: 'NEWS' })}
-                className={`px-4 py-2 rounded-md border text-sm font-medium ${
-                  article.articleType === 'NEWS'
-                    ? 'bg-sky-600 border-sky-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                News
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCompanyNews(false)
-                  setArticle({ ...article, articleType: 'ANALYSIS', isCompanyNews: false })
-                }}
-                className={`px-4 py-2 rounded-md border text-sm font-medium ${
-                  article.articleType === 'ANALYSIS'
-                    ? 'bg-purple-600 border-purple-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                Analysis
-              </button>
+      <CollapsibleAdminSection
+        title="Settings"
+        icon={<FileText className="h-3.5 w-3.5" />}
+        summary={`slug: ${article.slug || '—'} · ${article.authorName || 'no author'}`}
+      >
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Slug</label>
+              <input
+                type="text"
+                value={article.slug}
+                onChange={(e) => setArticle({ ...article, slug: e.target.value })}
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+              />
             </div>
-            {article.articleType === 'NEWS' && (
-              <label className="mt-4 flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isCompanyNews}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Article Type</label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <select
+                  value={article.articleType}
                   onChange={(e) => {
-                    const v = e.target.checked
-                    setIsCompanyNews(v)
-                    setArticle({ ...article, isCompanyNews: v })
+                    const next = e.target.value as ArticleTypeKey
+                    if (next !== 'NEWS') setIsCompanyNews(false)
+                    setArticle({
+                      ...article,
+                      articleType: next,
+                      isCompanyNews: next === 'NEWS' ? article.isCompanyNews : false,
+                    })
                   }}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span className="text-sm text-gray-700">
-                  Actualité entreprise (Company news / Vancelian)
+                  className="px-2 py-1 text-xs border border-gray-300 rounded bg-white"
+                >
+                  {ARTICLE_TYPE_KEYS.map((key) => (
+                    <option key={key} value={key}>
+                      {ARTICLE_TYPES[key].label}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${ARTICLE_TYPES[article.articleType].badgeClassName}`}
+                  title={ARTICLE_TYPES[article.articleType].description}
+                >
+                  {ARTICLE_TYPES[article.articleType].label}
                 </span>
-              </label>
-            )}
+                {article.articleType === 'NEWS' && (
+                  <label className="flex items-center gap-1 text-xs text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isCompanyNews}
+                      onChange={(e) => {
+                        const v = e.target.checked
+                        setIsCompanyNews(v)
+                        setArticle({ ...article, isCompanyNews: v })
+                      }}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Company news
+                  </label>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Author Name</label>
+              <input
+                type="text"
+                value={article.authorName}
+                onChange={(e) => setArticle({ ...article, authorName: e.target.value })}
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Author Role</label>
+              <input
+                type="text"
+                value={article.authorRole || ''}
+                onChange={(e) => setArticle({ ...article, authorRole: e.target.value || null })}
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Author Name</label>
-            <input
-              type="text"
-              value={article.authorName}
-              onChange={(e) => setArticle({ ...article, authorName: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Author Role</label>
-            <input
-              type="text"
-              value={article.authorRole || ''}
-              onChange={(e) => setArticle({ ...article, authorRole: e.target.value || null })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cover Image
-            </label>
-            <p className="text-xs text-gray-500 mb-2">
-              Optional. Select an image for the article cover.
-            </p>
-            <MediaField
-              value={article.coverMediaId || undefined}
-              onChange={(mediaId) => {
-                setArticle({ ...article, coverMediaId: mediaId || null })
+
+          {article.articleType === 'HELP' && (
+            <HelpHierarchyPicker
+              value={{
+                helpCollectionId: article.helpCollectionId ?? null,
+                helpSlug: article.helpSlug ?? null,
+                collectionTags: Array.isArray(article.collectionTags)
+                  ? article.collectionTags
+                  : [],
+                allowAnchors:
+                  typeof article.allowAnchors === 'boolean' ? article.allowAnchors : true,
               }}
-              label=""
-              allowClear
-              preview
+              onChange={(next) =>
+                setArticle({
+                  ...article,
+                  helpCollectionId: next.helpCollectionId,
+                  helpSlug: next.helpSlug,
+                  collectionTags: next.collectionTags,
+                  allowAnchors: next.allowAnchors,
+                })
+              }
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cover Credit
-            </label>
-            <input
-              type="text"
-              value={article.coverCredit || ''}
-              onChange={(e) => setArticle({ ...article, coverCredit: e.target.value || null })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              placeholder="THÉO GIACOMETTI / HANS LUCAS"
-              maxLength={120}
+          )}
+
+          {article.articleType === 'ACADEMY' && (
+            <AcademyHierarchyPicker
+              value={{
+                academyCollectionId: article.academyCollectionId ?? null,
+                academySlug: article.academySlug ?? null,
+                collectionTags: Array.isArray(article.collectionTags)
+                  ? article.collectionTags
+                  : [],
+                allowAnchors:
+                  typeof article.allowAnchors === 'boolean' ? article.allowAnchors : true,
+              }}
+              onChange={(next) =>
+                setArticle({
+                  ...article,
+                  academyCollectionId: next.academyCollectionId,
+                  academySlug: next.academySlug,
+                  collectionTags: next.collectionTags,
+                  allowAnchors: next.allowAnchors,
+                })
+              }
             />
+          )}
+
+          <div className="flex items-start gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Cover</label>
+              {article.coverMediaId ? (
+                <MediaTile
+                  variant="filled"
+                  mediaId={article.coverMediaId}
+                  onChange={(id) => setArticle({ ...article, coverMediaId: id || null })}
+                  onRemove={() => setArticle({ ...article, coverMediaId: null })}
+                  index={0}
+                  total={1}
+                  size={80}
+                  pickerKind="image"
+                  pickerTitle="Sélectionner une cover"
+                />
+              ) : (
+                <MediaTile
+                  variant="add"
+                  size={80}
+                  pickerKind="image"
+                  pickerTitle="Sélectionner une cover"
+                  onSelect={(id) => setArticle({ ...article, coverMediaId: id })}
+                />
+              )}
+            </div>
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Cover Credit</label>
+                <input
+                  type="text"
+                  value={article.coverCredit || ''}
+                  onChange={(e) => setArticle({ ...article, coverCredit: e.target.value || null })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  placeholder="THÉO GIACOMETTI / HANS LUCAS"
+                  maxLength={120}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Cover Source</label>
+                <input
+                  type="text"
+                  value={article.coverSource || ''}
+                  onChange={(e) => setArticle({ ...article, coverSource: e.target.value || null })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  placeholder="LE MONDE"
+                  maxLength={120}
+                />
+              </div>
+            </div>
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cover Source
-            </label>
-            <input
-              type="text"
-              value={article.coverSource || ''}
-              onChange={(e) => setArticle({ ...article, coverSource: e.target.value || null })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              placeholder="LE MONDE"
-              maxLength={120}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Publication Datetime
-            </label>
-            <p className="text-xs text-gray-500 mb-2">
-              Used on the public article page. Can be edited even when published.
-            </p>
-            <div className="flex gap-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Publication Datetime</label>
+            <div className="flex gap-1.5">
               <input
                 type="datetime-local"
                 value={
@@ -953,224 +1063,112 @@ export default function AdminArticleEditorPage() {
                     publishedAt: value ? new Date(value).toISOString() : null,
                   })
                 }}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
               />
               <button
-                onClick={() => {
-                  setArticle({ ...article, publishedAt: new Date().toISOString() })
-                }}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
+                onClick={() => setArticle({ ...article, publishedAt: new Date().toISOString() })}
+                className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
               >
-                Set to now
+                Now
               </button>
             </div>
           </div>
-          <Button onClick={handleSaveSettings} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
-            {saving ? 'Saving...' : 'Save Settings'}
-          </Button>
         </div>
-      </div>
-
-      {/* Header Media Section */}
-      {article && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Header Media</h2>
-          <div className="space-y-6">
-            {/* Cover Image (already in Settings) */}
-            <div>
-              <p className="text-sm text-gray-600 mb-4">
-                Cover image is required and managed in Settings section above.
-              </p>
-            </div>
-
-            {/* Video */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Video (Optional)
-              </label>
-              <p className="text-xs text-gray-500 mb-2">
-                If set, video replaces cover in article view. Cover still used for cards. YouTube/Vimeo URLs only.
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={videoUrl}
-                  onChange={(e) => setVideoUrl(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="https://www.youtube.com/watch?v=..."
-                />
-                {videoUrl && (
-                  <button
-                    onClick={() => setVideoUrl('')}
-                    className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              {videoUrl && (
-                <div className="mt-3">
-                  <div className="aspect-video bg-gray-100 rounded border border-gray-300 overflow-hidden">
-                    <iframe
-                      src={videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')
-                        ? `https://www.youtube.com/embed/${videoUrl.includes('watch?v=') ? videoUrl.split('watch?v=')[1].split('&')[0] : videoUrl.split('/').pop()}`
-                        : videoUrl.includes('vimeo.com')
-                        ? `https://player.vimeo.com/video/${videoUrl.split('/').pop()}`
-                        : videoUrl}
-                      className="w-full h-full"
-                      allowFullScreen
-                      title="Video preview"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Gallery */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Gallery (Optional)
-              </label>
-              <p className="text-xs text-gray-500 mb-2">
-                Add images to create a carousel. Cover image will be first slide automatically.
-              </p>
-              <button
-                onClick={() => setIsGalleryPickerOpen(true)}
-                className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 mb-3"
-              >
-                Add to Gallery
-              </button>
-              {galleryMediaIds.length > 0 && (
-                <div className="space-y-2">
-                  {galleryMediaIds.map((mediaId, index) => (
-                    <div key={mediaId} className="flex items-center gap-3 border border-gray-200 rounded p-2">
-                      {galleryMediaMap[mediaId] && (
-                        <img
-                          src={galleryMediaMap[mediaId].url}
-                          alt={galleryMediaMap[mediaId].filename}
-                          className="w-16 h-16 object-cover rounded"
-                        />
-                      )}
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{galleryMediaMap[mediaId]?.filename || mediaId}</p>
-                      </div>
-                      <div className="flex gap-1">
-                        {index > 0 && (
-                          <button
-                            onClick={() => {
-                              const newOrder = [...galleryMediaIds]
-                              ;[newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]]
-                              setGalleryMediaIds(newOrder)
-                            }}
-                            className="px-2 py-1 text-gray-600 hover:text-gray-900"
-                          >
-                            ↑
-                          </button>
-                        )}
-                        {index < galleryMediaIds.length - 1 && (
-                          <button
-                            onClick={() => {
-                              const newOrder = [...galleryMediaIds]
-                              ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
-                              setGalleryMediaIds(newOrder)
-                            }}
-                            className="px-2 py-1 text-gray-600 hover:text-gray-900"
-                          >
-                            ↓
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setGalleryMediaIds(galleryMediaIds.filter((id) => id !== mediaId))
-                            const newMap = { ...galleryMediaMap }
-                            delete newMap[mediaId]
-                            setGalleryMediaMap(newMap)
-                          }}
-                          className="px-2 py-1 text-red-600 hover:text-red-900"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      </CollapsibleAdminSection>
 
       {/* Categories Section — blog tags + investment categories */}
       {article && (articleBlogCategories.length > 0 || availableCategories.length > 0) && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Categories & tags</h2>
-          {articleBlogCategories.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-sm font-medium text-gray-600 mb-2">Blog / editorial tags</h3>
-              <div className="space-y-2">
-                {articleBlogCategories.map((cat) => (
-                  <label key={cat.id} className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={categorySlugs.includes(cat.slug)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setCategorySlugs([...categorySlugs, cat.slug])
-                        } else {
-                          setCategorySlugs(categorySlugs.filter((s) => s !== cat.slug))
-                        }
-                      }}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-gray-700">{cat.label}</span>
-                    <span className="text-xs text-gray-400">({cat.slug})</span>
-                  </label>
-                ))}
+        <CollapsibleAdminSection
+          title="Categories & tags"
+          icon={<Tag className="h-3.5 w-3.5" />}
+          summary={`${categorySlugs.length} sélectionnée${categorySlugs.length > 1 ? 's' : ''}`}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {articleBlogCategories.length > 0 && (
+              <div>
+                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  Blog / editorial tags
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {articleBlogCategories.map((cat) => {
+                    const checked = categorySlugs.includes(cat.slug)
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          if (checked) {
+                            setCategorySlugs(categorySlugs.filter((s) => s !== cat.slug))
+                          } else {
+                            setCategorySlugs([...categorySlugs, cat.slug])
+                          }
+                        }}
+                        className={`rounded-full border px-2 py-0.5 text-xs font-medium transition ${
+                          checked
+                            ? 'border-indigo-600 bg-indigo-600 text-white'
+                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                        title={cat.slug}
+                      >
+                        {cat.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-          {availableCategories.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-2">Investment / offer categories</h3>
-              <div className="space-y-2">
-                {availableCategories.map((cat) => (
-                  <label key={cat.id} className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={categorySlugs.includes(cat.slug)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setCategorySlugs([...categorySlugs, cat.slug])
-                        } else {
-                          setCategorySlugs(categorySlugs.filter((s) => s !== cat.slug))
-                        }
-                      }}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-gray-700">{cat.label}</span>
-                  </label>
-                ))}
+            )}
+            {availableCategories.length > 0 && (
+              <div>
+                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  Investment / offer categories
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {availableCategories.map((cat) => {
+                    const checked = categorySlugs.includes(cat.slug)
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          if (checked) {
+                            setCategorySlugs(categorySlugs.filter((s) => s !== cat.slug))
+                          } else {
+                            setCategorySlugs([...categorySlugs, cat.slug])
+                          }
+                        }}
+                        className={`rounded-full border px-2 py-0.5 text-xs font-medium transition ${
+                          checked
+                            ? 'border-emerald-600 bg-emerald-600 text-white'
+                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </CollapsibleAdminSection>
       )}
 
       {/* Related (Projects, Assets, Vaults) Section */}
       {article && (
-        <div ref={relatedSectionRef} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Related</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Liez cet article à des projets, des assets crypto ou des vaults. Saisissez un mot-clé pour rechercher.
-          </p>
-          <div className="relative space-y-4">
+        <div ref={relatedSectionRef}>
+        <CollapsibleAdminSection
+          title="Related"
+          icon={<Link2 className="h-3.5 w-3.5" />}
+          summary={`${linkedProjects.length} projets · ${linkedLinks.filter(l => l.kind === 'ASSET').length} assets · ${linkedLinks.filter(l => l.kind === 'VAULT').length} vaults`}
+        >
+          <div className="relative space-y-2">
             <input
               type="text"
               value={relatedSearch}
               onChange={(e) => setRelatedSearch(e.target.value)}
               onFocus={() => { if (relatedOptions.length > 0) setRelatedOptionsOpen(true) }}
               placeholder="Rechercher un projet, un asset (ex. BTC) ou un vault…"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
             />
             {relatedOptionsOpen && relatedOptions.length > 0 && (
               <div className="absolute z-10 w-full mt-0 border border-gray-200 rounded-md bg-white shadow-lg max-h-56 overflow-y-auto">
@@ -1185,7 +1183,7 @@ export default function AdminArticleEditorPage() {
                         })
                         if (!res.ok) {
                           const err = await res.json()
-                          throw new Error(err.error || 'Erreur')
+                          throw new Error(messageFromAdminApiError(err, 'Erreur'))
                         }
                         await fetchLinkedProjects()
                         toastSuccess('Projet lié')
@@ -1197,7 +1195,7 @@ export default function AdminArticleEditorPage() {
                         })
                         if (!res.ok) {
                           const err = await res.json()
-                          throw new Error(err.error || 'Erreur')
+                          throw new Error(messageFromAdminApiError(err, 'Erreur'))
                         }
                         await fetchLinkedLinks()
                         toastSuccess('Asset lié')
@@ -1209,7 +1207,7 @@ export default function AdminArticleEditorPage() {
                         })
                         if (!res.ok) {
                           const err = await res.json()
-                          throw new Error(err.error || 'Erreur')
+                          throw new Error(messageFromAdminApiError(err, 'Erreur'))
                         }
                         await fetchLinkedLinks()
                         toastSuccess('Vault lié')
@@ -1328,448 +1326,158 @@ export default function AdminArticleEditorPage() {
               ))}
             </div>
           </div>
+        </CollapsibleAdminSection>
         </div>
       )}
 
       {/* Editorial Settings Section */}
       {article && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Editorial Settings</h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Featured Article
-                </label>
-                <p className="text-xs text-gray-500">
-                  Only one featured article is allowed. This will replace the current featured article.
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isFeatured}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setShowFeaturedConfirm(true)
-                    } else {
-                      setIsFeatured(false)
-                    }
-                  }}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Highlighted Article
-                </label>
-                <p className="text-xs text-gray-500">
-                  Appears in the mosaic section on the blog page.
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isHighlighted}
-                  onChange={(e) => setIsHighlighted(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Milestone Articles
-                </label>
-                <p className="text-xs text-gray-500">
-                  Activated or not (true/false) to mark this article as a milestone.
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isMilestone}
-                  onChange={(e) => setIsMilestone(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            </div>
+        <CollapsibleAdminSection
+          title="Editorial Settings"
+          icon={<Star className="h-3.5 w-3.5" />}
+          summary={[
+            isFeatured ? 'Featured' : null,
+            isHighlighted ? 'Highlighted' : null,
+            isMilestone ? 'Milestone' : null,
+          ].filter(Boolean).join(' · ') || 'aucun flag'}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <label
+              className="flex cursor-pointer items-center justify-between gap-2 rounded border border-gray-200 px-2 py-1.5"
+              title="Only one featured article is allowed. This will replace the current featured article."
+            >
+              <span className="text-xs font-medium text-gray-700">Featured</span>
+              <input
+                type="checkbox"
+                checked={isFeatured}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setShowFeaturedConfirm(true)
+                  } else {
+                    setIsFeatured(false)
+                  }
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+            </label>
+            <label
+              className="flex cursor-pointer items-center justify-between gap-2 rounded border border-gray-200 px-2 py-1.5"
+              title="Appears in the mosaic section on the blog page."
+            >
+              <span className="text-xs font-medium text-gray-700">Highlighted</span>
+              <input
+                type="checkbox"
+                checked={isHighlighted}
+                onChange={(e) => setIsHighlighted(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+            </label>
+            <label
+              className="flex cursor-pointer items-center justify-between gap-2 rounded border border-gray-200 px-2 py-1.5"
+              title="Mark this article as a milestone."
+            >
+              <span className="text-xs font-medium text-gray-700">Milestone</span>
+              <input
+                type="checkbox"
+                checked={isMilestone}
+                onChange={(e) => setIsMilestone(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+            </label>
           </div>
-        </div>
-      )}
-
-      {/* Documents Section */}
-      {article && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Documents (PDF)</h2>
-          <button
-            onClick={() => setIsDocumentPickerOpen(true)}
-            className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 mb-3"
-          >
-            Attach PDF
-          </button>
-          {documents.length > 0 && (
-            <div className="space-y-2">
-              {documents.map((doc, index) => (
-                <div key={index} className="flex items-center justify-between border border-gray-200 rounded p-2">
-                  <div className="flex items-center gap-3">
-                    {documentMediaMap[doc.mediaId] && (
-                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
-                        <span className="text-xs">PDF</span>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-medium">{doc.title || documentMediaMap[doc.mediaId]?.filename || doc.mediaId}</p>
-                      {documentMediaMap[doc.mediaId] && (
-                        <a
-                          href={documentMediaMap[doc.mediaId].url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-indigo-600 hover:underline"
-                        >
-                          Download
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setDocuments(documents.filter((_, i) => i !== index))
-                    }}
-                    className="text-red-600 hover:text-red-900 text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        </CollapsibleAdminSection>
       )}
 
       {/* Header Content Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Header Content</h2>
-
-        <div className="space-y-4">
+      <CollapsibleAdminSection
+        title={`Header Content (${selectedLocale.toUpperCase()})`}
+        icon={<AlignLeft className="h-3.5 w-3.5" />}
+        summary={i18nData.title?.trim() || 'untitled'}
+        defaultOpen
+      >
+        <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Title *</label>
             <input
               type="text"
               value={i18nData.title}
               onChange={(e) => setI18nData({ ...i18nData, title: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-2xl font-bold"
+              className="w-full rounded border border-gray-300 px-2 py-1.5 text-base font-semibold"
               placeholder="Article Title"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Standfirst *</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Standfirst <span className="text-gray-400">(optionnel)</span>
+            </label>
             <textarea
               value={i18nData.standfirst}
               onChange={(e) => setI18nData({ ...i18nData, standfirst: e.target.value })}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md italic"
+              rows={2}
+              className="w-full rounded border border-gray-300 px-2 py-1 text-sm italic"
               placeholder="Short introduction..."
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Cover Title</label>
-            <p className="text-xs text-gray-500 mb-2">
-              Displayed below the cover image on the article page
-            </p>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Cover Title <span className="text-gray-400">(sous l'image de couverture)</span>
+            </label>
             <textarea
               value={i18nData.coverTitle}
               onChange={(e) => setI18nData({ ...i18nData, coverTitle: e.target.value })}
               rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
               placeholder="Caption text..."
               maxLength={240}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Meta Title</label>
-            <input
-              type="text"
-              value={i18nData.metaTitle || ''}
-              onChange={(e) => setI18nData({ ...i18nData, metaTitle: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Meta Description</label>
-            <textarea
-              value={i18nData.metaDescription || ''}
-              onChange={(e) => setI18nData({ ...i18nData, metaDescription: e.target.value })}
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Blocks Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Article Blocks</h2>
-          <div className="flex gap-2">
-            <Button onClick={() => handleAddBlock(ArticleBlockType.HEADING)} variant="outline" size="sm">
-              + Heading
-            </Button>
-            <Button onClick={() => handleAddBlock(ArticleBlockType.PARAGRAPH)} variant="outline" size="sm">
-              + Paragraph
-            </Button>
-            <Button onClick={() => handleAddBlock(ArticleBlockType.QUOTE)} variant="outline" size="sm">
-              + Quote
-            </Button>
-            <Button onClick={() => handleAddBlock(ArticleBlockType.BULLET_LIST)} variant="outline" size="sm">
-              + List
-            </Button>
-            <Button onClick={() => handleAddBlock(ArticleBlockType.IMAGE)} variant="outline" size="sm">
-              + Image
-            </Button>
-            <Button onClick={() => handleAddBlock(ArticleBlockType.VIDEO)} variant="outline" size="sm">
-              + Video
-            </Button>
-            <Button onClick={() => handleAddBlock(ArticleBlockType.DOCUMENT)} variant="outline" size="sm">
-              + Document
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {blocksDraft.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No blocks yet. Add your first block!</p>
-          ) : (
-            blocksDraft.map((block, index) => (
-              <div key={block.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-700">{block.type}</span>
-                  <div className="flex gap-2">
-                    {index > 0 && (
-                      <button
-                        onClick={() => {
-                          const newOrder = [...blocksDraft]
-                          ;[newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]]
-                          handleReorderBlocks(newOrder.map((b) => b.id))
-                        }}
-                        className="text-gray-600 hover:text-gray-900"
-                      >
-                        ↑
-                      </button>
-                    )}
-                    {index < blocksDraft.length - 1 && (
-                      <button
-                        onClick={() => {
-                          const newOrder = [...blocksDraft]
-                          ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
-                          handleReorderBlocks(newOrder.map((b) => b.id))
-                        }}
-                        className="text-gray-600 hover:text-gray-900"
-                      >
-                        ↓
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleDeleteBlock(block.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-                {block.type === ArticleBlockType.HEADING && (
-                  <input
-                    type="text"
-                    value={(block.data as any).text || ''}
-                    onChange={(e) =>
-                      handleUpdateBlock(block.id, { ...block.data, text: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-xl font-bold"
-                    placeholder="Heading text"
-                  />
-                )}
-                {block.type === ArticleBlockType.PARAGRAPH && (
-                  <div className="space-y-3">
-                    <textarea
-                      value={(block.data as any).text || ''}
-                      onChange={(e) =>
-                        handleUpdateBlock(block.id, { ...block.data, text: e.target.value })
-                      }
-                      rows={6}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
-                      placeholder="Paragraph text (Markdown supported)"
-                    />
-                    <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-                      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                        Markdown preview
-                      </div>
-                      {(block.data as any).text?.trim() ? (
-                        <div className="space-y-2 text-sm text-gray-900">
-                          <ReactMarkdown
-                            components={{
-                              p: ({ children }) => <p className="leading-7">{children}</p>,
-                              h1: ({ children }) => <h1 className="text-2xl font-bold">{children}</h1>,
-                              h2: ({ children }) => <h2 className="text-xl font-bold">{children}</h2>,
-                              h3: ({ children }) => <h3 className="text-lg font-semibold">{children}</h3>,
-                              ul: ({ children }) => <ul className="list-disc pl-5 space-y-1">{children}</ul>,
-                              ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1">{children}</ol>,
-                              li: ({ children }) => <li>{children}</li>,
-                              blockquote: ({ children }) => (
-                                <blockquote className="border-l-4 border-gray-300 pl-3 italic text-gray-700">
-                                  {children}
-                                </blockquote>
-                              ),
-                              a: ({ href, children }) => (
-                                <a
-                                  href={href}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-indigo-600 underline"
-                                >
-                                  {children}
-                                </a>
-                              ),
-                              code: ({ children }) => (
-                                <code className="rounded bg-gray-200 px-1 py-0.5 font-mono text-xs">
-                                  {children}
-                                </code>
-                              ),
-                            }}
-                          >
-                            {(block.data as any).text}
-                          </ReactMarkdown>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">Preview will appear here.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {block.type === ArticleBlockType.QUOTE && (
-                  <div className="space-y-2">
-                    <textarea
-                      value={(block.data as any).text || ''}
-                      onChange={(e) =>
-                        handleUpdateBlock(block.id, { ...block.data, text: e.target.value })
-                      }
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md italic"
-                      placeholder="Quote text"
-                    />
-                    <input
-                      type="text"
-                      value={(block.data as any).author || ''}
-                      onChange={(e) =>
-                        handleUpdateBlock(block.id, { ...block.data, author: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Author (optional)"
-                    />
-                  </div>
-                )}
-                {block.type === ArticleBlockType.BULLET_LIST && (
-                  <div className="space-y-2">
-                    {((block.data as any).items || ['']).map((item: string, i: number) => (
-                      <input
-                        key={i}
-                        type="text"
-                        value={item}
-                        onChange={(e) => {
-                          const items = [...((block.data as any).items || [])]
-                          items[i] = e.target.value
-                          handleUpdateBlock(block.id, { ...block.data, items })
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        placeholder={`Item ${i + 1}`}
-                      />
-                    ))}
-                    <button
-                      onClick={() => {
-                        const items = [...((block.data as any).items || [])]
-                        items.push('')
-                        handleUpdateBlock(block.id, { ...block.data, items })
-                      }}
-                      className="text-sm text-indigo-600 hover:text-indigo-900"
-                    >
-                      + Add item
-                    </button>
-                  </div>
-                )}
-                {block.type === ArticleBlockType.IMAGE && (
-                  <div className="space-y-2">
-                    <MediaField
-                      value={(block.data as any).mediaId || undefined}
-                      onChange={(mediaId) =>
-                        handleUpdateBlock(block.id, { ...block.data, mediaId: mediaId || '' })
-                      }
-                      label="Image"
-                      allowClear
-                      preview
-                    />
-                    <input
-                      type="text"
-                      value={(block.data as any).caption || ''}
-                      onChange={(e) =>
-                        handleUpdateBlock(block.id, { ...block.data, caption: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Caption"
-                    />
-                  </div>
-                )}
-                {block.type === ArticleBlockType.VIDEO && (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={(block.data as any).url || ''}
-                      onChange={(e) =>
-                        handleUpdateBlock(block.id, { ...block.data, url: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Video URL (YouTube/Vimeo)"
-                    />
-                    <input
-                      type="text"
-                      value={(block.data as any).caption || ''}
-                      onChange={(e) =>
-                        handleUpdateBlock(block.id, { ...block.data, caption: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Caption"
-                    />
-                  </div>
-                )}
-                {block.type === ArticleBlockType.DOCUMENT && (
-                  <div className="space-y-2">
-                    <MediaField
-                      value={(block.data as any).mediaId || undefined}
-                      onChange={(mediaId) =>
-                        handleUpdateBlock(block.id, { ...block.data, mediaId: mediaId || '' })
-                      }
-                      label="Document (PDF)"
-                      allowClear
-                    />
-                    <input
-                      type="text"
-                      value={(block.data as any).title || ''}
-                      onChange={(e) =>
-                        handleUpdateBlock(block.id, { ...block.data, title: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Document title"
-                    />
-                  </div>
-                )}
+          <details className="rounded border border-gray-200 bg-gray-50">
+            <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-gray-700">
+              SEO · Meta Title & Meta Description
+            </summary>
+            <div className="space-y-2 p-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Meta Title</label>
+                <input
+                  type="text"
+                  value={i18nData.metaTitle || ''}
+                  onChange={(e) => setI18nData({ ...i18nData, metaTitle: e.target.value })}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                />
               </div>
-            ))
-          )}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Meta Description</label>
+                <textarea
+                  value={i18nData.metaDescription || ''}
+                  onChange={(e) => setI18nData({ ...i18nData, metaDescription: e.target.value })}
+                  rows={2}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                />
+              </div>
+            </div>
+          </details>
         </div>
-      </div>
+      </CollapsibleAdminSection>
+
+      {/* Blocks Section — déléguée au composant réutilisable. */}
+      <ContentBlocksSection
+        blocks={blocksDraft}
+        entityId={articleId}
+        saving={saving}
+        onUpdateBlock={handleUpdateBlock}
+        onPatchBlock={handlePatchBlock}
+        onDeleteBlock={handleDeleteBlock}
+        onReorderBlocks={handleReorderBlocks}
+        onClickAddBlock={async () => {
+          // Sauvegarde tout (settings + i18n + blocs modifiés) avant de
+          // naviguer vers la page modale d'ajout : sinon toute édition en
+          // cours serait perdue au retour. handleSaveAll gère ses propres
+          // toasts d'erreur ; on navigue malgré tout pour ne pas bloquer
+          // l'utilisateur (l'API rejouera idempotente au save suivant).
+          await handleSaveAll()
+          router.push(`/admin/articles/${encodeURIComponent(articleId)}/add-block`)
+        }}
+      />
 
       {/* Translate Modal */}
       {currentI18n && (
@@ -1792,7 +1500,7 @@ export default function AdminArticleEditorPage() {
 
             if (!response.ok) {
               const error = await response.json()
-              throw new Error(error.error || 'Translation failed')
+              throw new Error(messageFromAdminApiError(error, 'Translation failed'))
             }
 
             const data = await response.json()
@@ -1835,42 +1543,19 @@ export default function AdminArticleEditorPage() {
         }}
       />
 
-      {/* Gallery Media Picker */}
-      <MediaPicker
-        isOpen={isGalleryPickerOpen}
-        onClose={() => setIsGalleryPickerOpen(false)}
-        onSelect={(media) => {
-          if (!galleryMediaIds.includes(media.id)) {
-            setGalleryMediaIds([...galleryMediaIds, media.id])
-            setGalleryMediaMap({ ...galleryMediaMap, [media.id]: { url: media.url, filename: media.filename } })
-          }
-          setIsGalleryPickerOpen(false)
-        }}
-        title="Select Image for Gallery"
-      />
-
-      {/* Document Media Picker */}
-      <MediaPicker
-        isOpen={isDocumentPickerOpen}
-        onClose={() => setIsDocumentPickerOpen(false)}
-        onSelect={(media) => {
-          const title = prompt('Document title:')
-          if (title) {
-            setDocuments([...documents, { mediaId: media.id, title }])
-            setDocumentMediaMap({ ...documentMediaMap, [media.id]: { url: media.url, filename: media.filename } })
-          }
-          setIsDocumentPickerOpen(false)
-        }}
-        title="Select PDF Document"
-      />
-
-      {/* Save Content Button - Bottom of page */}
-      <div className="mt-6 flex justify-end">
-        <Button onClick={handleSaveContent} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
-          {saving ? 'Saving...' : 'Save Content'}
-        </Button>
       </div>
-    </div>
+
+      <div className="hidden min-h-0 min-w-0 flex-col lg:sticky lg:top-2 lg:flex lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)] lg:pl-6">
+        <PagePreviewPanel
+          title={previewPanelTitle}
+          previewUrl={previewUrl}
+          dismissible={false}
+          toolbar={previewToolbar}
+          reloadEpoch={previewReloadEpoch}
+          className="min-h-0 flex-1"
+        />
+      </div>
+    </section>
   )
 }
 

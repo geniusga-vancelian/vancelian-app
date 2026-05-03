@@ -10,7 +10,11 @@ import {
   Prisma,
 } from '@prisma/client'
 
-import { calculateUrlPath, isValidSlug } from '@/lib/utils/slugify'
+import { calculateExclusiveOfferPageUrlPath, isValidSlug } from '@/lib/utils/slugify'
+import {
+  nextChildSortOrderUnderHub,
+  resolveProjectsHubPageId,
+} from '@/lib/admin/projectsHubAttachment'
 
 const VAULT_TEMPLATE_DB = 'vault_builder'
 const VAULT_SECTION_KEY = 'vault_builder_v1'
@@ -60,8 +64,11 @@ export async function createExclusiveOfferVaultInTransaction(
   if (!isValidSlug(slug)) {
     throw new Error('Slug invalide.')
   }
-  const urlPath = calculateUrlPath(slug)
+  const urlPath = calculateExclusiveOfferPageUrlPath(slug)
   const configWithMeta = defaultVaultBuilderSectionData()
+
+  const hubId = await resolveProjectsHubPageId(tx)
+  const sortOrder = hubId != null ? await nextChildSortOrderUnderHub(tx, hubId) : 0
 
   const page = await tx.page.create({
     data: {
@@ -70,6 +77,8 @@ export async function createExclusiveOfferVaultInTransaction(
       title: input.title.trim() || slug,
       description: input.description,
       template: VAULT_TEMPLATE_DB,
+      parentId: hubId,
+      sortOrder,
       sections: {
         create: {
           key: VAULT_SECTION_KEY,

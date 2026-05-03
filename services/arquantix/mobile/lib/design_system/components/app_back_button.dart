@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../atoms/app_colors.dart';
 import '../atoms/app_radius.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// Variante visuelle du [AppBackButton].
 enum AppBackButtonVariant {
@@ -31,15 +33,23 @@ class AppBackButton extends StatelessWidget {
     this.size = 40,
     this.onPressed,
     this.icon,
+    this.kalaiIcon,
     this.child,
   });
 
   final AppBackButtonVariant variant;
   final double size;
   final VoidCallback? onPressed;
+
+  /// Icône Material (legacy). Si fournie, prend le pas sur [kalaiIcon].
   final IconData? icon;
 
-  /// Contenu libre (prioritaire sur [icon]). Permet d'afficher un avatar, etc.
+  /// Asset SVG d'une icône KALAI (ex: `KalaiIcons.chevronLeft`).
+  ///
+  /// Utilisé par défaut quand [icon] et [child] sont nuls.
+  final String? kalaiIcon;
+
+  /// Contenu libre (prioritaire sur [icon]/[kalaiIcon]). Permet d'afficher un avatar, etc.
   final Widget? child;
 
   static const double _blur = 12;
@@ -69,12 +79,19 @@ class AppBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = child ??
-        Icon(
-          icon ?? Icons.chevron_left_rounded,
-          color: _iconColor,
-          size: size * 0.6,
-        );
+    Widget buildContent() {
+      if (child != null) return child!;
+      if (icon != null) {
+        return Icon(icon, color: _iconColor, size: size * 0.6);
+      }
+      return KalaiIcon(
+        kalaiIcon ?? KalaiIcons.chevronLeft,
+        color: _iconColor,
+        size: size * 0.6,
+      );
+    }
+
+    final content = buildContent();
 
     Widget button = Container(
       width: size,

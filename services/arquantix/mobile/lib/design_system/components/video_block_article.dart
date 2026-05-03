@@ -8,9 +8,11 @@ import '../../core/config.dart';
 import '../atoms/app_colors.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import '../layout/module_horizontal_margin.dart';
 import 'carousel_pagination_dots.dart';
 import 'ds_news_reading_time.dart';
+import 'kalai_icon.dart';
 
 /// Donnée d’une carte vidéo (Vault module [VideoBlockArticleModule]).
 class VideoBlockArticleItemData {
@@ -104,8 +106,8 @@ class VideoBlockArticle extends StatelessWidget {
                         errorWidget: (_, __, ___) => Container(
                           color: AppColors.gray.withValues(alpha: 0.15),
                           child: const Center(
-                            child: Icon(
-                              Icons.videocam_outlined,
+                            child: KalaiIcon(
+                              KalaiIcons.video,
                               color: AppColors.gray,
                               size: 32,
                             ),
@@ -255,8 +257,8 @@ class _VideoBlockArticleModuleState extends State<VideoBlockArticleModule> {
                             ),
                           ),
                           const SizedBox(width: AppSpacing.xs),
-                          Icon(
-                            Icons.chevron_right,
+                          const KalaiIcon(
+                            KalaiIcons.chevronRight,
                             size: 22,
                             color: AppColors.textPrimary,
                           ),

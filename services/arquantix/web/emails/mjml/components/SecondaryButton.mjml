@@ -1,0 +1,1 @@
+<mj-button href="{{href}}" background-color="transparent" color="{{#onDark}}#FFFFFF{{/onDark}}{{^onDark}}#000000{{/onDark}}" border="1.4px solid {{#onDark}}#FFFFFF{{/onDark}}{{^onDark}}#000000{{/onDark}}" inner-padding="12px 20px" align="{{#align}}{{align}}{{/align}}{{^align}}left{{/align}}">{{label}}</mj-button>

@@ -228,7 +228,7 @@ export function SectionHelpSearch({
   }
 
   const getArticleUrl = (result: SearchResult) => {
-    return `/help/${result.collection.slug}/${result.category.slug}/${result.slug}`
+    return `/help/${result.collection.slug}/${result.slug}`
   }
 
   return (

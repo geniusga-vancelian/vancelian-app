@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../models/article.dart';
 import '../services/blog_api.dart';
-import 'article_detail_screen.dart';
+import '../features/news/presentation/screens/article_detail_screen.dart';
 
 class ArticleListScreen extends StatefulWidget {
   const ArticleListScreen({super.key});

@@ -1,0 +1,37 @@
+{
+  "vars": {
+    "preheader": "Use this code to finish signing in.",
+    "assetOrigin": "https://www.arquantix.com",
+    "title": "Confirm your sign-in",
+    "intro": "We received a request to sign in to your Arquantix account. Enter this code in the open browser tab to continue.",
+    "otp": {
+      "label": "Your one-time code",
+      "code": "748391",
+      "expiryText": "This code expires in 10 minutes."
+    },
+    "metadata": {
+      "title": "Request details",
+      "rows": [
+        { "label": "Device", "value": "MacBook Pro · macOS 25.2" },
+        { "label": "Browser", "value": "Safari 18" },
+        { "label": "IP address", "value": "92.184.111.12 (Geneva, CH)" },
+        { "label": "When", "value": "Apr 28, 2026 · 09:14 UTC" }
+      ]
+    },
+    "warning": {
+      "title": "Didn’t request this?",
+      "body": "If this wasn’t you, ignore this email and consider rotating your password — your account remains secure as long as no one enters this code.",
+      "variant": { "warning": true }
+    },
+    "legal": {
+      "body": "Arquantix never asks for this code by phone or chat. We will not contact you about it. If anyone asks for it, do not share it."
+    },
+    "footer": {
+      "tagline": "",
+      "social": [],
+      "unsubscribeUrl": "https://www.arquantix.com/email/unsubscribe?token=PLACEHOLDER",
+      "unsubscribeLabel": "Manage notifications",
+      "copyright": "© 2026 Arquantix SA."
+    }
+  }
+}

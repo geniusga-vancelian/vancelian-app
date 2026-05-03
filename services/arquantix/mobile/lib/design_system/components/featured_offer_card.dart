@@ -5,8 +5,10 @@ import '../atoms/app_colors.dart';
 import '../atoms/app_radius.dart';
 import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
+import '../atoms/kalai_icons.dart';
 import 'app_small_button.dart';
 import 'ds_news_tag.dart';
+import 'kalai_icon.dart';
 
 /// Carte réutilisable : image (optionnel bloc progression) + zone blanche (assets, titre, description ou perf %, bouton optionnel).
 /// Utilisable pour Exclusive offers (avec barre de progression) et Crypto Bundles (avec performance % et icônes assets).
@@ -164,8 +166,8 @@ class FeaturedOfferCard extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.groups_2_outlined,
+                const KalaiIcon(
+                  KalaiIcons.userGroup,
                   size: 20,
                   color: Colors.white,
                 ),
@@ -365,8 +367,8 @@ class FeaturedOfferCard extends StatelessWidget {
 
   Widget _placeholder() => Container(
         color: AppColors.placeholderBg,
-        child: Icon(
-          Icons.image_not_supported,
+        child: const KalaiIcon(
+          KalaiIcons.photoOff,
           color: AppColors.placeholderIcon,
           size: 48,
         ),
@@ -546,13 +548,13 @@ class _AssetLogoUrlsRow extends StatelessWidget {
       child: CachedNetworkImage(
         imageUrl: url,
         fit: BoxFit.cover,
-        placeholder: (_, __) => Icon(
-          Icons.currency_bitcoin,
+        placeholder: (_, __) => KalaiIcon(
+          KalaiIcons.bitcoin,
           size: _circleSize * 0.5,
           color: AppColors.textSecondary,
         ),
-        errorWidget: (_, __, ___) => Icon(
-          Icons.currency_bitcoin,
+        errorWidget: (_, __, ___) => KalaiIcon(
+          KalaiIcons.bitcoin,
           size: _circleSize * 0.5,
           color: AppColors.textSecondary,
         ),
@@ -604,13 +606,13 @@ class _PerformanceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPositive = percent >= 0;
     final color = isPositive ? _positiveColor : _negativeColor;
-    final caret = isPositive ? Icons.arrow_drop_up : Icons.arrow_drop_down;
+    final caret = isPositive ? KalaiIcons.arrowUp : KalaiIcons.arrowDown;
     final text = '${isPositive ? '+' : ''}${percent.toStringAsFixed(2)} %';
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(caret, color: color, size: _caretSize),
+        KalaiIcon(caret, color: color, size: _caretSize),
         const SizedBox(width: 2),
         Text(
           text,

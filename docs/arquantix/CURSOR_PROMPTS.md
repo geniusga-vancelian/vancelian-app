@@ -6,6 +6,16 @@ Prompts prêts à coller en début de session ou avant une tâche ciblée. Ils c
 
 ---
 
+## Session bring-up après reboot Mac (stack `arquantixrecovery`)
+
+Prompt prêt à coller pour une remise en état **lecture + vérifs + lancement minimal** (sans `down -v`, sans projet legacy `arquantix`).
+
+- **Fichier source** : [prompts/SESSION_BRINGUP_AFTER_REBOOT.md](./prompts/SESSION_BRINGUP_AFTER_REBOOT.md)
+- **Afficher dans le terminal** : `bash scripts/cursor_prompt_arquantix_bringup.sh`
+- **Copier tout le fichier sous macOS** : `bash scripts/cursor_prompt_arquantix_bringup.sh | pbcopy` puis coller dans Cursor
+
+---
+
 ## 1. Debug PDF en 1 run
 
 ```

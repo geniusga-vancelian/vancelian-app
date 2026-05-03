@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../atoms/app_colors.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// Visual variant for [AppSearchInput].
 enum AppSearchInputVariant { white, gray, focused }
@@ -105,7 +107,7 @@ class _AppSearchInputState extends State<AppSearchInput> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, size: 24, color: _iconColor),
+          const KalaiIcon(KalaiIcons.search, size: 24, color: _iconColor),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -170,7 +172,7 @@ class _AppSearchInputState extends State<AppSearchInput> {
                   color: _clearBg,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close_rounded, size: 16, color: Colors.white),
+                child: const KalaiIcon(KalaiIcons.clear, size: 16, color: Colors.white),
               ),
             ),
         ],

@@ -27,15 +27,15 @@ export default function AdminHelpPage() {
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Help Center</h1>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Gérer le Centre d'aide</h2>
+        <h2 className="text-xl font-semibold mb-4">Gérer le Centre d&apos;aide</h2>
         <p className="text-gray-600 mb-4">
-          Organisez vos articles d'aide en collections et catégories.
+          Organisez vos articles d&apos;aide en collections et catégories.
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link
-          href="/admin/help/collections"
+          href="/admin/articles/collections#collections-help"
           className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow group"
         >
           <div className="flex items-center justify-between mb-4">
@@ -44,7 +44,8 @@ export default function AdminHelpPage() {
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Collections</h3>
           <p className="text-gray-600 text-sm">
-            Créez et gérez les collections d'articles (ex: "Pour commencer", "Investir")
+            Créez et gérez les collections d&apos;articles depuis la page unifiée{' '}
+            <span className="font-mono text-[11px]">Articles · Collections</span> (ancre Help).
           </p>
         </Link>
 
@@ -63,7 +64,7 @@ export default function AdminHelpPage() {
         </Link>
 
         <Link
-          href="/admin/help/articles"
+          href="/admin/articles?type=HELP"
           className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow group"
         >
           <div className="flex items-center justify-between mb-4">
@@ -72,7 +73,9 @@ export default function AdminHelpPage() {
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Articles</h3>
           <p className="text-gray-600 text-sm">
-            Créez et éditez les articles d'aide avec contenu structuré
+            Les articles d&apos;aide sont désormais gérés depuis l&apos;éditeur unifié
+            (<code className="rounded bg-gray-100 px-1 text-[11px]">/admin/articles</code>{' '}
+            avec le filtre HELP).
           </p>
         </Link>
       </div>

@@ -63,6 +63,50 @@ class HelpApi {
         .toList();
   }
 
+  /// Recherche **Centre d’aide uniquement** (`GET /api/help/search`) :
+  /// articles `Article(HELP)` publiés + `HelpArticle` legacy. Filtres optionnels
+  /// `collection` / `category`. Titres seuls si [titleOnly].
+  Future<List<HelpSearchResultItem>> searchHelpArticles({
+    required String query,
+    String locale = 'fr',
+    String? collectionSlug,
+    String? categorySlug,
+    bool titleOnly = true,
+    int minLength = 3,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{
+      'q': query,
+      'locale': locale,
+      'limit': '$limit',
+      'minLength': '$minLength',
+      'titleOnly': titleOnly ? '1' : '0',
+    };
+    final coll = collectionSlug?.trim();
+    if (coll != null && coll.isNotEmpty) {
+      params['collection'] = coll;
+    }
+    final cat = categorySlug?.trim();
+    if (cat != null && cat.isNotEmpty && cat != '__all__') {
+      params['category'] = cat;
+    }
+    final uri = Uri.parse(Config.helpSearchUrl).replace(queryParameters: params);
+    final response = await _getWithRetry(uri);
+    if (response.statusCode != 200) {
+      throw HelpApiException(
+        response.statusCode,
+        response.body.isNotEmpty ? response.body : 'Erreur réseau',
+      );
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final list = (json['results'] as List<dynamic>? ?? const []);
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(HelpSearchResultItem.fromJson)
+        .where((item) => item.slug.isNotEmpty && item.question.isNotEmpty)
+        .toList();
+  }
+
   Future<HelpCategoryListResponse> getCategories({
     required String collectionSlug,
     String locale = 'fr',
@@ -81,6 +125,25 @@ class HelpApi {
     return HelpCategoryListResponse.fromJson(json);
   }
 
+  /// Hub collection : tags dédupliqués depuis les articles, ou liste plate.
+  Future<HelpCollectionBrowseResponse> getCollectionBrowse({
+    required String collectionSlug,
+    String locale = 'fr',
+  }) async {
+    final uri = Uri.parse(Config.helpCollectionBrowseUrl(collectionSlug)).replace(
+      queryParameters: {'locale': locale},
+    );
+    final response = await _getWithRetry(uri);
+    if (response.statusCode != 200) {
+      throw HelpApiException(
+        response.statusCode,
+        response.body.isNotEmpty ? response.body : 'Erreur réseau',
+      );
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return HelpCollectionBrowseResponse.fromJson(json);
+  }
+
   Future<HelpArticleListResponse> getArticles({
     required String collectionSlug,
     required String categorySlug,
@@ -89,6 +152,25 @@ class HelpApi {
     final uri = Uri.parse(
       Config.helpCategoryArticlesUrl(collectionSlug, categorySlug),
     ).replace(queryParameters: {'locale': locale});
+    final response = await _getWithRetry(uri);
+    if (response.statusCode != 200) {
+      throw HelpApiException(
+        response.statusCode,
+        response.body.isNotEmpty ? response.body : 'Erreur réseau',
+      );
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return HelpArticleListResponse.fromJson(json);
+  }
+
+  /// Tous les articles Help publiés dans la collection (parcours « plat »).
+  Future<HelpArticleListResponse> getAllArticlesInCollection({
+    required String collectionSlug,
+    String locale = 'fr',
+  }) async {
+    final uri = Uri.parse(Config.helpCollectionAllArticlesUrl(collectionSlug)).replace(
+      queryParameters: {'locale': locale},
+    );
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
       throw HelpApiException(

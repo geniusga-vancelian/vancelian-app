@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'kalai_icon.dart';
 
 /// Image d'article avec légende optionnelle.
 ///
@@ -43,8 +44,8 @@ class ArticleImageBlock extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         alignment: Alignment.center,
-        child: const Icon(
-          Icons.image_rounded,
+        child: const KalaiIcon(
+          KalaiIcons.photo,
           size: 40,
           color: AppColors.placeholderIcon,
         ),
@@ -121,26 +122,41 @@ class ArticleVideoBlock extends StatelessWidget {
       onTap: onPlay,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.lg),
+        clipBehavior: Clip.hardEdge,
         child: SizedBox(
           width: double.infinity,
           height: height,
           child: Stack(
             fit: StackFit.expand,
+            clipBehavior: Clip.hardEdge,
             children: [
-              Image.network(
-                thumbnailUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: AppColors.placeholderBg,
+              Positioned.fill(
+                child: Image.network(
+                  thumbnailUrl,
+                  fit: BoxFit.cover,
                   alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.videocam_rounded,
-                    size: 40,
-                    color: AppColors.placeholderIcon,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: AppColors.placeholderBg,
+                    alignment: Alignment.center,
+                    child: const KalaiIcon(
+                      KalaiIcons.video,
+                      size: 40,
+                      color: AppColors.placeholderIcon,
+                    ),
                   ),
                 ),
               ),
-              Container(color: Colors.black.withValues(alpha: 0.2)),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ),
+              ),
               Center(child: _PlayButton()),
             ],
           ),
@@ -161,7 +177,7 @@ class _PlayButton extends StatelessWidget {
         border: Border.all(color: AppColors.white, width: 4),
       ),
       alignment: Alignment.center,
-      child: const Icon(Icons.play_arrow_rounded, color: AppColors.white, size: 32),
+      child: const KalaiIcon(KalaiIcons.play, color: AppColors.white, size: 32),
     );
   }
 }
@@ -213,8 +229,8 @@ class ArticleGalleryBlock extends StatelessWidget {
               errorBuilder: (_, __, ___) => Container(
                 color: AppColors.placeholderBg,
                 alignment: Alignment.center,
-                child: const Icon(
-                  Icons.image_rounded,
+                child: const KalaiIcon(
+                  KalaiIcons.photo,
                   size: 40,
                   color: AppColors.placeholderIcon,
                 ),

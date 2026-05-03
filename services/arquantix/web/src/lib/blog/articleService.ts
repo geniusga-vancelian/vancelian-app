@@ -4,9 +4,16 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { ContentStatus, ArticleBlockType, type Prisma } from '@prisma/client'
+import { ContentStatus, type Prisma } from '@prisma/client'
 import { getPresignedUrl } from '@/lib/storage/storageClient'
 import { resolveArticleCategoryLabels } from '@/lib/blog/articleCategoryLabels'
+import { resolveArticleBlocksForPublic } from '@/lib/blog/normalizeArticleBlocks'
+import {
+  parseArticleGalleryMediaIds,
+  resolveGalleryUrlsForMediaIds,
+  resolveArticleDocumentsWithUrls,
+} from '@/lib/blog/articleAttachments'
+import { effectiveArticleCoverTitle } from '@/lib/blog/articleCoverTitle'
 
 export interface ArticlePreview {
   id: string
@@ -570,117 +577,25 @@ export async function getArticleBySlug(
   const categorySlugs = parseCategorySlugs(article.categorySlugs)
   const categories = await resolveArticleCategoryLabels(categorySlugs, locale)
 
-  const galleryMediaIds: string[] = (() => {
-    const raw = (article as { galleryMediaIds?: unknown }).galleryMediaIds
-    if (!raw) return []
-    if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === 'string' && x.length > 0)
-    if (typeof raw === 'string') {
-      try {
-        const p = JSON.parse(raw)
-        return Array.isArray(p) ? p.filter((x: unknown): x is string => typeof x === 'string' && x.length > 0) : []
-      } catch {
-        return []
-      }
-    }
-    return []
-  })()
+  const galleryMediaIds = parseArticleGalleryMediaIds((article as { galleryMediaIds?: unknown }).galleryMediaIds)
+  const galleryUrls =
+    galleryMediaIds.length > 0 ? await resolveGalleryUrlsForMediaIds(prisma, galleryMediaIds) : []
 
-  const galleryUrls: string[] = []
-  for (const mediaId of galleryMediaIds) {
-    try {
-      const media = await prisma.media.findUnique({ where: { id: mediaId } })
-      if (media) {
-        let url = media.url
-        if (media.key) {
-          try {
-            url = await getPresignedUrl(media.key, 3600)
-          } catch {
-            // keep original
-          }
-        }
-        galleryUrls.push(url)
-      }
-    } catch {
-      // skip
-    }
-  }
+  const documentsResolved = await resolveArticleDocumentsWithUrls(prisma, article.documents)
+  const documents = documentsResolved.map((d) => ({
+    mediaId: typeof d.mediaId === 'string' ? d.mediaId : '',
+    title: typeof d.title === 'string' ? d.title : 'Document',
+    url: d.url ?? null,
+  }))
 
-  type DocRef = { mediaId?: string; title?: string }
-  const documentsRaw = (Array.isArray(article.documents) ? article.documents : []) as DocRef[]
-  const documents = await Promise.all(
-    documentsRaw.map(async (doc) => {
-      if (!doc?.mediaId) {
-        return { mediaId: '', title: doc.title || 'Document', url: null as string | null }
-      }
-      try {
-        const media = await prisma.media.findUnique({ where: { id: doc.mediaId } })
-        if (!media) return { mediaId: doc.mediaId, title: doc.title || 'Document', url: null }
-        let url = media.url
-        if (media.key) {
-          try {
-            url = await getPresignedUrl(media.key, 3600)
-          } catch {
-            // keep original
-          }
-        }
-        return { mediaId: doc.mediaId, title: doc.title || 'Document', url }
-      } catch {
-        return { mediaId: doc.mediaId, title: doc.title || 'Document', url: null }
-      }
-    })
-  )
-
-  const blocks: ArticleBlockApi[] = await Promise.all(
-    article.blocks.map(async (block) => {
-      const blockData = block.i18n[0]?.data || block.data
-      const data = (typeof blockData === 'object' && blockData !== null ? blockData : {}) as Record<string, unknown>
-
-      let imageUrl: string | undefined
-      if (block.type === ArticleBlockType.IMAGE && (data.mediaId as string)) {
-        try {
-          const media = await prisma.media.findUnique({ where: { id: data.mediaId as string } })
-          if (media?.key) {
-            try {
-              imageUrl = await getPresignedUrl(media.key, 3600)
-            } catch {
-              imageUrl = media.url
-            }
-          } else if (media?.url) {
-            imageUrl = media.url
-          }
-        } catch {
-          // no image
-        }
-      }
-
-      if (block.type === ArticleBlockType.DOCUMENT && (data.mediaId as string)) {
-        try {
-          const media = await prisma.media.findUnique({ where: { id: data.mediaId as string } })
-          if (media) {
-            let url = media.url
-            if (media.key) {
-              try {
-                url = await getPresignedUrl(media.key, 3600)
-              } catch {
-                // keep original
-              }
-            }
-            data.url = url
-          }
-        } catch {
-          // no url
-        }
-      }
-
-      return {
-        id: block.id,
-        type: block.type,
-        order: block.order,
-        data,
-        ...(imageUrl && { imageUrl }),
-      }
-    })
-  )
+  const resolvedBlocks = await resolveArticleBlocksForPublic(prisma, article.blocks)
+  const blocks: ArticleBlockApi[] = resolvedBlocks.map((b) => ({
+    id: b.id,
+    type: b.type,
+    order: b.order,
+    data: (typeof b.data === 'object' && b.data !== null ? b.data : {}) as Record<string, unknown>,
+    ...(b.imageUrl ? { imageUrl: b.imageUrl } : {}),
+  }))
 
   const articleType = article.articleType || 'NEWS'
   const isCompanyNews = effectiveIsCompanyNews({
@@ -695,7 +610,10 @@ export async function getArticleBySlug(
     title: i18n.title,
     standfirst: i18n.standfirst,
     coverUrl,
-    coverTitle: (i18n as { coverTitle?: string }).coverTitle ?? (article as { coverTitle?: string }).coverTitle ?? undefined,
+    coverTitle: effectiveArticleCoverTitle(
+      (i18n as { coverTitle?: string | null }).coverTitle,
+      (article as { coverTitle?: string | null }).coverTitle,
+    ),
     coverCredit: (article as { coverCredit?: string }).coverCredit ?? undefined,
     coverSource: (article as { coverSource?: string }).coverSource ?? undefined,
     authorName: article.authorName,

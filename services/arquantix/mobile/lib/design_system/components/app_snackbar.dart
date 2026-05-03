@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../atoms/app_colors.dart';
+import '../atoms/kalai_icons.dart';
+import 'kalai_icon.dart';
 
 /// Variante visuelle du [AppSnackbar].
 enum AppSnackbarVariant {
@@ -130,9 +132,9 @@ class AppSnackbar extends StatelessWidget {
   }
 
   Widget _buildActionIcon() {
-    final iconData = switch (action!) {
-      AppSnackbarAction.chevron => Icons.chevron_right_rounded,
-      AppSnackbarAction.close => Icons.close_rounded,
+    final assetPath = switch (action!) {
+      AppSnackbarAction.chevron => KalaiIcons.chevronRight,
+      AppSnackbarAction.close => KalaiIcons.clear,
     };
 
     return GestureDetector(
@@ -141,7 +143,7 @@ class AppSnackbar extends StatelessWidget {
       child: SizedBox(
         width: 16,
         height: 16,
-        child: Icon(iconData, size: 16, color: _actionIconColor),
+        child: KalaiIcon(assetPath, size: 16, color: _actionIconColor),
       ),
     );
   }

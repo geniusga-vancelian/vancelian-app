@@ -4,6 +4,7 @@ import '../../../../design_system/design_system.dart';
 import '../../data/help_api.dart';
 import '../../domain/models/help_center_models.dart';
 import 'help_articles_screen.dart';
+import 'help_search_layer.dart';
 import 'help_widgets.dart';
 
 class HelpCategoriesScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class HelpCategoriesScreen extends StatefulWidget {
 class _HelpCategoriesScreenState extends State<HelpCategoriesScreen> {
   final HelpApi _api = HelpApi();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   bool _loading = true;
   String? _error;
   List<HelpCategoryItem> _categories = const [];
@@ -31,12 +33,12 @@ class _HelpCategoriesScreenState extends State<HelpCategoriesScreen> {
   void initState() {
     super.initState();
     _load();
-    _searchController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -46,11 +48,26 @@ class _HelpCategoriesScreenState extends State<HelpCategoriesScreen> {
       _error = null;
     });
     try {
-      final response =
-          await _api.getCategories(collectionSlug: widget.collectionSlug);
+      final browse =
+          await _api.getCollectionBrowse(collectionSlug: widget.collectionSlug);
       if (!mounted) return;
+      if (browse.displayMode == HelpBrowseDisplayMode.flat) {
+        await Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => HelpArticlesScreen(
+              collectionSlug: widget.collectionSlug,
+              collectionTitle: widget.collectionTitle,
+              categorySlug: '__all__',
+              categoryTitle: widget.collectionTitle,
+              allArticlesInCollection: true,
+              initialArticles: browse.articles,
+            ),
+          ),
+        );
+        return;
+      }
       setState(() {
-        _categories = response.categories;
+        _categories = browse.tagGroups;
         _loading = false;
       });
     } catch (e) {
@@ -62,16 +79,6 @@ class _HelpCategoriesScreenState extends State<HelpCategoriesScreen> {
     }
   }
 
-  List<HelpCategoryItem> get _filtered {
-    final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return _categories;
-    return _categories.where((item) {
-      final base =
-          '${item.title} ${item.description ?? ''}'.toLowerCase();
-      return base.contains(q);
-    }).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     return PageSimpleNavBarTopTitlePageContent(
@@ -79,9 +86,18 @@ class _HelpCategoriesScreenState extends State<HelpCategoriesScreen> {
       onBackTap: () => Navigator.of(context).pop(),
       onRefresh: _load,
       content: [
-        HelpSearchBar(controller: _searchController),
+        HelpSearchBar(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+        ),
         const SizedBox(height: AppSpacing.xxl),
-        _buildBody(),
+        HelpDualSearchBody(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+          helpApi: _api,
+          collectionSlug: widget.collectionSlug,
+          normalBody: _buildBody(),
+        ),
       ],
     );
   }
@@ -105,10 +121,12 @@ class _HelpCategoriesScreenState extends State<HelpCategoriesScreen> {
         ),
       );
     }
-    return HelpChevronCardList(
-      items: _filtered
+    if (_categories.isEmpty) return const HelpEmptyResults();
+
+    return ListCardModule(
+      items: _categories
           .map(
-            (c) => HelpChevronCardItem(
+            (c) => ListCardItem(
               title: c.title,
               onTap: () {
                 Navigator.of(context).push(

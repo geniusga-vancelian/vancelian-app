@@ -451,6 +451,14 @@ class Config {
   static String helpCollectionCategoriesUrl(String collectionSlug) =>
       '$apiBaseUrl/api/help/collections/$collectionSlug/categories';
 
+  /// Hub Help (tags dérivés des articles + mode liste plate si un seul groupe).
+  static String helpCollectionBrowseUrl(String collectionSlug) =>
+      '$apiBaseUrl/api/help/collections/$collectionSlug/browse';
+
+  /// Tous les articles Help d'une collection (liste plate).
+  static String helpCollectionAllArticlesUrl(String collectionSlug) =>
+      '$apiBaseUrl/api/help/collections/$collectionSlug/articles';
+
   /// Articles d'une category Help.
   static String helpCategoryArticlesUrl(String collectionSlug, String categorySlug) =>
       '$apiBaseUrl/api/help/collections/$collectionSlug/categories/$categorySlug/articles';
@@ -469,8 +477,124 @@ class Config {
   /// Article Help par slug unique (FAQ, premier trouvé).
   static String get helpArticleBySlugUrl => '$apiBaseUrl/api/help/articles/by-slug';
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  ACADEMY — endpoints symétriques à Help (Phase 4 — pédagogie produit)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Recherche Academy.
+  static String get academySearchUrl => '$apiBaseUrl/api/academy/search';
+
+  /// Collections Academy.
+  static String get academyCollectionsUrl => '$apiBaseUrl/api/academy/collections';
+
+  /// Categories d'une collection Academy.
+  static String academyCollectionCategoriesUrl(String collectionSlug) =>
+      '$apiBaseUrl/api/academy/collections/$collectionSlug/categories';
+
+  /// Articles d'une category Academy.
+  static String academyCategoryArticlesUrl(String collectionSlug, String categorySlug) =>
+      '$apiBaseUrl/api/academy/collections/$collectionSlug/categories/$categorySlug/articles';
+
+  /// Detail d'un article Academy.
+  static String academyArticleDetailUrl(
+    String collectionSlug,
+    String categorySlug,
+    String articleSlug,
+  ) =>
+      '$apiBaseUrl/api/academy/collections/$collectionSlug/categories/$categorySlug/articles/$articleSlug';
+
+  /// Liste d'articles Academy filtrée par tag (ex. projet EXCLUSIVE_OFFER).
+  static String get academyArticlesByTagUrl => '$apiBaseUrl/api/academy/articles/by-tag';
+
+  /// Article Academy par slug unique (premier trouvé).
+  static String get academyArticleBySlugUrl => '$apiBaseUrl/api/academy/articles/by-slug';
+
   /// Chat conversationnel (réponses Markdown via OpenAI).
+  ///
+  /// **Legacy / non authentifié** — gardé pour compat le temps que toutes les
+  /// builds passent à [mobileAssistanceChatTurnUrl] (MVP D.0.1, persistance
+  /// per-client + rate-limit côté Python). À retirer après validation prod.
   static String get chatUrl => '$apiBaseUrl/api/chat';
+
+  /// Assistance « sur mesure » mobile (Search Screen) — proxy BFF Next →
+  /// FastAPI Python `/api/app/assistance/chat/turn`. Authentifié par Bearer JWT
+  /// (cf. [SessionBearerHttp]), retourne `{ conversationId, messageId, content }`.
+  static String get mobileAssistanceChatTurnUrl =>
+      '$apiBaseUrl/api/mobile/flutter/assistance/chat/turn';
+
+  /// Historique d'une conversation d'assistance (MVP D.1.6 — reprise visuelle).
+  /// Renvoie `{ conversation_id, title, status, messages: [{turn_index, role, content, created_at}, …] }`,
+  /// trié par `turn_index` croissant. Limit par défaut côté serveur = 100.
+  static String mobileAssistanceConversationMessagesUrl(
+    String conversationId, {
+    int? limit,
+  }) {
+    final base =
+        '$apiBaseUrl/api/mobile/flutter/assistance/conversations/${Uri.encodeComponent(conversationId)}/messages';
+    if (limit != null && limit > 0) {
+      return '$base?limit=$limit';
+    }
+    return base;
+  }
+
+  /// MVP D.1.4.2 — POST `/conversations/{id}/read` : marque comme lue.
+  static String mobileAssistanceConversationReadUrl(String conversationId) {
+    return '$apiBaseUrl/api/mobile/flutter/assistance/conversations/${Uri.encodeComponent(conversationId)}/read';
+  }
+
+  /// MVP D.1.4.5 — POST `/chat/turn/stream` : streaming SSE (effet
+  /// ChatGPT mot-par-mot). Fallback automatique sur polling si le stream
+  /// échoue (réseau, proxy, edge buffering).
+  static String get mobileAssistanceChatTurnStreamUrl =>
+      '$apiBaseUrl/api/mobile/flutter/assistance/chat/turn/stream';
+
+  /// MVP D.1.4.7 — POST `/chat/turn/{conv_id}/cancel` : annulation
+  /// volontaire du tour assistant en cours (équivalent du carré stop
+  /// ChatGPT). Idempotent (204 même si pas de génération en cours).
+  /// Ne tue PAS la task sur disconnect réseau — seulement sur appel
+  /// explicite à cet endpoint.
+  static String mobileAssistanceChatTurnCancelUrl(String conversationId) {
+    return '$apiBaseUrl/api/mobile/flutter/assistance/chat/turn/${Uri.encodeComponent(conversationId)}/cancel';
+  }
+
+  /// Voice input — moteur Whisper uniquement.
+  ///
+  /// Endpoint upload audio (multipart `audio` field, .m4a/aacLc) →
+  /// proxy BFF Next vers `POST /api/app/assistance/voice/transcribe`
+  /// (FastAPI Python qui appelle l'API OpenAI Whisper). Authentifié
+  /// par Bearer JWT (cf. [SessionBearerHttp]).
+  ///
+  /// Retourne `{ "transcript": "..." }`.
+  ///
+  /// **Pas appelé** quand `ASSISTANCE_VOICE_ENGINE=native` (défaut) :
+  /// la transcription a lieu localement via le moteur natif iOS/Android,
+  /// sans aucun upload réseau.
+  static String get mobileAssistanceVoiceTranscribeUrl =>
+      '$apiBaseUrl/api/mobile/flutter/assistance/voice/transcribe';
+
+  /// Liste des conversations d'assistance du client (MVP D.1.4 — page
+  /// « Mes conversations »). Renvoie `{ conversations: [{id, title, status,
+  /// created_at, last_message_at}, …] }` triée par `last_message_at` DESC.
+  /// Filtres optionnels : `status=active|closed`, `limit` (1-100, défaut 50),
+  /// `before` (ISO datetime pour pagination cursor-based).
+  static String mobileAssistanceConversationsUrl({
+    String? status,
+    int? limit,
+    String? before,
+  }) {
+    final base = '$apiBaseUrl/api/mobile/flutter/assistance/conversations';
+    final params = <String>[];
+    if (status != null && status.isNotEmpty) {
+      params.add('status=${Uri.encodeComponent(status)}');
+    }
+    if (limit != null && limit > 0) {
+      params.add('limit=$limit');
+    }
+    if (before != null && before.isNotEmpty) {
+      params.add('before=${Uri.encodeComponent(before)}');
+    }
+    return params.isEmpty ? base : '$base?${params.join('&')}';
+  }
 
   /// Base URL de l’API Market Data (FastAPI).
   /// - Si MARKET_DATA_BASE_URL est défini : utilisé (sur iOS, localhost → 127.0.0.1 pour le simulateur).

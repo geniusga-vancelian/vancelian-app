@@ -1,19 +1,25 @@
-# Runbook - Arquantix Vitrine + CMS
+# Runbook — Arquantix (Next.js + API + PostgreSQL)
 
-**Date:** 2026-01-01  
-**Status:** 🚧 En cours de développement
+**Date:** 2026-04-13  
+**Status:** opérationnel (local)
+
+**Entrée unique — setup local, quick start, fichiers d’env** : **[LOCAL_SETUP.md](./LOCAL_SETUP.md)**.
+
+> **Le CMS Strapi a été retiré du projet et n’est plus utilisé.** La stack Docker locale est : **arquantix-db**, **arquantix-redis**, **arquantix-api**, **arquantix-web** (projet Compose typique : **`arquantixrecovery`**, fichier **`docker-compose.arquantix-recovery.yml`** — voir `.env.arquantix`).
 
 ---
 
 ## TL;DR
 
-Procédures opérationnelles pour démarrer, arrêter, réinitialiser, et gérer le développement local d'Arquantix (Next.js + Strapi + PostgreSQL via Docker Compose).
+**Mode recommandé :** stack **100 % Docker** (API + Web + DB + Redis). Aucun besoin de lancer Next.js ou FastAPI sur l’hôte dans un usage standard.
 
-**Environnement local « verrouillé » (commandes officielles, base `arquantix`, pièges à éviter)** : voir **[LOCAL_ENV_RUNBOOK.md](./LOCAL_ENV_RUNBOOK.md)**.
+Procédures pour démarrer, arrêter et dépanner Arquantix en local (**Next.js + FastAPI + PostgreSQL + Redis** via Docker Compose).
+
+**Environnement « verrouillé »** (commandes officielles, `DB_NAME`, pièges à éviter) : **[LOCAL_ENV_RUNBOOK.md](./LOCAL_ENV_RUNBOOK.md)**.
 
 ### Reprise de session (recommandé)
 
-Une seule commande depuis la **racine du dépôt** :
+Depuis la **racine du dépôt** :
 
 ```bash
 bash scripts/start-arquantix.sh
@@ -21,193 +27,223 @@ bash scripts/start-arquantix.sh
 make -f Makefile.arquantix arquantix-dev-start-clean
 ```
 
-**Ce que ça fait (résumé)** : vérifie que `.env.arquantix`, `services/arquantix/api/.env.local` et `services/arquantix/web/.env.local` référencent la base canonique **`arquantix`** ; arrête les anciens workers `run_binance_ws_ingestion.py` et, sauf option, les **node / Python** qui occupent les ports Web/API sur l’hôte ; lance **`make -f Makefile.arquantix arquantix-up`** (seule voie officielle) ; contrôle conteneurs, ports, `DATABASE_URL` des services **api/web**, smoke HTTP (`/health`, `/openapi.json`, `/`, `/admin/login`) ; relance le **worker Binance WS** avec `source .env.arquantix` (logs : `/tmp/run_binance_ws_ingestion.log` par défaut).
+**Résumé** : vérifie `.env.arquantix`, `services/arquantix/api/.env.local` et `services/arquantix/web/.env.local` (base **`arquantix_fresh`** selon votre réglage) ; arrête les anciens workers `run_binance_ws_ingestion.py` et, sauf option, les processus sur les ports Web/API côté hôte ; lance **`make -f Makefile.arquantix arquantix-up`** (aligné sur `.env.arquantix`) ; smoke HTTP (`/health`, `/openapi.json`, `/`, `/admin/login`) ; optionnellement worker Binance WS (logs : `/tmp/run_binance_ws_ingestion.log`).
 
-**Options** : `bash scripts/start-arquantix.sh --skip-worker` (ne pas relancer le worker) ; `--skip-host-cleanup` (ne pas tuer les serveurs sur les ports).
+**Options** : `--skip-worker` ; `--skip-host-cleanup`.
 
-**Arrêt** : `bash scripts/stop-arquantix.sh` (worker uniquement) ; `bash scripts/stop-arquantix.sh --compose-down` (worker + `arquantix-down`). Équivalent : `make -f Makefile.arquantix arquantix-dev-stop`.
+**Arrêt** : `bash scripts/stop-arquantix.sh` ; `bash scripts/stop-arquantix.sh --compose-down` (worker + `arquantix-down`). Équivalent : `make -f Makefile.arquantix arquantix-dev-stop`.
 
-**À ne pas faire** en parallèle sans le vouloir : second `next dev` ou **uvicorn** sur les mêmes ports que Docker ; ancien worker Binance laissé tourner après changement de `DB_NAME`.
+**À ne pas faire** sans le vouloir : second `next dev` ou **uvicorn** sur les mêmes ports que Docker ; ancien worker Binance après changement de `DB_NAME`.
 
-Les **ports** affichés en fin de script suivent **`.env.arquantix`** (`WEB_PORT`, `API_PORT`, etc.) — souvent Web **3000** et API **8000** en local.
+Les **ports** suivent **`.env.arquantix`** (`WEB_PORT`, `API_PORT`, etc.) — souvent Web **3000** et API **8000**.
+
+**DX (racine du dépôt)** : `make -f Makefile.arquantix local-doctor` (ports 3000 / 8000 / 5443, conflit Docker web vs Next hôte, garde-fous :3001/:5433 dans les env — [LOCAL_STACK_DOCTOR.md](./LOCAL_STACK_DOCTOR.md)), **`make -f Makefile.arquantix local-db-doctor`** (cible DB API · Alembic · Prisma + tables CMS — [LOCAL_DB_ALIGNMENT.md](./LOCAL_DB_ALIGNMENT.md)), **`make -f Makefile.arquantix local-env-guard`** (scan env listés), `make doctor` (diagnostic + durée), `make doctor-fix` (correctifs sûrs), `make status` ou `make status-watch` (tableau terminal stack **recovery**, lecture seule). Détail : [QUICK_START.md](./QUICK_START.md), entrée unique : [LOCAL_SETUP.md](./LOCAL_SETUP.md).
 
 ---
 
 ## Source de vérité des fichiers d’environnement
 
+Tableau détaillé et modes de travail : **[LOCAL_SETUP.md](./LOCAL_SETUP.md)**.
+
 | Contexte | Fichier de vérité |
 |----------|-------------------|
-| Docker Compose / ports (`DB_PORT`, `WEB_PORT`, etc.) | `.env.arquantix` à la racine du repo |
-| API Python en local (hors conteneur) | `services/arquantix/api/.env.local` |
-| Next.js / BFF / Prisma en local | `services/arquantix/web/.env` + `services/arquantix/web/.env.local` |
-| `.env` à la racine du repo | Aligner `DATABASE_URL` sur la même base que la stack (`arquantix` sur `DB_PORT`) ; la **référence** reste `.env.arquantix` + `.env.local` API/web |
+| Docker Compose / ports (`DB_PORT`, `WEB_PORT`, `COMPOSE_PROJECT_NAME`, …) | `.env.arquantix` (racine du repo) |
+| API Python hors conteneur | `services/arquantix/api/.env.local` |
+| Next / BFF / Prisma hors conteneur | `services/arquantix/web/.env.local` (principal) ; `services/arquantix/web/.env` si utilisé |
+| Variables pour Next **dans** Docker (ex. vidéo admin) | `.env` racine (`DATABASE_URL` aligné sur la même base) |
 
 ---
 
 ## Base de données locale (API Alembic + Prisma web)
 
-Sur la **même** base PostgreSQL partagée entre l’API et Prisma :
+Même base PostgreSQL pour l’API et Prisma :
 
-1. **API** : migrations **Alembic** (`services/arquantix/api`) — au démarrage du conteneur : `alembic upgrade head` (voir `services/arquantix/api/Dockerfile`).
-2. **Web** : schéma Prisma — en dev local, **`prisma migrate deploy` n’est en général pas le réflexe** sur une base déjà remplie par Alembic (risque P3005). Utiliser plutôt **`npx prisma db push`** si besoin d’aligner le schéma, puis **`npx prisma db seed`** (ou `npm run db:sync` sous `services/arquantix/web`).
+1. **API** : Alembic — au démarrage du conteneur : `alembic upgrade head` (voir `services/arquantix/api/Dockerfile`).
+2. **Web** : Prisma — en dev, **`prisma migrate deploy`** n’est en général pas le réflexe sur une base déjà remplie par Alembic (risque P3005). Préférer **`npx prisma db push`** si besoin, puis seed / `npm run db:sync` sous `services/arquantix/web`.
 
 ---
 
 ## Secours PostgreSQL (`pg_hba.conf` tronqué / octets NUL)
 
-Si l’API ne joint plus Postgres depuis le réseau Docker (`no pg_hba.conf entry` / conteneur `arquantix-api` en restart) :
+Si l’API ne joint plus Postgres depuis le réseau Docker :
 
 1. Conteneur `arquantix-db` actif.
-2. Exécuter : `bash services/arquantix/tooling/fix_arquantix_pg_hba.sh`
-3. Puis : `docker restart arquantix-api`
+2. `bash services/arquantix/tooling/fix_arquantix_pg_hba.sh`
+3. `docker restart` du conteneur `arquantix-api` (nom exact selon `docker ps`).
 
-Les **nouveaux** volumes DB exécutent aussi `services/arquantix/db/docker-entrypoint-initdb.d/` (règle réseau) — les volumes **existants** déjà corrompus nécessitent le script ou une recréation de volume.
+Les **nouveaux** volumes DB exécutent aussi `services/arquantix/db/docker-entrypoint-initdb.d/`.
 
 ### Dérive schéma (`alembic_version` = head mais DDL incomplet)
 
-Si des routes métier renvoient 500 (ex. colonne `persons.login_frozen` absente, tables `auth_webauthn_challenges` / `auth_passkeys` manquantes) **sans** vouloir effacer la base : **backup `pg_dump -Fc` d’abord**, puis appliquer le script idempotent aligné sur les migrations 110 / 128 / 129 :
-
-```bash
-docker exec -i arquantix-db psql -U arquantix -d arquantix < services/arquantix/db/repair_schema_drift_110_128_129.sql
-```
-
-Puis `docker restart arquantix-api` et retester les routes concernées.
+Si des routes renvoient 500 (colonnes / tables manquantes) **sans** vouloir effacer la base : **backup `pg_dump -Fc` d’abord**, puis script idempotent (voir migrations 110 / 128 / 129 dans le repo), puis redémarrage API.
 
 ---
 
-## Ce qui est vrai aujourd'hui
+## Architecture locale (Docker)
 
-### Commandes Disponibles
+| Service Compose | Rôle |
+|-----------------|------|
+| `arquantix-db` | PostgreSQL (données app) |
+| `arquantix-redis` | Redis |
+| `arquantix-api` | FastAPI |
+| `arquantix-web` | Next.js |
 
-Depuis la racine du repo, utiliser `Makefile.arquantix`:
+**Pas de service `arquantix-cms`.** Ancien dossier `services/arquantix/cms/` : voir [README](../../services/arquantix/cms/README.md) (deprecated).
+
+---
+
+## Commandes disponibles
+
+Depuis la racine :
 
 ```bash
 make -f Makefile.arquantix <command>
 ```
 
-Ou directement avec Docker Compose (même projet et même env que `make` / `scripts/dev-reset.sh`) :
+Invocation Compose **alignée sur `.env.arquantix`** (souvent `COMPOSE_PROJECT_NAME=arquantixrecovery`, `ARQUANTIX_COMPOSE_FILE=docker-compose.arquantix-recovery.yml`) :
 
 ```bash
-docker compose --project-name arquantix --env-file .env.arquantix -f docker-compose.arquantix.yml <command>
+docker compose --project-name "$(grep '^COMPOSE_PROJECT_NAME=' .env.arquantix | head -1 | cut -d= -f2)" \
+  --env-file .env.arquantix \
+  -f "$(grep '^ARQUANTIX_COMPOSE_FILE=' .env.arquantix | head -1 | cut -d= -f2)" \
+  <subcommand>
 ```
 
-Pour éviter de répéter la ligne complète, vous pouvez définir dans votre shell :
+Alias pratique (adapter les valeurs si besoin) :
 
 ```bash
-export ARQUANTIX_COMPOSE='docker compose --project-name arquantix --env-file .env.arquantix -f docker-compose.arquantix.yml'
+export ARQUANTIX_COMPOSE='docker compose --project-name arquantixrecovery --env-file .env.arquantix -f docker-compose.arquantix-recovery.yml'
 ```
 
-*(Adapter `--project-name` si votre `COMPOSE_PROJECT_NAME` dans `.env.arquantix` n’est pas `arquantix`.)*
+### ⚠️ IMPORTANT — Legacy (`docker-compose.arquantix.yml`)
+
+Le fichier **`docker-compose.arquantix.yml`** est un fichier **historique (legacy)**. Il **ne doit pas** être utilisé pour **démarrer** la stack au quotidien.
+
+**Toujours utiliser :** **`docker-compose.arquantix-recovery.yml`** (avec `COMPOSE_PROJECT_NAME` et `.env.arquantix` — voir ci‑dessus).
+
+**Pourquoi :** éviter les conflits de réseau Docker, les incohérences de namespace, et garantir l’alignement avec `.env.arquantix`.
+
+Le fichier legacy peut encore être mentionné dans d’anciens scripts ou teardowns ; le mode **recovery** et les procédures associées sont décrits dans [LOCAL_DOCKER_RECOVERY.md](../LOCAL_DOCKER_RECOVERY.md).
 
 ---
 
-> **⚠️ Sections ci-dessous révisées (2026-04)** — Les blocs en tête de document (**source de vérité .env**, **base Alembic + Prisma**, **pg_hba**, **dérive schéma / `repair_schema_drift_110_128_129.sql`**) font foi. Toute procédure plus bas doit utiliser **`Makefile.arquantix`** ou la même invocation Compose que ci-dessus (`--project-name` + `--env-file .env.arquantix`), et les **ports** lus dans **`.env.arquantix`** (`DB_PORT`, `WEB_PORT`, `CMS_PORT`, `API_PORT`), pas des valeurs figées obsolètes.
+## Procédures
 
----
-
-## Procédures (Docker Compose unifié)
-
-**Ports de référence** (voir `docker-compose.arquantix.yml` + `.env.arquantix`) :
+**Ports de référence** (lire `.env.arquantix`) :
 
 | Service | Hôte (exemples) | Conteneur |
 |---------|-----------------|-----------|
-| PostgreSQL app (API + Prisma) | `${DB_PORT:-5433}` — souvent **5443** en local | `arquantix-db:5432` |
+| PostgreSQL | `${DB_PORT:-5443}` → | `arquantix-db:5432` |
 | API FastAPI | `${API_PORT:-8000}` | `8000` |
-| Next (image Docker) | `${WEB_PORT:-3001}` | `3000` |
-| Strapi | `${CMS_PORT:-1337}` | `1337` (défaut **SQLite** embarqué, pas de service `arquantix-cms-db` dans le compose actuel) |
+| Next | `${WEB_PORT:-3000}` | `3000` |
 
 ### 1. Démarrer les services
 
 ```bash
 make -f Makefile.arquantix arquantix-up
 # ou
-$ARQUANTIX_COMPOSE up -d
-$ARQUANTIX_COMPOSE ps
+make -f Makefile.arquantix arquantix-recovery-up
 ```
 
-**URLs typiques :** site Next Docker → `http://localhost:${WEB_PORT:-3001}` ; Strapi admin → `http://localhost:${CMS_PORT:-1337}/admin` ; API → `http://127.0.0.1:${API_PORT:-8000}/health`.
+**URLs typiques** : Web → `http://localhost:${WEB_PORT:-3000}/` ; API → `http://127.0.0.1:${API_PORT:-8000}/health`.
 
 ### 2. Arrêter sans supprimer les volumes
 
 ```bash
 make -f Makefile.arquantix arquantix-down
-# ou
-$ARQUANTIX_COMPOSE down
 ```
 
-### 3. Réinitialiser les données (destructif)
+### 3. « Reset » destructif (volumes)
 
-**⚠️** Supprime les volumes du projet (PostgreSQL app, Redis, etc.).
-
-```bash
-make -f Makefile.arquantix arquantix-reset   # interactif
-# ou
-$ARQUANTIX_COMPOSE down -v
-```
+Les cibles **`arquantix-reset`** et **`arquantix-clean`** sont **désactivées** dans le Makefile (risque `down -v`). Ne pas utiliser `docker compose down -v` sans procédure validée.
 
 ### 4. Logs
 
 ```bash
 make -f Makefile.arquantix arquantix-logs
 # ou
-$ARQUANTIX_COMPOSE logs -f
-$ARQUANTIX_COMPOSE logs -f arquantix-api
-$ARQUANTIX_COMPOSE logs --tail=100 arquantix-web
+docker compose … logs -f arquantix-api
+docker compose … logs --tail=100 arquantix-web
 ```
 
-### 5. Rebuild / shells / nettoyage profond
+### 5. Build / shell web
 
 ```bash
 make -f Makefile.arquantix arquantix-build
-make -f Makefile.arquantix arquantix-shell-cms
 make -f Makefile.arquantix arquantix-shell-web
-make -f Makefile.arquantix arquantix-clean   # down -v --rmi local
 ```
 
-**Next en local (hors Docker)** : `scripts/dev-reset.sh` ou `cd services/arquantix/web && npm run dev` — souvent port **3000** ; l’API reste joignable sur `127.0.0.1:8000`.
+**`arquantix-shell-cms`** : désactivé — Strapi retiré du compose.
 
-**Next en Docker (`arquantix-web`) — volume `.next` :** le compose monte le code source sous `/app` mais un volume anonyme recouvre **`/app/.next`**. `next start` lit **uniquement** ce build : les changements dans `src/app/api/**/route.ts` ne sont **pas** pris en compte tant que vous n’avez pas regénéré `.next` (ex. `cd services/arquantix/web && npm run build` sur l’hôte, puis copier le dossier `.next` dans le conteneur **ou** `docker compose build arquantix-web` et redémarrer). Symptôme typique : BFF obsolète (ex. liste produits PE vide alors que l’API renvoie des bundles).
+**Next en local (hors Docker)** : `scripts/dev-reset.sh` ou `cd services/arquantix/web && npm run dev`.
 
-### 6. Worker ingestion Binance (WebSocket), hors Docker
+**Next en Docker** — volume `.next` : le compose peut recouvrir `/app/.next` ; après changements sensibles sur les routes, rebuild image ou regénérer `.next` selon votre flux.
 
-Les scripts Python lancés **sur l’hôte** n’héritent pas des variables du `docker compose`. Après un changement de `DB_NAME` / `DATABASE_URL`, un redémarrage machine, ou si un ancien processus tourne encore, **relancer explicitement** le worker avec la même source d’env que la stack :
+### 6. Worker ingestion Binance (hors Docker)
 
-```bash
-cd services/arquantix/api
-# optionnel : pgrep -fl run_binance_ws_ingestion  puis  kill <pid>
-nohup bash -c 'set -a && source ../../.env.arquantix && set +a && exec python3 scripts/run_binance_ws_ingestion.py' \
-  >> /tmp/run_binance_ws_ingestion.log 2>&1 &
-```
+Les scripts sur l’hôte n’héritent pas du `docker compose`. Après changement de `DB_NAME` ou reboot, relancer le worker avec la même env que la stack (`source .env.arquantix`). Voir aussi `scripts/start-arquantix.sh`.
 
-Vérifier dans `.env.arquantix` que `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` correspondent à la base de travail active (**`arquantix`** sur le port exposé par `arquantix-db`).
+### 7. Doctor DX (`make doctor` / `make doctor-fix`)
+
+- **`make doctor`** — diagnostic lisible : Docker, `.env.arquantix`, services **db / redis / api / web**, `/health` API, page Web, Postgres (`pg_isready`), Redis (`PING`), réseau **arquantix_recovery_network**, détection **legacy** `arquantix` (sans action automatique). Verdict final : **SAFE**, **WARNING** ou **CRITICAL** (scripts : `scripts/doctor.sh`).
+- **`make doctor-fix`** — uniquement des actions **sûres** : `compose up -d --remove-orphans`, puis si besoin **`restart`** de `arquantix-api` ou `arquantix-web`. **Jamais** `down -v`, prune de volumes, ni modification de données (script : `scripts/doctor_fix.sh`).
+
+Diagnostic Compose détaillé (historique) : `make -f Makefile.arquantix arquantix-doctor` → `scripts/arquantix_local_doctor.sh`.
 
 ---
 
-## À vérifier quand ça casse
+## Autostart Mac (optionnel)
+
+La stack Arquantix peut démarrer automatiquement au login via un **LaunchAgent**.
+
+**Script utilisé :** `scripts/start_arquantix_recovery_boot.sh`
+
+**Comportement :**
+
+- Démarre uniquement la stack Docker **recovery** (`arquantixrecovery` + `docker-compose.arquantix-recovery.yml`).
+- Ne fait **jamais** de `down -v` ni de suppression de volumes.
+- Vérifie automatiquement la santé de l’API (`/health`).
+
+**Logs (launchd) :**
+
+- `/tmp/com.arquantix.autostart.stdout.log`
+- `/tmp/com.arquantix.autostart.stderr.log`
+
+**Forcer un lancement manuel** (si l’agent est installé) :
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.arquantix.autostart
+```
+
+Installation et désinstallation : [LOCAL_MAC_AUTOSTART.md](../LOCAL_MAC_AUTOSTART.md).
+
+---
+
+## Debug
 
 ### Ports déjà utilisés
 
 ```bash
-lsof -nP -iTCP:${WEB_PORT:-3001} -sTCP:LISTEN
-lsof -nP -iTCP:${CMS_PORT:-1337} -sTCP:LISTEN
+lsof -nP -iTCP:${WEB_PORT:-3000} -sTCP:LISTEN
+lsof -nP -iTCP:${API_PORT:-8000} -sTCP:LISTEN
 lsof -nP -iTCP:${DB_PORT:-5443} -sTCP:LISTEN
 ```
 
-### PostgreSQL applicatif (Arquantix API / Prisma)
+### PostgreSQL applicatif
 
-Le service s’appelle **`arquantix-db`**, pas `arquantix-cms-db`. Exemple :
+Le service s’appelle **`arquantix-db`**. Exemple (adapter projet / fichier compose) :
 
 ```bash
-$ARQUANTIX_COMPOSE ps arquantix-db
-$ARQUANTIX_COMPOSE logs arquantix-db
-docker exec arquantix-db psql -U arquantix -d "${DB_NAME:-arquantix}" -c "SELECT current_database();"
+docker compose --project-name arquantixrecovery --env-file .env.arquantix -f docker-compose.arquantix-recovery.yml ps arquantix-db
 ```
-
-### Strapi ↔ Next
-
-Dans le réseau Compose, Strapi écoute le port **1337** (`arquantix-cms:1337`). Les variables `NEXT_PUBLIC_STRAPI_*` doivent être alignées (souvent `http://localhost:1337` depuis le navigateur sur la machine hôte).
 
 ---
 
-**Dernière mise à jour:** 2026-04-13
+## Voir aussi
 
+- [QUICK_START.md](./QUICK_START.md) — onboarding : **`make setup`**
+- [LOCAL_ENV_RUNBOOK.md](./LOCAL_ENV_RUNBOOK.md)
+- [LOCAL_DOCKER_RECOVERY.md](../LOCAL_DOCKER_RECOVERY.md)
+- [API (FastAPI)](../../services/arquantix/api/) — OpenAPI `/docs`
+
+**Dernière mise à jour :** 2026-04-13

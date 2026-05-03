@@ -7,6 +7,7 @@ import '../atoms/atoms.dart';
 import 'app_back_button.dart';
 import 'app_small_button.dart';
 import 'ds_news_tag.dart';
+import 'kalai_icon.dart';
 
 /// Carte d'investissement immersive avec image, overlay gradient, badges,
 /// informations financières, barre de progression et section de contenu blanche.
@@ -172,8 +173,8 @@ class InvestmentCard extends StatelessWidget {
           size: _favoriteButtonSize,
           variant: AppBackButtonVariant.glassDark,
           onPressed: onFavorite,
-          child: const Icon(
-            Icons.diamond_outlined,
+          child: const KalaiIcon(
+            KalaiIcons.heart,
             color: AppColors.white,
             size: 13,
           ),
@@ -217,8 +218,8 @@ class InvestmentCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(
-          Icons.people_outline_rounded,
+        const KalaiIcon(
+          KalaiIcons.userGroup,
           color: AppColors.white,
           size: 15,
         ),

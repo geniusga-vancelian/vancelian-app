@@ -6,8 +6,22 @@ import Link from 'next/link'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { toastSuccess, toastError } from '@/lib/admin/toast'
 import { TranslateModal } from '@/components/admin/TranslateModal'
+import { LanguageCheckActions } from '@/components/admin/LanguageCheckActions'
 import { supportedLocales, defaultLocale, type Locale } from '@/config/locales'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { MenuStructureAlignmentPanel } from '@/components/admin/MenuStructureAlignmentPanel'
+import {
+  computeMenuEditorPolicy,
+  selectMenuNameToDisplay,
+} from '@/lib/admin/menuEditorPolicy'
+import { selectActiveLocaleEditsForSave } from '@/lib/admin/menuSaveLocale'
+
+const LOCALE_LABEL: Record<Locale, string> = {
+  fr: 'Français',
+  en: 'English',
+  it: 'Italiano',
+}
 
 interface Page {
   id: string
@@ -79,6 +93,33 @@ export default function AdminMenuPage() {
   const [savingMenuI18n, setSavingMenuI18n] = useState(false)
   const [approving, setApproving] = useState<Record<string, string>>({}) // itemId -> locale
   const [approvingMenu, setApprovingMenu] = useState<string>('') // locale
+  /**
+   * Locale unique pilotant l'éditeur (alignement UX strict avec
+   * `SiteFooterEditor.activeLocale`) :
+   *   - libellés affichés (refetch avec `?locale=${activeLocale}`),
+   *   - bouton « Copier depuis FR » (cible = activeLocale),
+   *   - bandeau Contrôle linguistique (scan + apply pour activeLocale),
+   *   - verrouillage de la structure (lecture seule quand ≠ defaultLocale).
+   */
+  const [activeLocale, setActiveLocale] = useState<Locale>(defaultLocale as Locale)
+  const [copyLocaleDialog, setCopyLocaleDialog] = useState<Locale | null>(null)
+  const [copyLocaleMode, setCopyLocaleMode] = useState<'missing' | 'overwrite'>('missing')
+  const [copyingLocale, setCopyingLocale] = useState(false)
+  /**
+   * Bouton « Tout enregistrer pour cette locale » — équivalent du bouton
+   * « Enregistrer » du `SiteFooterEditor`. Persiste en une seule transaction
+   * tous les inputs inline en mémoire (`menuName`, `menuI18nNames[locale]`,
+   * `i18nLabels[*][locale]`) via `POST /api/admin/menus/[key]/save-locale`.
+   */
+  const [savingLocale, setSavingLocale] = useState(false)
+  /**
+   * Politique d'édition unique (source de vérité testée et partagée avec
+   * `menuEditorPolicy.test.ts`). Cf. `lib/admin/menuEditorPolicy.ts` pour
+   * les invariants : structure verrouillée hors `defaultLocale`, copie
+   * pertinente uniquement quand `activeLocale !== defaultLocale`, etc.
+   */
+  const policy = computeMenuEditorPolicy(activeLocale, defaultLocale as Locale)
+  const { isStructureLocked } = policy
   const [newItem, setNewItem] = useState({
     label: '',
     type: 'LINK' as 'LINK' | 'BUTTON',
@@ -91,13 +132,120 @@ export default function AdminMenuPage() {
   })
 
   useEffect(() => {
-    fetchMenu()
     fetchPages()
   }, [])
 
-  const fetchMenu = async () => {
+  // Refetch menu chaque fois que la locale active change : le serveur
+  // résout `Menu.name` / `MenuItem.label` via `resolveLabelWithFallback`
+  // et renvoie les libellés vus par un visiteur dans cette locale.
+  useEffect(() => {
+    fetchMenu(activeLocale)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLocale])
+
+  const handleCopyLocaleConfirm = async () => {
+    if (!menu || !copyLocaleDialog) return
+    setCopyingLocale(true)
     try {
-      const response = await fetch('/api/admin/menus/primary?locale=fr')
+      const res = await fetch(
+        `/api/admin/menus/${encodeURIComponent(menu.key)}/copy-locale`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceLocale: defaultLocale,
+            targetLocale: copyLocaleDialog,
+            mode: copyLocaleMode,
+          }),
+        },
+      )
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Échec de la copie')
+      }
+      const s = data.summary ?? {}
+      const parts: string[] = []
+      if (s.menuName === 'copied') parts.push('nom du menu copié')
+      else if (s.menuName === 'skippedExisting') parts.push('nom du menu préservé')
+      parts.push(`${s.itemsCopied ?? 0} item(s) copié(s)`)
+      if (s.itemsSkippedExisting) parts.push(`${s.itemsSkippedExisting} préservé(s)`)
+      if (s.itemsSkippedDisabled) parts.push(`${s.itemsSkippedDisabled} désactivé(s)`)
+      toastSuccess(
+        `Copié ${defaultLocale.toUpperCase()} → ${copyLocaleDialog.toUpperCase()} : ${parts.join(', ')}.`,
+      )
+      const justCopiedTo = copyLocaleDialog
+      setCopyLocaleDialog(null)
+      // Bascule automatique sur la locale qu'on vient de remplir (alignement
+      // Footer : « Copier depuis FR » s'effectue en restant dans le contexte
+      // de la locale ciblée).
+      if (justCopiedTo !== activeLocale) {
+        setActiveLocale(justCopiedTo)
+      } else {
+        await fetchMenu(activeLocale)
+      }
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : 'Erreur de copie')
+    } finally {
+      setCopyingLocale(false)
+    }
+  }
+
+  /**
+   * Persiste en bulk pour `activeLocale` toutes les éditions inline en
+   * mémoire (input « Menu Name », accordéons « Localized Names »/«Localized
+   * Labels »). Évite à l'opérateur d'avoir à cliquer N petits boutons
+   * individuels par locale × item — alignement strict Footer
+   * (`SiteFooterEditor.handleSave`). Idempotent côté serveur.
+   */
+  const handleSaveAllLocale = async () => {
+    if (!menu) return
+    setSavingLocale(true)
+    try {
+      const { itemLabels, menuI18nName } = selectActiveLocaleEditsForSave({
+        activeLocale,
+        i18nLabels,
+        menuI18nNames,
+      })
+      const res = await fetch(
+        `/api/admin/menus/${encodeURIComponent(menu.key)}/save-locale`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            activeLocale,
+            defaultLocale,
+            menuNameInput:
+              activeLocale === (defaultLocale as Locale) ? menuName : undefined,
+            menuI18nName,
+            itemLabels,
+          }),
+        },
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data?.error || 'Échec de l’enregistrement')
+      }
+      const s = data.summary ?? {}
+      const parts: string[] = []
+      if (s.menuNameUpdated) parts.push('nom de base')
+      if (s.menuI18nNameUpdated) parts.push('nom localisé')
+      parts.push(`${s.itemsWritten ?? 0} libellé(s) item`)
+      if (s.itemsSkippedEmpty)
+        parts.push(`${s.itemsSkippedEmpty} ignoré(s) (vides)`)
+      toastSuccess(
+        `Enregistré pour ${activeLocale.toUpperCase()} : ${parts.join(', ')}.`,
+      )
+      await fetchMenu(activeLocale)
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : 'Erreur d’enregistrement')
+    } finally {
+      setSavingLocale(false)
+    }
+  }
+
+  const fetchMenu = async (locale: Locale = activeLocale) => {
+    try {
+      const response = await fetch(`/api/admin/menus/primary?locale=${encodeURIComponent(locale)}`)
       if (!response.ok) {
         if (response.status === 401) {
           router.push('/admin/login')
@@ -108,7 +256,17 @@ export default function AdminMenuPage() {
 
       const data = await response.json()
       setMenu(data.menu)
-      setMenuName(data.menu.nameBase || data.menu.name)
+      // Sur la locale par défaut on édite `Menu.name` (base, partagé) ;
+      // sur les autres locales le champ est en lecture seule et affiche la
+      // valeur résolue par le serveur. Helper testé dans `menuEditorPolicy`.
+      setMenuName(
+        selectMenuNameToDisplay({
+          activeLocale: locale,
+          defaultLocale: defaultLocale as Locale,
+          nameBase: data.menu.nameBase ?? '',
+          resolvedName: data.menu.name ?? '',
+        }),
+      )
       
       // Initialize i18n labels and statuses for menu items
       const labels: Record<string, Record<string, string>> = {}
@@ -257,7 +415,7 @@ export default function AdminMenuPage() {
   const fetchMenuI18n = async () => {
     if (!menu) return
     try {
-      const response = await fetch(`/api/admin/menus/${menu.id}/i18n`)
+      const response = await fetch(`/api/admin/menus/${menu.key}/i18n`)
       if (!response.ok) {
         throw new Error('Failed to fetch menu i18n')
       }
@@ -289,7 +447,7 @@ export default function AdminMenuPage() {
 
     setSavingMenuI18n(true)
     try {
-      const response = await fetch(`/api/admin/menus/${menu.id}/i18n`, {
+      const response = await fetch(`/api/admin/menus/${menu.key}/i18n`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ locale, name }),
@@ -568,27 +726,229 @@ export default function AdminMenuPage() {
           href="/admin/pages"
           className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
         >
-          ← Back to Menu & Pages
+          ← Structure du site
         </Link>
       </div>
 
-      {/* Menu Name */}
+      <MenuStructureAlignmentPanel
+        active={!loading && !!menu}
+        onApplied={async () => {
+          await fetchMenu(activeLocale)
+        }}
+      />
+
+      {/* ----------------------------------------------------------------- */}
+      {/* Bandeau unifié « édition par locale » — alignement strict Footer.  */}
+      {/* Pilote : libellés affichés, bouton Copier, Contrôle linguistique.  */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+        <div className="flex flex-col gap-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-indigo-900">
+              Langue éditée
+            </label>
+            <select
+              value={activeLocale}
+              onChange={(e) => setActiveLocale(e.target.value as Locale)}
+              className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 shadow-sm"
+              aria-label="Langue du menu à éditer"
+              disabled={loading || saving || copyingLocale}
+            >
+              {supportedLocales.map((loc) => (
+                <option key={loc} value={loc}>
+                  {LOCALE_LABEL[loc]} ({loc})
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 max-w-xs text-xs text-gray-600">
+              Bascule entre {supportedLocales.map((l) => l.toUpperCase()).join(' / ')}. Les libellés affichés
+              correspondent à la langue éditée.
+            </p>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={copyLocaleMode === 'overwrite'}
+                onChange={(e) =>
+                  setCopyLocaleMode(e.target.checked ? 'overwrite' : 'missing')
+                }
+                className="rounded border-slate-300"
+                disabled={activeLocale === (defaultLocale as Locale)}
+              />
+              <span>
+                Écraser les libellés existants
+                {copyLocaleMode === 'overwrite' ? (
+                  <span className="ml-1 rounded bg-red-100 px-1 text-[10px] font-semibold uppercase text-red-700">
+                    destructif
+                  </span>
+                ) : null}
+              </span>
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCopyLocaleDialog(activeLocale)}
+              disabled={
+                loading ||
+                saving ||
+                copyingLocale ||
+                !menu ||
+                activeLocale === (defaultLocale as Locale)
+              }
+              title={
+                activeLocale === (defaultLocale as Locale)
+                  ? `Vous éditez déjà ${LOCALE_LABEL[defaultLocale as Locale]} : la copie est inutile.`
+                  : `Matérialise les libellés ${defaultLocale.toUpperCase()} dans MenuI18n[${activeLocale}] / MenuItemI18n[${activeLocale}].`
+              }
+              className="w-full sm:w-auto"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copier depuis {LOCALE_LABEL[defaultLocale as Locale]}
+            </Button>
+          </div>
+        </div>
+
+        {isStructureLocked ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+            <strong className="font-medium">Structure verrouillée.</strong> Vous éditez la locale{' '}
+            <strong>{LOCALE_LABEL[activeLocale]}</strong> ({activeLocale.toUpperCase()}).
+            Pour ajouter / supprimer / réordonner des items, modifier le type, la page cible, l&apos;URL externe
+            ou l&apos;activation, basculez sur <strong>{LOCALE_LABEL[defaultLocale as Locale]}</strong>. Seuls
+            les libellés (nom du menu, label des items) peuvent être édités sur cette locale, via le panneau
+            « Localized Labels » de chaque item, le bouton « Copier depuis FR » ci-dessus, ou le contrôle
+            linguistique IA.
+          </div>
+        ) : null}
+
+        {/* Contrôle linguistique — branché sur la même activeLocale (un seul concept). */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-3">
+          <div className="text-xs text-slate-600">
+            <p className="font-semibold uppercase tracking-wide text-slate-700">
+              Contrôle linguistique
+            </p>
+            <p className="mt-1 max-w-md leading-snug">
+              Analyse exhaustive du nom du menu + de tous les libellés d&apos;items activés
+              (détection IA des cas ambigus), puis correction OpenAI directe pour la langue éditée
+              (upsert MenuI18n / MenuItemI18n, statut MACHINE).
+            </p>
+          </div>
+          {menu ? (
+            <LanguageCheckActions
+              domainLabel="menu"
+              scanUrl={`/api/admin/menus/${menu.key}/check-language/scan`}
+              applyUrl={`/api/admin/menus/${menu.key}/check-language/apply`}
+              activeLocale={activeLocale}
+              localeLabel={LOCALE_LABEL[activeLocale]}
+              onApplied={() => fetchMenu(activeLocale)}
+              disabled={loading || saving || copyingLocale || savingLocale}
+            />
+          ) : null}
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* « Tout enregistrer pour la locale active » — équivalent du    */}
+        {/* bouton « Enregistrer » du SiteFooterEditor. Pousse en bulk     */}
+        {/* `Menu.name` (uniquement si activeLocale = defaultLocale),      */}
+        {/* `MenuI18n[locale].name` et tous les `MenuItemI18n[locale]`     */}
+        {/* déjà chargés/édités. Évite d'oublier un Save inline.           */}
+        {/* ------------------------------------------------------------- */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+          <div className="text-xs text-emerald-900">
+            <p className="font-semibold uppercase tracking-wide text-emerald-800">
+              Enregistrer toutes les modifications de {LOCALE_LABEL[activeLocale]}
+            </p>
+            <p className="mt-1 max-w-md leading-snug">
+              Pousse en une seule transaction le nom du menu et tous les libellés
+              d&apos;items édités pour cette locale. Statut <strong>ORIGINAL</strong>
+              {' '}(édition humaine). Visible immédiatement côté navigation publique.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={handleSaveAllLocale}
+            disabled={
+              loading || saving || savingLocale || copyingLocale || !menu
+            }
+            className="w-full sm:w-auto"
+            title={
+              `Persistance en bulk pour ${activeLocale.toUpperCase()} : Menu.name (si ${defaultLocale.toUpperCase()}), MenuI18n et MenuItemI18n.`
+            }
+          >
+            {savingLocale
+              ? 'Enregistrement…'
+              : `Enregistrer pour ${activeLocale.toUpperCase()}`}
+          </Button>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={copyLocaleDialog !== null}
+        onOpenChange={(open) => {
+          if (!open && !copyingLocale) setCopyLocaleDialog(null)
+        }}
+        title={
+          copyLocaleDialog
+            ? `Copier ${defaultLocale.toUpperCase()} → ${copyLocaleDialog.toUpperCase()} (${
+                copyLocaleMode === 'missing' ? 'préserve l’existant' : 'écrase tout'
+              })`
+            : 'Copier les libellés vers une autre langue'
+        }
+        description={
+          copyLocaleDialog
+            ? `Matérialise les libellés ${defaultLocale.toUpperCase()} dans MenuI18n / MenuItemI18n pour ${copyLocaleDialog.toUpperCase()} (statut ORIGINAL). ${
+                copyLocaleMode === 'missing'
+                  ? 'Les libellés cibles déjà présents sont préservés.'
+                  : 'Tous les libellés cibles existants seront écrasés.'
+              } Étape préalable au scan + correction IA.`
+            : ''
+        }
+        confirmLabel={copyingLocale ? 'Copie…' : 'Copier'}
+        cancelLabel="Annuler"
+        destructive={copyLocaleMode === 'overwrite'}
+        onConfirm={handleCopyLocaleConfirm}
+      />
+
+      {/* Menu Name — édition uniquement sur la locale par défaut (structure partagée). */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold mb-4">Primary Menu</h2>
+        <h2 className="text-xl font-semibold mb-4">
+          Primary Menu
+          {isStructureLocked ? (
+            <span className="ml-2 align-middle text-xs font-normal text-amber-700">
+              (lecture seule — locale {activeLocale.toUpperCase()})
+            </span>
+          ) : null}
+        </h2>
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Menu Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Menu Name
+              {isStructureLocked ? (
+                <span className="ml-1 text-xs text-gray-500">
+                  — affiche la valeur résolue pour {activeLocale.toUpperCase()}
+                </span>
+              ) : null}
+            </label>
             <input
               type="text"
               value={menuName}
               onChange={(e) => setMenuName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-50 disabled:text-gray-500"
+              disabled={isStructureLocked}
+              readOnly={isStructureLocked}
             />
           </div>
           <button
             onClick={handleSaveMenuName}
-            disabled={saving}
+            disabled={saving || isStructureLocked}
             className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            title={
+              isStructureLocked
+                ? `Le nom de base se modifie uniquement depuis ${LOCALE_LABEL[defaultLocale as Locale]}.`
+                : undefined
+            }
           >
             {saving ? 'Saving...' : 'Save Name'}
           </button>
@@ -601,7 +961,13 @@ export default function AdminMenuPage() {
           <h2 className="text-xl font-semibold">Menu Items</h2>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+            disabled={isStructureLocked}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={
+              isStructureLocked
+                ? `Ajout d'item disponible uniquement depuis ${LOCALE_LABEL[defaultLocale as Locale]}.`
+                : undefined
+            }
           >
             + Add Menu Item
           </button>
@@ -639,9 +1005,13 @@ export default function AdminMenuPage() {
                           {index > 0 && (
                             <button
                               onClick={() => handleMoveUp(index)}
-                              disabled={saving}
-                              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 text-xs"
-                              title="Move up"
+                              disabled={saving || isStructureLocked}
+                              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                              title={
+                                isStructureLocked
+                                  ? `Réordonnancement uniquement depuis ${LOCALE_LABEL[defaultLocale as Locale]}.`
+                                  : 'Move up'
+                              }
                             >
                               ↑
                             </button>
@@ -649,9 +1019,13 @@ export default function AdminMenuPage() {
                           {index < menu.items.length - 1 && (
                             <button
                               onClick={() => handleMoveDown(index)}
-                              disabled={saving}
-                              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 text-xs"
-                              title="Move down"
+                              disabled={saving || isStructureLocked}
+                              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                              title={
+                                isStructureLocked
+                                  ? `Réordonnancement uniquement depuis ${LOCALE_LABEL[defaultLocale as Locale]}.`
+                                  : 'Move down'
+                              }
                             >
                               ↓
                             </button>
@@ -833,15 +1207,26 @@ export default function AdminMenuPage() {
                             {isInvalid && (
                               <button
                                 onClick={() => setEditingItem({ ...item })}
-                                className="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700"
-                                title="Fix invalid target"
+                                disabled={isStructureLocked}
+                                className="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={
+                                  isStructureLocked
+                                    ? `Édition de la cible uniquement depuis ${LOCALE_LABEL[defaultLocale as Locale]}.`
+                                    : 'Fix invalid target'
+                                }
                               >
                                 Fix
                               </button>
                             )}
                             <button
                               onClick={() => setEditingItem({ ...item })}
-                              className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                              disabled={isStructureLocked}
+                              className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={
+                                isStructureLocked
+                                  ? `Édition de la structure uniquement depuis ${LOCALE_LABEL[defaultLocale as Locale]}. Pour modifier les libellés ${activeLocale.toUpperCase()}, utilisez le panneau « Localized Labels » ci-dessous.`
+                                  : 'Edit item structure'
+                              }
                             >
                               Edit
                             </button>
@@ -858,7 +1243,13 @@ export default function AdminMenuPage() {
                             </button>
                             <button
                               onClick={() => setShowDeleteDialog(item.id)}
-                              className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                              disabled={isStructureLocked}
+                              className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={
+                                isStructureLocked
+                                  ? `Suppression d'item uniquement depuis ${LOCALE_LABEL[defaultLocale as Locale]}.`
+                                  : 'Delete item'
+                              }
                             >
                               Delete
                             </button>

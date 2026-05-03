@@ -78,12 +78,49 @@ Toute régression (émission ou acceptation d’un `sub` e-mail, numérique seul
 
 **Post-déploiement (48–72 h) :** surveiller les 401, les échecs `/auth/refresh` et les pics de login (clients encore en vieux token).
 
+## 🧪 Tests
+
+Les dépendances de test (pytest + pytest-asyncio) sont **séparées** de
+`requirements.txt` pour garder l'image Docker de production minimale.
+Elles vivent dans `requirements-dev.txt`.
+
+### Setup local (uvicorn hôte)
+
+```bash
+cd services/arquantix/api
+pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest tests/ -v
+```
+
+### Setup dans le conteneur API
+
+```bash
+docker exec arquantixrecovery-arquantix-api-1 \
+  pip install -r /app/requirements-dev.txt
+
+docker exec -w /app arquantixrecovery-arquantix-api-1 \
+  python3 -m pytest tests/ -v
+```
+
+### Tests Palier 2 D.2 — Mémoire long-terme assistance
+
+```bash
+docker exec -w /app arquantixrecovery-arquantix-api-1 \
+  python3 -m pytest \
+    tests/test_assistance_memory_unit.py \
+    tests/test_assistance_memory_integration.py -v
+```
+
+→ **81 tests** (64 unit + 17 integration), ~30 s.
+
+Doc complète : `docs/arquantix/MEMORY.md`.
+
 ## 📚 Documentation
 
 Voir `docs/arquantix/` pour la documentation complète.
 
 ---
 
-**Dernière mise à jour:** 2026-04-11
+**Dernière mise à jour:** 2026-05-02
 
 

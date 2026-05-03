@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import { X, Search, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ContentStatus } from '@prisma/client'
+import { adminMediaFileUrl } from '@/lib/admin/adminMediaFileUrl'
 
 interface Project {
   id: string
   slug: string
   status: ContentStatus
   coverMedia: {
+    id: string
     url: string
   } | null
   i18n: Array<{
@@ -183,7 +185,7 @@ export function ProjectSelector({
                 <GripVertical className="w-4 h-4 text-gray-400 cursor-move" />
                 {project.coverMedia && (
                   <img
-                    src={project.coverMedia.url}
+                    src={adminMediaFileUrl(project.coverMedia.id)}
                     alt={title}
                     className="w-12 h-12 object-cover rounded"
                   />
@@ -286,7 +288,7 @@ export function ProjectSelector({
                       >
                         {project.coverMedia ? (
                           <img
-                            src={project.coverMedia.url}
+                            src={adminMediaFileUrl(project.coverMedia.id)}
                             alt={title}
                             className="w-full h-32 object-cover"
                           />

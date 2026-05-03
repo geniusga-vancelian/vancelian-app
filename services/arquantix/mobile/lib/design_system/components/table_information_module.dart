@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'kalai_icon.dart';
 
 class TableInformationRowData {
   const TableInformationRowData({
@@ -64,8 +65,8 @@ class TableInformationModule extends StatelessWidget {
                     const SizedBox(width: 6),
                     GestureDetector(
                       onTap: row.onInfoTap,
-                      child: const Icon(
-                        Icons.info_outline,
+                      child: const KalaiIcon(
+                        KalaiIcons.info,
                         size: _infoIconSize,
                         color: AppColors.textPrimary,
                       ),

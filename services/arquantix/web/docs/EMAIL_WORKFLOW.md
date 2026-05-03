@@ -76,6 +76,19 @@ Once translations are approved, emails can be:
 - Scheduled for sending
 - Versioned for A/B testing
 
+> **Mise à jour 2026-04** : un nouveau pipeline **MJML strict** est désormais
+> disponible (templates `newsletter-quarterly`, `otp-login`,
+> `transaction-confirmation`, `welcome`) et co-existe avec le système IA
+> historique sans le casser.
+>
+> - Documentation : [`docs/EMAIL_MJML.md`](./EMAIL_MJML.md)
+> - Préview admin : `/admin/email/design` (onglet « MJML templates »)
+> - Preview chrome-free : `/preview/email/<templateId>?locale=fr|en`
+> - Build / preview / validate : `npm run emails:{build,preview,validate}`
+>
+> Phase 6 prévoit un bridge `buildMjml` ↔ composants MJML pour migrer
+> progressivement le builder IA `EmailModule` vers le nouveau DS.
+
 ## Data Model
 
 ### Email

@@ -1,0 +1,49 @@
+<mjml>
+  {{> head}}
+  <mj-body background-color="#F4F4F4" width="600px" css-class="arq-bg-default">
+    {{> preheader}}
+
+    {{#hero}}{{> HeaderL1}}{{/hero}}
+
+    <mj-section padding="32px 32px 8px" background-color="#FFFFFF">
+      <mj-column>
+        <mj-text font-size="22px" font-weight="500" line-height="1.25" letter-spacing="-0.01em" color="#101113" padding="0 0 12px 0">
+          {{greetingTitle}}
+        </mj-text>
+        <mj-text font-size="15px" line-height="1.6" color="#62656E" padding="0">
+          {{greetingBody}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section padding="24px 32px 8px" background-color="#FFFFFF">
+      <mj-column>
+        <mj-text font-size="13px" font-weight="500" letter-spacing="0.04em" text-transform="uppercase" color="#62656E" padding="0 0 16px 0">
+          {{stepsTitle}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    {{#steps}}
+      <mj-section padding="0 32px 12px" background-color="#FFFFFF">
+        <mj-column width="14%" vertical-align="top">
+          <mj-text padding="0">
+            <span style="display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;background:#101113;color:#FFFFFF;text-align:center;font-size:13px;font-weight:600;">{{index}}</span>
+          </mj-text>
+        </mj-column>
+        <mj-column width="86%" vertical-align="top">
+          <mj-text font-size="15px" font-weight="600" color="#101113" padding="0 0 4px 0">
+            {{title}}
+          </mj-text>
+          <mj-text font-size="14px" line-height="1.55" color="#62656E" padding="0">
+            {{body}}
+          </mj-text>
+        </mj-column>
+      </mj-section>
+    {{/steps}}
+
+    {{#cta}}{{> CTASection}}{{/cta}}
+
+    {{> Footer}}
+  </mj-body>
+</mjml>

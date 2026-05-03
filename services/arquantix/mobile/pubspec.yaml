@@ -15,6 +15,7 @@ dependencies:
   web_socket_channel: ^3.0.0
   cached_network_image: ^3.3.1
   intl: ^0.20.2
+  markdown: ^7.3.0
   url_launcher: ^6.2.5
   share_plus: ^10.1.4
   flutter_svg: ^2.0.10+1
@@ -30,6 +31,16 @@ dependencies:
   package_info_plus: ^8.0.0
   passkeys: ^2.17.4
   video_player: ^2.9.2
+  webview_flutter: ^4.10.0
+  # MVP D.1.4.8 — Voice input dans le chat Assistance.
+  # speech_to_text : moteur natif iOS/Android (gratuit, offline FR/EN, ~ChatGPT « dictée »).
+  #   Utilisé quand ASSISTANCE_VOICE_ENGINE=native (défaut).
+  speech_to_text: ^7.3.0
+  # record : enregistreur audio (sortie .m4a/.wav) — utilisé seulement quand
+  #   ASSISTANCE_VOICE_ENGINE=whisper. Le fichier audio est uploadé vers le
+  #   backend qui appelle l'API OpenAI Whisper. Permet une qualité supérieure
+  #   au prix d'une latence réseau et d'un coût par minute.
+  record: ^6.2.0
 
 dev_dependencies:
   flutter_test:
@@ -53,6 +64,8 @@ flutter:
     - assets/images/
     - assets/crypto_svgs/
     - assets/fiat_svgs/
+    # Jeu d'icones KALAI (line) — voir lib/design_system/atoms/kalai_icons.dart
+    - assets/icons/kalai/line/
 
 flutter_launcher_icons:
   image_path: assets/app_icon_1024.png

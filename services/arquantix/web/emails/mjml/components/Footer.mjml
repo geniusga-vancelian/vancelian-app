@@ -1,0 +1,24 @@
+<mj-section background-color="#000000" padding="40px 32px 28px">
+  <mj-column>
+    <mj-image src="{{assetOrigin}}/email-ds/logo-wordmark-white.png" alt="Arquantix" width="140px" align="left" padding="0 0 18px 0" />
+    {{#tagline}}
+      <mj-text font-size="12px" line-height="1.7" color="#D8D9DB" padding="0 0 22px 0">
+        {{tagline}}
+      </mj-text>
+    {{/tagline}}
+    {{#social.length}}
+      <mj-text padding="0 0 22px 0" font-size="12px" color="#D8D9DB">
+        {{#social}}<a href="{{href}}" style="color:#D8D9DB;text-decoration:none;margin-right:18px;">{{label}}</a>{{/social}}
+      </mj-text>
+    {{/social.length}}
+    <mj-divider border-color="rgba(255,255,255,0.12)" border-width="1px" padding="0 0 16px 0" />
+    <mj-text font-size="11px" line-height="1.5" color="#9B948D" padding="0">
+      {{copyright}} &nbsp;·&nbsp;
+      <a href="{{unsubscribeUrl}}" style="color:#9B948D;text-decoration:underline;">{{unsubscribeLabel}}</a>
+      {{#preferencesUrl}}
+        &nbsp;·&nbsp;
+        <a href="{{preferencesUrl}}" style="color:#9B948D;text-decoration:underline;">{{preferencesLabel}}</a>
+      {{/preferencesUrl}}
+    </mj-text>
+  </mj-column>
+</mj-section>

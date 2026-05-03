@@ -4,6 +4,7 @@ import '../atoms/app_spacing.dart';
 import '../layout/module_horizontal_margin.dart';
 import 'app_section_title.dart';
 import 'carousel_pagination_dots.dart';
+import 'ds_story_segment_bar.dart';
 import 'marketing_card.dart';
 import 'marketing_cards_carousel.dart';
 
@@ -61,6 +62,7 @@ class _MarketingCardsSlidingModuleState extends State<MarketingCardsSlidingModul
     }
 
     final screenWidth = MediaQuery.sizeOf(context).width;
+    final multi = widget.items.length > 1;
     final last = widget.items.length - 1;
     /// Carte la plus large = page « milieu » (W − gap) — évite de couper les cartes.
     final maxCardWidth = screenWidth - _gapBetweenCards;
@@ -75,7 +77,31 @@ class _MarketingCardsSlidingModuleState extends State<MarketingCardsSlidingModul
             padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
             child: AppSectionTitle(widget.title!),
           ),
+          if (multi) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+              child: DsStorySegmentBar(
+                segmentCount: widget.items.length,
+                activeIndex: _currentPage,
+                variant: DsStorySegmentBarVariant.onSurface,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
+        ],
+        if (widget.title == null || widget.title!.isEmpty) ...[
+          if (multi) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+              child: DsStorySegmentBar(
+                segmentCount: widget.items.length,
+                activeIndex: _currentPage,
+                variant: DsStorySegmentBarVariant.onSurface,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
         ],
         SizedBox(
           height: cardHeight,
@@ -119,11 +145,12 @@ class _MarketingCardsSlidingModuleState extends State<MarketingCardsSlidingModul
             },
           ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        CarouselPaginationDots(
-          count: widget.items.length,
-          activeIndex: _currentPage,
-        ),
+        if (!multi) const SizedBox(height: AppSpacing.md),
+        if (!multi)
+          CarouselPaginationDots(
+            count: widget.items.length,
+            activeIndex: _currentPage,
+          ),
       ],
     );
   }

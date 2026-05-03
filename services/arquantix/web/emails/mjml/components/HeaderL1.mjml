@@ -1,0 +1,22 @@
+<mj-section background-url="{{imageUrl}}" background-size="cover" background-position="center center" background-repeat="no-repeat" padding="32px 32px 56px">
+  <mj-column>
+    <mj-image src="{{assetOrigin}}/email-ds/logo-wordmark-white.png" alt="Arquantix" width="140px" align="left" padding="0 0 60px 0" />
+    {{#eyebrow}}
+      <mj-text padding="0 0 12px 0">
+        <span class="arq-eyebrow-chip arq-eyebrow-chip--light" style="font-family:'Barlow Semi Condensed','Avenir Next Condensed',Arial,sans-serif;letter-spacing:0.04em;text-transform:uppercase;font-size:11px;font-weight:500;color:#FFFFFF;border-color:rgba(255,255,255,0.6);">{{eyebrow}}</span>
+      </mj-text>
+    {{/eyebrow}}
+    <mj-text font-size="36px" font-weight="500" line-height="1.1" letter-spacing="-0.02em" color="#FFFFFF" padding="0">
+      {{title}}
+    </mj-text>
+    {{#kicker}}
+      <mj-text font-size="14px" line-height="1.5" color="rgba(255,255,255,0.75)" padding="10px 0 0 0">
+        {{kicker}}
+      </mj-text>
+    {{/kicker}}
+    {{#cta}}
+      <mj-spacer height="20px" />
+      {{> Button}}
+    {{/cta}}
+  </mj-column>
+</mj-section>

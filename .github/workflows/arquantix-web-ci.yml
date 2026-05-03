@@ -1,0 +1,49 @@
+name: Arquantix Web CI
+
+on:
+  pull_request:
+    paths:
+      - "services/arquantix/web/**"
+      - ".github/workflows/arquantix-web-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/arquantix/web/**"
+      - ".github/workflows/arquantix-web-ci.yml"
+
+jobs:
+  lint-typecheck-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/arquantix/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: services/arquantix/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Blog / article blocks tests
+        run: |
+          npm run test:normalize-article-blocks
+          npm run test:reading-time
+          npm run test:article-block-schemas
+
+      - name: Vault Builder module normalization
+        run: npm run test:vault-normalize-modules
+
+      - name: Mega-menu column layout
+        run: npm run test:mega-menu-columns
+
+      - name: Section map golden (régression CMS)
+        run: npm run test:section-map-golden

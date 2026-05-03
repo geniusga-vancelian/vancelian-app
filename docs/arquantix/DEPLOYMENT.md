@@ -1,4 +1,6 @@
-# Deployment - Arquantix Vitrine + CMS
+# Deployment — Arquantix (Next.js + API)
+
+> **Note 2026 :** Les sections historiques sur **Strapi** ci‑dessous ne reflètent **pas** la stack locale actuelle (Strapi **retiré** du compose). Pour le runtime : **db, redis, api, web** — voir [RUNBOOK.md](./RUNBOOK.md).
 
 **Date:** 2026-01-01  
 **Status:** 🚧 En cours de développement
@@ -7,16 +9,16 @@
 
 ## TL;DR
 
-Guide de déploiement pour Arquantix: Next.js sur AWS ECS/ALB, Strapi optionnel (dev local pour le moment).
+Guide de déploiement pour Arquantix : Next.js sur AWS ECS/ALB ; backend FastAPI selon l’architecture cible. **Pas de Strapi** en runtime dans ce dépôt.
 
 ---
 
 ## Ce qui est vrai aujourd'hui
 
-### Stratégie de Déploiement Actuelle
+### Stratégie de déploiement (aperçu)
 
-- **Next.js Web:** Déploiement sur AWS ECS/ALB (prévu)
-- **Strapi CMS:** Développement local uniquement (pas de déploiement prod pour le moment)
+- **Next.js Web :** déploiement sur AWS ECS/ALB (prévu / selon pipeline)
+- **API FastAPI :** selon l’architecture ops (souvent conteneurisée avec la même base PostgreSQL que le web en dev)
 
 ---
 

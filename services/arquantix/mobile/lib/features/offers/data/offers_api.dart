@@ -101,6 +101,8 @@ class OffersApi {
               entryAssetsAllowed: (e['entryAssetsAllowed'] as List<dynamic>?)
                   ?.map((a) => a.toString())
                   .toList(),
+              vaultHeroTags: const [],
+              vaultFunding: null,
             ))
         .toList();
   }

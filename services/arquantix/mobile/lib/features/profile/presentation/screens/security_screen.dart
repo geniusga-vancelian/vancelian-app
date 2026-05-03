@@ -20,8 +20,9 @@ class SecurityScreen extends StatelessWidget {
       pageTitle: 'Sécurité',
       content: [
         const SizedBox(height: AppSpacing.md),
+        const AppSectionTitle('Mon compte'),
+        const SizedBox(height: AppSpacing.md),
         SettingsCard(
-          sectionTitle: 'Mon compte',
           children: [
             SettingsListItem(
               leading: const Icon(
@@ -48,8 +49,9 @@ class SecurityScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.xxl),
+        const AppSectionTitle('Compte Business'),
+        const SizedBox(height: AppSpacing.md),
         const SettingsCard(
-          sectionTitle: 'Compte Business',
           children: [
             SettingsListItem(
               leading: Icon(

@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "MenuItemType" ADD VALUE 'LANGUAGE_SWITCHER';

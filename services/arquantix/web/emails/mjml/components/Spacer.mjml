@@ -1,0 +1,5 @@
+<mj-section padding="0">
+  <mj-column>
+    <mj-spacer height="{{#height}}{{height}}{{/height}}{{^height}}24px{{/height}}" />
+  </mj-column>
+</mj-section>

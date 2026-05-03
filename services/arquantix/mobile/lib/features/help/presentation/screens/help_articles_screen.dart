@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../design_system/design_system.dart';
 import '../../data/help_api.dart';
 import '../../domain/models/help_center_models.dart';
-import 'help_article_detail_screen.dart';
+import '../../../news/presentation/screens/article_detail_screen.dart';
+import 'help_search_layer.dart';
 import 'help_widgets.dart';
 
 class HelpArticlesScreen extends StatefulWidget {
@@ -14,6 +15,8 @@ class HelpArticlesScreen extends StatefulWidget {
     required this.categorySlug,
     required this.categoryTitle,
     this.initialFilterTagLabel,
+    this.allArticlesInCollection = false,
+    this.initialArticles,
   });
 
   final String collectionSlug;
@@ -21,6 +24,10 @@ class HelpArticlesScreen extends StatefulWidget {
   final String categorySlug;
   final String categoryTitle;
   final String? initialFilterTagLabel;
+  /// Liste plate `/collections/:slug/articles` (sans étape tags).
+  final bool allArticlesInCollection;
+  /// Évite un second fetch après `browse` en mode flat.
+  final List<HelpArticleItem>? initialArticles;
 
   @override
   State<HelpArticlesScreen> createState() => _HelpArticlesScreenState();
@@ -29,6 +36,7 @@ class HelpArticlesScreen extends StatefulWidget {
 class _HelpArticlesScreenState extends State<HelpArticlesScreen> {
   final HelpApi _api = HelpApi();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _selectedTagKey = 'ALL';
   bool _loading = true;
   String? _error;
@@ -39,12 +47,12 @@ class _HelpArticlesScreenState extends State<HelpArticlesScreen> {
   void initState() {
     super.initState();
     _load();
-    _searchController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -54,42 +62,34 @@ class _HelpArticlesScreenState extends State<HelpArticlesScreen> {
       _error = null;
     });
     try {
-      final response = await _api.getArticles(
-        collectionSlug: widget.collectionSlug,
-        categorySlug: widget.categorySlug,
-      );
+      final HelpArticleListResponse response;
+      if (widget.allArticlesInCollection) {
+        if (widget.initialArticles != null) {
+          if (!mounted) return;
+          setState(() {
+            _articles = widget.initialArticles!;
+            _resolvedCategoryTitle = widget.collectionTitle;
+            _loading = false;
+            _syncTagSelectionAfterLoad();
+          });
+          return;
+        }
+        response = await _api.getAllArticlesInCollection(
+          collectionSlug: widget.collectionSlug,
+        );
+      } else {
+        response = await _api.getArticles(
+          collectionSlug: widget.collectionSlug,
+          categorySlug: widget.categorySlug,
+        );
+      }
       if (!mounted) return;
       setState(() {
         _articles = response.articles;
         _resolvedCategoryTitle = response.categoryTitle;
 
-        final tagKeys = <String>{};
-        for (final article in response.articles) {
-          for (final tag in article.targetTags) {
-            tagKeys.add(tag.key);
-          }
-        }
-        if (_selectedTagKey != 'ALL' &&
-            !tagKeys.contains(_selectedTagKey)) {
-          _selectedTagKey = 'ALL';
-        }
+        _syncTagSelectionAfterLoad();
 
-        final filterLabel = widget.initialFilterTagLabel?.trim();
-        if (filterLabel != null &&
-            filterLabel.isNotEmpty &&
-            _selectedTagKey == 'ALL') {
-          final filterLower = filterLabel.toLowerCase();
-          for (final article in response.articles) {
-            for (final tag in article.targetTags) {
-              if (tag.label.toLowerCase() == filterLower ||
-                  tag.slug.toLowerCase() == filterLower) {
-                _selectedTagKey = tag.key;
-                break;
-              }
-            }
-            if (_selectedTagKey != 'ALL') break;
-          }
-        }
         _loading = false;
       });
     } catch (e) {
@@ -101,17 +101,42 @@ class _HelpArticlesScreenState extends State<HelpArticlesScreen> {
     }
   }
 
+  void _syncTagSelectionAfterLoad() {
+    final tagKeys = <String>{};
+    for (final article in _articles) {
+      for (final tag in article.targetTags) {
+        tagKeys.add(tag.key);
+      }
+    }
+    if (_selectedTagKey != 'ALL' && !tagKeys.contains(_selectedTagKey)) {
+      _selectedTagKey = 'ALL';
+    }
+
+    final filterLabel = widget.initialFilterTagLabel?.trim();
+    if (filterLabel != null &&
+        filterLabel.isNotEmpty &&
+        _selectedTagKey == 'ALL') {
+      final filterLower = filterLabel.toLowerCase();
+      for (final article in _articles) {
+        for (final tag in article.targetTags) {
+          if (tag.label.toLowerCase() == filterLower ||
+              tag.slug.toLowerCase() == filterLower) {
+            _selectedTagKey = tag.key;
+            break;
+          }
+        }
+        if (_selectedTagKey != 'ALL') break;
+      }
+    }
+  }
+
   List<HelpArticleItem> get _filtered {
-    final q = _searchController.text.trim().toLowerCase();
     return _articles.where((item) {
       if (_selectedTagKey != 'ALL' &&
           !item.targetTags.any((tag) => tag.key == _selectedTagKey)) {
         return false;
       }
-      if (q.isEmpty) return true;
-      final base =
-          '${item.question} ${item.standfirst ?? ''}'.toLowerCase();
-      return base.contains(q);
+      return true;
     }).toList();
   }
 
@@ -139,9 +164,19 @@ class _HelpArticlesScreenState extends State<HelpArticlesScreen> {
       onBackTap: () => Navigator.of(context).pop(),
       onRefresh: _load,
       content: [
-        HelpSearchBar(controller: _searchController),
+        HelpSearchBar(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+        ),
         const SizedBox(height: AppSpacing.xxl),
-        _buildBody(),
+        HelpDualSearchBody(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+          helpApi: _api,
+          collectionSlug: widget.collectionSlug,
+          categorySlug: widget.categorySlug,
+          normalBody: _buildBody(),
+        ),
       ],
     );
   }
@@ -192,26 +227,34 @@ class _HelpArticlesScreenState extends State<HelpArticlesScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
         ],
-        HelpChevronCardList(
-          items: _filtered
-              .map(
-                (a) => HelpChevronCardItem(
-                  title: a.question,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => HelpArticleDetailScreen(
-                          collectionSlug: widget.collectionSlug,
-                          categorySlug: widget.categorySlug,
-                          articleSlug: a.slug,
+        if (_filtered.isEmpty)
+          const HelpEmptyResults()
+        else
+          ListCardModule(
+            items: _filtered
+                .map(
+                  (a) => ListCardItem(
+                    title: a.question,
+                    onTap: () {
+                      final categorySlugForDetail = widget.allArticlesInCollection
+                          ? (a.collectionTags.isNotEmpty
+                              ? a.collectionTags.first
+                              : 'general')
+                          : widget.categorySlug;
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ArticleDetailScreen.help(
+                            collectionSlug: widget.collectionSlug,
+                            categorySlug: categorySlugForDetail,
+                            articleSlug: a.slug,
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              )
-              .toList(),
-        ),
+                      );
+                    },
+                  ),
+                )
+                .toList(),
+          ),
       ],
     );
   }

@@ -1,186 +1,52 @@
-# Design System - Composants Extraits
+# Design system (site web Arquantix)
 
-## 🎨 Palette de Couleurs
+Source : exports Figma / React (modules fusionnés). Usage principal : page `/design` et composition des pages marketing.
 
-```css
---primary: #6155F5
---on-primary: #FFFFFF
---surface: #FFFFFF
---on-surface: #000000
-```
+## Typographie navigation (atomes)
 
-## 📦 Composants
+| Rôle | Paramètres | Fichier |
+|------|------------|---------|
+| **Links** (atome typographie Figma) | Avenir Heavy 800, 16px, line-height 100%, letter-spacing 0% | Composant `extracted/atoms/links.tsx` → `Links` ; jeton `figmaDsLinksClassName` + `figmaDsTypography.links` |
+| **Links** (menu top) | Identique | `nav-primary-link.ts` → `NAV_PRIMARY_LINK_TYPO` (= `figmaDsLinksClassName`) |
+| **Links** (titres des entrées du méga-menu blanc) | Identique **Links** ci-dessus | `MEGA_MENU_ITEM_TITLE_TYPO` (= alias) ; module `mega-menu/figma/FigmaNavSubmenu.tsx` |
+| **Paragraph** (libellés de colonne + descriptions sous les titres du méga-menu) | Avenir Book 350, 14px, vertical trim cap height, line-height 160%, paragraph spacing 16px, letter-spacing 0% | Composant `extracted/atoms/paragraph.tsx` → `Paragraph` ; `figmaDsParagraphClassName` + `figmaDsTypography.paragraph` ; couleur `figmaDsColors.text.secondary` dans `FigmaNavSubmenu.tsx` |
+| **Titre** SimpleMarkdownContentModule (Vault / offres) | Avenir Heavy 800, 40px, line-height 110%, letter-spacing −1%, center | `simpleMarkdownModuleTitle.ts` → `SIMPLE_MARKDOWN_MODULE_TITLE_TYPO` ; jetons `figmaDsTypography.fontSize.xl`, `lineHeight.tight`, `letterSpacing.minus1PercentOfEm` |
+| **Lien menu (cadre)** | Padding 8 / 12px, `border-radius` 10px ; actif : fond noir + texte blanc | `NAV_MENU_LINK_FRAME`, `NAV_MENU_LINK_ACTIVE_SURFACE` |
 
-### 1. Button (Bouton)
+## Modules
 
-**Variantes:**
-- `primary`: Fond violet (#6155F5), texte blanc
-- `secondary`: Fond blanc, texte noir
+| Module | Fichier |
+|--------|---------|
+| Marketing block (gradient / image) | `marketing-block.tsx` |
+| How it works | `HowItWorks.tsx` |
+| Bloc gauche / droite | `BlockLeftAndRight.tsx`, `DecorativeOverlay.tsx` |
+| Galerie projets | `ProjetGallery/ProjetGallery.tsx`, `ProjetGalleryDemo.tsx` |
+| Témoignage | `Testimonial.tsx` |
+| FAQ | `FAQ.tsx` |
+| Pied de page | `Footer.tsx` |
+| Page « tous les projets » | `ProjetGalleryPage.tsx` |
 
-**Spécifications:**
-- Height: 48px
-- Border Radius: 9999px (fully rounded)
-- Padding horizontal: 40px
-- Font: Inter Semi Bold
-- Font Size: 16px
-- Letter Spacing: -0.31px
-- Line Height: 21px
+## Assets
 
-**Props Flutter suggérées:**
-```dart
-enum ButtonVariant { primary, secondary }
+Imports SVG / PNG : `imports/` (dossiers `Footer`, `Arguments`, `ExclusiveOffers`, `PageDeToutLesProjets`).
 
-class AppButton extends StatelessWidget {
-  final ButtonVariant variant;
-  final String text;
-  final VoidCallback? onPressed;
-  final bool fullWidth;
+## Couche Figma extraite (zip « Extraire composants pour Design Systeme »)
 
-  // Styling constants
-  static const double height = 48.0;
-  static const double borderRadius = 9999.0;
-  static const EdgeInsets padding = EdgeInsets.symmetric(horizontal: 40.0);
-  static const double fontSize = 16.0;
-  static const double letterSpacing = -0.31;
-}
-```
+Emplacement : `extracted/` (atomes, molécules, organismes, tokens préfixés `figmaDs*`).
 
----
+| Rôle | Composants |
+|------|------------|
+| Texte / titres | `FigmaBodyText`, `FigmaSectionTitle`, `FigmaEyebrowLabel`, `PillActionButton` |
+| Blocs | `FigmaStatCard`, `FigmaSectionHeading`, `FigmaTestimonialCard` |
+| Sections | `FigmaSimpleHero`, `FigmaStatsGrid` |
+| Démo | `ExtractedDesignDemo` (section en tête de `/design`) |
+| Tokens | `figmaDsColors`, `figmaDsTypography`, `figmaDsSpacing`, `figmaDsBorderRadius`, `figmaDsTokens` |
+| Canevas page (fond blanc init) | `figmaDsColors.background.light` / `pageCanvas`, classes `figmaDsBodyRootClassName`, `figmaDsSiteShellLightClassName` (`extracted/tokens/surfaces.ts`) — pas de `bg-neutral-100` sur body / coque |
 
-### 2. StatusBar (Barre de Statut iOS)
+**CMS** : sections enregistrées `figma_simple_hero`, `figma_stats_grid`, `figma_testimonial_cards` (voir `lib/sections/library.ts`). Elles composent les organismes ci-dessus sans remplacer `hero`, `testimonials`, etc.
 
-**Spécifications:**
-- Height: 54px
-- Couleur du texte: Blanc
-- Font (Time): SF Pro Semibold, 17px
-- Icônes: Batterie, WiFi, Signal cellulaire
+**UI shadcn** : le zip contenait aussi `calendar` / `chart` ; ils n’ont pas été copiés ici (incompatibilités de types avec `react-day-picker` v9 et `recharts` v3). Le dossier `components/ui/` existant est inchangé.
 
-**Composants:**
-- Time (à gauche): "9:41"
-- Levels (à droite): Batterie + WiFi + Signal
+## Flutter
 
----
-
-### 3. HomeIndicator (Indicateur Home iOS)
-
-**Spécifications:**
-- Container Height: 21px
-- Indicator Width: 139px
-- Indicator Height: 5px
-- Border Radius: 100px
-- Couleur: Blanc
-- Position: Centré horizontalement, 8px du bas
-
----
-
-### 4. Logo
-
-**Spécifications:**
-- Width: 251px
-- Height: 29.61px
-- Format: SVG
-- Couleur: Blanc (fill)
-- ViewBox: "0 0 250.999 29.6147"
-
----
-
-### 5. VideoBackground (Fond Vidéo)
-
-**Spécifications:**
-- Object-fit: cover
-- Autoplay: true
-- Loop: true
-- PlayInline: true
-- Controls: hidden (nodownload)
-
----
-
-## 📐 Layout
-
-### Écran Login (375x812px - iPhone dimensions)
-
-**Structure:**
-1. **StatusBar** - Top (0px)
-2. **Logo** - Position: left: 62px, top: 129px
-3. **Buttons Container** - Position: left: 16px, top: 645px, width: 343px
-   - Gap entre boutons: 8px
-4. **HomeIndicator** - Bottom (0px)
-
-**Spacing System:**
-- Petit: 4px
-- Moyen: 8px
-- Large: 16px, 21px
-- Extra Large: 40px
-
----
-
-## 🎯 Tokens pour Flutter
-
-```dart
-class AppSpacing {
-  static const double xs = 4.0;
-  static const double sm = 8.0;
-  static const double md = 16.0;
-  static const double lg = 21.0;
-  static const double xl = 40.0;
-}
-
-class AppColors {
-  static const Color primary = Color(0xFF6155F5);
-  static const Color onPrimary = Color(0xFFFFFFFF);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color onSurface = Color(0xFF000000);
-}
-
-class AppTypography {
-  static const TextStyle buttonText = TextStyle(
-    fontFamily: 'Inter',
-    fontWeight: FontWeight.w600, // Semi Bold
-    fontSize: 16.0,
-    letterSpacing: -0.31,
-    height: 21 / 16, // lineHeight / fontSize
-  );
-
-  static const TextStyle statusBarTime = TextStyle(
-    fontFamily: 'SF Pro',
-    fontWeight: FontWeight.w600,
-    fontSize: 17.0,
-    height: 22 / 17,
-  );
-}
-
-class AppBorderRadius {
-  static const double button = 9999.0; // Fully rounded
-  static const double homeIndicator = 100.0;
-}
-```
-
----
-
-## 📱 Usage Examples (React)
-
-```tsx
-import { Button } from './components/Button';
-import { StatusBar } from './components/StatusBar';
-import { HomeIndicator } from './components/HomeIndicator';
-import { Logo } from './components/Logo';
-
-// Bouton primaire
-<Button variant="primary" fullWidth>
-  Login
-</Button>
-
-// Bouton secondaire
-<Button variant="secondary" fullWidth>
-  S'inscrire
-</Button>
-
-// Barre de statut
-<StatusBar />
-
-// Indicateur home
-<HomeIndicator />
-
-// Logo
-<Logo />
-```
+Le design system mobile Flutter n’est pas défini ici ; ne pas confondre avec ces fichiers.

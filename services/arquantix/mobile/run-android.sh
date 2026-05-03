@@ -12,12 +12,11 @@ export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-API_URL="${API_BASE_URL:-http://10.0.2.2:3001}"
+API_URL="${API_BASE_URL:-http://10.0.2.2:3000}"
 if [ -n "${AUTH_API_BASE_URL:-}" ]; then
   AUTH_URL="$AUTH_API_BASE_URL"
 else
   AUTH_URL="${API_URL/:3000/:8000}"
-  AUTH_URL="${AUTH_URL/:3001/:8000}"
 fi
 echo "→ API URL: $API_URL (10.0.2.2 = localhost de la machine)"
 echo "→ Auth API URL: $AUTH_URL"

@@ -7,6 +7,7 @@
 import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { r2Client } from './r2-client'
+import { assertR2Configured } from './r2Env'
 
 const bucketName = process.env.R2_BUCKET_NAME || 'arquantix-media'
 const publicUrl = process.env.R2_PUBLIC_URL // Optional custom domain for public URLs
@@ -27,9 +28,7 @@ export async function uploadFile(
   key: string,
   contentType: string
 ): Promise<UploadResult> {
-  if (!process.env.R2_ENDPOINT || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
-    throw new Error('R2 credentials not configured')
-  }
+  assertR2Configured()
 
   const command = new PutObjectCommand({
     Bucket: bucketName,
@@ -55,9 +54,7 @@ export async function uploadFile(
  * Delete a file from R2
  */
 export async function deleteFile(key: string): Promise<void> {
-  if (!process.env.R2_ENDPOINT || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
-    throw new Error('R2 credentials not configured')
-  }
+  assertR2Configured()
 
   const command = new DeleteObjectCommand({
     Bucket: bucketName,
@@ -96,9 +93,7 @@ export function getPublicUrl(key: string): string {
  * Generate a presigned URL for private access (if needed)
  */
 export async function getPresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
-  if (!process.env.R2_ENDPOINT || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
-    throw new Error('R2 credentials not configured')
-  }
+  assertR2Configured()
 
   const command = new GetObjectCommand({
     Bucket: bucketName,

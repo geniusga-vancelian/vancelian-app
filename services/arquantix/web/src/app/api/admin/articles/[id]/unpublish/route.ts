@@ -2,20 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { ContentStatus } from '@prisma/client'
+import { awaitRouteParams } from '@/lib/api/routeParams'
 
 // POST /api/admin/articles/[id]/unpublish
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await awaitRouteParams(params)
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const article = await prisma.article.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!article) {
@@ -24,7 +26,7 @@ export async function POST(
 
     // Unpublish article (keep publishedAt, don't reset it)
     const updated = await prisma.article.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: ContentStatus.DRAFT,
         // publishedAt is NOT reset - we keep it

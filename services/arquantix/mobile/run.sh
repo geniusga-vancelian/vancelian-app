@@ -21,7 +21,6 @@ if [ -n "${AUTH_API_BASE_URL:-}" ]; then
   AUTH_URL="$AUTH_API_BASE_URL"
 else
   AUTH_URL="${API_URL/:3000/:8000}"
-  AUTH_URL="${AUTH_URL/:3001/:8000}"
 fi
 
 echo "→ API URL: $API_URL"

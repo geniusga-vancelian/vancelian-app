@@ -1,0 +1,10 @@
+<mj-section background-color="#FFFFFF" padding="20px 32px" border-bottom="1px solid rgba(59,63,99,0.2)">
+  <mj-column width="40%" vertical-align="middle">
+    <mj-image src="{{assetOrigin}}/email-ds/logo-wordmark-black.png" alt="Arquantix" width="120px" align="left" padding="0" />
+  </mj-column>
+  <mj-column width="60%" vertical-align="middle">
+    <mj-text align="right" padding="0" font-size="13px" color="#101113">
+      {{#navLinks}}<a href="{{href}}" style="color:#101113;text-decoration:none;margin-left:24px;">{{label}}</a>{{/navLinks}}
+    </mj-text>
+  </mj-column>
+</mj-section>

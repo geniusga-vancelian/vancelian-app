@@ -32,6 +32,11 @@ async function main() {
 
   for (const section of blogPage.sections) {
     console.log(`\n📦 Section: ${section.key} (order: ${section.order})`)
+    if (section.key === 'blog_category_nav') {
+      console.log(
+        '  ⚠️  Ce type est déprécié et n’est plus rendu sur la liste blog publique (gabarit CMS).',
+      )
+    }
     console.log('─'.repeat(50))
 
     for (const content of section.contents) {

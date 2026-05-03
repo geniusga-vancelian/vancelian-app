@@ -3,11 +3,13 @@
 **Date:** 2026-01-01  
 **Status:** 🚧 En cours de développement
 
+> **Entrée recommandée** : **[LOCAL_SETUP.md](./LOCAL_SETUP.md)** — puis `make -f Makefile.arquantix local-doctor` et `local-db-doctor`. Les sections Strapi ci‑dessous sont **historiques** (runtime actuel : Next + Prisma + FastAPI).
+
 ---
 
 ## TL;DR
 
-Guide de dépannage pour les problèmes courants avec Arquantix (Next.js + Strapi + PostgreSQL).
+Dépannage Arquantix : Next.js, FastAPI, PostgreSQL. (Strapi : sections historiques.)
 
 ---
 
@@ -17,11 +19,11 @@ Guide de dépannage pour les problèmes courants avec Arquantix (Next.js + Strap
 
 1. Services ne démarrent pas
 2. Connexion à la base de données échoue
-3. Next.js ne peut pas se connecter à Strapi
+3. Conflit de ports (web / API / Postgres hôte)
 4. Build Docker échoue
 5. Ports déjà utilisés
-6. Permissions API Strapi
-7. Erreurs de déploiement
+6. Erreurs de déploiement
+7. *(Historique)* Strapi / permissions API — voir archive ou ignorer si vous utilisez uniquement la stack recovery
 
 ---
 
@@ -45,13 +47,11 @@ docker compose -f docker-compose.arquantix.yml ps
 **Solutions:**
 1. **Ports déjà utilisés:**
    ```bash
-   # Vérifier les ports
-   lsof -i :3001
-   lsof -i :1338
-   lsof -i :5433
-   
-   # Arrêter les processus ou changer les ports dans .env.arquantix
+   lsof -nP -iTCP:3000 -sTCP:LISTEN
+   lsof -nP -iTCP:8000 -sTCP:LISTEN
+   lsof -nP -iTCP:5443 -sTCP:LISTEN
    ```
+   Ajuster `WEB_PORT`, `API_PORT`, `DB_PORT` dans `.env.arquantix` si besoin — voir [LOCAL_SETUP.md](./LOCAL_SETUP.md).
 
 2. **Variables d'environnement manquantes:**
    ```bash

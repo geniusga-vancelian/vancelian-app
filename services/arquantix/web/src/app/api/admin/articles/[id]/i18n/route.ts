@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionFromCookie } from '@/lib/auth'
 import { z } from 'zod'
-import { isValidLocale } from '@/config/locales'
+import { defaultLocale, isValidLocale } from '@/config/locales'
+import { awaitRouteParams } from '@/lib/api/routeParams'
 
 const updateI18nSchema = z.object({
   locale: z.string().refine(isValidLocale, { message: 'Invalid locale' }),
   title: z.string().min(1, { message: 'Title is required' }),
-  standfirst: z.string().min(1, { message: 'Standfirst is required' }),
+  // Standfirst optionnel : la chaîne vide est acceptée. La colonne DB
+  // (`ArticleI18n.standfirst`) reste `String NOT NULL` ; on stocke `''`
+  // lorsque l'éditeur ne saisit rien (aucun consommateur ne casse, tous
+  // gèrent déjà le cas via `?? ''` / `|| ''`).
+  standfirst: z.string().optional().default(''),
   coverTitle: z.string().optional().nullable(),
   metaTitle: z.string().optional().nullable(),
   metaDescription: z.string().optional().nullable(),
@@ -16,13 +21,15 @@ const updateI18nSchema = z.object({
 // PUT /api/admin/articles/[id]/i18n
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const { id: articleId } = await awaitRouteParams(params)
 
     const body = await request.json()
     const validated = updateI18nSchema.parse(body)
@@ -36,7 +43,7 @@ export async function PUT(
     const i18n = await prisma.articleI18n.upsert({
       where: {
         articleId_locale: {
-          articleId: params.id,
+          articleId: articleId,
           locale: validated.locale,
         },
       },
@@ -48,7 +55,7 @@ export async function PUT(
         metaDescription: normalizedMetaDescription,
       },
       create: {
-        articleId: params.id,
+        articleId: articleId,
         locale: validated.locale,
         title: validated.title,
         standfirst: validated.standfirst,
@@ -57,6 +64,13 @@ export async function PUT(
         metaDescription: normalizedMetaDescription,
       },
     })
+
+    if (validated.locale === defaultLocale) {
+      await prisma.article.update({
+        where: { id: articleId },
+        data: { coverTitle: normalizedCoverTitle },
+      })
+    }
 
     return NextResponse.json({ i18n })
   } catch (error) {

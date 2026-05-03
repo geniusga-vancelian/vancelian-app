@@ -17,7 +17,7 @@ def _safe_load_dotenv(path: Path) -> None:
 _safe_load_dotenv(api_dir / ".env.local")  # Priority: .env.local first
 _safe_load_dotenv(api_dir / ".env")  # Then .env
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, Enum as SQLEnum, Date, Numeric, BigInteger, ForeignKey, Boolean, Index, UniqueConstraint, text, Float
+from sqlalchemy import create_engine, Column, Integer, SmallInteger, String, Text, DateTime, JSON, Enum as SQLEnum, Date, Numeric, BigInteger, ForeignKey, Boolean, Index, UniqueConstraint, text, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, backref
 from sqlalchemy.sql import func
@@ -1224,6 +1224,243 @@ class ChatbotPromptVersion(Base):
     hash = Column(String(64), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ============================================================================
+# Assistance « sur mesure » (mobile Flutter Search Screen) — MVP D.1.1
+# Conversations & messages persistés par client (pe_clients), distinct du
+# `chatbot_epargne` (funnel projet épargne avec sessions anonymes).
+# ============================================================================
+
+class AssistanceConversation(Base):
+    __tablename__ = "assistance_conversations"
+    __table_args__ = (
+        Index(
+            "ix_assistance_conversations_client_last",
+            "client_id",
+            "last_message_at",
+        ),
+        Index(
+            "ix_assistance_conversations_client_status",
+            "client_id",
+            "status",
+        ),
+        {"schema": "public"},
+    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
+    client_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.pe_clients.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title = Column(Text, nullable=True)
+    status = Column(String(16), nullable=False, server_default="active")
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_message_at = Column(DateTime(timezone=True), nullable=True)
+    # D.1.4.2 — indicateur de réponse assistant non lue.
+    last_assistant_message_at = Column(DateTime(timezone=True), nullable=True)
+    last_read_at = Column(DateTime(timezone=True), nullable=True)
+    # ── Palier 2 D.2 — Mémoire long-terme (migration 146) ─────────────
+    # Résumé narratif (rolling summary) maintenu par services.assistance.memory.
+    conversation_summary = Column(Text, nullable=True)
+    # Faits structurés extraits ([{type, value, confidence, evidence, source_turn}]).
+    conversation_facts = Column(
+        JSONB(astext_type=Text), nullable=False, server_default="[]"
+    )
+    # turn_index du dernier tour absorbé par `conversation_summary`.
+    summarized_until_turn = Column(Integer, nullable=True)
+    # Horodatage de la dernière consolidation mémoire (debug / diag).
+    summary_updated_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class AssistanceMessage(Base):
+    __tablename__ = "assistance_messages"
+    __table_args__ = (
+        Index(
+            "ix_assistance_messages_conversation_created",
+            "conversation_id",
+            "created_at",
+        ),
+        UniqueConstraint(
+            "conversation_id",
+            "turn_index",
+            name="uq_assistance_messages_conversation_turn",
+        ),
+        {"schema": "public"},
+    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
+    conversation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.assistance_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    turn_index = Column(Integer, nullable=False)
+    role = Column(String(16), nullable=False)  # user | assistant
+    content = Column(Text, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Multi-agents Phase 1 (cf. docs/arquantix/MULTI_AGENTS.md, migration 147).
+    # `agent_used`     : identifiant de l'agent ayant produit le message
+    #                    assistant (`default`, `compliance`, `advisor`,
+    #                    `product`, `market`, `router`). NULL pour les
+    #                    messages user et les anciens messages assistant.
+    # `message_type`   : `'text'` (défaut, bulle Markdown) ou `'choices'`
+    #                    (QCM poussé par le router en cas d'indécision).
+    # `message_payload`: structure JSON quand `message_type != 'text'`.
+    agent_used = Column(String(32), nullable=True)
+    message_type = Column(
+        String(16), nullable=False, server_default="text"
+    )
+    message_payload = Column(JSONB, nullable=True)
+
+
+class AssistanceAgentDecision(Base):
+    """Audit trail des décisions agentiques (Phase 2a multi-agents).
+
+    Une ligne par tool call exécuté par le runtime agentique
+    (cf. `docs/arquantix/MULTI_AGENTS_RUNTIME.md` § 4 + migration 148).
+
+    Champs sensibles :
+      - `reasoning_summary` : passe par le sanitizer TIPPING_OFF_BLACKLIST
+        avant écriture (discipline applicative protégée par les tests CI
+        bloquants `test_assistance_tipping_off_*`).
+      - `autonomy_level` ∈ {'L0','L1','L2','L3'} (CHECK contraint en SQL).
+      - `review_status`   ∈ {'auto','pending','approved','rejected'}
+        (CHECK contraint en SQL).
+    """
+
+    __tablename__ = "assistance_agent_decisions"
+    __table_args__ = (
+        Index(
+            "ix_assistance_agent_decisions_conv_iter",
+            "conversation_id",
+            "iteration",
+        ),
+        Index(
+            "ix_assistance_agent_decisions_agent_created",
+            "agent_id",
+            "created_at",
+        ),
+        Index("ix_assistance_agent_decisions_tool_name", "tool_name"),
+        Index(
+            "ix_assistance_agent_decisions_autonomy_level", "autonomy_level"
+        ),
+        Index(
+            "ix_assistance_agent_decisions_target_client",
+            "target_client_id",
+            "created_at",
+        ),
+        # Index partiel `ix_assistance_agent_decisions_review_pending` créé
+        # via Alembic (postgresql_where) — non déclaré ici car SQLAlchemy
+        # autoload-only.
+        {"schema": "public"},
+    )
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False,
+    )
+    conversation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "public.assistance_conversations.id", ondelete="CASCADE"
+        ),
+        nullable=False,
+    )
+    message_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.assistance_messages.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    agent_id = Column(String(32), nullable=False)
+    iteration = Column(SmallInteger, nullable=False)
+    tool_name = Column(String(64), nullable=False)
+    autonomy_level = Column(String(4), nullable=False)
+    arguments_json = Column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    result_summary = Column(JSONB, nullable=True)
+    proposed_action = Column(String(64), nullable=True)
+    target_client_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.pe_clients.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    target_person_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.persons.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reasoning_summary = Column(Text, nullable=True)
+    review_status = Column(
+        String(16), nullable=False, server_default="auto"
+    )
+    reviewed_by = Column(
+        Integer,
+        # `admin_users` n'utilise PAS `schema="public"` côté SQLAlchemy
+        # (cf. ligne 128). FK string sans préfixe pour matcher le mapping.
+        ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    error_code = Column(String(32), nullable=True)
+    correlation_id = Column(String(64), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ProductKnowledge(Base):
+    """Base de connaissances factuelle de l'agent `product` (Phase 2c).
+
+    Lue par le tool L0 `read_product_knowledge(slug)` pour ramener un
+    contenu canonique court (200-500 mots) que l'agent `product` peut
+    citer ou paraphraser. Source de vérité unique : pas de duplication
+    LLM, donc pas d'hallucination sur les délais réglementaires.
+
+    Phase 5 (RAG) substituera ce seed manuel par une ingestion
+    vectorielle des fiches produit officielles depuis le CMS. La table
+    reste alors pertinente pour les FAQ canoniques courtes
+    (« délai SEPA », etc.) qui n'ont pas besoin du RAG.
+    """
+
+    __tablename__ = "product_knowledge"
+    __table_args__ = (
+        Index("ix_product_knowledge_topic", "topic"),
+        # `ix_product_knowledge_active` est partiel (`WHERE is_active`)
+        # — créé via Alembic uniquement.
+        {"schema": "public"},
+    )
+
+    slug = Column(String(80), primary_key=True, nullable=False)
+    topic = Column(String(40), nullable=False)
+    title = Column(String(200), nullable=False)
+    body = Column(Text, nullable=False)
+    metadata_json = Column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    is_active = Column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
 
 # ---------------------------------------------------------------------------

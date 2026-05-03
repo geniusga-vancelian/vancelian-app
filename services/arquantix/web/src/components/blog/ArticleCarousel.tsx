@@ -1,13 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { cn } from '@/lib/utils'
 
 interface ArticleCarouselProps {
   images: string[]
   title: string
+  /** Conteneur image (défaut 16/9). Ex. `aspect-[3/2]` pour le hero article. */
+  frameClassName?: string
 }
 
-export function ArticleCarousel({ images, title }: ArticleCarouselProps) {
+export function ArticleCarousel({ images, title, frameClassName }: ArticleCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
 
   const goToPrev = () => {
@@ -20,7 +23,12 @@ export function ArticleCarousel({ images, title }: ArticleCarouselProps) {
 
   return (
     <div className="relative">
-      <div className="relative aspect-video overflow-hidden rounded">
+      <div
+        className={cn(
+          'relative overflow-hidden rounded-[14px]',
+          frameClassName ?? 'aspect-video',
+        )}
+      >
         <img
           src={images[currentIndex]}
           alt={`${title} - Image ${currentIndex + 1}`}

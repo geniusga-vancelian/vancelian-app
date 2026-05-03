@@ -1,5 +1,6 @@
 import 'models/catalog_product.dart';
 import 'models/offer_project.dart';
+import 'vault_offer_builder_parse.dart';
 
 /// Mappe les réponses catalogue (Product Registry) vers [OfferProject] pour réutiliser l’UI existante.
 class CatalogOfferMapper {
@@ -41,6 +42,8 @@ class CatalogOfferMapper {
       entryAssetsAllowed: lending.entryAssetsAllowed,
       catalogSlug: item.slug,
       packagedProductId: item.id,
+      vaultHeroTags: const [],
+      vaultFunding: null,
     );
   }
 
@@ -63,7 +66,7 @@ class CatalogOfferMapper {
                 ? <String>[base.teaserVideoUrl!.trim()]
                 : <String>[]));
 
-    return OfferProject(
+    final mergedCore = OfferProject(
       id: id,
       imageUrl: (pres.coverUrl != null && pres.coverUrl!.trim().isNotEmpty)
           ? pres.coverUrl!.trim()
@@ -97,6 +100,11 @@ class CatalogOfferMapper {
       entryAssetsAllowed: lending.entryAssetsAllowed ?? base.entryAssetsAllowed,
       catalogSlug: packaged.slug.trim().isNotEmpty ? packaged.slug : base.catalogSlug,
       packagedProductId: packaged.id.trim().isNotEmpty ? packaged.id : base.packagedProductId,
+      vaultHeroTags: parseVaultHeroTags(detail.vaultData),
+      vaultFunding: null,
+    );
+    return mergedCore.withBuilderVault(
+      resolveVaultFundingUi(project: mergedCore, vaultData: detail.vaultData),
     );
   }
 }

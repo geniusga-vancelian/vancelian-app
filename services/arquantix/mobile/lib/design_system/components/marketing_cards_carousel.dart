@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../atoms/app_spacing.dart';
 import '../layout/module_horizontal_margin.dart';
 import 'app_section_title.dart';
+import 'ds_story_segment_bar.dart';
 import 'marketing_card.dart';
 
 /// Élément pour [MarketingCardsCarousel] et [MarketingCardsSlidingModule].
@@ -56,6 +57,7 @@ class MarketingCardsCarousel extends StatefulWidget {
 
 class _MarketingCardsCarouselState extends State<MarketingCardsCarousel> {
   late final PageController _pageController = PageController(viewportFraction: 1);
+  int _pageIndex = 0;
 
   @override
   void dispose() {
@@ -69,6 +71,7 @@ class _MarketingCardsCarouselState extends State<MarketingCardsCarousel> {
       return const SizedBox.shrink();
     }
 
+    final multi = widget.items.length > 1;
     final screenWidth = MediaQuery.sizeOf(context).width;
     const gap = AppSpacing.md;
     final last = widget.items.length - 1;
@@ -84,11 +87,25 @@ class _MarketingCardsCarouselState extends State<MarketingCardsCarousel> {
           padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
           child: AppSectionTitle(widget.title),
         ),
+        if (multi) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+            child: DsStorySegmentBar(
+              segmentCount: widget.items.length,
+              activeIndex: _pageIndex,
+              variant: DsStorySegmentBarVariant.onSurface,
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.md),
         SizedBox(
           height: cardHeight,
           child: PageView.builder(
             controller: _pageController,
+            onPageChanged: (i) {
+              if (multi) setState(() => _pageIndex = i);
+            },
             padEnds: false,
             itemCount: widget.items.length,
             itemBuilder: (context, index) {

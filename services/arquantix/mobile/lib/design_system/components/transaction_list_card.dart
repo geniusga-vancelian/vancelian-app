@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../atoms/atoms.dart';
+import 'kalai_icon.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TransactionBadgeStatus
@@ -25,18 +26,18 @@ class TransactionStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color bgColor;
-    final IconData iconData;
+    final String assetPath;
 
     switch (status) {
       case TransactionBadgeStatus.completed:
         bgColor = const Color(0xFF0088FF);
-        iconData = Icons.check;
+        assetPath = KalaiIcons.check;
       case TransactionBadgeStatus.pending:
         bgColor = const Color(0xFFAEAEB2);
-        iconData = Icons.access_time;
+        assetPath = KalaiIcons.clock;
       case TransactionBadgeStatus.cancelled:
         bgColor = const Color(0xFFDC2626);
-        iconData = Icons.close;
+        assetPath = KalaiIcons.clear;
     }
 
     return Container(
@@ -48,7 +49,7 @@ class TransactionStatusBadge extends StatelessWidget {
         border: Border.all(color: AppColors.white, width: _borderWidth),
       ),
       child: Center(
-        child: Icon(iconData, size: _iconSize, color: AppColors.white),
+        child: KalaiIcon(assetPath, size: _iconSize, color: AppColors.white),
       ),
     );
   }
@@ -266,6 +267,13 @@ class _TransactionListItemState extends State<_TransactionListItem> {
           vertical: TransactionListCard._itemPadV,
         ),
         child: Row(
+          // Avatar (et bloc montant) ancrés en haut : la position de l'avatar
+          // ne doit pas changer si le titre s'étend sur plusieurs lignes.
+          // En 1 ligne, le contenu central (titre 20px + subtitle 16px = 36px)
+          // a exactement la hauteur de l'avatar (36px), donc le passage de
+          // `center` (default) à `start` est visuellement neutre pour les
+          // transactions courantes ; il n'a d'effet que lorsque le titre wrap.
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildLeading(item),
             const SizedBox(width: 12),
@@ -277,7 +285,7 @@ class _TransactionListItemState extends State<_TransactionListItem> {
                   Text(
                     item.title,
                     style: widget.titleStyle,
-                    maxLines: 1,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                   _buildSubtitle(item),
@@ -310,8 +318,8 @@ class _TransactionListItemState extends State<_TransactionListItem> {
               item.trailingWidget!,
             ] else if (item.showChevron) ...[
               const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right_rounded,
+              const KalaiIcon(
+                KalaiIcons.chevronRight,
                 size: 20,
                 color: AppColors.textMuted,
               ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../atoms/atoms.dart';
 import 'ds_news_reading_time.dart';
 import 'ds_news_tag.dart';
+import 'kalai_icon.dart';
 
 /// Tag image pour [NewsCard] (libellé + couleur de point optionnelle, Figma Tag.tsx).
 class NewsCardTag {
@@ -139,8 +140,8 @@ class NewsCard extends StatelessWidget {
                   errorWidget: (_, __, ___) => Container(
                     color: AppColors.gray.withValues(alpha: 0.15),
                     child: const Center(
-                      child: Icon(
-                        Icons.image_rounded,
+                      child: KalaiIcon(
+                        KalaiIcons.photo,
                         color: AppColors.gray,
                         size: 32,
                       ),

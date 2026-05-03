@@ -1,5 +1,9 @@
 'use client'
 
+/**
+ * @deprecated Remplacé par le hero basé sur `MarketingBlock` (design system).
+ * Conservé si un écran legacy en a encore besoin.
+ */
 import { useState, useEffect } from 'react'
 
 interface HeroBackgroundImageProps {

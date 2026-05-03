@@ -89,5 +89,16 @@
 	<string>Authentification sécurisée pour déverrouiller l’application.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Nous utilisons les notifications pour vous informer des mouvements et alertes importantes.</string>
+	<!-- D.1.4.8 — Voice input (chat Assistance) :
+	     - NSMicrophoneUsageDescription est requis par iOS pour enregistrer.
+	     - NSSpeechRecognitionUsageDescription est requis pour utiliser
+	       le moteur natif (speech_to_text). Quand ASSISTANCE_VOICE_ENGINE=
+	       whisper, seul le micro est sollicité, mais on déclare aussi la
+	       speech recognition pour ne pas avoir à patcher Info.plist
+	       quand on switch à la volée. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Vancelian utilise votre micro pour vous permettre de dicter vos questions à l’assistant.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Vancelian utilise la reconnaissance vocale pour transcrire vos questions à l’assistant.</string>
 </dict>
 </plist>

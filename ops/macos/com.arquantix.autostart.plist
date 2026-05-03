@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.arquantix.autostart</string>
+	<key>Comment</key>
+	<string>Remplacer __REPO_ROOT__ par le chemin absolu du dépôt (clone local). Ne pas utiliser le projet Docker « arquantix ».</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>__REPO_ROOT__/scripts/start_arquantix_recovery_boot.sh</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>__REPO_ROOT__</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<false/>
+	<key>StandardOutPath</key>
+	<string>/tmp/com.arquantix.autostart.stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/com.arquantix.autostart.stderr.log</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>Nice</key>
+	<integer>5</integer>
+</dict>
+</plist>

@@ -1,6 +1,11 @@
 #!/bin/bash
 # Lance l'app Flutter sur le **simulateur** iOS uniquement.
-# Pour un **iPhone réel** : ./run-ios-device.sh (sinon 127.0.0.1 = le téléphone → API injoignable).
+#
+# Modèle officiel (sans surcharge des variables) :
+#   BFF Next     → http://127.0.0.1:3000   (API_BASE_URL)
+#   FastAPI auth → http://127.0.0.1:8000   (AUTH_API_BASE_URL)
+#
+# Pour un **iPhone réel** : ./run-ios-device.sh — jamais localhost vers le Mac depuis l’appareil.
 # Prérequis : Xcode installé (App Store) + avoir exécuté une fois :
 #   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 #   sudo xcodebuild -runFirstLaunch
@@ -13,8 +18,19 @@ export PATH="/opt/homebrew/bin:$PATH"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Simulateur : toujours 127.0.0.1:3000 / :8000 par défaut (pas d’IP LAN imposée).
+export ARQUANTIX_IOS_USE_LAN_DEFAULT=0
+
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/scripts/ios_dev_network.sh"
+
+echo ""
+echo "━━ Simulateur iOS — cibles par défaut ━━"
+echo "  BFF Next.js   : ${API_URL}  (API_BASE_URL)"
+echo "  FastAPI auth  : ${AUTH_URL}  (AUTH_API_BASE_URL)"
+echo "  Doc : docs/LOCAL_IOS_AND_BFF.md"
+echo ""
+
 if [ -n "${API_BASE_URL:-}" ]; then
   echo "→ API URL: $API_URL (API_BASE_URL fourni)"
 elif [[ "$API_URL" != *"127.0.0.1"* ]]; then

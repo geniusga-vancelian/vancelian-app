@@ -38,17 +38,27 @@ HelpCollection
 - Manage localized labels
 - Auto-translate categories
 
-### Articles (`/admin/help/articles`)
-- Filter by collection, category, status, locale
-- Search articles
-- Create articles with title, slug, status
-- Edit article content:
-  - Settings: slug, status, publishedAt, authorName
-  - Localized content: title, standfirst, metaTitle, metaDescription
-  - Content blocks: Add blocks (HEADING, PARAGRAPH, QUOTE, BULLET_LIST, IMAGE, VIDEO, DOCUMENT)
-  - Blocks are **localized per locale**
-- Auto-translate articles and blocks
-- Publish/unpublish articles
+### Articles (`/admin/articles` with `articleType=HELP`)
+
+> Cut-over Phase 3.3 — depuis avril 2026 les articles d'aide sont gérés via
+> **l'éditeur unifié** `/admin/articles/[id]` (même builder que NEWS / ANALYSIS /
+> RESEARCH / ACADEMY / USER_BLOG). L'admin legacy `/admin/help/articles/*` et
+> son API sœur `/api/admin/help/articles/*` ont été supprimés.
+
+- Création : depuis `/admin/articles` ou `/admin/content`, dropdown « Nouveau »
+  → « Nouvel article Help » → modale qui demande **collection + catégorie +
+  helpSlug + allowAnchors** (composant réutilisable `<HelpHierarchyPicker>`).
+- Édition : `/admin/articles/[id]` (split-screen + live preview), section
+  « Settings » qui affiche le picker HELP quand `articleType=HELP`.
+- Slug global : généré automatiquement par l'API
+  (`help-{collectionSlug}-{categorySlug}-{helpSlug}`) avec résolution de
+  conflits ; l'unicité de la paire `(helpCategoryId, helpSlug)` est garantie
+  côté DB.
+- Blocs : utilisent `ArticleBlock` / `ArticleBlockI18n` (les mêmes que tous les
+  autres types d'articles).
+- Rendu public : `/help/[collection]/[category]/[slug]` lit d'abord
+  `Article(HELP)` puis fallback vers `HelpArticle` legacy si l'article n'a pas
+  encore été migré (cf. `getHelpArticle` dans `src/lib/help/get-help-data.ts`).
 
 ## CMS Sections
 
@@ -159,13 +169,15 @@ Table of contents sidebar.
 8. Save
 
 ### Step 3: Create Article
-1. Go to `/admin/help/articles`
-2. Click "Add Article"
-3. Select collection and category
-4. Enter title (auto-generates slug)
-5. Edit article:
+1. Go to `/admin/articles` (or `/admin/content`)
+2. Click "Nouvel article" → "Nouvel article Help"
+3. In the modal, pick collection + category, enter `helpSlug` and toggle
+   `allowAnchors`, then submit
+4. You are redirected to the unified editor `/admin/articles/[id]`
+5. Edit the article:
    - Add localized content (title, standfirst, meta)
    - Add content blocks (paragraphs, headings, images, etc.)
+   - The "Help" hierarchy picker remains editable in the Settings section
 6. Save
 
 ### Step 4: Translate

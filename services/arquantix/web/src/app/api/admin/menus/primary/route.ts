@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { computeMenuItemUrlPath } from '@/lib/menu/computeUrlPath'
 import { resolveLabelWithFallback, DEFAULT_LOCALE } from '@/lib/i18n/resolveLabel'
 import { getLocaleOrDefault } from '@/config/locales'
+import { ensureBlogCmsPresence } from '@/lib/cms/ensureBlogCmsPresence'
+import { ensurePrimaryMenuLanguageSwitcher } from '@/lib/menu/ensurePrimaryMenuLanguageSwitcher'
 
 const updateMenuSchema = z.object({
   name: z.string().optional(),
@@ -17,6 +19,9 @@ export async function GET(request: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    await ensureBlogCmsPresence()
+    await ensurePrimaryMenuLanguageSwitcher()
 
     // Get locale from query param, default to fr
     const { searchParams } = new URL(request.url)
@@ -100,19 +105,27 @@ export async function GET(request: NextRequest) {
         // Default type to LINK for existing items that don't have type set
         const itemType = item.type || 'LINK'
         
-        // For buttons, compute URL from externalUrl or use a placeholder
-        const urlPath = itemType === 'BUTTON' 
-          ? (item.externalUrl || '#')
-          : (isInvalidTarget 
-            ? null 
-            : computeMenuItemUrlPath(item.isRoot, item.page?.slug || null))
+        const urlPath =
+          itemType === 'LANGUAGE_SWITCHER'
+            ? '#'
+            : itemType === 'BUTTON'
+              ? item.externalUrl || '#'
+              : isInvalidTarget
+                ? null
+                : computeMenuItemUrlPath(
+                    item.isRoot,
+                    item.page?.slug || null,
+                    locale,
+                    item.page?.template,
+                  )
 
         return {
           ...item,
           type: itemType, // Ensure type is always set
           label: resolvedLabel, // Override with resolved label
           labelBase: item.label, // Keep base label for reference
-          isInvalidTarget: itemType === 'BUTTON' ? false : isInvalidTarget,
+          isInvalidTarget:
+            itemType === 'LANGUAGE_SWITCHER' || itemType === 'BUTTON' ? false : isInvalidTarget,
           computedUrlPath: urlPath,
           buttonStyle: item.buttonStyle,
           buttonAction: item.buttonAction,

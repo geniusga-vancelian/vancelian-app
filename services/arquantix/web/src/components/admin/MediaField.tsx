@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react'
 import { Image as ImageIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MediaPicker } from './MediaPicker'
+import { adminMediaFileUrl } from '@/lib/admin/adminMediaFileUrl'
 
 interface Media {
   id: string
   key: string
   url: string
+  publicUrl?: string
   filename: string
   mimeType: string
   size: number
@@ -88,7 +90,7 @@ export function MediaField({
           <div className="flex items-start space-x-4">
             {isImage ? (
               <img
-                src={selectedMedia.url}
+                src={adminMediaFileUrl(selectedMedia.id)}
                 alt={selectedMedia.alt || selectedMedia.filename}
                 className="w-24 h-24 object-cover rounded border border-gray-200"
               />

@@ -11,6 +11,7 @@ const updateCollectionSchema = z.object({
   colorHex: colorHexSchema.optional(),
   order: z.number().int().optional(),
   isPublished: z.boolean().optional(),
+  coverMediaId: z.string().min(1).nullable().optional(),
 })
 
 // GET /api/admin/help/collections/[id]
