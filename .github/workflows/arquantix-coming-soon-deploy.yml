@@ -1,11 +1,10 @@
 name: Arquantix Coming Soon - Deploy to ECR & ECS
 
 on:
-  push:
-    branches: [ "main", "arquantix-coming-soon" ]
-    paths:
-      - "services/arquantix/web/**"
-      - ".github/workflows/arquantix-coming-soon-deploy.yml"
+  # Déclenchement manuel uniquement : ce workflow est conservé pour
+  # ré-héberger une page "coming soon" en cas de gros incident sur le vrai site.
+  # Le déploiement nominal d'arquantix.com passe désormais par
+  # `arquantix-web-deploy.yml` (vrai site Next.js).
   workflow_dispatch:
     inputs:
       tag:
@@ -18,8 +17,8 @@ permissions:
   id-token: write
 
 env:
-  AWS_REGION: me-central-1
-  ECR_REGISTRY: 411714852748.dkr.ecr.me-central-1.amazonaws.com
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 411714852748.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: arquantix-coming-soon
   ECS_CLUSTER: arquantix-cluster
   ECS_SERVICE: arquantix-coming-soon

@@ -1,11 +1,9 @@
 name: Arquantix - Push to ECR
 
 on:
-  push:
-    branches: [ "main", "arquantix/coming-soon" ]
-    paths:
-      - "services/arquantix/**"
-      - ".github/workflows/arquantix-push-to-ecr.yml"
+  # Manual only : utility workflow pour push une image coming-soon à la demande.
+  # Pas de trigger automatique pour éviter de se déclencher en doublon avec
+  # arquantix-web-deploy.yml et arquantix-api-deploy.yml.
   workflow_dispatch:
     inputs:
       tag:
@@ -18,8 +16,8 @@ permissions:
   id-token: write
 
 env:
-  AWS_REGION: me-central-1
-  ECR_REGISTRY: 411714852748.dkr.ecr.me-central-1.amazonaws.com
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 411714852748.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: arquantix-coming-soon
   IMAGE_TAG: ${{ inputs.tag || 'latest' }}
 
