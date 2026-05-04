@@ -844,3 +844,141 @@ class TestKnownAgentIds:
             AGENT_MARKET_ID,
         ):
             assert aid in router_mod.OFF_TOPIC_OPTION_IDS
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Router prompt enrichments — Phase 2.6 (2026-05-04)
+# Vocabulaire produit Vancelian + structure 3-niveaux explicite.
+# Suite à la conv fbbf4f13 où "parle moi des bundle" a déclenché un QCM
+# au lieu d'un routage direct vers l'agent product.
+# ─────────────────────────────────────────────────────────────────────────
+
+
+class TestRouterPromptVocabulary:
+    """Le prompt système du router doit contenir le vocabulaire produit
+    Vancelian propriétaire pour permettre un routage Niveau 1 (route_to
+    direct) sans clarification quand un nom de produit propriétaire est
+    cité par le client.
+
+    Tests sur le **contenu textuel du fichier prompt** (déterministe).
+    Les tests du comportement LLM réel sont par nature non-déterministes
+    et donc hors scope de la suite unit.
+    """
+
+    @pytest.fixture
+    def router_prompt(self) -> str:
+        """Charge le prompt système router via le prompt_builder."""
+        from services.assistance.agents.prompt_builder import (
+            load_agent_system_prompt,
+        )
+        return load_agent_system_prompt("router")
+
+    def test_three_levels_section_present(self, router_prompt: str):
+        """La section explicite des 3 niveaux d'orchestration (Niveau 1 /
+        Niveau 2 / Niveau 3) doit être présente en début de prompt."""
+        # Section ajoutée 2026-05-04 (avant : structure dispersée dans les règles).
+        assert "Les 3 niveaux d'orchestration" in router_prompt
+        assert "Niveau 1 — Sujet identifié → routage direct" in router_prompt
+        assert "Niveau 2 — Univers Vancelian mais ambigu → précision" in router_prompt
+        assert "Niveau 3 — Hors univers Vancelian → recentrer" in router_prompt
+
+    def test_rule_0bis_present(self, router_prompt: str):
+        """La règle 0bis (vocabulaire produit Vancelian) doit exister."""
+        assert "0bis." in router_prompt
+        assert "produit Vancelian propriétaire nommé" in router_prompt
+        assert "PRIORITÉ ABSOLUE" in router_prompt
+
+    @pytest.mark.parametrize(
+        "vocab_term",
+        [
+            # Coffres
+            "Coffre Flexible",
+            "Coffre Avenir",
+            "Flexible Vault",
+            "Future Vault",
+            # Crypto Baskets / Bundles (le cas qui a échoué dans la conv fbbf4f13)
+            "Crypto Basket",
+            "Bundle",
+            "Crypto Bundle",
+            # Exclusive offers
+            "Exclusive Offer",
+            "Cloud Mining",
+            "Dubai Villa",
+            # Loyalty
+            "Privilege Club",
+            "Vancelian Card",
+        ],
+    )
+    def test_vocabulary_contains_product_term(
+        self, router_prompt: str, vocab_term: str
+    ):
+        """Chaque terme produit Vancelian critique doit apparaître au
+        moins une fois dans le prompt enrichi (sensibilité à la casse
+        car les noms propres sont stables)."""
+        assert vocab_term in router_prompt, (
+            f"Le terme produit Vancelian '{vocab_term}' est absent du "
+            f"prompt router — le LLM va manquer ce vocabulaire et "
+            f"basculer en ask_clarification au lieu de route_to(product)."
+        )
+
+    def test_bundle_example_present(self, router_prompt: str):
+        """L'exemple « parle moi des bundle » → product doit être
+        documenté pour ancrer le LLM (cas réel de la conv fbbf4f13)."""
+        assert "parle moi des bundle" in router_prompt
+        # Et la justification doit citer le synonyme oral.
+        assert (
+            "synonyme oral" in router_prompt
+            or "Bundle = Crypto Basket" in router_prompt
+        )
+
+    def test_coffre_flexible_example_present(self, router_prompt: str):
+        """Idem pour Coffre Flexible — produit phare."""
+        assert "coffre flexible" in router_prompt.lower()
+
+    def test_anti_confusion_for_operational_questions(
+        self, router_prompt: str
+    ):
+        """Le prompt doit clarifier la frontière product/compliance :
+        si un terme produit est suivi d'un déterminant possessif +
+        verbe opérationnel (« mon coffre n'est pas crédité »), router
+        bascule sur compliance (règle 1), pas product."""
+        assert (
+            "mon coffre flexible n'est pas crédité" in router_prompt
+            or "déterminant possessif" in router_prompt
+        )
+
+    def test_ambiguity_anti_confusion_section(self, router_prompt: str):
+        """La règle anti-confusion entre les 3 niveaux doit être
+        explicite (évite les faux Niveau 2 sur des Niveau 1)."""
+        assert "anti-confusion" in router_prompt.lower()
+        # Mention que le coût d'un Niveau 1 mal classé en Niveau 2 est élevé.
+        assert (
+            "doit reformuler" in router_prompt
+            or "coût" in router_prompt.lower()
+        )
+
+
+class TestRouterPromptIntegrity:
+    """Sanity checks du prompt complet — invariants à préserver."""
+
+    @pytest.fixture
+    def router_prompt(self) -> str:
+        from services.assistance.agents.prompt_builder import (
+            load_agent_system_prompt,
+        )
+        return load_agent_system_prompt("router")
+
+    def test_prompt_loads_non_empty(self, router_prompt: str):
+        assert len(router_prompt) > 1000  # ordre de grandeur attendu
+
+    def test_three_tools_documented(self, router_prompt: str):
+        """Les 3 tools doivent être nommés dans le prompt."""
+        assert "route_to" in router_prompt
+        assert "ask_clarification" in router_prompt
+        assert "redirect_off_topic" in router_prompt
+
+    def test_no_emoji_in_prompt(self, router_prompt: str):
+        """Pas d'emoji dans le prompt système (style Vancelian)."""
+        # Quelques emojis fréquents — on tolère les flèches → ↑ ↓ ✓ ✗.
+        for forbidden in ("😀", "🚀", "💰", "🔥", "📊", "✨"):
+            assert forbidden not in router_prompt
