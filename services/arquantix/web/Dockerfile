@@ -32,6 +32,11 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+# Origine publique canonique du site — sert au metadataBase (SEO) et permet
+# aux iframes/liens admin de cibler le site public quand l'admin est servi
+# sur un sous-domaine séparé (ex. console.arquantix.com).
+ARG NEXT_PUBLIC_SITE_URL=
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ARG NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=
 ENV NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=$NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO
 # Collecte des données de route au build : les handlers importent le client OpenAI

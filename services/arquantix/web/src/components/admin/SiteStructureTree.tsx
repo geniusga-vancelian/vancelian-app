@@ -19,6 +19,29 @@ import {
 import { defaultLocale, getLocaleOrDefault, supportedLocales, type Locale } from '@/config/locales'
 import { siteStructureEditorHref } from '@/lib/admin/siteStructureEditorHref'
 import { siteStructurePublicUrl } from '@/lib/admin/siteStructurePublicUrl'
+
+/**
+ * Origine du site public injectée au build via `NEXT_PUBLIC_SITE_URL`.
+ * Utile quand l'admin tourne sur un sous-domaine séparé (ex.
+ * `console.arquantix.com`) : on préfixe les URLs publiques pour que les
+ * iframes / liens ciblent bien `https://arquantix.com/...` cross-host
+ * (sinon 404 sur le sous-domaine console qui ne sert que `/admin*` et
+ * `/preview/*`).
+ *
+ * En dev local sans variable définie : on retombe sur un path relatif,
+ * l'admin et le site sont sur le même origin → fonctionnement inchangé.
+ */
+const PUBLIC_SITE_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '')
+
+function toPublicHref(path: string): string {
+  if (!path) return path
+  if (/^https?:\/\//i.test(path)) return path
+  return PUBLIC_SITE_ORIGIN ? `${PUBLIC_SITE_ORIGIN}${path}` : path
+}
+
+function publicHrefForNode(node: SiteTreeNode, locale: string): string {
+  return toPublicHref(siteStructurePublicUrl(node, locale))
+}
 import { analyzeSiteTreeStructure } from '@/lib/admin/siteStructureTreeMeta'
 import { mustStayStructuralRoot } from '@/lib/admin/pageStructureValidation'
 import {
@@ -549,7 +572,7 @@ function TreeRow({
 }) {
   const hasChildren = node.children.length > 0
   const collapsed = collapsedIds.has(node.id)
-  const publicHref = siteStructurePublicUrl(node, locale)
+  const publicHref = publicHrefForNode(node, locale)
   const isVault = node.template === VAULT_BUILDER_TEMPLATE
   const vaultAdminHref = `/admin/vault-builder?slug=${encodeURIComponent(node.slug)}${node.packagedProduct?.productType === 'EXCLUSIVE_OFFER' ? '&eo=1' : ''}`
   const isVirtualArticle = Boolean(node.isVirtual && node.articleId)
@@ -931,13 +954,20 @@ export function SiteStructureTree({
     setCollapsedIds(new Set(collectNodeIdsWithChildren(tree)))
   }, [tree])
 
+  /**
+   * Voir `toPublicHref` plus haut : préfixe l'URL publique avec
+   * `NEXT_PUBLIC_SITE_URL` quand l'admin est servi sur un sous-domaine
+   * séparé du site public (sinon l'iframe charge `console.arquantix.com/<path>`
+   * qui est 404). Les URLs `/preview/*` restent relatives — elles sont
+   * servies à la fois sur console et sur le site public.
+   */
   const previewUrl = useMemo(() => {
     if (previewCommonModuleRow) {
       const loc = getLocaleOrDefault(previewLocale)
       return `/preview/common-module/${encodeURIComponent(previewCommonModuleRow.id)}?locale=${encodeURIComponent(loc)}`
     }
     if (previewNode) {
-      return siteStructurePublicUrl(previewNode, previewLocale)
+      return publicHrefForNode(previewNode, previewLocale)
     }
     return ''
   }, [previewCommonModuleRow, previewNode, previewLocale])
