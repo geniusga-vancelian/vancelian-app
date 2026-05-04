@@ -27,8 +27,10 @@ Compte : `411714852748` · Région : `us-east-1` · Profil CLI admin : `arquanti
 - ALB `arquantix-alb` (internet-facing).
   - Listener 80 → redirect 443.
   - Listener 443 (cert ACM) :
-    - default forward → `arquantix-web-tg`.
-    - Rule `Host = api.arquantix.com` → `arquantix-api-tg`.
+    - **default forward** → `arquantix-web-tg` (mode normal) ou `arquantix-maintenance-tg` (mode maintenance).
+    - Rule prio 50 : `Host=arquantix.com` AND `Path=/admin*, /api/admin/*, /api/site/media/*, /_next/*` → `arquantix-web-tg` (admin/API admin **toujours** servis, même en maintenance).
+    - Rule prio 100 : `Host=api.arquantix.com` → `arquantix-api-tg`.
+    - Rule prio 999 : (placeholder) host invalide → `arquantix-maintenance-tg` (binding ECS requis).
 
 ### Compute
 
@@ -44,12 +46,17 @@ Compte : `411714852748` · Région : `us-east-1` · Profil CLI admin : `arquanti
   - Port container 8000.
   - Env : `ENV=staging`, `APP_ENV=staging`, `AUTH_RL_BACKEND=auto`,
     `SKIP_TWO_FACTOR_CONFIG_GUARD=1`, `ARQUANTIX_ALLOW_UNAUTHENTICATED_APP_ROUTES=1`.
+- Service `arquantix-maintenance` :
+  - Task def `arquantix-maintenance:N` (image `arquantix-maintenance:latest` — nginx alpine + page 503).
+  - Port container 8080.
+  - Bascule manuelle via `scripts/aws/maintenance/{maintenance-on,off,status}.sh`.
+  - Doc complète : [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md).
 
 ### Données
 
 - RDS Postgres 16 `arquantix-db` (db.t4g.micro, 20 Go, encrypted, no public access, deletion-protected).
 - ElastiCache Redis 7.1 `arquantix-redis` (cache.t4g.micro, single node).
-- ECR : `arquantix-web`, `arquantix-api` (AES256 — pas KMS, contournement bug me-central-1).
+- ECR : `arquantix-web`, `arquantix-api`, `arquantix-maintenance` (AES256 — pas KMS, contournement bug me-central-1).
 - S3 `arquantix-media-prod` (us-east-1, AES256, BlockPublicAccess ON, versioning enabled,
   lifecycle = abort multipart > 7 j). Sert le storage media (uploads admin, blog, projets, mobile DS).
   Accès via IAM user dédié `arquantix-media-uploader` (policy `arquantix-media-uploader-policy`).

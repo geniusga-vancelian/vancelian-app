@@ -1,0 +1,94 @@
+name: Arquantix Maintenance - Build & Deploy
+
+on:
+  # Manuel uniquement : on ne veut pas redéployer la maintenance à chaque commit.
+  # Utilisé pour repush l'image (logo, design, page) sans toucher à la stack web/api.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Docker image tag (default: github.sha)"
+        required: false
+        default: ""
+      force_redeploy:
+        description: "Force ECS redeploy même si l'image n'a pas changé"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 411714852748.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: arquantix-maintenance
+  ECS_CLUSTER: arquantix-cluster
+  ECS_SERVICE: arquantix-maintenance
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: gha-arquantix-maintenance-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          INPUT="${{ inputs.tag }}"
+          if [ -n "$INPUT" ]; then
+            echo "tag=$INPUT" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & push image (linux/amd64, --push)
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
+            --push \
+            services/arquantix/maintenance
+
+      - name: Force ECS new deployment (if requested)
+        if: ${{ inputs.force_redeploy == 'true' }}
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --region ${{ env.AWS_REGION }} \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --query 'service.{Service:serviceName,Status:status,Desired:desiredCount}' \
+            --output json
+          echo "✅ Force-new-deployment lancé. Le service tirera l'image :latest dans ~60s."
+
+      - name: Summary
+        run: |
+          {
+            echo "### Arquantix maintenance image"
+            echo ""
+            echo "- Repo : \`${{ env.ECR_REPOSITORY }}\`"
+            echo "- Tag  : \`${{ steps.tag.outputs.tag }}\` + \`latest\`"
+            echo "- Force redeploy : \`${{ inputs.force_redeploy }}\`"
+            echo ""
+            echo "Pour activer la page maintenance manuellement :"
+            echo "\`scripts/aws/maintenance/maintenance-on.sh\`"
+          } >> "$GITHUB_STEP_SUMMARY"

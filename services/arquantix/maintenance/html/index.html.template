@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>${MAINT_BRAND} — ${MAINT_TITLE}</title>
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      color: #0a0a0a;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      text-align: center;
+    }
+    .logo {
+      width: 220px;
+      max-width: 60vw;
+      margin-bottom: 56px;
+      opacity: 0.95;
+    }
+    h1 {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      margin: 0 0 16px;
+      color: #0a0a0a;
+    }
+    p.subtitle {
+      font-size: clamp(16px, 2vw, 19px);
+      line-height: 1.6;
+      color: #4b5563;
+      max-width: 560px;
+      margin: 0 0 40px;
+    }
+    .eta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: #f3f4f6;
+      color: #111827;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .eta::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.5; }
+    }
+    footer {
+      padding: 24px;
+      text-align: center;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+    footer a { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0a0a0a; color: #f3f4f6; }
+      h1 { color: #ffffff; }
+      p.subtitle { color: #9ca3af; }
+      .eta { background: #18181b; color: #f3f4f6; }
+      footer { color: #4b5563; }
+      .logo { filter: invert(1); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="/logo.svg" alt="${MAINT_BRAND}" />
+    <h1>${MAINT_TITLE}</h1>
+    <p class="subtitle">${MAINT_SUBTITLE}</p>
+    <div class="eta-wrapper" id="eta-wrap" style="display:${MAINT_ETA:+inline-flex};${MAINT_ETA:+}">
+      <span class="eta">Retour estimé : ${MAINT_ETA}</span>
+    </div>
+  </main>
+  <footer>
+    © <span id="year">2026</span> ${MAINT_BRAND}. Tous droits réservés.
+  </footer>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+    var eta = "${MAINT_ETA}".trim();
+    var wrap = document.getElementById("eta-wrap");
+    if (!eta && wrap) wrap.style.display = "none";
+  </script>
+</body>
+</html>
