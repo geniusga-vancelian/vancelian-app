@@ -27,6 +27,38 @@ const nextConfig = {
     // Violations ESLint héritées : ne pas bloquer `next build` (lint séparé si besoin).
     ignoreDuringBuilds: true,
   },
+  /**
+   * Cache-busting agressif sur les pages HTML publiques.
+   *
+   * Pourquoi : si on bascule en mode maintenance (ALB → service nginx 503),
+   * un browser qui aurait déjà chargé la home garde son HTML en cache local
+   * et ne voit pas la page maintenance jusqu'à expiration. En forçant
+   * `no-store` sur tout sauf les assets statiques, on garantit que chaque
+   * navigation refetch le HTML — donc voit immédiatement l'éventuelle bascule.
+   *
+   * Exclusions :
+   *  - `/_next/static/*`, `/_next/image*` : assets immuables (hash dans l'URL),
+   *    les laisser cacher pour ne pas casser les perfs.
+   *  - `/api/*` : routes API, déjà `force-dynamic` côté serveur, leur cache
+   *    est géré au cas par cas.
+   *  - `/admin/*` : console admin, pas de problème de bascule maintenance
+   *    (rule ALB prio 50 garantit qu'elle reste servie par le web TG).
+   *  - `favicon.ico`, `robots.txt`, `sitemap.xml` : peu coûteux à recharger
+   *    mais inutile de casser leur cache.
+   */
+  async headers() {
+    return [
+      {
+        source: '/((?!_next/static|_next/image|api|admin|favicon\\.ico|robots\\.txt|sitemap\\.xml).*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate, max-age=0',
+          },
+        ],
+      },
+    ]
+  },
   // output: 'standalone', // Désactivé pour utiliser next start
   experimental: {
     instrumentationHook: true,

@@ -140,5 +140,13 @@ Ou via le workflow GitHub `arquantix-maintenance-deploy.yml` (déclenchement man
 - **Pas de CloudFront** : aucun cache CDN à invalider, mais aussi pas de TTFB
   optimisé. Si tu ajoutes CloudFront un jour, il faudra `aws cloudfront
   create-invalidation` après chaque bascule.
+- **Cache navigateur** : géré côté Next.js via `headers()` dans
+  `next.config.js`. Les pages HTML publiques retournent
+  `Cache-Control: no-store, must-revalidate, max-age=0` → les visiteurs
+  refetchent le HTML à chaque navigation et voient donc immédiatement la
+  bascule maintenance. Les assets `/_next/static/*` gardent leur cache
+  immuable (`max-age=31536000, immutable`) — pas d'impact perf.
+  L'admin (`/admin/*`) est exclu de cette règle (Next.js applique déjà
+  son propre `no-cache` sur les routes authentifiées).
 - **Bascule via ALB seulement** : si le DNS Route53 lui-même perd l'ALB, il
   faudra toucher au DNS. Hors scope de ce mécanisme.
