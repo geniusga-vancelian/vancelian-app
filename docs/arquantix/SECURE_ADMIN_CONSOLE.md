@@ -12,7 +12,10 @@ Il vit désormais sur un **sous-domaine dédié** : `console.arquantix.com`.
 | Routes admin | **404 (fixed-response ALB prio 30)** | servies normalement |
 | `/api/admin/*` | **404 (ALB prio 30 + middleware Next.js)** | servies normalement |
 | `/` | redirect vers `/{locale}` | **redirect vers `/admin/login`** |
-| Tout chemin non-`/admin` | servi par Next.js | **404 (middleware Next.js)** |
+| Tout chemin non-`/admin` | servi par Next.js | **404 (middleware Next.js)** sauf exceptions ↓ |
+| `/preview/*` | servi (status quo) | servi (utilisé par les iframes admin) |
+| `/robots.txt` | host-aware (Allow:/, Disallow `/admin/`, ...) | host-aware (`Disallow: /`) |
+| `/sitemap.xml` | servi | servi |
 | `X-Robots-Tag` | absent | `noindex, nofollow, noarchive` (toutes réponses) |
 | `<meta name="robots">` | absent | `noindex, nofollow, noarchive` (générée par RootLayout) |
 | `/robots.txt` | `Allow:/` + Disallow `/admin/`, `/api/admin/`, `/api/`, `/preview/` | **`Disallow: /`** |
@@ -48,6 +51,7 @@ Contrôle host-aware :
 - sur l'hôte console : `/` → 307 `/admin/login`, paths non-admin → 404, `X-Robots-Tag` ajouté à toutes les réponses (y compris `/_next/*`, `/api/admin/*`, redirects)
 - sur les autres hôtes : `/admin*` et `/api/admin/*` → 404 (défense en profondeur si la rule ALB 30 venait à disparaître)
 - `/robots.txt` et `/sitemap.xml` sont laissés passer sur console pour permettre le rendu de la version host-aware
+- `/preview/*` est laissé passer sur console (les iframes admin de `/admin/pages/*` et `/admin/pages/*/add-module` y pointent en URL relative pour rendre l'aperçu d'une page, section, module commun, article, ou section-demo)
 
 Le matcher inclut explicitement `/api/admin/:path*` pour que le middleware puisse aussi bloquer ces routes côté Next.js.
 

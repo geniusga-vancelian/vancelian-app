@@ -99,14 +99,23 @@ export async function middleware(request: NextRequest) {
       return withConsoleHeaders(NextResponse.redirect(url, 307), true)
     }
     /**
-     * Exceptions servies normalement (utiles aux moteurs / navigateurs) avec
-     * `X-Robots-Tag: noindex` posé en sortie :
-     * - `/robots.txt` (servi par `src/app/robots.ts` host-aware → Disallow:/)
-     * - `/sitemap.xml` (n'existe pas mais ne doit pas être 404 par un autre code)
+     * Routes autorisées sur l'hôte console (en plus de `/admin*`) :
+     * - `/preview/*` : iframes d'aperçu utilisées par l'admin CMS pour
+     *   visualiser pages, sections, modules communs, articles, e-mails, etc.
+     *   Les URLs sont relatives côté admin → résolvent vers console.*.
+     * - `/robots.txt` : servi par `src/app/robots.ts` host-aware (Disallow:/).
+     * - `/sitemap.xml` : ne doit pas être un 404 avec body opaque.
+     * Toutes ces réponses portent `X-Robots-Tag: noindex, nofollow, noarchive`.
      */
+    const isAllowedPreview =
+      pathname === '/preview' || pathname.startsWith('/preview/')
     const isAllowedSpecial =
       pathname === '/robots.txt' || pathname === '/sitemap.xml'
-    if (!pathname.startsWith('/admin') && !isAllowedSpecial) {
+    if (
+      !pathname.startsWith('/admin') &&
+      !isAllowedPreview &&
+      !isAllowedSpecial
+    ) {
       return withConsoleHeaders(
         new NextResponse('Not Found', {
           status: 404,
@@ -115,8 +124,8 @@ export async function middleware(request: NextRequest) {
         true,
       )
     }
-    if (isAllowedSpecial) {
-      return withConsoleHeaders(NextResponse.next(), true)
+    if (isAllowedPreview || isAllowedSpecial) {
+      return withConsoleHeaders(nextWithPathname(request), true)
     }
   }
 
