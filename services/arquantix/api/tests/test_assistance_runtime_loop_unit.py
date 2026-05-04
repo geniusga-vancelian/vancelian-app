@@ -657,3 +657,323 @@ class TestSanitizerIntegration:
         twice, n2 = audit.sanitize_reasoning(once)
         assert once == twice
         assert n2 == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# G. Phase 2 wiki — Guard-rail anti-hallucination agent `product` (2026-05-04)
+# ─────────────────────────────────────────────────────────────────────────
+
+
+class TestProductGuardrailHelper:
+    """Tests directs de `_check_product_guardrail` (logique pure, sans loop)."""
+
+    def test_no_tools_called_returns_no_read_hint(self):
+        from services.assistance.agents.runtime.agent_loop import (
+            PRODUCT_GUARDRAIL_HINT_NO_READ,
+            _check_product_guardrail,
+        )
+        assert _check_product_guardrail([]) == PRODUCT_GUARDRAIL_HINT_NO_READ
+
+    def test_only_select_returns_select_without_read_hint(self):
+        from services.assistance.agents.runtime.agent_loop import (
+            PRODUCT_GUARDRAIL_HINT_SELECT_WITHOUT_READ,
+            _check_product_guardrail,
+        )
+        assert (
+            _check_product_guardrail(["select_wiki_pages"])
+            == PRODUCT_GUARDRAIL_HINT_SELECT_WITHOUT_READ
+        )
+
+    def test_select_then_read_wiki_page_returns_none(self):
+        from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
+        assert (
+            _check_product_guardrail(["select_wiki_pages", "read_wiki_page"]) is None
+        )
+
+    def test_select_then_read_product_knowledge_returns_none(self):
+        """select + read_product_knowledge (SQL) compte comme une lecture valide."""
+        from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
+        assert (
+            _check_product_guardrail(["select_wiki_pages", "read_product_knowledge"])
+            is None
+        )
+
+    def test_only_show_instrument_card_returns_none(self):
+        """show_instrument_card seul est une lecture valide (carte produit live)."""
+        from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
+        assert _check_product_guardrail(["show_instrument_card"]) is None
+
+    def test_only_read_product_knowledge_returns_none(self):
+        from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
+        assert _check_product_guardrail(["read_product_knowledge"]) is None
+
+    def test_list_topics_only_does_not_satisfy_guardrail(self):
+        """list_product_knowledge_topics est un tool de debug/introspection,
+        pas une lecture de contenu — le guard-rail doit s'activer quand même."""
+        from services.assistance.agents.runtime.agent_loop import (
+            PRODUCT_GUARDRAIL_HINT_NO_READ,
+            _check_product_guardrail,
+        )
+        assert (
+            _check_product_guardrail(["list_product_knowledge_topics"])
+            == PRODUCT_GUARDRAIL_HINT_NO_READ
+        )
+
+
+class TestProductGuardrailIntegration:
+    """Tests d'intégration du guard-rail dans `run_agent_loop`."""
+
+    def test_product_no_tool_triggers_retry_with_hint(self, _stub_persist_decision):
+        """Cas turn 30 / 32 de la conv aef5923a : product répond direct sans tool.
+        Le guard-rail doit injecter un hint et relancer la boucle."""
+        # 1er tour : LLM répond direct sans tool (simule turn 30 hallucinatoire)
+        # 2e tour (après injection hint) : LLM finit par appeler un tool de lecture
+        tool = _make_tool_module(
+            name="read_product_knowledge",
+            agent_id="product",
+            execute_result={"slug": "vault", "content": "Le coffre…"},
+        )
+        completion, state = _make_completion_fn(
+            [
+                {"content": "Vancelian propose plusieurs produits…", "tool_calls": None},
+                {"content": None, "tool_calls": [_tool_call("read_product_knowledge", {"slug": "vault"})]},
+                {"content": "Voici la fiche officielle.", "tool_calls": None},
+            ]
+        )
+        events = asyncio.run(
+            _collect(
+                run_agent_loop(
+                    agent_id="product",
+                    system_prompt="You are product agent.",
+                    available_tools=[tool],
+                    agent_input=_make_agent_input("Découvrir un produit Vancelian"),
+                    actor_kind=ActorKind.CUSTOMER,
+                    db=MagicMock(),
+                    conversation_id=uuid4(),
+                    user_id=42,
+                    chat_completion_fn=completion,
+                )
+            )
+        )
+        # Le guard-rail a forcé 3 itérations LLM (réponse hallucinée → hint
+        # injecté → tool call → réponse finale), pas 1.
+        assert state["i"] == 3
+        # La réponse finale rendue à l'utilisateur est la "Voici la fiche…",
+        # pas le brouillon hallucinatoire.
+        deltas = [e.content for e in events if e.type == "delta" and e.content]
+        assert any("Voici la fiche officielle" in d for d in deltas)
+        assert not any("plusieurs produits" in d for d in deltas)
+
+    def test_product_select_without_read_triggers_retry(self, _stub_persist_decision):
+        """Cas turn 42 de la conv aef5923a : select × N sans read_wiki_page."""
+        select_tool = _make_tool_module(
+            name="select_wiki_pages",
+            agent_id="product",
+            execute_result={"matches": [{"slug": "x", "category": "y", "score": 5.0}]},
+        )
+        read_tool = _make_tool_module(
+            name="read_wiki_page",
+            agent_id="product",
+            execute_result={"slug": "x", "category": "y", "short_answer": "OK"},
+        )
+        completion, state = _make_completion_fn(
+            [
+                # Turn 1 : LLM appelle select × 2 puis tente de répondre direct
+                {
+                    "content": None,
+                    "tool_calls": [_tool_call("select_wiki_pages", {"question": "produits"})],
+                },
+                {"content": "Voici les meilleurs produits…", "tool_calls": None},
+                # Turn post-hint : LLM appelle enfin read_wiki_page
+                {
+                    "content": None,
+                    "tool_calls": [_tool_call("read_wiki_page", {"slug": "x", "category": "y"})],
+                },
+                {"content": "Réponse sourcée.", "tool_calls": None},
+            ]
+        )
+        events = asyncio.run(
+            _collect(
+                run_agent_loop(
+                    agent_id="product",
+                    system_prompt="You are product.",
+                    available_tools=[select_tool, read_tool],
+                    agent_input=_make_agent_input("quels sont les meilleurs produits ?"),
+                    actor_kind=ActorKind.CUSTOMER,
+                    db=MagicMock(),
+                    conversation_id=uuid4(),
+                    user_id=42,
+                    chat_completion_fn=completion,
+                )
+            )
+        )
+        # 4 itérations : select → réponse rejetée → read → réponse finale
+        assert state["i"] == 4
+        deltas = [e.content for e in events if e.type == "delta" and e.content]
+        assert any("Réponse sourcée" in d for d in deltas)
+
+    def test_product_with_proper_tool_no_retry(self, _stub_persist_decision):
+        """Cas turn 36 / 40 (nominal) : LLM appelle read_wiki_page avant de répondre.
+        Pas de guard-rail, pas de retry."""
+        tool = _make_tool_module(
+            name="read_wiki_page",
+            agent_id="product",
+            execute_result={"slug": "vault", "short_answer": "Le coffre…"},
+        )
+        completion, state = _make_completion_fn(
+            [
+                {
+                    "content": None,
+                    "tool_calls": [_tool_call("read_wiki_page", {"slug": "vault", "category": "vault"})],
+                },
+                {"content": "Réponse correcte.", "tool_calls": None},
+            ]
+        )
+        events = asyncio.run(
+            _collect(
+                run_agent_loop(
+                    agent_id="product",
+                    system_prompt="You are product.",
+                    available_tools=[tool],
+                    agent_input=_make_agent_input("parle moi du coffre"),
+                    actor_kind=ActorKind.CUSTOMER,
+                    db=MagicMock(),
+                    conversation_id=uuid4(),
+                    user_id=42,
+                    chat_completion_fn=completion,
+                )
+            )
+        )
+        assert state["i"] == 2  # Pas de retry — comportement nominal.
+        deltas = [e.content for e in events if e.type == "delta" and e.content]
+        assert any("Réponse correcte" in d for d in deltas)
+
+    def test_product_guardrail_max_one_retry(self, _stub_persist_decision):
+        """Si le LLM ignore le hint et répond toujours sans tool au 2e essai,
+        on accepte la réponse (pas de boucle infinie)."""
+        completion, state = _make_completion_fn(
+            [
+                {"content": "Réponse sans tool 1.", "tool_calls": None},
+                # Après injection du hint, le LLM répond encore sans tool
+                {"content": "Réponse sans tool 2.", "tool_calls": None},
+                # Filet : si jamais on continuait, ce 3e essai fail le test
+                {"content": "NE_DEVRAIT_PAS_APPARAITRE", "tool_calls": None},
+            ]
+        )
+        events = asyncio.run(
+            _collect(
+                run_agent_loop(
+                    agent_id="product",
+                    system_prompt="You are product.",
+                    available_tools=[],
+                    agent_input=_make_agent_input("question test"),
+                    actor_kind=ActorKind.CUSTOMER,
+                    db=MagicMock(),
+                    conversation_id=uuid4(),
+                    user_id=42,
+                    chat_completion_fn=completion,
+                )
+            )
+        )
+        # Exactement 2 itérations : 1ère rejetée, 2e acceptée même sans tool.
+        assert state["i"] == 2
+        deltas = [e.content for e in events if e.type == "delta" and e.content]
+        assert any("Réponse sans tool 2" in d for d in deltas)
+        # Et la 1ère hallucinée n'a PAS été émise au client.
+        assert not any("Réponse sans tool 1" in d for d in deltas)
+
+    def test_guardrail_disabled_via_env(self, monkeypatch, _stub_persist_decision):
+        """ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED=false → comportement legacy."""
+        monkeypatch.setenv("ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED", "false")
+        completion, state = _make_completion_fn(
+            [{"content": "Réponse legacy non-sourcée.", "tool_calls": None}]
+        )
+        events = asyncio.run(
+            _collect(
+                run_agent_loop(
+                    agent_id="product",
+                    system_prompt="...",
+                    available_tools=[],
+                    agent_input=_make_agent_input(),
+                    actor_kind=ActorKind.CUSTOMER,
+                    db=MagicMock(),
+                    conversation_id=uuid4(),
+                    user_id=42,
+                    chat_completion_fn=completion,
+                )
+            )
+        )
+        assert state["i"] == 1  # Pas de retry — guard-rail off.
+        deltas = [e.content for e in events if e.type == "delta" and e.content]
+        assert any("Réponse legacy non-sourcée" in d for d in deltas)
+
+    def test_guardrail_does_not_apply_to_other_agents(self, _stub_persist_decision):
+        """Le guard-rail est product-only — un autre agent peut répondre direct."""
+        completion, state = _make_completion_fn(
+            [{"content": "Compliance répond direct.", "tool_calls": None}]
+        )
+        events = asyncio.run(
+            _collect(
+                run_agent_loop(
+                    agent_id="compliance.general",
+                    system_prompt="...",
+                    available_tools=[],
+                    agent_input=_make_agent_input(),
+                    actor_kind=ActorKind.CUSTOMER,
+                    db=MagicMock(),
+                    conversation_id=uuid4(),
+                    user_id=42,
+                    chat_completion_fn=completion,
+                )
+            )
+        )
+        assert state["i"] == 1
+        deltas = [e.content for e in events if e.type == "delta" and e.content]
+        assert any("Compliance répond direct" in d for d in deltas)
+
+    def test_guardrail_does_not_apply_in_consult_subloop(self, _stub_persist_decision):
+        """En sous-loop consult (consult_in_progress=True), le specialist
+        peut répondre depuis son seul prompt sur des questions définitionnelles."""
+        completion, state = _make_completion_fn(
+            [{"content": "Spécialiste répond bref.", "tool_calls": None}]
+        )
+        events = asyncio.run(
+            _collect(
+                run_agent_loop(
+                    agent_id="product",
+                    system_prompt="...",
+                    available_tools=[],
+                    agent_input=_make_agent_input(),
+                    actor_kind=ActorKind.CUSTOMER,
+                    db=MagicMock(),
+                    conversation_id=uuid4(),
+                    user_id=42,
+                    chat_completion_fn=completion,
+                    consult_in_progress=True,
+                )
+            )
+        )
+        assert state["i"] == 1  # Pas de retry — sous-loop consult.
+        deltas = [e.content for e in events if e.type == "delta" and e.content]
+        assert any("Spécialiste répond bref" in d for d in deltas)
+
+
+class TestProductGuardrailConfig:
+    """`assistance_product_guardrail_enabled()` — lecture env var."""
+
+    def test_enabled_by_default(self, monkeypatch):
+        from services.assistance.agents.config import assistance_product_guardrail_enabled
+        monkeypatch.delenv("ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED", raising=False)
+        assert assistance_product_guardrail_enabled() is True
+
+    @pytest.mark.parametrize("val", ["true", "1", "yes", "on", "TRUE", "True"])
+    def test_enabled_truthy_values(self, monkeypatch, val):
+        from services.assistance.agents.config import assistance_product_guardrail_enabled
+        monkeypatch.setenv("ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED", val)
+        assert assistance_product_guardrail_enabled() is True
+
+    @pytest.mark.parametrize("val", ["false", "0", "no", "off", "FALSE", "anything_else"])
+    def test_disabled_falsy_values(self, monkeypatch, val):
+        from services.assistance.agents.config import assistance_product_guardrail_enabled
+        monkeypatch.setenv("ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED", val)
+        assert assistance_product_guardrail_enabled() is False

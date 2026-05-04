@@ -88,11 +88,46 @@ def assistance_summary_threshold_tokens() -> int:
 
     Au-delà, on compresse les anciens tours dans `conversation_summary` et
     on n'envoie plus que le résumé + les K derniers tours bruts.
+
+    **Défaut 2500** (révisé 2026-05-04 depuis 6000) pour mieux servir le
+    profil mobile : la majorité des sessions Vancelian font 10-30 tours
+    sans dépasser 4000 tokens. Avec un seuil à 6000, ces conversations
+    informatives ne contribuaient jamais à la mémoire long-terme client.
+    À 2500, on consolide ~tous les 8-12 tours selon la verbosité — coût
+    LLM marginal (`gpt-4o-mini` summarizer ≈ 0,001 USD / call) et gain
+    UX réel (l'agent apprend du client à chaque session significative).
+
+    Floor à 1000 préservé : valeurs sous ce seuil dégénèrent en
+    consolidation à chaque tour, ce qui n'a pas de sens.
     """
     try:
-        return max(1000, int(os.getenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "6000")))
+        return max(1000, int(os.getenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "2500")))
     except ValueError:
-        return 6000
+        return 2500
+
+
+def assistance_summary_min_turns() -> int:
+    """Nombre de tours minimum déclenchant la consolidation indépendamment du seuil tokens.
+
+    **Défaut 10** (introduit 2026-05-04). Raison : sur des conversations
+    avec messages courts (questions QCM, choix simples), on peut
+    accumuler 20-30 tours sans dépasser le seuil tokens — et donc ne
+    jamais consolider. Ce trigger garantit qu'au-delà de N tours
+    user/assistant complets, la mémoire est extraite quoi qu'il arrive.
+
+    Conversion : 1 tour ≈ 2 messages (1 user + 1 assistant). Le
+    déclencheur est donc ``len(messages) >= min_turns * 2``.
+
+    Mettre ``ASSISTANCE_SUMMARY_MIN_TURNS=0`` pour désactiver ce trigger
+    (ne garder que le seuil tokens, comportement < 2026-05-04).
+
+    Floor à 0 (désactivation), ceiling à 200 (sécurité).
+    """
+    try:
+        v = int(os.getenv("ASSISTANCE_SUMMARY_MIN_TURNS", "10"))
+    except ValueError:
+        return 10
+    return max(0, min(200, v))
 
 
 def assistance_recent_turns_kept() -> int:
@@ -150,10 +185,43 @@ def count_tokens(messages: Iterable[dict], model: str | None = None) -> int:
         return chars // 4
 
 
-def should_consolidate(messages: Iterable[dict], threshold: int | None = None) -> bool:
-    """True si le contexte dépasse le seuil → on doit consolider."""
+def should_consolidate(
+    messages: Iterable[dict],
+    threshold: int | None = None,
+    min_turns: int | None = None,
+) -> bool:
+    """True si on doit consolider la conversation.
+
+    Deux déclencheurs (logique **OR**) :
+
+    1. **Seuil tokens** (``threshold``, défaut
+       ``assistance_summary_threshold_tokens()`` = 2500) — consolide
+       quand le contexte dépasse ce volume pour libérer de la place
+       dans la fenêtre LLM.
+    2. **Seuil tours** (``min_turns``, défaut
+       ``assistance_summary_min_turns()`` = 10) — consolide quand le
+       nombre de messages atteint ``min_turns * 2`` (1 tour = 1 user +
+       1 assistant), même si le contexte tient sous le seuil tokens.
+       Garantit que les conversations longues mais peu verbeuses
+       finissent par alimenter la mémoire long-terme.
+
+    Args:
+        messages: liste de messages OpenAI-style (``{"role", "content"}``).
+        threshold: override token (utile pour tests). ``None`` →
+            valeur courante de l'env.
+        min_turns: override min_turns (utile pour tests). ``None`` →
+            valeur courante de l'env. ``0`` désactive ce déclencheur.
+
+    Returns:
+        True si l'un des deux seuils est atteint.
+    """
     threshold = threshold or assistance_summary_threshold_tokens()
-    return count_tokens(messages) >= threshold
+    if min_turns is None:
+        min_turns = assistance_summary_min_turns()
+    msgs_list = list(messages)
+    if min_turns > 0 and len(msgs_list) >= min_turns * 2:
+        return True
+    return count_tokens(msgs_list) >= threshold
 
 
 # ── Assemblage du contexte envoyé à OpenAI ────────────────────────────────

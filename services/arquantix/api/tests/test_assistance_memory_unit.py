@@ -55,8 +55,9 @@ class TestConfigEnvVars:
         assert memory.assistance_summarizer_model() == "gpt-4-turbo"
 
     def test_threshold_tokens_default(self, monkeypatch):
+        """Défaut révisé à 2500 (depuis 6000) le 2026-05-04 — cf. memory.py docstring."""
         monkeypatch.delenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", raising=False)
-        assert memory.assistance_summary_threshold_tokens() == 6000
+        assert memory.assistance_summary_threshold_tokens() == 2500
 
     def test_threshold_tokens_custom(self, monkeypatch):
         monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "1500")
@@ -64,12 +65,39 @@ class TestConfigEnvVars:
 
     def test_threshold_tokens_invalid_falls_back(self, monkeypatch):
         monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "not_a_number")
-        assert memory.assistance_summary_threshold_tokens() == 6000
+        assert memory.assistance_summary_threshold_tokens() == 2500
 
     def test_threshold_tokens_clamped_to_minimum(self, monkeypatch):
         """Floor à 1000 pour éviter les valeurs aberrantes (consolide à chaque tour)."""
         monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "100")
         assert memory.assistance_summary_threshold_tokens() == 1000
+
+    def test_min_turns_default(self, monkeypatch):
+        """Défaut 10 (introduit 2026-05-04) — cf. memory.assistance_summary_min_turns."""
+        monkeypatch.delenv("ASSISTANCE_SUMMARY_MIN_TURNS", raising=False)
+        assert memory.assistance_summary_min_turns() == 10
+
+    def test_min_turns_custom(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "5")
+        assert memory.assistance_summary_min_turns() == 5
+
+    def test_min_turns_zero_disables(self, monkeypatch):
+        """Valeur 0 désactive ce déclencheur (comportement < 2026-05-04)."""
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "0")
+        assert memory.assistance_summary_min_turns() == 0
+
+    def test_min_turns_invalid_falls_back(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "not_a_number")
+        assert memory.assistance_summary_min_turns() == 10
+
+    def test_min_turns_clamped_to_ceiling(self, monkeypatch):
+        """Ceiling à 200 pour éviter les valeurs aberrantes."""
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "9999")
+        assert memory.assistance_summary_min_turns() == 200
+
+    def test_min_turns_negative_clamped_to_zero(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "-5")
+        assert memory.assistance_summary_min_turns() == 0
 
     def test_recent_turns_kept_default(self, monkeypatch):
         monkeypatch.delenv("ASSISTANCE_RECENT_TURNS_KEPT", raising=False)
@@ -174,11 +202,13 @@ class TestCountTokens:
 class TestShouldConsolidate:
     def test_below_threshold_returns_false(self, monkeypatch):
         monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "10000")
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "0")  # désactive l'autre trigger
         msgs = [{"role": "user", "content": "court"}]
         assert memory.should_consolidate(msgs) is False
 
     def test_above_threshold_returns_true(self, monkeypatch):
         monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "1000")
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "0")
         # Génère ~5000 tokens (~ 20k chars)
         big = "lorem ipsum dolor sit amet " * 1000
         msgs = [{"role": "user", "content": big}]
@@ -186,12 +216,60 @@ class TestShouldConsolidate:
 
     def test_explicit_threshold_overrides_env(self, monkeypatch):
         monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "100000")
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "0")
         big = "x" * 100_000
         msgs = [{"role": "user", "content": big}]
         # Env très haut → False
         assert memory.should_consolidate(msgs) is False
         # Override bas → True
         assert memory.should_consolidate(msgs, threshold=100) is True
+
+    # ── Phase 2 wiki — déclencheur min_turns (2026-05-04) ────────────
+
+    def test_min_turns_triggers_below_token_threshold(self, monkeypatch):
+        """Si le contexte tient sous le seuil tokens mais dépasse min_turns *2 messages, on consolide quand même."""
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "100000")  # très haut
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "5")
+        # 10 messages courts (= 5 tours user/assistant) → atteint min_turns*2.
+        msgs = [{"role": "user" if i % 2 == 0 else "assistant", "content": "ok"} for i in range(10)]
+        assert memory.should_consolidate(msgs) is True
+
+    def test_min_turns_not_reached_returns_false(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "100000")
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "10")
+        # 8 messages = 4 tours, sous le seuil 10*2=20 messages.
+        msgs = [{"role": "user", "content": "ok"} for _ in range(8)]
+        assert memory.should_consolidate(msgs) is False
+
+    def test_min_turns_zero_disables_trigger(self, monkeypatch):
+        """min_turns=0 → seul le seuil tokens compte (comportement < 2026-05-04)."""
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "100000")
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "0")
+        # 100 messages mais sous le seuil tokens.
+        msgs = [{"role": "user", "content": "x"} for _ in range(100)]
+        assert memory.should_consolidate(msgs) is False
+
+    def test_explicit_min_turns_overrides_env(self, monkeypatch):
+        """Override explicite du paramètre min_turns (utile pour tests)."""
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "100000")
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "100")
+        msgs = [{"role": "user", "content": "x"} for _ in range(20)]
+        # Env min_turns=100 → False (besoin 200 messages)
+        assert memory.should_consolidate(msgs) is False
+        # Override min_turns=5 → True (10 messages suffisent)
+        assert memory.should_consolidate(msgs, min_turns=5) is True
+
+    def test_min_turns_or_threshold_either_triggers(self, monkeypatch):
+        """OR logic : token threshold seul OU min_turns seul → consolide."""
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_THRESHOLD_TOKENS", "1000")
+        monkeypatch.setenv("ASSISTANCE_SUMMARY_MIN_TURNS", "10")
+        # Court (sous tokens) mais 24 messages (≥ min_turns*2=20) → trigger min_turns
+        msgs_long_short = [{"role": "user", "content": "ok"} for _ in range(24)]
+        assert memory.should_consolidate(msgs_long_short) is True
+        # Long en tokens mais peu de messages → trigger threshold
+        big = "lorem ipsum " * 1000
+        msgs_short_big = [{"role": "user", "content": big}]
+        assert memory.should_consolidate(msgs_short_big) is True
 
 
 # ─────────────────────────────────────────────────────────────────────────

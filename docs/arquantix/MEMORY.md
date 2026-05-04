@@ -2,15 +2,15 @@
 
 > **Palier 2 — D.2** : continuité conversationnelle (rolling summary + faits structurés) avec mémoire **cross-conversations** au niveau du client.
 
-**Date :** 2026-05-02
+**Date :** 2026-05-04 *(révision : seuil tokens abaissé 6000 → 2500 + ajout `min_turns`)*
 **Status :** ✅ En production (image API rebuild + migration 146 appliquée)
-**Couverture tests :** 81 tests (`tests/test_assistance_memory_unit.py` + `tests/test_assistance_memory_integration.py`)
+**Couverture tests :** 87 tests (`tests/test_assistance_memory_unit.py` + `tests/test_assistance_memory_integration.py`)
 
 ---
 
 ## TL;DR
 
-Quand une conversation d'assistance dépasse un seuil de tokens (par défaut **6000**, plancher applicatif **1000**), un agent LLM dédié (`gpt-4o-mini`, JSON mode, T=0.2) :
+Quand une conversation d'assistance dépasse un seuil de tokens (par défaut **2500**, plancher applicatif **1000**) **OU** quand elle atteint **10 tours** (`min_turns`, configurable), un agent LLM dédié (`gpt-4o-mini`, JSON mode, T=0.2) :
 
 1. **Compresse** les anciens tours en un `conversation_summary` (rolling, 2-6 lignes)
 2. **Extrait** des `conversation_facts` typés (objectifs, montants, horizon, profil de risque…)
@@ -94,11 +94,11 @@ Module **autonome**, sans dépendance à `services.chatbot_epargne`. Seules dép
 
 **Surface publique :**
 - `count_tokens(messages, model=None)` — comptage via tiktoken (`cl100k_base` pour gpt-4o), fallback heuristique `chars/4` si tiktoken absent.
-- `should_consolidate(messages, threshold=None)` — `True` si total tokens ≥ seuil.
+- `should_consolidate(messages, threshold=None, min_turns=None)` — `True` si total tokens ≥ seuil **OU** si nombre de messages ≥ `min_turns × 2`. Le déclencheur `min_turns` (introduit 2026-05-04) garantit que les conversations longues mais peu verbeuses finissent par alimenter la mémoire long-terme client.
 - `build_context(*, summary, client_long_memory, recent_turns)` — assemble le payload OpenAI : `[system memory block?] + recent_turns`.
 - `consolidate_conversation(*, session_factory, conversation_id)` — coroutine async, lockée par conv, exécute `_consolidate_sync` dans un thread.
 - `load_memory_state(db, conversation_id) -> MemoryState | None` — snapshot lecture pour `_build_context`.
-- 4 helpers env vars : `assistance_summarizer_model()`, `assistance_summary_threshold_tokens()`, `assistance_recent_turns_kept()`, `assistance_summarizer_temperature()`.
+- 5 helpers env vars : `assistance_summarizer_model()`, `assistance_summary_threshold_tokens()`, `assistance_summary_min_turns()`, `assistance_recent_turns_kept()`, `assistance_summarizer_temperature()`.
 
 **Fonctions privées clés :**
 - `_consolidate_sync(session_factory, conversation_id)` — implémentation synchrone du flow complet.
@@ -270,7 +270,8 @@ Le client s'interroge sur la performance de son portefeuille diversifié...
 | Var | Défaut | Plancher | Plafond | Rôle |
 |---|---|---|---|---|
 | `ASSISTANCE_SUMMARIZER_MODEL` | `OPENAI_MODEL` ou `gpt-4o-mini` | — | — | Modèle pour le summarizer (séparable du chat principal) |
-| `ASSISTANCE_SUMMARY_THRESHOLD_TOKENS` | `6000` | `1000` | — | Seuil de déclenchement consolidation (somme tokens conv) |
+| `ASSISTANCE_SUMMARY_THRESHOLD_TOKENS` | `2500` *(rév. 2026-05-04, ex 6000)* | `1000` | — | Seuil tokens de déclenchement consolidation |
+| `ASSISTANCE_SUMMARY_MIN_TURNS` | `10` *(intro 2026-05-04)* | `0` | `200` | Seuil tours alternatif — déclenche consolidation à `len(messages) ≥ min_turns × 2`, indépendamment du seuil tokens. `0` désactive ce déclencheur. |
 | `ASSISTANCE_RECENT_TURNS_KEPT` | `8` | `2` | — | K — derniers tours bruts toujours envoyés (post-summary) |
 | `ASSISTANCE_SUMMARIZER_TEMPERATURE` | `0.2` | `0.0` | `2.0` | Temperature OpenAI summarizer (bas = factuel) |
 | `OPENAI_API_KEY` | — | — | — | (déjà existante, utilisée par chat principal aussi) |
@@ -282,13 +283,22 @@ Le client s'interroge sur la performance de son portefeuille diversifié...
 
 ### 5.2. Tuning des paramètres
 
-#### `ASSISTANCE_SUMMARY_THRESHOLD_TOKENS`
+#### `ASSISTANCE_SUMMARY_THRESHOLD_TOKENS` *(défaut révisé 2026-05-04)*
 
-- **6000** (défaut) : conv power-user (30+ tours longs) → consolidation tardive, faible coût LLM.
-- **1500** : conv typique (4-5 tours détaillés) → consolidation rapide, mémoire cross-conv quasi-immédiate.
-- **1000** (plancher) : tout est consolidé presque tout le temps. Useful pour démos / recettes.
+- **2500** (défaut **2026-05-04**) : équilibre mobile-first. La majorité des sessions Vancelian font 10-30 tours sans dépasser 4000 tokens ; à 2500 on consolide ~tous les 8-12 tours. Coût LLM marginal (`gpt-4o-mini` summarizer ≈ 0,001 USD / call).
+- **6000** (ancien défaut < 2026-05-04) : conv power-user (30+ tours longs) → consolidation tardive. Conséquence observée sur la conv `aef5923a` (42 tours, 24 h) : zéro fact extrait car contexte resté sous le seuil. Conservé comme option pour réduire le coût summarizer en lourde charge.
+- **1500** : conv typique courte (4-5 tours détaillés) → consolidation rapide, mémoire cross-conv quasi-immédiate.
+- **1000** (plancher) : tout est consolidé presque tout le temps. Utile pour démos / recettes.
 
-> 💡 Si l'utilisateur attend une mémoire cross-conv « WhatsApp-like » (= dès que je clos la conv 1, la conv 2 sait), descendre à **1500-2000**. Le coût LLM marginal est trivial avec `gpt-4o-mini`.
+> 💡 Pour une mémoire cross-conv « WhatsApp-like » (= dès que je clos la conv 1, la conv 2 sait), le défaut **2500** suffit. Coût négligeable avec `gpt-4o-mini`.
+
+#### `ASSISTANCE_SUMMARY_MIN_TURNS` *(introduit 2026-05-04)*
+
+- **10** (défaut) : déclencheur alternatif au seuil tokens. Garantit qu'une conv qui s'éternise sans dépasser `2500 tokens` (ex. : QCM, choix simples, messages courts) finisse par alimenter la mémoire long-terme. À 10 tours = 20 messages, on consolide quoi qu'il arrive.
+- **5** : agressif — capture des sessions courtes mais informatives. Coût summarizer × 1,5 environ.
+- **0** : désactive ce déclencheur. Comportement strictement équivalent à `< 2026-05-04` (token-only). Utile pour rollback rapide en cas d'incident.
+
+> Logique **OR** : la consolidation se déclenche dès que **l'un des deux seuils** est atteint. Cf. `services.assistance.memory.should_consolidate`.
 
 #### `ASSISTANCE_RECENT_TURNS_KEPT`
 

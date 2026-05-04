@@ -168,6 +168,28 @@ def assistance_global_autonomy_killswitch() -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
+def assistance_product_guardrail_enabled() -> bool:
+    """Phase 2 wiki — guard-rail anti-hallucination de l'agent ``product``.
+
+    Quand activé (**défaut True**), le runtime intercepte les réponses
+    finales de l'agent ``product`` qui n'auraient appelé **aucun** tool
+    de lecture (``read_product_knowledge``, ``read_wiki_page``,
+    ``show_instrument_card``) **ou** qui auraient appelé
+    ``select_wiki_pages`` **sans** suivre par ``read_wiki_page`` /
+    ``read_product_knowledge``. Dans ce cas, un message system rappelant
+    le contrat est injecté et la boucle réitère **une seule fois**. Si le
+    second essai produit toujours une réponse non-sourcée, on laisse
+    passer (mieux qu'un fallback vide).
+
+    Pour désactiver en cas d'incident :
+    ``ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED=false``.
+    """
+    raw = (
+        os.getenv("ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED") or "true"
+    ).strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 def assistance_agent_autonomy_max(agent_id: str) -> str:
     """Niveau d'autonomie max autorisé pour un agent.
 

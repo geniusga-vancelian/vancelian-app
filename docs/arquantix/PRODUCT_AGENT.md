@@ -1,8 +1,9 @@
 # Agent `product` — Spec Phase 2c
 
-> **Statut :** ✅ **livré** — Phase 2c en production locale, tests verts.
+> **Statut :** ✅ **livré** — Phase 2c + wiki Phase 2 + guard-rail v1.3 en
+> production locale, tests verts.
 >
-> **Dernière mise à jour :** 2026-05-03 (v1.0)
+> **Dernière mise à jour :** 2026-05-04 (v1.3)
 >
 > **Objectif :** introduire un véritable agent `product` (par
 > opposition au stub Phase 1) en charge des informations factuelles
@@ -338,6 +339,83 @@ au total après l'intégration → zéro régression.
 - Path legacy `ProductAgent._collect_tool_context` (heuristique
   V1) **non modifié** — kill-switch via `ASSISTANCE_RUNTIME_LOOP_AGENTS`.
 
+### 9.3 Guard-rail anti-hallucination — v1.3 (2026-05-04)
+
+**Constat post-prod (analyse de la conv `aef5923a` — 42 turns,
+24 h)** : le LLM `gpt-4o-mini` ne respecte pas systématiquement
+l'instruction « tu DOIS appeler un tool de lecture avant de
+répondre » du `product_system.md` v2. Sur les 8 turns Phase 2 de
+cette conv, **3 zappent les tools** :
+
+| Turn | Question | Tools appelés | Résultat |
+|---|---|---|---|
+| 30 | « Découvrir un produit Vancelian » | aucun | 1 332 chars depuis la connaissance LLM |
+| 32 | « Vancelian ne propose pas l'invest crypto ? » | aucun | **Hallucination** : « pas d'invest direct en crypto » (faux, contredit en turn 34) |
+| 42 | « quels sont les meilleurs dispo sur l'app ? » | `select_wiki_pages × 2`, **0** read | Réponse composée depuis les **titres** seuls |
+
+**Solution livrée** — guard-rail dans `agent_loop.py` :
+
+Au moment où l'agent `product` produit une réponse finale (sans
+nouveau tool_call), le runtime vérifie :
+
+1. Si **aucun** tool de lecture (`read_product_knowledge`,
+   `read_wiki_page`, `show_instrument_card`) n'a été appelé
+   pendant ce tour → injection de
+   `PRODUCT_GUARDRAIL_HINT_NO_READ`.
+2. Sinon, si `select_wiki_pages` a été appelé sans `read_wiki_page`
+   ni `read_product_knowledge` derrière → injection de
+   `PRODUCT_GUARDRAIL_HINT_SELECT_WITHOUT_READ`.
+
+Dans les deux cas, le brouillon assistant + le hint system sont
+appendés à `messages` et la boucle relance le LLM. **Borné à 1
+seul retry** par tour pour éviter les boucles infinies si le LLM
+ignore le hint (cas rare). Si le 2e essai produit toujours une
+réponse non-sourcée, on l'accepte (mieux qu'un fallback vide).
+
+**Périmètre** :
+
+- ✅ Activé pour l'agent `product` (top-level **et** sub-agent)
+- ❌ Pas appliqué en sous-loop `consult_in_progress=True` (un
+  spécialiste consulté peut légitimement répondre depuis son
+  seul prompt sur des questions définitionnelles)
+- ❌ Pas appliqué aux autres agents (compliance, advisor, market,
+  router) — ils ont leur propre logique de tools.
+
+**Configuration** :
+
+| Var | Défaut | Effet |
+|---|---|---|
+| `ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED` | `true` | Active le guard-rail |
+| `ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED=false` | — | Comportement legacy < 2026-05-04 (rollback rapide en cas d'incident) |
+
+**Observabilité** :
+
+```
+WARN agent_loop.product_guardrail_triggered iter=0
+    tools_called=- reason=no_read conv=<uuid> corr=<corr>
+WARN agent_loop.product_guardrail_triggered iter=0
+    tools_called=select_wiki_pages reason=select_without_read
+    conv=<uuid> corr=<corr>
+```
+
+→ surveiller la fréquence du déclenchement en prod : > 30 % du
+trafic `product` indique soit un prompt v2 trop permissif, soit
+un changement de modèle (ex. passage à un LLM moins rigoureux)
+qui mériterait un upgrade vers `gpt-4o`.
+
+**Tests** : `tests/test_assistance_runtime_loop_unit.py` —
+**18 nouveaux tests** (`TestProductGuardrailHelper` ×7,
+`TestProductGuardrailIntegration` ×7,
+`TestProductGuardrailConfig` ×4). Couvre :
+
+- Helper pur `_check_product_guardrail` (chaque combinaison de
+  tools).
+- Intégration `run_agent_loop` : retry triggered, retry borné à
+  1, env-disable, pas-applicable-aux-autres-agents,
+  pas-applicable-en-consult.
+- Lecture env var `ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED`
+  (truthy/falsy).
+
 ---
 
 ## 10. Versioning
@@ -347,6 +425,7 @@ au total après l'intégration → zéro régression.
 | **2026-05-03** | **1.0** | **Phase 2c livrée** | **Création de l'agent `product` (prompt + tools), table SQL `product_knowledge` (migration 149, 10 seeds), invocation via `consult_specialist`. Garde-fous structurels (pas de `consult_specialist`/`handoff_to_agent` côté product). 530 tests assistance verts.** |
 | **2026-05-04** | **1.1** | **Phase 1 wiki MD livrée** | **Import de 243 fiches markdown depuis le vault Obsidian source dans `assistance/data/wiki/` (stockage seul, aucun branchement runtime). Audit cohérence Annexe 36 + 72 feedbacks copiés dans `docs/arquantix/product-wiki/`. Phase 2 (branchement runtime via `select_wiki_pages` + `read_wiki_page`) en PR séparée.** |
 | **2026-05-04** | **1.2** | **Phase 2 wiki branchée au runtime** | **Repo `wiki_repo.py` (parsing frontmatter maison + cache TTL 5 min + scoring keyword Karpathy-style). 2 tools L0 livrés : `select_wiki_pages(question, top_k?, category?)` (pré-filtre top 5 sur les 243 fiches) + `read_wiki_page(category, slug)` (lecture complète). Prompt système v2 enrichi de `system-prompt-v2.md` (vocabulary, grounding_rule, account_limitation, response_rules, mandatory_disclaimers, escalation_triggers, forbidden_patterns, self_check, 4 examples). Cohabitation SQL/MD : SQL d'abord pour les fiches courtes canoniques, MD pour la couverture large. 46 tests wiki + 679 tests assistance globaux verts → zéro régression. Aucune modif env/DB/Docker, aucune nouvelle dépendance Python.** |
+| **2026-05-04** | **1.3** | **Guard-rail anti-hallucination + mémoire affinée** | **Constat post-prod (analyse conv `aef5923a`) : sur 8 turns Phase 2, 3 zappent les tools (turns 30/32 répondent direct → hallucination cf. turn 32 « Vancelian ne propose pas d'invest crypto » faux ; turn 42 = `select_wiki_pages × 2` sans `read_wiki_page` → composition depuis titres seuls). **Guard-rail runtime livré** dans `agent_loop.py` : si l'agent `product` termine un turn sans `read_product_knowledge` / `read_wiki_page` / `show_instrument_card`, ou avec `select_wiki_pages` mais sans read derrière, on injecte un hint system explicite et on rejoue la boucle **une seule fois**. Désactivable via `ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED=false`. **Mémoire long-terme retunée** : seuil tokens abaissé `6000 → 2500` + nouveau déclencheur `min_turns=10` (consolidation à 20 messages indépendamment des tokens). Conséquence : la conv `aef5923a` (4 200 tokens) aurait été consolidée 3-4 fois au lieu de 0. 18 nouveaux tests guard-rail + 6 nouveaux tests memory + 6 ajustements de tests existants. **852 tests assistance globaux verts (vs 679 avant) → zéro régression.** Aucune modif env/DB/Docker.** |
 
 > **Règle :** toute évolution du catalog `consult_purposes`, du
 > schéma `product_knowledge`, ou des garde-fous structurels **doit**

@@ -50,6 +50,7 @@ from services.assistance.agents.config import (
     assistance_agent_model,
     assistance_agent_temperature,
     assistance_agent_timeout_seconds,
+    assistance_product_guardrail_enabled,
     assistance_stream_thinking_enabled,
     assistance_tool_timeout_seconds,
     autonomy_le,
@@ -120,6 +121,83 @@ LLM_MAX_RETRIES = 2
 # Backoff fixe par tentative (en secondes). Pas de jitter en V1 — un
 # seul user à la fois côté arquantix, pas de risque de thundering herd.
 LLM_BACKOFF_SCHEDULE: tuple[float, ...] = (0.5, 1.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Phase 2 wiki — Guard-rail anti-hallucination agent `product`
+# ─────────────────────────────────────────────────────────────────────────
+#
+# Empiriquement (cf. analyse conv aef5923a, 2026-05-04), gpt-4o-mini
+# zappe parfois les tools de lecture sur des questions « faciles » qu'il
+# pense connaître, ce qui produit des réponses non-sourcées (turns 30,
+# 32) ou des compositions à partir des seuls titres de fiches (turn 42 :
+# select_wiki_pages × 2 sans read_wiki_page derrière).
+#
+# Le guard-rail détecte ces deux patterns en fin de turn et force un
+# retry **unique** avec un hint system explicite. Il ne s'applique qu'à
+# l'agent `product` et ne se déclenche jamais en sous-loop spécialiste
+# (pour ne pas casser les consultations cross-agent où le specialist
+# peut légitimement répondre depuis son seul prompt).
+
+# Tools dont l'appel est considéré comme une « lecture de source » côté
+# product. `select_wiki_pages` n'en fait PAS partie : il ne retourne que
+# les titres + 3 questions preview, pas le contenu.
+PRODUCT_KNOWLEDGE_READ_TOOLS: frozenset[str] = frozenset({
+    "read_product_knowledge",
+    "read_wiki_page",
+    "show_instrument_card",
+})
+
+PRODUCT_GUARDRAIL_HINT_NO_READ = (
+    "Tu n'as appelé aucun tool de lecture (read_product_knowledge, "
+    "read_wiki_page, show_instrument_card) avant de répondre. C'est "
+    "interdit pour les questions factuelles produit — tu risques de "
+    "halluciner. Reformule en commençant par select_wiki_pages(question, "
+    "category?) pour identifier la fiche pertinente, puis read_wiki_page("
+    "category, slug) pour en lire le contenu — ou read_product_knowledge("
+    "slug) si la fiche est dans le SQL canonique. Tu n'as droit qu'à un "
+    "seul retry, ne le gâche pas."
+)
+
+PRODUCT_GUARDRAIL_HINT_SELECT_WITHOUT_READ = (
+    "Tu as appelé select_wiki_pages mais pas read_wiki_page (ni "
+    "read_product_knowledge) derrière. select_wiki_pages ne retourne "
+    "que les titres et 3 questions preview — pas le contenu des fiches. "
+    "Tu dois maintenant appeler read_wiki_page(category, slug) sur le "
+    "candidat le plus pertinent (top-1 score) avant de composer ta "
+    "réponse. Tu n'as droit qu'à un seul retry."
+)
+
+
+def _check_product_guardrail(tools_called: list[str]) -> Optional[str]:
+    """Phase 2 wiki — vérifie qu'un turn agent `product` a consulté ses sources.
+
+    Args:
+        tools_called: liste ordonnée des noms de tools effectivement
+            appelés pendant ce tour (avant la réponse finale).
+
+    Returns:
+        ``None`` si le tour est conforme (au moins un tool de lecture
+        appelé). Sinon, un hint à injecter au LLM :
+
+        - ``PRODUCT_GUARDRAIL_HINT_SELECT_WITHOUT_READ`` si
+          ``select_wiki_pages`` a été appelé mais aucun read derrière.
+        - ``PRODUCT_GUARDRAIL_HINT_NO_READ`` sinon (aucune lecture du
+          tout).
+
+    Note: ``ask_user_question`` et ``show_instrument_card`` ne sont pas
+    des « lectures » au sens strict mais show_instrument_card retourne
+    des données live (carte produit) qu'on considère équivalentes à une
+    lecture. ``ask_user_question`` ne déclenche pas de réponse finale
+    (il interrupt la boucle via ``interrupt_with_question``), donc le
+    guard-rail ne le verra jamais en pratique.
+    """
+    has_read = any(t in PRODUCT_KNOWLEDGE_READ_TOOLS for t in tools_called)
+    if has_read:
+        return None
+    if "select_wiki_pages" in tools_called:
+        return PRODUCT_GUARDRAIL_HINT_SELECT_WITHOUT_READ
+    return PRODUCT_GUARDRAIL_HINT_NO_READ
 
 
 def _llm_error_is_retryable(exc: LLMError) -> bool:
@@ -547,6 +625,10 @@ async def run_agent_loop(
     interrupt_with_choices: Optional[dict[str, Any]] = None
     early_break_reason: Optional[str] = None
     subagent_dispatched: Optional[str] = None
+    # Phase 2 wiki — guard-rail product agent. Cf. _check_product_guardrail.
+    # Borné à 1 retry par tour pour éviter les boucles infinies si gpt-4o-mini
+    # ignore le hint (cas rare mais théoriquement possible).
+    product_guardrail_retry_done = False
     # Phase 2c.2 — Embeds UI structurés produits par les tools (cf.
     # `ToolContext.embeds_to_emit`). On dédoublonne sur la clé naturelle
     # `(type, transaction_id|slug|...)` pour qu'un même tool appelé
@@ -1065,6 +1147,53 @@ async def run_agent_loop(
 
         # ── Pas de tool_calls → réponse finale ────────────────────
         content = (message or {}).get("content") or ""
+
+        # ── Phase 2 wiki — guard-rail product agent ────────────────
+        # Si l'agent `product` arrive ici sans avoir appelé un tool de
+        # lecture, on injecte un hint system et on rejoue la boucle
+        # **une seule fois**. Voir `_check_product_guardrail` et la
+        # config `assistance_product_guardrail_enabled()`.
+        # Ne s'applique pas en sous-loop consult (un specialist peut
+        # légitimement répondre depuis son seul prompt sur des
+        # questions purement définitionnelles).
+        if (
+            current_agent_id == "product"
+            and not product_guardrail_retry_done
+            and not consult_in_progress
+            and assistance_product_guardrail_enabled()
+        ):
+            guardrail_hint = _check_product_guardrail(tools_called)
+            if guardrail_hint is not None:
+                logger.warning(
+                    "agent_loop.product_guardrail_triggered iter=%d "
+                    "tools_called=%s reason=%s conv=%s corr=%s",
+                    iteration,
+                    ",".join(tools_called) or "-",
+                    (
+                        "select_without_read"
+                        if "select_wiki_pages" in tools_called
+                        else "no_read"
+                    ),
+                    conversation_id,
+                    correlation_id,
+                )
+                # Append le brouillon assistant + le hint system, puis
+                # `continue` pour relancer le LLM avec le contexte enrichi.
+                # On garde le brouillon dans l'historique pour que le LLM
+                # voie ce qu'il a tenté de répondre (et pourquoi c'est
+                # rejeté), c'est plus efficace pédagogiquement qu'un
+                # simple message d'erreur abstrait.
+                messages.append({
+                    "role": "assistant",
+                    "content": content or "(réponse vide)",
+                })
+                messages.append({
+                    "role": "system",
+                    "content": guardrail_hint,
+                })
+                product_guardrail_retry_done = True
+                continue
+
         if not content.strip():
             content = MAX_ITER_FALLBACK_MESSAGE
         yield AgentEvent(type="delta", content=content)
