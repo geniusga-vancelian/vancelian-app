@@ -21,13 +21,48 @@ import { figmaDsBodyRootClassName } from '@/components/design-system/extracted/t
 
 const siteMetadataBase = getSiteMetadataBase()
 
+const ADMIN_CONSOLE_HOSTS = new Set(
+  (process.env.ADMIN_CONSOLE_HOSTS || 'console.arquantix.com')
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean),
+)
+
 /**
  * Valeurs par défaut si une route ne définit pas son propre `generateMetadata`.
  * `metadataBase` : défini si `NEXT_PUBLIC_SITE_URL` ou `VERCEL_URL` (voir `siteOrigin.ts`).
+ *
+ * `robots: noindex, nofollow, noarchive` injecté quand :
+ * - host = `console.arquantix.com` (sous-domaine privé admin)
+ * - pathname commence par `/admin` (défense en profondeur, indépendamment du host)
+ *
+ * Complète le header HTTP `X-Robots-Tag` posé par `src/middleware.ts`.
  */
-export const metadata: Metadata = {
-  ...CMS_PAGE_METADATA_FALLBACK,
-  ...(siteMetadataBase ? { metadataBase: siteMetadataBase } : {}),
+export async function generateMetadata(): Promise<Metadata> {
+  const headersList = await headers()
+  const host = (headersList.get('host') || '').toLowerCase().split(':')[0]
+  const path = headersList.get('x-arq-pathname') || ''
+  const isConsole = ADMIN_CONSOLE_HOSTS.has(host)
+  const isAdminPath = path.startsWith('/admin')
+
+  const base: Metadata = {
+    ...CMS_PAGE_METADATA_FALLBACK,
+    ...(siteMetadataBase ? { metadataBase: siteMetadataBase } : {}),
+  }
+
+  if (isConsole || isAdminPath) {
+    return {
+      ...base,
+      robots: {
+        index: false,
+        follow: false,
+        nocache: true,
+        googleBot: { index: false, follow: false, noimageindex: true },
+      },
+    }
+  }
+
+  return base
 }
 
 export default async function RootLayout({

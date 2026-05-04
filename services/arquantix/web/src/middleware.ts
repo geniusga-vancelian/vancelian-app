@@ -4,6 +4,37 @@ import { isValidLocale, type Locale } from '@/config/locales'
 import { pickLocaleForRootRedirect } from '@/lib/i18n/rootLocaleRedirect'
 import { LEGACY_UNPREFIXED_TOP_LEVEL } from '@/lib/i18n/legacyUnprefixedPaths'
 
+/**
+ * Hôtes connus :
+ * - `console.arquantix.com` : sous-domaine privé pour l'admin/CMS uniquement.
+ *   Renvoie X-Robots-Tag noindex sur toutes les réponses, redirige `/` vers
+ *   `/admin/login` et 404 sur tout chemin non admin.
+ * - `arquantix.com` (et autres) : site public ; les chemins `/admin*` et
+ *   `/api/admin/*` sont 404 (défense en profondeur — l'ALB bloque déjà).
+ *
+ * Override possible via `ADMIN_CONSOLE_HOSTS` (CSV) pour dev/staging.
+ */
+const ADMIN_CONSOLE_HOSTS = new Set(
+  (process.env.ADMIN_CONSOLE_HOSTS || 'console.arquantix.com')
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean),
+)
+
+const NOINDEX_HEADER = 'noindex, nofollow, noarchive'
+
+function isAdminConsoleHost(request: NextRequest): boolean {
+  const host = (request.headers.get('host') || '').toLowerCase().split(':')[0]
+  return ADMIN_CONSOLE_HOSTS.has(host)
+}
+
+function withConsoleHeaders(res: NextResponse, isConsole: boolean): NextResponse {
+  if (isConsole) {
+    res.headers.set('X-Robots-Tag', NOINDEX_HEADER)
+  }
+  return res
+}
+
 /** Pathname pour le layout (nav / coquille). */
 function nextWithPathname(request: NextRequest) {
   const requestHeaders = new Headers(request.headers)
@@ -27,6 +58,23 @@ function nextWithPathnameAndLocale(request: NextRequest, locale: Locale) {
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const isConsole = isAdminConsoleHost(request)
+
+  /**
+   * `/api/admin/*` : défense en profondeur.
+   * - sur les hosts publics (arquantix.com, www, ...) → 404 (l'ALB bloque déjà)
+   * - sur console.arquantix.com → pass-through, X-Robots-Tag posé par middleware
+   *   (le matcher inclut explicitement /api/admin/:path*)
+   */
+  if (pathname.startsWith('/api/admin')) {
+    if (!isConsole) {
+      return new NextResponse('Not Found', {
+        status: 404,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      })
+    }
+    return withConsoleHeaders(NextResponse.next(), true)
+  }
 
   if (
     pathname.startsWith('/_next') ||
@@ -34,7 +82,54 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/_vercel') ||
     pathname === '/favicon.ico'
   ) {
-    return NextResponse.next()
+    return withConsoleHeaders(NextResponse.next(), isConsole)
+  }
+
+  /**
+   * `console.arquantix.com` est strictement réservé à l'espace admin.
+   * - `/` redirige vers `/admin/login`
+   * - tout chemin hors `/admin*` répond 404
+   * - `X-Robots-Tag: noindex, nofollow, noarchive` ajouté à toutes les réponses
+   */
+  if (isConsole) {
+    if (pathname === '/' || pathname === '') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/login'
+      url.search = ''
+      return withConsoleHeaders(NextResponse.redirect(url, 307), true)
+    }
+    /**
+     * Exceptions servies normalement (utiles aux moteurs / navigateurs) avec
+     * `X-Robots-Tag: noindex` posé en sortie :
+     * - `/robots.txt` (servi par `src/app/robots.ts` host-aware → Disallow:/)
+     * - `/sitemap.xml` (n'existe pas mais ne doit pas être 404 par un autre code)
+     */
+    const isAllowedSpecial =
+      pathname === '/robots.txt' || pathname === '/sitemap.xml'
+    if (!pathname.startsWith('/admin') && !isAllowedSpecial) {
+      return withConsoleHeaders(
+        new NextResponse('Not Found', {
+          status: 404,
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+        }),
+        true,
+      )
+    }
+    if (isAllowedSpecial) {
+      return withConsoleHeaders(NextResponse.next(), true)
+    }
+  }
+
+  /**
+   * Défense en profondeur : sur les hosts publics (arquantix.com, www, ...),
+   * les routes `/admin*` ne sont pas servies (l'ALB renvoie déjà 404,
+   * mais on protège aussi côté app si la rule disparaît).
+   */
+  if (!isConsole && pathname.startsWith('/admin')) {
+    return new NextResponse('Not Found', {
+      status: 404,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    })
   }
 
   if (pathname === '/health') {
@@ -76,11 +171,11 @@ export async function middleware(request: NextRequest) {
       pathname === '/admin/login0' ||
       pathname === '/admin/signup'
     ) {
-      return nextWithPathname(request)
+      return withConsoleHeaders(nextWithPathname(request), isConsole)
     }
 
     if (pathname.startsWith('/api/admin')) {
-      return nextWithPathname(request)
+      return withConsoleHeaders(nextWithPathname(request), isConsole)
     }
 
     const sessionToken = request.cookies.get('arq_admin_session')?.value
@@ -89,10 +184,10 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/admin/login'
       url.searchParams.set('redirect', pathname)
-      return NextResponse.redirect(url)
+      return withConsoleHeaders(NextResponse.redirect(url), isConsole)
     }
 
-    return nextWithPathname(request)
+    return withConsoleHeaders(nextWithPathname(request), isConsole)
   }
 
   if (pathname === '/' || pathname === '') {
@@ -156,5 +251,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/((?!api|_next/static|_next/image|favicon\\.ico).*)',
+    '/api/admin/:path*',
   ],
 }

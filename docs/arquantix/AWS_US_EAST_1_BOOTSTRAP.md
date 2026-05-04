@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | Site public | https://arquantix.com → `/fr` | HTTP 200 |
 | API publique | https://api.arquantix.com | HTTP 200, `{"ok":true,"service":"arquantix-api","version":"2.0.0"}` |
-| Admin Next.js | https://arquantix.com/admin | derrière login |
+| Admin Next.js | **https://console.arquantix.com/admin/login** (sous-domaine privé) | derrière login + 404 sur `arquantix.com/admin*` |
 | ALB | `arquantix-alb-xxxxxxxxx.us-east-1.elb.amazonaws.com` | interne |
 
 ## Inventaire AWS
@@ -24,11 +24,14 @@ Compte : `411714852748` · Région : `us-east-1` · Profil CLI admin : `arquanti
 - Route53 zone `arquantix.com` :
   - `A arquantix.com` → ALIAS ALB
   - `A api.arquantix.com` → ALIAS ALB
+  - `A console.arquantix.com` → ALIAS ALB (sous-domaine privé admin/CMS, voir [SECURE_ADMIN_CONSOLE.md](SECURE_ADMIN_CONSOLE.md))
 - ALB `arquantix-alb` (internet-facing).
   - Listener 80 → redirect 443.
   - Listener 443 (cert ACM) :
     - **default forward** → `arquantix-web-tg` (mode normal) ou `arquantix-maintenance-tg` (mode maintenance).
-    - Rule prio 50 : `Host=arquantix.com` AND `Path=/admin*, /api/admin/*, /api/site/media/*, /_next/*` → `arquantix-web-tg` (admin/API admin **toujours** servis, même en maintenance).
+    - Rule prio 30 : `Host=arquantix.com` AND `Path=/admin, /admin/*, /api/admin/*` → **fixed-response 404** (admin fermé sur le domaine public).
+    - Rule prio 40 : `Host=console.arquantix.com` → `arquantix-web-tg` (sous-domaine admin privé, toutes routes).
+    - Rule prio 50 : `Host=arquantix.com` AND `Path=/api/site/media/*, /_next/*` → `arquantix-web-tg` (assets/média **toujours** servis, même en maintenance).
     - Rule prio 100 : `Host=api.arquantix.com` → `arquantix-api-tg`.
     - Rule prio 999 : (placeholder) host invalide → `arquantix-maintenance-tg` (binding ECS requis).
 
