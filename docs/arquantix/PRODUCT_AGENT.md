@@ -246,7 +246,9 @@ faible) — TTL Redis envisageable Phase 5.
 
 Reportés Phase 5+ :
 
-- RAG vectoriel sur fiches PDF/MD (pgvector ou Qdrant).
+- RAG vectoriel sur fiches PDF/MD (pgvector ou Qdrant). **Source MD
+  amont déjà importée en Phase 1 stockage** (cf. §9.1) — reste à
+  brancher au runtime.
 - Mini-écran admin BO pour éditer les fiches sans migration.
 - I18n multi-locale du `body` (V1 = FR uniquement).
 - Routing top-level vers `product` quand l'utilisateur pose
@@ -255,6 +257,42 @@ Reportés Phase 5+ :
 - Agent `market` consultable de la même façon (V1 : `product` seul
   est éligible à `consult_specialist`).
 
+### 9.1 Wiki MD importé en Phase 1 (2026-05-04)
+
+Une base de **243 fiches markdown** a été importée depuis le vault
+Obsidian `Vancelian Support (Chat WIKI LLM)` (snapshot du
+2026-05-04, source : Jean Guillou).
+
+| Élément | Emplacement | Statut |
+|---|---|---|
+| Wiki runtime | `services/arquantix/api/services/assistance/data/wiki/` | ⏳ stocké, pas branché |
+| Audit cohérence Annexe 36 | `docs/arquantix/product-wiki/audit/` | ✅ référence |
+| Feedback historiques (72) | `docs/arquantix/product-wiki/feedback/` | ✅ référence |
+| Doc provenance & phasing | `docs/arquantix/product-wiki/README.md` | ✅ |
+
+Phase 1 = **stockage seul**, aucun changement de code. La table SQL
+`product_knowledge` (10 fiches canoniques courtes) **reste la
+source utilisée par l'agent en Phase 2c**.
+
+Phase 2 (PR séparée) ajoutera deux tools L0 :
+
+- `select_wiki_pages(question)` — pattern Karpathy : lit
+  `data/wiki/index.md` (≈1 500 phrasings) et retourne 3 à 5 slugs
+  pertinents. Pas de vector DB.
+- `read_wiki_page(slug)` — lit `data/wiki/<category>/<slug>.md`,
+  retourne `## Short answer` + `## Details`.
+
+Le prompt système (`prompts/product_system.md`) sera enrichi avec
+les sections pertinentes de `data/wiki/system-prompt-v2.md`
+(vocabulary, app_ui_labels, language_and_register).
+
+Cohabitation : SQL `product_knowledge` reste pour les fiches
+courtes citées textuellement ; le wiki MD couvre les FAQ longues
+et les questions transverses (`account`, `transfers-cards`,
+`legal-compliance`, etc.) consommables aussi par
+`compliance.transactional` / `compliance.general` via
+`consult_specialist`.
+
 ---
 
 ## 10. Versioning
@@ -262,6 +300,7 @@ Reportés Phase 5+ :
 | Date | Version | Phase | Changements |
 |---|---|---|---|
 | **2026-05-03** | **1.0** | **Phase 2c livrée** | **Création de l'agent `product` (prompt + tools), table SQL `product_knowledge` (migration 149, 10 seeds), invocation via `consult_specialist`. Garde-fous structurels (pas de `consult_specialist`/`handoff_to_agent` côté product). 530 tests assistance verts.** |
+| **2026-05-04** | **1.1** | **Phase 1 wiki MD livrée** | **Import de 243 fiches markdown depuis le vault Obsidian source dans `assistance/data/wiki/` (stockage seul, aucun branchement runtime). Audit cohérence Annexe 36 + 72 feedbacks copiés dans `docs/arquantix/product-wiki/`. Phase 2 (branchement runtime via `select_wiki_pages` + `read_wiki_page`) en PR séparée.** |
 
 > **Règle :** toute évolution du catalog `consult_purposes`, du
 > schéma `product_knowledge`, ou des garde-fous structurels **doit**
