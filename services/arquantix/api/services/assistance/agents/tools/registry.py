@@ -61,6 +61,8 @@ from services.assistance.agents.tools.market import (
 from services.assistance.agents.tools.product import (
     list_product_knowledge_topics,
     read_product_knowledge,
+    read_wiki_page,
+    select_wiki_pages,
     show_instrument_card,
 )
 from services.assistance.agents.tools.shared import (
@@ -161,9 +163,17 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
     # Phase 2c.6 : ajout de `show_instrument_card` pour déclencher la
     # carte chat ``instrument_detail_card`` (complémentaire d'un texte
     # explicatif sur Bitcoin / Ether / etc.).
+    # Phase 2 wiki : `select_wiki_pages` + `read_wiki_page` exposent les
+    # 243 fiches markdown importées depuis le vault Obsidian source
+    # (couverture large : FAQ, exclusive offers, crypto, account, etc.).
+    # Le SQL `product_knowledge` reste pour les fiches courtes
+    # canoniques (délais SEPA/KYC, définitions Vault/SCPI/Livret),
+    # cf. `docs/arquantix/PRODUCT_AGENT.md` §9.1.
     "product": [
         read_product_knowledge,
         list_product_knowledge_topics,
+        select_wiki_pages,
+        read_wiki_page,
         show_instrument_card,
         ask_user_question,
     ],

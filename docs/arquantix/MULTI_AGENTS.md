@@ -1,8 +1,9 @@
 # Architecture multi-agents — Assistance Vancelian
 
-> **Statut :** Phase 2c livrée (v2.3) — orchestration multi-agents.
+> **Statut :** Phase 2 wiki branchée (v2.4) — orchestration multi-agents
+> + base de connaissance markdown 243 fiches.
 >
-> **Dernière mise à jour :** 2026-05-03 (v2.3)
+> **Dernière mise à jour :** 2026-05-04 (v2.4)
 >
 > **Code de référence :** `services/arquantix/api/services/assistance/agents/`
 >
@@ -360,12 +361,24 @@ class AgentBase(Protocol):
   - `read_product_knowledge(slug)` → fiche `product_knowledge` complète
   - `list_product_knowledge_topics(topic?)` → introspection des slugs
     (debug)
+  - `show_instrument_card(symbol)` → carte UI prix temps réel
+    (Phase 2c.6)
   - `ask_user_question` → autorisé pour clarifier un slug ambigu
+- **Tools L0 (Phase 2 wiki, livré 2026-05-04)** :
+  - `select_wiki_pages(question, top_k?, category?)` → pré-filtre
+    Karpathy keyword sur les 243 fiches markdown du wiki produit
+    (`assistance/data/wiki/`). Retourne top_k ≤ 10 candidats avec
+    score + extraits questions. Pas de body. Pas d'appel LLM dans
+    le retrieval.
+  - `read_wiki_page(category, slug)` → lecture complète d'une fiche
+    (frontmatter + sections `Short answer` + `Details` + sources).
+    Validation anti-path-traversal via whitelist
+    `wiki_repo.ALL_CATEGORIES`.
 - **Tools interdits** : pas de `consult_specialist` (anti-récursion),
   pas de `handoff_to_agent`, aucun accès aux données client.
-- **Tools V3 (Phase 5)** : RAG vectoriel sur fiches PDF/MD (pgvector ou
-  Qdrant) pour couvrir les FAQ longues, complète `product_knowledge`
-  qui reste pour les fiches courtes/canoniques.
+- **Tools V3 (Phase 5+)** : RAG vectoriel sur le wiki MD (pgvector
+  ou Qdrant) quand le volume dépassera ~1 000 fiches. Le pré-filtre
+  keyword Phase 2 reste pertinent en deçà.
 
 ### 2.5 `market` (veille marché)
 
@@ -614,3 +627,4 @@ faire l'objet d'un ADR daté ajouté en bas de fichier.
 | 2.1 | 2026-05-02 | Pré-2b | Référence à `COMPLIANCE_TOPICS.md` (spec v0.9) |
 | 2.2 | 2026-05-03 | Phase 2b livrée | Compliance tree system : sub-agents `compliance.{registration,remediation,transactional,general}`, `diagnose_compliance_topic`, `action_cta_catalog` whitelist deep-links, SSE `thinking`, `AssistanceChoiceOption.deep_link`, Flutter resolver. 140 tests verts. |
 | **2.3** | **2026-05-03** | **Phase 2c livrée** | **Orchestration multi-agents : tools `handoff_to_agent` (remediation → transactional / general) et `consult_specialist` (compliance → product) ; `tour_shared_context` avec whitelist explicite `_SAFE_KEYS_PER_TOOL` ; vrai agent `product` (prompt + table SQL `product_knowledge` seedée 10 entrées via migration 149) ; runtime extensions `MAX_CHAIN_DEPTH=1`, `MAX_CONSULTATIONS_PER_TOUR=3`, audit `agent_chain` + `consultations` dans `message_payload.metadata`. 530 tests verts (zéro régression).** |
+| **2.4** | **2026-05-04** | **Phase 2 wiki branchée** | **Wiki markdown 243 fiches importé en Phase 1 (vault Obsidian source) et branché au runtime de l'agent `product` via 2 nouveaux tools L0 (`select_wiki_pages` + `read_wiki_page`) — pattern Karpathy keyword (pas de vector DB, pas d'appel LLM dans le retrieval). Repo `wiki_repo.py` avec parseur frontmatter maison + cache TTL 5 min. Prompt `product_system.md` v2 enrichi de la spec Jean Guillou (vocabulary 7 termes critiques, grounding_rule, account_limitation, response_rules, mandatory_disclaimers, escalation_triggers, forbidden_patterns, self_check, 4 examples). Cohabitation SQL/MD : SQL pour les fiches courtes canoniques (délais, définitions), MD pour la couverture large (FAQ, exclusive offers, crypto, account, transfers, …). 46 tests wiki + 679 tests assistance globaux verts. Aucune modif env/DB/Docker, aucune nouvelle dépendance Python.** |

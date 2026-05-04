@@ -1,9 +1,15 @@
-"""Tools V1 pour l'agent `product` — stubs.
+"""Tools V1 pour l'agent `product` — stubs **mode legacy** (path
+``ASSISTANCE_RUNTIME_LOOP_AGENTS`` ne contient pas ``product``).
 
-Phase 5 substituera par un **RAG vectoriel** (pgvector ou Qdrant) sur
-les fiches produit indexées (PDF/MD côté CMS). En V1, on se contente
-d'une heuristique simple par mots-clés + lookup sur la table `pages`
-quand le slug est explicite — mais le lookup réel CMS arrive en Phase 5.
+Ce module n'est utilisé QUE par le legacy ``ProductAgent`` Phase 1
+(``services/assistance/agents/product.py::_collect_tool_context``).
+Quand l'agent `product` est exécuté via le runtime loop Phase 2c
+(le mode prod actuel), il utilise les **tools registry** dans
+``tools/product/`` (incluant ``select_wiki_pages`` + ``read_wiki_page``
+ajoutés en Phase 2).
+
+Phase 5 substituera ce module par un RAG vectoriel sur le wiki MD.
+En attendant, l'heuristique mots-clés survit pour le mode legacy.
 
 **Aucune mutation DB.** Lecture seule.
 """

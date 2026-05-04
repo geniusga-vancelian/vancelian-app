@@ -247,8 +247,10 @@ faible) — TTL Redis envisageable Phase 5.
 Reportés Phase 5+ :
 
 - RAG vectoriel sur fiches PDF/MD (pgvector ou Qdrant). **Source MD
-  amont déjà importée en Phase 1 stockage** (cf. §9.1) — reste à
-  brancher au runtime.
+  amont déjà importée en Phase 1 stockage** (cf. §9.1) **et branchée
+  au runtime en Phase 2 wiki** (cf. §9.2) via les tools
+  `select_wiki_pages` + `read_wiki_page`. Le RAG vectoriel reste
+  pertinent quand le volume dépassera ~1 000 fiches.
 - Mini-écran admin BO pour éditer les fiches sans migration.
 - I18n multi-locale du `body` (V1 = FR uniquement).
 - Routing top-level vers `product` quand l'utilisateur pose
@@ -274,24 +276,67 @@ Phase 1 = **stockage seul**, aucun changement de code. La table SQL
 `product_knowledge` (10 fiches canoniques courtes) **reste la
 source utilisée par l'agent en Phase 2c**.
 
-Phase 2 (PR séparée) ajoutera deux tools L0 :
+Phase 2 (cf. §9.2) ajoutera deux tools L0 — **livrée en
+2026-05-04**.
 
-- `select_wiki_pages(question)` — pattern Karpathy : lit
-  `data/wiki/index.md` (≈1 500 phrasings) et retourne 3 à 5 slugs
-  pertinents. Pas de vector DB.
-- `read_wiki_page(slug)` — lit `data/wiki/<category>/<slug>.md`,
-  retourne `## Short answer` + `## Details`.
+### 9.2 Wiki MD branché au runtime — Phase 2 (2026-05-04)
 
-Le prompt système (`prompts/product_system.md`) sera enrichi avec
-les sections pertinentes de `data/wiki/system-prompt-v2.md`
-(vocabulary, app_ui_labels, language_and_register).
+Cohabitation des 2 sources de vérité :
 
-Cohabitation : SQL `product_knowledge` reste pour les fiches
-courtes citées textuellement ; le wiki MD couvre les FAQ longues
-et les questions transverses (`account`, `transfers-cards`,
-`legal-compliance`, etc.) consommables aussi par
-`compliance.transactional` / `compliance.general` via
-`consult_specialist`.
+| Source | Volume | Tool(s) | Use case |
+|---|---|---|---|
+| SQL `product_knowledge` | 10 fiches | `read_product_knowledge` + `list_product_knowledge_topics` | Délais courts (SEPA/KYC) + définitions canoniques (Vault/SCPI/Livret) — citation littérale par sub-agents compliance |
+| Wiki MD | 243 fiches | `select_wiki_pages` + `read_wiki_page` | FAQ longues, mécaniques produit, exclusive offers, crypto, account, transfers, legal-compliance, … |
+
+**Pattern de retrieval** : option C (cf. plan Phase 2) — pré-filtre
+Python BM25-light sur le frontmatter `questions:` des 243 fiches.
+Pas de vector DB. Pas d'appel LLM dans le retrieval. Le LLM
+principal de l'agent `product` choisit lui-même la fiche à lire
+parmi les 5 candidats retournés par `select_wiki_pages`.
+
+**Tools L0 livrés** :
+
+| Tool | Fichier | Comportement |
+|---|---|---|
+| `select_wiki_pages(question, top_k?, category?)` | `agents/tools/product/select_wiki_pages.py` | Score les 243 fiches contre les tokens de la question (matching sur `questions:` + `title` + `tags` du frontmatter). Retourne top_k ≤ 10 fiches avec `score` + `matched_questions_preview`. Pas de body. |
+| `read_wiki_page(category, slug)` | `agents/tools/product/read_wiki_page.py` | Lit la fiche complète (frontmatter + sections `Short answer` + `Details`). Validation anti-path-traversal via whitelist `wiki_repo.ALL_CATEGORIES`. |
+
+**Repository** : `agents/repositories/wiki_repo.py` — parseur
+frontmatter maison (pas de PyYAML), cache RAM thread-safe TTL 5 min,
+scoring keyword déterministe (testable). Premier hit après reload
+≈ 150 ms (243 fiches), hits suivants O(1) ou O(N) sans I/O.
+
+**Prompt système** : `prompts/product_system.md` v2 — intégration
+complète des sections de `system-prompt-v2.md` (Jean Guillou) :
+identity, language_and_register, app_ui_labels, vocabulary
+(7 termes critiques + types de frais), grounding_rule,
+account_limitation, response_rules, mandatory_disclaimers,
+escalation_triggers, forbidden_patterns, self_check + 4 examples.
+La section `## Sources de vérité — 2 couches` cadre la décision SQL
+vs MD pour le LLM (option α : SQL d'abord pour les fiches courtes
+canoniques, MD pour la couverture large).
+
+**Sécurité** :
+
+- Toutes les fiches MD sont par construction client-facing (validé
+  éditorial Jean Guillou, cf. `CLAUDE.md` du vault source).
+  **Aucun risque tipping-off.**
+- Pas de PII dans le wiki.
+- Tools L0 read-only, idempotents, jamais d'exception remontée
+  (toujours `{"error": "..."}` en cas d'échec).
+
+**Tests** : `tests/test_assistance_wiki_tools_unit.py` — 46 tests
+verts (parsing frontmatter, sections markdown, scoring, tool spec,
+registry wiring, sanity filesystem). **679 tests assistance** verts
+au total après l'intégration → zéro régression.
+
+**Garanties charte** :
+
+- Aucune modif `.env*`, Docker, DB, Alembic, Prisma.
+- Aucune nouvelle dépendance Python (parseur frontmatter maison
+  ~80 lignes).
+- Path legacy `ProductAgent._collect_tool_context` (heuristique
+  V1) **non modifié** — kill-switch via `ASSISTANCE_RUNTIME_LOOP_AGENTS`.
 
 ---
 
@@ -301,6 +346,7 @@ et les questions transverses (`account`, `transfers-cards`,
 |---|---|---|---|
 | **2026-05-03** | **1.0** | **Phase 2c livrée** | **Création de l'agent `product` (prompt + tools), table SQL `product_knowledge` (migration 149, 10 seeds), invocation via `consult_specialist`. Garde-fous structurels (pas de `consult_specialist`/`handoff_to_agent` côté product). 530 tests assistance verts.** |
 | **2026-05-04** | **1.1** | **Phase 1 wiki MD livrée** | **Import de 243 fiches markdown depuis le vault Obsidian source dans `assistance/data/wiki/` (stockage seul, aucun branchement runtime). Audit cohérence Annexe 36 + 72 feedbacks copiés dans `docs/arquantix/product-wiki/`. Phase 2 (branchement runtime via `select_wiki_pages` + `read_wiki_page`) en PR séparée.** |
+| **2026-05-04** | **1.2** | **Phase 2 wiki branchée au runtime** | **Repo `wiki_repo.py` (parsing frontmatter maison + cache TTL 5 min + scoring keyword Karpathy-style). 2 tools L0 livrés : `select_wiki_pages(question, top_k?, category?)` (pré-filtre top 5 sur les 243 fiches) + `read_wiki_page(category, slug)` (lecture complète). Prompt système v2 enrichi de `system-prompt-v2.md` (vocabulary, grounding_rule, account_limitation, response_rules, mandatory_disclaimers, escalation_triggers, forbidden_patterns, self_check, 4 examples). Cohabitation SQL/MD : SQL d'abord pour les fiches courtes canoniques, MD pour la couverture large. 46 tests wiki + 679 tests assistance globaux verts → zéro régression. Aucune modif env/DB/Docker, aucune nouvelle dépendance Python.** |
 
 > **Règle :** toute évolution du catalog `consult_purposes`, du
 > schéma `product_knowledge`, ou des garde-fous structurels **doit**

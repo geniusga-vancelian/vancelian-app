@@ -1,0 +1,221 @@
+"""Tool ``select_wiki_pages`` — agent **product**, autonomy **L0**.
+
+Pré-filtre Karpathy (option C, cf. ``docs/arquantix/PRODUCT_AGENT.md``
+§9.1 et discussion design Phase 2). Lit le wiki MD on-disk
+(``services/assistance/data/wiki/``, 243 fiches) et retourne les
+``top_k`` fiches dont le frontmatter ``questions:`` matche le mieux
+la question utilisateur.
+
+──────────────────────────────────────────────────────────────────────
+Convention de retour
+──────────────────────────────────────────────────────────────────────
+
+Si match :
+
+::
+
+    {
+      "matches": [
+        {
+          "category":                 str,        # ex. "savings"
+          "slug":                     str,        # ex. "what-is-the-flexible-vault"
+          "title":                    str,
+          "status":                   str,        # draft | verified | stale
+          "matched_questions_preview": [str, ...],  # 3 phrasings max
+          "tags":                     [str, ...],  # 5 tags max
+          "score":                    float,
+          "matched_terms":            [str, ...],  # tokens qui ont matché
+        },
+        ...
+      ],
+      "total_returned":  int,
+      "filtered_by_category": str | None,
+      "wiki_total_pages":     int,        # taille du wiki en cache
+    }
+
+Si rien (question vide ou aucun match au-dessus du seuil) :
+
+::
+
+    {
+      "matches": [],
+      "total_returned": 0,
+      "filtered_by_category": str | None,
+      "wiki_total_pages": int,
+    }
+
+──────────────────────────────────────────────────────────────────────
+Étape suivante attendue
+──────────────────────────────────────────────────────────────────────
+
+Le LLM choisit la fiche la plus pertinente parmi ``matches`` puis
+appelle ``read_wiki_page(category, slug)`` pour récupérer le contenu
+complet (sections ``Short answer`` + ``Details``).
+
+──────────────────────────────────────────────────────────────────────
+Sécurité
+──────────────────────────────────────────────────────────────────────
+
+  * **L0 read-only** : aucun side-effect, aucune mutation DB ni FS.
+  * **Pas de PII** : le wiki est par construction client-facing
+    (validé éditorial). Aucun risque de tipping-off.
+  * **Pas de path traversal** : la résolution des chemins se fait
+    exclusivement via ``wiki_repo`` qui ne parcourt que les
+    catégories whitelistées.
+  * **Pas de débordement de payload** : on ne dump jamais le ``body``
+    ici (réservé à ``read_wiki_page``). Seuls les méta + 3 question
+    phrasings de preview voyagent jusqu'au LLM.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Optional
+
+from services.assistance.agents.repositories import wiki_repo
+from services.assistance.agents.tools.contracts import ToolContext, ToolSpec
+
+logger = logging.getLogger(__name__)
+
+
+SPEC: ToolSpec = {
+    "type": "function",
+    "function": {
+        "name": "select_wiki_pages",
+        "description": (
+            "Cherche dans le wiki produit Vancelian (243 fiches "
+            "markdown couvrant savings, exclusive-offers, crypto, "
+            "aktio, memberships, account, transfers-cards, "
+            "legal-compliance, company, business, affiliate-partner, "
+            "b2b-agent, concepts, entities, policies) les pages dont "
+            "le frontmatter `questions:` matche le mieux la question "
+            "utilisateur. Retourne au max 10 fiches (slug, title, "
+            "category, score, extraits). NE LIT PAS le contenu — "
+            "appelle ensuite `read_wiki_page(category, slug)` pour "
+            "récupérer la fiche choisie. À utiliser pour les "
+            "questions client larges (FAQ, mécaniques produit, "
+            "exclusive offers, crypto, account, transfers, etc.). "
+            "Pour les délais standards courts (SEPA, KYC) ou les "
+            "définitions canoniques (Vault, SCPI, Livret), préfère "
+            "`read_product_knowledge` (table SQL canonique). "
+            "Idempotent."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": (
+                        "Reformulation concise de la question client "
+                        "(FR ou EN), 3 à 200 caractères. Inclus les "
+                        "noms de produits ou concepts cités."
+                    ),
+                    "minLength": 3,
+                    "maxLength": 500,
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": (
+                        "Nombre maximum de fiches à retourner "
+                        "(1..10, défaut 5)."
+                    ),
+                    "minimum": 1,
+                    "maximum": 10,
+                },
+                "category": {
+                    "type": "string",
+                    "description": (
+                        "Filtre optionnel par catégorie. Valeurs : "
+                        "savings, exclusive-offers, crypto, aktio, "
+                        "memberships, account, transfers-cards, "
+                        "legal-compliance, company, business, "
+                        "affiliate-partner, b2b-agent, other, "
+                        "concepts, entities, policies. Vide = toutes."
+                    ),
+                    "maxLength": 40,
+                },
+            },
+            "required": ["question"],
+            "additionalProperties": False,
+        },
+    },
+    "autonomy_level": "L0",
+    "agent_id": "product",
+}
+
+
+def execute(
+    ctx: ToolContext,
+    *,
+    question: str,
+    top_k: Optional[int] = None,
+    category: Optional[str] = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    """Implémentation du tool — wraps ``wiki_repo.select_pages``.
+
+    Comportement défensif :
+      * Question vide / blanche → ``matches: []`` (pas d'erreur).
+      * Catégorie inconnue → ``matches: []`` + log warning.
+      * Erreur de cache → log + retour vide (best-effort).
+    """
+    safe_question = (question or "").strip()
+    safe_top_k = top_k if isinstance(top_k, int) and top_k > 0 else 5
+    safe_category = (category or "").strip().lower() or None
+
+    if safe_category and safe_category not in wiki_repo.ALL_CATEGORIES:
+        logger.info(
+            "select_wiki_pages.unknown_category agent=%s conv=%s "
+            "category=%s",
+            ctx.agent_id,
+            ctx.conversation_id,
+            safe_category,
+        )
+        return {
+            "matches": [],
+            "total_returned": 0,
+            "filtered_by_category": safe_category,
+            "wiki_total_pages": wiki_repo.total_pages_loaded(),
+            "error": "unknown_category",
+        }
+
+    try:
+        scored = wiki_repo.select_pages(
+            question=safe_question,
+            top_k=safe_top_k,
+            category=safe_category,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "select_wiki_pages.repo_error agent=%s conv=%s",
+            ctx.agent_id,
+            ctx.conversation_id,
+        )
+        return {
+            "matches": [],
+            "total_returned": 0,
+            "filtered_by_category": safe_category,
+            "wiki_total_pages": 0,
+            "error": "repo_error",
+        }
+
+    matches = [
+        page.to_select_dict(score=score, matched_terms=matched_terms)
+        for page, score, matched_terms in scored
+    ]
+    logger.info(
+        "select_wiki_pages.ok agent=%s conv=%s q_len=%d top_k=%d "
+        "category=%s returned=%d",
+        ctx.agent_id,
+        ctx.conversation_id,
+        len(safe_question),
+        safe_top_k,
+        safe_category,
+        len(matches),
+    )
+    return {
+        "matches": matches,
+        "total_returned": len(matches),
+        "filtered_by_category": safe_category,
+        "wiki_total_pages": wiki_repo.total_pages_loaded(),
+    }
