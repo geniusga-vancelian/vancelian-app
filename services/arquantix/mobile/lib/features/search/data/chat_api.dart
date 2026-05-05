@@ -107,6 +107,69 @@ class AssistanceChoicesPayload {
   }
 }
 
+/// Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05). Payload d'un QCM **annexé**
+/// à un message texte assistant — distinct de [AssistanceChoicesPayload]
+/// qui REMPLACE le texte. Construit côté serveur par le module
+/// `conversation_continuity.auto_qcm_from_listing` quand un agent
+/// whitelisté streame une liste numérotée 3+ items + question fermée :
+/// la liste textuelle reste affichée, et un footer cliquable est ajouté
+/// SOUS la bulle texte pour que l'utilisateur puisse répondre par tap.
+///
+/// Sources possibles de [source] :
+///   * `auto_promoted` — promu par le post-process serveur depuis le
+///     texte assistant (mécanisme V1.1).
+///
+/// Le client doit ignorer un payload avec `source` inconnu (rétro-compat).
+class AssistanceAutoQcmPayload {
+  const AssistanceAutoQcmPayload({
+    required this.prompt,
+    required this.options,
+    required this.source,
+    this.truncated = false,
+  });
+
+  /// Question fermée (généralement la dernière phrase du tour assistant,
+  /// ex. « Lequel t'intéresse ? »). Affichée comme intro du footer.
+  final String prompt;
+
+  /// Boutons cliquables. Mêmes options que [AssistanceChoicesPayload]
+  /// (un tap envoie un nouveau tour avec [AssistanceChoiceOption.label]
+  /// comme texte + [AssistanceChoiceOption.agentHint] comme hint).
+  final List<AssistanceChoiceOption> options;
+
+  /// Identifie l'origine du payload. Aujourd'hui : `'auto_promoted'`.
+  /// Réservé pour évolution V1.2+ (`'manual_qcm'`, etc.).
+  final String source;
+
+  /// `true` si le serveur a tronqué la liste au hard-cap (7 options).
+  /// Purement informatif côté client.
+  final bool truncated;
+
+  /// Cap UI Vancelian : 7 max (Miller's law + écran mobile 5,5″+).
+  /// Le serveur applique déjà ce cap, on garde la garde côté client
+  /// pour défense en profondeur si le payload est mal formé.
+  static const int kMaxOptions = 7;
+
+  bool get isEmpty => options.isEmpty;
+
+  factory AssistanceAutoQcmPayload.fromJson(Map<String, dynamic> json) {
+    final raw = (json['options'] as List?) ?? const [];
+    final parsed = raw
+        .whereType<Map<String, dynamic>>()
+        .map(AssistanceChoiceOption.fromJson)
+        .toList();
+    final capped = parsed.length > kMaxOptions
+        ? parsed.sublist(0, kMaxOptions)
+        : parsed;
+    return AssistanceAutoQcmPayload(
+      prompt: (json['prompt'] as String?) ?? '',
+      options: capped,
+      source: (json['source'] as String?) ?? 'auto_promoted',
+      truncated: (json['truncated'] as bool?) ?? false,
+    );
+  }
+}
+
 /// Phase 2c.2 — Bloc UI structuré attaché à un message assistant.
 ///
 /// Le serveur produit ces blocs via les tools (ex.
@@ -179,6 +242,18 @@ class AssistanceAllocationSlice {
 ///    24h — Phase 2c.7. Émise par `market` / `advisor`. Chaque ligne
 ///    ouvre la fiche instrument via deep-link
 ///    `vancelian://app/instrument/{id}`.
+///  - `crypto_bundles_card` : slider horizontal des Crypto Bundles
+///    publics actifs (catalogue Vancelian). Émise par l'agent
+///    `product` via `show_crypto_bundles`. Tap card → fiche détail
+///    bundle, bouton « Investir » → flow d'investissement. Phase 2
+///    wiki — réplique chat du widget `CryptoBundlesWidget` de la
+///    page markets.
+///  - `bundle_detail_card` : fiche détaillée d'UN bundle (tag « Crypto
+///    Bundle » + avatar empilé des allocations + chart de performance
+///    bord-à-bord avec puces de période + CTAs Voir/Investir). Émise
+///    par l'agent `product` via `show_bundle_detail`. Phase 2 wiki
+///    v1.4 — réplique chat de la partie haute de
+///    `BundleInstrumentDetailHero`.
 class AssistanceEmbed {
   const AssistanceEmbed({
     required this.type,
@@ -362,6 +437,44 @@ class AssistanceEmbed {
     return v is String && v.isNotEmpty ? v : null;
   }
 
+  // ──────────────────────────────────────────────────────────────────
+  // Helpers `crypto_bundles_card` (Phase 2 wiki)
+  // ──────────────────────────────────────────────────────────────────
+
+  /// Items du slider Crypto Bundles. Chaque entrée porte `id`
+  /// (UUID `pe_product_definitions`), `product_code` (ex. `TOP_5`),
+  /// `name`, `description`, `risk_label`, `base_currency`,
+  /// `allocations` (liste de `{symbol, instrument_name, weight}`)
+  /// et `actions` (deux deep-links whitelistés `view_bundle_detail`
+  /// + `invest_bundle`).
+  List<AssistanceCryptoBundleItem> get cryptoBundleItems {
+    final raw = data['bundles'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(AssistanceCryptoBundleItem.fromJson)
+        .where((b) => b.id.isNotEmpty && b.name.isNotEmpty)
+        .toList();
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Helpers `bundle_detail_card` (Phase 2 wiki v1.4)
+  // ──────────────────────────────────────────────────────────────────
+
+  /// Construit un `AssistanceCryptoBundleItem` à partir des champs
+  /// **plats** d'un embed `bundle_detail_card` (le payload n'a pas de
+  /// liste `bundles[]` puisqu'on cible UN bundle).
+  ///
+  /// Retourne `null` si les champs critiques sont absents (id, name).
+  AssistanceCryptoBundleItem? get singleBundleItem {
+    final id = (data['id'] as String?)?.trim();
+    final name = (data['name'] as String?)?.trim();
+    if (id == null || id.isEmpty || name == null || name.isEmpty) {
+      return null;
+    }
+    return AssistanceCryptoBundleItem.fromJson(data);
+  }
+
   /// Helper : liste d'actions whitelisées (chacune est un
   /// [AssistanceChoiceOption] avec deep_link). Présent quand
   /// l'embed embarque ses propres CTAs (ex. carte transaction).
@@ -509,6 +622,167 @@ class AssistanceTopMoverItem {
   }
 }
 
+/// Item d'un embed `crypto_bundles_card` (Phase 2 wiki — slider chat
+/// Crypto Bundles, calque visuel du widget [CryptoBundlesWidget] de la
+/// page markets).
+///
+/// Le serveur compose ces items via `services/portfolio_engine/products/
+/// catalog.py::CatalogService.get_public_catalog(product_type=
+/// 'crypto_bundle')`. Les `actions` sont **toujours** deux entrées
+/// whitelisted via `action_cta_catalog.build_action` :
+///
+///  - `view_bundle_detail` (kind) → `vancelian://app/bundle/{id}`
+///    (tap card)
+///  - `invest_bundle` (kind) → `vancelian://app/bundle/{id}/invest`
+///    (bouton « Investir »)
+class AssistanceCryptoBundleItem {
+  const AssistanceCryptoBundleItem({
+    required this.id,
+    required this.productCode,
+    required this.name,
+    required this.description,
+    required this.riskLabel,
+    required this.baseCurrency,
+    required this.allocations,
+    required this.actions,
+  });
+
+  /// `pe_product_definitions.id` (UUID stringifié).
+  final String id;
+
+  /// Code produit canonique (ex. `TOP_5`, `TOP_2`).
+  final String productCode;
+
+  /// Nom commercial (ex. `Top 5`, `Top 2`).
+  final String name;
+
+  /// Description courte (catalogue) — peut être `null` si la fiche
+  /// produit n'en a pas.
+  final String? description;
+
+  /// Étiquette de risque (`low` | `medium` | `high` | …) ou `null`.
+  /// Sert à colorer un éventuel badge côté UI (non affiché pour
+  /// l'instant — on s'aligne sur le widget markets qui ne l'affiche
+  /// pas non plus).
+  final String? riskLabel;
+
+  /// Devise de référence (`EUR` typiquement).
+  final String baseCurrency;
+
+  /// Allocations cibles (ordre serveur — souvent par poids
+  /// décroissant). Chaque entrée porte `symbol` (court, upper) et
+  /// `weight` (0..1).
+  final List<AssistanceBundleAllocation> allocations;
+
+  /// Actions whitelisées (toujours 2 entrées : view + invest si tout
+  /// est OK côté serveur). Chacune porte `kind`, `label` et
+  /// `deep_link`.
+  final List<AssistanceChoiceOption> actions;
+
+  /// Tickers triés tels quels (utilisé pour le bandeau d'avatars
+  /// côté carte). Filtre les vides.
+  List<String> get cryptoTickers => allocations
+      .map((a) => a.symbol.toUpperCase())
+      .where((s) => s.isNotEmpty)
+      .toList(growable: false);
+
+  /// Deep-link tap card (fiche détail produit). `null` si non émis
+  /// par le serveur.
+  String? get viewDetailDeepLink {
+    for (final a in actions) {
+      if (a.id == 'view_bundle_detail' && a.hasDeepLink) {
+        return a.deepLink;
+      }
+    }
+    return null;
+  }
+
+  /// Deep-link bouton « Investir ». `null` si non émis par le
+  /// serveur (ex. flow d'invest indisponible côté backend pour ce
+  /// bundle).
+  String? get investDeepLink {
+    for (final a in actions) {
+      if (a.id == 'invest_bundle' && a.hasDeepLink) {
+        return a.deepLink;
+      }
+    }
+    return null;
+  }
+
+  factory AssistanceCryptoBundleItem.fromJson(Map<String, dynamic> json) {
+    final rawAllocs = json['allocations'];
+    final allocs = rawAllocs is List
+        ? rawAllocs
+            .whereType<Map<String, dynamic>>()
+            .map(AssistanceBundleAllocation.fromJson)
+            .toList(growable: false)
+        : const <AssistanceBundleAllocation>[];
+
+    final rawActions = json['actions'];
+    final actions = rawActions is List
+        ? rawActions
+            .whereType<Map<String, dynamic>>()
+            .map(
+              (e) => AssistanceChoiceOption(
+                id: (e['kind'] as String?) ?? '',
+                label: (e['label'] as String?) ?? '',
+                deepLink: e['deep_link'] as String?,
+              ),
+            )
+            .where((o) => o.label.isNotEmpty && o.hasDeepLink)
+            .toList(growable: false)
+        : const <AssistanceChoiceOption>[];
+
+    return AssistanceCryptoBundleItem(
+      id: (json['id'] as String?) ?? '',
+      productCode: (json['product_code'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      description: (json['description'] as String?),
+      riskLabel: (json['risk_label'] as String?),
+      baseCurrency: (json['base_currency'] as String?) ?? 'EUR',
+      allocations: allocs,
+      actions: actions,
+    );
+  }
+}
+
+/// Allocation cible d'un Crypto Bundle (item de
+/// [AssistanceCryptoBundleItem.allocations]).
+class AssistanceBundleAllocation {
+  const AssistanceBundleAllocation({
+    required this.symbol,
+    required this.instrumentName,
+    required this.weight,
+  });
+
+  /// Symbol court (ex. `BTC`, `ETH`). Toujours non-vide pour les
+  /// items émis par le serveur (filtre côté tool).
+  final String symbol;
+
+  /// Nom complet (ex. `Bitcoin`, `Ethereum`).
+  final String instrumentName;
+
+  /// Poids cible normalisé (0..1).
+  final double weight;
+
+  /// Pourcentage entier (0..100) pour affichage.
+  int get percentage => (weight * 100).round();
+
+  factory AssistanceBundleAllocation.fromJson(Map<String, dynamic> json) {
+    double parseNum(dynamic v) {
+      if (v is num) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? 0;
+      return 0;
+    }
+
+    return AssistanceBundleAllocation(
+      symbol: ((json['symbol'] as String?) ?? '').toUpperCase(),
+      instrumentName: (json['instrument_name'] as String?) ?? '',
+      weight: parseNum(json['weight']),
+    );
+  }
+}
+
 /// Envoie un tour utilisateur (`content`) à l'API d'assistance authentifiée.
 ///
 /// Le serveur Python résout le `client_id` depuis le bearer JWT, applique le
@@ -584,6 +858,7 @@ class AssistanceHistoryMessage {
     this.messageType = 'text',
     this.choicesPayload,
     this.embeds = const [],
+    this.autoQcmPayload,
   });
 
   final String id;
@@ -616,10 +891,23 @@ class AssistanceHistoryMessage {
   /// l'avenir.
   final List<AssistanceEmbed> embeds;
 
+  /// Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05). QCM auto-promu
+  /// **annexé** à un message texte (footer cliquable). Lu depuis
+  /// `message_payload.auto_qcm` au reload `/messages`. `null` pour
+  /// les messages sans auto-QCM (cas usuel).
+  final AssistanceAutoQcmPayload? autoQcmPayload;
+
   bool get isChoicesMessage => messageType == 'choices';
+
+  /// Lot 7 V1.1 — `true` si le message porte un footer auto-QCM
+  /// (texte + boutons sous la bulle). Distinct de [isChoicesMessage]
+  /// qui replace la bulle texte.
+  bool get hasAutoQcm =>
+      autoQcmPayload != null && autoQcmPayload!.options.isNotEmpty;
 
   factory AssistanceHistoryMessage.fromJson(Map<String, dynamic> json) {
     AssistanceChoicesPayload? choicesPayload;
+    AssistanceAutoQcmPayload? autoQcm;
     List<AssistanceEmbed> parsedEmbeds = const [];
     final rawPayload = json['message_payload'];
     if (rawPayload is Map<String, dynamic>) {
@@ -638,6 +926,13 @@ class AssistanceHistoryMessage {
             .where((e) => e.type.isNotEmpty)
             .toList();
       }
+      // Lot 7 V1.1 — auto_qcm : footer cliquable annexé au texte. Compat
+      // totale : un client legacy ignore la clé.
+      final rawAutoQcm = rawPayload['auto_qcm'];
+      if (rawAutoQcm is Map<String, dynamic>) {
+        final parsed = AssistanceAutoQcmPayload.fromJson(rawAutoQcm);
+        if (!parsed.isEmpty) autoQcm = parsed;
+      }
     }
     return AssistanceHistoryMessage(
       id: (json['id'] as String?) ?? '',
@@ -651,6 +946,7 @@ class AssistanceHistoryMessage {
       messageType: (json['message_type'] as String?) ?? 'text',
       choicesPayload: choicesPayload,
       embeds: parsedEmbeds,
+      autoQcmPayload: autoQcm,
     );
   }
 }
@@ -891,6 +1187,19 @@ class AssistanceTurnEvent {
         .map(AssistanceEmbed.fromJson)
         .where((e) => e.type.isNotEmpty)
         .toList();
+  }
+
+  /// Cognitive Bot v4 — Lot 7 V1.1 — auto-QCM annexé au tour assistant
+  /// (`done.auto_qcm`). Présent quand un agent whitelisté a streamé une
+  /// liste 3+ items + question fermée et que les garde-fous serveur
+  /// (objective.stop_pushing, embed avec CTAs, etc.) ne court-circuitent
+  /// pas. `null` sinon — comportement standard préservé.
+  AssistanceAutoQcmPayload? get doneAutoQcm {
+    final raw = data['auto_qcm'];
+    if (raw is! Map<String, dynamic>) return null;
+    final parsed = AssistanceAutoQcmPayload.fromJson(raw);
+    if (parsed.isEmpty) return null;
+    return parsed;
   }
 }
 

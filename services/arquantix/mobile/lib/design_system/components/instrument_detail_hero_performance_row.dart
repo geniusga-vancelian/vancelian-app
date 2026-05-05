@@ -17,6 +17,8 @@ class InstrumentDetailHeroPerformanceRow extends StatelessWidget {
     required this.periodLabel,
     required this.percentColor,
     required this.percentIsPositive,
+    /// Fond des [SurfaceTag] perf (défaut blanc). Même gris que la page sur embed carte blanche.
+    this.chipSurfaceColor = AppColors.white,
   });
 
   /// Variation absolue (ex. devise). Si null ou vide, seule la pilule % est affichée (bundles).
@@ -26,6 +28,7 @@ class InstrumentDetailHeroPerformanceRow extends StatelessWidget {
   final String periodLabel;
   final Color percentColor;
   final bool percentIsPositive;
+  final Color chipSurfaceColor;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +41,7 @@ class InstrumentDetailHeroPerformanceRow extends StatelessWidget {
       children: [
         if (showAbs)
           SurfaceTag(
+            backgroundColor: chipSurfaceColor,
             child: Text(
               absChipText!,
               style: AppTypography.supportingBdPerformanceChip.copyWith(
@@ -48,6 +52,7 @@ class InstrumentDetailHeroPerformanceRow extends StatelessWidget {
             ),
           ),
         SurfaceTag(
+          backgroundColor: chipSurfaceColor,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,

@@ -40,12 +40,20 @@ class BundlePerformanceChartModule extends StatefulWidget {
     this.title = 'Performance',
     this.embedInstrumentHero = false,
     this.onHeroMetricsChanged,
+    this.chartContainerWidth,
   });
 
   final String productCode;
   final String title;
   final bool embedInstrumentHero;
   final void Function(BundleChartHeroMetrics metrics)? onHeroMetricsChanged;
+
+  /// Largeur de référence pour dimensionner le chart (override de
+  /// `MediaQuery.sizeOf(context).width`). Utilisée quand le module est
+  /// embarqué dans un container plus petit que l'écran (bulle chat
+  /// `BundleDetailCardEmbed`). Null = comportement actuel = full
+  /// width écran.
+  final double? chartContainerWidth;
 
   @override
   State<BundlePerformanceChartModule> createState() =>
@@ -216,7 +224,8 @@ class _BundlePerformanceChartModuleState
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenWidth =
+        widget.chartContainerWidth ?? MediaQuery.sizeOf(context).width;
     final isPositive = _performancePct >= 0;
     final perfColor = isPositive
         ? AppColors.semanticPositive

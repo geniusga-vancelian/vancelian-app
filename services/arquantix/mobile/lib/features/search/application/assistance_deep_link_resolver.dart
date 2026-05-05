@@ -9,7 +9,9 @@ import '../../deposit/presentation/screens/deposit_carte_screen.dart';
 import '../../deposit/presentation/screens/deposit_crypto_screen.dart';
 import '../../deposit/presentation/screens/deposit_virement_screen.dart';
 import '../../markets/data/market_data_api.dart';
+import '../../markets/data/product_catalog_api.dart';
 import '../../markets/presentation/screens/crypto_detail_screen.dart';
+import '../../markets/presentation/screens/product_preview_screen.dart';
 import '../../markets/presentation/widgets/top_crypto_assets_module.dart';
 import '../../news/presentation/screens/article_detail_screen.dart';
 import '../../profile/presentation/screens/account_info_screen.dart';
@@ -18,6 +20,7 @@ import '../../registration/screens/registration_flow_launcher_screen.dart';
 import '../../wallet/data/crypto_positions_api.dart';
 import '../../wallet/data/transaction_operation_pdf_api.dart';
 import '../../wallet/presentation/screens/buy_asset_modal_screen.dart';
+import '../../wallet/presentation/screens/bundle_invest_flow/bundle_invest_flow_controller.dart';
 import '../../wallet/presentation/screens/compte_euro_screen.dart';
 import '../../wallet/presentation/screens/iban_screen.dart';
 import '../../wallet/presentation/screens/sell_flow/sell_flow_controller.dart';
@@ -186,6 +189,36 @@ class AssistanceDeepLinkResolver {
           ArticleDetailScreen(slug: segments[1]),
         );
 
+      case 'bundle':
+        // Phase 2 wiki — `vancelian://app/bundle/{id}[/invest]`.
+        // L'`id` est l'UUID `pe_product_definitions`. Sans
+        // sous-segment → fiche détail produit (ProductPreviewScreen,
+        // identique à `_onProductTap` de `CryptoBundlesWidget`).
+        // Avec `/invest` → flow d'investissement
+        // (BundleInvestFlowController.start, identique à
+        // `_onInvestTap` de `CryptoBundlesWidget`).
+        if (segments.length < 2 || segments[1].isEmpty) {
+          _showUnavailable(
+            context,
+            deepLink,
+            reason: 'missing_bundle_id',
+          );
+          return false;
+        }
+        final bundleId = segments[1];
+        if (segments.length == 2) {
+          return _openBundleDetail(context, bundleId);
+        }
+        if (segments[2] != 'invest') {
+          _showUnavailable(
+            context,
+            deepLink,
+            reason: 'unknown_bundle_sub',
+          );
+          return false;
+        }
+        return _openBundleInvest(context, bundleId);
+
       default:
         _showUnavailable(context, deepLink, reason: 'unknown_intent');
         return false;
@@ -203,6 +236,8 @@ class AssistanceDeepLinkResolver {
     'profile',
     'instrument',
     'article',
+    // Phase 2 wiki — `view_bundle_detail` + `invest_bundle`.
+    'bundle',
   };
 
   // ─────────────────────────────────────────────────────────────────
@@ -558,6 +593,103 @@ class AssistanceDeepLinkResolver {
       context,
       CryptoDetailScreen(asset: asset),
     );
+  }
+
+  /// Phase 2 wiki — `vancelian://app/bundle/{id}` → ouvre la fiche
+  /// produit (`ProductPreviewScreen`). Comportement identique à
+  /// `CryptoBundlesWidget._onProductTap` côté markets.
+  ///
+  /// Best-effort : si `productId` est invalide, le screen affichera
+  /// son propre état d'erreur ; on ne pré-fetch rien ici (la fiche
+  /// gère son loading state).
+  static Future<bool> _openBundleDetail(
+    BuildContext context,
+    String productId,
+  ) async {
+    if (!context.mounted) return false;
+    return _push(
+      context,
+      ProductPreviewScreen(productId: productId),
+    );
+  }
+
+  /// Phase 2 wiki — `vancelian://app/bundle/{id}/invest` → enrichit
+  /// le bundle (récupère `portfolioId`) puis lance le flow
+  /// d'investissement (`BundleInvestFlowController.start`).
+  /// Comportement identique à `CryptoBundlesWidget._onInvestTap`.
+  ///
+  /// Best-effort : tout échec réseau / `portfolioId` manquant →
+  /// snackbar discret + false.
+  static Future<bool> _openBundleInvest(
+    BuildContext context,
+    String productId,
+  ) async {
+    if (!context.mounted) return false;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+
+    final api = ProductCatalogApi();
+    ProductCatalogItem? match;
+    try {
+      final list = await api.getBundleCatalog();
+      for (final item in list) {
+        if (item.id == productId) {
+          match = item;
+          break;
+        }
+      }
+    } catch (e) {
+      developer.log(
+        'AssistanceDeepLinkResolver.bundle_invest.fetch_error '
+        'product=$productId err=$e',
+        name: 'AssistanceDeepLinkResolver',
+      );
+    }
+
+    if (match == null) {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Ce bundle n'est pas disponible pour le moment.",
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return false;
+    }
+
+    final portfolioId = match.portfolioId;
+    if (portfolioId == null || portfolioId.isEmpty) {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Ce bundle n'est pas encore disponible à l'investissement.",
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return false;
+    }
+
+    if (!context.mounted) return false;
+
+    final bundle = BundleItem(
+      portfolioId: portfolioId,
+      productId: match.id,
+      name: match.name,
+      description: match.description ?? match.allocationsSummary,
+      entryAssetDefault: match.entryAssetDefault ?? 'USDC',
+      entryAssetsAllowed: match.entryAssetsAllowed ?? const ['USDC'],
+      allocations: match.allocations
+          .map(
+            (a) => BundleAllocationTarget(
+              asset: a.assetSymbol,
+              weight: a.targetWeight,
+            ),
+          )
+          .toList(growable: false),
+    );
+    await BundleInvestFlowController.start(context, bundle: bundle);
+    return true;
   }
 
   /// Strip USDT/USDC/BUSD/USD suffix d'un provider symbol Binance.

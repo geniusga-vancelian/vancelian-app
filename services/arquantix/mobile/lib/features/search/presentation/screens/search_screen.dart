@@ -13,6 +13,9 @@ import '../../data/assistance_conversation_storage.dart';
 import '../../application/assistance_deep_link_resolver.dart';
 import '../../data/chat_api.dart';
 import '../../data/voice_transcriber.dart';
+import '../widgets/auto_qcm_footer.dart';
+import '../widgets/bundle_detail_card_embed.dart';
+import '../widgets/crypto_bundles_card_embed.dart';
 import '../widgets/featured_articles_list_embed.dart';
 import '../widgets/instrument_detail_card_embed.dart';
 import '../widgets/portfolio_allocation_donut_embed.dart';
@@ -59,6 +62,8 @@ class _ChatMessage {
     this.choicesPayload,
     this.selectedChoiceId,
     this.embeds = const [],
+    this.autoQcmPayload,
+    this.selectedAutoQcmOptionId,
   });
   final String role; // 'user' | 'assistant'
   final String content;
@@ -109,7 +114,25 @@ class _ChatMessage {
   /// dans le même `Column` aligné à gauche.
   final List<AssistanceEmbed> embeds;
 
+  /// Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05). Footer auto-QCM
+  /// **annexé** à un message texte. Distinct de [choicesPayload] qui
+  /// remplace la bulle. Source : `done.auto_qcm` SSE ou
+  /// `message_payload.auto_qcm` au reload `/messages`.
+  final AssistanceAutoQcmPayload? autoQcmPayload;
+
+  /// Lot 7 V1.1 — ID de l'option auto-QCM choisie par l'utilisateur.
+  /// `null` tant qu'aucune option n'a été cliquée. Une fois défini, le
+  /// footer passe en mode **consommé** (anti double-tap, marque
+  /// l'option choisie). Purement local (jamais persisté serveur).
+  final String? selectedAutoQcmOptionId;
+
   bool get isChoicesMessage => messageType == 'choices' && choicesPayload != null;
+
+  /// Lot 7 V1.1 — `true` si un footer auto-QCM est attaché. Distinct de
+  /// [isChoicesMessage] : ici la bulle texte reste affichée et le
+  /// footer est rendu en dessous.
+  bool get hasAutoQcm =>
+      autoQcmPayload != null && autoQcmPayload!.options.isNotEmpty;
 
   /// Copie immutable avec sélection d'une option mise à jour. Utilisé
   /// par [_SearchScreenState._handleChoiceTapped] pour figer le QCM
@@ -124,6 +147,8 @@ class _ChatMessage {
       choicesPayload: choicesPayload,
       selectedChoiceId: selectedId,
       embeds: embeds,
+      autoQcmPayload: autoQcmPayload,
+      selectedAutoQcmOptionId: selectedAutoQcmOptionId,
     );
   }
 
@@ -140,6 +165,44 @@ class _ChatMessage {
       choicesPayload: choicesPayload,
       selectedChoiceId: selectedChoiceId,
       embeds: next,
+      autoQcmPayload: autoQcmPayload,
+      selectedAutoQcmOptionId: selectedAutoQcmOptionId,
+    );
+  }
+
+  /// Lot 7 V1.1 — Copie immutable avec un payload auto-QCM attaché.
+  /// Utilisé au moment du `done` SSE pour le rendre live, ou au reload
+  /// `/messages` pour reconstituer l'historique.
+  _ChatMessage copyWithAutoQcm(AssistanceAutoQcmPayload? payload) {
+    return _ChatMessage(
+      role: role,
+      content: content,
+      createdAt: createdAt,
+      agentUsed: agentUsed,
+      messageType: messageType,
+      choicesPayload: choicesPayload,
+      selectedChoiceId: selectedChoiceId,
+      embeds: embeds,
+      autoQcmPayload: payload,
+      selectedAutoQcmOptionId: selectedAutoQcmOptionId,
+    );
+  }
+
+  /// Lot 7 V1.1 — Copie immutable avec une option auto-QCM marquée
+  /// comme sélectionnée. Symétrique de [copyWithSelectedChoiceId] pour
+  /// les QCM router.
+  _ChatMessage copyWithSelectedAutoQcmOptionId(String selectedId) {
+    return _ChatMessage(
+      role: role,
+      content: content,
+      createdAt: createdAt,
+      agentUsed: agentUsed,
+      messageType: messageType,
+      choicesPayload: choicesPayload,
+      selectedChoiceId: selectedChoiceId,
+      embeds: embeds,
+      autoQcmPayload: autoQcmPayload,
+      selectedAutoQcmOptionId: selectedId,
     );
   }
 }
@@ -639,6 +702,11 @@ class _SearchScreenState extends State<SearchScreen> {
                   // ce `done`. Si vide, fallback gracieux (= bulle
                   // markdown classique sans cartes).
                   embeds: ev.doneEmbeds,
+                  // Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05) — footer
+                  // auto-QCM annexé au message texte (boutons cliquables
+                  // sous la bulle markdown). `null` quand le serveur n'a
+                  // pas auto-promu (cas usuel) → pas de footer.
+                  autoQcmPayload: ev.doneAutoQcm,
                 ));
                 _loading = false;
               });
@@ -1496,6 +1564,7 @@ class _SearchScreenState extends State<SearchScreen> {
       messageType: m.messageType,
       choicesPayload: m.choicesPayload,
       embeds: m.embeds,
+      autoQcmPayload: m.autoQcmPayload,
     );
   }
 
@@ -1914,6 +1983,26 @@ class _SearchScreenState extends State<SearchScreen> {
               if (showLlmBubble) const SizedBox(height: AppSpacing.sm),
               _buildEmbed(emb),
             ],
+            // Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05). Footer
+            // auto-QCM cliquable annexé sous la bulle texte. Distinct
+            // de `_buildChoicesBubble` (qui remplace la bulle).
+            // Filtre défensif : si le tour porte un embed self-contained
+            // ou un embed avec ses propres CTAs, on saute le footer
+            // pour éviter le doublon UI (le serveur applique déjà la
+            // règle dans `decide_auto_qcm`, c'est une défense en
+            // profondeur côté client).
+            if (msg.hasAutoQcm && !_embedsBlockAutoQcmFooter(msg.embeds)) ...[
+              const SizedBox(height: AppSpacing.sm),
+              AutoQcmFooter(
+                payload: msg.autoQcmPayload!,
+                onOptionTapped: (opt) => _handleAutoQcmTapped(
+                  opt,
+                  messageIndex: messageIndex,
+                ),
+                selectedOptionId: msg.selectedAutoQcmOptionId,
+                maxBubbleWidth: MediaQuery.sizeOf(context).width * 0.92,
+              ),
+            ],
             const SizedBox(height: AppSpacing.xs),
             // Actions hors module (copier / pouce haut / pouce bas) +
             // heure à droite. Discrètes, sous la bulle, esprit ChatGPT.
@@ -2031,6 +2120,29 @@ class _SearchScreenState extends State<SearchScreen> {
           items: movers,
           direction: emb.topMoversDirection ?? 'gainers',
         );
+      case 'crypto_bundles_card':
+        // Phase 2 wiki — slider Crypto Bundles poussé par
+        // `show_crypto_bundles` (agent `product`). Réplique chat du
+        // widget `CryptoBundlesWidget` de la page markets. Le LLM
+        // peut écrire un texte d'introduction au-dessus.
+        // Tap card → deep-link `view_bundle_detail` →
+        // `ProductPreviewScreen`. Bouton « Investir » → deep-link
+        // `invest_bundle` → `BundleInvestFlowController.start`.
+        return CryptoBundlesCardEmbed(
+          bundles: emb.cryptoBundleItems,
+          title: emb.blockTitle,
+        );
+      case 'bundle_detail_card':
+        // Phase 2 wiki v1.4 — fiche détaillée d'UN bundle poussée par
+        // `show_bundle_detail` (agent `product`). Réplique chat de la
+        // partie haute de `BundleInstrumentDetailHero` (page détail
+        // bundle) : tag « Crypto Bundle » + avatars allocations + chart
+        // de performance bord-à-bord + CTAs Voir/Investir.
+        final bundle = emb.singleBundleItem;
+        if (bundle == null) {
+          return const SizedBox.shrink();
+        }
+        return BundleDetailCardEmbed(bundle: bundle);
       default:
         return const SizedBox.shrink();
     }
@@ -2410,6 +2522,63 @@ class _SearchScreenState extends State<SearchScreen> {
     // `option.id` qui reste un identifiant local de l'option).
     final hint = option.hasAgentHint ? option.agentHint : option.id;
     _sendMessageWithText(option.label, agentHint: hint);
+  }
+
+  /// Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05). Tap sur une option
+  /// du footer auto-QCM (cf. [AutoQcmFooter]). Symétrique de
+  /// [_handleChoiceTapped] pour le QCM router, mais SANS la branche
+  /// retry-after-cancel (irréaliste pour un footer post-réponse) et
+  /// SANS la branche freeform (pas de freeform dans un footer auto-QCM
+  /// — l'utilisateur peut toujours saisir librement dans l'input
+  /// principal qui reste actif).
+  void _handleAutoQcmTapped(
+    AssistanceChoiceOption option, {
+    required int messageIndex,
+  }) {
+    if (!mounted || _loading) return;
+    if (messageIndex < 0 || messageIndex >= _messages.length) return;
+
+    final currentMsg = _messages[messageIndex];
+    if (currentMsg.selectedAutoQcmOptionId != null) return;
+
+    setState(() {
+      _messages[messageIndex] =
+          currentMsg.copyWithSelectedAutoQcmOptionId(option.id);
+    });
+
+    // Branche deep-link : un futur listing pourra exposer des liens
+    // natifs (« voir détail X »). Aujourd'hui le serveur n'en émet
+    // pas via auto-QCM, mais on supporte par défense en profondeur.
+    if (option.hasDeepLink) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      AssistanceDeepLinkResolver.resolve(context, option.deepLink!);
+      return;
+    }
+
+    // Cas nominal : envoi du label avec `agent_hint`. Le label de
+    // l'option est canoniquement le titre court extrait du listing,
+    // suffisant pour le routing serveur.
+    final hint = option.hasAgentHint ? option.agentHint : option.id;
+    _sendMessageWithText(option.label, agentHint: hint);
+  }
+
+  /// Lot 7 V1.1 — `true` si l'un des embeds attachés au message a
+  /// déjà ses propres CTAs cliquables (slider bundles, fiche bundle,
+  /// fiche instrument, transaction). Le serveur applique déjà cette
+  /// garde dans `decide_auto_qcm` via `EMBEDS_WITH_BUILTIN_CTAS`,
+  /// mais on garde la défense en profondeur côté client pour éviter
+  /// un doublon visuel si la décision serveur évolue.
+  static bool _embedsBlockAutoQcmFooter(List<AssistanceEmbed> embeds) {
+    for (final emb in embeds) {
+      switch (emb.type) {
+        case 'crypto_bundles_card':
+        case 'bundle_detail_card':
+        case 'instrument_detail_card':
+        case 'transaction_detail':
+          return true;
+      }
+    }
+    return false;
   }
 
   /// Envoie un message en réutilisant la mécanique standard de

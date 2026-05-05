@@ -73,6 +73,14 @@ class ChartAssetModule extends StatelessWidget {
     /// Si true : pas de carte blanche, pas de bloc prix (affiché dans le header),
     /// graphique bord à bord sur le fond page.
     this.instrumentDetailStyle = false,
+    /// Largeur de référence pour dimensionner le chart (override de
+    /// `MediaQuery.sizeOf(context).width`). Utilisé quand le module est
+    /// embarqué dans un container plus petit que l'écran (ex. bulle chat
+    /// `InstrumentDetailCardEmbed`). Null = comportement actuel = full
+    /// width écran (page détail instrument).
+    this.chartContainerWidth,
+    /// Capsule des périodes en gris page, segment sélectionné blanc (contraste sur fond carte blanche).
+    this.invertedPeriodChips = false,
   });
 
   final CryptoAssetItem asset;
@@ -95,6 +103,13 @@ class ChartAssetModule extends StatelessWidget {
 
   /// Variante [LayoutPageInstrumentDetail] : surface transparente, sans doublon de prix.
   final bool instrumentDetailStyle;
+
+  /// Override optionnel de la largeur de référence du chart (cf.
+  /// constructeur). Null = `MediaQuery.sizeOf(context).width`.
+  final double? chartContainerWidth;
+
+  /// Voir [ChartAssetModule.invertedPeriodChips] (constructeur).
+  final bool invertedPeriodChips;
 
   static const double _chartVerticalSafety = 30;
   /// Marge à droite entre la fin du chart (et le point animé) et le bord du module (évite que le sonar soit tronqué).
@@ -128,7 +143,8 @@ class ChartAssetModule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenWidth =
+        chartContainerWidth ?? MediaQuery.sizeOf(context).width;
     final chartWidth = instrumentDetailStyle
         ? screenWidth - _chartRightMargin
         : screenWidth - AppSpacing.lg - _chartRightMargin;
@@ -148,6 +164,8 @@ class ChartAssetModule extends StatelessWidget {
               child: _buildChartContent(
                 chartWidth,
                 _chartTotalHeight,
+                startPriceLabelLeft:
+                    instrumentDetailStyle ? AppSpacing.sm : 0,
               ),
             ),
           ),
@@ -169,7 +187,9 @@ class ChartAssetModule extends StatelessWidget {
                 height: _periodModuleHeight,
                 width: _periodModuleHeight,
                 child: Material(
-                  color: AppColors.cardBackground,
+                  color: invertedPeriodChips
+                      ? AppColors.white
+                      : AppColors.cardBackground,
                   borderRadius: BorderRadius.circular(999),
                   child: InkWell(
                     onTap: () => onChartTypeChanged!(!isLineChart),
@@ -323,7 +343,11 @@ class ChartAssetModule extends StatelessWidget {
     );
   }
 
-  Widget _buildChartContent(double width, double height) {
+  Widget _buildChartContent(
+    double width,
+    double height, {
+    double startPriceLabelLeft = 0,
+  }) {
     if (chartLoading) {
       return _ChartLoadingPlaceholder(width: width, height: height);
     }
@@ -418,7 +442,7 @@ class ChartAssetModule extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  left: 0,
+                  left: startPriceLabelLeft,
                   top: geometry.startY + 6,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -472,7 +496,7 @@ class ChartAssetModule extends StatelessWidget {
             ),
           ),
           Positioned(
-            left: 0,
+            left: startPriceLabelLeft,
             top: geometry.startY + 6,
             child: Container(
               padding: const EdgeInsets.symmetric(
@@ -571,10 +595,14 @@ class ChartAssetModule extends StatelessWidget {
   }
 
   Widget _buildPeriodChips(BuildContext context) {
+    final outerColor =
+        invertedPeriodChips ? AppColors.pageBackground : AppColors.cardBackground;
+    final slidingPillColor =
+        invertedPeriodChips ? AppColors.cardBackground : AppColors.pageBackground;
     return Container(
       padding: const EdgeInsets.all(_periodPillInset),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: outerColor,
         borderRadius: BorderRadius.circular(999),
       ),
       child: LayoutBuilder(
@@ -596,7 +624,7 @@ class ChartAssetModule extends StatelessWidget {
                   height: pillH,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: AppColors.pageBackground,
+                      color: slidingPillColor,
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),

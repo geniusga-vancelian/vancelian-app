@@ -87,6 +87,8 @@ class AssetsBundlesModule extends StatelessWidget {
     this.title = 'Thematic investing',
     this.visibleCardsCount,
     this.showImageOverlay = false,
+    this.horizontalMargin,
+    this.layoutWidth,
   });
 
   final String title;
@@ -94,14 +96,32 @@ class AssetsBundlesModule extends StatelessWidget {
   final double? visibleCardsCount;
   final bool showImageOverlay;
 
+  /// Marge horizontale du module (override de [_horizontalMargin]).
+  ///
+  /// `null` (défaut) = `AppSpacing.xl` — page markets. Sur le chat,
+  /// le parent applique déjà une gouttière : passer `0` et
+  /// [layoutWidth] pour ne pas cumuler deux marges.
+  final double? horizontalMargin;
+
+  /// Largeur utile pour dimensionner les cartes (ex. `LayoutBuilder.maxWidth`
+  /// quand le module est dans une colonne déjà paddée). `null` = largeur
+  /// écran ([MediaQuery]).
+  final double? layoutWidth;
+
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
     final hasTitle = title.trim().isNotEmpty;
     final count = visibleCardsCount ?? _defaultVisibleCardsCount;
+    final hMargin = horizontalMargin ?? _horizontalMargin;
 
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final availableWidth = screenWidth - _horizontalMargin * 2;
+    final trackWidth = (layoutWidth != null &&
+            layoutWidth!.isFinite &&
+            layoutWidth! > 0)
+        ? layoutWidth!
+        : screenWidth;
+    final availableWidth = trackWidth - hMargin * 2;
     final cardWidth = availableWidth / count;
     final cardHeight = _bundleCardHeightForWidth(cardWidth);
 
@@ -111,7 +131,7 @@ class AssetsBundlesModule extends StatelessWidget {
       children: [
         if (hasTitle) ...[
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+            padding: EdgeInsets.symmetric(horizontal: hMargin),
             child: AppSectionTitle(title),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -120,7 +140,7 @@ class AssetsBundlesModule extends StatelessWidget {
           height: cardHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+            padding: EdgeInsets.symmetric(horizontal: hMargin),
             itemCount: items.length,
             separatorBuilder: (_, __) => const SizedBox(width: _gapBetweenCards),
             itemBuilder: (context, index) {

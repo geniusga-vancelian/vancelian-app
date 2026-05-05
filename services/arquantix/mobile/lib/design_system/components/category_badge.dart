@@ -13,10 +13,13 @@ class SurfaceTag extends StatelessWidget {
     super.key,
     required this.child,
     this.onTap,
+    /// Fond de la puce (défaut blanc). Ex. [AppColors.pageBackground] sur carte blanche.
+    this.backgroundColor = AppColors.white,
   });
 
   final Widget child;
   final VoidCallback? onTap;
+  final Color backgroundColor;
 
   static const double _blurSigma = 12;
 
@@ -34,7 +37,7 @@ class SurfaceTag extends StatelessWidget {
               vertical: 6,
             ),
             decoration: BoxDecoration(
-              color: AppColors.white,
+              color: backgroundColor,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: child,
@@ -54,18 +57,21 @@ class CategoryBadge extends StatelessWidget {
   final String label;
   final Color dotColor;
   final VoidCallback? onTap;
+  final Color surfaceColor;
 
   const CategoryBadge({
     super.key,
     required this.label,
     required this.dotColor,
     this.onTap,
+    this.surfaceColor = AppColors.white,
   });
 
   @override
   Widget build(BuildContext context) {
     return SurfaceTag(
       onTap: onTap,
+      backgroundColor: surfaceColor,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
