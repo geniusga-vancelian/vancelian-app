@@ -16,7 +16,7 @@
 #
 # Usage:
 #   AWS_ACCOUNT_ID=411714852748 \
-#   AWS_REGION=me-central-1 \
+#   AWS_REGION=us-east-1 \
 #   GITHUB_OWNER=geniusga-vancelian \
 #   GITHUB_REPO=vancelian-app \
 #   ROLE_NAME=arquantix-github-actions-deployer \
@@ -28,7 +28,7 @@ set -euo pipefail
 
 # ---- Inputs (with sane defaults for this project) -------------------------
 : "${AWS_ACCOUNT_ID:=411714852748}"
-: "${AWS_REGION:=me-central-1}"
+: "${AWS_REGION:=us-east-1}"
 : "${GITHUB_OWNER:=geniusga-vancelian}"
 : "${GITHUB_REPO:=vancelian-app}"
 : "${ROLE_NAME:=arquantix-github-actions-deployer}"

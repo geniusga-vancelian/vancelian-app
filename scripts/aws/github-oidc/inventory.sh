@@ -8,13 +8,13 @@
 # infrastructure is in the expected shape after the account was reactivated.
 #
 # Usage:
-#   AWS_ACCOUNT_ID=411714852748 AWS_REGION=me-central-1 \
+#   AWS_ACCOUNT_ID=411714852748 AWS_REGION=us-east-1 \
 #     ./scripts/aws/github-oidc/inventory.sh
 # ============================================================================
 set -euo pipefail
 
 : "${AWS_ACCOUNT_ID:=411714852748}"
-: "${AWS_REGION:=me-central-1}"
+: "${AWS_REGION:=us-east-1}"
 : "${ECS_CLUSTER:=arquantix-cluster}"
 
 ECR_REPOS=(arquantix-web arquantix-api arquantix-coming-soon)
