@@ -34,6 +34,30 @@ export function getR2PublicUrl(): string | undefined {
   return firstNonEmpty('R2_PUBLIC_URL', 'STORAGE_PUBLIC_URL')
 }
 
+/**
+ * Région SDK pour S3 / R2.
+ * - R2 : `auto` (recommandé Cloudflare).
+ * - AWS S3 : `STORAGE_REGION` / variables AWS, ou dérivé de l’endpoint régional.
+ */
+export function getS3ClientRegion(): string {
+  const ep = getR2Endpoint()
+  if (ep && ep.includes('r2.cloudflarestorage.com')) {
+    return 'auto'
+  }
+  const fromSecret = firstNonEmpty('STORAGE_REGION', 'AWS_REGION', 'AWS_DEFAULT_REGION')
+  if (fromSecret) return fromSecret
+  if (ep) {
+    const m = ep.match(/\.s3[.-]([a-z0-9-]+)\.amazonaws\.com\/?$/i)
+    if (m) return m[1]
+  }
+  return 'us-east-1'
+}
+
+export function isR2CloudflareEndpoint(): boolean {
+  const ep = getR2Endpoint()
+  return !!ep && ep.includes('r2.cloudflarestorage.com')
+}
+
 const REQUIRED_LABELS = ['R2_ENDPOINT', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'] as const
 
 export function missingR2EnvVarNames(): string[] {

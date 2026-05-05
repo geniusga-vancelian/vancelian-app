@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { Readable } from 'node:stream'
 import { prisma } from '@/lib/prisma'
-import { r2Client } from '@/lib/storage/r2-client'
-import { isR2Configured, r2CredentialsNotConfiguredMessage } from '@/lib/storage/r2Env'
-
-import { getR2BucketName } from '@/lib/storage/r2Env'
+import { getR2S3Client } from '@/lib/storage/r2-client'
+import { getR2BucketName, isR2Configured, r2CredentialsNotConfiguredMessage } from '@/lib/storage/r2Env'
 
 const bucketName = getR2BucketName()
 
@@ -45,7 +43,7 @@ export async function GET(
       Key: media.key,
     })
 
-    const result = await r2Client.send(command)
+    const result = await getR2S3Client().send(command)
 
     if (!result.Body) {
       return new NextResponse('Empty object', { status: 404 })

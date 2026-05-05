@@ -6,12 +6,14 @@
 
 import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { r2Client } from './r2-client'
+import { getR2S3Client } from './r2-client'
 import {
   assertR2Configured,
   getR2BucketName,
   getR2Endpoint,
   getR2PublicUrl,
+  getS3ClientRegion,
+  isR2CloudflareEndpoint,
 } from './r2Env'
 
 const bucketName = getR2BucketName()
@@ -42,7 +44,7 @@ export async function uploadFile(
     ContentType: contentType,
   })
 
-  await r2Client.send(command)
+  await getR2S3Client().send(command)
 
   // Generate public URL
   const url = getPublicUrl(key)
@@ -66,7 +68,7 @@ export async function deleteFile(key: string): Promise<void> {
     Key: key,
   })
 
-  await r2Client.send(command)
+  await getR2S3Client().send(command)
 }
 
 /**
@@ -82,16 +84,20 @@ export function getPublicUrl(key: string): string {
     return `${baseUrl}/${key}`
   }
 
-  // Fallback to R2 endpoint URL format
-  // Extract account ID from endpoint if available
   if (endpoint) {
-    const match = endpoint.match(/https:\/\/([^.]+)\.r2\.cloudflarestorage\.com/)
-    if (match && match[1]) {
-      return `https://pub-${match[1]}.r2.dev/${key}`
+    if (isR2CloudflareEndpoint()) {
+      const match = endpoint.match(/https:\/\/([^.]+)\.r2\.cloudflarestorage\.com/)
+      if (match && match[1]) {
+        return `https://pub-${match[1]}.r2.dev/${key}`
+      }
+    }
+    if (endpoint.includes('amazonaws.com')) {
+      const region = getS3ClientRegion()
+      return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`
     }
   }
 
-  throw new Error('R2_ENDPOINT not configured or invalid format')
+  throw new Error('Storage endpoint not configured or unsupported (R2 / S3)')
 }
 
 /**
@@ -105,6 +111,6 @@ export async function getPresignedUrl(key: string, expiresIn: number = 3600): Pr
     Key: key,
   })
 
-  return getSignedUrl(r2Client, command, { expiresIn })
+  return getSignedUrl(getR2S3Client(), command, { expiresIn })
 }
 
