@@ -1,9 +1,15 @@
 # Agent `product` — Spec Phase 2c
 
-> **Statut :** ✅ **livré** — Phase 2c + wiki Phase 2 + guard-rail v1.3 en
-> production locale, tests verts.
+> **Statut :** **livré** — Phase 2c + wiki Phase 2 + guard-rail v1.3 +
+> slider Crypto Bundles v1.4 + dedup + slot topic + hot-path
+> + cleanup SQL + fiche catalogue + garde-fou cross-repo +
+> Karpathy LLM-as-retriever (v1.4 patch 3) en production locale,
+> 1067 tests verts.
 >
-> **Dernière mise à jour :** 2026-05-04 (v1.3)
+> **Dernière mise à jour :** 2026-05-04 (v1.4 patch 3 — cleanup
+> `product_basics_scpi`/`livret`/`mandate`, fiche
+> `vancelian_product_catalog`, garde-fou `read_wiki_page` sur
+> slugs SQL, retriever LLM-as-retriever sur le wiki MD)
 >
 > **Objectif :** introduire un véritable agent `product` (par
 > opposition au stub Phase 1) en charge des informations factuelles
@@ -416,6 +422,379 @@ qui mériterait un upgrade vers `gpt-4o`.
 - Lecture env var `ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED`
   (truthy/falsy).
 
+### 9.4 Slider Crypto Bundles — v1.4 (2026-05-04)
+
+**Constat post-prod (analyse conv `e5133711`)** : quand le client
+clique « Découvrir les différents bundles disponibles » dans un QCM
+router, l'agent `product` répond uniquement par **un texte
+markdown** (lecture wiki) — pas de moyen visuel de lister les
+bundles concrets disponibles dans le catalogue Vancelian. L'attente
+utilisateur explicite : retrouver le slider **Crypto Bundles** déjà
+affiché côté markets/home, mais en bulle chat.
+
+**Solution livrée** — nouveau tool L0 `show_crypto_bundles()` (sans
+paramètre, idempotent) :
+
+| Composant | Source / cible |
+|---|---|
+| Tool Python | `services/assistance/agents/tools/product/show_crypto_bundles.py` |
+| Source DB | `services/portfolio_engine/products/catalog.py::CatalogService.get_public_catalog(product_type='crypto_bundle')` (réutilisé tel quel — **0 modif** côté `portfolio_engine`) |
+| Embed type | `crypto_bundles_card` (push dans `ctx.embeds_to_emit`) |
+| Cap | 8 bundles maxi par embed |
+| Guard-rail | Inscrit dans `PRODUCT_KNOWLEDGE_READ_TOOLS` — équivalent fonctionnel de `show_instrument_card` |
+
+**Deep-links whitelisted** (cf. `action_cta_catalog`) :
+
+- `view_bundle_detail` → `vancelian://app/bundle/{id}` (tap card →
+  `ProductPreviewScreen`).
+- `invest_bundle` → `vancelian://app/bundle/{id}/invest` (bouton
+  « Investir » → `BundleInvestFlowController.start` après
+  enrichissement `getBundleCatalog` pour résoudre le
+  `portfolioId`).
+
+**Côté mobile** : nouvel embed `CryptoBundlesCardEmbed` qui délègue
+le rendu à `AssetsBundlesModule` (réutilisé tel quel) — **réplique
+visuelle exacte** du widget `CryptoBundlesWidget` markets, ce qui
+garantit la cohérence design même quand le DS évoluera.
+
+**Documentation prompt** : section *« Slider de Crypto Bundles —
+Phase 2 wiki »* ajoutée à `product_system.md` — guide le LLM sur
+quand appeler / ne pas appeler le tool, et notamment lui interdit
+d'inventer un bundle si `bundles_count == 0`.
+
+**Tests** : nouveau fichier
+`tests/test_assistance_show_crypto_bundles_unit.py` — **30 tests**
+couvrant la SPEC (4), le cas nominal (4), edge cases (4), helpers
+(4), action catalog whitelist (12 incluant param check), guard-rail
+intégration (3) + maj `test_assistance_wiki_tools_unit.py` pour
+asserter `len(tools) == 7` côté `product` (+ exclusion explicite
+sur les autres agents).
+
+### 9.5 Refonte design `instrument_detail_card` — v1.4 (2026-05-04)
+
+**Constat client (UX feedback)** : la carte instrument du chat
+n'était pas alignée sur la partie haute de la page détail
+([`CryptoDetailScreen` / `LayoutPageInstrumentDetail`]). Quatre
+écarts visuels :
+
+1. Mini-sparkline 96 px **avec zone area** (vs line chart pur du
+   hero), sans ligne horizontale + puce de prix de départ, sans
+   sonar point en bout, sans puces de période, sans disclaimer
+   mid-rate.
+2. Pas de tag **« Crypto »** au-dessus du titre.
+3. Avatar = `Image.network` brut (pas le `CryptoAvatar` du DS qui
+   gère SVG bundled → réseau → fallback icône).
+4. Chart pas bord-à-bord du module.
+
+**Solution livrée** — refonte complète du widget
+`InstrumentDetailCardEmbed` en `StatefulWidget` qui **réutilise
+strictement** les composants du hero détail instrument :
+
+| Composant hero | Réutilisé dans le chat embed |
+|---|---|
+| `ChartAssetModule(instrumentDetailStyle: true)` | ✅ idem (line chart pur, ligne horizontale + puce, sonar, period chips, disclaimer) |
+| `CategoryBadge('Crypto')` | ✅ idem |
+| `CryptoAvatar(size: small)` | ✅ idem |
+| `InstrumentDetailHeroPerformanceRow` | ✅ idem |
+| `InstrumentDetailHeroCtaRow` + `AppPrimaryButton(arrow_up/down)` | ✅ idem |
+| `MarketDataApi.getChartHistory` | ✅ idem (1j/1s/1m/1a/5a) |
+
+**Extension rétrocompatible** : `ChartAssetModule` accepte une nouvelle
+prop optionnelle `chartContainerWidth` (override de
+`MediaQuery.size.width`) — null = comportement actuel page détail
+(bord-à-bord écran), valeur = bord-à-bord du module parent (bulle chat).
+Pas de régression sur la page détail (la prop n'est passée que par
+l'embed chat).
+
+**Différence assumée vs page détail** :
+
+- Tout est encapsulé dans un module blanc (radius bubble assistant +
+  shadow). Chart bord-à-bord du module, pas de l'écran.
+- Pas de boutons header (favoris / alertes / orders).
+
+**v1.4 patch (2026-05-04 – instrument live)** : ajout du **WebSocket
+streaming** (`MarketDataWsService`) dans le widget chat, exactement
+comme la page détail instrument. Le tick live (`QuoteUpdate.price`)
+prime sur le dernier close des bougies pour la ligne « prix +
+performance », ce qui permet à la bulle chat de rester à jour si le
+client la garde ouverte. `dispose()` déconnecte proprement le WS.
+
+**Comportement** :
+
+- Au mount → fetch `getChartHistory(symbol, period='1j')` (default).
+- Toggle des period chips → re-fetch + maj du libellé période + perf
+  recalculée (premier vs dernier close).
+- Toggle ligne ↔ chandeliers via le bouton du module chart.
+- CTAs Acheter/Vendre dispatchent vers `AssistanceDeepLinkResolver`
+  (deep-links `buy_instrument` / `sell_instrument`).
+
+**Fallback** : tant que les bougies ne sont pas chargées, on affiche
+le prix backend (EUR ou USD) + la perf 24 h fournie dans le payload
+backend (`change_24h_abs/pct`). Une fois les bougies arrivées, on
+bascule sur USD + perf calculée sur la période sélectionnée.
+
+**Fichiers touchés** :
+
+- `services/arquantix/mobile/lib/features/markets/presentation/widgets/chart_asset_module.dart`
+  → +1 prop `chartContainerWidth` (rétrocompatible).
+- `services/arquantix/mobile/lib/features/search/presentation/widgets/instrument_detail_card_embed.dart`
+  → réécriture complète (Stateful, charge candles, délègue à
+  `ChartAssetModule(instrumentDetailStyle: true)`).
+
+`flutter analyze` clean sur les deux fichiers (0 nouveau warning).
+
+### 9.6 Bundle detail + filtrage liste + WS instrument — v1.4 patch (2026-05-04)
+
+**Constat client (UX feedback)** : quatre écarts résiduels après la
+livraison v1.4 initiale :
+
+1. La bulle chat instrument **n'est pas live** (vs page détail qui
+   stream le ticker Binance) — incohérent quand le client laisse la
+   bulle ouverte plusieurs minutes.
+2. Pas d'équivalent **bulle « bundle detail »** : si le client cible
+   un bundle nommé (« parle-moi du TOP5 »), on ne peut afficher que
+   la liste — pas de fiche détaillée avec chart de performance.
+3. Le slider liste a un **titre de module** (« Crypto Bundles ») au
+   dessus des cards qui fait double-emploi avec le texte d'intro du
+   LLM, et la **taille des cards** diffère de la page markets
+   (densité visiblement différente). En plus, l'**image de cover ne
+   s'affiche pas** dans le chat.
+4. Quand le client précise *plusieurs* bundles ciblés (« les bundles
+   à dominante BTC »), le slider montre **tout** le catalogue au lieu
+   du sous-ensemble demandé.
+
+**Solutions livrées** :
+
+| Item | Solution |
+|---|---|
+| (1) Stream live instrument | `InstrumentDetailCardEmbed` ouvre `MarketDataWsService.subscribe([providerSymbol])` au mount → tick `QuoteUpdate.price` prime sur `_candles.last.close` pour `_currentPriceUsd`. `dispose()` déconnecte. Identique au pattern `CryptoDetailScreen`. |
+| (2) Bundle detail card | Nouveau tool L0 backend `show_bundle_detail(product_code OR bundle_id)` (consomme `CatalogService.get_public_catalog`, idempotent, ajouté à `PRODUCT_KNOWLEDGE_READ_TOOLS`). Nouveau widget Flutter `BundleDetailCardEmbed` qui réplique la **partie haute** de `BundleInstrumentDetailHero` : tag « Crypto Bundle » + `BundleTickerAvatarRow` (allocations) + titre/description + `InstrumentDetailHeroPerformanceRow` (alimentée par `BundlePerformanceChartModule.onHeroMetricsChanged`) + chart bord-à-bord (`BundlePerformanceChartModule(embedInstrumentHero: true, chartContainerWidth: ...)`) + CTAs « Voir détail » + « Investir ». |
+| (3a) Pas de titre dans la liste | `CryptoBundlesCardEmbed` passe `title: ''` à `AssetsBundlesModule`. |
+| (3b) Taille cards = markets | `visibleCardsCount: 1.4` (strictement identique au widget markets). |
+| (3c) Image cover affichée | `CryptoBundlesCardEmbed` devient `Stateful`, fetch `ProductCatalogApi.getDisplayConfigs()` au mount, applique `headerMediaUrl` + `cardTitle` + `performance1d` + tri par `sortOrder` (le payload backend Python n'a pas accès à la table Prisma `portfolioProductConfig` côté Web/BFF). |
+| (4) Filtrage liste | `show_crypto_bundles` accepte un paramètre **optionnel** `product_codes: list[str]` ; si fourni, seul ce sous-ensemble est retourné. En cas de zéro match, le tool renvoie `available_product_codes` pour permettre au LLM de proposer une alternative au client. |
+
+**Extension `BundlePerformanceChartModule`** : nouvelle prop
+optionnelle `chartContainerWidth` (override de
+`MediaQuery.size.width`) — null = bord-à-bord écran (page détail
+bundle), valeur = bord-à-bord du module parent (bulle chat).
+Rétrocompatible.
+
+**Routing LLM** : section *« Bundles Vancelian — `show_crypto_bundles`
+vs `show_bundle_detail` »* enrichie dans `product_system.md` avec une
+règle de tri **CRITIQUE** sur 3 cas (1 bundle nommé →
+`show_bundle_detail` ; bundles ciblés multiples →
+`show_crypto_bundles(product_codes=[...])` ; tout le catalogue →
+`show_crypto_bundles()` sans param).
+
+**Tests** : 5 nouveaux tests sur le filtrage `show_crypto_bundles`
++ nouveau fichier `test_assistance_show_bundle_detail_unit.py` (24
+tests : SPEC, nominal, edge cases, helper, registry, guard-rail).
+**935 tests assistance globaux verts → zéro régression.**
+
+**Fichiers touchés** :
+
+- Backend : `services/assistance/agents/tools/product/show_crypto_bundles.py` (filtre), `services/assistance/agents/tools/product/show_bundle_detail.py` (nouveau), `services/assistance/agents/tools/product/__init__.py`, `services/assistance/agents/tools/registry.py`, `services/assistance/agents/runtime/agent_loop.py` (guard-rail), `services/assistance/prompts/product_system.md`.
+- Flutter : `features/markets/presentation/widgets/bundle_performance_chart_module.dart` (+1 prop), `features/search/presentation/widgets/instrument_detail_card_embed.dart` (+WS), `features/search/presentation/widgets/crypto_bundles_card_embed.dart` (refondu Stateful), `features/search/presentation/widgets/bundle_detail_card_embed.dart` (nouveau), `features/search/data/chat_api.dart` (+helper `singleBundleItem`), `features/search/presentation/screens/search_screen.dart` (case `bundle_detail_card`).
+
+`flutter analyze` clean sur tous les fichiers modifiés (0 nouveau warning).
+
+### 9.7 Router QCM contextualisé + advisor pour « profil » — v1.4 (2026-05-04)
+
+**Constat post-prod (conv `e5133711` turn 3)** : « quel bundle est
+le plus adapté à mon profil ? » → router émet un QCM Niveau 2 avec
+4 labels génériques (« Conseils pour mes placements », « La
+situation des marchés », etc.) qui ne mentionnent pas « bundle ».
+Le client a l'impression qu'on a oublié son sujet.
+
+**Solution livrée** (prompt-only — `router_system.md`) :
+
+1. **Sous-cas règle 2 « profil sur produit Vancelian nommé »** :
+   quand un produit Vancelian propriétaire est cité (Bundle, Coffre
+   Flexible, etc.) **et** que le client demande lequel **lui**
+   correspond, route_to(advisor) direct (≥ 0.8) — la règle 2 prime
+   sur la règle 0bis. **3 nouveaux exemples calibrés** ajoutés
+   (« le plus adapté à mon profil », « me convient le mieux »,
+   « lequel je devrais choisir »).
+2. **Règle de contextualisation `ask_clarification`** : quand
+   `recent_turns` mentionne un produit / instrument nommé, **chacun**
+   des labels d'options DOIT explicitement reprendre ce sujet
+   (« Adapter un bundle à mon profil » plutôt que « Conseils pour
+   mes placements »). Exemple anti-pattern + pattern positif fournis.
+
+**Tests** : nouvelle classe
+`TestRouterPromptProfileAdvisorAndContextualQcm` (6 tests) qui
+asserte le contenu textuel du prompt enrichi.
+
+### 9.9 Catalogue produit canonique + Karpathy retriever (v1.4 patch 3 — 2026-05-04)
+
+**Constat post-prod (analyse conv `534d545b`, 7 turns, 27 tool calls)** :
+sur une question simple « parle moi des offres exclusives » et son
+extension « quels sont les produits Vancelian ? », le bot enchaîne
+4 défaillances majeures :
+
+1. **0 match wiki** sur 4 appels `select_wiki_pages(category="exclusive-offers")`
+   alors que la catégorie contient 34 fiches. Le scoring **keyword pur**
+   ne traduit pas FR↔EN (66 % du wiki en anglais).
+2. **MAX_ITER atteint** au turn 8 (« service indisponible ») après
+   16 tool calls dans un seul tour qui boucle sur des slugs introuvables.
+3. **Hallucination « Vancelian propose des SCPI »** au turn 10 : la
+   fiche SQL `product_basics_scpi` a un titre affirmatif (« Investir en
+   SCPI sur Vancelian ») mais un corps purement définitionnel — le LLM
+   l'ajoute à la gamme. Idem `product_basics_livret_vancelian` et
+   `product_basics_managed_mandate`.
+4. **Confusion runtime SQL ↔ wiki** : 3 appels à
+   `read_wiki_page(slug="product_basics_*")` retournent `not_found`
+   alors que ces slugs vivent dans la table SQL `product_knowledge`.
+
+Le bot du copain (Jean Guillou, cf. `wiki/chatbot-spec.md` v2.1)
+n'a aucun de ces défauts car il utilise le **pattern Karpathy
+LLM-as-retriever** : un LLM Haiku reçoit `index.md` entier (310
+lignes, 222 fiches résumées) + la question, et retourne 3-5 slugs.
+
+**Solutions livrées (4 lots)** :
+
+#### Lot 1 — Cleanup SQL `product_knowledge` (migration 151)
+
+  * **Soft-delete** (`is_active=false`) de 3 fiches non-canoniques :
+    `product_basics_scpi`, `product_basics_livret_vancelian`,
+    `product_basics_managed_mandate`. Aucun de ces produits n'est
+    proposé par Vancelian.
+  * Migration purement additive (UPDATE + INSERT, aucun DROP).
+
+#### Lot 2 — Fiche `vancelian_product_catalog`
+
+  * Nouvelle entrée canonique dans `product_knowledge` qui décrit
+    les **5 familles** Vancelian (Coffres, Offres Exclusives, Crypto
+    Baskets, Trading spot, Compte EUR + carte VISA) avec une section
+    « Ce que Vancelian ne propose PAS » qui mentionne explicitement
+    SCPI / livret / mandat.
+  * Patch `product_system.md` : règle PRIORITÉ ABSOLUE — sur question
+    catalogue (« quels produits ? », « la gamme », « découvrir
+    Vancelian »), appeler EN PREMIER `read_product_knowledge('vancelian_product_catalog')`.
+  * Texte calibré sur la réponse référence du chatbot Slack v3 du
+    wiki source.
+
+#### Lot 3 — Garde-fou cross-référentiel `read_wiki_page`
+
+  * Détection préfixes SQL (`product_basics_`, `deposit_delay_`,
+    `withdrawal_delay_`, `kyc_`, `swap_`, `kind_`) + whitelist
+    `vancelian_product_catalog`. Si match → retourne
+    `{"error": "wrong_repo", "use_tool": "read_product_knowledge",
+    "hint": "..."}` au lieu de `not_found`. Le LLM voit le hint et
+    sait quoi faire.
+  * Patch prompt : règle explicite « les slugs `product_basics_*`,
+    `deposit_delay_*`, etc. sont SQL — utilise `read_product_knowledge` ».
+  * Tests : 16 dans `test_assistance_read_wiki_page_guard_unit.py`.
+
+#### Lot 4 — Karpathy LLM-as-retriever sur le wiki MD
+
+  * Nouveau module `services/assistance/agents/repositories/wiki_llm_retriever.py` :
+    construit un catalogue compact (1 ligne / fiche, ~6 000 tokens),
+    appelle un LLM avec un tool `return_selected_slugs` qui force la
+    sortie structurée.
+  * Wire dans `select_wiki_pages.execute` : LLM-as-retriever **par
+    défaut**, fallback transparent sur le scoring keyword si l'appel
+    LLM échoue / retourne 0 slug exploitable / désactivé via env var.
+  * Sentinel `__use_sql_catalog__` : si la question vise la **gamme
+    globale**, le retriever LLM peut renvoyer ce slug spécial → le
+    tool retourne `via: llm_sql_hint` qui pousse le LLM caller à
+    utiliser `read_product_knowledge('vancelian_product_catalog')`.
+  * **Cohérence catégorie** : si le caller passe un `category=...`,
+    on filtre les matches LLM dans cette catégorie *si* au moins
+    1 match reste. Sinon on garde tout (le LLM a parfois un meilleur
+    choix transverse).
+  * Configuration env :
+      - `ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED=true` (défaut).
+      - `ASSISTANCE_WIKI_LLM_RETRIEVER_MODEL=<override>` (défaut =
+        modèle agent product = `gpt-4o-mini` ou autre selon env).
+      - `ASSISTANCE_WIKI_LLM_RETRIEVER_MAX_SLUGS=5`.
+  * Cache catalogue partagé avec TTL `wiki_repo._cache_ttl_seconds()`
+    = 300 s. Lazy-build, 1 lock pour éviter rebuild concurrent.
+  * Tests : 14 dans `test_assistance_wiki_llm_retriever_unit.py`.
+
+**Tests** :
+  * `test_assistance_wiki_llm_retriever_unit.py` — 14 tests (build
+    catalogue, cas nominaux, sentinel SQL, erreurs LLM, intégration).
+  * `test_assistance_read_wiki_page_guard_unit.py` — 16 tests
+    (détection slugs SQL, redirection, slugs wiki normaux préservés).
+  * `test_assistance_product_catalog_seed_unit.py` — 9 tests (état
+    DB après migration 151, sanity du body catalogue).
+  * **1067 tests assistance globaux verts** (vs 1017 avant) — **zéro
+    régression** après ajustement de 2 tests legacy
+    (`test_assistance_wiki_tools_unit.py`) qui désactivent
+    explicitement le retriever LLM pour tester le fallback keyword.
+
+**Rétrocompatibilité** :
+  * Migration 151 purement additive (UPDATE + INSERT).
+  * Si `ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED=false`, le tool
+    retombe sur le keyword scoring d'origine (zéro changement de
+    comportement vs avant patch 3 sur le `via: keyword` path).
+  * Garde-fou `wrong_repo` ne casse aucun appel légitime — uniquement
+    les appels qui retournaient déjà `not_found`.
+
+**Aucune modif env/Docker.** Lots actifs immédiatement après restart
+container API.
+
+### 9.8 Stabilité conversationnelle — dedup + topic + hot-path (v1.4 patch 2 — 2026-05-04)
+
+**Constat post-prod** (analyse conv `5bef01e9`, 5 turns) : malgré les
+patchs 9.6 et 9.7, 3 problèmes résiduels observés :
+
+  1. **Routeur qui flippe sur mot-clé isolé** — turn 3, le user envoie
+     « précisément les perf sont bonnes sur ce bundle ? » (28 chars,
+     déictique fort « ce bundle »). Le LLM router classifie sur
+     `market` à cause du keyword « perf », casse la conversation
+     produit en cours.
+  2. **Tool dupliqué dans le même turn** — turn 4, le LLM appelle
+     `show_crypto_bundles()` × 2 avec exactement les mêmes args dans
+     le même turn (compte le 1er résultat comme insuffisant et
+     re-tente). Tokens / latence / DB gaspillés. Le 2ᵉ appel
+     contribue à déclencher le guard-rail à tort.
+  3. **Sujet « en cours » non matérialisé** — `recent_turns` (4
+     derniers messages bruts) ne suffit pas au LLM pour comprendre
+     que « ce bundle » désigne TOP_5 quand l'ancrage est ≥ 2 tours
+     en arrière.
+
+**Solutions livrées (3 mécanismes complémentaires, déterministes,
+cheap, observables — voir `MULTI_AGENTS.md` § 8.5 pour les détails
+de bas niveau)** :
+
+  * **9.8.1 Dédoublonnage runtime** (`agent_loop.py` ::
+    `tool_call_cache`) — cache local au turn `(tool_name, frozen_args)
+    → result`. Au 2ᵉ appel identique sur un tool de
+    `DEDUPABLE_TOOLS` (whitelist d'idempotents read-only),
+    on renvoie le cache + un hint `_dedup_hint` au LLM. Erreurs
+    non-cachées. Hits non-persistés dans `agent_decisions`.
+  * **9.8.2 Slot mémoire `current_topic`** (migration 150 + service
+    `conversation_topic.py`) — colonne JSONB `assistance_conversations
+    .current_topic` auto-set par les tools ancrants
+    (`show_bundle_detail`, `show_instrument_card`, `read_wiki_page`,
+    `read_product_knowledge`). Lu par le router au tour suivant et
+    injecté dans le system prompt sous forme `[CONTEXT TOPIC] Sujet
+    en cours : produit Vancelian TOP_5 (agent owner: product). Si le
+    user message est un follow-up déictique, reste sur l'agent_owner`.
+    Listes (`show_crypto_bundles`, `select_wiki_pages`) **n'ancrent
+    pas**.
+  * **9.8.3 Hot-path follow-up court** (`router_hot_path.py`) — bypass
+    LLM router quand `len(msg) ≤ 60` + dernier agent expert + pas de
+    signal de changement de sujet (`par contre`, `sinon`, `au fait`,
+    …). Économie ~150-300 ms et ~500 tokens. Kill-switch
+    `ASSISTANCE_ROUTER_HOT_PATH_ENABLED=false`.
+
+**Tests** :
+  * `test_assistance_runtime_dedup_unit.py` — 8 tests (dedup whitelist,
+    args différents, tool hors whitelist, erreur, scope par turn).
+  * `test_assistance_conversation_topic_unit.py` — 28 tests (inférence
+    par tool, périmètre whitelist, render prompt, persistance defensive).
+  * `test_assistance_router_hot_path_unit.py` — 46 tests (matrice
+    longueur / agent / signaux / kill-switch / wrapper input).
+
+**1017 tests assistance globaux verts → zéro régression.** Aucune
+modif env/Docker (la migration Alembic 150 est purement additive,
+JSONB nullable, aucun backfill). Lot actif immédiatement après
+restart API container.
+
 ---
 
 ## 10. Versioning
@@ -426,6 +805,9 @@ qui mériterait un upgrade vers `gpt-4o`.
 | **2026-05-04** | **1.1** | **Phase 1 wiki MD livrée** | **Import de 243 fiches markdown depuis le vault Obsidian source dans `assistance/data/wiki/` (stockage seul, aucun branchement runtime). Audit cohérence Annexe 36 + 72 feedbacks copiés dans `docs/arquantix/product-wiki/`. Phase 2 (branchement runtime via `select_wiki_pages` + `read_wiki_page`) en PR séparée.** |
 | **2026-05-04** | **1.2** | **Phase 2 wiki branchée au runtime** | **Repo `wiki_repo.py` (parsing frontmatter maison + cache TTL 5 min + scoring keyword Karpathy-style). 2 tools L0 livrés : `select_wiki_pages(question, top_k?, category?)` (pré-filtre top 5 sur les 243 fiches) + `read_wiki_page(category, slug)` (lecture complète). Prompt système v2 enrichi de `system-prompt-v2.md` (vocabulary, grounding_rule, account_limitation, response_rules, mandatory_disclaimers, escalation_triggers, forbidden_patterns, self_check, 4 examples). Cohabitation SQL/MD : SQL d'abord pour les fiches courtes canoniques, MD pour la couverture large. 46 tests wiki + 679 tests assistance globaux verts → zéro régression. Aucune modif env/DB/Docker, aucune nouvelle dépendance Python.** |
 | **2026-05-04** | **1.3** | **Guard-rail anti-hallucination + mémoire affinée** | **Constat post-prod (analyse conv `aef5923a`) : sur 8 turns Phase 2, 3 zappent les tools (turns 30/32 répondent direct → hallucination cf. turn 32 « Vancelian ne propose pas d'invest crypto » faux ; turn 42 = `select_wiki_pages × 2` sans `read_wiki_page` → composition depuis titres seuls). **Guard-rail runtime livré** dans `agent_loop.py` : si l'agent `product` termine un turn sans `read_product_knowledge` / `read_wiki_page` / `show_instrument_card`, ou avec `select_wiki_pages` mais sans read derrière, on injecte un hint system explicite et on rejoue la boucle **une seule fois**. Désactivable via `ASSISTANCE_PRODUCT_GUARDRAIL_ENABLED=false`. **Mémoire long-terme retunée** : seuil tokens abaissé `6000 → 2500` + nouveau déclencheur `min_turns=10` (consolidation à 20 messages indépendamment des tokens). Conséquence : la conv `aef5923a` (4 200 tokens) aurait été consolidée 3-4 fois au lieu de 0. 18 nouveaux tests guard-rail + 6 nouveaux tests memory + 6 ajustements de tests existants. **852 tests assistance globaux verts (vs 679 avant) → zéro régression.** Aucune modif env/DB/Docker.** |
+| **2026-05-04** | **1.4** | **Slider Crypto Bundles + router QCM contextualisé + refonte `instrument_detail_card`** | **Constat post-prod (analyse conv `e5133711`) : (1) « Découvrir les bundles disponibles » → réponse markdown générique (pas de visuel concret du catalogue) ; (2) « quel bundle adapté à mon profil ? » → QCM router avec labels génériques ne mentionnant pas « bundle » + bascule en clarification au lieu d'advisor direct ; (3) la carte `instrument_detail_card` du chat n'était pas alignée sur la partie haute de la page détail (mini-sparkline avec area, pas de tag Crypto, mauvais avatar, chart pas bord-à-bord). **Solutions livrées (4 lots)** : **Lot 1 (router prompt-only)** : nouveau sous-cas règle 2 « profil sur produit Vancelian nommé » → `route_to(advisor)` direct + règle de contextualisation `ask_clarification` (labels DOIVENT reprendre le sujet `recent_turns`) + 3 exemples calibrés. **Lot 2 (tool backend)** : nouveau tool L0 `show_crypto_bundles()` qui consomme `CatalogService.get_public_catalog(product_type='crypto_bundle')` (réutilisé tel quel — 0 modif portfolio_engine) et émet un embed `crypto_bundles_card` avec bundles + allocations + 2 deep-links whitelistés (`view_bundle_detail` + `invest_bundle`). Ajouté à `PRODUCT_KNOWLEDGE_READ_TOOLS` (compatible guard-rail). **Lot 3 (Flutter `crypto_bundles_card`)** : nouvel embed `CryptoBundlesCardEmbed` qui délègue le rendu à `AssetsBundlesModule` (réplique exacte du widget markets). Resolver `vancelian://app/bundle/{id}[/invest]` ajouté avec enrichissement `portfolioId` via `getBundleCatalog`. **Lot 4 (Flutter `instrument_detail_card` refonte)** : `InstrumentDetailCardEmbed` réécrit en `StatefulWidget` qui charge les vraies bougies via `MarketDataApi.getChartHistory` et délègue au `ChartAssetModule(instrumentDetailStyle: true)` (réplique visuelle exacte du hero détail instrument : line chart pur + ligne horizontale + sonar + period chips + disclaimer + tag « Crypto » + `CryptoAvatar` + CTAs Acheter/Vendre sous le chart). `ChartAssetModule` étendu d'une prop optionnelle rétrocompatible `chartContainerWidth` pour fonctionner dans une bulle chat. **Tests** : 30 nouveaux (show_crypto_bundles) + 6 nouveaux (router QCM/advisor profil) + maj wiring registry. **909 tests assistance globaux verts → zéro régression**. Aucune modif env/DB/Docker, 0 nouvelle dépendance. Lots 1+2 actifs immédiatement (restart container) ; Lots 3+4 attendent un build Flutter.** |
+| **2026-05-04** | **1.4 patch 2** | **Stabilité conversationnelle — dedup + topic + hot-path** | **Constat post-prod (analyse conv `5bef01e9`, 5 turns) : (1) router LLM flippe sur mot-clé isolé (« perf » → market) malgré déictique « ce bundle » ; (2) `show_crypto_bundles` appelé 2× avec mêmes args dans le même turn ; (3) sujet « en cours » non matérialisé entre tours. **Solutions livrées (3 mécanismes complémentaires)** : **(A) Dédoublonnage runtime** (`agent_loop.py` :: `tool_call_cache`) — cache local au turn `(tool_name, frozen_args)`, whitelist `DEDUPABLE_TOOLS` (idempotents read-only). 2ᵉ appel identique → cache + `_dedup_hint` au LLM. Erreurs non-cachées. Hits non-persistés. **(B) Slot mémoire `current_topic`** (migration 150 + `services/assistance/conversation_topic.py`) — colonne JSONB nullable auto-set par `show_bundle_detail` / `show_instrument_card` / `read_wiki_page` / `read_product_knowledge`. Lu par le router et injecté en system prompt `[CONTEXT TOPIC]`. Listes (`show_crypto_bundles`, `select_wiki_pages`) n'ancrent pas. **(C) Hot-path follow-up court** (`services/assistance/router_hot_path.py`) — bypass LLM router quand message ≤ 60 chars + dernier agent expert + pas de signal de changement de sujet. Économie 150-300 ms / 500 tokens. Kill-switch `ASSISTANCE_ROUTER_HOT_PATH_ENABLED=false`. **Tests** : 8 (dedup) + 28 (topic) + 46 (hot-path) = **82 nouveaux tests**. **1017 tests assistance globaux verts (vs 935 avant) → zéro régression.** Migration 150 purement additive (JSONB NULL, aucun backfill). Aucune modif env/Docker. Lot actif immédiatement après restart container.** |
+| **2026-05-04** | **1.4 patch** | **WebSocket instrument live + Bundle detail card + filtrage liste bundles** | **Constat client (UX feedback v1.4)** : 4 écarts résiduels — (1) bulle chat instrument **non live** (vs page détail qui stream Binance) ; (2) pas d'équivalent **fiche détaillée** pour UN bundle ciblé (« parle-moi du TOP5 ») ; (3) slider liste avec titre de module dupliquant le texte LLM + cards de **taille différente** vs markets + **image cover absente** ; (4) demande de **plusieurs bundles ciblés** affiche tout le catalogue. **Solutions livrées (4 lots couplés)** : **Lot 1 (Flutter instrument live)** : `InstrumentDetailCardEmbed` connecte `MarketDataWsService.subscribe([providerSymbol])` au mount → tick `QuoteUpdate.price` prime sur `_candles.last.close`. `dispose()` déconnecte. **Lot 2 (Flutter `crypto_bundles_card` refonte)** : `CryptoBundlesCardEmbed` devient `Stateful`, fetch `ProductCatalogApi.getDisplayConfigs()` au mount → résout `headerMediaUrl` (image cover), `cardTitle`, `performance1d`, `sortOrder`. `title: ''` (pas de titre module) + `visibleCardsCount: 1.4` (strictement identique markets). **Lot 3 (Flutter `bundle_detail_card` nouveau)** : nouveau widget `BundleDetailCardEmbed` qui réplique la partie haute de `BundleInstrumentDetailHero` (tag Crypto Bundle + `BundleTickerAvatarRow` + titre + `InstrumentDetailHeroPerformanceRow` alimentée par `BundlePerformanceChartModule.onHeroMetricsChanged` + chart bord-à-bord + CTAs Voir/Investir). `BundlePerformanceChartModule` étendu de la prop optionnelle rétrocompatible `chartContainerWidth`. Nouveau case `bundle_detail_card` dans `search_screen.dart`. Nouveau helper `singleBundleItem` dans `chat_api.dart`. **Lot 4 (backend filtrage + show_bundle_detail)** : `show_crypto_bundles` accepte param optionnel `product_codes: list[str]` (zéro match → `available_product_codes` retourné pour aider le LLM). Nouveau tool L0 `show_bundle_detail(product_code OR bundle_id)` qui émet un embed `bundle_detail_card`, ajouté à `PRODUCT_KNOWLEDGE_READ_TOOLS`. Prompt `product_system.md` enrichi d'une règle de tri **CRITIQUE** sur 3 cas (1 bundle nommé / N bundles ciblés / tout le catalogue). **Tests** : 5 nouveaux (filtrage `show_crypto_bundles`) + 24 nouveaux (`show_bundle_detail` complet) + maj `test_product_total_tool_count` (7→8). **935 tests assistance globaux verts → zéro régression.** Aucune modif env/DB/Docker, 0 nouvelle dépendance. Lot 4 (backend) actif immédiatement après restart container ; Lots 1-3 (Flutter) attendent un build mobile.** |
 
 > **Règle :** toute évolution du catalog `consult_purposes`, du
 > schéma `product_knowledge`, ou des garde-fous structurels **doit**
