@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session
 
 from database import AssistanceConversation, AssistanceMessage
 from services.assistance import memory as assistance_memory
+from services.assistance import conversation_topic as assistance_conversation_topic
+from services.assistance import router_hot_path as assistance_router_hot_path
 from services.assistance.agents import router as agent_router
 from services.assistance.agents.base import (
     AGENT_DEFAULT_ID,
@@ -33,6 +35,19 @@ from services.assistance.agents.base import (
     ChoiceOption,
     RouterDecision,
 )
+from services.assistance.agents.cognitive_state import (
+    CognitiveState,
+    compute_cognitive_state,
+)
+from services.assistance.agents.conversation_objective import (
+    compute_objective,
+)
+from services.assistance.agents import client_discovery as discovery_engine
+from services.assistance.agents.conversation_continuity import (
+    build_previous_bot_context_block,
+    decide_auto_qcm,
+)
+from services.assistance import client_discovery_repo as discovery_repo
 from services.assistance.agents.config import (
     assistance_multi_agent_enabled,
     assistance_router_confidence_min,
@@ -42,6 +57,10 @@ from services.assistance.agents.config import (
 from services.assistance.agents.prompt_builder import load_agent_system_prompt
 from services.assistance.agents.registry import get_agent
 from services.assistance.agents.runtime import run_agent_loop
+from services.assistance.agents.runtime.product_slack_pipeline import (
+    iter_product_slack_pipeline_events,
+    should_use_slack_pipeline,
+)
 from services.assistance.agents.tools import registry as tools_registry
 from services.assistance.agents.tools.shared.classify_actor import ActorKind
 from services.assistance.config import assistance_history_max_turns
@@ -145,10 +164,100 @@ def _next_turn_index(db: Session, conversation_id: UUID) -> int:
     return (last or 0) + 1
 
 
+def _safe_get_current_topic(
+    db: Session | None, conversation_id: UUID | str | None
+) -> dict | None:
+    """Lit le slot `current_topic` côté DB, defensive (jamais d'exception
+    remontée). Retourne `None` si la colonne n'existe pas encore (migration
+    150 pas appliquée — utile pour les tests qui n'utilisent pas de DB).
+
+    Cf. `services.assistance.conversation_topic.get_topic`.
+    """
+    if db is None or conversation_id is None:
+        return None
+    try:
+        return assistance_conversation_topic.get_topic(db, conversation_id)
+    except Exception:  # noqa: BLE001 — never let a memory read kill a turn
+        logger.exception(
+            "assistance.topic.read_failed conv=%s", conversation_id
+        )
+        return None
+
+
+def _decision_kind_label(decision: RouterDecision) -> str:
+    """Mappe une `RouterDecision` vers son label de décision canonique.
+
+    Utilisé à 2 endroits :
+      * inférence du ``conversation_stage`` (cf.
+        ``cognitive_state.infer_conversation_stage``) ;
+      * persistance dans ``assistance_agent_decisions`` (cf.
+        ``_persist_router_decision``).
+
+    Centralise la logique pour garantir la cohérence des deux usages.
+    """
+    if decision.redirect_bridge:
+        return "redirect_off_topic"
+    if decision.fallback_choices and not decision.is_decisive:
+        return "ask_clarification"
+    return "route_to"
+
+
+def _safe_load_previous_cognitive_state(
+    db: Session | None, conversation_id: UUID | str | None
+) -> dict | None:
+    """Lit le ``cognitive_state`` du tour précédent depuis
+    ``assistance_agent_decisions``.
+
+    Cherche la dernière entrée ``router_classify`` pour cette
+    conversation (ordre ``created_at desc``) et extrait son
+    ``arguments_json["cognitive_state"]``.
+
+    Defensive — jamais d'exception remontée :
+      * ``None`` si pas d'historique (premier tour),
+      * ``None`` si l'entrée n'a pas de cognitive_state (legacy <
+        Cognitive Bot v4),
+      * ``None`` en cas d'erreur DB (best-effort, on dégrade vers un
+        état neutre démarrage).
+    """
+    if db is None or conversation_id is None:
+        return None
+    try:
+        from database import AssistanceAgentDecision
+
+        row = (
+            db.query(AssistanceAgentDecision)
+            .filter(
+                AssistanceAgentDecision.conversation_id == conversation_id,
+                AssistanceAgentDecision.tool_name == "router_classify",
+            )
+            .order_by(AssistanceAgentDecision.created_at.desc())
+            .first()
+        )
+        if row is None:
+            return None
+        args = row.arguments_json or {}
+        if not isinstance(args, dict):
+            return None
+        prev = args.get("cognitive_state")
+        return prev if isinstance(prev, dict) else None
+    except Exception:  # noqa: BLE001 — best-effort, never kill a turn
+        logger.exception(
+            "assistance.cognitive_state.read_failed conv=%s",
+            conversation_id,
+        )
+        return None
+
+
 def _load_history(
     db: Session, conversation_id: UUID, *, limit: int
 ) -> list[dict]:
-    """Renvoie les ``limit`` derniers messages dans l'ordre chronologique."""
+    """Renvoie les ``limit`` derniers messages dans l'ordre chronologique.
+
+    Phase 2 wiki v1.4 patch : on expose aussi `agent_used` pour permettre
+    au hot-path router (`router_hot_path.py`) d'identifier l'auteur du
+    dernier message assistant. Champ absent / NULL pour les conv legacy
+    pré-migration 147 → désactive naturellement le hot-path.
+    """
     rows = (
         db.query(AssistanceMessage)
         .filter(AssistanceMessage.conversation_id == conversation_id)
@@ -157,7 +266,14 @@ def _load_history(
         .all()
     )
     rows.reverse()
-    return [{"role": r.role, "content": r.content} for r in rows]
+    return [
+        {
+            "role": r.role,
+            "content": r.content,
+            "agent_used": r.agent_used,
+        }
+        for r in rows
+    ]
 
 
 def _build_context(
@@ -647,6 +763,17 @@ async def _run_via_runtime(
     En cas d'absence de tools dans le registry pour cet agent, le caller
     aura déjà court-circuité et utilisé le fallback Phase 1.
     """
+    if should_use_slack_pipeline(agent_id):
+        async for event in iter_product_slack_pipeline_events(
+            db=db,
+            agent_id=agent_id,
+            agent_input=agent_input,
+            actor_kind=actor_kind,
+            conversation_id=conversation_id,
+            user_id=user_id,
+        ):
+            yield event
+        return
     system_prompt = load_agent_system_prompt(agent_id)
     available_tools = tools_registry.tools_for(agent_id)
     async for event in run_agent_loop(
@@ -755,6 +882,22 @@ def _decide_agent(
                 agent_hint,
             )
 
+    # Phase 2 wiki v1.4 patch — Hot-path follow-up : si le user envoie
+    # un message court qui suit un tour d'agent expert, on conserve cet
+    # agent sans appeler le LLM router (économie ~150-300 ms + stabilité
+    # conversationnelle). Cf. `router_hot_path.py`.
+    hot_path_decision = assistance_router_hot_path.should_skip_router_from_input(
+        agent_input,
+        agent_hint=agent_hint,
+    )
+    if hot_path_decision is not None:
+        logger.info(
+            "assistance.agent.hot_path_bypass conv=%s agent=%s",
+            conv_id,
+            hot_path_decision.agent_id,
+        )
+        return hot_path_decision
+
     try:
         return agent_router.classify(agent_input)
     except Exception as exc:  # noqa: BLE001 — best-effort, jamais propager
@@ -832,7 +975,154 @@ def start_chat_turn(
         "summarized_until_turn": (
             getattr(state, "summarized_until_turn", None) if state else None
         ),
+        # Phase 2 wiki v1.4 patch — slot « topic en cours », lu par le
+        # router pour stabiliser les follow-ups déictiques. NULL si
+        # aucun tool ancrant n'a encore été appelé sur cette conv.
+        "current_topic": _safe_get_current_topic(db, conv.id),
     }
+    # Cognitive Bot v4 — Lot 1+2 (2026-05-04). Avant `_decide_agent`,
+    # on calcule un cognitive_state PRÉLIMINAIRE :
+    #   * `emotional_intent` — précis car keyword-only sur user_message.
+    #   * `conversation_stage` — hérité du tour précédent (continuité).
+    #   * `trust_level` — recalculé avec emotion courante + prev_trust.
+    #   * `knowledge_level` — déduit de client_long_memory.
+    # Ce snapshot préliminaire est injecté dans `memory_state["cognitive_state"]`
+    # pour que le router LLM le voie (cf. `_build_router_messages`).
+    # Le state final sera **recalculé** après la décision pour intégrer
+    # le `decision_kind` du tour courant (qui peut faire transiter le
+    # stage : ask_clarification → CLARIFICATION, route_to advisor →
+    # RECOMMENDATION, etc.).
+    prev_cog_dict: Optional[dict] = None
+    prev_cog_state: Optional[CognitiveState] = None
+    try:
+        prev_cog_dict = _safe_load_previous_cognitive_state(db, conv.id)
+        prev_cog_state = (
+            CognitiveState.from_dict(prev_cog_dict)
+            if prev_cog_dict
+            else None
+        )
+        preliminary_cog_state = compute_cognitive_state(
+            user_message=user_content,
+            prev_state=prev_cog_state,
+            intent_classification=None,  # pas encore disponible
+            last_router_decision_kind=None,  # → continuité (prev_stage)
+            client_long_memory=memory_state_dict.get("client_long_memory"),
+            recent_turns=recent_turns,
+        )
+        memory_state_dict["cognitive_state"] = preliminary_cog_state.to_dict()
+    except Exception:  # noqa: BLE001 — best-effort, never kill a turn
+        logger.exception(
+            "assistance.cognitive_state.preliminary_failed conv=%s", conv.id
+        )
+
+    # Cognitive Bot v4 — Lot 7 (2026-05-04). Extraction discovery
+    # (multi-projet client + paramètres adossés). Best-effort, ne casse
+    # jamais un tour. Branchements :
+    #   * Lookup cross-conv des projets actifs de la personne (par
+    #     ``person_id``). Permet au bot de se souvenir de « achat
+    #     maison » même si le client revient 3 jours plus tard dans
+    #     une nouvelle conv.
+    #   * Extraction keyword (latence < 1 ms) sur le user_message courant.
+    #     LLM gating reste branchable en V2 (cf. CLIENT_DISCOVERY.md).
+    #   * Persistance des nouveaux projets / floating params dans la
+    #     transaction courante (commit délégué à _persist_user_turn).
+    #   * Détection switch (« parlons d'autre chose ») → pause des
+    #     autres projets actifs.
+    #   * Injection du bloc ``[CLIENT DISCOVERY]`` rendu en mémoire,
+    #     lu par le router et les agents experts via memory_state.
+    #   * Préparation du context block « previous_bot_turn » si user
+    #     message laconique (cf. should_embed_previous_bot_turn).
+    last_assistant_text: Optional[str] = None
+    for turn in reversed(recent_turns or []):
+        if isinstance(turn, dict) and turn.get("role") == "assistant":
+            last_assistant_text = str(turn.get("content") or "")
+            break
+    try:
+        active_projects = (
+            discovery_repo.list_active_projects_for_person(
+                db, person_id, limit=5
+            )
+            if person_id
+            else []
+        )
+
+        extraction = discovery_engine.extract_discovery_keyword_pass(
+            user_message=user_content,
+            last_assistant_text=last_assistant_text,
+            active_projects=active_projects,
+            current_turn=user_idx,
+        )
+
+        # Switch detection : on pause les autres projets actifs si signal
+        # explicite + un projet est nominativement présent dans extraction.
+        if person_id and discovery_engine.detect_project_switch_signal(
+            user_content
+        ):
+            keep_label: Optional[str] = None
+            if extraction.new_or_updated_projects:
+                keep_label = extraction.new_or_updated_projects[0].label
+            discovery_repo.pause_other_active_projects(
+                db, person_id=person_id, keep_label=keep_label
+            )
+
+        # Upsert des projets détectés. Best-effort : on log mais on ne
+        # bloque pas le tour si ça échoue.
+        if person_id:
+            for proj in extraction.new_or_updated_projects:
+                discovery_repo.upsert_project(
+                    db,
+                    person_id=person_id,
+                    conversation_id=conv.id,
+                    project=proj,
+                    current_turn=user_idx,
+                )
+            for fp in extraction.floating_parameters:
+                discovery_repo.add_floating_parameter(
+                    db,
+                    conversation_id=conv.id,
+                    person_id=person_id,
+                    floating=fp,
+                    current_turn=user_idx,
+                )
+
+        # Re-fetch les projets actifs APRÈS l'upsert pour le rendu prompt.
+        if person_id:
+            active_projects_post = (
+                discovery_repo.list_active_projects_for_person(
+                    db, person_id, limit=5
+                )
+            )
+            pending_floating = (
+                discovery_repo.list_pending_floating_parameters(
+                    db, conv.id, limit=5
+                )
+            )
+        else:
+            active_projects_post = []
+            pending_floating = []
+
+        rendered = discovery_engine.render_discovery_for_prompt(
+            active_projects=active_projects_post,
+            floating_parameters=pending_floating,
+        )
+        if rendered:
+            memory_state_dict["client_discovery"] = rendered
+
+        # Préparation du context block previous_bot (utilisé par les
+        # agents experts pour les messages laconiques) — c'est juste un
+        # texte qu'on pose dans memory_state ; agent_loop décide de
+        # l'injecter ou non.
+        prev_bot_block = build_previous_bot_context_block(
+            user_message=user_content,
+            last_assistant_text=last_assistant_text,
+        )
+        if prev_bot_block:
+            memory_state_dict["previous_bot_context_block"] = prev_bot_block
+    except Exception:  # noqa: BLE001 — best-effort, never kill a turn
+        logger.exception(
+            "assistance.client_discovery.failed conv=%s", conv.id
+        )
+
     agent_input = AgentInput(
         user_message=user_content,
         recent_turns=recent_turns,
@@ -847,6 +1137,32 @@ def start_chat_turn(
     )
     agent_input.router_metadata = decision
 
+    # Cognitive Bot v4 — Lot 1+2 (2026-05-04). FINALISATION du cognitive
+    # state à la lumière de la décision du router (qui peut faire
+    # transiter le stage). Calcul de l'`objective` déterministe à partir
+    # du cognitive_state final. Tous deux sont attachés à la decision et
+    # exposés côté `agent_input.memory_state` pour les agents experts
+    # (cf. `agent_loop._build_initial_messages`).
+    try:
+        final_cog_state = compute_cognitive_state(
+            user_message=user_content,
+            prev_state=prev_cog_state,
+            intent_classification=decision.intent_classification,
+            last_router_decision_kind=_decision_kind_label(decision),
+            client_long_memory=memory_state_dict.get("client_long_memory"),
+            recent_turns=recent_turns,
+        )
+        decision.cognitive_state = final_cog_state.to_dict()
+        memory_state_dict["cognitive_state"] = decision.cognitive_state
+
+        objective = compute_objective(final_cog_state)
+        decision.objective = objective.to_dict()
+        memory_state_dict["objective"] = decision.objective
+    except Exception:  # noqa: BLE001 — best-effort, never kill a turn
+        logger.exception(
+            "assistance.cognitive_state.finalize_failed conv=%s", conv.id
+        )
+
     logger.info(
         "assistance.agent.tour conv=%s turn=%s router=%s",
         conv.id,
@@ -854,7 +1170,127 @@ def start_chat_turn(
         json.dumps(decision.to_log_dict(), ensure_ascii=False),
     )
 
+    # Router v2 (2026-05-04) — on persiste la décision du router (avec
+    # intent_classification keyword) dans `assistance_agent_decisions`.
+    # Cela permet à la vue admin 3-colonnes (workflow trace, cf. v3.0)
+    # d'afficher pour chaque turn le `primary_tag` détecté + le scope
+    # level — utile pour debugger les misroutings.
+    # Cognitive Bot v4 (2026-05-04) — la persistance inclut aussi le
+    # ``cognitive_state`` calculé ci-dessus.
+    _persist_router_decision(
+        db=db,
+        conversation_id=conv.id,
+        message_id=user_msg.id,
+        decision=decision,
+        iteration=0,
+        client_discovery_block=memory_state_dict.get("client_discovery"),
+    )
+
     return conv, user_msg, agent_input, decision, user_idx
+
+
+def _persist_router_decision(
+    *,
+    db: Session,
+    conversation_id: UUID,
+    message_id: UUID,
+    decision: RouterDecision,
+    iteration: int = 0,
+    client_discovery_block: Optional[str] = None,
+) -> None:
+    """Persiste la décision du router dans `assistance_agent_decisions`
+    pour audit — best-effort, jamais d'exception remontée.
+
+    On encode :
+      * ``tool_name = "router_classify"`` — repère stable pour les
+        requêtes de la vue admin (filtre / agrégation).
+      * ``autonomy_level = "L0"`` — par convention le router est L0
+        (pas d'effet de bord, juste sélection d'agent).
+      * ``arguments_json`` = la classification keyword + le détail de
+        décision (decision_kind = route_to / ask_clarification /
+        redirect_off_topic + agent + confidence).
+      * ``result_summary`` = ``decision.reasoning`` (déjà tronqué).
+    """
+    try:
+        from services.assistance.agents.tools.shared import audit
+
+        intent = decision.intent_classification or {}
+        cog = decision.cognitive_state or {}
+        obj = decision.objective or {}
+
+        decision_kind = _decision_kind_label(decision)
+
+        args = {
+            "decision_kind": decision_kind,
+            "agent_id": decision.agent_id,
+            "confidence": round(decision.confidence, 3),
+            "intent_classification": intent or None,
+            # Cognitive Bot v4 (2026-05-04) — snapshot cognitif du tour
+            # (emotional_intent, conversation_stage, trust_level,
+            # knowledge_level). Lu au tour suivant via
+            # ``_safe_load_previous_cognitive_state`` pour assurer la
+            # continuité de l'état (notamment du trust_level qui s'érode
+            # / regagne tour par tour). Visible dans la vue admin
+            # 3-colonnes pour debug du comportement émotionnel du bot.
+            "cognitive_state": cog or None,
+            # Cognitive Bot v4 — Lot 2 (2026-05-04) — objectif déterministe
+            # du tour (primary_goal + next_best_action + stop_pushing +
+            # strategy_hint). Audit dans la vue admin pour valider que le
+            # bot a la bonne stratégie selon l'état émotionnel détecté.
+            "objective": obj or None,
+            # Cognitive Bot v4 — Lot 7 V1.2 (2026-05-05) — snapshot du
+            # bloc ``[CLIENT DISCOVERY]`` exactement tel qu'injecté au
+            # router LLM ce tour. Permet à l'admin de reconstituer "ce
+            # que le bot savait des projets/paramètres du client AU
+            # moment de cette décision" — la table
+            # ``assistance_client_discovery_projects`` ne stocke que
+            # l'état courant, pas l'historique des transitions.
+            # Best-effort : ``None`` si le client n'avait pas (encore)
+            # de projet identifié.
+            "client_discovery_block": client_discovery_block or None,
+        }
+
+        # Cognitive Bot v4 — Lot 6 (2026-05-04) — double-write des
+        # dimensions cognitives sur les colonnes natives (cf. migration
+        # 152). La JSONB ``arguments_json`` reste la source de vérité
+        # complète ; les colonnes natives accélèrent les agrégats funnel
+        # (cf. ``admin_cognitive_router``) et exposent les données aux
+        # outils tiers (Metabase / Retool). ``trust_level`` est coercé
+        # en float prudent (best-effort).
+        cognitive_columns: dict = {}
+        if cog:
+            cognitive_columns["emotional_intent"] = cog.get("emotional_intent")
+            cognitive_columns["conversation_stage"] = cog.get("conversation_stage")
+            cognitive_columns["knowledge_level"] = cog.get("knowledge_level")
+            tl_raw = cog.get("trust_level")
+            if tl_raw is not None:
+                try:
+                    cognitive_columns["trust_level"] = float(tl_raw)
+                except (TypeError, ValueError):
+                    cognitive_columns["trust_level"] = None
+        if obj:
+            cognitive_columns["primary_goal"] = obj.get("primary_goal")
+            cognitive_columns["next_best_action"] = obj.get("next_best_action")
+
+        audit.persist_decision(
+            db=db,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            agent_id="router",
+            iteration=int(iteration),
+            tool_name="router_classify",
+            autonomy_level="L0",
+            arguments=args,
+            reasoning_summary=decision.reasoning or "",
+            result_summary=None,
+            review_status="auto",
+            extra_columns=cognitive_columns or None,
+        )
+    except Exception:  # noqa: BLE001 — best-effort, ne casse jamais le tour
+        logger.exception(
+            "assistance.router.persist_decision_failed conv=%s",
+            conversation_id,
+        )
 
 
 def _build_choices_payload(
@@ -1149,6 +1585,7 @@ async def stream_assistant_turn(
         # level distincte de `metadata` car affichés directement par le
         # client, pas un audit).
         runtime_embeds: Optional[list[dict]] = None
+        runtime_output_judge: Optional[dict] = None
         try:
             async for event in event_iter:
                 if event.type == "delta":
@@ -1231,6 +1668,8 @@ async def stream_assistant_turn(
                         runtime_consultations = list(event.consultations)
                     if event.embeds:
                         runtime_embeds = list(event.embeds)
+                    if event.output_judge_metadata:
+                        runtime_output_judge = dict(event.output_judge_metadata)
                     # On n'émet pas le `done` ici — on le fera après la
                     # persistance avec un vrai `message_id`.
                     break
@@ -1290,6 +1729,69 @@ async def stream_assistant_turn(
             orchestration_meta["agent_chain"] = runtime_agent_chain
         if runtime_consultations:
             orchestration_meta["consultations"] = runtime_consultations
+        if runtime_output_judge:
+            orchestration_meta["product_pipeline_output_judge"] = (
+                runtime_output_judge
+            )
+
+        # Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05). AUTO-QCM
+        # post-process : si l'agent a streamé un texte contenant une
+        # liste numérotée + question, et qu'aucun QCM n'a été émis via
+        # `ask_user_question`, on promote la liste en QCM cliquable
+        # **annexé** au message texte. La décision est centralisée
+        # dans `decide_auto_qcm` qui applique tous les garde-fous (E) :
+        # kill-switch env, whitelist agents, anti-double-QCM,
+        # anti-redondance avec embeds CTA, lecture `[OBJECTIVE]`
+        # (`stop_pushing`, `next_best_action`).
+        # Le payload est :
+        #   * persisté dans `message_payload.auto_qcm` (rétro-compat
+        #     totale : `message_type` reste `text`, le client qui ne
+        #     sait pas lire `auto_qcm` voit juste le texte) ;
+        #   * exposé en SSE via la clé `done.auto_qcm` (atomique avec
+        #     le `done` final, pas de nouvel event mid-stream).
+        # Cf. `CLIENT_DISCOVERY.md` §4 + `docs/arquantix/COGNITIVE_BOT.md`
+        # §11 (Lot 7 V1.1 livré).
+        auto_qcm_payload: Optional[dict] = None
+        try:
+            auto_qcm_decision = decide_auto_qcm(
+                full_text=full_text,
+                agent_id=agent_used_persisted,
+                runtime_choices_present=(runtime_choices is not None),
+                runtime_embeds=runtime_embeds,
+                objective=getattr(decision, "objective", None),
+            )
+            if auto_qcm_decision.promoted and auto_qcm_decision.candidate:
+                cand = auto_qcm_decision.candidate
+                auto_qcm_payload = {
+                    "prompt": cand.prompt,
+                    "options": list(cand.options),
+                    "source": "auto_promoted",
+                    "truncated": bool(cand.truncated),
+                }
+                logger.info(
+                    "assistance.auto_qcm.emitted conv=%s agent=%s "
+                    "items=%d truncated=%s",
+                    conversation_id,
+                    agent_used_persisted,
+                    len(cand.options),
+                    cand.truncated,
+                )
+            else:
+                # On log les skips à `debug` pour ne pas spammer en prod
+                # mais permettre l'audit en dev.
+                logger.debug(
+                    "assistance.auto_qcm.skipped conv=%s agent=%s "
+                    "reason=%s",
+                    conversation_id,
+                    agent_used_persisted,
+                    auto_qcm_decision.skip_reason,
+                )
+        except Exception:  # noqa: BLE001 — best-effort, ne kill jamais le tour
+            logger.exception(
+                "assistance.auto_qcm.decide_failed conv=%s agent=%s",
+                conversation_id,
+                agent_used_persisted,
+            )
 
         if runtime_choices is not None:
             choices_payload = {
@@ -1312,12 +1814,14 @@ async def stream_assistant_turn(
             )
         else:
             text_payload: Optional[dict] = None
-            if orchestration_meta or runtime_embeds:
+            if orchestration_meta or runtime_embeds or auto_qcm_payload or runtime_output_judge:
                 text_payload = {}
                 if orchestration_meta:
                     text_payload["metadata"] = orchestration_meta
                 if runtime_embeds:
                     text_payload["embeds"] = runtime_embeds
+                if auto_qcm_payload:
+                    text_payload["auto_qcm"] = auto_qcm_payload
             msg = _persist_assistant_message(
                 db,
                 conversation_id=conversation_id,
@@ -1348,6 +1852,14 @@ async def stream_assistant_turn(
         }
         if runtime_embeds:
             done_payload["embeds"] = runtime_embeds
+        # Lot 7 V1.1 — atomicité : l'auto-QCM est livré dans le `done`
+        # final (pas un event mid-stream) pour éviter race conditions
+        # avec `ask_user_question` et garantir que le client reçoit
+        # texte + QCM exactement quand le tour est persisté en DB.
+        if auto_qcm_payload:
+            done_payload["auto_qcm"] = auto_qcm_payload
+        if runtime_output_judge:
+            done_payload["product_pipeline_output_judge"] = runtime_output_judge
         yield done_payload
 
         logger.info(

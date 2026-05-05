@@ -24,12 +24,22 @@ interface LanguageSwitcherProps {
    * `drawer-row` : ligne globe + libellé + chevron (menu mobile plein écran, type SwissBorg).
    */
   variant?: 'toolbar-icon' | 'drawer-row'
+  enabledLocales?: Locale[]
 }
 
 export function LanguageSwitcher({
   themeColor: _themeColor = 'dark',
   variant = 'toolbar-icon',
+  enabledLocales,
 }: LanguageSwitcherProps) {
+  const localesRaw = enabledLocales?.length ? enabledLocales : [...supportedLocales]
+  const locales = localesRaw.filter((l): l is Locale => isValidLocale(l))
+  const uniqueLocales = locales.filter((l, i) => locales.indexOf(l) === i)
+
+  if (uniqueLocales.length <= 1) {
+    return null
+  }
+
   const [storedLocale, setStoredLocale] = useLocale()
   const pathname = usePathname() ?? '/'
   const urlLocaleMatch = pathname.match(/^\/(fr|en|it)(?:\/|$)/)
@@ -91,7 +101,7 @@ export function LanguageSwitcher({
       role="listbox"
       aria-label={siteCommonCta(locale, 'language_switcher_aria')}
     >
-      {supportedLocales.map((loc) => (
+      {uniqueLocales.map((loc) => (
         <button
           key={loc}
           type="button"

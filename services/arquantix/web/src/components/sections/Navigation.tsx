@@ -19,7 +19,7 @@ import {
   navPaletteForLightSolidHeroBlend,
   useTransparentHeroNavBlend,
 } from '@/hooks/useHeroSecondaryNavBlend'
-import { defaultLocale, type Locale } from '@/config/locales'
+import { defaultLocale, supportedLocales, type Locale } from '@/config/locales'
 import {
   getActiveLocaleFromPathname,
   isPublicHrefExternalNavigation,
@@ -220,6 +220,8 @@ export interface NavigationProps extends React.HTMLAttributes<HTMLElement> {
    * même mécanique de blend au scroll que le hero secondary (sans photo).
    */
   overlayBlogHero?: boolean
+  showLanguageSwitcher?: boolean
+  publicLocales?: Locale[]
 }
 
 function inferActionStyle(item: MenuItem): 'outline' | 'text' | 'solid' {
@@ -252,9 +254,12 @@ export function Navigation({
   overlayHeroSecondary = false,
   overlayHeroHomeLight = false,
   overlayBlogHero = false,
+  showLanguageSwitcher = true,
+  publicLocales: publicLocalesProp,
   ...props
 }: NavigationProps) {
   const pathname = usePathname() ?? ''
+  const publicLocales = publicLocalesProp ?? [...supportedLocales]
   const navLocale = getActiveLocaleFromPathname(pathname)
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [scrolled, setScrolled] = React.useState(false)
@@ -364,19 +369,26 @@ export function Navigation({
     { id: 'fallback-vaults', label: siteCommonCta(navLocale, 'fallback_menu_vaults'), urlPath: '/vaults', order: 2, type: 'LINK' },
     { id: 'fallback-about', label: siteCommonCta(navLocale, 'fallback_menu_about'), urlPath: `/${navLocale}/about`, order: 3, type: 'LINK' },
     { id: 'fallback-contact', label: siteCommonCta(navLocale, 'fallback_menu_contact'), urlPath: `/${navLocale}/contact`, order: 4, type: 'LINK' },
-    {
-      id: 'fallback-lang',
-      label: siteCommonCta(navLocale, 'fallback_menu_lang'),
-      urlPath: '#',
-      order: 9,
-      type: 'LANGUAGE_SWITCHER',
-    },
+    ...(showLanguageSwitcher
+      ? ([
+          {
+            id: 'fallback-lang',
+            label: siteCommonCta(navLocale, 'fallback_menu_lang'),
+            urlPath: '#',
+            order: 9,
+            type: 'LANGUAGE_SWITCHER' as const,
+          },
+        ] satisfies MenuItem[])
+      : []),
     { id: 'fallback-login', label: siteCommonCta(navLocale, 'fallback_menu_login'), urlPath: '/login', order: 10, type: 'BUTTON', buttonStyle: 'outline' },
     { id: 'fallback-wallet', label: siteCommonCta(navLocale, 'fallback_menu_connect_wallet'), urlPath: '#', order: 11, type: 'BUTTON', buttonStyle: 'text' },
   ]
 
-  const menuItems =
+  const menuItemsRaw =
     propMenuItems && propMenuItems.length > 0 ? propMenuItems : fallbackMenuItems
+  const menuItems = showLanguageSwitcher
+    ? menuItemsRaw
+    : menuItemsRaw.filter((item) => item.type !== 'LANGUAGE_SWITCHER')
 
   const rawLinkItems = menuItems.filter((item) => (item.type || 'LINK') === 'LINK')
   const rawButtonItems = menuItems.filter((item) => (item.type || 'LINK') === 'BUTTON')
@@ -723,7 +735,11 @@ export function Navigation({
             {rightRailItems.map((item) =>
               item.type === 'LANGUAGE_SWITCHER' ? (
                 <span key={item.id} className="hidden md:contents">
-                  <LanguageSwitcher key={item.id} themeColor={langTheme} />
+                  <LanguageSwitcher
+                    key={item.id}
+                    themeColor={langTheme}
+                    enabledLocales={publicLocales}
+                  />
                 </span>
               ) : (
                 <span key={item.id} className="hidden md:contents">
@@ -782,7 +798,13 @@ export function Navigation({
                   isActive={isActive}
                   onNavigate={() => setMobileOpen(false)}
                 />
-                <LanguageSwitcher variant="drawer-row" themeColor="light" />
+                {showLanguageSwitcher ? (
+                  <LanguageSwitcher
+                    variant="drawer-row"
+                    themeColor="light"
+                    enabledLocales={publicLocales}
+                  />
+                ) : null}
               </div>
               {buttonItems.length > 1 ? (
                 <div className="shrink-0 border-t border-black/[0.06] bg-white px-4 py-4">

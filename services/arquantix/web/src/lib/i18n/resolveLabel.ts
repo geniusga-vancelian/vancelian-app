@@ -3,8 +3,8 @@
  * Fallback: requested locale -> default locale -> base label
  */
 
-export const SUPPORTED_LOCALES = ['fr', 'en', 'it'] as const
-export const DEFAULT_LOCALE = 'fr' as const
+export const SUPPORTED_LOCALES = ['en', 'fr', 'it'] as const
+export const DEFAULT_LOCALE = 'en' as const
 
 export type SupportedLocale = typeof SUPPORTED_LOCALES[number]
 
@@ -23,7 +23,7 @@ export interface ResolveLabelOptions {
 /**
  * Resolve label with fallback chain:
  * 1. Try requested locale
- * 2. Try default locale (fr)
+ * 2. Try default locale (site canonical, e.g. en)
  * 3. Fallback to base label
  */
 export function resolveLabelWithFallback({

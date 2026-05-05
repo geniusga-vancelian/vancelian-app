@@ -2,6 +2,7 @@ import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { pickLocaleForRootFromSources } from '@/lib/i18n/rootLocaleRedirect'
 import { ARQUANTIX_LOCALE_COOKIE } from '@/lib/i18n/locale-server'
+import { getSiteI18nSettingsCached } from '@/lib/i18n/siteI18nSettings'
 
 function pickLocaleQuery(
   searchParams: Record<string, string | string[] | undefined> | undefined,
@@ -23,10 +24,14 @@ export default async function RootPage({
 }) {
   const cookieStore = await cookies()
   const hdrs = await headers()
-  const locale = pickLocaleForRootFromSources({
-    localeQuery: pickLocaleQuery(searchParams),
-    cookieLocale: cookieStore.get(ARQUANTIX_LOCALE_COOKIE)?.value,
-    acceptLanguage: hdrs.get('accept-language'),
-  })
+  const site = await getSiteI18nSettingsCached()
+  const locale = site.multilingualEnabled
+    ? pickLocaleForRootFromSources({
+        localeQuery: pickLocaleQuery(searchParams),
+        cookieLocale: cookieStore.get(ARQUANTIX_LOCALE_COOKIE)?.value,
+        acceptLanguage: hdrs.get('accept-language'),
+        fallbackLocale: site.defaultLocale,
+      })
+    : site.defaultLocale
   redirect(`/${locale}`)
 }

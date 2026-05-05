@@ -1,8 +1,19 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { isValidLocale, type Locale } from '@/config/locales'
-import { pickLocaleForRootRedirect } from '@/lib/i18n/rootLocaleRedirect'
+import { defaultLocale, isValidLocale, type Locale } from '@/config/locales'
+import {
+  pickLocaleForRootRedirect,
+  replaceLeadingLocaleInPathname,
+} from '@/lib/i18n/rootLocaleRedirect'
 import { LEGACY_UNPREFIXED_TOP_LEVEL } from '@/lib/i18n/legacyUnprefixedPaths'
+import { ARQUANTIX_LOCALE_COOKIE } from '@/lib/i18n/locale-server'
+import {
+  ARQUANTIX_SITE_I18N_COOKIE,
+  encodeSiteI18nCookie,
+  parseSiteI18nCookie,
+  buildSiteI18nCookieSetOptions,
+  type SitePublicI18nPolicy,
+} from '@/lib/i18n/siteI18nPolicyCookie'
 
 /** Pathname pour le layout (nav / coquille). */
 function nextWithPathname(request: NextRequest) {
@@ -12,18 +23,48 @@ function nextWithPathname(request: NextRequest) {
 }
 
 /** Locale issue du segment d’URL `/{fr|en|it}/…` (prioritaire sur le cookie en layout). */
-function nextWithPathnameAndLocale(request: NextRequest, locale: Locale) {
+function nextWithPathnameAndLocale(request: NextRequest, locale: Locale, policy?: SitePublicI18nPolicy) {
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-arq-pathname', request.nextUrl.pathname)
   requestHeaders.set('x-arq-locale', locale)
-  return NextResponse.next({ request: { headers: requestHeaders } })
+  const res = NextResponse.next({ request: { headers: requestHeaders } })
+  if (policy) {
+    applyPublicI18nCookies(res, policy)
+  }
+  return res
+}
+
+async function fetchSitePublicI18nPolicy(request: NextRequest): Promise<SitePublicI18nPolicy> {
+  try {
+    const url = new URL('/api/site/i18n-policy', request.nextUrl.origin)
+    const res = await fetch(url, { cache: 'no-store' })
+    if (res.ok) {
+      const j = (await res.json()) as { multilingual?: boolean; defaultLocale?: string }
+      const multilingual = j.multilingual !== false
+      const d =
+        j.defaultLocale && isValidLocale(j.defaultLocale) ? j.defaultLocale : (defaultLocale as Locale)
+      return { multilingual, defaultLocale: d }
+    }
+  } catch {
+    /* repli cookie / défaut */
+  }
+  const parsed = parseSiteI18nCookie(request.cookies.get(ARQUANTIX_SITE_I18N_COOKIE)?.value)
+  if (parsed) return parsed
+  return { multilingual: true, defaultLocale: defaultLocale as Locale }
+}
+
+function applyPublicI18nCookies(res: NextResponse, p: SitePublicI18nPolicy) {
+  const o = buildSiteI18nCookieSetOptions()
+  res.cookies.set(ARQUANTIX_SITE_I18N_COOKIE, encodeSiteI18nCookie(p), o)
+  if (!p.multilingual) {
+    res.cookies.set(ARQUANTIX_LOCALE_COOKIE, '', { path: '/', maxAge: 0, sameSite: 'lax' })
+  }
 }
 
 /**
  * Phase 2B — SEO i18n :
- * - `/` → `/{locale}` (query > cookie > Accept-Language > défaut)
- * - `/{fr|en|it}` et `/{fr|en|it}/…` : header `x-arq-locale`
- * - ancienne URL CMS `/slug` (un segment) → `/fr/slug` (308), sauf routes legacy listées
+ * - `/` → locale selon politique (site monolingue = défaut admin, sans cookie préférence)
+ * - Préfixe `/{fr|en|it}/…` : si monolingue, redirection vers la locale par défaut
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -58,11 +99,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url, 307)
   }
 
-  /**
-   * L’admin vit uniquement sous `app/admin` (pas sous `app/[locale]/admin`).
-   * Une URL du type `/fr/admin/pages/article` ne matche aucune page → 404 silencieux.
-   * On normalise vers `/admin/…` (même cookie, même session).
-   */
   const adminAfterLocale = pathname.match(/^\/(fr|en|it)(\/admin(?:\/|$).*)$/)
   if (adminAfterLocale) {
     const url = request.nextUrl.clone()
@@ -95,29 +131,50 @@ export async function middleware(request: NextRequest) {
     return nextWithPathname(request)
   }
 
+  let lazyPolicy: SitePublicI18nPolicy | null = null
+  const getPolicy = async () => {
+    if (!lazyPolicy) {
+      lazyPolicy = await fetchSitePublicI18nPolicy(request)
+    }
+    return lazyPolicy
+  }
+
   if (pathname === '/' || pathname === '') {
-    const locale = pickLocaleForRootRedirect(request)
+    const p = await getPolicy()
+    const locale = pickLocaleForRootRedirect(request, p)
     const url = request.nextUrl.clone()
     url.pathname = `/${locale}`
     url.searchParams.delete('locale')
-    return NextResponse.redirect(url, 307)
+    const res = NextResponse.redirect(url, 307)
+    applyPublicI18nCookies(res, p)
+    return res
   }
 
-  // URLs CMS historiques sans préfixe : /slug → /fr/slug (locale par défaut du site)
   const singleSeg = pathname.match(/^\/([^/]+)\/?$/)
   if (singleSeg) {
     const seg = singleSeg[1]
     if (!isValidLocale(seg) && !LEGACY_UNPREFIXED_TOP_LEVEL.has(seg) && !seg.includes('.')) {
+      const p = await getPolicy()
       const url = request.nextUrl.clone()
-      url.pathname = `/fr/${seg}`
-      return NextResponse.redirect(url, 308)
+      url.pathname = `/${p.defaultLocale}/${seg}`
+      const res = NextResponse.redirect(url, 308)
+      applyPublicI18nCookies(res, p)
+      return res
     }
   }
 
-  // `/{fr|en|it}` ou `/{fr|en|it}/…` — délimite la locale (évite `/france` interprété comme `fr`).
   const localePrefix = pathname.match(/^\/(fr|en|it)(?:\/|$)/)
   if (localePrefix?.[1] && isValidLocale(localePrefix[1])) {
-    return nextWithPathnameAndLocale(request, localePrefix[1] as Locale)
+    const loc = localePrefix[1] as Locale
+    const p = await getPolicy()
+    if (!p.multilingual && loc !== p.defaultLocale) {
+      const url = request.nextUrl.clone()
+      url.pathname = replaceLeadingLocaleInPathname(pathname, p.defaultLocale)
+      const res = NextResponse.redirect(url, 308)
+      applyPublicI18nCookies(res, p)
+      return res
+    }
+    return nextWithPathnameAndLocale(request, loc, p)
   }
 
   const helpLegacyThree = pathname.match(/^\/help\/([^/]+)\/([^/]+)\/([^/]+)\/?$/)
@@ -154,7 +211,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/((?!api|_next/static|_next/image|favicon\\.ico).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon\\.ico).*)'],
 }

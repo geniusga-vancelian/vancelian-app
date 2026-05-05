@@ -12,6 +12,7 @@ import {
 import { VAULT_BUILDER_TEMPLATE } from '@/lib/catalog/packagedCatalogHelpers'
 import { ensureBlogCmsPresence } from '@/lib/cms/ensureBlogCmsPresence'
 import { ensurePrimaryMenuIdWithTx } from '@/lib/cms/ensurePrimaryMenuTx'
+import { defaultLocale } from '@/config/locales'
 
 const createPageSchema = z.object({
   template: z.string().default('homepage'),
@@ -172,14 +173,106 @@ export async function POST(request: NextRequest) {
     // If creating "home" page, create default sections
     // Only create sections for the "home" slug, not all homepage templates
     if (slug === 'home') {
-      const defaultLocale = 'fr'
-      const sectionsData = [
-        { key: 'hero', order: 0, schemaVersion: 'v1', data: { title: 'Bienvenue sur Arquantix', subtitle: 'Fractional Real Estate, Institutional Rigor.', ctaText: 'Découvrir', ctaLink: '/projects' } },
-        { key: 'features', order: 1, schemaVersion: 'v1', data: { title: 'Nos Avantages', items: [{ title: 'Service 1', description: 'Description du service 1' }] } },
-        { key: 'projects', order: 2, schemaVersion: 'v1', data: { title: 'Nos Projets', description: 'Découvrez nos opportunités', items: [] } },
-        { key: 'cta', order: 3, schemaVersion: 'v1', data: { title: 'Prêt à investir ?', description: '', primaryButtonText: 'Nous contacter', primaryButtonHref: '#contact' } },
-        { key: 'footer', order: 4, schemaVersion: 'v1', data: { copyright: '© 2026 Arquantix. Tous droits réservés.', links: [] } },
-      ]
+      const sectionsData =
+        defaultLocale === 'en'
+          ? [
+              {
+                key: 'hero',
+                order: 0,
+                schemaVersion: 'v1',
+                data: {
+                  title: 'Welcome to Arquantix',
+                  subtitle: 'Fractional Real Estate, Institutional Rigor.',
+                  ctaText: 'Discover',
+                  ctaLink: '/projects',
+                },
+              },
+              {
+                key: 'features',
+                order: 1,
+                schemaVersion: 'v1',
+                data: {
+                  title: 'Why choose us',
+                  items: [{ title: 'Service 1', description: 'Service 1 description' }],
+                },
+              },
+              {
+                key: 'projects',
+                order: 2,
+                schemaVersion: 'v1',
+                data: {
+                  title: 'Our projects',
+                  description: 'Explore our opportunities',
+                  items: [],
+                },
+              },
+              {
+                key: 'cta',
+                order: 3,
+                schemaVersion: 'v1',
+                data: {
+                  title: 'Ready to invest?',
+                  description: '',
+                  primaryButtonText: 'Contact us',
+                  primaryButtonHref: '#contact',
+                },
+              },
+              {
+                key: 'footer',
+                order: 4,
+                schemaVersion: 'v1',
+                data: { copyright: '© 2026 Arquantix. All rights reserved.', links: [] },
+              },
+            ]
+          : [
+              {
+                key: 'hero',
+                order: 0,
+                schemaVersion: 'v1',
+                data: {
+                  title: 'Bienvenue sur Arquantix',
+                  subtitle: 'Fractional Real Estate, Institutional Rigor.',
+                  ctaText: 'Découvrir',
+                  ctaLink: '/projects',
+                },
+              },
+              {
+                key: 'features',
+                order: 1,
+                schemaVersion: 'v1',
+                data: {
+                  title: 'Nos Avantages',
+                  items: [{ title: 'Service 1', description: 'Description du service 1' }],
+                },
+              },
+              {
+                key: 'projects',
+                order: 2,
+                schemaVersion: 'v1',
+                data: {
+                  title: 'Nos Projets',
+                  description: 'Découvrez nos opportunités',
+                  items: [],
+                },
+              },
+              {
+                key: 'cta',
+                order: 3,
+                schemaVersion: 'v1',
+                data: {
+                  title: 'Prêt à investir ?',
+                  description: '',
+                  primaryButtonText: 'Nous contacter',
+                  primaryButtonHref: '#contact',
+                },
+              },
+              {
+                key: 'footer',
+                order: 4,
+                schemaVersion: 'v1',
+                data: { copyright: '© 2026 Arquantix. Tous droits réservés.', links: [] },
+              },
+            ]
 
       for (const sectionData of sectionsData) {
         const section = await prisma.section.create({

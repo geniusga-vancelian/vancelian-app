@@ -73,6 +73,15 @@ from services.assistance import router as assistance_router
 from services.assistance.admin_knowledge_router import (
     admin_router as assistance_admin_knowledge_router,
 )
+from services.assistance.admin_conversations_router import (
+    admin_conversations_router as assistance_admin_conversations_router,
+)
+from services.assistance.admin_cognitive_router import (
+    admin_cognitive_router as assistance_admin_cognitive_router,
+)
+from services.assistance.admin_client_discovery_router import (
+    admin_client_discovery_router as assistance_admin_client_discovery_router,
+)
 from services.migrations.routes import router as migrations_router
 from services.portfolio_engine import router as portfolio_engine_router
 from services.customers_admin import customers_admin_router
@@ -191,6 +200,9 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(chatbot_epargne_router)
     app.include_router(assistance_router)
     app.include_router(assistance_admin_knowledge_router)
+    app.include_router(assistance_admin_conversations_router)
+    app.include_router(assistance_admin_cognitive_router)
+    app.include_router(assistance_admin_client_discovery_router)
     app.include_router(migrations_router)
     app.include_router(portfolio_engine_router)
     app.include_router(customers_admin_router)

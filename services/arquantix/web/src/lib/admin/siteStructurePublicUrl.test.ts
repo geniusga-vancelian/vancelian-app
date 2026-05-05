@@ -58,7 +58,7 @@ describe('siteStructurePublicUrl', () => {
         node({ slug: 'offre-x', urlPath: '/projects/offre-x', template: VAULT_BUILDER_TEMPLATE }),
         '',
       ),
-      '/fr/projects/offre-x',
+      '/en/projects/offre-x',
     )
   })
 

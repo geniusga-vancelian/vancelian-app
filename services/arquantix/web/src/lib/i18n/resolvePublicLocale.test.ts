@@ -28,12 +28,12 @@ test('sans cookie, utilise searchParams valide', () => {
   assert.equal(locale, 'en')
 })
 
-test('sans cookie ni query valide → fr', () => {
+test('sans cookie ni query valide → en (défaut site)', () => {
   const locale = resolvePublicLocale({
     cookieStore: mockStore({}),
     searchParams: { locale: 'xx' },
   })
-  assert.equal(locale, 'fr')
+  assert.equal(locale, 'en')
 })
 
 test('searchParams locale en tableau', () => {

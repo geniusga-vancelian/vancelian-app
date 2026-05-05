@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Trash2 } from 'lucide-react'
-import { supportedLocales, type Locale } from '@/config/locales'
+import { defaultLocale as configDefaultLocale, supportedLocales, type Locale } from '@/config/locales'
 import { SectionEditor } from '@/components/admin/SectionEditor'
 import { LocaleCompletenessStrip } from '@/components/admin/LocaleCompletenessStrip'
 import { toastSuccess, toastError } from '@/lib/admin/toast'
@@ -39,8 +39,8 @@ export function SiteCommonModuleEditor({ moduleId }: { moduleId: string }) {
   const [moduleMeta, setModuleMeta] = useState<CommonModuleEntryStored | null>(null)
   const [sectionTypeLabel, setSectionTypeLabel] = useState('')
   const [label, setLabel] = useState('')
-  const [defaultLocale, setDefaultLocale] = useState<Locale>('fr')
-  const [activeLocale, setActiveLocale] = useState<Locale>('fr')
+  const [defaultLocale, setDefaultLocale] = useState<Locale>(configDefaultLocale)
+  const [activeLocale, setActiveLocale] = useState<Locale>(configDefaultLocale)
   /** Médias, couleurs, options d’affichage — partagés. */
   const [design, setDesign] = useState<Record<string, unknown>>({})
   /** Textes / liens traduisibles par langue. */
@@ -68,7 +68,7 @@ export function SiteCommonModuleEditor({ moduleId }: { moduleId: string }) {
         en: deepClone((m.locales.en ?? {}) as Record<string, unknown>),
         it: deepClone((m.locales.it ?? {}) as Record<string, unknown>),
       })
-      setActiveLocale('fr')
+      setActiveLocale(m.defaultLocale ?? configDefaultLocale)
     } catch (e) {
       toastError(e instanceof Error ? e.message : 'Erreur')
       router.push('/admin/pages')

@@ -9,10 +9,15 @@ import { resolvePublicLocale } from '@/lib/i18n/resolvePublicLocale'
 export function resolveLayoutLocale(options: {
   pathLocaleHeader: string | null | undefined
   cookieStore: { get: (name: string) => { value?: string } | undefined }
+  fallbackLocale?: Locale
 }): Locale {
   const raw = options.pathLocaleHeader?.trim()
   if (raw && isValidLocale(raw)) {
     return raw
   }
-  return resolvePublicLocale({ cookieStore: options.cookieStore, searchParams: undefined }) as Locale
+  return resolvePublicLocale({
+    cookieStore: options.cookieStore,
+    searchParams: undefined,
+    fallbackLocale: options.fallbackLocale,
+  }) as Locale
 }

@@ -12,7 +12,7 @@ function pickQueryLocale(
 
 /**
  * Locale pour pages publiques et preview CMS.
- * Priorité par défaut : segment d’URL (`urlLocale`) → cookie `arquantix-locale` → `searchParams.locale` → `defaultLocale`.
+ * Priorité par défaut : segment d’URL (`urlLocale`) → cookie `arquantix-locale` → `searchParams.locale` → `fallbackLocale` / `defaultLocale`.
  *
  * Avec `preferQueryLocaleOverCookie`, `?locale=` passe **avant** le cookie (iframe d’aperçu admin
  * où l’URL est la source de vérité, sinon le cookie navigateur fige la langue).
@@ -23,6 +23,8 @@ export function resolvePublicLocale(options: {
   /** Ex. `/fr/projects/slug` → `fr` — doit primer sur cookie pour cohérence barre d’adresse. */
   urlLocale?: string | null
   preferQueryLocaleOverCookie?: boolean
+  /** Locale canonique site (ex. `AppSettings.default_locale`) — primée sur le défaut compile-time. */
+  fallbackLocale?: Locale
 }): Locale {
   const q = pickQueryLocale(options.searchParams ?? undefined)
 
@@ -43,5 +45,5 @@ export function resolvePublicLocale(options: {
     return q
   }
 
-  return defaultLocale
+  return options.fallbackLocale ?? defaultLocale
 }

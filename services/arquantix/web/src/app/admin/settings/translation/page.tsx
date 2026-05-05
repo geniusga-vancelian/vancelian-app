@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supportedLocales, defaultLocale, type Locale } from '@/config/locales'
+import { supportedLocales, defaultLocale, isValidLocale, type Locale } from '@/config/locales'
 import { toastSuccess, toastError } from '@/lib/admin/toast'
 import { X, Plus } from 'lucide-react'
 
@@ -12,13 +12,20 @@ interface TranslationGlossary {
   preferred?: Array<{ from: string; to: string }>
 }
 
+const LOCALE_LABEL: Record<Locale, string> = {
+  en: 'English',
+  fr: 'Français',
+  it: 'Italiano',
+}
+
 export default function AdminTranslationSettingsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [settings, setSettings] = useState({
-    supportedLocales: supportedLocales as readonly Locale[],
+    supportedLocales: [...supportedLocales] as Locale[],
     defaultLocale: defaultLocale as Locale,
+    multilingualEnabled: true,
     translationGlossary: null as TranslationGlossary | null,
   })
 
@@ -27,7 +34,7 @@ export default function AdminTranslationSettingsPage() {
   const [newPreferredTo, setNewPreferredTo] = useState('')
 
   useEffect(() => {
-    fetchSettings()
+    void fetchSettings()
   }, [])
 
   const fetchSettings = async () => {
@@ -42,9 +49,15 @@ export default function AdminTranslationSettingsPage() {
       }
 
       const data = await response.json()
+      const rawSupported = (data.settings.supportedLocales || supportedLocales) as string[]
+      const parsedSupported = rawSupported.filter((l): l is Locale => isValidLocale(l))
+      const dl = isValidLocale(data.settings.defaultLocale)
+        ? data.settings.defaultLocale
+        : defaultLocale
       setSettings({
-        supportedLocales: data.settings.supportedLocales || supportedLocales,
-        defaultLocale: data.settings.defaultLocale || defaultLocale,
+        supportedLocales: parsedSupported.length ? parsedSupported : [...supportedLocales],
+        defaultLocale: dl,
+        multilingualEnabled: data.settings.multilingualEnabled !== false,
         translationGlossary: data.settings.translationGlossary || null,
       })
     } catch (error) {
@@ -55,7 +68,30 @@ export default function AdminTranslationSettingsPage() {
     }
   }
 
+  const toggleLocale = (loc: Locale) => {
+    setSettings((prev) => {
+      const has = prev.supportedLocales.includes(loc)
+      let next = has
+        ? prev.supportedLocales.filter((l) => l !== loc)
+        : [...prev.supportedLocales, loc]
+      next = [...new Set(next)].filter(isValidLocale)
+      if (next.length === 0) {
+        toastError('At least one locale is required')
+        return prev
+      }
+      let def = prev.defaultLocale
+      if (!next.includes(def)) {
+        def = next[0]
+      }
+      return { ...prev, supportedLocales: next, defaultLocale: def }
+    })
+  }
+
   const handleSave = async () => {
+    if (!settings.supportedLocales.includes(settings.defaultLocale)) {
+      toastError('Default language must be one of the enabled locales')
+      return
+    }
     setSaving(true)
     try {
       const response = await fetch('/api/admin/settings/translation', {
@@ -64,6 +100,7 @@ export default function AdminTranslationSettingsPage() {
         body: JSON.stringify({
           supportedLocales: settings.supportedLocales,
           defaultLocale: settings.defaultLocale,
+          multilingualEnabled: settings.multilingualEnabled,
           translationGlossary: settings.translationGlossary,
         }),
       })
@@ -75,8 +112,9 @@ export default function AdminTranslationSettingsPage() {
 
       toastSuccess('Saved')
       await fetchSettings()
-    } catch (error: any) {
-      toastError(error.message || 'Failed to save settings')
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save settings'
+      toastError(message)
     } finally {
       setSaving(false)
     }
@@ -159,11 +197,13 @@ export default function AdminTranslationSettingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Translation Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Configure translation glossary and settings</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Canonical copy is English-first; machine translation uses the default language as
+            source. Disable multilingual to hide the public language switcher.
+          </p>
         </div>
         <Link
           href="/admin/settings"
@@ -173,39 +213,82 @@ export default function AdminTranslationSettingsPage() {
         </Link>
       </div>
 
-      {/* Supported Locales */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold mb-4">Supported Locales</h2>
-        <div className="flex flex-wrap gap-2">
-          {supportedLocales.map((locale) => (
-            <span
-              key={locale}
-              className={`px-3 py-1 rounded-full text-sm ${
-                settings.supportedLocales.includes(locale)
-                  ? 'bg-indigo-100 text-indigo-800'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {locale.toUpperCase()}
-            </span>
-          ))}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
+        <h2 className="text-xl font-semibold">Site languages</h2>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={settings.multilingualEnabled}
+              onChange={(e) =>
+                setSettings((s) => ({ ...s, multilingualEnabled: e.target.checked }))
+              }
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Multilingual public site (language switcher in header)
+          </label>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Supported locales are configured in code. Default: {settings.defaultLocale.toUpperCase()}
+        <p className="text-xs text-gray-500">
+          When off, the globe control is hidden on the public site (desktop and mobile drawer).
         </p>
+
+        <div>
+          <span className="block text-sm font-medium text-gray-700 mb-2">Enabled locales</span>
+          <div className="flex flex-wrap gap-3">
+            {supportedLocales.map((locale) => (
+              <label
+                key={locale}
+                className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={settings.supportedLocales.includes(locale)}
+                  onChange={() => toggleLocale(locale)}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                {LOCALE_LABEL[locale]} ({locale.toUpperCase()})
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="default-locale" className="block text-sm font-medium text-gray-700 mb-2">
+            Default (canonical) language
+          </label>
+          <select
+            id="default-locale"
+            value={settings.defaultLocale}
+            onChange={(e) =>
+              setSettings((s) => ({
+                ...s,
+                defaultLocale: e.target.value as Locale,
+              }))
+            }
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            {settings.supportedLocales.map((loc) => (
+              <option key={loc} value={loc}>
+                {LOCALE_LABEL[loc]} ({loc})
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-2">
+            CMS copy operations and translation sources use this locale as primary.
+          </p>
+        </div>
       </div>
 
-      {/* Glossary */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-xl font-semibold mb-4">Translation Glossary</h2>
 
-        {/* Brand Terms */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Do Not Translate (Brand Terms)
           </label>
           <p className="text-xs text-gray-500 mb-3">
-            Terms that should remain unchanged during translation (e.g., "Arquantix", "Vancelian")
+            Terms that should remain unchanged during translation (e.g., &quot;Arquantix&quot;)
           </p>
           <div className="flex gap-2 mb-3">
             <input
@@ -217,6 +300,7 @@ export default function AdminTranslationSettingsPage() {
               className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
             <button
+              type="button"
               onClick={addBrandTerm}
               className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
             >
@@ -231,6 +315,7 @@ export default function AdminTranslationSettingsPage() {
               >
                 {term.term}
                 <button
+                  type="button"
                   onClick={() => removeBrandTerm(index)}
                   className="text-green-600 hover:text-green-800"
                 >
@@ -241,13 +326,12 @@ export default function AdminTranslationSettingsPage() {
           </div>
         </div>
 
-        {/* Preferred Translations */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Preferred Translations
           </label>
           <p className="text-xs text-gray-500 mb-3">
-            Force specific translations (e.g., "vault" → "coffre")
+            Force specific translations (source → target wording hints for the model)
           </p>
           <div className="flex gap-2 mb-3">
             <input
@@ -265,6 +349,7 @@ export default function AdminTranslationSettingsPage() {
               className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
             <button
+              type="button"
               onClick={addPreferred}
               className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
             >
@@ -282,6 +367,7 @@ export default function AdminTranslationSettingsPage() {
                   <span className="font-medium">{pref.to}</span>
                 </span>
                 <button
+                  type="button"
                   onClick={() => removePreferred(index)}
                   className="text-blue-600 hover:text-blue-800"
                 >
@@ -293,9 +379,9 @@ export default function AdminTranslationSettingsPage() {
         </div>
       </div>
 
-      {/* Save Button */}
       <div className="flex justify-end">
         <button
+          type="button"
           onClick={handleSave}
           disabled={saving}
           className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
@@ -306,12 +392,3 @@ export default function AdminTranslationSettingsPage() {
     </div>
   )
 }
-
-
-
-
-
-
-
-
-

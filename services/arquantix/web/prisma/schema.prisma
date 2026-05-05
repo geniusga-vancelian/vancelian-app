@@ -72,11 +72,12 @@ model AppRuntimeSettings {
 }
 
 model AppSettings {
-  id                  String   @id
-  supportedLocales    String   @default("[\"fr\",\"en\",\"ar\",\"it\"]") @map("supported_locales")
-  defaultLocale       String   @default("fr") @map("default_locale")
-  translationGlossary Json?    @map("translation_glossary")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                   String   @id
+  supportedLocales     String   @default("[\"en\",\"fr\",\"it\"]") @map("supported_locales")
+  defaultLocale        String   @default("en") @map("default_locale")
+  multilingualEnabled  Boolean  @default(true) @map("multilingual_enabled")
+  translationGlossary  Json?    @map("translation_glossary")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
 }

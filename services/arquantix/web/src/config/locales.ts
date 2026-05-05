@@ -1,5 +1,6 @@
-export const defaultLocale = 'fr'
-export const supportedLocales = ['fr', 'en', 'it'] as const
+/** Locale canonique / fallback compile-time (alignée avec `AppSettings.default_locale` en prod). */
+export const defaultLocale = 'en'
+export const supportedLocales = ['en', 'fr', 'it'] as const
 
 export type Locale = (typeof supportedLocales)[number]
 
@@ -13,4 +14,3 @@ export function getLocaleOrDefault(locale: string | null | undefined): Locale {
   }
   return defaultLocale
 }
-

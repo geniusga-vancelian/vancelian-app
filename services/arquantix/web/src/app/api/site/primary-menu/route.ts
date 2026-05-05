@@ -4,12 +4,14 @@ import { type Locale, isValidLocale } from '@/config/locales'
 import { getPublicLocaleFromPathname } from '@/lib/i18n/localizedExclusiveOfferPath'
 import { resolvePublicLocale } from '@/lib/i18n/resolvePublicLocale'
 import { getPrimaryMenu } from '@/lib/menu/getPrimaryMenu'
+import { getSiteI18nSettingsCached, shouldShowPublicLanguageSwitcher } from '@/lib/i18n/siteI18nSettings'
 
 export async function GET(request: NextRequest) {
   try {
     const path = request.nextUrl.searchParams.get('path')
     const localeParam = request.nextUrl.searchParams.get('locale')
     const cookieStore = await cookies()
+    const site = await getSiteI18nSettingsCached()
 
     const urlLocale = path ? getPublicLocaleFromPathname(path) : null
     const requestedLocale =
@@ -19,9 +21,12 @@ export async function GET(request: NextRequest) {
             cookieStore,
             searchParams: undefined,
             urlLocale,
+            fallbackLocale: site.defaultLocale,
           })
 
-    const menu = await getPrimaryMenu(requestedLocale)
+    const menu = await getPrimaryMenu(requestedLocale, {
+      languageSwitcherEnabled: shouldShowPublicLanguageSwitcher(site),
+    })
     return NextResponse.json({ items: menu })
   } catch {
     return NextResponse.json({ items: [] })

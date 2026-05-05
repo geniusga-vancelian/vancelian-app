@@ -11,6 +11,8 @@ import { figmaDsSiteShellLightClassName } from '@/components/design-system/extra
 export type SiteChromeProps = {
   menuItems: MenuItem[]
   initialNav: NavShellState
+  showLanguageSwitcher?: boolean
+  publicLocales?: Locale[]
   children: React.ReactNode
 }
 
@@ -25,7 +27,13 @@ function isHomePath(path: string): boolean {
   return p === '/fr' || p === '/en' || p === '/it'
 }
 
-export function SiteChrome({ menuItems, initialNav, children }: SiteChromeProps) {
+export function SiteChrome({
+  menuItems,
+  initialNav,
+  showLanguageSwitcher = true,
+  publicLocales,
+  children,
+}: SiteChromeProps) {
   const pathname = usePathname() ?? ''
   const isAdmin = pathname.startsWith('/admin')
   const isIntegratedNavSectionDemo =
@@ -136,6 +144,8 @@ export function SiteChrome({ menuItems, initialNav, children }: SiteChromeProps)
         overlayHeroSecondary={overlayHeroSecondary}
         overlayHeroHomeLight={overlayHeroHomeLight}
         overlayBlogHero={overlayBlogHero}
+        showLanguageSwitcher={showLanguageSwitcher}
+        publicLocales={publicLocales}
       />
       <div className="flex min-h-0 flex-col">{children}</div>
     </div>

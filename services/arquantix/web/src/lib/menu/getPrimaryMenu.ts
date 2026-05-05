@@ -37,6 +37,23 @@ export function injectLanguageSwitcherIfMissing(items: MenuItem[], locale: Local
   ]
 }
 
+function applyLanguageSwitcherPolicy(
+  items: MenuItem[],
+  locale: Locale,
+  languageSwitcherEnabled: boolean,
+): MenuItem[] {
+  const stripped = items.filter((i) => i.type !== 'LANGUAGE_SWITCHER')
+  if (!languageSwitcherEnabled) {
+    return stripped
+  }
+  return injectLanguageSwitcherIfMissing(stripped, locale)
+}
+
+export type GetPrimaryMenuOptions = {
+  /** Faux : retire LANGUAGE_SWITCHER (DB + fallback injecté). */
+  languageSwitcherEnabled?: boolean
+}
+
 /**
  * Pages Vault Builder = détail produit sous `/{locale}/projects/{slug}`.
  * Elles ne doivent pas apparaître comme entrées du menu primaire (hub « Projets » + cartes suffisent).
@@ -76,10 +93,14 @@ export interface MenuItem {
 /**
  * Get primary menu with enabled items ordered
  * Returns empty array if menu not found or no enabled items
- * @param locale - Locale for label resolution (default: 'fr')
+ * @param locale - Locale for label resolution (default: site default)
  */
-export async function getPrimaryMenu(locale?: string): Promise<MenuItem[]> {
+export async function getPrimaryMenu(
+  locale?: string,
+  options?: GetPrimaryMenuOptions,
+): Promise<MenuItem[]> {
   const requestedLocale = (locale ? getLocaleOrDefault(locale) : DEFAULT_LOCALE) as Locale
+  const languageSwitcherEnabled = options?.languageSwitcherEnabled !== false
 
   try {
     try {
@@ -103,7 +124,7 @@ export async function getPrimaryMenu(locale?: string): Promise<MenuItem[]> {
     })
 
     if (!menu || menu.menuItems.length === 0) {
-      return injectLanguageSwitcherIfMissing(
+      return applyLanguageSwitcherPolicy(
         [
           {
             id: 'fallback-home',
@@ -116,6 +137,7 @@ export async function getPrimaryMenu(locale?: string): Promise<MenuItem[]> {
           },
         ],
         requestedLocale,
+        languageSwitcherEnabled,
       )
     }
 
@@ -300,7 +322,7 @@ export async function getPrimaryMenu(locale?: string): Promise<MenuItem[]> {
       return path === '/blog' || path.endsWith('/blog')
     })
     if (hasBlogEntry) {
-      return injectLanguageSwitcherIfMissing(normalizedItems, requestedLocale)
+      return applyLanguageSwitcherPolicy(normalizedItems, requestedLocale, languageSwitcherEnabled)
     }
 
     const blogPage = await prisma.page.findUnique({
@@ -308,11 +330,11 @@ export async function getPrimaryMenu(locale?: string): Promise<MenuItem[]> {
       select: { slug: true, parentId: true },
     })
     if (!blogPage || blogPage.parentId !== null) {
-      return injectLanguageSwitcherIfMissing(normalizedItems, requestedLocale)
+      return applyLanguageSwitcherPolicy(normalizedItems, requestedLocale, languageSwitcherEnabled)
     }
 
     const maxOrder = normalizedItems.reduce((max, item) => Math.max(max, item.order), 0)
-    return injectLanguageSwitcherIfMissing(
+    return applyLanguageSwitcherPolicy(
       [
         ...normalizedItems,
         {
@@ -326,10 +348,11 @@ export async function getPrimaryMenu(locale?: string): Promise<MenuItem[]> {
         },
       ],
       requestedLocale,
+      languageSwitcherEnabled,
     )
   } catch (error) {
     console.error('Error fetching primary menu:', error)
-    return injectLanguageSwitcherIfMissing(
+    return applyLanguageSwitcherPolicy(
       [
         {
           id: 'fallback-home',
@@ -342,6 +365,7 @@ export async function getPrimaryMenu(locale?: string): Promise<MenuItem[]> {
         },
       ],
       requestedLocale,
+      languageSwitcherEnabled,
     )
   }
 }
