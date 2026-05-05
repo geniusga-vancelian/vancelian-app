@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { Locale } from '@/config/locales'
-import { defaultLocale, isValidLocale, supportedLocales } from '@/config/locales'
+import { defaultLocale, getLocaleOrDefault, isValidLocale, supportedLocales } from '@/config/locales'
 
 type Ctx = {
   locale: Locale
@@ -49,7 +49,7 @@ export function AdminEditingLocaleProvider({ children }: { children: ReactNode }
         }
         const s = data.settings
         const sup = (s.supportedLocales || []).filter((x): x is Locale => isValidLocale(x))
-        const dl = isValidLocale(s.defaultLocale) ? s.defaultLocale : defaultLocale
+        const dl = getLocaleOrDefault(s.defaultLocale)
         const multi = s.multilingualEnabled !== false
         const allowed: Locale[] = !multi ? [dl] : sup.length > 0 ? sup : [dl]
 
