@@ -72,7 +72,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from services.assistance.agents.repositories import wiki_repo
+from services.assistance.agents.repositories import wiki_repo, wiki_llm_retriever
 from services.assistance.agents.tools.contracts import ToolContext, ToolSpec
 
 logger = logging.getLogger(__name__)
@@ -179,6 +179,70 @@ def execute(
             "error": "unknown_category",
         }
 
+    # ── Phase 2 wiki v1.4 patch 3 — Karpathy LLM-as-retriever ──
+    # On essaie d'abord le retriever LLM (gère mieux FR↔EN et la
+    # sémantique "vue d'ensemble"). Si désactivé via env var, ou s'il
+    # échoue, ou s'il retourne 0 slug exploitable, on retombe sur le
+    # scoring keyword historique. Le retour du LLM peut aussi inclure
+    # un sentinel `__use_sql_catalog__` qui hint le caller vers la
+    # fiche SQL `vancelian_product_catalog`.
+    llm_result = wiki_llm_retriever.select_pages_via_llm(
+        question=safe_question,
+        top_k=safe_top_k,
+        category=safe_category,
+    )
+    if llm_result is not None:
+        # Cas spécial : sentinel SQL catalog hint.
+        if llm_result.get("via") == "llm_sql_hint":
+            logger.info(
+                "select_wiki_pages.via_sql_catalog_hint agent=%s conv=%s "
+                "q_len=%d",
+                ctx.agent_id,
+                ctx.conversation_id,
+                len(safe_question),
+            )
+            return {
+                "matches": [],
+                "total_returned": 0,
+                "filtered_by_category": safe_category,
+                "wiki_total_pages": llm_result.get("wiki_total_pages")
+                or wiki_repo.total_pages_loaded(),
+                "use_sql_catalog": True,
+                "use_sql_catalog_slug": llm_result.get("use_sql_catalog_slug"),
+                "selection_reason": llm_result.get("selection_reason"),
+                "hint": (
+                    "Pour cette question type 'gamme / catalogue / "
+                    "produits Vancelian', appelle "
+                    "`read_product_knowledge('vancelian_product_catalog')`"
+                    " — c'est la fiche SQL canonique qui fait autorité."
+                ),
+                "via": "llm_sql_hint",
+            }
+        # Cas nominal LLM avec slugs résolus.
+        logger.info(
+            "select_wiki_pages.via_llm agent=%s conv=%s q_len=%d "
+            "top_k=%d category=%s returned=%d",
+            ctx.agent_id,
+            ctx.conversation_id,
+            len(safe_question),
+            safe_top_k,
+            safe_category,
+            llm_result.get("total_returned", 0),
+        )
+        # On respecte top_k côté caller : le retriever a son propre cap
+        # mais peut renvoyer plus que `safe_top_k` si l'env override.
+        matches = (llm_result.get("matches") or [])[:safe_top_k]
+        return {
+            "matches": matches,
+            "total_returned": len(matches),
+            "filtered_by_category": safe_category,
+            "wiki_total_pages": llm_result.get("wiki_total_pages")
+            or wiki_repo.total_pages_loaded(),
+            "selection_reason": llm_result.get("selection_reason"),
+            "via": "llm",
+        }
+
+    # Fallback keyword scoring (legacy ou LLM disable / failed).
     try:
         scored = wiki_repo.select_pages(
             question=safe_question,
@@ -204,7 +268,7 @@ def execute(
         for page, score, matched_terms in scored
     ]
     logger.info(
-        "select_wiki_pages.ok agent=%s conv=%s q_len=%d top_k=%d "
+        "select_wiki_pages.via_keyword agent=%s conv=%s q_len=%d top_k=%d "
         "category=%s returned=%d",
         ctx.agent_id,
         ctx.conversation_id,
@@ -218,4 +282,5 @@ def execute(
         "total_returned": len(matches),
         "filtered_by_category": safe_category,
         "wiki_total_pages": wiki_repo.total_pages_loaded(),
+        "via": "keyword",
     }

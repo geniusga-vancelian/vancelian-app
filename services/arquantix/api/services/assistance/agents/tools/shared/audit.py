@@ -156,6 +156,7 @@ def persist_decision(
     duration_ms: Optional[int] = None,
     error_code: Optional[str] = None,
     correlation_id: Optional[str] = None,
+    extra_columns: Optional[dict[str, Any]] = None,
 ) -> Optional[str]:
     """Persiste une row `assistance_agent_decisions`. Best-effort.
 
@@ -176,6 +177,15 @@ def persist_decision(
     Returns:
         L'`id` (UUID stringifié) de la row persistée, ou ``None`` en cas
         d'échec.
+
+    Cognitive Bot v4 — Lot 6 (2026-05-04). Le kwarg ``extra_columns``
+    permet à un caller de remplir des colonnes natives (ex.
+    ``emotional_intent``, ``conversation_stage``, ``trust_level``,
+    ``primary_goal``, ``next_best_action``, ``knowledge_level``)
+    sans coupler le module ``audit`` à un schéma cognitif spécifique.
+    Seules les clés correspondant à un attribut existant de
+    ``AssistanceAgentDecision`` sont appliquées (best-effort, silent
+    ignore sur les autres).
     """
     conv_uuid = _coerce_uuid(conversation_id)
     if conv_uuid is None:
@@ -229,6 +239,17 @@ def persist_decision(
                 error_code=(error_code[:32] if error_code else None),
                 correlation_id=(correlation_id[:64] if correlation_id else None),
             )
+            # Cognitive Bot v4 — Lot 6 : double-write des colonnes
+            # cognitives via setattr best-effort. Toute clé inconnue
+            # (typo, schéma futur) est silently ignorée — le runtime
+            # ne doit jamais casser à cause d'une colonne absente côté
+            # ORM (ex. environnement pré-migration 152).
+            if extra_columns:
+                for key, value in extra_columns.items():
+                    if value is None:
+                        continue
+                    if hasattr(row, key):
+                        setattr(row, key, value)
             db.add(row)
             # le flush implicite se fait au commit du savepoint
     except Exception:

@@ -222,6 +222,10 @@ Master catalog of all compiled knowledge pages. Powers Vancelian's customer supp
 - 🆕 [What new services is Vancelian planning to offer?](faq/legal-compliance/what-new-services-are-coming.md)
 - 🆕 [What happens if Vancelian does not obtain its MiCA authorisation?](faq/legal-compliance/what-happens-if-vancelian-does-not-obtain-mica.md)
 
+## FAQ — Trust & Security (2)
+- 🆕 [Cadre réglementaire de Vancelian](faq/trust-security/regulation-overview.md) — PSAN/AMF, MiCA/CASP, LCB-FT, RGPD ; angle rassurance pour agent `trust`
+- 🆕 [Custody : où sont stockés vos fonds chez Vancelian](faq/trust-security/custody-overview.md) — Ségrégation, cold storage, scénario faillite ; angle rassurance pour agent `trust`
+
 ## FAQ — Company (11)
 - ✅ [About Vancelian: company snapshot, mission, and key figures](faq/company/about-vancelian.md)
 - ✅ [Vancelian's regulatory status in the UAE: VARA In-Principle Approval](faq/company/vancelian-receives-vara-in-principle-approval.md)

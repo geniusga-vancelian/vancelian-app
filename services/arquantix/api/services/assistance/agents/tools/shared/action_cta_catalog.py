@@ -59,6 +59,9 @@ ActionKind = Literal[
     "buy_instrument",
     "sell_instrument",
     "view_instrument",  # Phase 2c.7 — top_movers_crypto rows
+    # Crypto Bundles (Phase 2 wiki — carte crypto_bundles_card)
+    "view_bundle_detail",
+    "invest_bundle",
     # Articles / News (Phase 2c.7 — featured_articles_list)
     "open_article",
     # Profil
@@ -171,6 +174,25 @@ _CATALOG: dict[str, ActionSpec] = {
         deep_link_template="vancelian://app/instrument/{id}",
         available_phase_2b=True,
         requires_param="instrument_id",
+    ),
+    # Phase 2 wiki — `crypto_bundles_card`. Le placeholder `{id}` est
+    # rempli avec le `product_id` (UUID) du `pe_product_definitions`.
+    # Le resolver Flutter (`AssistanceDeepLinkResolver._resolveBundleSub`)
+    # ouvre la fiche détail (tap card) ou démarre le `BundleInvestFlow`
+    # (bouton « Investir »).
+    "view_bundle_detail": ActionSpec(
+        kind="view_bundle_detail",
+        default_label="Voir le détail",
+        deep_link_template="vancelian://app/bundle/{id}",
+        available_phase_2b=True,
+        requires_param="bundle_id",
+    ),
+    "invest_bundle": ActionSpec(
+        kind="invest_bundle",
+        default_label="Investir",
+        deep_link_template="vancelian://app/bundle/{id}/invest",
+        available_phase_2b=True,
+        requires_param="bundle_id",
     ),
     # Phase 2c.7 — `featured_articles_list` rows. Le placeholder `{id}`
     # est rempli avec le **slug** de l'article (URL-safe) que le client

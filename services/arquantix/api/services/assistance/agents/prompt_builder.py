@@ -45,6 +45,134 @@ _FALLBACK_PROMPT = (
 )
 
 
+# Cognitive Bot v4 — Lot 3 (2026-05-04). Whitelist des agents qui
+# bénéficient du **Response Framework** auto-injecté en suffixe de leur
+# system prompt. Le fragment partagé ``_response_framework.md`` impose
+# une structure de réponse en 4 temps (ACK émotionnel → reformulation →
+# apport de valeur → next best action) et s'aligne sur les blocs
+# ``[OBJECTIVE]`` + ``[COGNITIVE STATE]`` injectés par
+# ``agent_loop._build_initial_messages``.
+#
+# Sont **inclus** : agents qui produisent une réponse texte côté client.
+# Sont **exclus** : `router` (function calling pur), `summarizer`
+# (extraction JSON), `compliance` top-level (simple dispatcher).
+RESPONSE_FRAMEWORK_AGENTS: frozenset[str] = frozenset({
+    "default",
+    "advisor",
+    "product",
+    "market",
+    "compliance.registration",
+    "compliance.transactional",
+    "compliance.general",
+    "compliance.remediation",
+    # Lot 4 (anticipé) — agent Trust & Risk dédié à la rassurance.
+    "trust",
+})
+
+
+_FRAMEWORK_FILE = _PROMPTS_DIR / "_response_framework.md"
+
+# Wiki product — même `index.md` que le dépôt embarqué (`data/wiki/`).
+# Injecté **uniquement** pour l'agent `product` afin de cartographier
+# slugs et liens entre pages (équivalent « pass 1 » côté bot Slack).
+_WIKI_INDEX_FILE = (
+    Path(__file__).resolve().parent.parent / "data" / "wiki" / "index.md"
+)
+
+# Cache module-level avec invalidation par mtime (reload en dev si le
+# fichier change sans restart du process).
+_wiki_index_cache_mtime: Optional[float] = None
+_wiki_index_cache_block: Optional[str] = None
+
+
+# Cache module-level — le fragment ne change pas pendant la durée de
+# vie du process, on évite N relectures disque par tour.
+_framework_cache: Optional[str] = None
+
+
+def _load_response_framework_fragment() -> Optional[str]:
+    """Charge le fragment Cognitive Bot v4 ``_response_framework.md``
+    qui structure la réponse des agents experts en 4 temps.
+
+    Best-effort : retourne ``None`` si le fichier n'existe pas (dégrade
+    gracieusement vers le prompt agent seul, comme pré-Lot 3).
+    Cache module-level pour éviter N relectures disque par tour.
+    """
+    global _framework_cache
+    if _framework_cache is not None:
+        return _framework_cache or None
+    try:
+        content = _FRAMEWORK_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        logger.warning(
+            "assistance.prompt_builder.response_framework_missing path=%s",
+            _FRAMEWORK_FILE,
+        )
+        _framework_cache = ""  # marqueur : déjà tenté, échec
+        return None
+    except OSError as exc:
+        logger.warning(
+            "assistance.prompt_builder.response_framework_io_error exc=%s",
+            exc,
+        )
+        _framework_cache = ""
+        return None
+    _framework_cache = content
+    return content
+
+
+def _load_product_wiki_index_block() -> str:
+    """Lit ``index.md`` du wiki embarqué pour suffixer le prompt product.
+
+    Best-effort : chaîne vide si le fichier est absent ou illisible
+    (l'agent garde ``product_system.md`` + framework).
+    """
+    global _wiki_index_cache_mtime, _wiki_index_cache_block
+    try:
+        mtime = _WIKI_INDEX_FILE.stat().st_mtime
+    except OSError:
+        logger.warning(
+            "assistance.prompt_builder.wiki_index_missing path=%s",
+            _WIKI_INDEX_FILE,
+        )
+        return ""
+
+    if (
+        _wiki_index_cache_block is not None
+        and _wiki_index_cache_mtime == mtime
+    ):
+        return _wiki_index_cache_block
+
+    try:
+        raw = _WIKI_INDEX_FILE.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        logger.warning(
+            "assistance.prompt_builder.wiki_index_read_error exc=%s",
+            exc,
+        )
+        _wiki_index_cache_mtime = mtime
+        _wiki_index_cache_block = ""
+        return ""
+
+    if not raw:
+        _wiki_index_cache_mtime = mtime
+        _wiki_index_cache_block = ""
+        return ""
+
+    block = (
+        "## Wiki — index.md (cartographie des pages)\n\n"
+        "Référence pour `read_wiki_page` : ce fichier liste les chemins des "
+        "pages compilées et leur organisation. Sers-t'en pour choisir "
+        "quels sujets lire et dans quel ordre, avant d'appeler l'outil.\n\n"
+        "---\n\n"
+        f"{raw}\n\n"
+        "---"
+    )
+    _wiki_index_cache_mtime = mtime
+    _wiki_index_cache_block = block
+    return block
+
+
 def _agent_id_to_path_stem(agent_id: str) -> str:
     """Normalise un `agent_id` pour chercher son prompt sur disque.
 
@@ -65,25 +193,48 @@ def load_agent_system_prompt(agent_id: str) -> str:
 
     Le `agent_id` peut contenir un `.` pour les sub-agents (ex.
     `compliance.registration`) — il est normalisé en `_` pour le path.
+
+    Cognitive Bot v4 — Lot 3 (2026-05-04) : pour les agents listés dans
+    ``RESPONSE_FRAMEWORK_AGENTS``, on **concatène** automatiquement le
+    fragment ``_response_framework.md`` qui impose la structure de
+    réponse en 4 temps. Ainsi tous les agents experts héritent du
+    framework sans duplication par fichier.
+
+    Agent ``product`` : après le prompt fichier et avant le framework,
+    on injecte ``data/wiki/index.md`` (cartographie des pages wiki) pour
+    guider l'usage de ``read_wiki_page`` ; les autres agents ne reçoivent
+    pas ce bloc.
     """
     stem = _agent_id_to_path_stem(agent_id)
     path = _PROMPTS_DIR / f"{stem}_system.md"
+    base: str
     try:
-        return path.read_text(encoding="utf-8").strip()
+        base = path.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         logger.warning(
             "assistance.agent.prompt_missing agent=%s path=%s — using fallback",
             agent_id,
             path,
         )
-        return _FALLBACK_PROMPT
+        base = _FALLBACK_PROMPT
     except OSError as exc:
         logger.warning(
             "assistance.agent.prompt_io_error agent=%s exc=%s — using fallback",
             agent_id,
             exc,
         )
-        return _FALLBACK_PROMPT
+        base = _FALLBACK_PROMPT
+
+    if agent_id == "product":
+        wiki_block = _load_product_wiki_index_block()
+        if wiki_block:
+            base = base + "\n\n" + wiki_block
+
+    if agent_id in RESPONSE_FRAMEWORK_AGENTS:
+        framework = _load_response_framework_fragment()
+        if framework:
+            return base + "\n\n" + framework
+    return base
 
 
 def _maybe_build_catalog_block(agent_id: str) -> Optional[str]:

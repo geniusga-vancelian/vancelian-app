@@ -70,6 +70,10 @@ from services.assistance.agents.tools.shared import (
     handoff_to_agent as handoff_to_agent_tool,
 )
 from services.assistance.agents.tools.shared.classify_actor import ActorKind
+from services.assistance.conversation_topic import (
+    infer_topic_from_tool_call,
+    set_topic as conversation_set_topic,
+)
 from services.assistance.llm import LLMError
 
 logger = logging.getLogger(__name__)
@@ -146,13 +150,82 @@ PRODUCT_KNOWLEDGE_READ_TOOLS: frozenset[str] = frozenset({
     "read_product_knowledge",
     "read_wiki_page",
     "show_instrument_card",
+    # Phase 2 wiki — `show_crypto_bundles` consomme le catalogue
+    # `CatalogService`, donc c'est une lecture sourcée DB (équivalent
+    # `show_instrument_card` côté instruments).
+    "show_crypto_bundles",
+    # Phase 2 wiki v1.4 — fiche détaillée d'UN bundle, source DB
+    # identique au slider (``CatalogService.get_public_catalog``).
+    "show_bundle_detail",
 })
+
+# ─────────────────────────────────────────────────────────────────────────
+# Phase 2 wiki v1.4 patch — Dédoublonnage des tool calls dans un même turn
+# ─────────────────────────────────────────────────────────────────────────
+#
+# Empiriquement (cf. analyse conv 5bef01e9 turn 4, 2026-05-04), un LLM peut
+# rappeler **deux fois** le même tool (avec exactement les mêmes arguments)
+# dans le même turn — typiquement parce qu'il s'attendait à un résultat
+# différent ou qu'il a oublié qu'il l'avait déjà appelé. Comme nos tools
+# L0 sont **idempotents** (read-only), c'est une perte sèche : tokens, DB,
+# latence, et parfois ça déclenche le guard-rail anti-hallucination à tort.
+#
+# Solution : on cache `(tool_name, frozen_args) -> tool_result` PAR TURN
+# (= scope iteration, reset à chaque user message). Au 2ᵉ appel identique,
+# on renvoie le résultat caché + un hint au LLM dans le `tool_result`
+# pour qu'il finalise sa réponse plutôt que de boucler.
+#
+# Périmètre : ne s'applique qu'aux tools considérés idempotents (whitelist
+# explicite). Les tools d'orchestration et interactifs sont exclus
+# (`consult_specialist` peut retourner un texte différent à chaque appel
+# selon l'état du sub-runtime ; `ask_user_question` est interactif).
+
+# Tools que l'on autorise à dédupliquer (idempotents, read-only). On part
+# sur une whitelist explicite plutôt qu'une blacklist : c'est plus sûr
+# pour les tools L1+ futurs qui auront des side-effects.
+DEDUPABLE_TOOLS: frozenset[str] = frozenset({
+    # product
+    "read_product_knowledge",
+    "list_product_knowledge_topics",
+    "select_wiki_pages",
+    "read_wiki_page",
+    "show_instrument_card",
+    "show_crypto_bundles",
+    "show_bundle_detail",
+    # advisor / market
+    "show_featured_articles",
+    "show_top_movers",
+    # compliance — lectures pures
+    "read_compliance_state",
+    "read_registration_progress",
+    "read_documents",
+    "read_transactions",
+    "read_external_aml_signals",
+    "read_transaction_detail",
+    "list_transactions",
+    "stats_transaction_counts",
+    "stats_transaction_amounts",
+    "stats_portfolio_performance",
+    "stats_portfolio_allocation",
+    "diagnose_compliance_topic",
+    "propose_resume_registration",
+})
+
+DEDUP_HINT_REPEATED_CALL = (
+    "Tu as déjà appelé ce tool avec ces arguments dans ce turn. Voici "
+    "le résultat précédent (cache local). Ces tools sont idempotents : "
+    "un seul appel suffit. Réponds maintenant au client avec ce que tu "
+    "as déjà — n'appelle pas une 3ᵉ fois ce tool."
+)
+
 
 PRODUCT_GUARDRAIL_HINT_NO_READ = (
     "Tu n'as appelé aucun tool de lecture (read_product_knowledge, "
-    "read_wiki_page, show_instrument_card) avant de répondre. C'est "
-    "interdit pour les questions factuelles produit — tu risques de "
-    "halluciner. Reformule en commençant par select_wiki_pages(question, "
+    "read_wiki_page, show_instrument_card, show_crypto_bundles, "
+    "show_bundle_detail) avant "
+    "de répondre. C'est interdit pour les questions factuelles produit "
+    "— tu risques de halluciner. Reformule en commençant par "
+    "select_wiki_pages(question, "
     "category?) pour identifier la fiche pertinente, puis read_wiki_page("
     "category, slug) pour en lire le contenu — ou read_product_knowledge("
     "slug) si la fiche est dans le SQL canonique. Tu n'as droit qu'à un "
@@ -289,6 +362,19 @@ def _build_initial_messages(
     (`agent_input.memory_state`) est concaténée au system prompt si
     présente, pour rester compatible avec le format Phase 1 attendu par
     OpenAI.
+
+    Cognitive Bot v4 (Lot 1+2, 2026-05-04) : on injecte aussi en fin
+    de system prompt, si présents :
+
+      * un bloc ``[COGNITIVE STATE]`` (emotional_intent, stage, trust)
+        — vue panoramique de l'état du client.
+      * un bloc ``[OBJECTIVE]`` (primary_goal, next_best_action,
+        stop_pushing, hint stratégique) — directive de tour qui doit
+        guider la rédaction de la réponse.
+
+    Ces blocs sont calculés en amont par ``service.start_chat_turn`` et
+    transportés via ``agent_input.memory_state`` (clés
+    ``cognitive_state`` et ``objective``).
     """
     messages: list[dict[str, Any]] = []
 
@@ -303,6 +389,20 @@ def _build_initial_messages(
             "\n## Mémoire long-terme client\n"
             + json.dumps(long_mem, ensure_ascii=False, indent=2)
         )
+
+    cognitive_block = _format_cognitive_blocks(mem)
+    if cognitive_block:
+        sys_chunks.append(cognitive_block)
+
+    # Cognitive Bot v4 — Lot 7 (2026-05-04). Bloc [CLIENT DISCOVERY]
+    # rendu par service.start_chat_turn et passé via memory_state.
+    # Vue panoramique des projets actifs + paramètres connus pour
+    # que l'agent expert adapte sa réponse (ex. ne pas proposer un
+    # produit < horizon que le client a annoncé).
+    discovery_block = mem.get("client_discovery")
+    if isinstance(discovery_block, str) and discovery_block.strip():
+        sys_chunks.append(discovery_block)
+
     messages.append({"role": "system", "content": "\n".join(sys_chunks)})
 
     for turn in agent_input.recent_turns or []:
@@ -311,8 +411,71 @@ def _build_initial_messages(
         if role in ("user", "assistant") and isinstance(content, str):
             messages.append({"role": role, "content": content})
 
-    messages.append({"role": "user", "content": agent_input.user_message})
+    # Cognitive Bot v4 — Lot 7. Si le user message est laconique
+    # (cf. should_embed_previous_bot_turn), le runtime aura pré-calculé
+    # un bloc « previous_bot_context_block » qui pré-pend le tour bot
+    # précédent au user message dans son contexte. On envoie ce bloc
+    # à la place du user message brut pour le LLM uniquement (la DB
+    # garde le user_message original intact).
+    user_payload = agent_input.user_message
+    prev_bot_block = mem.get("previous_bot_context_block")
+    if isinstance(prev_bot_block, str) and prev_bot_block.strip():
+        user_payload = prev_bot_block
+    messages.append({"role": "user", "content": user_payload})
     return messages
+
+
+def _format_cognitive_blocks(memory_state: dict) -> str:
+    """Cognitive Bot v4 — formate les blocs ``[COGNITIVE STATE]`` et
+    ``[OBJECTIVE]`` pour injection dans le system prompt.
+
+    Lit ``memory_state["cognitive_state"]`` et ``memory_state["objective"]``
+    posés par ``services.assistance.service.start_chat_turn`` (Lot 1+2).
+
+    Retourne ``""`` si rien à dire (cas démarrage neutre + pas
+    d'objectif). Defensive : import local pour éviter un cycle
+    d'imports au démarrage du runtime.
+    """
+    if not isinstance(memory_state, dict):
+        return ""
+
+    cog_dict = memory_state.get("cognitive_state")
+    obj_dict = memory_state.get("objective")
+
+    if not cog_dict and not obj_dict:
+        return ""
+
+    parts: list[str] = []
+
+    try:
+        from services.assistance.agents.cognitive_state import (
+            CognitiveState,
+            render_cognitive_state_for_prompt,
+        )
+
+        if cog_dict:
+            cog = CognitiveState.from_dict(cog_dict)
+            rendered = render_cognitive_state_for_prompt(cog)
+            if rendered:
+                parts.append("\n## État cognitif client\n" + rendered)
+    except Exception:  # noqa: BLE001 — best-effort, never break a turn
+        logger.exception("agent_loop.cognitive_state_render_failed")
+
+    try:
+        from services.assistance.agents.conversation_objective import (
+            ConversationObjective,
+            render_objective_for_prompt,
+        )
+
+        if obj_dict:
+            objective = ConversationObjective.from_dict(obj_dict)
+            rendered = render_objective_for_prompt(objective)
+            if rendered:
+                parts.append("\n## Objectif du tour\n" + rendered)
+    except Exception:  # noqa: BLE001 — best-effort.
+        logger.exception("agent_loop.objective_render_failed")
+
+    return "\n".join(parts)
 
 
 def _filter_tools_by_autonomy(
@@ -532,6 +695,7 @@ async def run_agent_loop(
     chat_completion_fn: Any = None,
     chain_depth: int = 0,
     consult_in_progress: bool = False,
+    product_pipeline_relax_product_guardrail: bool = False,
 ) -> AsyncIterator[AgentEvent]:
     """Boucle agentique (cf. `MULTI_AGENTS_RUNTIME.md` § 1.0 et § 16).
 
@@ -551,9 +715,13 @@ async def run_agent_loop(
                           top-level depuis service.py. ``1`` = sous-loop
                           spawné par `consult_specialist`. > 1 interdit.
         consult_in_progress : Phase 2c — True quand cette boucle est un
-                              sous-loop spécialiste. Filtre
-                              `consult_specialist` et `handoff_to_agent`
-                              du toolset (profondeur 1, terminal).
+            sous-loop spécialiste. Filtre
+            `consult_specialist` et `handoff_to_agent`
+            du toolset (profondeur 1, terminal).
+        product_pipeline_relax_product_guardrail : Pipeline Slack-like —
+            si True sur l'agent ``product``, désactive le guard-rail
+            anti-hallucination « lecture obligatoire » (le wiki est déjà
+            injecté dans le system prompt).
 
     Yields:
         `AgentEvent` (`started`, `delta`, `choices`, `done`, `error`).
@@ -636,6 +804,12 @@ async def run_agent_loop(
     # `done` event final (top-level uniquement, comme `agent_chain`).
     embeds_collected: list[dict[str, Any]] = []
     embeds_seen_keys: set[tuple[str, str]] = set()
+    # Phase 2 wiki v1.4 patch — dédoublonnage des tool calls dans CE turn.
+    # Clé : (tool_name, frozen_args). Valeur : tool_result précédent.
+    # Reset à chaque tour user (= portée de la fonction `run_agent_loop`,
+    # appelée 1× par message user). Cf. DEDUPABLE_TOOLS + DEDUP_HINT_*.
+    tool_call_cache: dict[tuple[str, str], dict[str, Any]] = {}
+    dedup_hits: int = 0  # diag — exposé en logs en fin de tour
 
     thinking_enabled = (
         assistance_stream_thinking_enabled() and not consult_in_progress
@@ -744,12 +918,66 @@ async def run_agent_loop(
                     correlation_id=correlation_id,
                 )
 
+                # ── Dédoublonnage des tool calls dans CE turn (Phase 2 wiki v1.4 patch) ──
+                # Si on a déjà appelé exactement ce tool avec ces args dans
+                # ce turn, on renvoie le cache + un hint dans le tool_result
+                # pour signaler au LLM qu'il doit finaliser sa réponse.
+                # Périmètre : whitelist `DEDUPABLE_TOOLS` (idempotents
+                # uniquement). Le cache est local au turn (run_agent_loop).
+                cache_key: Optional[tuple[str, str]] = None
+                if tool_name in DEDUPABLE_TOOLS:
+                    try:
+                        frozen_args = json.dumps(
+                            args, sort_keys=True, default=str
+                        )
+                    except Exception:
+                        frozen_args = ""
+                    cache_key = (tool_name, frozen_args)
+                    cached = tool_call_cache.get(cache_key)
+                    if cached is not None:
+                        dedup_hits += 1
+                        logger.info(
+                            "agent_loop.tool_dedup_hit agent=%s tool=%s "
+                            "iteration=%d hits=%d",
+                            current_agent_id,
+                            tool_name,
+                            iteration,
+                            dedup_hits,
+                        )
+                        # On enrichit le résultat avec un hint visible
+                        # côté LLM, sans toucher la structure pour rester
+                        # compatible avec les keys que le LLM attend
+                        # (`bundles_count`, `embed_emitted`, etc.).
+                        cached_with_hint = {
+                            **cached,
+                            "_dedup_hint": DEDUP_HINT_REPEATED_CALL,
+                        }
+                        messages.append(
+                            _tool_result_message(
+                                call_id, tool_name, cached_with_hint
+                            )
+                        )
+                        # Track tools_called pour le guard-rail (compte
+                        # comme une lecture, le tool a bel et bien produit
+                        # un résultat — c'est juste qu'on en a évité le
+                        # double calcul).
+                        tools_called.append(tool_name)
+                        # Pas de persist_decision : on ne pollue pas
+                        # `assistance_agent_decisions` avec des doublons.
+                        continue
+
                 result, duration_ms, error_code = await _execute_tool(
                     module,
                     ctx=ctx,
                     args=args,
                     timeout_seconds=tool_timeout,
                 )
+                # Cache du résultat pour les futurs appels identiques de
+                # ce turn. On ne cache que les succès (error_code is None)
+                # — un échec transient (timeout, internal) doit pouvoir
+                # être retenté légitimement par le LLM.
+                if cache_key is not None and error_code is None:
+                    tool_call_cache[cache_key] = result
                 tools_called.append(tool_name)
                 spec_level = (module.SPEC.get("autonomy_level") or "L0")  # type: ignore[union-attr]
 
@@ -777,6 +1005,48 @@ async def run_agent_loop(
                     "handoff_to_agent",
                 ) and isinstance(result, dict):
                     tools_history.append((tool_name, result))
+
+                # ── Slot mémoire « topic en cours » (Phase 2 wiki v1.4 patch) ──
+                # On infère un topic depuis le tool result : si le tool
+                # ancre un sujet (ex. show_bundle_detail succès), on le
+                # persiste sur la conversation. Lecture par le router
+                # au tour suivant pour stabiliser les follow-ups.
+                # On skip en sous-loop consult (chain_depth > 0) pour ne
+                # pas qu'un specialist consulté impose un topic au
+                # caller (séparation des responsabilités).
+                if (
+                    error_code is None
+                    and chain_depth == 0
+                    and isinstance(result, dict)
+                ):
+                    inferred = infer_topic_from_tool_call(
+                        tool_name=tool_name,
+                        tool_args=args,
+                        tool_result=result,
+                        agent_id=current_agent_id,
+                        turn_index=iteration,
+                    )
+                    if inferred is not None:
+                        try:
+                            conversation_set_topic(
+                                db,
+                                conversation_id,
+                                inferred,
+                                commit=False,
+                            )
+                            logger.info(
+                                "agent_loop.topic_set agent=%s tool=%s topic=%s",
+                                current_agent_id,
+                                tool_name,
+                                inferred.get("kind"),
+                            )
+                        except Exception:
+                            # Defensive : un échec de write topic ne doit
+                            # jamais casser le tour. Le topic se réamorcera
+                            # au prochain tool ancrant.
+                            logger.exception(
+                                "agent_loop.topic_set_failed tool=%s", tool_name
+                            )
 
                 # Phase 2c.2 — Collecte des embeds UI produits par le tool.
                 # On dédoublonne sur (type, identifiant naturel) pour
@@ -1158,6 +1428,7 @@ async def run_agent_loop(
         # questions purement définitionnelles).
         if (
             current_agent_id == "product"
+            and not product_pipeline_relax_product_guardrail
             and not product_guardrail_retry_done
             and not consult_in_progress
             and assistance_product_guardrail_enabled()

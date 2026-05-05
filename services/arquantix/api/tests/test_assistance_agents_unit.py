@@ -408,10 +408,9 @@ class TestRouterRedirectOffTopic:
     def test_off_topic_with_bridge_and_options(self, monkeypatch):
         """Cas : pas d'historique, message client = « pluie et beau temps ».
 
-        Le bridge attendu :
-          1. Reprend explicitement le sujet (« la pluie et le beau temps »).
-          2. Mentionne sans juger que cet espace est dédié à Vancelian.
-          3. Invite à proposer un sujet Vancelian.
+        Router v2 (Lot 1) : peu importe les options envoyées par le LLM,
+        le runtime substitue par la liste FIXE
+        (cf. `router_off_topic_options.OFF_TOPIC_FIXED_OPTIONS`).
         """
         monkeypatch.setenv("ASSISTANCE_ROUTER_CONFIDENCE_MIN", "0.5")
         monkeypatch.setattr(
@@ -423,11 +422,12 @@ class TestRouterRedirectOffTopic:
                     "t'éclairer ici — cet espace est dédié à ton compte "
                     "Vancelian, tes placements et nos produits. Tu veux "
                     "qu'on regarde quelque chose de ce côté ?",
+                    # Les options envoyées par le LLM sont ignorées
+                    # depuis Router v2 — on les laisse présentes ici
+                    # pour vérifier qu'elles ne pollutent PAS le résultat.
                     [
                         {"id": "compliance", "label": "Mon compte"},
                         {"id": "advisor", "label": "Conseil placement"},
-                        {"id": "product", "label": "Produits Vancelian"},
-                        {"id": "market", "label": "Marchés"},
                     ],
                 )
             ),
@@ -436,24 +436,20 @@ class TestRouterRedirectOffTopic:
         assert d.agent_id == AGENT_DEFAULT_ID  # placeholder
         assert d.is_off_topic is True
         assert d.is_decisive is False  # forcera le path choices
-        # Acknowledge explicite du sujet client.
         assert "pluie" in d.redirect_bridge.lower()
-        # Recadrage Vancelian présent.
         assert "vancelian" in d.redirect_bridge.lower()
         assert d.reasoning == "off_topic_redirect"
-        assert len(d.fallback_choices) == 4
-        assert {o.id for o in d.fallback_choices} == {
-            "compliance",
-            "advisor",
-            "product",
-            "market",
-        }
+        # Liste FIXE Router v2 = 5 entrées.
+        assert len(d.fallback_choices) == 5
+        ids = {o.id for o in d.fallback_choices}
+        assert "compliance" in ids
+        assert "advisor" in ids
+        assert "product" in ids
+        assert "market" in ids
 
     def test_off_topic_with_resume_topic_option(self, monkeypatch):
-        """Conversation engagée → option `resume_topic` autorisée en 1ère position.
-
-        Le bridge reprend le sujet hors-mission ET propose le retour
-        au sujet en cours.
+        """Router v2 — le slot `resume_topic` est ajouté par le runtime
+        depuis `memory_state["current_topic"]`, plus par le LLM.
         """
         monkeypatch.setattr(
             router_mod,
@@ -464,25 +460,30 @@ class TestRouterRedirectOffTopic:
                     "ailleurs ! Ici on est plutôt sur ton compte et tes "
                     "placements Vancelian — et on était justement en train "
                     "de regarder ton allocation, on y revient ?",
-                    [
-                        {"id": "resume_topic", "label": "Reprendre l'allocation"},
-                        {"id": "advisor", "label": "Autre conseil"},
-                    ],
                 )
             ),
         )
-        d = router_mod.classify(_make_input())
+        # current_topic présent en mémoire → resume_topic doit
+        # apparaître en 1ʳᵉ position du QCM.
+        agent_input = _make_input()
+        agent_input.memory_state = {
+            "current_topic": {"display_label": "l'allocation"}
+        }
+        d = router_mod.classify(agent_input)
         assert d.is_off_topic is True
-        # Acknowledge du sujet hors-mission.
         assert "tiramisu" in d.redirect_bridge.lower()
-        # Mention du sujet en cours.
-        assert "allocation" in d.redirect_bridge.lower()
-        assert len(d.fallback_choices) == 2
+        # 1 resume + 5 fixes = 6 options.
+        assert len(d.fallback_choices) == 6
         assert d.fallback_choices[0].id == RESUME_TOPIC_HINT_ID
-        assert d.fallback_choices[0].label == "Reprendre l'allocation"
+        assert "allocation" in d.fallback_choices[0].label.lower()
 
     def test_off_topic_without_options(self, monkeypatch):
-        """Bridge seul : valide, options vides, la freeform sera ajoutée par service.py."""
+        """Router v2 — même sans options du LLM, la liste fixe est appliquée.
+
+        Le LLM peut très bien ne plus passer d'options du tout (c'est
+        d'ailleurs ce que le tool spec v2 attend) — le runtime fournit
+        la liste fixe complète.
+        """
         monkeypatch.setattr(
             router_mod,
             "chat_completion_with_tools",
@@ -496,7 +497,8 @@ class TestRouterRedirectOffTopic:
         )
         d = router_mod.classify(_make_input())
         assert d.is_off_topic is True
-        assert d.fallback_choices == []
+        # Router v2 — 5 options fixes même sans options envoyées.
+        assert len(d.fallback_choices) == 5
         assert "blagues" in d.redirect_bridge.lower()
         assert "vancelian" in d.redirect_bridge.lower()
 
@@ -515,7 +517,10 @@ class TestRouterRedirectOffTopic:
         assert d.reasoning == "redirect_off_topic_no_bridge"
 
     def test_off_topic_invalid_option_id_filtered_out(self, monkeypatch):
-        """Un id non whitelist (ex. 'router' ou 'freeform') est ignoré."""
+        """Router v2 — les options du LLM sont **totalement ignorées**,
+        donc des `id` invalides ne peuvent plus passer. La liste fixe
+        ne contient que des agents whitelist.
+        """
         monkeypatch.setattr(
             router_mod,
             "chat_completion_with_tools",
@@ -523,8 +528,8 @@ class TestRouterRedirectOffTopic:
                 _redirect_off_topic_call(
                     "Recentrons.",
                     [
-                        {"id": "router", "label": "X"},  # interdit
-                        {"id": "freeform", "label": "Y"},  # ajouté par service.py
+                        {"id": "router", "label": "X"},
+                        {"id": "freeform", "label": "Y"},
                         {"id": "advisor", "label": "Conseil"},
                     ],
                 )
@@ -532,9 +537,19 @@ class TestRouterRedirectOffTopic:
         )
         d = router_mod.classify(_make_input())
         assert d.is_off_topic is True
-        assert [o.id for o in d.fallback_choices] == ["advisor"]
+        # Aucun id "router" ou "freeform" — on a la liste fixe.
+        ids = {o.id for o in d.fallback_choices}
+        assert "router" not in ids
+        assert "freeform" not in ids
+        assert ids.issubset(
+            {"compliance", "advisor", "product", "market", "resume_topic"}
+        )
 
     def test_off_topic_dedupes_options(self, monkeypatch):
+        """Router v2 — la liste fixe est par construction dédupliquée
+        sur le couple (id, label). On vérifie qu'aucun doublon ne
+        se faufile peu importe ce que le LLM envoie.
+        """
         monkeypatch.setattr(
             router_mod,
             "chat_completion_with_tools",
@@ -543,15 +558,16 @@ class TestRouterRedirectOffTopic:
                     "B",
                     [
                         {"id": "advisor", "label": "A"},
-                        {"id": "advisor", "label": "B"},  # doublon → ignoré
+                        {"id": "advisor", "label": "A"},
                         {"id": "compliance", "label": "C"},
                     ],
                 )
             ),
         )
         d = router_mod.classify(_make_input())
-        assert len(d.fallback_choices) == 2
-        assert d.fallback_choices[0].label == "A"
+        # Liste fixe = 5 entrées, toutes uniques sur (id, label).
+        pairs = [(o.id, o.label) for o in d.fallback_choices]
+        assert len(pairs) == len(set(pairs))
 
     def test_off_topic_bridge_truncated_to_500(self, monkeypatch):
         long_bridge = "x" * 900
@@ -980,5 +996,85 @@ class TestRouterPromptIntegrity:
     def test_no_emoji_in_prompt(self, router_prompt: str):
         """Pas d'emoji dans le prompt système (style Vancelian)."""
         # Quelques emojis fréquents — on tolère les flèches → ↑ ↓ ✓ ✗.
-        for forbidden in ("😀", "🚀", "💰", "🔥", "📊", "✨"):
+        for forbidden in ("😀", "🚀", "💰", "🔥", "📊", "✨", "❌", "✅"):
             assert forbidden not in router_prompt
+
+
+class TestRouterPromptProfileAdvisorAndContextualQcm:
+    """Tests des enrichissements 2026-05-04 (lot 1) — l'agent advisor doit
+    être route_to direct sur "le plus adapté à mon profil/besoin", et le
+    QCM ask_clarification doit contextualiser ses labels sur le sujet en
+    cours quand l'historique contient un produit Vancelian nommé.
+
+    Cas réel ayant motivé l'enrichissement : conv e5133711 turn 3 où
+    « quel bundle est il le plus adapté à mon profil ? » a été classé
+    en QCM générique au lieu d'un route_to(advisor) direct.
+    """
+
+    @pytest.fixture
+    def router_prompt(self) -> str:
+        from services.assistance.agents.prompt_builder import (
+            load_agent_system_prompt,
+        )
+        return load_agent_system_prompt("router")
+
+    def test_profile_advisor_subrule_present(self, router_prompt: str):
+        """La règle 2 doit expliquer que « lequel pour moi/mon profil »
+        sur un produit Vancelian nommé bascule sur advisor (et non
+        product, malgré la règle 0bis)."""
+        assert "le plus adapté à mon profil" in router_prompt
+        # La règle 2 doit primer sur la règle 0bis dans ce cas. Test
+        # robuste à la mise en forme : on compare le prompt entièrement
+        # « unwrapé » (whitespace collapsé) pour tolérer les sauts de
+        # ligne du markdown.
+        import re
+        flat = re.sub(r"\s+", " ", router_prompt.lower())
+        assert "règle 2 prime sur la règle 0bis" in flat
+
+    @pytest.mark.parametrize(
+        "example_query",
+        [
+            "quel bundle est le plus adapté à mon profil ?",
+            "quel coffre flexible me convient le mieux ?",
+            "lequel de ces bundles je devrais choisir ?",
+        ],
+    )
+    def test_profile_advisor_examples_present(
+        self, router_prompt: str, example_query: str
+    ):
+        """Les 3 exemples calibrés (« le plus adapté à mon profil »,
+        « me convient le mieux », « lequel je devrais choisir ») doivent
+        figurer dans le bloc d'exemples route_to → advisor."""
+        assert example_query in router_prompt
+        # Et chacun doit clairement router vers advisor.
+        idx = router_prompt.find(example_query)
+        snippet = router_prompt[idx : idx + 400]
+        assert "advisor" in snippet, (
+            f"L'exemple '{example_query}' devrait router vers advisor "
+            f"mais le snippet ne mentionne pas advisor : {snippet[:200]!r}"
+        )
+
+    def test_contextualization_rule_critical_marker(
+        self, router_prompt: str
+    ):
+        """La règle critique « les labels d'options DOIVENT reprendre le
+        sujet de recent_turns » doit être explicitement marquée comme
+        critique pour que le LLM ne la zappe pas."""
+        assert "Règle de contextualisation" in router_prompt
+        # La criticité doit être marquée (sinon le LLM risque de la zapper).
+        assert "CRITIQUE" in router_prompt
+
+    def test_contextualization_anti_pattern_present(
+        self, router_prompt: str
+    ):
+        """Le prompt doit contenir l'exemple ANTI (générique) ET BON
+        (contextualisé bundle) pour ancrer le contraste."""
+        # Anti-pattern : labels génériques recyclés malgré le contexte
+        # bundle.
+        assert "ne mentionne pas\n    bundle" in router_prompt or (
+            "générique, ne mentionne pas" in router_prompt
+        )
+        # Pattern positif : labels qui reprennent « bundle ».
+        assert "Adapter un bundle à mon profil" in router_prompt
+        assert "Voir tous les bundles disponibles" in router_prompt
+        assert "Comparer les performances des bundles" in router_prompt

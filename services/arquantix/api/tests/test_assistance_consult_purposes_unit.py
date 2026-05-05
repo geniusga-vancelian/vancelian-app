@@ -20,14 +20,21 @@ from services.assistance.agents.tools.shared import consult_purposes
 class TestKnownPurposes:
     """`is_known_purpose` + `KNOWN_PURPOSES` : whitelist statique."""
 
-    def test_all_5_purposes_listed_phase_2c(self):
-        # Les 5 purposes initiaux validés dans l'archi Phase 2c.
+    def test_all_purposes_listed_phase_2c_plus_lot4_trust(self):
+        # Phase 2c : 5 purposes ciblant `product`.
+        # Cognitive Bot v4 — Lot 4 (2026-05-04) : 3 purposes ciblant
+        # `trust` (rassurance régulation/custody/sécurité).
         expected = {
+            # phase 2c — product
             "explain_deposit_delay",
             "explain_withdrawal_delay",
             "explain_kyc_review_typical_delay",
             "explain_product_basics",
             "explain_swap_settlement_delay",
+            # lot 4 — trust
+            "reassure_about_regulation",
+            "reassure_about_custody",
+            "reassure_about_security",
         }
         assert consult_purposes.KNOWN_PURPOSES == expected
 
@@ -43,10 +50,29 @@ class TestKnownPurposes:
 
 
 class TestTargetAgent:
-    def test_target_agent_is_product_for_all(self):
-        # Phase 2c : tous les purposes Phase 2c ciblent product.
-        for name in consult_purposes.KNOWN_PURPOSES:
+    # Cognitive Bot v4 — Lot 4 (2026-05-04) : le mapping purpose →
+    # target_agent n'est plus uniformément `product` ; les 3 purposes
+    # ``reassure_about_*`` ciblent `trust`.
+    _PRODUCT_PURPOSES = {
+        "explain_deposit_delay",
+        "explain_withdrawal_delay",
+        "explain_kyc_review_typical_delay",
+        "explain_product_basics",
+        "explain_swap_settlement_delay",
+    }
+    _TRUST_PURPOSES = {
+        "reassure_about_regulation",
+        "reassure_about_custody",
+        "reassure_about_security",
+    }
+
+    def test_product_purposes_target_product(self):
+        for name in self._PRODUCT_PURPOSES:
             assert consult_purposes.target_agent_for(name) == "product"
+
+    def test_trust_purposes_target_trust(self):
+        for name in self._TRUST_PURPOSES:
+            assert consult_purposes.target_agent_for(name) == "trust"
 
     def test_target_agent_none_for_unknown(self):
         assert consult_purposes.target_agent_for("explain_random") is None
@@ -178,12 +204,32 @@ class TestListKnownPurposes:
     def test_list_includes_all_with_target_and_required(self):
         items = consult_purposes.list_known_purposes()
         assert len(items) == len(consult_purposes.KNOWN_PURPOSES)
+        # Cognitive Bot v4 — Lot 4 : target_agent ∈ {product, trust}.
         for it in items:
             assert "name" in it
             assert "target_agent" in it
             assert "description" in it
             assert "required_params" in it
-            assert it["target_agent"] == "product"
+            assert it["target_agent"] in {"product", "trust"}
+
+    def test_target_agent_split_product_vs_trust(self):
+        items = {it["name"]: it for it in consult_purposes.list_known_purposes()}
+        # Product (phase 2c).
+        for n in (
+            "explain_deposit_delay",
+            "explain_withdrawal_delay",
+            "explain_kyc_review_typical_delay",
+            "explain_product_basics",
+            "explain_swap_settlement_delay",
+        ):
+            assert items[n]["target_agent"] == "product"
+        # Trust (lot 4).
+        for n in (
+            "reassure_about_regulation",
+            "reassure_about_custody",
+            "reassure_about_security",
+        ):
+            assert items[n]["target_agent"] == "trust"
 
     def test_required_params_correct(self):
         items = {it["name"]: it for it in consult_purposes.list_known_purposes()}
@@ -192,3 +238,7 @@ class TestListKnownPurposes:
         assert items["explain_product_basics"]["required_params"] == ["slug"]
         assert items["explain_kyc_review_typical_delay"]["required_params"] == []
         assert items["explain_swap_settlement_delay"]["required_params"] == []
+        # Lot 4 — purposes trust : aucun param requis.
+        assert items["reassure_about_regulation"]["required_params"] == []
+        assert items["reassure_about_custody"]["required_params"] == []
+        assert items["reassure_about_security"]["required_params"] == []

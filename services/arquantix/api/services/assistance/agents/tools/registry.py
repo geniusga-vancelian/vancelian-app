@@ -63,6 +63,8 @@ from services.assistance.agents.tools.product import (
     read_product_knowledge,
     read_wiki_page,
     select_wiki_pages,
+    show_bundle_detail,
+    show_crypto_bundles,
     show_instrument_card,
 )
 from services.assistance.agents.tools.shared import (
@@ -175,16 +177,28 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
         select_wiki_pages,
         read_wiki_page,
         show_instrument_card,
+        # Phase 2 wiki — slider chat des bundles disponibles (catalogue
+        # crypto_bundle public actif, source ``CatalogService``).
+        show_crypto_bundles,
+        # Phase 2 wiki v1.4 — fiche détaillée d'UN bundle (équivalent
+        # ``show_instrument_card`` mais pour un bundle nommé). Utilisé
+        # quand le client cible un bundle précis (« parle-moi du TOP5 »).
+        show_bundle_detail,
         ask_user_question,
     ],
     # Phase 2c.6 : `advisor` peut aussi pousser la carte instrument
     # quand il évoque un actif dans un raisonnement d'allocation.
     # Phase 2c.7 : `advisor` peut citer des articles à la une +
     # commenter les mouvements crypto en complément de son conseil.
+    # Router v2 (2026-05-04) : pattern **advisor-first** sur demandes
+    # mixtes — l'advisor doit pouvoir interroger product et market via
+    # `consult_specialist` pour synthétiser un conseil multi-angle
+    # sans renvoyer le client sur 2 agents séparés.
     "advisor": [
         show_instrument_card,
         show_featured_articles,
         show_top_movers,
+        consult_specialist,
         ask_user_question,
     ],
     # Phase 2c.7 : agent `market` réveillé. Toolset L0 minimal centré
@@ -194,6 +208,18 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
     "market": [
         show_featured_articles,
         show_top_movers,
+        ask_user_question,
+    ],
+    # Cognitive Bot v4 — Lot 4 (2026-05-04). Agent `trust` =
+    # spécialiste Confiance & sécurité (régulation, custody, infra).
+    # Toolset minimal : exploration du wiki ``faq/trust-security/`` via
+    # `select_wiki_pages` + `read_wiki_page`. Pas de `consult_specialist`
+    # (terminal, profondeur 1, ne consulte personne). Pas de tool
+    # transactionnel ni produit : trust reste sur les preuves
+    # factuelles, jamais le push commercial.
+    "trust": [
+        select_wiki_pages,
+        read_wiki_page,
         ask_user_question,
     ],
     "default": [ask_user_question],

@@ -59,6 +59,13 @@ PurposeName = Literal[
     "explain_kyc_review_typical_delay",
     "explain_product_basics",
     "explain_swap_settlement_delay",
+    # Cognitive Bot v4 — Lot 4 (2026-05-04) : purposes ciblant l'agent
+    # `trust` pour fournir un encart factuel rassurant aux agents
+    # caller (typiquement `advisor` ou `compliance.general` sur un
+    # client en FEAR / inquiet sur la sécurité).
+    "reassure_about_regulation",
+    "reassure_about_custody",
+    "reassure_about_security",
 ]
 
 
@@ -162,6 +169,38 @@ def _q_swap_settlement(_params: dict[str, str]) -> str:
     )
 
 
+# Question builders pour les purposes `trust` (Lot 4).
+
+
+def _q_reassure_regulation(_params: dict[str, str]) -> str:
+    return (
+        "Donne-moi un encart factuel et rassurant sur le cadre "
+        "réglementaire de Vancelian (régulation, licence, supervision). "
+        "Reste factuel, ne pousse aucun produit, focalise-toi sur ce qui "
+        "rassure un client inquiet de la solidité institutionnelle."
+    )
+
+
+def _q_reassure_custody(_params: dict[str, str]) -> str:
+    return (
+        "Donne-moi un encart factuel et rassurant sur la custody / le "
+        "stockage des fonds clients chez Vancelian (cold storage, "
+        "ségrégation, partenaires). Reste factuel, ne pousse aucun "
+        "produit, focalise-toi sur ce qui rassure un client inquiet de "
+        "la sécurité de ses fonds."
+    )
+
+
+def _q_reassure_security(_params: dict[str, str]) -> str:
+    return (
+        "Donne-moi un encart factuel et rassurant sur l'infrastructure "
+        "et la sécurité opérationnelle de Vancelian (audits, partenaires, "
+        "monitoring, gestion des risques). Reste factuel, ne pousse aucun "
+        "produit, focalise-toi sur ce qui rassure un client inquiet "
+        "d'un hack, d'une faillite ou d'une indisponibilité."
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Catalogue
 # ─────────────────────────────────────────────────────────────────────
@@ -248,6 +287,46 @@ _CATALOG: dict[str, PurposeSpec] = {
         ),
         params_schema={},
         question_builder=_q_swap_settlement,
+    ),
+    # Cognitive Bot v4 — Lot 4 (2026-05-04) : purposes Trust & sécurité.
+    # Cibles `trust`. Aucun param requis (la question naturelle est
+    # déjà précise) — laisse l'agent trust composer sa réponse à partir
+    # du wiki ``faq/trust-security/``.
+    "reassure_about_regulation": PurposeSpec(
+        name="reassure_about_regulation",
+        target_agent="trust",
+        description=(
+            "Demande à l'agent trust un encart factuel rassurant sur le "
+            "cadre réglementaire de Vancelian (régulation, licence). "
+            "Aucun param. À utiliser quand le client exprime de la "
+            "fear sur la solidité institutionnelle."
+        ),
+        params_schema={},
+        question_builder=_q_reassure_regulation,
+    ),
+    "reassure_about_custody": PurposeSpec(
+        name="reassure_about_custody",
+        target_agent="trust",
+        description=(
+            "Demande à l'agent trust un encart factuel rassurant sur la "
+            "custody / le stockage des fonds clients (cold storage, "
+            "ségrégation, partenaires). Aucun param. À utiliser quand "
+            "le client exprime de la fear sur la sécurité de ses fonds."
+        ),
+        params_schema={},
+        question_builder=_q_reassure_custody,
+    ),
+    "reassure_about_security": PurposeSpec(
+        name="reassure_about_security",
+        target_agent="trust",
+        description=(
+            "Demande à l'agent trust un encart factuel rassurant sur "
+            "l'infrastructure et la sécurité opérationnelle (audits, "
+            "monitoring, gestion des risques de hack / faillite). "
+            "Aucun param."
+        ),
+        params_schema={},
+        question_builder=_q_reassure_security,
     ),
 }
 

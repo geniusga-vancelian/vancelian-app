@@ -335,7 +335,10 @@ class TestSelectWikiPagesTool:
         assert result.get("error") == "unknown_category"
         assert result["matches"] == []
 
-    def test_repo_error_returns_empty(self):
+    def test_repo_error_returns_empty(self, monkeypatch):
+        # Phase 2 wiki v1.4 patch 3 — désactive le LLM retriever pour
+        # tester le fallback keyword scoring legacy.
+        monkeypatch.setenv("ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED", "false")
         with patch.object(
             select_wiki_pages.wiki_repo,
             "select_pages",
@@ -347,7 +350,10 @@ class TestSelectWikiPagesTool:
         assert result.get("error") == "repo_error"
         assert result["matches"] == []
 
-    def test_success_payload_shape(self):
+    def test_success_payload_shape(self, monkeypatch):
+        # Phase 2 wiki v1.4 patch 3 — désactive le LLM retriever pour
+        # tester directement le format du payload côté keyword path.
+        monkeypatch.setenv("ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED", "false")
         page = _mk_page(
             category="savings",
             slug="what-is-the-flexible-vault",
@@ -472,6 +478,8 @@ class TestRegistryWiring:
         assert "read_product_knowledge" in names
         assert "list_product_knowledge_topics" in names
         assert "show_instrument_card" in names
+        # Phase 2 wiki — slider crypto_bundles_card
+        assert "show_crypto_bundles" in names
         assert "ask_user_question" in names
         # Garde-fous structurels (anti-récursion product)
         assert "consult_specialist" not in names
@@ -479,8 +487,9 @@ class TestRegistryWiring:
 
     def test_product_total_tool_count(self):
         names = tools_registry.all_tool_names("product")
-        # 6 tools attendus : 2 SQL + 2 wiki + 1 instrument + 1 ask
-        assert len(names) == 6
+        # 8 tools attendus : 2 SQL + 2 wiki + 1 instrument + 1 bundles
+        # liste + 1 bundle detail + 1 ask
+        assert len(names) == 8
 
     def test_other_agents_dont_get_wiki_tools(self):
         for agent_id in (
@@ -498,6 +507,13 @@ class TestRegistryWiring:
                 "consult_specialist(target=product)."
             )
             assert "read_wiki_page" not in names
+            # Phase 2 wiki — `show_crypto_bundles` est strictement réservé
+            # à l'agent `product` (consult_specialist le fera transiter
+            # via le specialist appel si advisor en a besoin).
+            assert "show_crypto_bundles" not in names, (
+                f"{agent_id} ne doit PAS exposer show_crypto_bundles "
+                "(réservé au specialist product)."
+            )
 
     def test_find_dispatches_to_module(self):
         mod = tools_registry.find("product", "select_wiki_pages")

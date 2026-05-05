@@ -24,6 +24,12 @@ AGENT_COMPLIANCE_ID = "compliance"
 AGENT_ADVISOR_ID = "advisor"
 AGENT_PRODUCT_ID = "product"
 AGENT_MARKET_ID = "market"
+# Cognitive Bot v4 — Lot 4 (2026-05-04) : agent dédié confiance &
+# sécurité. Routable directement par le router pour questions purement
+# sécurité/régulation/custody, et consultable par advisor /
+# compliance.general en sous-routine pour fournir un encart factuel
+# rassurant dans une réponse synthétique.
+AGENT_TRUST_ID = "trust"
 
 KNOWN_AGENT_IDS = frozenset({
     AGENT_DEFAULT_ID,
@@ -32,6 +38,7 @@ KNOWN_AGENT_IDS = frozenset({
     AGENT_ADVISOR_ID,
     AGENT_PRODUCT_ID,
     AGENT_MARKET_ID,
+    AGENT_TRUST_ID,
 })
 
 # Pseudo-`agent_hint` que le client renvoie quand l'utilisateur clique
@@ -48,6 +55,7 @@ AGENT_LABELS: dict[str, str] = {
     AGENT_ADVISOR_ID: "Conseil placement",
     AGENT_PRODUCT_ID: "Produits Vancelian",
     AGENT_MARKET_ID: "Veille marché",
+    AGENT_TRUST_ID: "Confiance & sécurité",
 }
 
 
@@ -149,6 +157,9 @@ class AgentEvent:
     # générique : chaque embed a un `type` propre (ex. `transaction_detail`,
     # futur `product_card`, `portfolio_summary`…) que le client dispatche.
     embeds: Optional[list[dict]] = None            # type='done'
+    # Pipeline product (Slack-like) : métadonnées du juge sortie — persistées
+    # dans `message_payload.metadata.product_pipeline_output_judge`.
+    output_judge_metadata: Optional[dict] = None   # type='done'
     error_code: Optional[str] = None               # type='error'
     thinking_phase: Optional[str] = None           # type='thinking' (ex. 'diagnose')
     thinking_agent: Optional[str] = None           # type='thinking' (ex. 'compliance')
@@ -178,6 +189,10 @@ class AgentEvent:
                 payload["consultations"] = list(self.consultations)
             if self.embeds:
                 payload["embeds"] = list(self.embeds)
+            if self.output_judge_metadata:
+                payload["product_pipeline_output_judge"] = dict(
+                    self.output_judge_metadata
+                )
             return payload
         if self.type == "error":
             return {"type": "error", "message": self.error_code or "unknown"}
@@ -214,6 +229,24 @@ class RouterDecision:
     extracted_entities: dict = field(default_factory=dict)
     fallback_choices: list[ChoiceOption] = field(default_factory=list)
     redirect_bridge: Optional[str] = None
+    # Router v2 (2026-05-04) — pré-classification keyword des tags
+    # d'intention Vancelian. Persistée dans `assistance_agent_decisions`
+    # pour audit / debug via la vue admin 3-colonnes.
+    intent_classification: Optional[dict] = None
+    # Cognitive Bot v4 — Lot 1 (2026-05-04) — snapshot cognitif du tour
+    # (emotional_intent, conversation_stage, trust_level, knowledge_level).
+    # Calculé par ``services.assistance.agents.cognitive_state.compute_cognitive_state``,
+    # persisté dans ``assistance_agent_decisions.arguments_json`` et lu
+    # au tour suivant pour assurer la continuité (notamment du
+    # trust_level qui s'érode / regagne tour par tour).
+    cognitive_state: Optional[dict] = None
+    # Cognitive Bot v4 — Lot 2 (2026-05-04) — objectif du tour calculé
+    # de façon déterministe à partir du ``cognitive_state``
+    # (cf. ``services.assistance.agents.conversation_objective``).
+    # Forme : {primary_goal, next_best_action, stop_pushing,
+    # strategy_hint, source_emotion, source_stage}. Injecté dans le
+    # system prompt des agents experts pour orienter leur réponse.
+    objective: Optional[dict] = None
 
     @property
     def is_decisive(self) -> bool:

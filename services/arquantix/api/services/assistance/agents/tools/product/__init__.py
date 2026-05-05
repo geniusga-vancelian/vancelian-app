@@ -34,6 +34,8 @@ from services.assistance.agents.tools.product import (
     read_product_knowledge,
     read_wiki_page,
     select_wiki_pages,
+    show_bundle_detail,
+    show_crypto_bundles,
     show_instrument_card,
 )
 
@@ -42,5 +44,7 @@ __all__ = [
     "read_product_knowledge",
     "read_wiki_page",
     "select_wiki_pages",
+    "show_bundle_detail",
+    "show_crypto_bundles",
     "show_instrument_card",
 ]

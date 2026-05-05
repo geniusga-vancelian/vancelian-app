@@ -1276,6 +1276,14 @@ class AssistanceConversation(Base):
     summarized_until_turn = Column(Integer, nullable=True)
     # Horodatage de la dernière consolidation mémoire (debug / diag).
     summary_updated_at = Column(DateTime(timezone=True), nullable=True)
+    # ── Phase 2 wiki v1.4 patch — Slot « topic en cours » (migration 150) ──
+    # Sujet actif de la conversation à l'instant t (vs. recent_turns qui
+    # sont les N derniers messages bruts, et conversation_summary qui est
+    # une narration). Set automatiquement par les tools experts qui
+    # ancrent un sujet (`show_bundle_detail`, `show_instrument_card`,
+    # etc.) et lu par le router pour stabiliser les follow-ups.
+    # Schéma libre : cf. `services.assistance.conversation_topic`.
+    current_topic = Column(JSONB(astext_type=Text), nullable=True)
 
 
 class AssistanceMessage(Base):
@@ -1418,6 +1426,130 @@ class AssistanceAgentDecision(Base):
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    # Cognitive Bot v4 — Lot 6 (2026-05-04) — colonnes dénormalisées
+    # extraites depuis ``arguments_json->'cognitive_state'`` et
+    # ``arguments_json->'objective'`` pour permettre des index natifs
+    # (analytics funnel) et la lecture par des outils tiers (Metabase).
+    # ``arguments_json`` reste la **source de vérité** (audit complet) ;
+    # ces colonnes sont remplies en double-write par le runtime
+    # (`service._persist_router_decision`) — cf. migration 152 +
+    # ``COGNITIVE_BOT.md`` §11. Toutes nullable : pas de contrainte CHECK
+    # pour ne pas figer les enums (V2 = classifieur ML potentiel).
+    emotional_intent = Column(String(32), nullable=True)
+    conversation_stage = Column(String(16), nullable=True)
+    knowledge_level = Column(String(8), nullable=True)
+    trust_level = Column(Float, nullable=True)
+    primary_goal = Column(String(16), nullable=True)
+    next_best_action = Column(String(20), nullable=True)
+
+
+class AssistanceClientDiscoveryProject(Base):
+    """Cognitive Bot v4 — Lot 7 (2026-05-04). Projet client extrait par
+    le ``client_discovery_extractor`` (achat maison, retraite, vacances…).
+
+    Lié à la **personne** (FK ``persons.id``) plus qu'au ``pe_clients``
+    pour permettre la mémoire **cross-conversation** (un même projet
+    peut être évoqué dans plusieurs conv). ``conversation_id_source``
+    trace la conv où le projet a été détecté pour la première fois.
+
+    Cf. migration 153 + ``CLIENT_DISCOVERY.md``.
+    """
+
+    __tablename__ = "assistance_client_discovery_projects"
+    __table_args__ = (
+        # Les index partiels sont créés en Alembic (pas exprimables ici).
+        {"schema": "public"},
+    )
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+        nullable=False,
+    )
+    person_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.persons.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    conversation_id_source = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "public.assistance_conversations.id", ondelete="SET NULL"
+        ),
+        nullable=True,
+    )
+    label = Column(String(80), nullable=False)
+    # ``status`` ∈ {active, paused, completed, abandoned}. Pas de CHECK
+    # SQL pour laisser respirer (cf. migration 153).
+    status = Column(String(16), nullable=False, server_default="active")
+    confidence = Column(Float, nullable=True)
+    parameters = Column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    created_at_turn = Column(Integer, nullable=True)
+    last_touched_at_turn = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AssistanceFloatingParameter(Base):
+    """Cognitive Bot v4 — Lot 7. Paramètre extrait par le discovery
+    extractor mais non encore attribué à un projet.
+
+    Cas typique : le user dit « 4 ans » sans nommer le projet, on
+    stocke en floating et on demande clarification au prochain tour.
+    Cf. ``CLIENT_DISCOVERY.md`` — règles d'attribution strictes.
+    """
+
+    __tablename__ = "assistance_floating_parameters"
+    __table_args__ = ({"schema": "public"},)
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+        nullable=False,
+    )
+    conversation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "public.assistance_conversations.id", ondelete="CASCADE"
+        ),
+        nullable=False,
+    )
+    person_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.persons.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    parameter_kind = Column(String(32), nullable=False)
+    parameter_value = Column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    # ``status`` ∈ {pending_attribution, attributed, discarded}.
+    status = Column(
+        String(24), nullable=False, server_default="pending_attribution"
+    )
+    attributed_project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "public.assistance_client_discovery_projects.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    created_at_turn = Column(Integer, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class ProductKnowledge(Base):

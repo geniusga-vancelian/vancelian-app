@@ -65,6 +65,52 @@ from services.assistance.agents.tools.contracts import ToolContext, ToolSpec
 logger = logging.getLogger(__name__)
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Phase 2 wiki v1.4 patch 3 — Garde-fou cross-référentiel SQL ↔ wiki MD
+# ─────────────────────────────────────────────────────────────────────
+#
+# Empiriquement (cf. analyse conv `534d545b` 2026-05-04), le LLM peut
+# passer des slugs **SQL** (table `product_knowledge`) à `read_wiki_page`
+# qui s'attend à des slugs **wiki MD**. Exemple observé :
+#
+#     read_wiki_page(slug="product_basics_exclusive_offer")  → not_found
+#     read_wiki_page(slug="product_basics_vault")            → not_found
+#     read_wiki_page(slug="product_basics_livret_vancelian") → not_found
+#
+# Ces slugs existent **uniquement** dans la table SQL. Le `not_found`
+# générique ne dit pas au LLM où chercher → il boucle, parfois jusqu'à
+# MAX_ITER. On retourne maintenant une erreur typée `wrong_repo` avec
+# un hint actionnable.
+#
+# Préfixes SQL canoniques (cf. seed migrations 149 + 151) :
+
+SQL_KNOWLEDGE_SLUG_PREFIXES: tuple[str, ...] = (
+    "product_basics_",
+    "deposit_delay_",
+    "withdrawal_delay_",
+    "kyc_",
+    "swap_",
+    "kind_",
+)
+
+# Slugs SQL exacts (sans préfixe régulier) — extension future à mettre
+# ici si on ajoute d'autres slugs canoniques.
+SQL_KNOWLEDGE_SLUGS_EXACT: frozenset[str] = frozenset({
+    "vancelian_product_catalog",
+})
+
+
+def _is_sql_knowledge_slug(slug: str) -> bool:
+    """`True` si le slug fourni est un slug SQL `product_knowledge`,
+    pas un slug wiki MD. Heuristique sur préfixes + whitelist exacte."""
+    if not slug:
+        return False
+    s = slug.strip().lower()
+    if s in SQL_KNOWLEDGE_SLUGS_EXACT:
+        return True
+    return any(s.startswith(p) for p in SQL_KNOWLEDGE_SLUG_PREFIXES)
+
+
 SPEC: ToolSpec = {
     "type": "function",
     "function": {
@@ -125,6 +171,32 @@ def execute(
 
     if not safe_category or not safe_slug:
         return {"error": "missing_args"}
+
+    # Phase 2 wiki v1.4 patch 3 — garde-fou cross-référentiel.
+    # Un slug `product_basics_*` (ou autre préfixe SQL) est dans la
+    # table `product_knowledge`, pas dans le wiki MD. On retourne une
+    # erreur typée + un hint actionnable au lieu de `not_found`.
+    if _is_sql_knowledge_slug(safe_slug):
+        logger.info(
+            "read_wiki_page.wrong_repo agent=%s conv=%s "
+            "category=%s slug=%s — slug looks SQL, hinting redirect",
+            ctx.agent_id,
+            ctx.conversation_id,
+            safe_category,
+            safe_slug,
+        )
+        return {
+            "error": "wrong_repo",
+            "category": safe_category,
+            "slug": safe_slug,
+            "hint": (
+                f"Le slug `{safe_slug}` est dans la table SQL "
+                "`product_knowledge`, pas dans le wiki markdown. "
+                f"Appelle `read_product_knowledge(slug='{safe_slug}')` "
+                "à la place."
+            ),
+            "use_tool": "read_product_knowledge",
+        }
 
     if safe_category not in wiki_repo.ALL_CATEGORIES:
         logger.info(

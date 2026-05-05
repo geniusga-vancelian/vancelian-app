@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from services.assistance import memory as assistance_memory
 from services.assistance.agents.base import (
@@ -32,6 +32,7 @@ from services.assistance.agents.base import (
     AGENT_DEFAULT_ID,
     AGENT_MARKET_ID,
     AGENT_PRODUCT_ID,
+    AGENT_TRUST_ID,
     KNOWN_AGENT_IDS,
     RESUME_TOPIC_HINT_ID,
     AgentInput,
@@ -51,12 +52,15 @@ logger = logging.getLogger(__name__)
 
 
 # Liste des `agent_id` que le router est autorisé à choisir.
+# Cognitive Bot v4 — Lot 4 (2026-05-04) : ajout de `trust` pour les
+# demandes purement sécurité / régulation / custody / hack.
 ROUTABLE_AGENTS: list[str] = [
     AGENT_DEFAULT_ID,
     AGENT_COMPLIANCE_ID,
     AGENT_ADVISOR_ID,
     AGENT_PRODUCT_ID,
     AGENT_MARKET_ID,
+    AGENT_TRUST_ID,
 ]
 
 # Identifiants d'option valides dans le QCM produit par
@@ -136,11 +140,39 @@ def _routing_tools() -> list[dict]:
                     "redirect_off_topic dès qu'un mot-clé patrimonial "
                     "(argent, épargne, placement, investissement, "
                     "patrimoine, retraite, fiscalité, immobilier) "
-                    "apparaît dans le message."
+                    "apparaît dans le message. "
+                    "ROUTER V2 — paramètre OPTIONNEL `tag` : si tu "
+                    "fournis un tag d'intention ∈ {epargner, "
+                    "securiser_capital, livret_coffre, rendement, "
+                    "avenir_securite, investir, performance, retraite, "
+                    "bundle_crypto, exclusive_offer, instrument_cote, "
+                    "immobilier_long_terme, compte_kyc, depot, retrait, "
+                    "virement_sepa, carte_visa, banque, actu_marche, "
+                    "opinion_marche, cours_evolution, macro_inflation, "
+                    "trading, reussir, projet_vie, decouvrir, "
+                    "argent_general}, le runtime utilisera un QCM "
+                    "canonique calibré (prompt + options éditoriales) "
+                    "et IGNORERA les `prompt`/`options` que tu fournis. "
+                    "Préfère cela quand le tag est clair (cf. bloc "
+                    "[INTENT TAGS]). Si le sujet est très contextuel "
+                    "(produit nommé dans recent_turns, instrument coté "
+                    "spécifique), N'envoie PAS de `tag` et fournis des "
+                    "options sur mesure."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
+                        "tag": {
+                            "type": "string",
+                            "description": (
+                                "OPTIONNEL — tag d'intention Vancelian "
+                                "qui active un QCM canonique calibré. "
+                                "Voir liste exhaustive dans la "
+                                "description du tool. Si fourni et "
+                                "présent dans le catalogue, override "
+                                "complet de prompt + options."
+                            ),
+                        },
                         "prompt": {
                             "type": "string",
                             "description": (
@@ -251,43 +283,6 @@ def _routing_tools() -> list[dict]:
                                 "Markdown, pas de listes, pas d'emoji."
                             ),
                         },
-                        "options": {
-                            "type": "array",
-                            "minItems": 0,
-                            "maxItems": 5,
-                            "description": (
-                                "Si conversation engagée : OPTIONNEL, 1 "
-                                "option `resume_topic` en première "
-                                "position pour ramener au sujet courant. "
-                                "Si conversation neuve : 3 à 4 options "
-                                "parmi compliance/advisor/product/market "
-                                "formulées en langage client."
-                            ),
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "id": {
-                                        "type": "string",
-                                        "enum": OFF_TOPIC_OPTION_IDS,
-                                        "description": (
-                                            "ID de l'option : un agent "
-                                            "expert ou la valeur "
-                                            "spéciale `resume_topic`."
-                                        ),
-                                    },
-                                    "label": {
-                                        "type": "string",
-                                        "description": (
-                                            "Libellé court en français "
-                                            "(ex. « Mon compte et mes "
-                                            "opérations », « Reprendre "
-                                            "<sujet courant> »)."
-                                        ),
-                                    },
-                                },
-                                "required": ["id", "label"],
-                            },
-                        },
                     },
                     "required": ["bridge"],
                 },
@@ -318,12 +313,147 @@ def _build_router_messages(agent_input: AgentInput) -> list[dict]:
     if memory_block:
         messages.append({"role": "system", "content": memory_block})
 
+    # Phase 2 wiki v1.4 patch — Slot « topic en cours » injecté en
+    # contexte system. Le LLM router lit cette ligne **avant** de
+    # classifier ; sur un follow-up déictique (« ce bundle », « il/
+    # elle »), il doit garder l'`agent_owner` du topic au lieu de
+    # réinférer depuis le seul user message.
+    topic_block = _build_topic_block(agent_input)
+    if topic_block:
+        messages.append({"role": "system", "content": topic_block})
+
+    # Router v2 (2026-05-04) — pré-classification keyword-matching FR+EN
+    # qui annote le user message avec son `primary_tag` / `family` /
+    # `scope_level` / `preferred_agent`. C'est un **signal**, pas une
+    # décision : le LLM peut surclasser. Mais cela permet de briser les
+    # symétries dans les cas tendus (« quel bundle… » → bundle_crypto
+    # détecté → product/advisor le plus probable).
+    intent_block = _build_intent_tags_block(agent_input)
+    if intent_block:
+        messages.append({"role": "system", "content": intent_block})
+
+    # Cognitive Bot v4 (2026-05-04) — bloc [COGNITIVE STATE] préliminaire
+    # injecté dans le prompt routeur. Permet au LLM router de moduler
+    # ses décisions selon l'état émotionnel du client :
+    #   * FEAR / ANGER → favoriser advisor (rassure / désescalade) plutôt
+    #     que product (pousse).
+    #   * COMPLIANCE   → favoriser compliance.
+    #   * OPPORTUNITY / CURIOSITY clair → router direct sur expert.
+    # Le state injecté est PRÉLIMINAIRE (calculé avant la décision) ;
+    # le state final est calculé après pour les agents experts.
+    cognitive_block = _build_cognitive_state_block(agent_input)
+    if cognitive_block:
+        messages.append({"role": "system", "content": cognitive_block})
+
+    # Cognitive Bot v4 — Lot 7 (2026-05-04). Bloc [CLIENT DISCOVERY]
+    # injecté SI projets actifs ou floating params présents. Permet
+    # au router de relier « investissements » à un projet en cours
+    # (« achat maison ») au lieu de redémarrer thématiquement.
+    discovery_block = _build_client_discovery_block(agent_input)
+    if discovery_block:
+        messages.append({"role": "system", "content": discovery_block})
+
     # Garder les 4 derniers tours max (2 user + 2 assistant) pour donner
     # un contexte conversationnel court, sans gonfler les tokens.
     tail = (agent_input.recent_turns or [])[-4:]
     messages.extend(tail)
 
     return messages
+
+
+def _build_client_discovery_block(agent_input: AgentInput) -> str:
+    """Lot 7 — lit ``memory_state['client_discovery']`` (déjà rendu en
+    string par ``service.start_chat_turn`` via
+    ``discovery_engine.render_discovery_for_prompt``) et le retourne
+    tel quel pour injection. Vide si rien à dire.
+    """
+    state = agent_input.memory_state or {}
+    rendered = state.get("client_discovery")
+    if isinstance(rendered, str) and rendered.strip():
+        return rendered
+    return ""
+
+
+def _build_cognitive_state_block(agent_input: AgentInput) -> str:
+    """Lit le ``cognitive_state`` du tour courant (préliminaire) depuis
+    ``agent_input.memory_state`` et le rend en bloc compact pour le
+    prompt routeur. Retourne ``""`` si rien à dire."""
+    state = (agent_input.memory_state or {}).get("cognitive_state")
+    if not isinstance(state, dict):
+        return ""
+    try:
+        from services.assistance.agents.cognitive_state import (
+            CognitiveState,
+            render_cognitive_state_for_prompt,
+        )
+
+        cog = CognitiveState.from_dict(state)
+        rendered = render_cognitive_state_for_prompt(cog)
+        return rendered or ""
+    except Exception:  # noqa: BLE001
+        logger.exception("router._build_cognitive_state_block_failed")
+        return ""
+
+
+def _build_intent_tags_block(agent_input: AgentInput) -> str:
+    """Pré-classifie le dernier user message via keyword-matching et
+    rend le résultat dans un bloc system court pour le router LLM.
+
+    Retourne ``""`` si le message est vide ou si rien n'a matché.
+    """
+    user_text = (getattr(agent_input, "user_message", "") or "").strip()
+    if not user_text:
+        # Fallback : prendre le dernier user message des recent_turns.
+        recent = getattr(agent_input, "recent_turns", None) or []
+        for turn in reversed(recent):
+            if isinstance(turn, dict) and turn.get("role") == "user":
+                user_text = str(turn.get("content") or "").strip()
+                break
+    if not user_text:
+        return ""
+
+    # Import local pour éviter un cycle au démarrage (router_intent_tags
+    # n'a pas besoin du router lui-même mais ce module est aussi
+    # importé par d'autres helpers du runtime).
+    from services.assistance.agents.router_intent_tags import (
+        classify_message_tags,
+        render_classification_for_prompt,
+    )
+
+    classification = classify_message_tags(user_text)
+    rendered = render_classification_for_prompt(classification)
+    return rendered or ""
+
+
+def _build_topic_block(agent_input: AgentInput) -> str:
+    """Lit le topic depuis `agent_input.memory_state["current_topic"]`
+    et le rend en libellé court pour le prompt router.
+
+    Le `service.py` est responsable de remplir `memory_state` avec le
+    topic lu en DB avant d'appeler `classify`. Si le slot est absent
+    ou mal formé, on retourne `""` (pas de section dans le prompt).
+    """
+    state = agent_input.memory_state or {}
+    raw = state.get("current_topic")
+    if not isinstance(raw, dict):
+        return ""
+
+    # Import local pour éviter cycle d'imports (router est chargé tôt
+    # dans services.assistance, conversation_topic charge database).
+    from services.assistance.conversation_topic import (
+        render_topic_for_prompt,
+    )
+    rendered = render_topic_for_prompt(raw)
+    if not rendered:
+        return ""
+    return (
+        "[CONTEXT TOPIC] "
+        + rendered
+        + " Si le user message est un follow-up déictique (« ce bundle », "
+        "« il/elle », « la perf »), reste sur l'agent_owner ci-dessus "
+        "(ne bascule PAS sur market sur un mot-clé isolé). Si le user "
+        "change clairement de sujet, ignore ce topic."
+    )
 
 
 def classify(agent_input: AgentInput) -> RouterDecision:
@@ -339,6 +469,16 @@ def classify(agent_input: AgentInput) -> RouterDecision:
     temperature = assistance_router_temperature()
     confidence_min = assistance_router_confidence_min()
 
+    # Router v2 — pré-classification keyword (cf. Lot 2). Le résultat
+    # est attaché à toutes les RouterDecision de ce tour pour audit
+    # via `assistance_agent_decisions` (admin monitoring).
+    intent_dict = _compute_intent_classification_dict(agent_input)
+
+    def _attach(decision: RouterDecision) -> RouterDecision:
+        if intent_dict and decision.intent_classification is None:
+            decision.intent_classification = intent_dict
+        return decision
+
     try:
         response_message = chat_completion_with_tools(
             messages,
@@ -351,11 +491,11 @@ def classify(agent_input: AgentInput) -> RouterDecision:
         logger.warning(
             "assistance.router.llm_failed exc=%s — fallback default", exc
         )
-        return RouterDecision(
+        return _attach(RouterDecision(
             agent_id=AGENT_DEFAULT_ID,
             confidence=0.0,
             reasoning="router_llm_failed",
-        )
+        ))
 
     tool_calls = response_message.get("tool_calls") or []
     if not tool_calls:
@@ -365,11 +505,11 @@ def classify(agent_input: AgentInput) -> RouterDecision:
             "assistance.router.no_tool_call response_text=%s",
             (response_message.get("content") or "")[:200],
         )
-        return RouterDecision(
+        return _attach(RouterDecision(
             agent_id=AGENT_DEFAULT_ID,
             confidence=0.0,
             reasoning="router_no_tool_call",
-        )
+        ))
 
     # On prend le premier tool call (un seul demandé par le prompt).
     call = tool_calls[0]
@@ -382,25 +522,71 @@ def classify(agent_input: AgentInput) -> RouterDecision:
         logger.warning(
             "assistance.router.invalid_args fn=%s raw=%s", fn_name, raw_args[:200]
         )
-        return RouterDecision(
+        return _attach(RouterDecision(
             agent_id=AGENT_DEFAULT_ID,
             confidence=0.0,
             reasoning="router_invalid_args",
-        )
+        ))
 
     if fn_name == "route_to":
-        return _parse_route_to(args)
+        return _attach(_parse_route_to(args))
     if fn_name == "ask_clarification":
-        return _parse_ask_clarification(args, confidence_min=confidence_min)
+        return _attach(_parse_ask_clarification(args, confidence_min=confidence_min))
     if fn_name == "redirect_off_topic":
-        return _parse_redirect_off_topic(args, confidence_min=confidence_min)
+        memory_state = getattr(agent_input, "memory_state", None) or {}
+        current_topic = (
+            memory_state.get("current_topic")
+            if isinstance(memory_state, dict)
+            else None
+        )
+        return _attach(_parse_redirect_off_topic(
+            args,
+            confidence_min=confidence_min,
+            current_topic=current_topic,
+        ))
 
     logger.warning("assistance.router.unknown_function fn=%s", fn_name)
-    return RouterDecision(
+    return _attach(RouterDecision(
         agent_id=AGENT_DEFAULT_ID,
         confidence=0.0,
         reasoning=f"router_unknown_function:{fn_name}",
+    ))
+
+
+def _compute_intent_classification_dict(
+    agent_input: AgentInput,
+) -> Optional[dict]:
+    """Calcule la classification keyword pour ce tour et la rend en
+    dict serializable (pour persistance ``assistance_agent_decisions``
+    et JSON-friendly).
+
+    Retourne ``None`` si rien à dire (message vide ou aucun match).
+    """
+    user_text = (getattr(agent_input, "user_message", "") or "").strip()
+    if not user_text:
+        recent = getattr(agent_input, "recent_turns", None) or []
+        for turn in reversed(recent):
+            if isinstance(turn, dict) and turn.get("role") == "user":
+                user_text = str(turn.get("content") or "").strip()
+                break
+    if not user_text:
+        return None
+
+    from services.assistance.agents.router_intent_tags import (
+        classify_message_tags,
     )
+
+    classification = classify_message_tags(user_text)
+    if not classification.primary_tag:
+        return None
+
+    return {
+        "primary_tag": classification.primary_tag,
+        "family": classification.family,
+        "scope_level": classification.scope_level,
+        "preferred_agent": classification.preferred_agent,
+        "tags": list(classification.tags),
+    }
 
 
 def _parse_route_to(args: dict[str, Any]) -> RouterDecision:
@@ -436,12 +622,65 @@ def _parse_ask_clarification(
       - `fallback_choices` rempli pour que le service.py puisse émettre
         l'event SSE `choices` directement (avec ajout automatique de
         l'option `"freeform"` côté service.py).
+
+    **Router v2 — paramètre `tag`** : si fourni et présent dans le
+    catalogue ``router_clarification_catalog``, le runtime substitue
+    prompt + options par le QCM canonique (override complet). Sinon,
+    fallback sur le `prompt`/`options` fournis par le LLM.
     """
+    tag = str(args.get("tag") or "").strip() or None
+
+    # Cas 1 — tag dans le catalogue : on ignore prompt/options du LLM.
+    if tag:
+        from services.assistance.agents.router_clarification_catalog import (
+            get_clarification_for_tag,
+        )
+
+        canonical = get_clarification_for_tag(tag)
+        if canonical:
+            options: list[ChoiceOption] = []
+            # Le catalogue autorise 2 entries avec le même agent_id
+            # si les labels sont distincts. On déduplique sur le tuple
+            # (id, label) plutôt que sur id seul.
+            seen_pairs: set[tuple[str, str]] = set()
+            for opt in canonical.get("options", []):
+                opt_id = str(opt.get("agent_id") or "").strip()
+                opt_label = str(opt.get("label") or "").strip()
+                if (
+                    not opt_id
+                    or opt_id not in ROUTABLE_AGENTS
+                    or not opt_label
+                ):
+                    continue
+                pair = (opt_id, opt_label)
+                if pair in seen_pairs:
+                    continue
+                options.append(ChoiceOption(id=opt_id, label=opt_label[:120]))
+                seen_pairs.add(pair)
+
+            if options:
+                return RouterDecision(
+                    agent_id=AGENT_DEFAULT_ID,
+                    confidence=max(0.0, confidence_min - 0.01),
+                    reasoning=(
+                        canonical.get("prompt", "")[:500]
+                        or f"clarification_tag:{tag}"
+                    ),
+                    fallback_choices=options,
+                )
+            # Catalogue vide ou mal formé : on retombe sur le path LLM.
+            logger.warning(
+                "assistance.router.clarification_catalog_empty_options "
+                "tag=%s — fallback LLM",
+                tag,
+            )
+
+    # Cas 2 — fallback LLM (pas de tag, ou tag inconnu).
     prompt = str(args.get("prompt") or "").strip()
     raw_options = args.get("options") or []
 
-    options: list[ChoiceOption] = []
-    seen_ids: set[str] = set()
+    options = []
+    seen_ids = set()
     for opt in raw_options:
         if not isinstance(opt, dict):
             continue
@@ -474,7 +713,10 @@ def _parse_ask_clarification(
 
 
 def _parse_redirect_off_topic(
-    args: dict[str, Any], *, confidence_min: float
+    args: dict[str, Any],
+    *,
+    confidence_min: float,
+    current_topic: Optional[dict[str, Any]] = None,
 ) -> RouterDecision:
     """Parse + sanitize un tool call `redirect_off_topic` (règle 6).
 
@@ -482,14 +724,18 @@ def _parse_redirect_off_topic(
       - Le tool est utilisé pour un **hors-sujet manifeste**, pas pour
         une ambiguïté entre 2 agents → l'intention est claire (hors
         scope), seul le recentrage doit être renvoyé.
-      - `bridge` (texte) est obligatoire ; `options` est facultatif.
-        Quand absent ou vide, le `service.py` n'émettra qu'un message
-        de recentrage (`prompt = bridge`) avec uniquement l'option
-        `freeform` (« Rien de tout ça — je reformule »), ajoutée
-        systématiquement par `_build_choices_payload`.
-      - L'option spéciale `resume_topic` est autorisée et résolue
-        serveur-side dans `service._decide_agent` (lookup du dernier
-        `agent_used` non-router de la conversation).
+      - `bridge` (texte) est obligatoire et reste libre (LLM-rédigé).
+      - **Router v2 (2026-05-04)** : les ``options`` ne sont plus prises
+        du LLM — elles sont **substituées par la liste FIXE**
+        ``OFF_TOPIC_FIXED_OPTIONS`` (cf.
+        ``router_off_topic_options.py``), avec ajout dynamique d'un slot
+        ``resume_topic`` en 1ʳᵉ position si la conversation a un
+        ``current_topic`` non-trivial. Cela corrige le pattern observé
+        en prod où le LLM inventait des options bancales (« default →
+        Discuter de Vancelian »).
+      - L'option spéciale `resume_topic` est résolue serveur-side dans
+        `service._decide_agent` (lookup du dernier `agent_used`
+        non-router de la conversation).
 
     Le résultat est une `RouterDecision` avec :
       - `agent_id = AGENT_DEFAULT_ID` (placeholder, jamais instancié).
@@ -497,7 +743,7 @@ def _parse_redirect_off_topic(
         sur le path SSE `choices`.
       - `redirect_bridge = bridge` → flag `is_off_topic = True` côté
         consommateurs (logs, build_choices).
-      - `fallback_choices = options sanitizées` (peut être `[]`).
+      - `fallback_choices = liste fixe + slot resume éventuel`.
     """
     bridge = str(args.get("bridge") or "").strip()
     if not bridge:
@@ -509,20 +755,17 @@ def _parse_redirect_off_topic(
             reasoning="redirect_off_topic_no_bridge",
         )
 
-    raw_options = args.get("options") or []
-    options: list[ChoiceOption] = []
-    seen_ids: set[str] = set()
-    for opt in raw_options:
-        if not isinstance(opt, dict):
-            continue
-        opt_id = str(opt.get("id") or "").strip()
-        opt_label = str(opt.get("label") or "").strip()
-        if not opt_id or opt_id not in OFF_TOPIC_OPTION_IDS or opt_id in seen_ids:
-            continue
-        if not opt_label:
-            continue
-        options.append(ChoiceOption(id=opt_id, label=opt_label[:120]))
-        seen_ids.add(opt_id)
+    # Router v2 — liste FIXE + slot resume dynamique.
+    # Import local pour éviter un cycle d'import au démarrage.
+    from services.assistance.agents.router_off_topic_options import (
+        build_off_topic_options,
+    )
+
+    fixed_options = build_off_topic_options(current_topic=current_topic)
+    options: list[ChoiceOption] = [
+        ChoiceOption(id=str(opt["id"]), label=str(opt["label"])[:120])
+        for opt in fixed_options
+    ]
 
     return RouterDecision(
         agent_id=AGENT_DEFAULT_ID,

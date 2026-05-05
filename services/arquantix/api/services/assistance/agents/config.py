@@ -49,6 +49,86 @@ def assistance_router_confidence_min() -> float:
     return v
 
 
+def assistance_router_hot_path_enabled() -> bool:
+    """Active le **hot-path follow-up** du router (Phase 2 wiki v1.4 patch).
+
+    Quand activé : un message user court (≤ `assistance_router_hot_path_max_chars`)
+    qui suit immédiatement un tour d'agent expert (i.e. dernier message
+    assistant émis par `product`/`compliance`/`advisor`/`market`)
+    **bypasse** l'appel LLM router et conserve l'agent précédent.
+
+    Défaut : `true` — économie ~150-300 ms et stabilité conversationnelle
+    (cf. analyse `5bef01e9` 2026-05-04 où le router avait flippé entre
+    `product` et `market` sur 3 follow-ups consécutifs sur le même bundle).
+
+    Override : `ASSISTANCE_ROUTER_HOT_PATH_ENABLED=false` pour désactiver
+    en cas de régression observée en production.
+    """
+    raw = os.getenv("ASSISTANCE_ROUTER_HOT_PATH_ENABLED", "true").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def assistance_router_hot_path_max_chars() -> int:
+    """Longueur max d'un user message éligible au hot-path (Phase 2 wiki
+    v1.4 patch).
+
+    Défaut : 60 caractères. Au-delà, on ne fait pas l'hypothèse que
+    le message est un follow-up court (questions ouvertes plus longues
+    méritent une vraie classification LLM).
+
+    Clampé dans [10, 300].
+    """
+    try:
+        v = int(os.getenv("ASSISTANCE_ROUTER_HOT_PATH_MAX_CHARS", "60"))
+    except ValueError:
+        v = 60
+    return max(10, min(300, v))
+
+
+def assistance_wiki_llm_retriever_enabled() -> bool:
+    """Active le **Karpathy LLM-as-retriever** sur le wiki (Phase 2 wiki
+    v1.4 patch 3).
+
+    Quand activé : `select_wiki_pages` appelle d'abord un LLM avec un
+    catalogue compact des 222+ fiches FAQ ; le LLM choisit 3-5 slugs
+    pertinents. Fallback transparent sur le scoring keyword si l'appel
+    échoue. Cf. `services/assistance/agents/repositories/wiki_llm_retriever.py`.
+
+    Défaut : `true` — corrige les rates de matching FR↔EN observés en
+    prod (cf. analyse conv `534d545b` 2026-05-04 où `select_wiki_pages`
+    retourne 0 match sur « parle moi des offres exclusives » alors que
+    34 fiches existent).
+
+    Override : `ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED=false` pour
+    revenir au comportement d'origine en cas de régression.
+    """
+    raw = os.getenv("ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED", "true").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def assistance_wiki_llm_retriever_model() -> str:
+    """Modèle utilisé par le retriever LLM. Défaut : modèle agent
+    `product` (cohérence + reuse caches OpenAI). Override :
+    `ASSISTANCE_WIKI_LLM_RETRIEVER_MODEL`."""
+    return (
+        os.getenv("ASSISTANCE_WIKI_LLM_RETRIEVER_MODEL")
+        or assistance_agent_model("product")
+    )
+
+
+def assistance_wiki_llm_retriever_max_slugs() -> int:
+    """Nombre max de slugs retournés par le retriever LLM (cap).
+
+    Défaut : 5. Clampé dans [1, 10] — au-delà, le LLM caller a trop de
+    candidats et risque de boucler.
+    """
+    try:
+        v = int(os.getenv("ASSISTANCE_WIKI_LLM_RETRIEVER_MAX_SLUGS", "5"))
+    except ValueError:
+        v = 5
+    return max(1, min(10, v))
+
+
 def assistance_agent_model(agent_id: str) -> str:
     """Modèle OpenAI à utiliser pour l'agent ``agent_id``.
 
@@ -166,6 +246,72 @@ def assistance_global_autonomy_killswitch() -> bool:
         os.getenv("ASSISTANCE_GLOBAL_AUTONOMY_KILLSWITCH") or "true"
     ).strip().lower()
     return raw in ("1", "true", "yes", "on")
+
+
+def assistance_product_slack_pipeline_enabled() -> bool:
+    """Pipeline multi-phases type bot Slack (guardrail entrée → Pass 1 sur
+    ``index.md`` → chargement fiches → agent → juge sortie optionnel).
+
+    Désactivable avec ``ASSISTANCE_PRODUCT_SLACK_PIPELINE_ENABLED=false``.
+
+    Défaut **true** : pipeline aligné bot Slack (guardrail → Pass 1 index →
+    pré-chargement wiki → agent). Désactive en cas de régression.
+    """
+    raw = (
+        os.getenv("ASSISTANCE_PRODUCT_SLACK_PIPELINE_ENABLED") or "true"
+    ).strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def assistance_product_pipeline_index_max_chars() -> int:
+    """Troncature defensive de ``index.md`` pour le Pass 1 (0 = illimité).
+
+    Clampé à [0, 500_000]. Défaut 0 (= pas de troncature).
+    """
+    try:
+        v = int(os.getenv("ASSISTANCE_PRODUCT_PIPELINE_INDEX_MAX_CHARS", "0"))
+    except ValueError:
+        v = 0
+    return max(0, min(500_000, v))
+
+
+def assistance_product_pipeline_page_max_chars() -> int:
+    """Taille max du corps par fiche injectée (Pass 3). Défaut 3000."""
+    return _parse_int_env(
+        "ASSISTANCE_PRODUCT_PIPELINE_PAGE_MAX_CHARS",
+        default=3000,
+        lo=500,
+        hi=50_000,
+    )
+
+
+def assistance_product_pipeline_output_judge_enabled() -> bool:
+    """Juge de sortie (PASS / REWRITE / BLOCK). Bufferise la réponse
+    jusqu'au ``done`` si activé.
+
+    Quand activé, les scores (5 critères 1–5), ``confidence``,
+    ``knowledge_gap`` et flags sont normalisés et persistés dans
+    ``message_payload.metadata.product_pipeline_output_judge`` ainsi
+    que dans l'event SSE ``done.product_pipeline_output_judge``.
+
+    Défaut **true**. Désactive avec
+    ``ASSISTANCE_PRODUCT_PIPELINE_OUTPUT_JUDGE_ENABLED=false`` si latence
+    ou coût trop élevés.
+    """
+    raw = (
+        os.getenv("ASSISTANCE_PRODUCT_PIPELINE_OUTPUT_JUDGE_ENABLED") or "true"
+    ).strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def assistance_product_pipeline_model() -> str:
+    """Modèle pour guardrail entrée, Pass 1 index et juge sortie.
+
+    Défaut : même modèle que l'agent ``product``.
+    """
+    return os.getenv("ASSISTANCE_PRODUCT_PIPELINE_MODEL") or assistance_agent_model(
+        "product"
+    )
 
 
 def assistance_product_guardrail_enabled() -> bool:

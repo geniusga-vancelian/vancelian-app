@@ -88,22 +88,28 @@ SPEC: ToolSpec = {
                 "target": {
                     "type": "string",
                     "description": (
-                        "Agent racine cible. Phase 2c : seul "
-                        "`product` est disponible."
+                        "Agent racine cible. `product` pour les bases "
+                        "produit / délais opérationnels. `trust` "
+                        "(Cognitive Bot v4 — Lot 4) pour les encarts "
+                        "factuels rassurants sur la régulation, la "
+                        "custody ou la sécurité."
                     ),
-                    "enum": ["product"],
+                    "enum": ["product", "trust"],
                     "maxLength": 32,
                 },
                 "purpose": {
                     "type": "string",
                     "description": (
                         "Identifiant whitelisté du sujet de "
-                        "consultation. Phase 2c : "
+                        "consultation. Cibles product : "
                         "`explain_deposit_delay`, "
                         "`explain_withdrawal_delay`, "
                         "`explain_kyc_review_typical_delay`, "
                         "`explain_product_basics`, "
-                        "`explain_swap_settlement_delay`."
+                        "`explain_swap_settlement_delay`. Cibles "
+                        "trust : `reassure_about_regulation`, "
+                        "`reassure_about_custody`, "
+                        "`reassure_about_security`."
                     ),
                     "maxLength": 64,
                 },

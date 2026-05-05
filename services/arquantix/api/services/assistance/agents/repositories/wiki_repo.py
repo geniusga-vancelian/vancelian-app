@@ -135,6 +135,11 @@ FAQ_CATEGORIES: frozenset[str] = frozenset(
         "business",
         "affiliate-partner",
         "b2b-agent",
+        # Cognitive Bot v4 — Lot 4 (2026-05-04) : seed dédié à l'agent
+        # ``trust`` (rassurance régulation/custody/sécurité). Distinct
+        # de ``legal-compliance`` (référentiel juridique) — ces fiches
+        # sont écrites avec un angle ACK émotionnel + factualité.
+        "trust-security",
         "other",
     }
 )
@@ -802,3 +807,21 @@ def select_pages(
 def total_pages_loaded() -> int:
     """Nombre de fiches actuellement en cache (pour debug / health)."""
     return len(_get_pages_cached())
+
+
+def all_pages() -> tuple["WikiPage", ...]:
+    """Retourne **toutes** les fiches indexées (cache TTL).
+
+    API publique exposée pour ``wiki_llm_retriever`` qui a besoin de
+    construire un catalogue compact (1 ligne / fiche) à passer au LLM
+    retriever. Hot path → on retourne directement le tuple cached
+    sans copie (les WikiPage sont immutables côté API publique).
+    """
+    return _get_pages_cached()
+
+
+def _cache_ttl_seconds() -> float:
+    """Expose le TTL du cache wiki à d'autres modules qui veulent
+    aligner leur cache avec celui du repo (cf. wiki_llm_retriever).
+    """
+    return _CACHE_TTL_SECONDS
