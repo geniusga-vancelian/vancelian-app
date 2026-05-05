@@ -19,6 +19,7 @@ import {
 import { toastError, toastSuccess } from '@/lib/admin/toast'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ArrowLeft, FileText, Info, RefreshCw, Snowflake, Sun, Trash2 } from 'lucide-react'
+import { AssistanceConversationsSection } from '@/components/admin/AssistanceConversationsSection'
 
 interface SessionSummary {
   session_id?: string
@@ -713,6 +714,8 @@ export default function CustomerDetailPage() {
       <Section title="Sécurité & sessions">
         <PlaceholderBlock title="Not available yet" message={data.security.message} />
       </Section>
+
+      <AssistanceConversationsSection personId={personId} />
 
       <Section title="Support & technique">
         <p className="text-xs text-slate-600 mb-2">{data.debug.hints}</p>

@@ -7,6 +7,10 @@ import { getPrimaryMenu, injectLanguageSwitcherIfMissing } from '@/lib/menu/getP
 import type { Locale } from '@/config/locales'
 import { resolveLayoutLocale } from '@/lib/i18n/resolveLayoutLocale'
 import {
+  getSiteI18nSettingsCached,
+  shouldShowPublicLanguageSwitcher,
+} from '@/lib/i18n/siteI18nSettings'
+import {
   DEFAULT_NAV_SHELL,
   getNavShellStateForPathname,
 } from '@/lib/cms/navShellContext'
@@ -14,10 +18,6 @@ import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
 import { CMS_PAGE_METADATA_FALLBACK } from '@/lib/metadata/cmsPageMetadata'
 import { getSiteMetadataBase } from '@/lib/metadata/siteOrigin'
 import { figmaDsBodyRootClassName } from '@/components/design-system/extracted/tokens/surfaces'
-import {
-  getSiteI18nSettingsCached,
-  shouldShowPublicLanguageSwitcher,
-} from '@/lib/i18n/siteI18nSettings'
 
 const siteMetadataBase = getSiteMetadataBase()
 

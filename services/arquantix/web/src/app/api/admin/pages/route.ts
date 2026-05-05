@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
 
       return { page: created, primaryMenuItemCreated: menuCreated }
     })
-
+      
     // If creating "home" page, create default sections
     // Only create sections for the "home" slug, not all homepage templates
     if (slug === 'home') {
