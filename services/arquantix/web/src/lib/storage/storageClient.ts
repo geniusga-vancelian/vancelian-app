@@ -7,11 +7,16 @@
 import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { r2Client } from './r2-client'
-import { assertR2Configured } from './r2Env'
+import {
+  assertR2Configured,
+  getR2BucketName,
+  getR2Endpoint,
+  getR2PublicUrl,
+} from './r2Env'
 
-const bucketName = process.env.R2_BUCKET_NAME || 'arquantix-media'
-const publicUrl = process.env.R2_PUBLIC_URL // Optional custom domain for public URLs
-const endpoint = process.env.R2_ENDPOINT
+const bucketName = getR2BucketName()
+const publicUrl = getR2PublicUrl()
+const endpoint = getR2Endpoint()
 
 export interface UploadResult {
   key: string

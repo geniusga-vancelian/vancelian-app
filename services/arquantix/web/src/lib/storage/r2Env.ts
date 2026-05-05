@@ -1,15 +1,47 @@
 /**
- * Variables d’environnement requises pour l’API S3 compatible (Cloudflare R2).
- * Le dashboard Cloudflare utilise ta session ; l’app a besoin de jetons R2 (Manage R2 API Tokens).
+ * Variables d’environnement pour l’API S3 compatible (Cloudflare R2).
+ * En prod ECS, les secrets sont souvent nommés STORAGE_* (alignés API Python) ;
+ * en local / doc historique on utilise R2_* — les deux sont acceptés.
  */
 
-const REQUIRED = ['R2_ENDPOINT', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'] as const
+function firstNonEmpty(...keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = process.env[k]
+    if (v !== undefined && String(v).trim() !== '') {
+      return String(v).trim()
+    }
+  }
+  return undefined
+}
+
+export function getR2Endpoint(): string | undefined {
+  return firstNonEmpty('R2_ENDPOINT', 'STORAGE_ENDPOINT')
+}
+
+export function getR2AccessKeyId(): string | undefined {
+  return firstNonEmpty('R2_ACCESS_KEY_ID', 'STORAGE_ACCESS_KEY_ID')
+}
+
+export function getR2SecretAccessKey(): string | undefined {
+  return firstNonEmpty('R2_SECRET_ACCESS_KEY', 'STORAGE_SECRET_ACCESS_KEY')
+}
+
+export function getR2BucketName(): string {
+  return firstNonEmpty('R2_BUCKET_NAME', 'STORAGE_BUCKET_NAME') ?? 'arquantix-media'
+}
+
+export function getR2PublicUrl(): string | undefined {
+  return firstNonEmpty('R2_PUBLIC_URL', 'STORAGE_PUBLIC_URL')
+}
+
+const REQUIRED_LABELS = ['R2_ENDPOINT', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'] as const
 
 export function missingR2EnvVarNames(): string[] {
-  return REQUIRED.filter((k) => {
-    const v = process.env[k]
-    return v === undefined || String(v).trim() === ''
-  })
+  const miss: string[] = []
+  if (!getR2Endpoint()) miss.push(REQUIRED_LABELS[0])
+  if (!getR2AccessKeyId()) miss.push(REQUIRED_LABELS[1])
+  if (!getR2SecretAccessKey()) miss.push(REQUIRED_LABELS[2])
+  return miss
 }
 
 export function isR2Configured(): boolean {
@@ -26,10 +58,9 @@ export function r2CredentialsNotConfiguredMessage(): string {
   }
   return (
     `R2 credentials not configured (missing: ${miss.join(', ')}). ` +
-    `The Cloudflare console uses your account login; this app needs R2 S3 API keys ` +
-    `(R2 → Manage R2 API Tokens). With npm run dev: services/arquantix/web/.env.local ` +
-    `or repo root .env (loaded via next.config.js). With Docker: repo root .env and/or .env.arquantix ` +
-    `(compose env_file for arquantix-web).`
+    `Provide R2_* or STORAGE_* (endpoint, access key id, secret) — e.g. Cloudflare R2 S3 API keys. ` +
+    `Local: services/arquantix/web/.env.local or repo .env. ` +
+    `ECS: map Secrets Manager to R2_* or the STORAGE_* keys already used by arquantix-web.`
   )
 }
 

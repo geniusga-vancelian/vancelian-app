@@ -1,20 +1,21 @@
 /**
  * Cloudflare R2 Storage Client Configuration
- * 
+ *
  * Uses AWS S3 SDK v3 (compatible with R2)
- * Endpoint: R2_ENDPOINT (format: https://<account-id>.r2.cloudflarestorage.com)
+ * Endpoint: R2_ENDPOINT or STORAGE_ENDPOINT (https://<account-id>.r2.cloudflarestorage.com)
  */
 
 import { S3Client } from '@aws-sdk/client-s3'
+import { getR2AccessKeyId, getR2Endpoint, getR2SecretAccessKey } from './r2Env'
 
-const endpoint = process.env.R2_ENDPOINT
-const accessKeyId = process.env.R2_ACCESS_KEY_ID
-const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
+const endpoint = getR2Endpoint()
+const accessKeyId = getR2AccessKeyId()
+const secretAccessKey = getR2SecretAccessKey()
 
 if (!endpoint || !accessKeyId || !secretAccessKey) {
   console.warn(
-    '⚠️  R2 credentials not configured. Media uploads will fail. ' +
-    'Set R2_ENDPOINT, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY in your environment.'
+    '⚠️  R2 / STORAGE credentials not configured. Media uploads will fail. ' +
+    'Set R2_* or STORAGE_* (endpoint, access key id, secret).'
   )
 }
 
