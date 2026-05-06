@@ -19,8 +19,8 @@
  *   assistant ne soit créé (le router décide qui répond). En conséquence,
  *   le `message_id` persisté est celui du **message USER** qui a déclenché
  *   le tour (cf. `service.py` ligne 1183 : `message_id=user_msg.id`).
- *   Le matching côté UI doit donc se faire sur `userMsg.id`, pas sur
- *   `assistantMsg.id`.
+ *   Le matching côté UI préfère `userMsg.id` ; des fallbacks (assistant id,
+ *   fenêtre temporelle, ordinal, orphelins…) couvrent les divergences FK.
  *
  * Best-effort : une section sans donnée (ex. ancien tour pré-Lot 5)
  * est silencieusement masquée — on n'affiche jamais "inconnu" pour ne
@@ -54,6 +54,8 @@ export interface CognitiveDiagramMessage {
   content: string
   agent_used: string | null
   message_payload: Record<string, unknown> | null
+  /** ISO admin — utilisé pour le fallback temporel `findRouterDecision`. */
+  created_at?: string | null
 }
 
 export interface CognitiveDiagramContext {
@@ -114,29 +116,139 @@ function findTriggeringUserMessage(
   return null
 }
 
+/** Parse ISO admin → ms ; null si invalide. */
+function parseIsoMs(iso: string | null | undefined): number | null {
+  if (!iso) return null
+  const n = Date.parse(iso)
+  return Number.isNaN(n) ? null : n
+}
+
+/** Présence de données utiles dans arguments (cognitive / objective / intent). */
+function routerArgumentsLookRich(args: Record<string, unknown> | undefined): boolean {
+  if (!args || typeof args !== 'object') return false
+  const cog = args.cognitive_state
+  if (cog && typeof cog === 'object' && !Array.isArray(cog)) {
+    if (Object.keys(cog).length > 0) return true
+  }
+  const obj = args.objective
+  if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+    if (Object.keys(obj).length > 0) return true
+  }
+  const intent = args.intent_classification
+  if (intent && typeof intent === 'object' && !Array.isArray(intent)) {
+    if (Object.keys(intent).length > 0) return true
+  }
+  return false
+}
+
 /**
  * Cherche la décision `router_classify` rattachée au tour. Le matching
  * se fait sur `userMsg.id` car la persistance utilise le message user
  * qui a déclenché le tour (le message assistant n'existe pas encore
  * au moment où le router décide).
+ *
+ * Fallbacks si `message_id` ne matche pas : FK sur l’assistant du même
+ * tour, fenêtre temporelle user→assistant, message_id sur user même
+ * `turn_index`, appariement ordinal (k-ième user ↔ k-ième router),
+ * orphelins legacy, puis derniers recours chronologiques avec préférence
+ * pour un payload riche (cognitive / objective / intent).
  */
 function findRouterDecision(
   userMsg: CognitiveDiagramMessage | null,
+  assistantMsg: CognitiveDiagramMessage | null,
   decisions: AgentDecision[],
+  allMessages: CognitiveDiagramMessage[],
 ): AgentDecision | null {
   if (!userMsg) return null
   const routerDecisions = decisions.filter(
     (d) => d.tool_name === 'router_classify',
   )
-  // Cas idéal : message_id == user_msg.id (cf. service.py:1183).
+  if (routerDecisions.length === 0) return null
+
+  const sortedMsgs = [...allMessages].sort(
+    (a, b) => a.turn_index - b.turn_index,
+  )
+
   const exact = routerDecisions.find((d) => d.message_id === userMsg.id)
   if (exact) return exact
-  // Fallback prudent : decisions sans message_id (très ancien path)
-  // et iteration <= turn courant — on prend la plus proche.
+
+  if (assistantMsg) {
+    const byAssistantId = routerDecisions.find(
+      (d) => d.message_id === assistantMsg.id,
+    )
+    if (byAssistantId) return byAssistantId
+  }
+
+  const tUser = parseIsoMs(userMsg.created_at)
+  const tAsst = assistantMsg ? parseIsoMs(assistantMsg.created_at) : null
+
+  if (tUser !== null && tAsst !== null && tAsst >= tUser) {
+    const inWindow = routerDecisions.filter((d) => {
+      const td = parseIsoMs(d.created_at)
+      if (td === null) return false
+      return td >= tUser && td <= tAsst
+    })
+    if (inWindow.length > 0) {
+      inWindow.sort(
+        (a, b) =>
+          (parseIsoMs(a.created_at) ?? 0) - (parseIsoMs(b.created_at) ?? 0),
+      )
+      const preferred = inWindow.find((d) => routerArgumentsLookRich(d.arguments))
+      return preferred ?? inWindow[0]!
+    }
+  }
+
+  const linkedSameTurnUser = routerDecisions.find((d) => {
+    if (!d.message_id || d.message_id === userMsg.id) return false
+    const linked = sortedMsgs.find((m) => m.id === d.message_id)
+    return linked?.role === 'user' && linked.turn_index === userMsg.turn_index
+  })
+  if (linkedSameTurnUser) return linkedSameTurnUser
+
+  const userMessages = sortedMsgs.filter((m) => m.role === 'user')
+  const userOrdinal = userMessages.findIndex((m) => m.id === userMsg.id)
+  if (userOrdinal >= 0) {
+    const routersChrono = [...routerDecisions].sort(
+      (a, b) =>
+        (parseIsoMs(a.created_at) ?? 0) - (parseIsoMs(b.created_at) ?? 0),
+    )
+    if (userOrdinal < routersChrono.length) {
+      return routersChrono[userOrdinal]!
+    }
+  }
+
   const orphans = routerDecisions.filter((d) => !d.message_id)
-  if (orphans.length === 0) return null
-  const sorted = [...orphans].sort((a, b) => a.iteration - b.iteration)
-  return sorted.at(-1) ?? null
+  if (orphans.length > 0) {
+    orphans.sort(
+      (a, b) =>
+        a.iteration - b.iteration ||
+        (parseIsoMs(a.created_at) ?? 0) - (parseIsoMs(b.created_at) ?? 0),
+    )
+    const rich = [...orphans].reverse().find((d) => routerArgumentsLookRich(d.arguments))
+    return rich ?? orphans.at(-1) ?? null
+  }
+
+  if (tUser !== null) {
+    const afterUser = [...routerDecisions]
+      .filter((d) => {
+        const td = parseIsoMs(d.created_at)
+        return td !== null && td >= tUser
+      })
+      .sort(
+        (a, b) =>
+          (parseIsoMs(a.created_at) ?? 0) - (parseIsoMs(b.created_at) ?? 0),
+      )
+    const useful = afterUser.find((d) => routerArgumentsLookRich(d.arguments))
+    if (useful) return useful
+    if (afterUser.length > 0) return afterUser[0]!
+  }
+
+  const allChrono = [...routerDecisions].sort(
+    (a, b) =>
+      (parseIsoMs(a.created_at) ?? 0) - (parseIsoMs(b.created_at) ?? 0),
+  )
+  const richLast = [...allChrono].reverse().find((d) => routerArgumentsLookRich(d.arguments))
+  return richLast ?? allChrono.at(-1) ?? null
 }
 
 /**
@@ -343,7 +455,12 @@ export function CognitiveTurnDiagram({
     )
   }
   const userMsg = findTriggeringUserMessage(assistantMsg, messages)
-  const routerDecision = findRouterDecision(userMsg, decisions)
+  const routerDecision = findRouterDecision(
+    userMsg,
+    assistantMsg,
+    decisions,
+    messages,
+  )
 
   // Extraction du payload router (best-effort).
   const args = (routerDecision?.arguments ?? {}) as Record<string, unknown>

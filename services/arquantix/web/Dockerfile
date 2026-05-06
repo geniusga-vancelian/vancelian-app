@@ -63,4 +63,6 @@ ENV PATH="/app/node_modules/.bin:$PATH"
 
 # Applique d’abord les migrations (base Docker souvent en retard vs schéma Prisma), puis Next.
 # Sans cela, l’image rebuild ne met pas à jour l’enum PG si personne n’a lancé migrate sur arquantix_fresh.
-CMD ["sh", "-c", "set -e; npx prisma migrate deploy; exec node_modules/.bin/next start -H 0.0.0.0 -p 3000"]
+# En prod ECS, mettre RUN_PRISMA_MIGRATE_ON_START=0 si migrate deploy échoue (ex. P3005 : base non
+# vide / baseline Prisma à faire à part) — le conteneur ne doit pas rester en crash-loop.
+CMD ["sh", "-c", "set -e; if [ \"${RUN_PRISMA_MIGRATE_ON_START:-1}\" != \"0\" ]; then npx prisma migrate deploy; fi; exec node_modules/.bin/next start -H 0.0.0.0 -p 3000"]

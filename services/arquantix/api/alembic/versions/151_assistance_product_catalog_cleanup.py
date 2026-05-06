@@ -56,6 +56,7 @@ from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 
 revision = "151"
 down_revision = "150"
@@ -120,6 +121,10 @@ CATALOG_METADATA: dict[str, object] = {
 
 def upgrade() -> None:
     bind = op.get_bind()
+    if not inspect(bind).has_table("product_knowledge", schema="public"):
+        # Bases jamais passées par 149 (ou stamp partiel) : pas de table → no-op
+        # pour ne pas bloquer le démarrage API / Alembic.
+        return
 
     # A) Soft-delete des 3 fiches non-canoniques.
     bind.execute(
@@ -164,6 +169,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    if not inspect(bind).has_table("product_knowledge", schema="public"):
+        return
 
     # B) Retirer la fiche catalogue (DELETE — pas de soft, c'est un seed
     # technique sans valeur d'historique en cas de rollback).

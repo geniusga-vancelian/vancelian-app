@@ -51,6 +51,7 @@ jobs:
           echo "   Context: services/arquantix/coming-soon"
           
           docker build \
+            --platform linux/amd64 \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
             -f services/arquantix/coming-soon/Dockerfile \
             services/arquantix/coming-soon

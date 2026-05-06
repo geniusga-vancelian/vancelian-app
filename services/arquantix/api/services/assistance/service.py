@@ -1186,6 +1186,29 @@ def start_chat_turn(
         client_discovery_block=memory_state_dict.get("client_discovery"),
     )
 
+    # Cognitive Bot v4 — Lot 6 fix (2026-05-05) — commit explicite du
+    # router_decision + cognitive_state + objective. Sans cela, le
+    # ``begin_nested`` de ``audit.persist_decision`` reste un savepoint
+    # qui n'est jamais flushé : la session HTTP ``db`` (Depends/get_db)
+    # est ferm\u00e9e à la fin de la requête sans commit explicite, ce qui
+    # rollback toutes les decisions cognitives. Le user_msg est commité
+    # plus haut (``_persist_user_turn``) et les decisions des agents
+    # experts sont sur une session distincte (SessionLocal du
+    # ``_drive_pipeline``), donc ce commit ne concerne QUE le router et
+    # les snapshots cognitifs du tour. Best-effort : un échec ici ne
+    # casse pas le tour utilisateur (le SSE va déjà être lancé).
+    try:
+        db.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "assistance.router.commit_failed conv=%s",
+            conv.id,
+        )
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
     return conv, user_msg, agent_input, decision, user_idx
 
 

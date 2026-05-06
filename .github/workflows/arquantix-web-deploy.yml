@@ -53,6 +53,7 @@ jobs:
           echo "  Repository: ${{ env.ECR_REPOSITORY }}"
           echo "  Tag:        ${{ env.IMAGE_TAG }}"
           docker build \
+            --platform linux/amd64 \
             --build-arg NEXT_PUBLIC_API_URL=https://api.arquantix.com \
             --build-arg NEXT_PUBLIC_BACKEND_URL=https://api.arquantix.com \
             --build-arg NEXT_PUBLIC_SITE_URL=https://arquantix.com \
@@ -71,6 +72,24 @@ jobs:
           task-definition-family: ${{ env.ECS_TASKDEF_FAMILY }}
           container-name: arquantix-web
           image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          # RDS prod peut déclencher P3005 au migrate deploy (schéma existant sans historique aligné).
+          # Les migrations doivent être baseline/résolues séparément ; le web ne doit pas bloquer le démarrage.
+          environment-variables: |
+            RUN_PRISMA_MIGRATE_ON_START=0
+
+      # amazon-ecs-render-task-definition ne supprime pas un `command` déjà présent sur
+      # la task definition AWS ; sans cette étape le contournement manuel (next-only)
+      # survivrait à tous les déploiements. Après fusion du Dockerfile (CMD conditionnel),
+      # on revient au CMD image + variable d’environnement ci‑dessus.
+      - name: Retirer le override command ECS (CMD de l'image)
+        run: |
+          set -euo pipefail
+          TD="${{ steps.render-taskdef.outputs.task-definition }}"
+          jq '
+            .containerDefinitions |= map(
+              if .name == "arquantix-web" then del(.command) else . end
+            )
+          ' "$TD" > "${TD}.tmp" && mv "${TD}.tmp" "$TD"
 
       - name: Deploy to ECS (force-new-deployment + wait stable)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2

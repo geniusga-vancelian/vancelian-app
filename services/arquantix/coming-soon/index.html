@@ -1,99 +1,198 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arquantix — Coming Soon</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            padding: 20px;
-        }
-        
-        .container {
-            text-align: center;
-            max-width: 600px;
-            animation: fadeIn 1s ease-in;
-        }
-        
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        h1 {
-            font-size: 3.5rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            letter-spacing: -0.02em;
-        }
-        
-        .subtitle {
-            font-size: 1.25rem;
-            margin-bottom: 0.5rem;
-            opacity: 0.95;
-        }
-        
-        .subtitle-en {
-            font-size: 1rem;
-            opacity: 0.8;
-            font-style: italic;
-        }
-        
-        .divider {
-            width: 80px;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.3);
-            margin: 2rem auto;
-        }
-        
-        .message {
-            font-size: 1.1rem;
-            line-height: 1.6;
-            opacity: 0.9;
-            margin-top: 2rem;
-        }
-        
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 2.5rem;
-            }
-            
-            .subtitle {
-                font-size: 1.1rem;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Arquantix — Fractional real estate, institutional rigor. This site is under construction." />
+  <title>Arquantix — Under construction</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --gradient-from: #e885d0;
+      --gradient-to: #ffcd4e;
+      --text: #000000;
+      --divider: rgba(0, 0, 0, 0.12);
+    }
+
+    body {
+      min-height:100vh;
+      font-family: "Avenir Next", Avenir, "Avenir Next Condensed", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: #ffffff;
+      color: var(--text);
+      overflow-x: clip;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.25rem 3rem;
+    }
+
+    .hero__content {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 900px;
+      gap: 3.5rem;
+      animation: fadeUp 0.85s ease-out both;
+    }
+
+    .hero__lead {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+      width: 100%;
+    }
+
+    /** Wordmark — smaller than previous */
+    .hero__brand {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .hero__logo {
+      display: block;
+      width: clamp(120px, 38vw, 200px);
+      height: auto;
+      object-fit: contain;
+    }
+
+    /**
+     * Main title + GradientHeading — mirrors `mainTitleTypographyClassName` +
+     * `GradientHeading` (homepage hero sans photo).
+     * @see web/src/components/design-system/extracted/atoms/main-title.tsx
+     * @see web/src/components/design-system/ds-hero/gradient-heading.tsx
+     */
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      font-family: "Avenir Next", Avenir, "Avenir Next Condensed", system-ui, sans-serif;
+      font-weight: 500;
+      font-size: 3rem;
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+      font-style: normal;
+      overflow: visible;
+    }
+
+    @media (min-width: 768px) {
+      .title-block {
+        font-size: clamp(3rem, 6vw, 4.5rem);
+      }
+    }
+
+    .title-block__primary {
+      display: block;
+      width: 100%;
+      line-height: 1.02;
+      color: var(--text);
+      overflow: visible;
+    }
+
+    /**
+     * line-height: 1 rogne les descendantes (g, p, y) avec background-clip: text.
+     * Interligne + marge basse explicite pour garder le rendu proche du DS sans crop.
+     */
+    .title-block__gradient {
+      display: block;
+      width: 100%;
+      line-height: 1.18;
+      padding-bottom: 0.14em;
+      overflow: visible;
+      background: linear-gradient(90deg, var(--gradient-from), var(--gradient-to));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tagline {
+      font-size: 1.125rem;
+      line-height: 1.6;
+      font-weight: 500;
+      max-width: 46ch;
+      color: var(--text);
+    }
+
+    .divider {
+      width: 5rem;
+      height: 1px;
+      background: var(--divider);
+      border: 0;
+    }
+
+    .footnote {
+      font-size: 1.125rem;
+      line-height: 1.6;
+      max-width: 40ch;
+      color: var(--text);
+      opacity: 0.85;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(1rem);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero__content {
+        animation: none;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Arquantix</h1>
-        <p class="subtitle">Bientôt disponible</p>
-        <p class="subtitle-en">Coming soon</p>
-        <div class="divider"></div>
-        <p class="message">
-            Nous préparons quelque chose d'exceptionnel.<br>
-            Revenez bientôt.
-        </p>
+  <main class="hero" role="main">
+    <div class="hero__content">
+      <div class="hero__lead">
+        <div class="hero__brand">
+          <img
+            class="hero__logo"
+            src="logo-arquantix.svg"
+            width="1420"
+            height="355"
+            alt=""
+            decoding="async"
+          />
+        </div>
+        <h1 class="title-block">
+          <span class="title-block__primary">Fractional Real Estate,</span>
+          <span class="title-block__gradient">Institutional Rigor.</span>
+        </h1>
+      </div>
+
+      <p class="tagline">This site is under construction.</p>
+
+      <hr class="divider" />
+
+      <p class="footnote">Please check back soon.</p>
     </div>
+  </main>
 </body>
 </html>
-
