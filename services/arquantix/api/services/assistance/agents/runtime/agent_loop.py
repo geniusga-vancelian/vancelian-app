@@ -58,6 +58,7 @@ from services.assistance.agents.config import (
 from services.assistance.agents.openai_client import chat_completion_with_tools
 from services.assistance.agents.prompt_builder import load_agent_system_prompt
 from services.assistance.agents.runtime import tour_shared_context
+from services.assistance.text_sanitizer import strip_emojis_with_metrics
 from services.assistance.agents.tools import registry as tools_registry
 from services.assistance.agents.tools.contracts import (
     ToolContext,
@@ -105,6 +106,18 @@ MAX_CONSULTATIONS_PER_TOUR = 3
 # `chain_depth=1` = sous-runtime spawné par un consult_specialist.
 # Profondeur > 1 = interdit (anti-récursion infinie).
 MAX_CHAIN_DEPTH = 1
+
+# Lot 1 « Wiki shared » (2026-05-06) — borne wiki par tour.
+# Tous les agents (compliance.*, advisor, market, product) partagent
+# le même budget. Le dédoublonnage (`DEDUPABLE_TOOLS`) gère déjà les
+# re-call avec args identiques ; ce compteur empêche les explorations
+# tangentielles excessives (ex. LLM qui appelle 8× select_wiki_pages
+# avec des reformulations marginales). 6 = scénario réaliste max
+# (1-2 select_wiki_pages + 4 read_wiki_page sur fiches distinctes).
+MAX_WIKI_CALLS_PER_TOUR = 6
+WIKI_TOOLS: frozenset[str] = frozenset(
+    {"select_wiki_pages", "read_wiki_page"}
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -613,12 +626,29 @@ async def _run_consult_specialist(
     try:
         sub_prompt = load_agent_system_prompt(target_agent)
         sub_tools = tools_registry.tools_for(target_agent)
+        # Cognitive Bot v4 — Lot 2 (2026-05-06). On propage l'état
+        # cognitif + objectif du caller au sub-runtime consulté pour
+        # qu'un specialist (product, advisor, market…) sache que le
+        # caller est en FEAR/ANGER (et donc adapte son ton, évite le
+        # push commercial). Sans cette propagation, le sub-loop voit
+        # un état neutre par défaut → bug latent observé en prod
+        # (specialist enchaîne sur de la recommandation alors que le
+        # caller est en mode ``stop_pushing=True``).
+        caller_mem = agent_input.memory_state or {}
+        # Lot 4 (2026-05-06) — propagation du ``current_topic`` au
+        # sub-runtime : le specialist consulté DOIT voir le sujet
+        # actif (« on parle du bundle TOP5 »), sinon il peut dériver
+        # vers un autre instrument/produit alors que le caller a déjà
+        # ancré le sujet via un tool ancrant (cf. TOPIC_ANCHORING_TOOLS).
         sub_input = AgentInput(
             user_message=question,
             recent_turns=[],  # specialist isolé du contexte caller
             memory_state={
-                "client_id": (agent_input.memory_state or {}).get("client_id"),
-                "person_id": (agent_input.memory_state or {}).get("person_id"),
+                "client_id": caller_mem.get("client_id"),
+                "person_id": caller_mem.get("person_id"),
+                "cognitive_state": caller_mem.get("cognitive_state"),
+                "objective": caller_mem.get("objective"),
+                "current_topic": caller_mem.get("current_topic"),
             },
         )
         text_chunks: list[str] = []
@@ -755,6 +785,37 @@ async def run_agent_loop(
     current_agent_id = agent_id
     handoff_done = False  # Phase 2c — max 1 handoff par tour.
     consultations_count = 0  # Phase 2c — borne `MAX_CONSULTATIONS_PER_TOUR`.
+    # Lot 1 « Wiki shared » (2026-05-06) — borne wiki par tour.
+    # Compteur cumulant select_wiki_pages + read_wiki_page (cf.
+    # `WIKI_TOOLS`). Au-delà de `MAX_WIKI_CALLS_PER_TOUR`, on retourne
+    # un tool_result d'erreur exploitable par le LLM (cf. pattern
+    # `consult_limit_reached`).
+    wiki_calls_count = 0
+    # Lot 5 « Observabilité » (2026-05-06) — compteurs cumulatifs par
+    # tour, exposés dans l'``AgentEvent(type="done").runtime_metrics``
+    # pour audit + UX admin (cf. `done event payload`). Fail-soft : si
+    # le tracking échoue à un endroit, on continue le tour sans
+    # impact. Aucun de ces compteurs n'influence la logique métier.
+    #
+    #   * wiki_quota_blocked_count       : nb d'appels wiki short-circuités
+    #     parce que MAX_WIKI_CALLS_PER_TOUR atteint (cf. Lot 1).
+    #   * audience_filtered_out_total    : nb total de fiches wiki retirées
+    #     du résultat ``select_wiki_pages`` à cause du filtre audience
+    #     (cf. ``_filter_matches_by_audience``, Lot 1).
+    #   * stop_pushing_blocked_count     : nb d'appels widgets commerciaux
+    #     court-circuités par ``should_stop_pushing(ctx)`` (cf. Lot 3 :
+    #     show_instrument_card / show_crypto_bundles / show_bundle_detail).
+    wiki_quota_blocked_count: int = 0
+    audience_filtered_out_total: int = 0
+    stop_pushing_blocked_count: int = 0
+    # Politique éditoriale Vancelian (2026-05-06) — ton sobre, aucun
+    # emoji dans les réponses texte au client. Voir
+    # ``services.assistance.text_sanitizer``. Ce compteur cumule le nb
+    # de codepoints emojis supprimés par le sanitizer post-LLM (defense
+    # en profondeur du prompt ``_response_framework.md`` interdiction
+    # absolue). Une valeur > 0 signifie que le LLM a désobéi à
+    # l'instruction prompt — utile pour audit + monitoring.
+    emojis_stripped_count: int = 0
     # Historique tools pour `tour_shared_context` (handoff cross-subagent).
     tools_history: list[tuple[str, dict[str, Any]]] = []
     # Chaîne d'agents traversés au top-level (top-level tour seulement).
@@ -901,6 +962,28 @@ async def run_agent_loop(
                     continue
 
                 memory_state = agent_input.memory_state or {}
+                # Cognitive Bot v4 — Lot 2 (2026-05-06). On recopie les
+                # snapshots cognitive_state + objective déjà calculés
+                # par ``service.start_chat_turn`` (transportés via
+                # memory_state) pour les rendre lisibles côté tools.
+                # Defensive : on n'accepte que des dicts (sinon None).
+                cog_state_dict = memory_state.get("cognitive_state")
+                if not isinstance(cog_state_dict, dict):
+                    cog_state_dict = None
+                obj_dict = memory_state.get("objective")
+                if not isinstance(obj_dict, dict):
+                    obj_dict = None
+                # Cognitive Bot v4 — Lot 4 (2026-05-06). On recopie le
+                # slot ``current_topic`` persisté côté DB (lu par
+                # ``_safe_get_current_topic`` dans ``service.py`` puis
+                # injecté dans memory_state). Permet à n'importe quel
+                # tool de connaître le sujet actif (sans appel DB) via
+                # ``ctx.current_topic`` ou les helpers de
+                # ``tools/shared/topic_context.py``.
+                topic_dict = memory_state.get("current_topic")
+                if not isinstance(topic_dict, dict):
+                    topic_dict = None
+
                 ctx = ToolContext(
                     db=db,
                     client_id=str(memory_state.get("client_id"))
@@ -916,6 +999,9 @@ async def run_agent_loop(
                     iteration=iteration,
                     audit_session_id=audit_session_id,
                     correlation_id=correlation_id,
+                    cognitive_state=cog_state_dict,
+                    objective=obj_dict,
+                    current_topic=topic_dict,
                 )
 
                 # ── Dédoublonnage des tool calls dans CE turn (Phase 2 wiki v1.4 patch) ──
@@ -966,6 +1052,63 @@ async def run_agent_loop(
                         # `assistance_agent_decisions` avec des doublons.
                         continue
 
+                # ── Lot 1 « Wiki shared » (2026-05-06) — borne wiki ──
+                # On compte les appels effectifs (post-dedup) à
+                # `select_wiki_pages` + `read_wiki_page`. Au-delà de
+                # `MAX_WIKI_CALLS_PER_TOUR`, on court-circuite avec un
+                # tool_result d'erreur typée — le LLM est censé répondre
+                # avec ce qu'il a déjà collecté. Pattern : aligné sur
+                # `consult_limit_reached`.
+                if (
+                    tool_name in WIKI_TOOLS
+                    and wiki_calls_count >= MAX_WIKI_CALLS_PER_TOUR
+                ):
+                    logger.info(
+                        "agent_loop.wiki_limit_reached agent=%s tool=%s "
+                        "iteration=%d count=%d max=%d",
+                        current_agent_id,
+                        tool_name,
+                        iteration,
+                        wiki_calls_count,
+                        MAX_WIKI_CALLS_PER_TOUR,
+                    )
+                    quota_payload = {
+                        "error": "wiki_quota_exceeded",
+                        "max": MAX_WIKI_CALLS_PER_TOUR,
+                        "hint": (
+                            "Tu as atteint la limite d'appels au wiki "
+                            "pour ce tour. Réponds maintenant au client "
+                            "avec ce que tu as déjà lu (cite les fiches "
+                            "consultées). Si tu as besoin d'une fiche "
+                            "supplémentaire, demande au client de "
+                            "préciser sa question dans un nouveau "
+                            "message."
+                        ),
+                    }
+                    messages.append(
+                        _tool_result_message(
+                            call_id, tool_name, quota_payload
+                        )
+                    )
+                    decision_id = audit.persist_decision(
+                        db,
+                        conversation_id=conversation_id,
+                        agent_id=current_agent_id,
+                        iteration=iteration,
+                        tool_name=tool_name,
+                        autonomy_level="L0",
+                        arguments=args,
+                        result_summary=quota_payload,
+                        error_code="wiki_quota_exceeded",
+                        correlation_id=correlation_id,
+                    )
+                    if decision_id:
+                        decision_ids.append(decision_id)
+                    # Lot 5 — observabilité : on tracke le blocage pour
+                    # le rendre visible dans le done event final.
+                    wiki_quota_blocked_count += 1
+                    continue
+
                 result, duration_ms, error_code = await _execute_tool(
                     module,
                     ctx=ctx,
@@ -978,6 +1121,41 @@ async def run_agent_loop(
                 # être retenté légitimement par le LLM.
                 if cache_key is not None and error_code is None:
                     tool_call_cache[cache_key] = result
+                # Lot 1 « Wiki shared » — incrémente le compteur wiki
+                # uniquement sur succès (un timeout ne pénalise pas le
+                # budget : retry légitime). Le dedup gère les re-call
+                # idempotents avec args identiques (continue plus haut).
+                if tool_name in WIKI_TOOLS and error_code is None:
+                    wiki_calls_count += 1
+                # Lot 5 « Observabilité » — tracking transverse :
+                #   * audience_filtered_out_total : ``select_wiki_pages``
+                #     expose ``audience_filtered_out: int`` quand des
+                #     fiches ``audience: internal`` ont été retirées
+                #     pour un agent non-product (cf. Lot 1).
+                #   * stop_pushing_blocked_count : les widgets
+                #     commerciaux retournent ``error: stop_pushing_active``
+                #     quand le caller est en FEAR/ANGER (cf. Lot 3).
+                # Tout est best-effort : un payload mal formé ne casse
+                # pas le tour.
+                if isinstance(result, dict):
+                    try:
+                        if (
+                            tool_name == "select_wiki_pages"
+                            and isinstance(
+                                result.get("audience_filtered_out"), int
+                            )
+                        ):
+                            audience_filtered_out_total += int(
+                                result["audience_filtered_out"]
+                            )
+                    except Exception:  # noqa: BLE001
+                        logger.debug(
+                            "agent_loop.metrics.audience_track_failed "
+                            "tool=%s",
+                            tool_name,
+                        )
+                    if result.get("error") == "stop_pushing_active":
+                        stop_pushing_blocked_count += 1
                 tools_called.append(tool_name)
                 spec_level = (module.SPEC.get("autonomy_level") or "L0")  # type: ignore[union-attr]
 
@@ -1467,13 +1645,37 @@ async def run_agent_loop(
 
         if not content.strip():
             content = MAX_ITER_FALLBACK_MESSAGE
-        yield AgentEvent(type="delta", content=content)
+        # Politique éditoriale Vancelian (2026-05-06) — strip les emojis
+        # de la réponse finale avant émission SSE delta (filet
+        # post-LLM). Cf. `text_sanitizer.strip_emojis_with_metrics`.
+        sanitized_content, n_stripped = strip_emojis_with_metrics(content)
+        if n_stripped:
+            emojis_stripped_count += int(n_stripped)
+            logger.info(
+                "agent_loop.emojis_stripped agent=%s subagent=%s "
+                "n=%d corr=%s",
+                agent_id,
+                current_agent_id,
+                n_stripped,
+                correlation_id,
+            )
+        yield AgentEvent(type="delta", content=sanitized_content or "")
         early_break_reason = "final_answer"
         break
     else:
-        # Boucle terminée sans break (= MAX_ITER atteint)
+        # Boucle terminée sans break (= MAX_ITER atteint).
+        # MAX_ITER_FALLBACK_MESSAGE est contrôlé côté code (pas LLM),
+        # donc en théorie sans emoji ; on passe quand même par le
+        # sanitizer pour être 100 % cohérent avec la politique.
         early_break_reason = "max_iter"
-        yield AgentEvent(type="delta", content=MAX_ITER_FALLBACK_MESSAGE)
+        sanitized_fb, n_stripped_fb = strip_emojis_with_metrics(
+            MAX_ITER_FALLBACK_MESSAGE
+        )
+        if n_stripped_fb:
+            emojis_stripped_count += int(n_stripped_fb)
+        yield AgentEvent(
+            type="delta", content=sanitized_fb or MAX_ITER_FALLBACK_MESSAGE
+        )
 
     duration_total_ms = int((time.monotonic() - started_at) * 1000)
     logger.info(
@@ -1510,6 +1712,33 @@ async def run_agent_loop(
         else None
     )
 
+    # Lot 5 « Observabilité » (2026-05-06). Snapshot des compteurs
+    # cumulés du tour. Émis uniquement au top-level (un sub-loop
+    # consult ne porte pas de métriques propres : son budget wiki/
+    # widget est isolé du caller, et l'agrégation cross-loop serait
+    # source d'ambiguïté côté UX admin). Si tous les compteurs sont
+    # nuls (cas standard d'un tour sans tool spécial), on n'émet
+    # rien — payload propre.
+    final_runtime_metrics: Optional[dict[str, int]] = None
+    if chain_depth == 0:
+        metrics_snapshot = {
+            "wiki_calls_count": int(wiki_calls_count),
+            "wiki_quota_blocked_count": int(wiki_quota_blocked_count),
+            "audience_filtered_out_total": int(
+                audience_filtered_out_total
+            ),
+            "stop_pushing_blocked_count": int(stop_pushing_blocked_count),
+            "consultations_count": int(consultations_count),
+            "embeds_count": int(len(embeds_collected)),
+            "dedup_hits": int(dedup_hits),
+            # Politique éditoriale (2026-05-06) — nb d'emojis supprimés
+            # par le sanitizer post-LLM. Une valeur > 0 = LLM a
+            # désobéi à l'instruction prompt anti-emoji.
+            "emojis_stripped_count": int(emojis_stripped_count),
+        }
+        if any(v > 0 for v in metrics_snapshot.values()):
+            final_runtime_metrics = metrics_snapshot
+
     yield AgentEvent(
         type="done",
         completed=True,
@@ -1519,4 +1748,5 @@ async def run_agent_loop(
         agent_chain=final_chain,
         consultations=final_consultations,
         embeds=final_embeds,
+        runtime_metrics=final_runtime_metrics,
     )

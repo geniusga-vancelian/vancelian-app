@@ -495,6 +495,283 @@ des réponses LLM (ça reste un sujet d'évaluation manuelle / A-B).
 * `trust_level` = heuristique (érosion sur tour FEAR/ANGER, regain
   sur tour CONVERSION/SATISFACTION) — pas de vrai modèle prédictif.
 
+### Wiki Brainstorming Lot 2 (livré — 2026-05-06) — Cognitive State injecté dans chaque sub-agent
+
+**Constat brainstorming Wiki commun** : `cognitive_state` +
+`objective` étaient déjà calculés à chaque tour par
+`service.start_chat_turn` et injectés dans le **system prompt** de
+l'agent expert via `_format_cognitive_blocks(memory_state)`, mais ils
+n'arrivaient **jamais** dans le `ToolContext`. Conséquences :
+
+- Aucun tool ne pouvait adapter son comportement à l'état
+  émotionnel (ex. `select_wiki_pages` ne savait pas si le client est
+  en FEAR pour prioriser une fiche `trust-security/`).
+- **Bug latent** : `_run_consult_specialist` perdait
+  `cognitive_state` + `objective` lors du spawn du sub-runtime — le
+  specialist consulté voyait un état neutre par défaut et pouvait
+  enchaîner sur de la recommandation alors que le caller était en
+  `stop_pushing=True`.
+
+**Livré** :
+
+1. **`ToolContext` étendu** (`agents/tools/contracts.py`) avec 2
+   champs optionnels `cognitive_state: Optional[dict]` +
+   `objective: Optional[dict]`. Format dict (anti-cycle d'import,
+   sérialisable, fidèle au format `memory_state`).
+2. **Plumbing runtime** (`agents/runtime/agent_loop.py`) — au moment
+   de construire `ctx`, on lit ces dicts depuis
+   `agent_input.memory_state` (rejet défensif si non-dict).
+3. **Fix `_run_consult_specialist`** — propagation
+   `cognitive_state` + `objective` dans le `memory_state` du
+   sub-runtime spawné.
+4. **Helpers `tools/shared/cognitive_context.py`** —
+   `get_emotional_intent(ctx)`, `get_trust_level(ctx)`,
+   `should_stop_pushing(ctx)`, `get_strategy_hint(ctx)`,
+   `cognitive_snapshot(ctx)`, etc. Tous read-only, pure, defaults
+   `NEUTRAL/discovery/stop_pushing=False` quand l'état est `None`
+   ou malformé. Constantes `URGENT_EMOTIONS = {"fear", "anger"}`.
+5. **Tests** (`tests/test_assistance_cognitive_context_unit.py`) —
+   39 tests : helpers (fallbacks défensifs, clamping
+   `trust_level`), plumbing runtime (capture du `ctx` reçu par un
+   tool factice), propagation consult_specialist (capture du
+   `agent_input` du sub-runtime via `monkeypatch`).
+
+**Pas de changement de comportement métier des tools** dans Lot 2 —
+uniquement plumbing + helpers + observabilité. Les Lots suivants
+peuvent désormais s'appuyer sur `should_stop_pushing(ctx)` et
+consorts pour brancher des comportements (ton wiki, restriction de
+widgets `show_*`, sélection contextuelle de fiches).
+
+Tests verts : **319 tests assistance** (Lot 1 + Lot 2) — sweep
+large : **1528 tests** assistance verts au total.
+
+### Wiki Brainstorming Lot 3 (livré — 2026-05-06) — Widgets unifiés + garde-fou stop_pushing
+
+**Constat** : les 3 widgets commerciaux exposés au LLM
+(`show_instrument_card` carte BTC/ETH/SOL avec CTAs Acheter/Vendre,
+`show_crypto_bundles` slider catalogue avec CTAs Investir,
+`show_bundle_detail` fiche bundle avec CTAs Voir/Investir) restaient
+invocables même quand le client était en FEAR/ANGER. Bug qualité
+pure : un client paniqué qui demande « comment va Bitcoin ? » se
+voyait pousser un CTA Acheter au lieu d'une rassurance verbale +
+preuves.
+
+**Livré** :
+
+1. **Branchement `should_stop_pushing(ctx)`** (Lot 2) sur les 3
+   widgets commerciaux — court-circuit AVANT toute requête DB /
+   marché (gain latence + tokens log) :
+   - `agents/tools/product/show_instrument_card.py`
+   - `agents/tools/product/show_crypto_bundles.py`
+   - `agents/tools/product/show_bundle_detail.py`
+
+2. **Payload typé `error: stop_pushing_active`** retourné au LLM avec :
+   - `emotional_intent` (fear / anger pour audit)
+   - `hint` actionnable (« réponds en texte avec rassurance + preuves
+     régulation/custody/sécurité ») exploitable par le LLM pour
+     reformuler la réponse.
+
+3. **Pas de filtrage CTAs** : on retourne `error` plutôt que
+   d'amputer les actions. Décision design : un client en FEAR n'a
+   pas besoin de moins de boutons, il a besoin que le bot **ne
+   pousse pas du tout** un produit ce tour-ci. Filtrer la moitié
+   des CTAs n'aurait pas adressé le vrai besoin.
+
+4. **Widgets informatifs préservés** (`show_top_movers`,
+   `show_featured_articles`) — pas de garde-fou. Leur rôle est
+   d'informer (pas de CTA d'achat) ; en FEAR, un client peut au
+   contraire vouloir des analyses factuelles. Régression couverte
+   par un test dédié (`TestInformationalWidgetsNotBlocked`).
+
+5. **Pas d'extension du registry agents** dans Lot 3. Étendre par
+   ex. `show_instrument_card` à `compliance.transactional` créerait
+   un risque de push commercial dans un contexte transactionnel —
+   l'esprit Lot 3 est le renforcement de la pertinence (anti-push)
+   et non l'élargissement du push. Cette décision est documentée
+   pour ne pas réintroduire l'extension par inertie dans un Lot
+   futur.
+
+6. **Tests** (`tests/test_assistance_widgets_stop_pushing_unit.py`) —
+   20 tests : court-circuit FEAR/ANGER + objective explicite
+   stop_pushing, ordre du garde-fou (avant validation symbol /
+   identifier), payload shape stable, non-blocage en curiosity,
+   non-blocage des widgets informatifs.
+
+### Wiki Brainstorming Lot 4 (livré — 2026-05-06) — Topic mémoire cross-tour exposé aux tools
+
+**Constat** : le slot `current_topic` (Phase 2 wiki v1.4) persisté
+côté `AssistanceConversation.current_topic` est lu jusqu'à
+maintenant **uniquement par le router** (pour stabiliser les
+follow-ups déictiques type « et lui ? »). Les sous-agents et leurs
+tools n'avaient pas accès au sujet actif → un tool `show_bundle_detail`
+appelé sur « TOP5 » ne pouvait pas détecter qu'un re-call sur
+« ALT5 » au tour suivant constituait une dérive de sujet.
+
+**Livré** :
+
+1. **`ToolContext.current_topic`** (`agents/tools/contracts.py`) —
+   nouveau champ `Optional[dict]` qui transporte le snapshot du
+   topic actif au format dict (cf. schéma documenté dans
+   `conversation_topic.py`).
+
+2. **Plumbing runtime** (`agents/runtime/agent_loop.py`) —
+   `memory_state["current_topic"]` (déjà calculé par
+   `service.start_chat_turn` via `_safe_get_current_topic`) est
+   recopié dans `ToolContext.current_topic` (rejet défensif si
+   non-dict).
+
+3. **Propagation `_run_consult_specialist`** — le specialist
+   consulté hérite désormais du `current_topic` du caller, ce qui
+   évite que le sub-runtime dérive vers un autre instrument /
+   produit alors que le sujet est ancré côté caller.
+
+4. **Helpers `tools/shared/topic_context.py`** :
+   - `get_current_topic_kind(ctx)` → `"vancelian_product" |
+     "instrument" | "topic_other" | None`.
+   - `get_current_topic_product_code(ctx)` (uppercase, defensive).
+   - `get_current_topic_instrument_symbol(ctx)` (uppercase,
+     defensive).
+   - `get_current_topic_label(ctx)` → libellé court stable
+     (`"vancelian_product:TOP5"`, `"instrument:BTC"`,
+     `"topic_other:<slug>"`).
+   - `topic_matches_product_code(ctx, code)` /
+     `topic_matches_instrument_symbol(ctx, symbol)` — utiles pour
+     un tool qui veut détecter une dérive de sujet.
+   - `topic_snapshot(ctx)` — log/audit JSON-safe.
+
+5. **Tests** (`tests/test_assistance_topic_context_unit.py`) —
+   40 tests : shape `ToolContext.current_topic` (default, dict,
+   immutabilité), helpers (None / dict vide / kind inconnu / types
+   invalides / casing), `topic_matches_*`, `topic_snapshot`,
+   alignement constantes avec
+   `conversation_topic.TOPIC_ANCHORING_TOOLS`, plumbing runtime
+   (smoke test source-based), propagation consult_specialist.
+
+**Pas de changement de comportement métier des tools** dans Lot 4 —
+uniquement plumbing + helpers, comme Lot 2. Un futur lot pourra
+brancher `topic_matches_*` sur `show_instrument_card` /
+`show_bundle_detail` pour détecter les dérives de sujet et y
+répondre par un message de transition explicite.
+
+### Wiki Brainstorming Lot 5 (livré — 2026-05-06) — Observabilité runtime_metrics
+
+**Constat** : Lots 1+3 ajoutent des compteurs de blocages
+silencieux (`wiki_quota_exceeded`, `audience_filtered_out`,
+`stop_pushing_blocked`) qui sont visibles uniquement dans les logs
+serveur. Aucune trace remontée au consommateur SSE / admin UI →
+debug d'un tour difficile (pourquoi le bot a-t-il refusé d'afficher
+la carte instrument ? combien de fiches wiki ont été masquées par
+le filtre audience ?).
+
+**Livré** :
+
+1. **`AgentEvent.runtime_metrics`** (`agents/base.py`) — nouveau
+   champ `Optional[dict]` sur le done event, sérialisé dans la
+   payload SSE. Schéma stable :
+   ```
+   {
+     "wiki_calls_count": int,
+     "wiki_quota_blocked_count": int,
+     "audience_filtered_out_total": int,
+     "stop_pushing_blocked_count": int,
+     "consultations_count": int,
+     "embeds_count": int,
+     "dedup_hits": int,
+   }
+   ```
+
+2. **Compteurs cumulés** (`agents/runtime/agent_loop.py`) —
+   tracking par tour des blocages :
+   - `wiki_quota_blocked_count` incrémenté quand un appel wiki est
+     court-circuité par le cap `MAX_WIKI_CALLS_PER_TOUR` (Lot 1).
+   - `audience_filtered_out_total` cumule les
+     `result["audience_filtered_out"]` exposés par
+     `select_wiki_pages` (Lot 1).
+   - `stop_pushing_blocked_count` incrémenté quand un widget
+     commercial retourne `error: stop_pushing_active` (Lot 3).
+   - Reads défensifs (jamais d'exception qui casse le tour).
+
+3. **Émis uniquement au top-level** (`chain_depth == 0`) — un
+   sub-loop `consult_specialist` ne porte pas de métriques propres
+   (isolation budget, anti-ambiguïté côté UX admin).
+
+4. **Émis uniquement si non-trivial** — quand tous les compteurs
+   sont à 0 (cas standard d'un tour nominal sans tool spécial), on
+   omet le champ pour ne pas polluer le payload SSE des tours
+   simples.
+
+5. **Tests** (`tests/test_assistance_runtime_observability_unit.py`)
+   — 10 tests : shape `AgentEvent.runtime_metrics` (default,
+   sérialisation SSE), absence de metrics sur tour text-only,
+   `wiki_quota_blocked_count` + `wiki_calls_count` cohérents avec
+   le cap, `audience_filtered_out_total` agrégé sur N appels,
+   robustesse aux types invalides (`audience_filtered_out` non-int),
+   `stop_pushing_blocked_count` sur widgets bloqués, schéma exact
+   des clés exposées.
+
+Tests verts cumulés : **270 tests** (Lots 1+2+3+4+5) — sweep large
+**1598 tests** assistance verts.
+
+### Politique éditoriale Vancelian — Anti-emoji (livré — 2026-05-06)
+
+**Constat** : le LLM (notamment `gpt-4o-mini`) glissait
+occasionnellement des emojis (✅ ⚠️ 🎉 🔥 etc.) dans les réponses
+texte au client. Incohérent avec le positionnement Vancelian
+(institution premium, ton sobre).
+
+**Approche « ceinture + bretelles »** (ne pas se reposer
+uniquement sur le prompt, le LLM peut désobéir) :
+
+1. **Prompt** : `_response_framework.md` (auto-injecté à tous les
+   agents experts) interdit explicitement tout emoji /
+   emoticône / pictogramme Unicode dans la section
+   « Interdits absolus ». Si emphase nécessaire → gras Markdown,
+   jamais d'icône.
+
+2. **Filtre runtime post-LLM** :
+   `services/assistance/text_sanitizer.py` — module pur sans
+   dépendance qui strip les codepoints Unicode des blocs emoji
+   standard (Emoticons, Misc Symbols & Pictographs, Dingbats,
+   Misc Symbols and Arrows, Regional Indicators, Skin tones,
+   ZWJ sequences, Variation Selector-16). Ranges figés depuis
+   Unicode 13.0.
+
+3. **Symboles utiles préservés** : ©, ®, ™, ÷, ±, →, ←, ≈, ≥,
+   ≠, ∞, √, ∑, accents français, guillemets typographiques,
+   euros/devises. La regex est **explicite** sur les ranges
+   emoji uniquement (pas la catégorie Unicode `So` générique
+   qui aurait strippé ces symboles).
+
+4. **Branchement** : `agent_loop.run_agent_loop` strip les
+   emojis du `content` final avant `yield AgentEvent(type="delta",
+   content=...)`. Idempotent (un re-strip d'un texte propre est
+   un no-op via fast path).
+
+5. **Observabilité** : nouveau compteur
+   `runtime_metrics.emojis_stripped_count` qui cumule le nb
+   d'emojis supprimés par tour. Une valeur > 0 = LLM a désobéi
+   au prompt (utile pour monitorer la dérive du modèle).
+
+6. **Politique typographique française préservée** : les
+   espaces avant `!` `?` `;` `:` sont conservés (« Salut ! »
+   reste correct). Seuls les espaces leading/trailing et les
+   doubles espaces résultant du strip sont nettoyés.
+
+**Tests** :
+- `tests/test_assistance_text_sanitizer_unit.py` — 71 tests :
+  edge cases (None, vide, idempotence), 7 catégories Unicode
+  emoji, préservation des 20+ symboles typographiques utiles,
+  normalisation des espaces, helper `contains_emojis`,
+  `strip_emojis_with_metrics` avec compteur.
+- `tests/test_assistance_runtime_emoji_sanitizer_unit.py` —
+  4 tests d'intégration : strip dans le delta SSE final,
+  exposition dans `runtime_metrics.emojis_stripped_count`,
+  pas de pollution metrics quand réponse propre, présence de
+  la nouvelle clé dans le schéma.
+
+**Tests verts** : 85 dédiés + 1673 sweep large assistance
+sans régression.
+
 ### Lot 6 (livré — 2026-05-04)
 
 * **Colonnes natives** dénormalisées sur `assistance_agent_decisions`

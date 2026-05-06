@@ -160,6 +160,22 @@ class AgentEvent:
     # Pipeline product (Slack-like) : métadonnées du juge sortie — persistées
     # dans `message_payload.metadata.product_pipeline_output_judge`.
     output_judge_metadata: Optional[dict] = None   # type='done'
+    # Cognitive Bot v4 — Lot 5 « Observabilité » (2026-05-06).
+    # Compteurs cumulés du tour, pour audit + UX admin (admin
+    # conversation viewer). JSON-safe, valeurs numériques uniquement.
+    # Présent uniquement sur le done event top-level (chain_depth == 0).
+    # Schéma stable :
+    #   {
+    #     "wiki_calls_count": int,            # appels wiki effectués (succès)
+    #     "wiki_quota_blocked_count": int,    # appels wiki bloqués (cap atteint)
+    #     "audience_filtered_out_total": int, # fiches retirées pour audience
+    #     "stop_pushing_blocked_count": int,  # widgets commerciaux bloqués
+    #     "consultations_count": int,         # consult_specialist effectués
+    #     "embeds_count": int,                # embeds UI émis (post-dédup)
+    #     "dedup_hits": int,                  # tool calls dédupliqués
+    #     "emojis_stripped_count": int,       # emojis supprimés par sanitizer post-LLM
+    #   }
+    runtime_metrics: Optional[dict] = None         # type='done'
     error_code: Optional[str] = None               # type='error'
     thinking_phase: Optional[str] = None           # type='thinking' (ex. 'diagnose')
     thinking_agent: Optional[str] = None           # type='thinking' (ex. 'compliance')
@@ -193,6 +209,8 @@ class AgentEvent:
                 payload["product_pipeline_output_judge"] = dict(
                     self.output_judge_metadata
                 )
+            if self.runtime_metrics:
+                payload["runtime_metrics"] = dict(self.runtime_metrics)
             return payload
         if self.type == "error":
             return {"type": "error", "message": self.error_code or "unknown"}

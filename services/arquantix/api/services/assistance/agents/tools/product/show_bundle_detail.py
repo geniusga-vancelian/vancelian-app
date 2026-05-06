@@ -58,6 +58,10 @@ from services.assistance.agents.tools.contracts import ToolContext, ToolSpec
 from services.assistance.agents.tools.shared.action_cta_catalog import (
     build_action,
 )
+from services.assistance.agents.tools.shared.cognitive_context import (
+    get_emotional_intent,
+    should_stop_pushing,
+)
 from services.portfolio_engine.products.catalog import CatalogService
 
 logger = logging.getLogger(__name__)
@@ -128,6 +132,29 @@ def execute(
     bundle_id: Optional[str] = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
+    # ── Lot 3 (2026-05-06) — garde-fou stop_pushing ──
+    # Fiche bundle détaillée = push commercial pur (CTAs « Voir » +
+    # « Investir »). Inacceptable quand le client est en FEAR/ANGER
+    # ou quand l'objectif du tour est `stop_pushing=true`.
+    if should_stop_pushing(ctx):
+        logger.info(
+            "show_bundle_detail.stop_pushing_active "
+            "agent=%s conv=%s emotion=%s",
+            ctx.agent_id,
+            ctx.conversation_id,
+            get_emotional_intent(ctx),
+        )
+        return {
+            "error": "stop_pushing_active",
+            "emotional_intent": get_emotional_intent(ctx),
+            "hint": (
+                "Le client est en état émotionnel négatif (FEAR/"
+                "ANGER) ou l'objectif est `stop_pushing=true`. Ne "
+                "pousse PAS la fiche bundle avec CTAs Investir. "
+                "Réponds en texte court et factuel sans push commercial."
+            ),
+        }
+
     code = (product_code or "").strip().upper()
     bid = (bundle_id or "").strip()
     if not code and not bid:

@@ -345,6 +345,145 @@ au total après l'intégration → zéro régression.
 - Path legacy `ProductAgent._collect_tool_context` (heuristique
   V1) **non modifié** — kill-switch via `ASSISTANCE_RUNTIME_LOOP_AGENTS`.
 
+### 9.2bis Wiki en tool partagé — Lot 1 (2026-05-06)
+
+**Constat brainstorming 2026-05-06** (cf. discussion Wiki commun) :
+historiquement les tools `select_wiki_pages` + `read_wiki_page`
+n'étaient exposés qu'aux agents `product` et `trust`. Conséquences
+observées :
+
+- L'agent `compliance.transactional` doit improviser face à
+  « pourquoi mon virement n'est pas arrivé ? » alors que la fiche
+  wiki `transfers-cards/sepa-deposit-delays.md` répond précisément
+  (J+0 à J+2 ouvrés). Risque de paraphrase approximative ou
+  d'hallucination.
+- L'`advisor` doit déléguer chaque question produit au specialist
+  via `consult_specialist(target=product, …)` — overhead latence et
+  tokens.
+- Le `market` ne peut pas cadrer ses commentaires sur les concepts
+  (TVL, swap, custody) sans recourir à sa connaissance LLM brute.
+
+**Décision** : exposer les 2 tools wiki à **tous les sub-agents
+métier** :
+
+| Agent | Avant | Après Lot 1 |
+|---|---|---|
+| `product` | ✅ | ✅ (inchangé, voit `audience: internal`) |
+| `trust` | ✅ | ✅ (inchangé) |
+| `compliance.registration` | ❌ | ✅ (audience filtré → `client`) |
+| `compliance.remediation` | ❌ | ✅ (audience filtré → `client`) |
+| `compliance.transactional` | ❌ | ✅ (audience filtré → `client`) |
+| `compliance.general` | ❌ | ✅ (audience filtré → `client`) |
+| `advisor` | ❌ | ✅ (audience filtré → `client`) |
+| `market` | ❌ | ✅ (audience filtré → `client`) |
+| `compliance` (top-level dispatcher) | ❌ | ❌ (reste minimal au tour 0) |
+| `default` | ❌ | ❌ (fallback minimal) |
+
+**Garde-fous** :
+
+1. **Filtre `audience`** dans `select_wiki_pages.execute` et
+   `read_wiki_page.execute` (cf.
+   `_AUDIENCE_PRIVILEGED_AGENT = "product"`). Les fiches
+   `audience: internal` (notes éditoriales, cas opérationnels,
+   contenu non-publiable) sont **invisibles** pour tout agent ≠
+   `product`. Côté `select`, elles sont retirées du `matches` (avec
+   compteur `audience_filtered_out` pour observabilité). Côté `read`,
+   on retourne `{"error": "audience_restricted", "hint": …}` — le
+   LLM peut requêter une fiche client équivalente ou consulter
+   `product` via `consult_specialist`.
+
+2. **Quota par tour** dans `runtime/agent_loop.py` —
+   `MAX_WIKI_CALLS_PER_TOUR = 6` (cumulant `select_wiki_pages` +
+   `read_wiki_page`). Au-delà, le runtime court-circuite avec un
+   tool_result `wiki_quota_exceeded` (mêmes mécaniques que
+   `consult_limit_reached`). Évite qu'un LLM mal calibré épuise le
+   budget tokens en explorant 12 fiches tangentielles. Le
+   `DEDUPABLE_TOOLS` complémente déjà la dédup d'args identiques.
+
+3. **Borne globale `MAX_ITER`** + **timeout** runtime existants
+   (inchangés) restent les filets de dernière instance.
+
+**Pas de déplacement de fichiers** : les modules restent dans
+`agents/tools/product/select_wiki_pages.py` et `…/read_wiki_page.py`,
+mais sont importés explicitement par `agents/tools/registry.py`
+dans les listes d'autres agents (cf. `_COMPLIANCE_BASE_TOOLS`).
+Cette décision design (pas de move physique) garantit zéro casse
+des imports/tests externes pendant la migration.
+
+**Tests** : `tests/test_assistance_wiki_tools_unit.py`
+(`TestRegistrySharedWikiLot1`, `TestSelectWikiPagesAudienceGuard`,
+`TestReadWikiPageAudienceGuard`) +
+`tests/test_assistance_runtime_wiki_quota_unit.py` (5 tests).
+**1502 tests assistance verts** au total après livraison.
+
+### 9.2ter Widgets commerciaux & garde-fou stop_pushing — Lot 3 (2026-05-06)
+
+**Constat brainstorming Wiki commun (suite Lot 2)** : les 3 widgets
+commerciaux exposés au LLM côté product (`show_instrument_card`,
+`show_crypto_bundles`, `show_bundle_detail`) restaient invocables
+même quand le client était en FEAR/ANGER. Bug qualité pur : un
+client paniqué qui demande « comment va Bitcoin ? » se voyait
+pousser un CTA Acheter au lieu d'une rassurance verbale.
+
+**Décision** : brancher `should_stop_pushing(ctx)` (helper Lot 2)
+sur les 3 widgets commerciaux uniquement. Court-circuit **avant**
+toute requête DB / marché (gain latence + tokens log) avec un
+payload typé exploitable par le LLM.
+
+| Tool | Garde-fou stop_pushing ? | Raison |
+|---|---|---|
+| `show_instrument_card` | ✅ | CTAs Acheter / Vendre = push commercial |
+| `show_crypto_bundles` | ✅ | Slider catalogue + CTAs Investir |
+| `show_bundle_detail` | ✅ | Fiche bundle + CTAs Voir / Investir |
+| `show_top_movers` (market) | ❌ | Informationnel : pas de CTA d'achat |
+| `show_featured_articles` (market) | ❌ | Informationnel : articles à la une |
+
+**Payload retourné** quand `should_stop_pushing(ctx) == True` :
+
+```json
+{
+  "error": "stop_pushing_active",
+  "emotional_intent": "fear",
+  "hint": "Le client est en état émotionnel négatif (FEAR/ANGER)…
+           Réponds en texte avec rassurance + preuves
+           (régulation, custody, sécurité)…"
+}
+```
+
+**Pas de filtrage CTAs** (vs blocage complet) : un client en FEAR
+n'a pas besoin de moins de boutons, il a besoin que le bot **ne
+pousse pas du tout** un produit ce tour-ci. Filtrer la moitié des
+CTAs n'aurait pas adressé le vrai besoin.
+
+**Pas d'extension du registry agents** dans Lot 3. Étendre par ex.
+`show_instrument_card` à `compliance.transactional` créerait un
+risque de push commercial dans un contexte transactionnel —
+l'esprit Lot 3 est le renforcement de la pertinence (anti-push) et
+non l'élargissement du push.
+
+**Tests** : `tests/test_assistance_widgets_stop_pushing_unit.py`
+(20 tests : court-circuit FEAR/ANGER + objective explicite,
+ordre du garde-fou, payload shape, non-blocage curiosity, garde
+sur les widgets informatifs préservé).
+
+### 9.2quater Topic mémoire cross-tour exposé aux tools — Lot 4 (2026-05-06)
+
+Lot 4 expose `current_topic` (déjà persisté côté DB et lu par le
+router depuis Phase 2 wiki v1.4) aux tools des sub-agents via
+`ToolContext.current_topic`. Cf. `MULTI_AGENTS_RUNTIME.md`
+§ 2.3ter pour le détail. Côté product, un futur lot pourra
+brancher `topic_matches_product_code(ctx, code)` sur
+`show_bundle_detail` pour détecter une dérive de sujet (« on parle
+de TOP5, le LLM vient d'invoquer ALT5 »).
+
+### 9.2quinquies Observabilité runtime_metrics — Lot 5 (2026-05-06)
+
+Lot 5 expose dans le done event SSE un champ `runtime_metrics`
+agrégeant les blocages silencieux du tour
+(`wiki_quota_blocked_count`, `audience_filtered_out_total`,
+`stop_pushing_blocked_count`, etc.). Cf. `MULTI_AGENTS_RUNTIME.md`
+§ 2.3quater pour le schéma exact et l'usage admin UI.
+
 ### 9.3 Guard-rail anti-hallucination — v1.3 (2026-05-04)
 
 **Constat post-prod (analyse de la conv `aef5923a` — 42 turns,

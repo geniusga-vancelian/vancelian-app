@@ -1,10 +1,24 @@
-"""Tool ``read_wiki_page`` — agent **product**, autonomy **L0**.
+"""Tool ``read_wiki_page`` — **shared**, autonomy **L0**.
 
 Lit une fiche markdown du wiki produit (``services/assistance/data/wiki/``)
 et retourne les sections structurées (frontmatter + ``Short answer`` +
 ``Details``) prêtes à être citées/paraphrasées par le LLM.
 
 S'utilise après ``select_wiki_pages`` qui a retourné les candidats.
+
+──────────────────────────────────────────────────────────────────────
+Lot 1 « Wiki shared » (2026-05-06)
+──────────────────────────────────────────────────────────────────────
+
+Historiquement réservé à l'agent ``product``, ce tool est désormais
+exposé à **tous** les sub-agents (``compliance.*``, ``advisor``,
+``market``) via ``tools/registry.py`` (cf. brainstorming Wiki commun).
+
+Garde-fou audience :
+  * ``ctx.agent_id == "product"`` → toutes les fiches sont lisibles.
+  * ``ctx.agent_id != "product"`` → les fiches ``audience: internal``
+    sont **bloquées** (retour ``{"error": "audience_restricted"}``).
+    Cohérent avec le filtre appliqué côté ``select_wiki_pages``.
 
 ──────────────────────────────────────────────────────────────────────
 Convention de retour
@@ -92,6 +106,14 @@ SQL_KNOWLEDGE_SLUG_PREFIXES: tuple[str, ...] = (
     "swap_",
     "kind_",
 )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Lot 1 « Wiki shared » — agent privilégié pour audience: internal
+# ─────────────────────────────────────────────────────────────────────
+
+_AUDIENCE_PRIVILEGED_AGENT: str = "product"
+"""Seul l'agent ``product`` peut lire les fiches ``audience: internal``."""
 
 # Slugs SQL exacts (sans préfixe régulier) — extension future à mettre
 # ici si on ajoute d'autres slugs canoniques.
@@ -243,6 +265,35 @@ def execute(
             "error": "not_found",
             "category": safe_category,
             "slug": safe_slug,
+        }
+
+    # Lot 1 « Wiki shared » — garde-fou audience cross-agent.
+    page_audience = (page.audience or "client").strip().lower()
+    if (
+        page_audience == "internal"
+        and ctx.agent_id != _AUDIENCE_PRIVILEGED_AGENT
+    ):
+        logger.info(
+            "read_wiki_page.audience_restricted agent=%s conv=%s "
+            "category=%s slug=%s audience=%s",
+            ctx.agent_id,
+            ctx.conversation_id,
+            safe_category,
+            safe_slug,
+            page_audience,
+        )
+        return {
+            "error": "audience_restricted",
+            "category": safe_category,
+            "slug": safe_slug,
+            "audience": page_audience,
+            "hint": (
+                "Cette fiche est réservée à un usage interne / éditorial "
+                "(audience: internal). Cherche une fiche équivalente "
+                "audience: client via select_wiki_pages, ou bien "
+                "consulte l'agent product via consult_specialist si la "
+                "réponse est sensible."
+            ),
         }
 
     return page.to_read_dict()

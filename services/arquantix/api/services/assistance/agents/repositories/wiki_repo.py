@@ -198,12 +198,18 @@ class WikiPage:
         Volontairement **minimale** : 3 question phrasings de preview
         suffisent au LLM pour décider quelle fiche lire ensuite via
         ``read_wiki_page``. On ne dump jamais le ``body`` ici.
+
+        Lot 1 « Wiki shared » (2026-05-06) — exposition de ``audience``
+        pour permettre le filtrage cross-agent dans
+        ``select_wiki_pages.execute`` (les agents ≠ ``product`` ne
+        voient que les fiches ``audience: client``).
         """
         return {
             "category": self.category,
             "slug": self.slug,
             "title": self.title,
             "status": self.status,
+            "audience": self.audience,
             "matched_questions_preview": list(self.questions[:3]),
             "tags": list(self.tags[:5]),
             "score": round(score, 3),

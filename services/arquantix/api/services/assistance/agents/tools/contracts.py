@@ -91,6 +91,80 @@ class ToolContext:
     #    "actions": [{"kind": ..., "label": ..., "deep_link": ...}, ...]}
     embeds_to_emit: list[dict] = field(default_factory=list)
 
+    # ─────────────────────────────────────────────────────────────────
+    # Cognitive Bot v4 — Lot 2 (2026-05-06) — état cognitif du tour
+    # ─────────────────────────────────────────────────────────────────
+    #
+    # Snapshot **dict-form** (pas dataclass typée) calculé en amont par
+    # ``services.assistance.service.start_chat_turn`` puis transporté
+    # via ``agent_input.memory_state``. Le runtime
+    # (``agent_loop.run_agent_loop``) recopie ces dicts dans le
+    # ``ToolContext`` pour les rendre lisibles depuis n'importe quel
+    # tool — ex. ``select_wiki_pages`` peut adapter le ``selection_reason``
+    # selon ``emotional_intent``, ``read_compliance_state`` peut
+    # privilégier un message court si ``stop_pushing=True``, etc.
+    #
+    # Pourquoi ``dict`` et pas ``CognitiveState`` typé :
+    #   * pas de cycle d'import (``contracts.py`` est très bas niveau).
+    #   * sérialisable trivialement (audit / log / propagation cross-agent).
+    #   * fidèle au format réel transporté via ``memory_state``.
+    #
+    # Pour typer côté tool, faire :
+    #   ``CognitiveState.from_dict(ctx.cognitive_state)``
+    # ou utiliser les helpers de
+    # ``services.assistance.agents.tools.shared.cognitive_context``.
+    #
+    # Convention :
+    #   * ``None`` = état non disponible (cas test, démarrage avant
+    #     calcul, ou échec best-effort en amont). Les tools doivent
+    #     traiter ``None`` comme un ``NEUTRAL/discovery`` implicite.
+    #   * Sinon, ``dict`` JSON-safe conforme à
+    #     ``CognitiveState.to_dict()`` /
+    #     ``ConversationObjective.to_dict()``.
+    cognitive_state: Optional[dict] = None
+    objective: Optional[dict] = None
+
+    # ─────────────────────────────────────────────────────────────────
+    # Cognitive Bot v4 — Lot 4 (2026-05-06) — topic mémoire cross-tour
+    # ─────────────────────────────────────────────────────────────────
+    #
+    # Snapshot **dict-form** du slot ``current_topic`` persisté côté
+    # ``AssistanceConversation.current_topic`` (cf.
+    # ``services.assistance.conversation_topic``). Lu jusqu'ici
+    # uniquement par le router pour stabiliser les follow-ups
+    # déictiques (« et lui ? », « combien ça coûte ? »…). Lot 4
+    # l'expose aussi aux tools des sub-agents pour qu'ils puissent :
+    #
+    #   * ``select_wiki_pages`` : prioriser les fiches liées au sujet
+    #     en cours sans réinterpréter la requête.
+    #   * ``show_instrument_card`` / ``show_bundle_detail`` : valider
+    #     que le sujet ciblé correspond bien au sujet actif (anti
+    #     dérive de tool call).
+    #   * Tout tool ``read_*`` : enrichir un payload texte avec un
+    #     contexte « tu parles de X » sans dépendre du history LLM.
+    #
+    # Schéma typique (cf. ``conversation_topic.infer_topic_from_tool_call``)
+    #   {
+    #     "kind": "vancelian_product" | "instrument" | "topic_other",
+    #     "product_code": "TOP5" | None,
+    #     "instrument_symbol": "BTC" | None,
+    #     "agent_owner": "product",
+    #     "set_at_turn": 3,
+    #     "set_by_tool": "show_bundle_detail",
+    #     "confidence": 0.95,
+    #     "set_at": "2026-05-06T11:42:00Z",
+    #   }
+    #
+    # Convention :
+    #   * ``None`` = pas de topic actif (tour 0, ou explicitement
+    #     ``clear_topic``). Les tools traitent l'absence comme
+    #     « topic non contraint ».
+    #   * Sinon, ``dict`` JSON-safe ; les tools doivent toujours passer
+    #     par les helpers de
+    #     ``services.assistance.agents.tools.shared.topic_context``
+    #     pour la lecture défensive.
+    current_topic: Optional[dict] = None
+
 
 # ─────────────────────────────────────────────────────────────────────────
 # ToolSpec — contrat OpenAI augmenté des métadonnées internes

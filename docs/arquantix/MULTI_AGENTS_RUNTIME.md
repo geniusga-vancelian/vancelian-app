@@ -229,11 +229,137 @@ class ToolContext:
     iteration: int                 # n° du tour de boucle (0..MAX_ITER)
     audit_session_id: str          # pour traçabilité
     correlation_id: str            # pour logs structurés
+    embeds_to_emit: list[dict]     # collecteur d'embeds UI (Phase 2c.2)
+    # Cognitive Bot v4 — Lot 2 (2026-05-06)
+    cognitive_state: Optional[dict] = None
+    objective: Optional[dict] = None
 ```
 
 Le tool ne reçoit **jamais** le `AuthContext` brut (trop puissant). Le
 runtime construit un `ToolContext` filtré qui ne contient **que** ce dont
 le tool a besoin.
+
+#### 2.3bis Champs cognitifs — Lot 2 (2026-05-06)
+
+`cognitive_state` et `objective` sont des snapshots **dict-form**
+calculés en amont par `services.assistance.service.start_chat_turn`
+puis transportés via `agent_input.memory_state`. Le runtime les
+recopie dans `ToolContext` pour les rendre lisibles depuis n'importe
+quel tool.
+
+| Champ | Forme | Source | Usage typique côté tool |
+|---|---|---|---|
+| `cognitive_state` | `{emotional_intent, conversation_stage, trust_level, knowledge_level, …}` | `cognitive_state.compute_cognitive_state(...).to_dict()` | Adapter le ton, prioriser certains résultats |
+| `objective` | `{primary_goal, next_best_action, stop_pushing, strategy_hint, …}` | `conversation_objective.compute_objective(...).to_dict()` | Bloquer un push commercial si `stop_pushing=True` |
+
+**Pourquoi `dict` et pas une dataclass typée** :
+
+- Pas de cycle d'import (`contracts.py` est très bas niveau).
+- Sérialisable trivialement (audit / log / propagation cross-agent).
+- Fidèle au format réel transporté via `memory_state`.
+
+**Helpers read-only** dans
+`services.assistance.agents.tools.shared.cognitive_context` —
+batterie défensive (fallback `NEUTRAL` si l'état est `None` ou
+malformé) qui évite que chaque tool réimplémente le boilerplate
+`isinstance(...) + dict.get(...) + fallback` :
+
+```python
+from services.assistance.agents.tools.shared import (
+    get_emotional_intent, get_trust_level, should_stop_pushing,
+    get_strategy_hint, cognitive_snapshot,
+)
+
+def execute(ctx, *, question, **_):
+    if should_stop_pushing(ctx):
+        # Pas de CTA, pas d'upsell : restauration de confiance d'abord.
+        ...
+    emotion = get_emotional_intent(ctx)  # "fear" | "anger" | "neutral" | …
+    trust   = get_trust_level(ctx)       # 0.0 .. 1.0
+```
+
+**Propagation cross-agent** : `_run_consult_specialist` recopie
+`cognitive_state` + `objective` dans le `memory_state` du sub-runtime
+avant spawn. Sans cela, le specialist consulté voyait un état
+neutre par défaut (bug latent réparé par Lot 2).
+
+Tests : `tests/test_assistance_cognitive_context_unit.py` (39
+tests : helpers + plumbing runtime + propagation consult).
+
+#### 2.3ter Champ `current_topic` — Lot 4 (2026-05-06)
+
+`current_topic` est un snapshot **dict-form** du slot persisté côté
+`AssistanceConversation.current_topic` (cf.
+`services.assistance.conversation_topic` pour la source de vérité).
+Lu par le router depuis Phase 2 wiki v1.4 pour stabiliser les
+follow-ups déictiques (« et lui ? »), il est **maintenant aussi**
+exposé aux tools via `ToolContext.current_topic`.
+
+Schéma typique (cf. `infer_topic_from_tool_call`) :
+
+```python
+{
+    "kind": "vancelian_product" | "instrument" | "topic_other",
+    "product_code": "TOP5" | None,
+    "instrument_symbol": "BTC" | None,
+    "agent_owner": "product",
+    "set_at_turn": 3,
+    "set_by_tool": "show_bundle_detail",
+    "confidence": 0.95,
+    "set_at": "2026-05-06T11:42:00Z",
+}
+```
+
+**Helpers read-only** dans
+`services.assistance.agents.tools.shared.topic_context` :
+
+```python
+from services.assistance.agents.tools.shared import (
+    get_current_topic_kind,            # "vancelian_product" | … | None
+    get_current_topic_product_code,    # "TOP5" | None  (uppercase)
+    get_current_topic_instrument_symbol,  # "BTC" | None  (uppercase)
+    get_current_topic_label,           # "vancelian_product:TOP5" | …
+    topic_matches_product_code,        # bool — utile pour anti-dérive
+    topic_matches_instrument_symbol,   # bool
+    topic_snapshot,                    # dict JSON-safe pour log / hint
+)
+```
+
+**Propagation cross-agent** : `_run_consult_specialist` recopie
+`current_topic` dans le `memory_state` du sub-runtime — sans quoi
+le specialist consulté pouvait dériver vers un autre instrument /
+produit alors que le sujet est ancré côté caller.
+
+Tests : `tests/test_assistance_topic_context_unit.py` (40 tests :
+shape, helpers défensifs, casing, alignement constantes,
+plumbing + propagation consult).
+
+#### 2.3quater Observabilité `runtime_metrics` — Lot 5 (2026-05-06)
+
+L'`AgentEvent(type="done")` porte désormais un champ optionnel
+`runtime_metrics: Optional[dict]` qui agrège les compteurs cumulés
+du tour. Émis uniquement au top-level (`chain_depth == 0`) et
+seulement si au moins une valeur est non-nulle (payload propre
+pour les tours simples).
+
+| Clé | Type | Source |
+|---|---|---|
+| `wiki_calls_count` | int | `select_wiki_pages` + `read_wiki_page` succès (Lot 1) |
+| `wiki_quota_blocked_count` | int | Appels wiki court-circuités par `MAX_WIKI_CALLS_PER_TOUR` (Lot 1) |
+| `audience_filtered_out_total` | int | Cumul de `result["audience_filtered_out"]` exposé par `select_wiki_pages` (Lot 1) |
+| `stop_pushing_blocked_count` | int | Widgets commerciaux retournant `error: stop_pushing_active` (Lot 3) |
+| `consultations_count` | int | `consult_specialist` effectués (Phase 2c) |
+| `embeds_count` | int | Embeds UI émis (post-dédup) |
+| `dedup_hits` | int | Tool calls dédupliqués (Phase 2 wiki v1.4 patch) |
+
+Sérialisé tel quel dans la SSE payload du done event sous la clé
+`runtime_metrics`. Utilisable côté admin UI (vue conversation) pour
+expliquer pourquoi un tour s'est mal passé (« 3 fiches wiki
+masquées par audience » / « widget instrument bloqué FEAR »).
+
+Tests : `tests/test_assistance_runtime_observability_unit.py` (10
+tests : shape, sérialisation SSE, agrégation par compteur, tour
+simple sans metrics, robustesse aux types invalides).
 
 ### 2.4 Registry
 

@@ -181,6 +181,7 @@ def _mk_page(
     slug="my-page",
     title="My Page Title",
     status="verified",
+    audience="client",
     questions=(),
     tags=(),
     short_answer=None,
@@ -191,7 +192,7 @@ def _mk_page(
         slug=slug,
         title=title,
         status=status,
-        audience="client",
+        audience=audience,
         last_reviewed="2026-04-12",
         questions=questions,
         sources=(),
@@ -491,25 +492,36 @@ class TestRegistryWiring:
         # liste + 1 bundle detail + 1 ask
         assert len(names) == 8
 
-    def test_other_agents_dont_get_wiki_tools(self):
+    def test_compliance_top_level_does_NOT_get_wiki_tools(self):
+        """L'agent `compliance` top-level (entry-point dispatcher) au
+        tour 0 n'a accès qu'à `diagnose_compliance_topic` +
+        `ask_user_question`. Le wiki n'arrive qu'après dispatch sur
+        un sub-agent `compliance.<topic>`."""
+        names = tools_registry.all_tool_names("compliance")
+        assert "select_wiki_pages" not in names
+        assert "read_wiki_page" not in names
+
+    def test_default_agent_does_NOT_get_wiki_tools(self):
+        """L'agent `default` (fallback) reste minimal."""
+        names = tools_registry.all_tool_names("default")
+        assert "select_wiki_pages" not in names
+        assert "read_wiki_page" not in names
+
+    def test_show_crypto_bundles_stays_product_only(self):
+        """`show_crypto_bundles` reste strictement réservé à l'agent
+        `product` (cf. ToolSpec) — Lot 1 « Wiki shared » ne touche
+        pas aux widgets produit."""
         for agent_id in (
             "compliance",
             "compliance.registration",
+            "compliance.remediation",
             "compliance.transactional",
+            "compliance.general",
             "advisor",
             "market",
             "default",
         ):
             names = tools_registry.all_tool_names(agent_id)
-            assert "select_wiki_pages" not in names, (
-                f"{agent_id} ne doit PAS exposer select_wiki_pages — "
-                "le wiki est consultable indirectement via "
-                "consult_specialist(target=product)."
-            )
-            assert "read_wiki_page" not in names
-            # Phase 2 wiki — `show_crypto_bundles` est strictement réservé
-            # à l'agent `product` (consult_specialist le fera transiter
-            # via le specialist appel si advisor en a besoin).
             assert "show_crypto_bundles" not in names, (
                 f"{agent_id} ne doit PAS exposer show_crypto_bundles "
                 "(réservé au specialist product)."
@@ -520,6 +532,251 @@ class TestRegistryWiring:
         assert mod is select_wiki_pages
         mod = tools_registry.find("product", "read_wiki_page")
         assert mod is read_wiki_page
+
+
+# ─────────────────────────────────────────────────────────────────
+# Lot 1 « Wiki shared » (2026-05-06) — registry cross-agent
+# ─────────────────────────────────────────────────────────────────
+
+
+class TestRegistrySharedWikiLot1:
+    """Wiki exposé à tous les sub-agents (compliance.*, advisor, market)."""
+
+    @pytest.mark.parametrize(
+        "agent_id",
+        [
+            "compliance.registration",
+            "compliance.remediation",
+            "compliance.transactional",
+            "compliance.general",
+            "advisor",
+            "market",
+            "trust",  # déjà historique — sanity check
+            "product",  # déjà historique — sanity check
+        ],
+    )
+    def test_agent_exposes_select_wiki_pages(self, agent_id):
+        names = tools_registry.all_tool_names(agent_id)
+        assert "select_wiki_pages" in names, (
+            f"{agent_id} doit exposer select_wiki_pages (Lot 1)."
+        )
+
+    @pytest.mark.parametrize(
+        "agent_id",
+        [
+            "compliance.registration",
+            "compliance.remediation",
+            "compliance.transactional",
+            "compliance.general",
+            "advisor",
+            "market",
+            "trust",
+            "product",
+        ],
+    )
+    def test_agent_exposes_read_wiki_page(self, agent_id):
+        names = tools_registry.all_tool_names(agent_id)
+        assert "read_wiki_page" in names, (
+            f"{agent_id} doit exposer read_wiki_page (Lot 1)."
+        )
+
+    def test_find_resolves_wiki_tools_for_compliance_subagent(self):
+        """Le dispatcher runtime doit résoudre les tools wiki pour
+        un sub-agent compliance (sinon le LLM verra `tool_not_found`)."""
+        mod = tools_registry.find(
+            "compliance.transactional", "select_wiki_pages"
+        )
+        assert mod is select_wiki_pages
+        mod = tools_registry.find(
+            "compliance.transactional", "read_wiki_page"
+        )
+        assert mod is read_wiki_page
+
+
+# ─────────────────────────────────────────────────────────────────
+# Lot 1 « Wiki shared » (2026-05-06) — garde-fou audience cross-agent
+# ─────────────────────────────────────────────────────────────────
+
+
+def _ctx_for_agent(agent_id: str) -> ToolContext:
+    """ToolContext pour un agent donné — utilisé par les tests
+    audience guard."""
+    return ToolContext(
+        db=MagicMock(),
+        client_id=None,
+        person_id=None,
+        user_id=42,
+        actor_kind=ActorKind.CUSTOMER,
+        agent_id=agent_id,
+        conversation_id=str(uuid4()),
+        iteration=0,
+        audit_session_id=str(uuid4()),
+        correlation_id="t-audience",
+    )
+
+
+class TestSelectWikiPagesAudienceGuard:
+    """Filtre `audience: internal` pour les agents non-product."""
+
+    def test_select_filters_internal_for_compliance_transactional(
+        self, monkeypatch
+    ):
+        monkeypatch.setenv("ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED", "false")
+        client_page = _mk_page(
+            category="savings",
+            slug="public-faq",
+            title="Public FAQ",
+            audience="client",
+            questions=("test",),
+        )
+        internal_page = _mk_page(
+            category="savings",
+            slug="internal-note",
+            title="Internal Note",
+            audience="internal",
+            questions=("test",),
+        )
+        with patch.object(
+            select_wiki_pages.wiki_repo,
+            "select_pages",
+            return_value=[
+                (client_page, 4.0, ["test"]),
+                (internal_page, 3.5, ["test"]),
+            ],
+        ):
+            result = select_wiki_pages.execute(
+                _ctx_for_agent("compliance.transactional"),
+                question="test",
+            )
+        slugs = [m["slug"] for m in result["matches"]]
+        assert "public-faq" in slugs
+        assert "internal-note" not in slugs
+        assert result["audience_filtered_out"] == 1
+
+    def test_select_keeps_internal_for_product_agent(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED", "false")
+        client_page = _mk_page(
+            category="savings",
+            slug="public-faq",
+            title="Public FAQ",
+            audience="client",
+            questions=("test",),
+        )
+        internal_page = _mk_page(
+            category="savings",
+            slug="internal-note",
+            title="Internal Note",
+            audience="internal",
+            questions=("test",),
+        )
+        with patch.object(
+            select_wiki_pages.wiki_repo,
+            "select_pages",
+            return_value=[
+                (client_page, 4.0, ["test"]),
+                (internal_page, 3.5, ["test"]),
+            ],
+        ):
+            result = select_wiki_pages.execute(
+                _ctx_for_agent("product"),
+                question="test",
+            )
+        slugs = [m["slug"] for m in result["matches"]]
+        assert "public-faq" in slugs
+        assert "internal-note" in slugs
+        assert result["audience_filtered_out"] == 0
+
+    def test_select_dict_payload_includes_audience_field(self, monkeypatch):
+        """Régression : `to_select_dict` doit inclure `audience` pour
+        permettre le filtrage cross-agent."""
+        monkeypatch.setenv("ASSISTANCE_WIKI_LLM_RETRIEVER_ENABLED", "false")
+        page = _mk_page(
+            category="savings",
+            slug="any",
+            title="Any",
+            audience="client",
+            questions=("x",),
+        )
+        with patch.object(
+            select_wiki_pages.wiki_repo,
+            "select_pages",
+            return_value=[(page, 1.0, ["x"])],
+        ):
+            result = select_wiki_pages.execute(
+                _ctx_for_agent("product"), question="x"
+            )
+        assert result["matches"][0]["audience"] == "client"
+
+
+class TestReadWikiPageAudienceGuard:
+    """Blocage des fiches `audience: internal` pour les non-product."""
+
+    def test_read_blocks_internal_for_compliance_transactional(self):
+        page = _mk_page(
+            category="savings",
+            slug="internal-note",
+            audience="internal",
+            short_answer="hidden",
+            details="hidden details",
+        )
+        with patch.object(
+            read_wiki_page.wiki_repo, "fetch_page", return_value=page
+        ):
+            result = read_wiki_page.execute(
+                _ctx_for_agent("compliance.transactional"),
+                category="savings",
+                slug="internal-note",
+            )
+        assert result["error"] == "audience_restricted"
+        assert result["audience"] == "internal"
+        assert "hint" in result
+        assert "short_answer" not in result
+        assert "details" not in result
+
+    def test_read_blocks_internal_for_advisor(self):
+        page = _mk_page(audience="internal")
+        with patch.object(
+            read_wiki_page.wiki_repo, "fetch_page", return_value=page
+        ):
+            result = read_wiki_page.execute(
+                _ctx_for_agent("advisor"),
+                category="savings",
+                slug="any",
+            )
+        assert result["error"] == "audience_restricted"
+
+    def test_read_allows_internal_for_product(self):
+        page = _mk_page(
+            audience="internal",
+            short_answer="ok",
+            details="ok details",
+        )
+        with patch.object(
+            read_wiki_page.wiki_repo, "fetch_page", return_value=page
+        ):
+            result = read_wiki_page.execute(
+                _ctx_for_agent("product"),
+                category="savings",
+                slug="any",
+            )
+        assert result.get("error") is None
+        assert result["short_answer"] == "ok"
+
+    def test_read_allows_client_audience_for_compliance(self):
+        page = _mk_page(
+            audience="client",
+            short_answer="public answer",
+        )
+        with patch.object(
+            read_wiki_page.wiki_repo, "fetch_page", return_value=page
+        ):
+            result = read_wiki_page.execute(
+                _ctx_for_agent("compliance.remediation"),
+                category="savings",
+                slug="any",
+            )
+        assert result.get("error") is None
+        assert result["short_answer"] == "public answer"
 
 
 # ─────────────────────────────────────────────────────────────────

@@ -42,6 +42,10 @@ from services.assistance.agents.tools.contracts import ToolContext, ToolSpec
 from services.assistance.agents.tools.shared.action_cta_catalog import (
     build_action,
 )
+from services.assistance.agents.tools.shared.cognitive_context import (
+    get_emotional_intent,
+    should_stop_pushing,
+)
 from services.market_data.market_summary_repo import get_market_summaries
 
 logger = logging.getLogger(__name__)
@@ -111,6 +115,36 @@ def execute(
     symbol: Optional[str] = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
+    # ── Lot 3 (2026-05-06) — garde-fou stop_pushing ──
+    # Court-circuit AVANT toute requête DB/marché : si le caller est
+    # en FEAR/ANGER (cf. cognitive_context), une carte instrument
+    # avec CTAs Acheter/Vendre est inappropriée — risque d'ajouter
+    # de l'anxiété ou d'apparaître commercial alors qu'il faut
+    # rassurer / désamorcer d'abord. Le LLM voit l'erreur typée et
+    # peut adapter sa réponse texte.
+    if should_stop_pushing(ctx):
+        logger.info(
+            "show_instrument_card.stop_pushing_active "
+            "agent=%s conv=%s emotion=%s symbol=%s",
+            ctx.agent_id,
+            ctx.conversation_id,
+            get_emotional_intent(ctx),
+            (symbol or "").strip().upper() or "?",
+        )
+        return {
+            "error": "stop_pushing_active",
+            "emotional_intent": get_emotional_intent(ctx),
+            "hint": (
+                "Le client est en état émotionnel négatif (FEAR/ANGER) "
+                "ou l'objectif du tour est `stop_pushing=true`. Ne "
+                "pousse PAS de carte instrument avec CTAs Acheter/"
+                "Vendre. Réponds en texte avec rassurance + preuves "
+                "(régulation, custody, sécurité). Tu pourras proposer "
+                "à nouveau cette carte au tour suivant si l'état "
+                "émotionnel est revenu à la normale."
+            ),
+        }
+
     raw_symbol = (symbol or "").strip().upper()
     if not raw_symbol:
         return {"error": "missing_symbol"}

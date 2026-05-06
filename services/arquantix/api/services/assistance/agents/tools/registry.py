@@ -75,12 +75,22 @@ from services.assistance.agents.tools.shared import (
 
 
 # Sous-set commun à tous les sub-agents compliance (lecture safe).
+#
+# Lot 1 « Wiki shared » (2026-05-06) — `select_wiki_pages` +
+# `read_wiki_page` sont **shared** : tous les sub-agents compliance
+# en bénéficient pour fonder leurs réponses sur les FAQ canoniques
+# (anti-hallucination + cohérence cross-agents). Le filtre audience
+# (cf. `select_wiki_pages._filter_matches_by_audience` et
+# `read_wiki_page` audience guard) interdit aux non-product de lire
+# les fiches `audience: internal`.
 _COMPLIANCE_BASE_TOOLS: list[ToolModule] = [
     read_compliance_state,
     read_registration_progress,
     read_documents,
     read_transactions,
     read_external_aml_signals,
+    select_wiki_pages,
+    read_wiki_page,
     ask_user_question,
 ]
 
@@ -194,10 +204,17 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
     # mixtes — l'advisor doit pouvoir interroger product et market via
     # `consult_specialist` pour synthétiser un conseil multi-angle
     # sans renvoyer le client sur 2 agents séparés.
+    # Lot 1 « Wiki shared » (2026-05-06) — l'advisor doit pouvoir
+    # citer la FAQ produit pour appuyer ses recommandations sans
+    # déléguer systématiquement à `consult_specialist(product)`
+    # (latence + tokens). Le filtre audience garantit qu'il ne voit
+    # que les fiches `audience: client`.
     "advisor": [
         show_instrument_card,
         show_featured_articles,
         show_top_movers,
+        select_wiki_pages,
+        read_wiki_page,
         consult_specialist,
         ask_user_question,
     ],
@@ -205,9 +222,14 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
     # sur les widgets chat (articles à la une + top movers) — pas de
     # tool client/personnel ici (anti-tipping-off : market reste sur
     # les données publiques).
+    # Lot 1 « Wiki shared » (2026-05-06) — accès lecture wiki client
+    # pour cadrer les réponses (« comment fonctionne le swap ? »,
+    # « qu'est-ce que la TVL ? ») via les fiches `concepts/`.
     "market": [
         show_featured_articles,
         show_top_movers,
+        select_wiki_pages,
+        read_wiki_page,
         ask_user_question,
     ],
     # Cognitive Bot v4 — Lot 4 (2026-05-04). Agent `trust` =
