@@ -16,10 +16,13 @@ class BundleAmountEntryScreen extends StatefulWidget {
     super.key,
     required this.bundle,
     required this.sourceAccount,
+    /// Montant initial (optionnel) — ex. deep-link depuis l'assistant.
+    this.prefillAmount,
   });
 
   final BundleItem bundle;
   final BundleSourceAccount sourceAccount;
+  final double? prefillAmount;
 
   @override
   State<BundleAmountEntryScreen> createState() =>
@@ -73,6 +76,15 @@ class _BundleAmountEntryScreenState extends State<BundleAmountEntryScreen> {
   void initState() {
     super.initState();
     _amountCtrl.addListener(_onAmountChanged);
+    if (widget.prefillAmount != null && widget.prefillAmount! > 0) {
+      final a = widget.prefillAmount!;
+      final s = a < 1 ? a.toStringAsFixed(8) : a.toStringAsFixed(2);
+      _amountCtrl.text = s.replaceAll(RegExp(r'\.?0+$'), '');
+      _parsedAmount = double.tryParse(_amountCtrl.text.replaceAll(',', '.')) ?? a;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _schedulePreview(_parsedAmount);
+      });
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final route = ModalRoute.of(context);
       final animation = route?.animation;

@@ -9,14 +9,15 @@ import '../../data/chat_api.dart';
 
 /// Carte chat « featured_articles_list » — Phase 2c.7.
 ///
-/// Émise par les agents `market` / `advisor` (et autres avec accès au
-/// tool `show_featured_articles`) pour pousser une **liste d'articles
+/// Émise par les agents qui exposent `show_featured_articles` (ex.
+/// `market`, `advisor`, **`product`** pour les articles `HELP` / FAQ CMS)
+/// pour pousser une **liste d'articles
 /// à lire** en complément d'une synthèse texte.
 ///
-/// Visuel : enveloppe `_CardShell` alignée avec [TransactionDetailEmbed]
-/// / [InstrumentDetailCardEmbed]. Titre du bloc + 1 à 5 articles
-/// (cover 56×56, titre 2 lignes max, date FR). Tap → deep-link
-/// `open_article` (slug) → ouverture du lecteur d'article.
+/// Deux présentations :
+/// - **Éditorial** (NEWS / ANALYSIS / RESEARCH) : vignette, méta date.
+/// - **FAQ centre d'aide** (`kind=HELP`, [useFaqListStyle]) : sans icône,
+///   titre + chevron [ListCardModule] (aligné sur le Cas 4 DS / écrans aide).
 ///
 /// Mode : **complémentaire** (jamais self-contained — le LLM rédige
 /// son commentaire au-dessus du widget).
@@ -25,15 +26,74 @@ class FeaturedArticlesListEmbed extends StatelessWidget {
     super.key,
     required this.title,
     required this.items,
+    this.useFaqListStyle = false,
   });
 
   final String title;
   final List<AssistanceArticleItem> items;
 
+  /// Si `true` (articles `HELP`), rendu type centre d’aide — [ListCardModule]
+  /// sans leading, avec chevron.
+  final bool useFaqListStyle;
+
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
     final visible = items.take(5).toList(growable: false);
+    if (useFaqListStyle) {
+      return _buildFaqList(context, visible);
+    }
+    return _buildEditorialList(context, visible);
+  }
+
+  Widget _buildFaqList(BuildContext context, List<AssistanceArticleItem> visible) {
+    final listItems = visible
+        .map(
+          (it) => ListCardItem(
+            title: it.title,
+            titleMaxLines: 6,
+            showChevron: it.hasDeepLink,
+            onTap: it.hasDeepLink
+                ? () => AssistanceDeepLinkResolver.resolve(
+                      context,
+                      it.deepLink!,
+                    )
+                : null,
+          ),
+        )
+        .toList(growable: false);
+
+    return _CardShell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            style: AppTypography.headerTertiary.copyWith(
+              color: AppColors.textPrimary,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: ListCardModule(
+              embedded: true,
+              showShadow: false,
+              items: listItems,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditorialList(
+    BuildContext context,
+    List<AssistanceArticleItem> visible,
+  ) {
     return _CardShell(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

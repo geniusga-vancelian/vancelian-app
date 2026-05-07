@@ -1329,6 +1329,109 @@ class AssistanceMessage(Base):
     message_payload = Column(JSONB, nullable=True)
 
 
+class AssistanceActionDraft(Base):
+    """Brouillon transactionnel CAL (migration 154) — audit, pas d'exécution métier."""
+
+    __tablename__ = "assistance_action_drafts"
+    __table_args__ = (
+        Index(
+            "ix_assistance_action_drafts_conversation_id",
+            "conversation_id",
+        ),
+        Index(
+            "ix_assistance_action_drafts_client_created",
+            "client_id",
+            "created_at",
+            postgresql_ops={"created_at": "DESC NULLS LAST"},
+        ),
+        {"schema": "public"},
+    )
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False,
+    )
+    conversation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.assistance_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    client_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.pe_clients.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    action_type = Column(String(64), nullable=False)
+    status = Column(String(32), nullable=False, server_default="draft")
+    payload = Column(
+        JSONB(astext_type=Text()),
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class AssistanceActionPlaybook(Base):
+    """Catalogue déclaratif des parcours CAL (édition admin, injection agent product)."""
+
+    __tablename__ = "assistance_action_playbooks"
+    __table_args__ = (
+        Index(
+            "ix_assistance_action_playbooks_enabled_sort",
+            "is_enabled",
+            "sort_order",
+        ),
+        Index(
+            "uq_assistance_action_playbooks_action_key",
+            "action_key",
+            unique=True,
+        ),
+        {"schema": "public"},
+    )
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False,
+    )
+    action_key = Column(String(64), nullable=False)
+    label = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    transaction_kind = Column(String(32), nullable=False)
+    agent_id = Column(String(32), nullable=False, server_default="product")
+    definition = Column(
+        JSONB(astext_type=Text()),
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    is_enabled = Column(Boolean, nullable=False, server_default=text("true"))
+    sort_order = Column(Integer, nullable=False, server_default="0")
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class AssistanceAgentDecision(Base):
     """Audit trail des décisions agentiques (Phase 2a multi-agents).
 

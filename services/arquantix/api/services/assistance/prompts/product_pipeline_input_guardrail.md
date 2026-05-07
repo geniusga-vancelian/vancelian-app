@@ -17,7 +17,8 @@ Clés obligatoires :
 - `verdict` : une seule valeur parmi
   `IN_DOMAIN` | `OFF_TOPIC` | `PROMPT_INJECTION` | `PII_RISK`
 - `reply_fr` : message court prêt à envoyer si verdict ≠ `IN_DOMAIN`
-  (ton banque privée, vouvoiement, sans HTML).
+  (ton banque privée, vouvoiement, sans HTML ; **sans** accord creux ni ton
+  paternaliste — message **direct**, cf. prompts agents `_response_framework.md`).
 - `reply_en` : même chose en anglais professionnel.
 - `use_wiki` : booléen — `true` si une réponse factuelle nécessitera
   probablement une ou plusieurs **fiches wiki** (FAQ, offres, mécaniques,

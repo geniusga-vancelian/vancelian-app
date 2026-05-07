@@ -3,7 +3,7 @@
 Couvre :
 
   * ``should_embed_previous_bot_turn`` : règle déterministe (longueur
-    + tokens standalone).
+    sur message court ; plus de veto « standalone keyword » depuis Lot 8).
   * ``build_previous_bot_context_block`` : structure du bloc de
     pré-pend.
   * ``extract_assistant_listing`` : listes numérotées, bullets,
@@ -55,19 +55,18 @@ class TestShouldEmbed:
     def test_short_message_without_token_embeds(self):
         assert should_embed_previous_bot_turn("Les offres") is True
 
-    def test_short_message_with_vancelian_token_does_not_embed(self):
-        assert should_embed_previous_bot_turn("Le coffre flexible") is False
-        assert should_embed_previous_bot_turn("Bundle Top 5") is False
-        assert should_embed_previous_bot_turn("Cloud Mining") is False
+    def test_short_message_with_vancelian_token_still_embeds(self):
+        assert should_embed_previous_bot_turn("Le coffre flexible") is True
+        assert should_embed_previous_bot_turn("Bundle Top 5") is True
+        assert should_embed_previous_bot_turn("Cloud Mining") is True
 
-    def test_short_message_with_instrument_token_does_not_embed(self):
-        assert should_embed_previous_bot_turn("BTC") is False
-        assert should_embed_previous_bot_turn("ETH ?") is False
+    def test_short_message_with_instrument_token_still_embeds(self):
+        assert should_embed_previous_bot_turn("BTC") is True
+        assert should_embed_previous_bot_turn("ETH ?") is True
 
-    def test_short_message_with_project_token_does_not_embed(self):
-        # User prend l'initiative, on n'embarque pas.
-        assert should_embed_previous_bot_turn("la maison") is False
-        assert should_embed_previous_bot_turn("ma retraite") is False
+    def test_short_message_with_project_token_still_embeds(self):
+        assert should_embed_previous_bot_turn("la maison") is True
+        assert should_embed_previous_bot_turn("ma retraite") is True
 
     def test_long_message_does_not_embed(self):
         msg = " ".join(["mot"] * (LACONIC_WORD_THRESHOLD + 2))
@@ -89,8 +88,12 @@ class TestShouldEmbed:
 
 class TestBuildBlock:
     def test_returns_none_when_no_embed(self):
+        msg = " ".join(
+            ["je veux acheter une maison de trois cent mille euros sur quatre ans"]
+            + ["avec un prêt amortissable détaillé et des mensualités stables"]
+        )
         out = build_previous_bot_context_block(
-            user_message="je veux acheter une maison de 300000 EUR sur 4 ans",
+            user_message=msg,
             last_assistant_text="...",
         )
         assert out is None
@@ -104,8 +107,8 @@ class TestBuildBlock:
             ),
         )
         assert out is not None
-        assert "[CONTEXT FROM PREVIOUS BOT TURN]" in out
-        assert "[USER MESSAGE]" in out
+        assert "[RÉPONSE ASSISTANT PRÉCÉDENTE" in out
+        assert "[DEMANDE / RÉPONSE UTILISATEUR SUR CE TOUR]" in out
         assert "Les offres" in out
         assert "Offres Exclusives" in out
 

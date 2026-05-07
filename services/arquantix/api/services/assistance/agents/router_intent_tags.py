@@ -397,6 +397,30 @@ TAG_CATALOG: tuple[TagDefinition, ...] = (
         preferred_agent="product",
     ),
     TagDefinition(
+        tag="centre_aide_faq",
+        family=TAG_FAMILY_TRANSVERSE,
+        keywords_fr=(
+            "faq",
+            "articles faq",
+            "liste faq",
+            "centre aide",
+            "aide en ligne",
+            "rubrique aide",
+            "documentation app",
+            "manuel app",
+            "guides app",
+            "help center",
+        ),
+        keywords_en=(
+            "faq",
+            "help center",
+            "help articles",
+            "faq articles",
+            "knowledge base",
+        ),
+        preferred_agent="product",
+    ),
+    TagDefinition(
         tag="argent_general",
         family=TAG_FAMILY_TRANSVERSE,
         keywords_fr=(

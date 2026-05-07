@@ -10,13 +10,26 @@ from uuid import uuid4
 from services.assistance.agents.base import AgentEvent, AgentInput
 from services.assistance.agents.runtime import product_slack_pipeline as psp
 from services.assistance.agents.runtime.product_slack_pipeline import (
-    _build_preload_block,
+    _build_preload_block_and_refs,
+    _language_hint_for_replies,
     _run_input_guardrail,
     normalize_index_path,
     parse_index_path_to_category_slug,
     should_use_slack_pipeline,
 )
 from services.assistance.agents.tools.shared.classify_actor import ActorKind
+
+
+def test_language_hint_fr_without_accents():
+    assert (
+        _language_hint_for_replies("sur quoi tu me proposes d'investir ?") == "fr"
+    )
+    assert _language_hint_for_replies("comment ça marche le coffre ?") == "fr"
+
+
+def test_language_hint_fr_from_recent_turns():
+    turns = [{"role": "user", "content": "Épargne retraite"}]
+    assert _language_hint_for_replies("ok thanks", turns) == "fr"
 
 
 def test_normalize_judge_payload():
@@ -70,7 +83,7 @@ class TestParseIndexPath:
 
 class TestPreloadBlock:
     def test_build_returns_markdown_sections(self):
-        block = _build_preload_block(
+        block, refs = _build_preload_block_and_refs(
             ["faq/savings/what-is-the-flexible-vault.md"],
         )
         assert "Contexte wiki pré-chargé" in block

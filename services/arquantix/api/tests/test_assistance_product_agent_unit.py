@@ -182,8 +182,10 @@ class TestListProductKnowledgeTopicsTool:
 class TestRegistryHasProduct:
     def test_product_registered_with_runtime_tools(self):
         tool_names = tools_registry.all_tool_names("product")
-        assert "read_product_knowledge" in tool_names
-        assert "list_product_knowledge_topics" in tool_names
+        assert "read_product_knowledge" not in tool_names
+        assert "list_product_knowledge_topics" not in tool_names
+        assert "read_wiki_page" in tool_names
+        assert "select_wiki_pages" in tool_names
         assert "ask_user_question" in tool_names
         # Phase 2c : product N'A PAS consult_specialist (anti-récursion).
         assert "consult_specialist" not in tool_names

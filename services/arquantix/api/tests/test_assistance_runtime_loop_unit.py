@@ -690,26 +690,13 @@ class TestProductGuardrailHelper:
             _check_product_guardrail(["select_wiki_pages", "read_wiki_page"]) is None
         )
 
-    def test_select_then_read_product_knowledge_returns_none(self):
-        """select + read_product_knowledge (SQL) compte comme une lecture valide."""
-        from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
-        assert (
-            _check_product_guardrail(["select_wiki_pages", "read_product_knowledge"])
-            is None
-        )
-
     def test_only_show_instrument_card_returns_none(self):
         """show_instrument_card seul est une lecture valide (carte produit live)."""
         from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
         assert _check_product_guardrail(["show_instrument_card"]) is None
 
-    def test_only_read_product_knowledge_returns_none(self):
-        from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
-        assert _check_product_guardrail(["read_product_knowledge"]) is None
-
     def test_list_topics_only_does_not_satisfy_guardrail(self):
-        """list_product_knowledge_topics est un tool de debug/introspection,
-        pas une lecture de contenu — le guard-rail doit s'activer quand même."""
+        """Un tool inconnu / hors périmètre lecture ne satisfait pas le guard-rail."""
         from services.assistance.agents.runtime.agent_loop import (
             PRODUCT_GUARDRAIL_HINT_NO_READ,
             _check_product_guardrail,
@@ -729,14 +716,22 @@ class TestProductGuardrailIntegration:
         # 1er tour : LLM répond direct sans tool (simule turn 30 hallucinatoire)
         # 2e tour (après injection hint) : LLM finit par appeler un tool de lecture
         tool = _make_tool_module(
-            name="read_product_knowledge",
+            name="read_wiki_page",
             agent_id="product",
-            execute_result={"slug": "vault", "content": "Le coffre…"},
+            execute_result={"title": "Coffre", "short_answer": "Le coffre…"},
         )
         completion, state = _make_completion_fn(
             [
                 {"content": "Vancelian propose plusieurs produits…", "tool_calls": None},
-                {"content": None, "tool_calls": [_tool_call("read_product_knowledge", {"slug": "vault"})]},
+                {
+                    "content": None,
+                    "tool_calls": [
+                        _tool_call(
+                            "read_wiki_page",
+                            {"category": "savings", "slug": "product_basics_vault"},
+                        )
+                    ],
+                },
                 {"content": "Voici la fiche officielle.", "tool_calls": None},
             ]
         )

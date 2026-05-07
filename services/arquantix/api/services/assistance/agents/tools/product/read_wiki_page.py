@@ -212,12 +212,13 @@ def execute(
             "category": safe_category,
             "slug": safe_slug,
             "hint": (
-                f"Le slug `{safe_slug}` est dans la table SQL "
-                "`product_knowledge`, pas dans le wiki markdown. "
-                f"Appelle `read_product_knowledge(slug='{safe_slug}')` "
-                "à la place."
+                f"Le slug `{safe_slug}` est réservé à l'ancienne table SQL "
+                "`product_knowledge` (non exposée aux tools dans cette "
+                "configuration). Pour obtenir le contenu, utilise "
+                "`select_wiki_pages(question, category?)` puis "
+                "`read_wiki_page(category, slug)` afin de trouver la fiche "
+                "équivalente dans le wiki Markdown."
             ),
-            "use_tool": "read_product_knowledge",
         }
 
     if safe_category not in wiki_repo.ALL_CATEGORIES:

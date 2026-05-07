@@ -116,9 +116,9 @@ class TestReadWikiPageGuard:
             slug="product_basics_exclusive_offer",
         )
         assert out["error"] == "wrong_repo"
-        assert out["use_tool"] == "read_product_knowledge"
+        assert "select_wiki_pages" in out["hint"]
+        assert "read_wiki_page" in out["hint"]
         assert "product_basics_exclusive_offer" in out["hint"]
-        assert "read_product_knowledge" in out["hint"]
 
     def test_sql_slug_with_any_category_redirected(self):
         """Le préfixe SQL doit primer sur la catégorie : peu importe

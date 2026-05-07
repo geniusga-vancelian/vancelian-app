@@ -333,6 +333,24 @@ model AssistanceMessage {
   @@map("assistance_messages")
 }
 
+/// Catalogue CAL (Alembic 155) — parcours transactionnels édités en admin ; runtime Python.
+model AssistanceActionPlaybook {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actionKey        String   @unique @map("action_key") @db.VarChar(64)
+  label            String   @db.VarChar(200)
+  description      String?  @db.Text
+  transactionKind  String   @map("transaction_kind") @db.VarChar(32)
+  agentId          String   @default("product") @map("agent_id") @db.VarChar(32)
+  definition       Json     @default("{}") @db.JsonB
+  isEnabled        Boolean  @default(true) @map("is_enabled")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([isEnabled, sortOrder], map: "ix_assistance_action_playbooks_enabled_sort")
+  @@map("assistance_action_playbooks")
+}
+
 /// Phase 2a multi-agents — audit trail des décisions agentiques.
 /// Cf. `docs/arquantix/MULTI_AGENTS_RUNTIME.md` § 4 et migration Alembic 148.
 /// Table « miroir » : gérée par Alembic côté Python, déclarée ici pour

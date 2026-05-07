@@ -6,12 +6,11 @@ Référence : ``docs/arquantix/CLIENT_DISCOVERY.md`` § 4 (« Continuité »).
 3 responsabilités
 ──────────────────────────────────────────────────────────────────────
 
-A) ``should_embed_previous_bot_turn(user_message)`` — détection
-   déterministe (longueur + keyword product/instrument/projet) qui
-   décide si le user message est laconique au point qu'il faut **lui
-   pré-pendre** le contenu du tour bot précédent dans le contexte
-   transmis aux tools de retrieval (cf. cas conv ``f9d59f98`` tour #15
-   « Les offres » qui dérive sans le tour #14 listant les 5 familles).
+A) ``should_embed_previous_bot_turn`` + bloc construit dans
+    ``build_previous_bot_context_block`` puis exposé comme
+    ``compound_user_turn`` via ``memory_state`` : tout message utilisateur
+    **court** (≤ ``LACONIC_WORD_THRESHOLD`` mots) est résolu à la lumière
+    du dernier tour assistant enrichi (y compris les labels QCM).
 
 B) ``extract_assistant_listing(text)`` — parser déterministe qui
    détecte une liste numérotée ≥ 2 (et bullet ≥ 2) précédée d'une
@@ -36,7 +35,7 @@ import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Iterable, Mapping, MutableMapping, Optional, cast
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +90,11 @@ QCM_SOFT_CAP: int = 5
 QCM_AUTO_PROMOTE_MIN_ITEMS: int = 3
 
 
+# Clé mémoire : formulation « sémantique » du dernier tour user,
+# combinant lorsque pertinent le dernier assistant + le message utilisateur.
+# Cf. Lot 8 (2026-05-06) — continuité follow-up court quel que soit l'agent.
+COMPOUND_USER_TURN_MEMORY_KEY: str = "compound_user_turn"
+
 # Embeds backend qui fournissent **déjà** des CTAs cliquables au client
 # Flutter (cf. `services/assistance/agents/tools/product/show_*.py`).
 # Si l'un d'eux est attaché au tour assistant, on **ne promote pas**
@@ -100,6 +104,8 @@ EMBEDS_WITH_BUILTIN_CTAS: frozenset[str] = frozenset({
     "bundle_detail_card",       # show_bundle_detail
     "instrument_detail_card",   # show_instrument_card
     "transaction_detail",       # read_transaction_detail (compliance)
+    "invest_source_account_list",
+    "invest_confirmation_draft",
 })
 
 
@@ -218,13 +224,18 @@ def contains_standalone_token(message: str) -> bool:
 
 def should_embed_previous_bot_turn(user_message: str) -> bool:
     """Décide si le tour assistant précédent doit être pré-pendu au
-    user message dans le contexte des tools de retrieval.
+    user message dans la formulation sémantique du tour suivant.
 
-    Règle :
+    Règle (Lot 8 / 2026-05-06) :
+
       * désactivé si la feature flag est off ;
-      * embed si word_count(user_message) ≤ LACONIC_WORD_THRESHOLD
-        ET pas de token standalone détecté ;
-      * sinon non.
+      * embed si ``word_count ≤ LACONIC_WORD_THRESHOLD`` (**messages
+        courts quasi toujours en réaction au bot précédent**).
+
+    L'ancien garde ``contains_standalone_token`` (produits BTC, Coffre…)
+    a été **retiré** : même un jeton « auto-porteur » doit être résolu à
+    la lumière du dernier tour assistant (« cryptique » après un écran de
+    choix métier ou un QCM).
     """
     if not assistance_previous_bot_context_injection_enabled():
         return False
@@ -232,9 +243,75 @@ def should_embed_previous_bot_turn(user_message: str) -> bool:
         return False
     if _word_count(user_message) > LACONIC_WORD_THRESHOLD:
         return False
-    if contains_standalone_token(user_message):
-        return False
     return True
+
+
+def augment_assistant_content_for_followup(
+    *,
+    content: Optional[str],
+    message_type: Optional[str] = None,
+    message_payload: Optional[Mapping[str, Any]] = None,
+    max_option_labels: int = 14,
+) -> str:
+    """Enrichit le texte assistant persisté pour ancrage des follow-ups.
+
+    Cas critique : les messages ``message_type=choices`` ne stockent
+    souvent que le ``prompt`` en ``content`` — le client voit aussi les
+    **labels** du QCM sans qu'elles ne soient dans ``content``.
+    Ajoute ces labels à la ligne pour que tout LLM/routeur puisse résoudre
+    « Dépôt par virement » dans le même référentiel que l'écran.
+    """
+    base = (content or "").strip()
+    mt = (message_type or "").strip().lower()
+    labels: list[str] = []
+
+    payload = dict(message_payload) if isinstance(message_payload, dict) else {}
+    opts = payload.get("options")
+
+    def _gather_option_labels(raw: Iterable[Any]) -> None:
+        for item in raw:
+            if isinstance(item, dict):
+                lbl = str(item.get("label") or "").strip()
+                if lbl:
+                    labels.append(lbl)
+
+    if mt == "choices" and isinstance(opts, list):
+        _gather_option_labels(opts)
+
+    if not labels:
+        return base
+
+    labels = labels[: int(max_option_labels)]
+    appendix = "; ".join(labels)
+    if base:
+        return f"{base}\n(Options affichées au client : {appendix})"
+    return f"(Options affichées au client : {appendix})"
+
+
+def last_assistant_enriched_from_history(
+    recent_turns: Optional[list[dict[str, Any]]],
+) -> str:
+    """Dernier message ``assistant`` de l'historique, enrichi comme pour un
+    follow-up (labels QCM incluses si ``message_payload`` disponible).
+
+    Chaîne vide s'il n'y a pas d'assistant précédent.
+    """
+    for turn in reversed(recent_turns or []):
+        if not isinstance(turn, dict):
+            continue
+        if turn.get("role") != "assistant":
+            continue
+        raw_pl = turn.get("message_payload")
+        return augment_assistant_content_for_followup(
+            content=str(turn.get("content") or ""),
+            message_type=(
+                str(turn.get("message_type")).strip()
+                if turn.get("message_type") is not None
+                else None
+            ),
+            message_payload=raw_pl if isinstance(raw_pl, dict) else None,
+        )
+    return ""
 
 
 def build_previous_bot_context_block(
@@ -260,11 +337,93 @@ def build_previous_bot_context_block(
     if len(text) > len(truncated):
         truncated = truncated + "…"
     return (
-        "[CONTEXT FROM PREVIOUS BOT TURN]\n"
+        "[RÉPONSE ASSISTANT PRÉCÉDENTE – référencée pour résoudre le tour "
+        "courant]\n"
         + truncated
-        + "\n[USER MESSAGE]\n"
+        + "\n[DEMANDE / RÉPONSE UTILISATEUR SUR CE TOUR]\n"
         + user_message.strip()
     )
+
+
+def attach_compound_turn_to_recent_history(
+    recent_turns: Optional[list[dict[str, Any]]],
+    *,
+    semantic_user_turn: str,
+) -> list[dict[str, Any]]:
+    """Copie ``recent_turns`` en substituant la **phrase utilisateur brute**
+    du dernier tour ``user`` par ``semantic_user_turn``."""
+
+    turns = cast(list[dict[str, Any]], list(recent_turns or []))
+    if not turns:
+        return []
+    semantic = semantic_user_turn.strip()
+    if not semantic:
+        return turns
+
+    out: list[MutableMapping[str, Any]] = []
+    i_last_user = None
+    for i in range(len(turns) - 1, -1, -1):
+        row = turns[i]
+        if isinstance(row, dict) and row.get("role") == "user":
+            i_last_user = i
+            break
+    if i_last_user is None:
+        return turns
+    for j, row in enumerate(turns):
+        if j != i_last_user or not isinstance(row, dict):
+            out.append(dict(row))
+            continue
+        cp = dict(row)
+        cp["content"] = semantic
+        out.append(cp)
+    return cast(list[dict[str, Any]], out)
+
+
+def trim_trailing_duplicate_user_turn(
+    turns: Optional[list[dict[str, Any]]],
+    *,
+    raw_user_fallback: Optional[str],
+) -> list[dict[str, Any]]:
+    """Si la fin de l'historique duplique le user courant, retire la dernière
+
+    ligne ``user`` (évite deux bulles utilisateur strictement identiques
+    dans les prompts après refacto Lot 8).
+    """
+    if not turns:
+        return []
+    lst = turns[-1]
+    if isinstance(lst, dict) and lst.get("role") == "user":
+        content = str(lst.get("content") or "").strip()
+        fb = (raw_user_fallback or "").strip()
+        if not fb:
+            return cast(list[dict[str, Any]], list(turns))
+        if content == fb:
+            return cast(list[dict[str, Any]], list(turns[:-1]))
+    return cast(list[dict[str, Any]], list(turns))
+
+
+def enrich_recent_turns_for_llm_semantic_user(
+    recent_turns: Optional[list[dict[str, Any]]],
+    *,
+    compound_user_turn: Optional[str],
+    raw_user_fallback: str,
+) -> list[dict[str, Any]]:
+    """Historique destiné aux LLM : dernier ``user`` = ``compound_user_turn``.
+
+    Sinon retombe sur l'historique inchangé (sans copie défensive superfétatoire).
+    """
+    tgt = compound_user_turn
+    tgt_st = tgt.strip() if isinstance(tgt, str) else ""
+    if tgt_st:
+        attached = attach_compound_turn_to_recent_history(
+            recent_turns,
+            semantic_user_turn=tgt_st,
+        )
+        return trim_trailing_duplicate_user_turn(
+            attached,
+            raw_user_fallback=raw_user_fallback,
+        )
+    return cast(list[dict[str, Any]], list(recent_turns or []))
 
 
 # ─────────────────────────────────────────────────────────────────────

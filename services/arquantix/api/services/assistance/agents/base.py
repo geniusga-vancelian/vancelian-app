@@ -160,6 +160,9 @@ class AgentEvent:
     # Pipeline product (Slack-like) : métadonnées du juge sortie — persistées
     # dans `message_payload.metadata.product_pipeline_output_judge`.
     output_judge_metadata: Optional[dict] = None   # type='done'
+    # Fiches wiki effectivement injectées dans le system prompt (Pass 1 → FS),
+    # pour l’admin (cohérent même sans appel `read_wiki_page`).
+    wiki_pipeline_preload_refs: Optional[list[dict]] = None  # type='done'
     # Cognitive Bot v4 — Lot 5 « Observabilité » (2026-05-06).
     # Compteurs cumulés du tour, pour audit + UX admin (admin
     # conversation viewer). JSON-safe, valeurs numériques uniquement.
@@ -208,6 +211,10 @@ class AgentEvent:
             if self.output_judge_metadata:
                 payload["product_pipeline_output_judge"] = dict(
                     self.output_judge_metadata
+                )
+            if self.wiki_pipeline_preload_refs:
+                payload["product_pipeline_wiki_preload"] = list(
+                    self.wiki_pipeline_preload_refs
                 )
             if self.runtime_metrics:
                 payload["runtime_metrics"] = dict(self.runtime_metrics)
@@ -265,6 +272,10 @@ class RouterDecision:
     # strategy_hint, source_emotion, source_stage}. Injecté dans le
     # system prompt des agents experts pour orienter leur réponse.
     objective: Optional[dict] = None
+    # Orchestrateur enrichi (2026-05) : dimensions produit au-delà de
+    # l'agent_id — intention métier, urgence, besoin données, etc.
+    # Cf. ``orchestration_context.normalize_orchestration``.
+    orchestration: Optional[dict] = None
 
     @property
     def is_decisive(self) -> bool:
@@ -280,13 +291,22 @@ class RouterDecision:
         return self.redirect_bridge is not None
 
     def to_log_dict(self) -> dict:
-        return {
+        out = {
             "agent_id": self.agent_id,
             "confidence": round(self.confidence, 3),
             "reasoning": self.reasoning,
             "extracted_entities": self.extracted_entities,
             "off_topic": self.is_off_topic,
         }
+        if self.orchestration:
+            orch = self.orchestration
+            out["orchestration"] = {
+                "business_intent": orch.get("business_intent"),
+                "urgency": orch.get("urgency"),
+                "data_need": orch.get("data_need"),
+                "transaction_kind": orch.get("transaction_kind"),
+            }
+        return out
 
 
 # ── Type label (pour signatures) ────────────────────────────────────────

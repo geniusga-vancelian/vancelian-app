@@ -112,10 +112,9 @@ SPEC: ToolSpec = {
             "appelle ensuite `read_wiki_page(category, slug)` pour "
             "récupérer la fiche choisie. À utiliser pour les "
             "questions client larges (FAQ, mécaniques produit, "
-            "exclusive offers, crypto, account, transfers, etc.). "
-            "Pour les délais standards courts (SEPA, KYC) ou les "
-            "définitions canoniques (Vault, SCPI, Livret), préfère "
-            "`read_product_knowledge` (table SQL canonique). "
+            "exclusive offers, crypto, account, transfers, délais SEPA/KYC, "
+            "vue d'ensemble catalogue, etc.). "
+            "Pour chaque besoin factuel : enchaîne avec `read_wiki_page`. "
             "Idempotent."
         ),
         "parameters": {
@@ -276,10 +275,11 @@ def execute(
                 "use_sql_catalog_slug": llm_result.get("use_sql_catalog_slug"),
                 "selection_reason": llm_result.get("selection_reason"),
                 "hint": (
-                    "Pour cette question type 'gamme / catalogue / "
-                    "produits Vancelian', appelle "
-                    "`read_product_knowledge('vancelian_product_catalog')`"
-                    " — c'est la fiche SQL canonique qui fait autorité."
+                    "Pour les questions « gamme / catalogue / produits Vancelian », "
+                    "affine la question puis rappelle `select_wiki_pages` avec une "
+                    "reformulation explicite, ou ouvre une fiche wiki pertinente via "
+                    "`read_wiki_page(category, slug)` (le wiki Markdown est la source "
+                    "exposée aux tools)."
                 ),
                 "via": "llm_sql_hint",
             }

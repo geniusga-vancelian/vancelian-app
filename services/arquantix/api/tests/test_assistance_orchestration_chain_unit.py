@@ -506,13 +506,11 @@ def _remediation_tools_with_handoff():
 
 
 def _transactional_tools_with_consult():
-    from services.assistance.agents.tools.product import (
-        read_product_knowledge,
-    )
+    from services.assistance.agents.tools.product import read_wiki_page
     from services.assistance.agents.tools.shared import consult_specialist
 
     return [
         _read_documents_tool(),
         consult_specialist,
-        read_product_knowledge,  # exposé au sub-loop product
+        read_wiki_page,
     ]

@@ -1,11 +1,10 @@
 """Logique métier Assistance : conversation lookup/create + persistence + LLM.
 
-Le flux d'un tour :
-1. Vérifier conversation existante (FK client) ou en créer une (titre auto).
-2. Insérer le message `user` (turn_index = next).
-3. Reconstituer l'historique (limité à `assistance_history_max_turns`) et appeler OpenAI.
-4. Insérer la réponse `assistant` (turn_index + 1).
-5. Mettre à jour `last_message_at` + `updated_at`.
+Flux **nominal aligné SSE** (`/chat/turn/stream`) :
+  persistance du tour user puis router + runtime multi-agents (tools, QCM).
+
+L'endpoint synchrone `/chat/turn` rejoue la même boucle jusqu'à l'event ``done``
+puis recharge le message assistant persisté — plus de courte LLM anonyme sans tools.
 """
 
 from __future__ import annotations
@@ -15,14 +14,15 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from database import AssistanceConversation, AssistanceMessage
+from database import AssistanceConversation, AssistanceMessage, SessionLocal
 from services.assistance import memory as assistance_memory
+from services.assistance.action_drafts_repo import pending_action_memory_snapshot
 from services.assistance import conversation_topic as assistance_conversation_topic
 from services.assistance import router_hot_path as assistance_router_hot_path
 from services.assistance.agents import router as agent_router
@@ -35,6 +35,14 @@ from services.assistance.agents.base import (
     ChoiceOption,
     RouterDecision,
 )
+from services.assistance.agents.expected_answer_scope import (
+    PENDING_EXPECTATION_MEMORY_KEY,
+    build_scope_agent_qcm,
+    build_scope_auto_qcm,
+    build_scope_router_qcm,
+    extract_pending_expectation_from_recent_turns,
+    merge_expected_answer_scope_into_payload,
+)
 from services.assistance.agents.cognitive_state import (
     CognitiveState,
     compute_cognitive_state,
@@ -42,10 +50,21 @@ from services.assistance.agents.cognitive_state import (
 from services.assistance.agents.conversation_objective import (
     compute_objective,
 )
+from services.assistance.agents.conversation_state import (
+    CONVERSATION_STATE_MEMORY_KEY,
+    build_conversation_state,
+    render_conversation_state_for_prompt,
+)
 from services.assistance.agents import client_discovery as discovery_engine
+from services.assistance.assistant_output_sanitize import (
+    strip_phantom_cta_invitations,
+    strip_untrusted_article_links,
+)
 from services.assistance.agents.conversation_continuity import (
+    COMPOUND_USER_TURN_MEMORY_KEY,
     build_previous_bot_context_block,
     decide_auto_qcm,
+    last_assistant_enriched_from_history,
 )
 from services.assistance import client_discovery_repo as discovery_repo
 from services.assistance.agents.config import (
@@ -63,8 +82,11 @@ from services.assistance.agents.runtime.product_slack_pipeline import (
 )
 from services.assistance.agents.tools import registry as tools_registry
 from services.assistance.agents.tools.shared.classify_actor import ActorKind
-from services.assistance.config import assistance_history_max_turns
-from services.assistance.llm import LLMError, chat_markdown, chat_markdown_stream
+from services.assistance.config import (
+    assistance_conversation_state_debug,
+)
+from services.assistance.embed_gate import gate_embeds_for_ui_experience
+from services.assistance.llm import LLMError
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +293,8 @@ def _load_history(
             "role": r.role,
             "content": r.content,
             "agent_used": r.agent_used,
+            "message_type": getattr(r, "message_type", None) or "text",
+            "message_payload": getattr(r, "message_payload", None),
         }
         for r in rows
     ]
@@ -415,75 +439,95 @@ def create_conversation(
     return conv
 
 
+async def _collect_stream_until_done(**kwargs: Any) -> dict[str, Any]:
+    """Consomme `stream_assistant_turn` jusqu'à un événement `done` ou lève."""
+    done_ev: Optional[dict[str, Any]] = None
+    last_err: Optional[str] = None
+    async for ev in stream_assistant_turn(**kwargs):
+        et = ev.get("type")
+        if et == "done":
+            done_ev = ev
+            break
+        if et == "error":
+            last_err = str(ev.get("message") or "stream_failed")
+    if done_ev is not None:
+        return done_ev
+    if last_err == "llm_unavailable":
+        raise LLMError("llm_unavailable")
+    if last_err:
+        raise LLMError(last_err)
+    raise LLMError("assistant_turn_incomplete")
+
+
 def process_chat_turn(
     db: Session,
     *,
     client_id: UUID,
     conversation_id: Optional[UUID],
     user_content: str,
+    agent_hint: Optional[str] = None,
+    person_id: Optional[UUID] = None,
+    actor_kind: ActorKind,
+    user_id: int,
 ) -> tuple[AssistanceConversation, AssistanceMessage]:
-    """Traite un tour : crée/charge la conversation, persiste user, appelle LLM, persiste assistant.
+    """Même orchestration que `/chat/turn/stream` : router, tools, QCM persistés.
 
-    Lève :
-    - `ValueError("conversation_not_found")` si l'ID est fourni mais ne match pas le client.
-    - `ValueError("conversation_closed")` si la conversation est marquée close.
-    - `LLMError(...)` si l'appel OpenAI échoue (le user message reste persisté).
+    Le tour user est commité dans `start_chat_turn` puis le pipeline async
+    `stream_assistant_turn` tourne jusqu'à ``done``. Le message assistant
+    présent sur la DB est rechargé via cette session.
+
+    Lève les mêmes `ValueError` conv + `LLMError` lorsqu'aucune réponse complète.
     """
-    # D.1.4.4 — COMMIT ANTICIPÉ (UX optimiste) ───────────────────────────
-    # On persiste la conversation + le message user AVANT l'appel LLM
-    # (qui peut prendre 5 à 30 s avec OpenAI). Ainsi, si l'utilisateur
-    # navigue vers la liste « Mes conversations » pendant l'attente :
-    #  - la conversation y apparaît immédiatement (`GET /conversations`)
-    #  - en tapant dessus, l'historique montre déjà son message user
-    #    (`GET /conversations/{id}/messages`)
-    #
-    # `last_message_at` reflète l'activité user. `last_assistant_message_at`
-    # reste `NULL` tant que la réponse n'est pas arrivée → pas de pastille
-    # « non lu » prématurée. La conv ne pourra remonter unread qu'après
-    # le second commit (insertion du message assistant).
-    conv, _user_msg, user_idx = _persist_user_turn(
+    conv, _user_msg, agent_input, decision, user_idx = start_chat_turn(
         db,
         client_id=client_id,
         conversation_id=conversation_id,
         user_content=user_content,
+        agent_hint=agent_hint,
+        person_id=person_id,
     )
 
-    history = _load_history(
-        db, conv.id, limit=assistance_history_max_turns()
+    kwargs = dict(
+        session_factory=SessionLocal,
+        conversation_id=conv.id,
+        user_idx=user_idx,
+        agent_input=agent_input,
+        decision=decision,
+        client_id=client_id,
+        actor_kind=actor_kind,
+        user_id=user_id,
+        person_id=person_id,
     )
 
     try:
-        assistant_text = chat_markdown(history)
-    except LLMError:
-        # Le user_msg est déjà persisté par le commit anticipé : pas
-        # besoin de re-commiter ici. Le client conserve la conv (visible
-        # dans /conversations) et peut réessayer en renvoyant le même
-        # `conversation_id`.
-        raise
+        asyncio.get_running_loop()
+    except RuntimeError:
+        done_ev = asyncio.run(_collect_stream_until_done(**kwargs))
+    else:
+        raise RuntimeError(
+            "process_chat_turn doit être invoquée hors event-loop active "
+            "(handler FastAPI sync). Sinon utiliser l'endpoint stream."
+        )
 
-    assistant_msg = AssistanceMessage(
-        id=uuid4(),
-        conversation_id=conv.id,
-        turn_index=user_idx + 1,
-        role="assistant",
-        content=assistant_text,
+    db.expire_all()
+    assistant_id = UUID(str(done_ev["message_id"]))
+    assistant_msg = (
+        db.query(AssistanceMessage)
+        .filter(AssistanceMessage.id == assistant_id)
+        .one_or_none()
     )
-    db.add(assistant_msg)
+    if assistant_msg is None:
+        raise LLMError("assistant_message_not_found_after_turn")
 
-    now = datetime.now(timezone.utc)
-    conv.last_message_at = now
-    conv.last_assistant_message_at = now
-    # D.1.4.2 — par convention, un nouveau message assistant arrive « non
-    # lu » par défaut. C'est au client d'appeler explicitement
-    # `POST /conversations/{id}/read` lorsqu'il considère que la réponse a
-    # été affichée à l'utilisateur. On ne touche donc PAS à `last_read_at`
-    # ici — sinon la pastille ne pourrait jamais remonter.
-    conv.updated_at = now
-
-    db.commit()
-    db.refresh(conv)
-    db.refresh(assistant_msg)
-    return conv, assistant_msg
+    conv_ref = (
+        db.query(AssistanceConversation)
+        .filter(AssistanceConversation.id == conv.id)
+        .one_or_none()
+    )
+    if conv_ref is None:
+        raise ValueError("conversation_not_found")
+    db.refresh(conv_ref)
+    return conv_ref, assistant_msg
 
 
 def _persist_user_turn(
@@ -980,6 +1024,48 @@ def start_chat_turn(
         # aucun tool ancrant n'a encore été appelé sur cette conv.
         "current_topic": _safe_get_current_topic(db, conv.id),
     }
+
+    try:
+        _snap = pending_action_memory_snapshot(db, conversation_id=conv.id)
+        if _snap:
+            memory_state_dict["pending_action"] = _snap
+    except Exception:  # noqa: BLE001 — best-effort
+        logger.exception(
+            "assistance.pending_action.load_failed conv=%s",
+            conv.id,
+        )
+
+    last_assistant_plain_for_discovery = ""
+    for turn in reversed(recent_turns or []):
+        if isinstance(turn, dict) and turn.get("role") == "assistant":
+            last_assistant_plain_for_discovery = str(turn.get("content") or "")
+            break
+
+    last_assistant_rich = last_assistant_enriched_from_history(recent_turns)
+    compound_preview_block = build_previous_bot_context_block(
+        user_message=user_content,
+        last_assistant_text=last_assistant_rich or None,
+    )
+    memory_state_dict[COMPOUND_USER_TURN_MEMORY_KEY] = (
+        compound_preview_block.strip()
+        if compound_preview_block
+        else (user_content.strip() if user_content else "")
+    )
+    if compound_preview_block:
+        memory_state_dict["previous_bot_context_block"] = (
+            compound_preview_block.strip()
+        )
+    # QCM / auto-QCM — scope « attente » pour le tour user courant
+    # (résolution « B », « le 2 », … sans reposer la question).
+    try:
+        _pending_exp = extract_pending_expectation_from_recent_turns(recent_turns)
+        if _pending_exp:
+            memory_state_dict[PENDING_EXPECTATION_MEMORY_KEY] = _pending_exp
+    except Exception:  # noqa: BLE001 — best-effort
+        logger.exception(
+            "assistance.pending_expectation.extract_failed conv=%s",
+            conv.id,
+        )
     # Cognitive Bot v4 — Lot 1+2 (2026-05-04). Avant `_decide_agent`,
     # on calcule un cognitive_state PRÉLIMINAIRE :
     #   * `emotional_intent` — précis car keyword-only sur user_message.
@@ -1032,11 +1118,6 @@ def start_chat_turn(
     #     lu par le router et les agents experts via memory_state.
     #   * Préparation du context block « previous_bot_turn » si user
     #     message laconique (cf. should_embed_previous_bot_turn).
-    last_assistant_text: Optional[str] = None
-    for turn in reversed(recent_turns or []):
-        if isinstance(turn, dict) and turn.get("role") == "assistant":
-            last_assistant_text = str(turn.get("content") or "")
-            break
     try:
         active_projects = (
             discovery_repo.list_active_projects_for_person(
@@ -1048,7 +1129,7 @@ def start_chat_turn(
 
         extraction = discovery_engine.extract_discovery_keyword_pass(
             user_message=user_content,
-            last_assistant_text=last_assistant_text,
+            last_assistant_text=last_assistant_plain_for_discovery,
             active_projects=active_projects,
             current_turn=user_idx,
         )
@@ -1107,17 +1188,6 @@ def start_chat_turn(
         )
         if rendered:
             memory_state_dict["client_discovery"] = rendered
-
-        # Préparation du context block previous_bot (utilisé par les
-        # agents experts pour les messages laconiques) — c'est juste un
-        # texte qu'on pose dans memory_state ; agent_loop décide de
-        # l'injecter ou non.
-        prev_bot_block = build_previous_bot_context_block(
-            user_message=user_content,
-            last_assistant_text=last_assistant_text,
-        )
-        if prev_bot_block:
-            memory_state_dict["previous_bot_context_block"] = prev_bot_block
     except Exception:  # noqa: BLE001 — best-effort, never kill a turn
         logger.exception(
             "assistance.client_discovery.failed conv=%s", conv.id
@@ -1163,6 +1233,35 @@ def start_chat_turn(
             "assistance.cognitive_state.finalize_failed conv=%s", conv.id
         )
 
+    if getattr(decision, "orchestration", None):
+        memory_state_dict["orchestration"] = decision.orchestration
+
+    # Conversation state v1 (PR2) — snapshot agrégé read-only dans memory_state,
+    # injecté ensuite par ``agent_loop._build_initial_messages`` ([CONVERSATION_STATE]).
+    try:
+        _cs = build_conversation_state(
+            memory_state=memory_state_dict,
+            recent_turns=recent_turns,
+            last_bot_turn=None,
+            router_decision=decision,
+            cognitive_state=getattr(decision, "cognitive_state", None),
+            objective=getattr(decision, "objective", None),
+        )
+        memory_state_dict[CONVERSATION_STATE_MEMORY_KEY] = _cs.model_dump(
+            mode="json"
+        )
+        if assistance_conversation_state_debug():
+            logger.debug(
+                "assistance.conversation_state.debug conv=%s turn=%s %s",
+                conv.id,
+                user_idx,
+                render_conversation_state_for_prompt(_cs),
+            )
+    except Exception:  # noqa: BLE001 — best-effort, never kill a turn
+        logger.exception(
+            "assistance.conversation_state.snapshot_failed conv=%s", conv.id
+        )
+
     logger.info(
         "assistance.agent.tour conv=%s turn=%s router=%s",
         conv.id,
@@ -1184,6 +1283,7 @@ def start_chat_turn(
         decision=decision,
         iteration=0,
         client_discovery_block=memory_state_dict.get("client_discovery"),
+        conversation_state=memory_state_dict.get(CONVERSATION_STATE_MEMORY_KEY),
     )
 
     # Cognitive Bot v4 — Lot 6 fix (2026-05-05) — commit explicite du
@@ -1220,6 +1320,7 @@ def _persist_router_decision(
     decision: RouterDecision,
     iteration: int = 0,
     client_discovery_block: Optional[str] = None,
+    conversation_state: Optional[dict] = None,
 ) -> None:
     """Persiste la décision du router dans `assistance_agent_decisions`
     pour audit — best-effort, jamais d'exception remontée.
@@ -1261,6 +1362,7 @@ def _persist_router_decision(
             # strategy_hint). Audit dans la vue admin pour valider que le
             # bot a la bonne stratégie selon l'état émotionnel détecté.
             "objective": obj or None,
+            "orchestration": getattr(decision, "orchestration", None) or None,
             # Cognitive Bot v4 — Lot 7 V1.2 (2026-05-05) — snapshot du
             # bloc ``[CLIENT DISCOVERY]`` exactement tel qu'injecté au
             # router LLM ce tour. Permet à l'admin de reconstituer "ce
@@ -1271,6 +1373,8 @@ def _persist_router_decision(
             # Best-effort : ``None`` si le client n'avait pas (encore)
             # de projet identifié.
             "client_discovery_block": client_discovery_block or None,
+            # Agrégateur v1 — snapshot rejouable (admin / métriques) sans nouvelle migration.
+            "conversation_state": conversation_state or None,
         }
 
         # Cognitive Bot v4 — Lot 6 (2026-05-04) — double-write des
@@ -1354,6 +1458,13 @@ def _build_choices_payload(
         "options": [o.to_dict() for o in options],
         "allow_freeform": True,
     }
+    payload_dict = merge_expected_answer_scope_into_payload(
+        payload_dict,
+        build_scope_router_qcm(
+            prompt=prompt,
+            option_dicts=payload_dict["options"],
+        ),
+    )
 
     # Texte lisible (fallback pour clients qui ignorent message_type).
     lines = [prompt]
@@ -1609,6 +1720,7 @@ async def stream_assistant_turn(
         # client, pas un audit).
         runtime_embeds: Optional[list[dict]] = None
         runtime_output_judge: Optional[dict] = None
+        runtime_product_wiki_preload: Optional[list[dict]] = None
         try:
             async for event in event_iter:
                 if event.type == "delta":
@@ -1693,6 +1805,10 @@ async def stream_assistant_turn(
                         runtime_embeds = list(event.embeds)
                     if event.output_judge_metadata:
                         runtime_output_judge = dict(event.output_judge_metadata)
+                    if event.wiki_pipeline_preload_refs:
+                        runtime_product_wiki_preload = list(
+                            event.wiki_pipeline_preload_refs
+                        )
                     # On n'émet pas le `done` ici — on le fera après la
                     # persistance avec un vrai `message_id`.
                     break
@@ -1743,6 +1859,39 @@ async def stream_assistant_turn(
         # quand pas de dispatch (Phase 2a/sub-agents non-compliance).
         agent_used_persisted = final_agent_id or decision.agent_id
 
+        # Liens `vancelian://app/article/...` dans le markdown ne sont pas
+        # validés — le modèle peut inventer des slugs. On neutralise avant
+        # persistance (les seuls liens article fiables sont ceux du widget
+        # `featured_articles_list` émis par `show_featured_articles`).
+        _sanitized, _n_article_links = strip_untrusted_article_links(
+            full_text
+        )
+        if _n_article_links:
+            logger.info(
+                "assistance.output.untrusted_article_links_stripped "
+                "conv=%s turn=%s count=%d",
+                conversation_id,
+                user_idx + 1,
+                _n_article_links,
+            )
+        full_text = _sanitized
+
+        # QCM / boutons : uniquement si le runtime a émis `choices`
+        # (`ask_user_question`). Sinon, neutralise les phrases qui promettent
+        # un « bouton ci-dessous » et propose des liens profonds whitelistés
+        # (cf. `assistant_output_sanitize.strip_phantom_cta_invitations`).
+        if runtime_choices is None:
+            _no_phantoms, n_phantom = strip_phantom_cta_invitations(full_text)
+            if n_phantom:
+                logger.info(
+                    "assistance.output.phantom_cta_stripped "
+                    "conv=%s turn=%s blocks=%d",
+                    conversation_id,
+                    user_idx + 1,
+                    n_phantom,
+                )
+            full_text = _no_phantoms
+
         # Phase 2c : metadata orchestration multi-agent (audit + future
         # UI BO). On l'attache à `message_payload` (qui devient ainsi
         # toujours présent quand il y a chaînage, même sur un message
@@ -1755,6 +1904,10 @@ async def stream_assistant_turn(
         if runtime_output_judge:
             orchestration_meta["product_pipeline_output_judge"] = (
                 runtime_output_judge
+            )
+        if runtime_product_wiki_preload:
+            orchestration_meta["product_pipeline_wiki_preload"] = (
+                runtime_product_wiki_preload
             )
 
         # Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05). AUTO-QCM
@@ -1816,11 +1969,27 @@ async def stream_assistant_turn(
                 agent_used_persisted,
             )
 
+        # Filtrage UX : stress / stop_pushing → retire embeds « promo »
+        # avant persistance + SSE (sans altérer la décision auto_qcm ci-dessus).
+        if runtime_embeds:
+            runtime_embeds = gate_embeds_for_ui_experience(
+                runtime_embeds,
+                cognitive_state=getattr(decision, "cognitive_state", None),
+                objective=getattr(decision, "objective", None),
+            )
+
         if runtime_choices is not None:
             choices_payload = {
                 "options": runtime_choices["options"],
                 "allow_freeform": runtime_choices["allow_freeform"],
             }
+            choices_payload = merge_expected_answer_scope_into_payload(
+                choices_payload,
+                build_scope_agent_qcm(
+                    prompt=str(runtime_choices.get("prompt") or ""),
+                    option_dicts=list(runtime_choices["options"]),
+                ),
+            )
             if orchestration_meta:
                 choices_payload["metadata"] = orchestration_meta
             if runtime_embeds:
@@ -1837,7 +2006,7 @@ async def stream_assistant_turn(
             )
         else:
             text_payload: Optional[dict] = None
-            if orchestration_meta or runtime_embeds or auto_qcm_payload or runtime_output_judge:
+            if orchestration_meta or runtime_embeds or auto_qcm_payload or runtime_output_judge or runtime_product_wiki_preload:
                 text_payload = {}
                 if orchestration_meta:
                     text_payload["metadata"] = orchestration_meta
@@ -1845,6 +2014,13 @@ async def stream_assistant_turn(
                     text_payload["embeds"] = runtime_embeds
                 if auto_qcm_payload:
                     text_payload["auto_qcm"] = auto_qcm_payload
+                    text_payload = merge_expected_answer_scope_into_payload(
+                        text_payload,
+                        build_scope_auto_qcm(
+                            prompt=str(auto_qcm_payload.get("prompt") or ""),
+                            option_strings=list(auto_qcm_payload.get("options") or []),
+                        ),
+                    )
             msg = _persist_assistant_message(
                 db,
                 conversation_id=conversation_id,
@@ -1883,6 +2059,8 @@ async def stream_assistant_turn(
             done_payload["auto_qcm"] = auto_qcm_payload
         if runtime_output_judge:
             done_payload["product_pipeline_output_judge"] = runtime_output_judge
+        if runtime_product_wiki_preload:
+            done_payload["product_pipeline_wiki_preload"] = runtime_product_wiki_preload
         yield done_payload
 
         logger.info(
@@ -1932,12 +2110,13 @@ async def stream_assistant_turn(
             pass
         # Tentative de commit du partiel si on a au moins quelque chose.
         if full_text.strip():
+            _partial, _ = strip_untrusted_article_links(full_text.strip())
             try:
                 _persist_assistant_message(
                     db,
                     conversation_id=conversation_id,
                     turn_index=user_idx + 1,
-                    content=full_text.strip() + "\n\n_[Réponse interrompue]_",
+                    content=_partial + "\n\n_[Réponse interrompue]_",
                     agent_used=decision.agent_id,
                     message_type="text",
                     message_payload=None,

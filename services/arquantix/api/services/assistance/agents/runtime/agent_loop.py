@@ -44,6 +44,15 @@ from services.assistance.agents.base import (
     AgentInput,
     ChoiceOption,
 )
+from services.assistance.agents.expected_answer_scope import (
+    PENDING_EXPECTATION_MEMORY_KEY,
+    render_pending_expectation_for_prompt,
+)
+from services.assistance.agents.conversation_state import (
+    CONVERSATION_STATE_MEMORY_KEY,
+    ConversationState,
+    render_conversation_state_for_prompt,
+)
 from services.assistance.agents.config import (
     assistance_agent_autonomy_max,
     assistance_agent_max_iter,
@@ -71,6 +80,12 @@ from services.assistance.agents.tools.shared import (
     handoff_to_agent as handoff_to_agent_tool,
 )
 from services.assistance.agents.tools.shared.classify_actor import ActorKind
+from services.assistance.agents.conversation_continuity import (
+    COMPOUND_USER_TURN_MEMORY_KEY,
+    build_previous_bot_context_block,
+    enrich_recent_turns_for_llm_semantic_user,
+    last_assistant_enriched_from_history,
+)
 from services.assistance.conversation_topic import (
     infer_topic_from_tool_call,
     set_topic as conversation_set_topic,
@@ -160,7 +175,6 @@ LLM_BACKOFF_SCHEDULE: tuple[float, ...] = (0.5, 1.0)
 # product. `select_wiki_pages` n'en fait PAS partie : il ne retourne que
 # les titres + 3 questions preview, pas le contenu.
 PRODUCT_KNOWLEDGE_READ_TOOLS: frozenset[str] = frozenset({
-    "read_product_knowledge",
     "read_wiki_page",
     "show_instrument_card",
     # Phase 2 wiki — `show_crypto_bundles` consomme le catalogue
@@ -170,6 +184,10 @@ PRODUCT_KNOWLEDGE_READ_TOOLS: frozenset[str] = frozenset({
     # Phase 2 wiki v1.4 — fiche détaillée d'UN bundle, source DB
     # identique au slider (``CatalogService.get_public_catalog``).
     "show_bundle_detail",
+    # Articles HELP CMS (`articles` publiées) — liste cliquable ; slugs issus
+    # de la DB. Valide le guard-rail quand le client demande surtout une
+    # liste d'articles d'aide sans question factuelle wiki.
+    "show_featured_articles",
 })
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -198,8 +216,6 @@ PRODUCT_KNOWLEDGE_READ_TOOLS: frozenset[str] = frozenset({
 # pour les tools L1+ futurs qui auront des side-effects.
 DEDUPABLE_TOOLS: frozenset[str] = frozenset({
     # product
-    "read_product_knowledge",
-    "list_product_knowledge_topics",
     "select_wiki_pages",
     "read_wiki_page",
     "show_instrument_card",
@@ -233,21 +249,20 @@ DEDUP_HINT_REPEATED_CALL = (
 
 
 PRODUCT_GUARDRAIL_HINT_NO_READ = (
-    "Tu n'as appelé aucun tool de lecture (read_product_knowledge, "
-    "read_wiki_page, show_instrument_card, show_crypto_bundles, "
+    "Tu n'as appelé aucun tool de lecture (read_wiki_page, "
+    "show_featured_articles, show_instrument_card, show_crypto_bundles, "
     "show_bundle_detail) avant "
     "de répondre. C'est interdit pour les questions factuelles produit "
     "— tu risques de halluciner. Reformule en commençant par "
     "select_wiki_pages(question, "
     "category?) pour identifier la fiche pertinente, puis read_wiki_page("
-    "category, slug) pour en lire le contenu — ou read_product_knowledge("
-    "slug) si la fiche est dans le SQL canonique. Tu n'as droit qu'à un "
+    "category, slug) pour en lire le contenu. Tu n'as droit qu'à un "
     "seul retry, ne le gâche pas."
 )
 
 PRODUCT_GUARDRAIL_HINT_SELECT_WITHOUT_READ = (
-    "Tu as appelé select_wiki_pages mais pas read_wiki_page (ni "
-    "read_product_knowledge) derrière. select_wiki_pages ne retourne "
+    "Tu as appelé select_wiki_pages mais pas read_wiki_page derrière. "
+    "select_wiki_pages ne retourne "
     "que les titres et 3 questions preview — pas le contenu des fiches. "
     "Tu dois maintenant appeler read_wiki_page(category, slug) sur le "
     "candidat le plus pertinent (top-1 score) avant de composer ta "
@@ -371,9 +386,16 @@ def _build_initial_messages(
 ) -> list[dict[str, Any]]:
     """Construit la liste de messages initiale pour le LLM.
 
-    Schéma : `[system, ...recent_turns, user]`. La mémoire long-terme
-    (`agent_input.memory_state`) est concaténée au system prompt si
-    présente, pour rester compatible avec le format Phase 1 attendu par
+    Schéma : `[system, ...recent_turns]`. Les tours user/assistant
+    proviennent de ``recent_turns`` après substitution éventuelle du
+    dernier message user par ``compound_user_turn`` (voir
+    ``conversation_continuity.enrich_recent_turns_for_llm_semantic_user``)
+    lorsque présent dans ``memory_state``. Zéro tour user dans
+    ``recent_turns`` (consult specialist) ⇒ un dernier message
+    ``user`` est dérivé de ``compound_user_turn`` puis ``user_message``.
+
+    La mémoire long-terme (`agent_input.memory_state`) est concaténée au
+    system prompt si présente, pour rester compatible avec le format Phase 1 attendu par
     OpenAI.
 
     Cognitive Bot v4 (Lot 1+2, 2026-05-04) : on injecte aussi en fin
@@ -387,7 +409,11 @@ def _build_initial_messages(
 
     Ces blocs sont calculés en amont par ``service.start_chat_turn`` et
     transportés via ``agent_input.memory_state`` (clés
-    ``cognitive_state`` et ``objective``).
+    ``cognitive_state``, ``objective``, et optionnellement ``orchestration``).
+
+    Conversation state v1 (PR2) : bloc compact ``[CONVERSATION_STATE]`` si
+    la clé ``conversation_state`` est présente (snapshot JSON depuis
+    ``service.start_chat_turn``).
     """
     messages: list[dict[str, Any]] = []
 
@@ -416,46 +442,84 @@ def _build_initial_messages(
     if isinstance(discovery_block, str) and discovery_block.strip():
         sys_chunks.append(discovery_block)
 
+    try:
+        pend_raw = mem.get(PENDING_EXPECTATION_MEMORY_KEY)
+        pend_rendered = render_pending_expectation_for_prompt(
+            pend_raw if isinstance(pend_raw, dict) else None
+        )
+        if pend_rendered:
+            sys_chunks.append("\n" + pend_rendered)
+    except Exception:  # noqa: BLE001 — best-effort, never break a turn
+        logger.exception("agent_loop.pending_expectation_render_failed")
+
+    try:
+        raw_cs = mem.get(CONVERSATION_STATE_MEMORY_KEY)
+        if isinstance(raw_cs, dict) and raw_cs:
+            compact = render_conversation_state_for_prompt(
+                ConversationState.model_validate(raw_cs)
+            )
+            if compact.strip() and compact.strip() not in ("{}", "null"):
+                sys_chunks.append("\n[CONVERSATION_STATE]\n" + compact)
+    except Exception:  # noqa: BLE001 — best-effort, never break a turn
+        logger.exception("agent_loop.conversation_state_inject_failed")
+
     messages.append({"role": "system", "content": "\n".join(sys_chunks)})
 
-    for turn in agent_input.recent_turns or []:
+    cmpv = mem.get(COMPOUND_USER_TURN_MEMORY_KEY)
+    compound_arg = (
+        cmpv.strip()
+        if isinstance(cmpv, str) and cmpv.strip()
+        else None
+    )
+    turns_for_llm = enrich_recent_turns_for_llm_semantic_user(
+        agent_input.recent_turns,
+        compound_user_turn=compound_arg,
+        raw_user_fallback=agent_input.user_message or "",
+    )
+
+    saw_user_turn = False
+    for turn in turns_for_llm or []:
         role = turn.get("role")
         content = turn.get("content")
         if role in ("user", "assistant") and isinstance(content, str):
             messages.append({"role": role, "content": content})
+            if role == "user":
+                saw_user_turn = True
 
-    # Cognitive Bot v4 — Lot 7. Si le user message est laconique
-    # (cf. should_embed_previous_bot_turn), le runtime aura pré-calculé
-    # un bloc « previous_bot_context_block » qui pré-pend le tour bot
-    # précédent au user message dans son contexte. On envoie ce bloc
-    # à la place du user message brut pour le LLM uniquement (la DB
-    # garde le user_message original intact).
-    user_payload = agent_input.user_message
-    prev_bot_block = mem.get("previous_bot_context_block")
-    if isinstance(prev_bot_block, str) and prev_bot_block.strip():
-        user_payload = prev_bot_block
-    messages.append({"role": "user", "content": user_payload})
+    # Sous-loop ``consult_specialist`` : pas d'historique ; le tour user
+    # provient alors de ``compound_user_turn`` (si défini par le caller)
+    # ou de ``user_message``.
+    if not saw_user_turn:
+        payload = (
+            compound_arg
+            if compound_arg
+            else (agent_input.user_message or "").strip()
+        )
+        if payload:
+            messages.append({"role": "user", "content": payload})
+
     return messages
 
 
 def _format_cognitive_blocks(memory_state: dict) -> str:
-    """Cognitive Bot v4 — formate les blocs ``[COGNITIVE STATE]`` et
-    ``[OBJECTIVE]`` pour injection dans le system prompt.
+    """Cognitive Bot v4 — formate ``[COGNITIVE STATE]``, ``[OBJECTIVE]`` et
+    optionnellement la **décision orchestrateur** pour injection system prompt.
 
-    Lit ``memory_state["cognitive_state"]`` et ``memory_state["objective"]``
-    posés par ``services.assistance.service.start_chat_turn`` (Lot 1+2).
+    Lit ``memory_state["cognitive_state"]``, ``["objective"]``,
+    ``["orchestration"]`` posés par ``service.start_chat_turn``.
 
-    Retourne ``""`` si rien à dire (cas démarrage neutre + pas
-    d'objectif). Defensive : import local pour éviter un cycle
-    d'imports au démarrage du runtime.
+    Retourne ``""`` si rien à dire. Defensive : import local pour éviter un
+    cycle d'imports au démarrage du runtime.
     """
     if not isinstance(memory_state, dict):
         return ""
 
     cog_dict = memory_state.get("cognitive_state")
     obj_dict = memory_state.get("objective")
+    orch_raw = memory_state.get("orchestration")
+    has_orch = isinstance(orch_raw, dict) and bool(orch_raw)
 
-    if not cog_dict and not obj_dict:
+    if not cog_dict and not obj_dict and not has_orch:
         return ""
 
     parts: list[str] = []
@@ -487,6 +551,18 @@ def _format_cognitive_blocks(memory_state: dict) -> str:
                 parts.append("\n## Objectif du tour\n" + rendered)
     except Exception:  # noqa: BLE001 — best-effort.
         logger.exception("agent_loop.objective_render_failed")
+
+    try:
+        from services.assistance.agents.orchestration_context import (
+            render_orchestration_for_prompt,
+        )
+
+        if has_orch and isinstance(orch_raw, dict):
+            rendered = render_orchestration_for_prompt(orch_raw)
+            if rendered:
+                parts.append(rendered.rstrip())
+    except Exception:  # noqa: BLE001
+        logger.exception("agent_loop.orchestration_render_failed")
 
     return "\n".join(parts)
 
@@ -635,6 +711,36 @@ async def _run_consult_specialist(
         # (specialist enchaîne sur de la recommandation alors que le
         # caller est en mode ``stop_pushing=True``).
         caller_mem = agent_input.memory_state or {}
+        last_ast_enriched = last_assistant_enriched_from_history(
+            agent_input.recent_turns,
+        )
+        consult_compound_preview = build_previous_bot_context_block(
+            user_message=question,
+            last_assistant_text=last_ast_enriched or None,
+        )
+        consult_turn_semantic = (
+            consult_compound_preview.strip()
+            if consult_compound_preview
+            else question.strip()
+        )
+        specialist_mem = {
+            "client_id": caller_mem.get("client_id"),
+            "person_id": caller_mem.get("person_id"),
+            "cognitive_state": caller_mem.get("cognitive_state"),
+            "objective": caller_mem.get("objective"),
+            "current_topic": caller_mem.get("current_topic"),
+            COMPOUND_USER_TURN_MEMORY_KEY: consult_turn_semantic,
+        }
+        _pend_c = caller_mem.get(PENDING_EXPECTATION_MEMORY_KEY)
+        if isinstance(_pend_c, dict) and _pend_c:
+            specialist_mem[PENDING_EXPECTATION_MEMORY_KEY] = _pend_c
+        raw_conv = caller_mem.get(CONVERSATION_STATE_MEMORY_KEY)
+        if isinstance(raw_conv, dict) and raw_conv:
+            specialist_mem[CONVERSATION_STATE_MEMORY_KEY] = raw_conv
+        if consult_compound_preview:
+            specialist_mem["previous_bot_context_block"] = (
+                consult_compound_preview.strip()
+            )
         # Lot 4 (2026-05-06) — propagation du ``current_topic`` au
         # sub-runtime : le specialist consulté DOIT voir le sujet
         # actif (« on parle du bundle TOP5 »), sinon il peut dériver
@@ -643,13 +749,7 @@ async def _run_consult_specialist(
         sub_input = AgentInput(
             user_message=question,
             recent_turns=[],  # specialist isolé du contexte caller
-            memory_state={
-                "client_id": caller_mem.get("client_id"),
-                "person_id": caller_mem.get("person_id"),
-                "cognitive_state": caller_mem.get("cognitive_state"),
-                "objective": caller_mem.get("objective"),
-                "current_topic": caller_mem.get("current_topic"),
-            },
+            memory_state=specialist_mem,
         )
         text_chunks: list[str] = []
         async for sub_event in run_agent_loop(
@@ -825,6 +925,28 @@ async def run_agent_loop(
     # Liste des consultations effectuées (pour message_payload metadata).
     consultations: list[dict[str, Any]] = []
 
+    effective_system_prompt = system_prompt
+    if current_agent_id == "product":
+        try:
+            from services.assistance.action_playbooks_catalog import (
+                render_enabled_playbooks_markdown,
+            )
+
+            block = render_enabled_playbooks_markdown(db)
+            if block.strip():
+                effective_system_prompt = (
+                    system_prompt.strip()
+                    + "\n\n## Playbooks d'actions transactionnelles (CAL)\n"
+                    "Suis **strictement** les étapes et outils listés ci-dessous "
+                    "quand l'intention correspond (achat crypto, bundle). "
+                    "Ne renvoie pas vers « Mes informations » comme substitut "
+                    "à ces outils.\n\n"
+                    + "[ACTION_PLAYBOOKS_CATALOG]\n"
+                    + block
+                )
+        except Exception:  # noqa: BLE001
+            logger.exception("agent_loop.action_playbooks_catalog_inject_failed")
+
     autonomy_max = assistance_agent_autonomy_max(current_agent_id)
     gated_tools = _filter_tools_by_autonomy(
         available_tools, autonomy_max=autonomy_max
@@ -838,7 +960,7 @@ async def run_agent_loop(
     openai_tools = [to_openai_tool(m.SPEC) for m in gated_tools]  # type: ignore[arg-type]
 
     messages = _build_initial_messages(
-        system_prompt=system_prompt, agent_input=agent_input
+        system_prompt=effective_system_prompt, agent_input=agent_input
     )
 
     max_iter = assistance_agent_max_iter()
@@ -851,6 +973,7 @@ async def run_agent_loop(
 
     tools_called: list[str] = []
     decision_ids: list[str] = []
+    last_iteration_index: int = 0
     interrupt_with_choices: Optional[dict[str, Any]] = None
     early_break_reason: Optional[str] = None
     subagent_dispatched: Optional[str] = None
@@ -888,6 +1011,7 @@ async def run_agent_loop(
     yield AgentEvent(type="delta", content="")  # warm-up event (compat)
 
     for iteration in range(max_iter):
+        last_iteration_index = iteration
         if time.monotonic() - started_at > timeout_total:
             early_break_reason = "timeout"
             yield AgentEvent(type="error", error_code="agent_timeout")
@@ -1676,6 +1800,35 @@ async def run_agent_loop(
         yield AgentEvent(
             type="delta", content=sanitized_fb or MAX_ITER_FALLBACK_MESSAGE
         )
+
+    # PR3 — Politique data_need (soft) : audit si réponse finale sans tool de lecture.
+    if (
+        chain_depth == 0
+        and not consult_in_progress
+        and early_break_reason in ("final_answer", "max_iter", "timeout")
+    ):
+        _mem = agent_input.memory_state or {}
+        _orch = _mem.get("orchestration")
+        if isinstance(_orch, dict):
+            try:
+                from services.assistance.data_need_read_policy import (
+                    maybe_audit_data_need_read_gap,
+                )
+
+                maybe_audit_data_need_read_gap(
+                    db,
+                    conversation_id=conversation_id,
+                    agent_id=current_agent_id,
+                    orchestration=_orch,
+                    tools_called_sequence=tools_called,
+                    correlation_id=correlation_id,
+                    iteration=last_iteration_index,
+                    early_break_reason=early_break_reason,
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "agent_loop.data_need_policy_failed conv=%s", conversation_id
+                )
 
     duration_total_ms = int((time.monotonic() - started_at) * 1000)
     logger.info(

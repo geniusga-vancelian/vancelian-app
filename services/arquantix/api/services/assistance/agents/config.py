@@ -61,6 +61,12 @@ def assistance_router_hot_path_enabled() -> bool:
     (cf. analyse `5bef01e9` 2026-05-04 où le router avait flippé entre
     `product` et `market` sur 3 follow-ups consécutifs sur le même bundle).
 
+    Quand le dernier message **assistant** apporte déjà du fond (cf.
+    `assistance_router_hot_path_min_prior_assistant_chars`), le hot-path
+    est **désactivé** pour ce tour : le superviseur (router LLM) relit
+    la question user **courte** avec ce contexte — notamment pour
+    distinguer conseil vs discovery produit.
+
     Override : `ASSISTANCE_ROUTER_HOT_PATH_ENABLED=false` pour désactiver
     en cas de régression observée en production.
     """
@@ -83,6 +89,29 @@ def assistance_router_hot_path_max_chars() -> int:
     except ValueError:
         v = 60
     return max(10, min(300, v))
+
+
+def assistance_router_hot_path_min_prior_assistant_chars() -> int:
+    """Seuil de « réponse bot » : au-delà, pas de hot-path sur follow-up court.
+
+    Si le message assistant **juste avant** le tour user courant fait au
+    moins N caractères (réponse de fond), on **ne** court-circuite **pas**
+    le router : la question courte doit être interprétée avec ce contexte
+    (conseil vs produit, etc.). Mettre ``0`` pour retrouver le comportement
+    historique (hot-path uniquement selon longueur user + agent précédent).
+
+    Défaut : ``40``. Clampé dans [0, 8000].
+    """
+    try:
+        v = int(
+            os.getenv(
+                "ASSISTANCE_ROUTER_HOT_PATH_MIN_PRIOR_ASSISTANT_CHARS",
+                "40",
+            )
+        )
+    except ValueError:
+        v = 40
+    return max(0, min(8000, v))
 
 
 def assistance_wiki_llm_retriever_enabled() -> bool:
@@ -375,19 +404,19 @@ def assistance_stream_thinking_enabled() -> bool:
 
 
 def assistance_runtime_loop_enabled() -> bool:
-    """Active le runtime agent loop (Phase 2a). Défaut **False**.
+    """Active le runtime agent loop (Phase 2a). Défaut **True**.
 
-    Quand `True`, les agents qui possèdent des tools dans
-    `tools/registry.py` sont dispatchés via `runtime.run_agent_loop` au
-    lieu du `agent.stream(...)` Phase 1. Les autres agents conservent
-    leur flux Phase 1 sans changement (pas de régression).
+    Quand ``True``, les agents listés dans ``ASSISTANCE_RUNTIME_LOOP_AGENTS``
+    passent par ``run_agent_loop`` (function-calling : transactions, KYC,
+    stats, wiki, widgets). Quand ``False``, retour **Phase 1**
+    (``LLMAgentBase.stream`` sans outils OpenAI) : pour ``compliance``,
+    seul le stub ``compliance_tools`` est injecté en texte — pas les outils
+    ``read_transactions`` / ``list_transactions`` du registry.
 
-    Mise en prod : passer à `True` après validation smoke test pour
-    activer le mode multi-tools sur l'agent compliance. Rollback
-    instantané en cas de souci → repasser à `False` (zéro rebuild).
+    Désactiver explicitement : ``ASSISTANCE_RUNTIME_LOOP_ENABLED=false``.
     """
     raw = (
-        os.getenv("ASSISTANCE_RUNTIME_LOOP_ENABLED") or "false"
+        os.getenv("ASSISTANCE_RUNTIME_LOOP_ENABLED") or "true"
     ).strip().lower()
     return raw in ("1", "true", "yes", "on")
 
@@ -410,5 +439,5 @@ def assistance_runtime_loop_agents() -> set[str]:
     """
     raw = os.getenv("ASSISTANCE_RUNTIME_LOOP_AGENTS")
     if raw is None or not raw.strip():
-        return {"compliance", "product", "advisor", "market"}
+        return {"compliance", "product", "advisor", "market", "trust"}
     return {part.strip().lower() for part in raw.split(",") if part.strip()}

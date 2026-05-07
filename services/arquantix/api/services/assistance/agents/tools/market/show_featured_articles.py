@@ -26,7 +26,7 @@ Sources de données (toutes publiques) :
     titre i18n (``article_i18n.title``) ou sur le slug.
 
 Sécurité :
-  - ``kind`` whitelisté strict (NEWS / ANALYSIS / RESEARCH).
+  - ``kind`` whitelisté strict (NEWS / ANALYSIS / RESEARCH / HELP).
   - ``query`` capée à 80 chars + sanitizée (LIKE escape).
   - ``limit`` borné [1, 5].
   - Deep-links générés via ``action_cta_catalog.build_action`` avec
@@ -56,13 +56,14 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────
 
 # Mappage kind public → article_type DB (table `articles`). On expose
-# au LLM des kinds parlant français (NEWS, ANALYSIS, RESEARCH) qui
-# coïncident avec les constantes Prisma actuelles. Tout futur ajout
-# (OFFER, PROJECT, …) passera par ce dict pour rester whitelisté.
+# au LLM des kinds parlant (NEWS, ANALYSIS, RESEARCH, HELP) qui
+# coïncident avec les constantes Prisma. HELP = articles d'aide / FAQ CMS
+# (Phase 3 unification, `articleType='HELP'`).
 _KIND_TO_ARTICLE_TYPE: dict[str, str] = {
     "NEWS": "NEWS",
     "ANALYSIS": "ANALYSIS",
     "RESEARCH": "RESEARCH",
+    "HELP": "HELP",
 }
 
 _DEFAULT_LIMIT = 3
@@ -81,22 +82,31 @@ SPEC: ToolSpec = {
     "function": {
         "name": "show_featured_articles",
         "description": (
-            "Affiche un BLOC LISTE D'ARTICLES en complément de ta "
-            "réponse texte : 1 à 5 articles « à la une » (cover, titre, "
-            "date, temps de lecture). Chaque ligne est cliquable et "
-            "ouvre le lecteur d'article. À utiliser quand le client "
-            "demande de l'actualité marché, des analyses ou des notes "
-            "de recherche.\n"
+            "Affiche un BLOC LISTE D'ARTICLES en complément de ta réponse "
+            "texte (1 à 5 entrées ; chaque ligne ouvre le lecteur d’article "
+            "in-app — slugs issus de la base de données).\n\n"
+            "DÉCLENCHEMENT FAQ — si le client demande une **liste d’articles FAQ**, "
+            "le **centre d’aide**, des « articles HELP », « montre les articles », "
+            "etc., utilise **`kind=HELP`** avec `limit=5` et un `query` court "
+            "déduit du besoin (ou générique vide). Tu ne refuses **pas** ces "
+            "demandes sous prétexte d’orienter uniquement vers un site web.\n\n"
+            "Réponse éditoriale (NEWS / ANALYSIS / RESEARCH en anglais comme en "
+            "français) : couverture visible, titre, date ; même ouverture in-app "
+            "`open_article`. N’invente **jamais** de lien Markdown "
+            "`[texte](vancelian://app/article/...)` dans ton texte libre.\n"
             "\n"
-            "RÈGLE IMPORTANTE : tu peux ÉCRIRE EN PLUS un texte "
-            "explicatif au-dessus du widget (synthèse 2-4 phrases des "
-            "tendances). Le widget porte les liens vers les articles "
-            "complets ; ton texte donne la vue d'ensemble.\n"
+            "RÈGLE : tu rédiges aussi un court texte d’introduction au-dessus du "
+            "widget ; le widget porte les liens cliquables vérifiés.\n"
             "\n"
             "PARAM `kind` (obligatoire, whitelist stricte) :\n"
             "- `NEWS` → actualités marché récentes ;\n"
             "- `ANALYSIS` → analyses & opinions de la rédaction ;\n"
-            "- `RESEARCH` → notes de recherche.\n"
+            "- `RESEARCH` → notes de recherche ;\n"
+            "- `HELP` → **aide & FAQ CMS** (articles publiés `article_type=HELP`). "
+            "À utiliser quand tu veux proposer des lectures vérifiables : "
+            "le widget émet les **seuls** liens article autorisés — "
+            "n'écris **jamais** `[texte](vancelian://app/article/...)` "
+            "dans ton markdown libre.\n"
             "\n"
             "PARAM `query` (optionnel) : mots-clés du sujet "
             "(ex. \"bitcoin\", \"taux\", \"etf\"). Best-effort sur "
@@ -111,11 +121,12 @@ SPEC: ToolSpec = {
             "properties": {
                 "kind": {
                     "type": "string",
-                    "enum": ["NEWS", "ANALYSIS", "RESEARCH"],
+                    "enum": ["NEWS", "ANALYSIS", "RESEARCH", "HELP"],
                     "description": (
                         "Type d'article à afficher. NEWS = actu, "
                         "ANALYSIS = analyses/opinions, "
-                        "RESEARCH = notes de recherche."
+                        "RESEARCH = notes de recherche, "
+                        "HELP = aide & FAQ (liens article validés serveur)."
                     ),
                 },
                 "query": {
@@ -252,6 +263,7 @@ _BLOCK_TITLE_BY_KIND: dict[str, str] = {
     "NEWS": "À la une",
     "ANALYSIS": "Analyses",
     "RESEARCH": "Notes de recherche",
+    "HELP": "Articles utiles",
 }
 
 

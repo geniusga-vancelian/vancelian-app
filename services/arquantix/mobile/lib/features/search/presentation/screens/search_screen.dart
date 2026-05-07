@@ -14,6 +14,8 @@ import '../../application/assistance_deep_link_resolver.dart';
 import '../../data/chat_api.dart';
 import '../../data/voice_transcriber.dart';
 import '../widgets/auto_qcm_footer.dart';
+import '../widgets/invest_confirmation_draft_embed.dart';
+import '../widgets/invest_source_account_list_embed.dart';
 import '../widgets/bundle_detail_card_embed.dart';
 import '../widgets/crypto_bundles_card_embed.dart';
 import '../widgets/featured_articles_list_embed.dart';
@@ -1907,6 +1909,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
     final agentBadge = _buildAgentBadge(msg.agentUsed);
 
+    final showAutoInsideBubble =
+        msg.hasAutoQcm && !_embedsBlockAutoQcmFooter(msg.embeds);
+
     // Phase 2c.4 — fusion en un seul module visuel quand l'embed
     // self-suffit. Le prompt instruit le LLM à se taire après
     // `read_transaction_detail`, mais en pratique il écrit parfois
@@ -1934,11 +1939,9 @@ class _SearchScreenState extends State<SearchScreen> {
               const SizedBox(height: AppSpacing.xs),
             ],
             if (showLlmBubble)
-              // Module blanc encapsulant la réponse assistant : coin
-              // top-left carré (« pointe » vers l'émetteur — l'assistant,
-              // à gauche) en miroir de la bulle user (top-right carré).
-              // Ombre et radius alignés sur le DS (`AppShadow`,
-              // `AppRadius.bubble`).
+              // Module blanc encapsulant la réponse assistant +, le cas échéant,
+              // le footer auto-QCM dans le même volume visuel (évite le fond gris
+              // entre texte et boutons — cf. lot assistance UX 2026-05-06).
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.lg,
@@ -1954,24 +1957,42 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   boxShadow: AppShadow.defaultShadowList,
                 ),
-                child: ArticleParagraphMarkdown(
-                  text: msg.content,
-                  baseStyle: AppTypography.paragraph,
-                  // Phase 2c.2 — bug fix : sans `onOpenLink`, le markdown
-                  // résolu par `flutter_markdown` ouvre les liens via
-                  // `launchUrl(externalApplication)` qui ne sait pas
-                  // gérer notre scheme `vancelian://...`. Avec ce hook,
-                  // tout deep-link assistance produit en markdown par un
-                  // LLM (cas legacy / fallback) est correctement résolu
-                  // par `AssistanceDeepLinkResolver`.
-                  onOpenLink: (href) async {
-                    await AssistanceDeepLinkResolver.resolve(context, href);
-                  },
-                  // Espacement vertical entre blocs Markdown pour des
-                  // réponses multi-blocs (titres + paragraphes + listes
-                  // + citations…), dans l'esprit ChatGPT : aéré sans
-                  // exagérer.
-                  blockSpacing: AppSpacing.md,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ArticleParagraphMarkdown(
+                      text: msg.content,
+                      baseStyle: AppTypography.paragraph,
+                      // Phase 2c.2 — bug fix : sans `onOpenLink`, le markdown
+                      // résolu par `flutter_markdown` ouvre les liens via
+                      // `launchUrl(externalApplication)` qui ne sait pas
+                      // gérer notre scheme `vancelian://...`. Avec ce hook,
+                      // tout deep-link assistance produit en markdown par un
+                      // LLM (cas legacy / fallback) est correctement résolu
+                      // par `AssistanceDeepLinkResolver`.
+                      onOpenLink: (href) async {
+                        await AssistanceDeepLinkResolver.resolve(context, href);
+                      },
+                      // Espacement vertical entre blocs Markdown pour des
+                      // réponses multi-blocs (titres + paragraphes + listes
+                      // + citations…), dans l'esprit ChatGPT : aéré sans
+                      // exagérer.
+                      blockSpacing: AppSpacing.md,
+                    ),
+                    if (showAutoInsideBubble) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      AutoQcmFooter(
+                        payload: msg.autoQcmPayload!,
+                        onOptionTapped: (opt) => _handleAutoQcmTapped(
+                          opt,
+                          messageIndex: messageIndex,
+                        ),
+                        selectedOptionId: msg.selectedAutoQcmOptionId,
+                        maxBubbleWidth: null,
+                      ),
+                    ],
+                  ],
                 ),
               ),
             // Phase 2c.2 — Embeds UI structurés produits par les tools
@@ -1983,24 +2004,36 @@ class _SearchScreenState extends State<SearchScreen> {
               if (showLlmBubble) const SizedBox(height: AppSpacing.sm),
               _buildEmbed(emb),
             ],
-            // Cognitive Bot v4 — Lot 7 V1.1 (2026-05-05). Footer
-            // auto-QCM cliquable annexé sous la bulle texte. Distinct
-            // de `_buildChoicesBubble` (qui remplace la bulle).
-            // Filtre défensif : si le tour porte un embed self-contained
-            // ou un embed avec ses propres CTAs, on saute le footer
-            // pour éviter le doublon UI (le serveur applique déjà la
-            // règle dans `decide_auto_qcm`, c'est une défense en
-            // profondeur côté client).
-            if (msg.hasAutoQcm && !_embedsBlockAutoQcmFooter(msg.embeds)) ...[
+            // Auto-QCM annexé : dans la bulle blanche avec le markdown
+            // quand celle-ci existe ; sinon (bulle masquée pour embed),
+            // même carte blanche isolée pour ne pas perdre les boutons
+            // hors du module réponse.
+            if (!showLlmBubble && showAutoInsideBubble) ...[
               const SizedBox(height: AppSpacing.sm),
-              AutoQcmFooter(
-                payload: msg.autoQcmPayload!,
-                onOptionTapped: (opt) => _handleAutoQcmTapped(
-                  opt,
-                  messageIndex: messageIndex,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.md,
                 ),
-                selectedOptionId: msg.selectedAutoQcmOptionId,
-                maxBubbleWidth: MediaQuery.sizeOf(context).width * 0.92,
+                decoration: const BoxDecoration(
+                  color: AppColors.cardBackground,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.zero,
+                    topRight: Radius.circular(AppRadius.bubble),
+                    bottomLeft: Radius.circular(AppRadius.bubble),
+                    bottomRight: Radius.circular(AppRadius.bubble),
+                  ),
+                  boxShadow: AppShadow.defaultShadowList,
+                ),
+                child: AutoQcmFooter(
+                  payload: msg.autoQcmPayload!,
+                  onOptionTapped: (opt) => _handleAutoQcmTapped(
+                    opt,
+                    messageIndex: messageIndex,
+                  ),
+                  selectedOptionId: msg.selectedAutoQcmOptionId,
+                  maxBubbleWidth: null,
+                ),
               ),
             ],
             const SizedBox(height: AppSpacing.xs),
@@ -2107,6 +2140,7 @@ class _SearchScreenState extends State<SearchScreen> {
         return FeaturedArticlesListEmbed(
           title: emb.blockTitle ?? 'À la une',
           items: items,
+          useFaqListStyle: emb.featuredArticlesKind == 'HELP',
         );
       case 'top_movers_crypto':
         // Phase 2c.7 — top movers crypto poussé par
@@ -2143,6 +2177,10 @@ class _SearchScreenState extends State<SearchScreen> {
           return const SizedBox.shrink();
         }
         return BundleDetailCardEmbed(bundle: bundle);
+      case 'invest_source_account_list':
+        return InvestSourceAccountListEmbed(embed: emb);
+      case 'invest_confirmation_draft':
+        return InvestConfirmationDraftEmbed(embed: emb);
       default:
         return const SizedBox.shrink();
     }
@@ -2575,6 +2613,8 @@ class _SearchScreenState extends State<SearchScreen> {
         case 'bundle_detail_card':
         case 'instrument_detail_card':
         case 'transaction_detail':
+        case 'invest_source_account_list':
+        case 'invest_confirmation_draft':
           return true;
       }
     }

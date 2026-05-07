@@ -48,7 +48,38 @@ from services.assistance.agents.openai_client import chat_completion_with_tools
 from services.assistance.agents.prompt_builder import load_agent_system_prompt
 from services.assistance.llm import LLMError
 
+from services.assistance.agents.conversation_continuity import (
+    COMPOUND_USER_TURN_MEMORY_KEY,
+    enrich_recent_turns_for_llm_semantic_user,
+)
+from services.assistance.agents.orchestration_context import (
+    BUSINESS_INTENTS,
+    TRANSACTION_KINDS,
+    orchestration_from_route_to_args,
+)
+
 logger = logging.getLogger(__name__)
+
+
+def _effective_router_user_text(agent_input: AgentInput) -> str:
+    """Texte utilisateur « effectif » pour le routeur (tags + classement).
+
+    Préfère ``compound_user_turn`` (réponse assistant enrichie + message
+    court) lorsqu'elle est présente dans ``memory_state`` — aligné avec
+    l'historique injecté aux LLM.
+    """
+    mem = agent_input.memory_state or {}
+    cmp_raw = mem.get(COMPOUND_USER_TURN_MEMORY_KEY)
+    if isinstance(cmp_raw, str) and cmp_raw.strip():
+        return cmp_raw.strip()
+    user_text = (getattr(agent_input, "user_message", "") or "").strip()
+    if user_text:
+        return user_text
+    recent = getattr(agent_input, "recent_turns", None) or []
+    for turn in reversed(recent):
+        if isinstance(turn, dict) and turn.get("role") == "user":
+            return str(turn.get("content") or "").strip()
+    return ""
 
 
 # Liste des `agent_id` que le router est autorisé à choisir.
@@ -89,7 +120,11 @@ def _routing_tools() -> list[dict]:
                 "description": (
                     "Route le tour conversationnel courant vers l'agent "
                     "spécialisé approprié. Utilise quand l'intention est "
-                    "claire (confidence ≥ 0.5)."
+                    "claire (confidence ≥ 0.5). "
+                    "**Remplis aussi les dimensions orchestrateur** "
+                    "(business_intent, emotional_state, urgency, …) "
+                    "pour guider ton, priorité et outils — cf. [ORCHESTRATION] "
+                    "dans ton system prompt."
                 ),
                 "parameters": {
                     "type": "object",
@@ -116,6 +151,114 @@ def _routing_tools() -> list[dict]:
                             "description": (
                                 "Justification courte (1-2 phrases) du "
                                 "choix. Pour debug et logs."
+                            ),
+                        },
+                        "business_intent": {
+                            "type": "string",
+                            "description": (
+                                "OPTIONNEL — famille métier dominante. "
+                                "Si plusieurs intentions coexistent, choisis "
+                                "celle qui doit **piloter l'agent principal** "
+                                "(ex. dépôt bloqué + colère → account_operations ; "
+                                "la colère est traitée via emotional_state + style)."
+                            ),
+                            "enum": sorted(BUSINESS_INTENTS),
+                        },
+                        "transaction_kind": {
+                            "type": "string",
+                            "enum": sorted(TRANSACTION_KINDS),
+                            "description": (
+                                "OPTIONNEL — précise l'action CAL quand "
+                                "`business_intent` vaut `action_request` : "
+                                "`bundle_invest` (crypto basket / bundle), "
+                                "`crypto_buy` (achat spot d'un actif). "
+                                "Sans offre exclusive pour l'instant."
+                            ),
+                        },
+                        "emotional_state": {
+                            "type": "string",
+                            "enum": [
+                                "calm",
+                                "confused",
+                                "anxious",
+                                "angry",
+                                "frustrated",
+                                "neutral",
+                            ],
+                            "description": (
+                                "OPTIONNEL — état émotionnel perçu du message "
+                                "(et du contexte court)."
+                            ),
+                        },
+                        "urgency": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
+                            "description": (
+                                "OPTIONNEL — urgence opérationnelle ou affective."
+                            ),
+                        },
+                        "regulatory_risk": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
+                            "description": (
+                                "OPTIONNEL — risque de déraper vers conseil "
+                                "non conforme, promesse, ou sujet sensible AML."
+                            ),
+                        },
+                        "data_need": {
+                            "type": "string",
+                            "enum": [
+                                "none",
+                                "account_data",
+                                "transaction_data",
+                                "kyc_data",
+                                "human_review",
+                            ],
+                            "description": (
+                                "OPTIONNEL — données internes nécessaires pour "
+                                "répondre correctement."
+                            ),
+                        },
+                        "secondary_intents": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "maxItems": 4,
+                            "description": (
+                                "OPTIONNEL — intentions satellites "
+                                "(ex. reassurance, complaint) quand le message est mixte."
+                            ),
+                        },
+                        "must_acknowledge_emotion": {
+                            "type": "boolean",
+                            "description": (
+                                "OPTIONNEL — True si la réponse doit reconnaître "
+                                "l'émotion avant le fond (colère, peur forte)."
+                            ),
+                        },
+                        "must_check_account_data": {
+                            "type": "boolean",
+                            "description": (
+                                "OPTIONNEL — True si les outils compte/transactions "
+                                "doivent être utilisés avant de conclure."
+                            ),
+                        },
+                        "needs_human_escalation": {
+                            "type": "boolean",
+                            "description": (
+                                "OPTIONNEL — True si un humain devrait probablement reprendre "
+                                "(à communiquer sans promettre un délai irréaliste)."
+                            ),
+                        },
+                        "response_style": {
+                            "type": "string",
+                            "enum": [
+                                "calm_deescalation",
+                                "factual_support",
+                                "educational",
+                                "neutral_advisor",
+                            ],
+                            "description": (
+                                "OPTIONNEL — ton global attendu pour l'agent."
                             ),
                         },
                     },
@@ -355,7 +498,19 @@ def _build_router_messages(agent_input: AgentInput) -> list[dict]:
 
     # Garder les 4 derniers tours max (2 user + 2 assistant) pour donner
     # un contexte conversationnel court, sans gonfler les tokens.
-    tail = (agent_input.recent_turns or [])[-4:]
+    mem = agent_input.memory_state or {}
+    cmpv = mem.get(COMPOUND_USER_TURN_MEMORY_KEY)
+    compound_arg = (
+        cmpv.strip()
+        if isinstance(cmpv, str) and cmpv.strip()
+        else None
+    )
+    turns_router = enrich_recent_turns_for_llm_semantic_user(
+        agent_input.recent_turns,
+        compound_user_turn=compound_arg,
+        raw_user_fallback=agent_input.user_message or "",
+    )
+    tail = (turns_router or [])[-4:]
     messages.extend(tail)
 
     return messages
@@ -401,14 +556,7 @@ def _build_intent_tags_block(agent_input: AgentInput) -> str:
 
     Retourne ``""`` si le message est vide ou si rien n'a matché.
     """
-    user_text = (getattr(agent_input, "user_message", "") or "").strip()
-    if not user_text:
-        # Fallback : prendre le dernier user message des recent_turns.
-        recent = getattr(agent_input, "recent_turns", None) or []
-        for turn in reversed(recent):
-            if isinstance(turn, dict) and turn.get("role") == "user":
-                user_text = str(turn.get("content") or "").strip()
-                break
+    user_text = _effective_router_user_text(agent_input)
     if not user_text:
         return ""
 
@@ -562,13 +710,7 @@ def _compute_intent_classification_dict(
 
     Retourne ``None`` si rien à dire (message vide ou aucun match).
     """
-    user_text = (getattr(agent_input, "user_message", "") or "").strip()
-    if not user_text:
-        recent = getattr(agent_input, "recent_turns", None) or []
-        for turn in reversed(recent):
-            if isinstance(turn, dict) and turn.get("role") == "user":
-                user_text = str(turn.get("content") or "").strip()
-                break
+    user_text = _effective_router_user_text(agent_input)
     if not user_text:
         return None
 
@@ -604,10 +746,13 @@ def _parse_route_to(args: dict[str, Any]) -> RouterDecision:
 
     reasoning = str(args.get("reasoning") or "").strip()[:500]
 
+    orch = orchestration_from_route_to_args(args)
+
     return RouterDecision(
         agent_id=agent_id,
         confidence=confidence,
         reasoning=reasoning,
+        orchestration=orch,
     )
 
 

@@ -31,5 +31,5 @@ dans l'index (lignes du type `faq/.../slug.md` ou `concepts/...`,
   chemin sentinelle : `__use_sql_catalog__` (une seule « entrée », pas un
   vrai fichier).
 
-Réponds **uniquement** via le tool `return_wiki_paths` — jamais de prose
-libre.
+- Réponds **uniquement** via le tool `return_wiki_paths` — jamais de prose
+  libre.

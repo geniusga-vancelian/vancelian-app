@@ -200,3 +200,19 @@ class TestSpecIntegrity:
                     f"Phase 2a/2b doit être 100% L0, agent={agent_id} "
                     f"tool={mod.SPEC['function']['name']} level={level}"
                 )
+
+
+class TestRuntimeLoopConfigDefaults:
+    """Sans runtime loop, compliance reste en Phase 1 (stub texte, pas les tools registry)."""
+
+    def test_runtime_loop_enabled_defaults_true(self, monkeypatch):
+        monkeypatch.delenv("ASSISTANCE_RUNTIME_LOOP_ENABLED", raising=False)
+        from services.assistance.agents import config as ag_config
+
+        assert ag_config.assistance_runtime_loop_enabled() is True
+
+    def test_trust_in_default_runtime_loop_agents(self, monkeypatch):
+        monkeypatch.delenv("ASSISTANCE_RUNTIME_LOOP_AGENTS", raising=False)
+        from services.assistance.agents import config as ag_config
+
+        assert "trust" in ag_config.assistance_runtime_loop_agents()

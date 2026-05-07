@@ -475,9 +475,9 @@ class TestRegistryWiring:
         names = tools_registry.all_tool_names("product")
         assert "select_wiki_pages" in names
         assert "read_wiki_page" in names
-        # Phase 2c tools toujours présents
-        assert "read_product_knowledge" in names
-        assert "list_product_knowledge_topics" in names
+        # Phase 2c — tools SQL product_knowledge volontairement absents (désactivés).
+        assert "read_product_knowledge" not in names
+        assert "list_product_knowledge_topics" not in names
         assert "show_instrument_card" in names
         # Phase 2 wiki — slider crypto_bundles_card
         assert "show_crypto_bundles" in names
@@ -488,9 +488,8 @@ class TestRegistryWiring:
 
     def test_product_total_tool_count(self):
         names = tools_registry.all_tool_names("product")
-        # 8 tools attendus : 2 SQL + 2 wiki + 1 instrument + 1 bundles
-        # liste + 1 bundle detail + 1 ask
-        assert len(names) == 8
+        # 6 tools : wiki×2 + instrument + bundles + bundle detail + ask
+        assert len(names) == 6
 
     def test_compliance_top_level_does_NOT_get_wiki_tools(self):
         """L'agent `compliance` top-level (entry-point dispatcher) au

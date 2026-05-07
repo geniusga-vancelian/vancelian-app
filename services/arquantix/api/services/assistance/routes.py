@@ -109,6 +109,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/app/assistance", tags=["assistance"])
 
 
+def _chat_turn_response_model(conv, assistant_msg) -> ChatTurnResponse:
+    """Expose ``embeds`` / ``auto_qcm`` pour les clients non-stream (parité SSE ``done``)."""
+    mp = assistant_msg.message_payload if assistant_msg.message_payload else None
+    embeds = None
+    auto_qcm = None
+    if isinstance(mp, dict):
+        embeds = mp.get("embeds")
+        auto_qcm = mp.get("auto_qcm")
+
+    return ChatTurnResponse(
+        conversation_id=conv.id,
+        message_id=assistant_msg.id,
+        content=assistant_msg.content,
+        agent_used=assistant_msg.agent_used,
+        message_type=assistant_msg.message_type or "text",
+        embeds=embeds,
+        auto_qcm=auto_qcm,
+        message_payload=assistant_msg.message_payload,
+    )
+
+
 def _compute_unread_state(row) -> tuple[bool, bool]:
     """Retourne `(awaiting_response, unread_response)` (D.1.4.6).
 
@@ -272,6 +293,10 @@ def chat_turn(
                 client_id=auth.client_id,
                 conversation_id=body.conversation_id,
                 user_content=body.content,
+                agent_hint=body.agent_hint,
+                person_id=auth.person_id,
+                actor_kind=actor,
+                user_id=auth.user_id,
             )
     except ValueError as exc:
         code = str(exc)
@@ -297,11 +322,7 @@ def chat_turn(
             },
         ) from exc
 
-    return ChatTurnResponse(
-        conversation_id=conv.id,
-        message_id=assistant_msg.id,
-        content=assistant_msg.content,
-    )
+    return _chat_turn_response_model(conv, assistant_msg)
 
 
 def _sse_format(event_type: str, data: dict) -> str:

@@ -12,11 +12,11 @@ import '../../data/chat_api.dart';
 ///
 ///   * `choices` (router QCM) → REMPLACE la bulle texte. Pas de markdown.
 ///     Bulle blanche dédiée.
-///   * `auto_qcm` (post-process listing) → COMPLÈTE la bulle texte. La
-///     bulle markdown reste affichée (le LLM y a écrit son explication
-///     + sa liste). Le footer ajoute juste des boutons cliquables EN
-///     BAS pour shortcut le clic sur une option, sans casser le flow
-///     freeform — l'utilisateur peut toujours répondre par texte libre.
+///   * `auto_qcm` (post-process listing) → COMPLÈTE la réponse assistant.
+///     Rendu dans le même module blanc que le markdown (`search_screen`)
+///     pour garder une capsule unique ; sinon bulle dédiée si le markdown
+///     est masqué (embed auto-suffisant). Boutons cliquables pour raccourci
+///     sans casser le flow freeform (texte libre toujours possible).
 ///
 /// Le widget est stateless. L'état (option sélectionnée) vit dans le
 /// `_ChatMessage` parent. Le tap est délégué via [onOptionTapped].

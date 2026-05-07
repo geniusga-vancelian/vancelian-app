@@ -10,7 +10,7 @@ Couvre :
     ``wiki_quota_exceeded`` + un ``hint`` exploitable par le LLM.
   * Le compteur ne s'incrémente que sur succès (un échec transient ne
     pénalise pas le budget).
-  * Les tools hors ``WIKI_TOOLS`` (ex. ``read_product_knowledge``) ne
+  * Les tools hors ``WIKI_TOOLS`` (ex. ``show_instrument_card``) ne
     consomment pas le budget wiki.
   * La décision quota est persistée dans ``assistance_agent_decisions``
     avec ``error_code="wiki_quota_exceeded"`` pour traçabilité audit.
@@ -368,14 +368,14 @@ class TestWikiQuotaIsolation:
     def test_non_wiki_tool_does_not_consume_budget(
         self, _stub_persist_decision, monkeypatch
     ):
-        """Un tool hors `WIKI_TOOLS` (ex. `read_product_knowledge`)
+        """Un tool hors `WIKI_TOOLS` (ex. `show_instrument_card`)
         peut être appelé QUOTA+1 fois sans déclencher la borne wiki."""
         monkeypatch.setattr(
             agent_loop_module, "MAX_WIKI_CALLS_PER_TOUR", _QUOTA_FOR_TESTS
         )
         non_wiki_tool = _make_tool_module(
-            name="read_product_knowledge",
-            execute_result={"slug": "any", "content": "..."},
+            name="show_instrument_card",
+            execute_result={"symbol": "BTC", "embed_emitted": True},
         )
 
         responses: list[dict] = []
@@ -384,8 +384,8 @@ class TestWikiQuotaIsolation:
                 "content": None,
                 "tool_calls": [
                     _tool_call(
-                        "read_product_knowledge",
-                        {"slug": f"item-{i}"},
+                        "show_instrument_card",
+                        {"symbol": f"SYM{i}"},
                         call_id=f"c{i}",
                     )
                 ],

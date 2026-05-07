@@ -10,8 +10,12 @@ Stratégie d'assemblage commune (tous les agents passent par ici) :
   3. user/assistant alternés = `recent_turns` du AgentInput.
 
 Le user message courant est **déjà inclus** dans `recent_turns` (le
-service.py persiste le user_msg avant d'appeler l'agent), donc l'agent
-n'a pas besoin de le rajouter manuellement.
+service.py persiste le user_msg avant d'appeler l'agent) ; lorsque
+``compound_user_turn`` est présente dans ``memory_state``, la **dernière
+ligne ``user`** de cet historique est réécrite avec la formulation
+sémantique (assistant précédent + message court).
+
+L'agent **n'a pas à** rajouter manuellement le dernier tour user séparément.
 
 Si pour une raison quelconque le system prompt spécifique de l'agent
 manque (fichier introuvable), un fallback minimal est utilisé pour
@@ -27,6 +31,10 @@ from typing import Optional
 from services.assistance import memory as assistance_memory
 from services.assistance.agents.base import AgentInput
 
+from services.assistance.agents.conversation_continuity import (
+    COMPOUND_USER_TURN_MEMORY_KEY,
+    enrich_recent_turns_for_llm_semantic_user,
+)
 logger = logging.getLogger(__name__)
 
 # NB: ``catalog_context_builder`` est importé en *lazy* dans
@@ -349,5 +357,17 @@ def build_agent_messages(
     if memory_block:
         messages.append({"role": "system", "content": memory_block})
 
-    messages.extend(agent_input.recent_turns or [])
+    mem = agent_input.memory_state or {}
+    cmpv = mem.get(COMPOUND_USER_TURN_MEMORY_KEY)
+    compound_arg = (
+        cmpv.strip()
+        if isinstance(cmpv, str) and cmpv.strip()
+        else None
+    )
+    turns_llm = enrich_recent_turns_for_llm_semantic_user(
+        agent_input.recent_turns,
+        compound_user_turn=compound_arg,
+        raw_user_fallback=agent_input.user_message or "",
+    )
+    messages.extend(turns_llm or [])
     return messages

@@ -59,13 +59,13 @@ from services.assistance.agents.tools.market import (
     show_top_movers,
 )
 from services.assistance.agents.tools.product import (
-    list_product_knowledge_topics,
-    read_product_knowledge,
     read_wiki_page,
     select_wiki_pages,
     show_bundle_detail,
     show_crypto_bundles,
     show_instrument_card,
+    show_invest_confirmation_draft,
+    show_invest_source_accounts,
 )
 from services.assistance.agents.tools.shared import (
     ask_user_question,
@@ -178,14 +178,17 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
     # Phase 2 wiki : `select_wiki_pages` + `read_wiki_page` exposent les
     # 243 fiches markdown importées depuis le vault Obsidian source
     # (couverture large : FAQ, exclusive offers, crypto, account, etc.).
-    # Le SQL `product_knowledge` reste pour les fiches courtes
-    # canoniques (délais SEPA/KYC, définitions Vault/SCPI/Livret),
-    # cf. `docs/arquantix/PRODUCT_AGENT.md` §9.1.
+    # Temporairement désactivés (2026-05-06) — qualité éditoriale SQL
+    # insuffisante ; toute lecture factuelle produit passe par le wiki MD
+    # (`select_wiki_pages` + `read_wiki_page`). Réactiver en réimportant
+    # `read_product_knowledge` / `list_product_knowledge_topics`.
     "product": [
-        read_product_knowledge,
-        list_product_knowledge_topics,
         select_wiki_pages,
         read_wiki_page,
+        # Phase FAQ CMS — liste d'articles HELP publiés (`article_type=HELP`)
+        # avec slugs DB (complément du wiki MD). Pas de liens article
+        # inventés dans le markdown : le widget porte les deep-links.
+        show_featured_articles,
         show_instrument_card,
         # Phase 2 wiki — slider chat des bundles disponibles (catalogue
         # crypto_bundle public actif, source ``CatalogService``).
@@ -194,6 +197,8 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
         # ``show_instrument_card`` mais pour un bundle nommé). Utilisé
         # quand le client cible un bundle précis (« parle-moi du TOP5 »).
         show_bundle_detail,
+        show_invest_source_accounts,
+        show_invest_confirmation_draft,
         ask_user_question,
     ],
     # Phase 2c.6 : `advisor` peut aussi pousser la carte instrument
@@ -215,6 +220,8 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
         show_top_movers,
         select_wiki_pages,
         read_wiki_page,
+        show_invest_source_accounts,
+        show_invest_confirmation_draft,
         consult_specialist,
         ask_user_question,
     ],

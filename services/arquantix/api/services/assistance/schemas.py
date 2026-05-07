@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -41,13 +41,34 @@ class ChatTurnRequest(BaseModel):
 
 
 class ChatTurnResponse(BaseModel):
-    """Tour assistant + meta-données conversation."""
+    """Tour assistant + meta alignée sur l'événement SSE ``done``.
+
+    Les champs ``embeds`` / ``auto_qcm`` reflètent le ``done`` stream pour
+    que les clients **non-stream** puissent instancier widgets + QCM.
+    Les messages ``text`` avec embeds seulement ont aussi ces clés tirées
+    de ``message_payload``.
+    """
 
     conversation_id: UUID
     message_id: UUID
     content: str
-    # Multi-agents Phase 1 — agent qui a produit la réponse (informatif).
     agent_used: Optional[str] = None
+    message_type: Optional[str] = Field(
+        default="text",
+        description="''text'' | ''choices'' (router ou ask_user_question).",
+    )
+    embeds: Optional[List[dict[str, Any]]] = Field(
+        default=None,
+        description="Cartes structurées (transaction_detail, etc.).",
+    )
+    auto_qcm: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="QCM annexé automatiquement au message texte (Lot 7).",
+    )
+    message_payload: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Payload brut (options QCM ``choices``, métadonnées, etc.).",
+    )
 
 
 class ConversationMessageItem(BaseModel):

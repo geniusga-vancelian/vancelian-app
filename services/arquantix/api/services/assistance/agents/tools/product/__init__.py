@@ -39,6 +39,9 @@ from services.assistance.agents.tools.product import (
     show_instrument_card,
 )
 
+from . import show_invest_confirmation_draft
+from . import show_invest_source_accounts
+
 __all__ = [
     "list_product_knowledge_topics",
     "read_product_knowledge",
@@ -47,4 +50,6 @@ __all__ = [
     "show_bundle_detail",
     "show_crypto_bundles",
     "show_instrument_card",
+    "show_invest_confirmation_draft",
+    "show_invest_source_accounts",
 ]

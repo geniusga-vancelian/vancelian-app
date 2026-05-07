@@ -30,8 +30,9 @@ Notes d'archi
 -------------
 On évite volontairement d'ajouter une nouvelle table : ``product_knowledge``
 est suffisamment souple (``metadata_json`` porte le mapping technique) et
-c'est aussi la source de vérité que les agents consultent déjà via
-``read_product_knowledge(slug)``. Une seule source = pas de divergence.
+c'est aussi la table lue pour construire ce bloc d'injection prompt.
+Les agents **ne** doivent **plus** appeler d'outil SQL sur ces slugs :
+passer par le wiki (`select_wiki_pages` / `read_wiki_page`).
 """
 from __future__ import annotations
 
@@ -199,15 +200,15 @@ def _format_block(
         "### Règle d'usage stricte",
         "",
         (
-            "1. Pour répondre sur un **type de transaction** ci-dessus, "
-            "appelle `read_product_knowledge(<slug>)` avec le slug de la "
-            "colonne *Fiche knowledge*."
+            "1. Pour répondre sur un **type de transaction** ou une **question "
+            "produit**, appelle `select_wiki_pages(question, category?)` puis "
+            "`read_wiki_page(category, slug)` sur la fiche wiki indiquée dans "
+            "cette table (colonne *Fiche knowledge* = slug SQL historique — "
+            "cherche l'équivalent wiki si besoin)."
         ),
         (
-            "2. Pour une **question produit**, soit tu appelles "
-            "`read_product_knowledge(<slug>)` directement, soit tu délègues "
-            "via `consult_specialist(target=product, ...)` si tu es un agent "
-            "non-spécialiste."
+            "2. Si tu es un agent non-spécialiste, tu peux aussi déléguer via "
+            "`consult_specialist(target=product, ...)`."
         ),
         (
             "3. Si le client mentionne un type / produit absent du catalogue, "

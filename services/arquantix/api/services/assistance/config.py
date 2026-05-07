@@ -91,3 +91,11 @@ def assistance_voice_max_audio_bytes() -> int:
         return max(64 * 1024, int(os.getenv("ASSISTANCE_VOICE_MAX_BYTES", str(10 * 1024 * 1024))))
     except ValueError:
         return 10 * 1024 * 1024
+
+
+def assistance_conversation_state_debug() -> bool:
+    """Log une ligne compacte ``conversation_state`` (débogage hors prod)."""
+    raw = (
+        os.getenv("ASSISTANCE_CONVERSATION_STATE_DEBUG") or ""
+    ).strip().lower()
+    return raw in {"1", "true", "yes", "on"}

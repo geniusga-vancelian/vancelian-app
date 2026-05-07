@@ -1,37 +1,43 @@
 """Phase 2 wiki v1.4 patch — hot-path follow-up du router.
 
-Court-circuite l'appel LLM router pour les **follow-ups courts** qui
-suivent immédiatement un tour d'agent expert, et conserve cet agent.
+Court-circuite l'appel LLM router pour certains **follow-ups courts**
+qui suivent un tour d'agent expert, et conserve cet agent **uniquement**
+quand le superviseur n'a pas besoin de relier la question à une **réponse
+bot de fond** déjà livrée.
 
 ──────────────────────────────────────────────────────────────────────
-Pourquoi
+Pourquoi (historique)
 
-Empiriquement (cf. analyse conv `5bef01e9` 2026-05-04), les
-conversations productives suivent un pattern « 1 question initiale
-classée → N follow-ups courts sur le même sujet ». Sur ces follow-ups :
-
-  * Le LLM router consomme ~150-300 ms et ~500 tokens.
-  * Il flippe parfois sur un mot-clé isolé (« perf », « cours »,
-    « performance ») et casse la conversation en routant sur `market`
-    alors qu'on parle d'un produit Vancelian.
-
-Solution déterministe : si le user message tient en ≤ N caractères et
-que le **dernier message assistant** non-user a été émis par un agent
-expert (`product`/`compliance`/`advisor`/`market`), on garde cet agent.
+Économie ~150-300 ms sur les enchaînements « même sujet » après un
+premier routage. Risque : une question courte (« sur quoi investir ? »)
+sans rappel du hot-path **sans** re-lire le dernier message assistant
+fige à tort l'agent (ex. `product` alors qu'il faut `advisor`).
 
 ──────────────────────────────────────────────────────────────────────
-Garde-fous (refus du hot-path → fallback router LLM)
+Règle actuelle (2026-05)
 
-  * Long message (> N) → vraie question, classification LLM nécessaire.
-  * Pas d'agent précédent (1ʳᵉ question) → router LLM obligatoire.
-  * Agent précédent = `default` ou `router` → on n'a pas posé d'expert,
-    le hot-path n'a pas de cible.
-  * `agent_hint` fourni (clic QCM, deep-link) → continuité serveur-side
-    déjà gérée par `service.py::_decide_agent`, on ne touche pas.
-  * Message contient des **signaux de changement de sujet** (cf.
-    `TOPIC_CHANGE_SIGNALS`) — ex. « par contre », « autre question » —
-    on laisse le LLM router décider.
-  * Module désactivé via `ASSISTANCE_ROUTER_HOT_PATH_ENABLED=false`.
+Si le **dernier message assistant avant le user courant** dépasse un
+seuil de caractères (`ASSISTANCE_ROUTER_HOT_PATH_MIN_PRIOR_ASSISTANT_CHARS`,
+défaut 40), on **ne** bypass **pas** le router : la longueur est mesurée
+sur le texte **enrichi** (prompt + labels QCM comme côté LLM). Le message
+user court est alors interprété **avec** ce contexte par
+`router.classify`. Complément : une demande explicite de conseil
+personnalisé (cf. `has_personalized_advice_signal`) force aussi le router
+— sans réintroduire l’ancienne liste « produits » / advisory du hot-path
+historique.
+
+Le hot-path ne s'applique donc surtout quand la réponse assistant
+précédente était courte (accusé de réception, etc.) **ou** seuil à 0
+(rollback comportement ancien).
+
+──────────────────────────────────────────────────────────────────────
+Autres garde-fous
+
+  * Long message user (> max_chars) → router LLM.
+  * Pas d'agent précédent expert → router.
+  * `agent_hint` (QCM) → géré ailleurs.
+  * Signaux `TOPIC_CHANGE_SIGNALS` → router.
+  * `ASSISTANCE_ROUTER_HOT_PATH_ENABLED=false`.
 
 ──────────────────────────────────────────────────────────────────────
 Tests : `tests/test_assistance_router_hot_path_unit.py`.
@@ -47,6 +53,10 @@ from services.assistance.agents.base import AgentInput, RouterDecision
 from services.assistance.agents.config import (
     assistance_router_hot_path_enabled,
     assistance_router_hot_path_max_chars,
+    assistance_router_hot_path_min_prior_assistant_chars,
+)
+from services.assistance.agents.conversation_continuity import (
+    augment_assistant_content_for_followup,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,6 +114,63 @@ DEICTIC_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     )
 )
 
+# Demande explicite de conseil / recommandation personnalisée (court message).
+# Le hot-path ne doit pas figer `product` alors que la bonne file est
+# souvent `advisor` ou un routage nuancé — le superviseur LLM tranche.
+_PERSONALIZED_ADVICE_RE: re.Pattern[str] = re.compile(
+    r"(?is)"
+    r"\bme\s+conseill\w*|"
+    r"\btu\s+me\s+conseill\w*|"
+    r"\bvous\s+me\s+conseill\w*|"
+    r"que\s+(?:tu\s+|vous\s+)?(?:me\s+|m['\u2019])?conseill\w+|"
+    r"qu['\u2019]est-ce\s+que\s+(?:tu|vous)\s+(?:me\s+|m['\u2019])?conseill\w*|"
+    r"\bquel(?:le)?s?\s+placement[s]?\s+.*\bconseill\w*|"
+    r"\bme\s+recommand\w*|"
+    r"\b(?:what|which)\s+(?:investments?|products?|funds?)\s+(?:do|would)\s+you\s+"
+    r"(?:recommend|suggest)\s+for\s+me|"
+    r"\bwhat\s+should\s+i\s+invest\b"
+)
+
+
+def len_of_prior_assistant_reply(
+    recent_turns: Optional[list[dict]],
+) -> int:
+    """Nombre de caractères du **dernier** message assistant avant le tour user.
+
+    L'historique se termine en pratique par le message **user** du tour en
+    cours (persistance avant décision router) : on prend l'assistant qui le
+    précède. Si le dernier élément n'est pas un user, on prend le dernier
+    assistant quand même (tolérance).
+    """
+    if not recent_turns:
+        return 0
+    n = len(recent_turns)
+    last_idx = n - 1
+    if last_idx < 0:
+        return 0
+    # Sauter le message user courant en fin d'historique.
+    scan_from = last_idx
+    if recent_turns[scan_from].get("role") == "user":
+        scan_from -= 1
+    for i in range(scan_from, -1, -1):
+        turn = recent_turns[i]
+        if not isinstance(turn, dict):
+            continue
+        if turn.get("role") != "assistant":
+            continue
+        pl = turn.get("message_payload")
+        enriched = augment_assistant_content_for_followup(
+            content=str(turn.get("content") or ""),
+            message_type=(
+                str(turn.get("message_type")).strip()
+                if turn.get("message_type") is not None
+                else None
+            ),
+            message_payload=pl if isinstance(pl, dict) else None,
+        )
+        return len(enriched.strip())
+    return 0
+
 
 def has_topic_change_signal(message: str) -> bool:
     """`True` si le message contient un signal de changement de sujet.
@@ -131,6 +198,13 @@ def has_deictic(message: str) -> bool:
     if not message:
         return False
     return any(p.search(message) for p in DEICTIC_PATTERNS)
+
+
+def has_personalized_advice_signal(message: str) -> bool:
+    """Demande orientée « conseil pour moi » (réglementaire / bon routage)."""
+    if not message or not message.strip():
+        return False
+    return bool(_PERSONALIZED_ADVICE_RE.search(message.strip()))
 
 
 def should_skip_router(
@@ -178,6 +252,13 @@ def should_skip_router(
     if has_topic_change_signal(msg):
         logger.debug(
             "router_hot_path.skip reason=topic_change_signal msg=%r",
+            msg[:80],
+        )
+        return None
+
+    if has_personalized_advice_signal(msg):
+        logger.debug(
+            "router_hot_path.skip reason=personalized_advice_signal msg=%r",
             msg[:80],
         )
         return None
@@ -238,7 +319,28 @@ def should_skip_router_from_input(
 
     Utilisé par `service.py::_decide_agent` pour intégrer le hot-path
     sans dupliquer la logique d'extraction.
+
+    Si le dernier message assistant (avant ce user) apporte déjà du fond,
+    on **n'applique pas** le hot-path : le router LLM doit relier la
+    question courte à ce contexte.
     """
+    if not assistance_router_hot_path_enabled():
+        return None
+    if agent_hint:
+        return None
+
+    min_prior = assistance_router_hot_path_min_prior_assistant_chars()
+    if min_prior > 0:
+        prior_len = len_of_prior_assistant_reply(agent_input.recent_turns)
+        if prior_len >= min_prior:
+            logger.info(
+                "router_hot_path.skip reason=prior_assistant_context "
+                "prior_len=%d min=%d",
+                prior_len,
+                min_prior,
+            )
+            return None
+
     last_agent = extract_last_assistant_agent(agent_input.recent_turns)
     return should_skip_router(
         user_message=agent_input.user_message or "",
@@ -248,11 +350,14 @@ def should_skip_router_from_input(
 
 
 __all__ = [
+    "DEICTIC_PATTERNS",
     "EXPERT_AGENTS_FOR_HOT_PATH",
     "TOPIC_CHANGE_SIGNALS",
+    "len_of_prior_assistant_reply",
     "should_skip_router",
     "should_skip_router_from_input",
     "extract_last_assistant_agent",
     "has_topic_change_signal",
     "has_deictic",
+    "has_personalized_advice_signal",
 ]

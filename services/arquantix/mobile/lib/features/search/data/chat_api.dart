@@ -402,6 +402,14 @@ class AssistanceEmbed {
     return v is String && v.trim().isNotEmpty ? v.trim() : null;
   }
 
+  /// Kind articles (`NEWS`, `ANALYSIS`, `RESEARCH`, `HELP`) pour
+  /// `featured_articles_list`. Défini par `show_featured_articles`.
+  String? get featuredArticlesKind {
+    final v = data['kind'];
+    if (v is! String || v.trim().isEmpty) return null;
+    return v.trim().toUpperCase();
+  }
+
   /// Items de la liste d'articles. Chaque entrée porte `slug`,
   /// `title`, `cover_url`, `published_at`, `deep_link`.
   List<AssistanceArticleItem> get articleItems {

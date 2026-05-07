@@ -9,7 +9,9 @@ import {
   Image,
   Settings,
   BookOpen,
+  BookMarked,
   FileCheck,
+  ListOrdered,
   Mail,
   MessageSquare,
   FolderKanban,
@@ -88,9 +90,29 @@ const navItems: NavItem[] = [
   { label: 'AI Config Builder', href: '/admin/ai/jurisdiction-configs', icon: Globe },
   { label: 'Diagnostics', href: '/admin/diagnostics', icon: Cpu },
   {
+    label: 'Architecture agents (assistance)',
+    href: '/admin/assistance',
+    icon: Layers,
+  },
+  {
     label: 'Knowledge agents',
     href: '/admin/assistance/knowledge',
     icon: Bot,
+  },
+  {
+    label: 'Wiki MD (assistance)',
+    href: '/admin/assistance/wiki',
+    icon: BookMarked,
+  },
+  {
+    label: 'Playbooks CAL (assistance)',
+    href: '/admin/assistance/cal-playbooks',
+    icon: ListOrdered,
+  },
+  {
+    label: 'Observabilité assistance',
+    href: '/admin/assistance/observability',
+    icon: TrendingUp,
   },
   { label: 'Risk dashboard', href: '/admin/security/risk-dashboard', icon: Shield },
   { label: 'Risk rules (F.5)', href: '/admin/risk/rules', icon: Shield },
@@ -137,6 +159,9 @@ export function AdminSidebar() {
         pathname !== '/admin/pages/exclusive-offer' &&
         !pathname.startsWith('/admin/pages/exclusive-offer/')
       )
+    }
+    if (href === '/admin/assistance') {
+      return pathname === '/admin/assistance'
     }
     return pathname.startsWith(href)
   }

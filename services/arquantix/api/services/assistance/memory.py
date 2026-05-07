@@ -19,6 +19,12 @@ Surface publique
                                                conversation et met à jour la
                                                mémoire client agrégée.
 
+Complément **hors** de ce module mais voisin conceptuellement : les
+dimensions **orchestrateur** du router (`orchestration` dans
+``assistance_agent_decisions.arguments_json``, cf.
+``agents/orchestration_context.py``) enrichissent l'audit « mémoire
+comportementale » tour par tour sans doubler les faits client.
+
 Toutes les autres fonctions sont privées (`_…`) et exposées uniquement pour
 les tests d'intégration via le module.
 

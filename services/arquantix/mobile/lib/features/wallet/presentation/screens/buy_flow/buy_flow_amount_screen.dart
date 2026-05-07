@@ -27,12 +27,15 @@ class BuyFlowAmountScreen extends StatefulWidget {
     required this.assetName,
     this.assetLogoUrl,
     required this.sourceAccount,
+    /// Montant fiat initial (symbole EUR/USD) — ex. deep-link assistant.
+    this.prefillFiatAmount,
   });
 
   final String assetSymbol;
   final String assetName;
   final String? assetLogoUrl;
   final BuyFlowSourceAccount sourceAccount;
+  final double? prefillFiatAmount;
 
   @override
   State<BuyFlowAmountScreen> createState() => _BuyFlowAmountScreenState();
@@ -78,6 +81,16 @@ class _BuyFlowAmountScreenState extends State<BuyFlowAmountScreen> {
   void initState() {
     super.initState();
     _amountCtrl.addListener(_onAmountChanged);
+    if (widget.sourceAccount.isFiat &&
+        widget.prefillFiatAmount != null &&
+        widget.prefillFiatAmount! > 0) {
+      final a = widget.prefillFiatAmount!;
+      _amountCtrl.text = a.toStringAsFixed(2);
+      _parsedAmount = a;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _schedulePreview();
+      });
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final route = ModalRoute.of(context);
       final animation = route?.animation;

@@ -111,6 +111,12 @@ class TestKeywordMatching:
                 TAG_FAMILY_TRANSVERSE,
                 2,
             ),
+            (
+                "donne moi des articles de la faq",
+                "centre_aide_faq",
+                TAG_FAMILY_TRANSVERSE,
+                2,
+            ),
             # Off-topic
             (
                 "parle moi de la pluie et du beau temps",

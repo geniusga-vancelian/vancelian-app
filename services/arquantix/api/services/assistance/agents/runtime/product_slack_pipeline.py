@@ -103,10 +103,19 @@ def _load_prompt_file(filename: str) -> str:
         return ""
 
 
-def _language_hint_for_replies(user_message: str) -> str:
-    """Heuristique légère FR vs EN pour choisir reply_fr vs reply_en."""
-    text = (user_message or "").lower()
-    if re.search(r"[àâäéèêëïîôùûüçœæ]", user_message or ""):
+def _language_hint_for_replies(
+    user_message: str,
+    recent_turns: Optional[list[dict]] = None,
+) -> str:
+    """Heuristique FR vs EN pour les réponses scriptées (guardrail, juge BLOCK).
+
+    Les messages courts sans accents (ex. *« sur quoi tu me proposes d'investir ? »*)
+    retombaient en EN — mauvais fallback. On enrichit les marqueurs FR et on
+    regarde l'historique user récent si le tour courant est ambigu.
+    """
+    raw = user_message or ""
+    text = raw.lower()
+    if re.search(r"[àâäéèêëïîôùûüçœæ]", raw):
         return "fr"
     fr_markers = (
         "comment ",
@@ -115,15 +124,58 @@ def _language_hint_for_replies(user_message: str) -> str:
         "qu'est-ce",
         "quel ",
         "quelle ",
+        "quels ",
+        "quoi ",
         "délai",
         "frais ",
         "bonjour",
         "merci",
         "coffre",
         "offre ",
+        " tu ",
+        " vous ",
+        "sur quoi",
+        " propose",
+        " proposes",
+        " investir",
+        "investir ",
+        "épargne",
+        "retraite",
+        "placement",
+        " conseil",
+        " connais",
+        "où ",
+        " où ",  # nbsp variants rare; "où" with accent handled above
+        " dans ",
+        " avec ",
+        " pour ",
+        " sur ",
+        " mon ",
+        " ma ",
+        " mes ",
+        " tes ",
+        " ses ",
+        " leur ",
+        "ceux ",
+        "celui ",
+        "selon ",
+        "dis-moi",
+        "est-ce",
     )
     if any(m in text for m in fr_markers):
         return "fr"
+    if recent_turns:
+        for t in reversed(recent_turns[-8:]):
+            if not isinstance(t, dict):
+                continue
+            if (t.get("role") or "").strip() != "user":
+                continue
+            c = str(t.get("content") or "")
+            if re.search(r"[àâäéèêëïîôùûüçœæ]", c):
+                return "fr"
+            cl = c.lower()
+            if any(m in cl for m in fr_markers):
+                return "fr"
     return "en"
 
 
@@ -160,6 +212,18 @@ def normalize_index_path(raw: str) -> str:
     if p.lower().startswith("wiki/"):
         p = p[5:]
     return p
+
+
+_NON_FAQ_TOP_FOR_PATH = frozenset({"concepts", "entities", "policies"})
+
+
+def wiki_markdown_relative_path(category: str, slug: str) -> str:
+    """Aligné sur `web/src/lib/admin/assistanceWikiRefs.ts` → `wikiMarkdownRelativePath`."""
+    c = (category or "").strip().lower()
+    s = (slug or "").strip().lower()
+    if c in _NON_FAQ_TOP_FOR_PATH:
+        return f"{c}/{s}.md"
+    return f"faq/{c}/{s}.md"
 
 
 def parse_index_path_to_category_slug(rel_path: str) -> Optional[tuple[str, str]]:
@@ -294,7 +358,10 @@ def _run_pass1_paths(
     return [], "no_tool_call"
 
 
-def _build_preload_block(paths: list[str]) -> str:
+def _build_preload_block_and_refs(
+    paths: list[str],
+) -> tuple[str, list[dict[str, str]]]:
+    """Construit le bloc system « pré-chargé » + liste JSON des fiches réellement lues FS."""
     seen: set[tuple[str, str]] = set()
     resolved: list[tuple[str, str]] = []
     for raw_path in paths:
@@ -310,6 +377,7 @@ def _build_preload_block(paths: list[str]) -> str:
 
     max_chars = assistance_product_pipeline_page_max_chars()
     chunks: list[str] = []
+    refs: list[dict[str, str]] = []
     for cat, slug in resolved[:5]:
         page = wiki_repo.fetch_page(category=cat, slug=slug)
         if page is None:
@@ -321,23 +389,31 @@ def _build_preload_block(paths: list[str]) -> str:
             body = body[:max_chars] + "\n\n[… tronqué …]"
         title = page.title or slug
         chunks.append(f"### {cat}/{slug} — {title}\n\n{body}")
+        refs.append(
+            {
+                "category": cat,
+                "slug": slug,
+                "title": title,
+                "relative_path": wiki_markdown_relative_path(cat, slug),
+            }
+        )
 
     if not chunks:
-        return ""
+        return "", []
 
     instr = (
         "Les extraits ci-dessus proviennent du **Pass 3** du pipeline wiki. "
         "Ils sont **prioritaires** pour tout ce qu'ils couvrent. Tu peux "
         "encore appeler `read_wiki_page` pour compléter une fiche absente. "
-        "Pour délais SQL ou `vancelian_product_catalog`, appelle "
-        "`read_product_knowledge` comme d'habitude."
+        "Pour le reste, `select_wiki_pages` + `read_wiki_page` uniquement."
     )
-    return (
+    block = (
         "## Contexte wiki pré-chargé (pipeline produit)\n\n"
         + instr
         + "\n\n---\n\n"
         + "\n\n---\n\n".join(chunks)
     )
+    return block, refs
 
 
 _CRITERIA_KEYS: tuple[str, ...] = (
@@ -491,7 +567,7 @@ async def iter_product_slack_pipeline_events(
     )
     verdict = str(guard.get("verdict") or "IN_DOMAIN")
     if verdict != "IN_DOMAIN":
-        lang = _language_hint_for_replies(user_message)
+        lang = _language_hint_for_replies(user_message, recent_turns)
         if lang == "fr":
             text = (guard.get("reply_fr") or "").strip() or (guard.get("reply_en") or "").strip()
         else:
@@ -515,6 +591,7 @@ async def iter_product_slack_pipeline_events(
 
     use_wiki = bool(guard.get("use_wiki", True))
     preload_block = ""
+    preload_wiki_refs: list[dict[str, str]] = []
     if use_wiki:
         paths, reason = await asyncio.to_thread(
             _run_pass1_paths,
@@ -523,9 +600,13 @@ async def iter_product_slack_pipeline_events(
         )
         if paths and any(normalize_index_path(p) == _SQL_SENTINEL for p in paths):
             preload_block = ""
+            preload_wiki_refs = []
             logger.info("product_slack_pipeline.sql_sentinel conv=%s reason=%s", conversation_id, reason)
         else:
-            preload_block = await asyncio.to_thread(_build_preload_block, paths)
+            block, preload_wiki_refs = await asyncio.to_thread(
+                _build_preload_block_and_refs, paths
+            )
+            preload_block = block
 
     base_prompt = load_agent_system_prompt(agent_id)
     system_prompt = base_prompt
@@ -577,7 +658,7 @@ async def iter_product_slack_pipeline_events(
                     blocked_fb = False
                     rewritten_applied = False
                     if jverdict == "BLOCK":
-                        lang = _language_hint_for_replies(user_message)
+                        lang = _language_hint_for_replies(user_message, recent_turns)
                         text = (
                             _BLOCKED_FALLBACK_FR
                             if lang == "fr"
@@ -606,6 +687,22 @@ async def iter_product_slack_pipeline_events(
                 consultations=event.consultations,
                 embeds=event.embeds,
                 output_judge_metadata=judge_meta_out,
+                wiki_pipeline_preload_refs=preload_wiki_refs if preload_wiki_refs else None,
+            )
+            continue
+        if event.type == "done":
+            payload_refs = preload_wiki_refs if preload_wiki_refs else None
+            yield AgentEvent(
+                type="done",
+                completed=event.completed,
+                message_id=event.message_id,
+                final_agent_id=event.final_agent_id,
+                agent_chain=event.agent_chain,
+                consultations=event.consultations,
+                embeds=event.embeds,
+                output_judge_metadata=event.output_judge_metadata,
+                runtime_metrics=event.runtime_metrics,
+                wiki_pipeline_preload_refs=payload_refs,
             )
             continue
         yield event

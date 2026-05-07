@@ -53,6 +53,10 @@ ci-dessous. Pas de prose autour, pas de Markdown, pas de bloc de code.
 - Reste factuel : objectif du client, montants, horizon, contraintes,
   décisions prises, points en suspens. Pas d'interprétation marketing.
 - Pas de tutoiement, pas d'adresse au client (3ᵉ personne).
+- Aucune **validation émotionnelle** dans le résumé (« il est compréhensible
+  que », « inquiétudes légitimes », etc.) : reste factuel et neutre. La peur ou
+  le stress du client n'apparaissent comme **motif** que s'ils changent une
+  décision ou une contrainte (alignement éditorial : `_response_framework.md`).
 
 ### 2. `facts`
 

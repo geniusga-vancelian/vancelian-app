@@ -148,8 +148,6 @@ class TestDedupableToolsPerimeter:
     def test_includes_product_read_tools(self):
         """Tous les tools de lecture product doivent être dédupliquables."""
         for t in (
-            "read_product_knowledge",
-            "list_product_knowledge_topics",
             "select_wiki_pages",
             "read_wiki_page",
             "show_instrument_card",

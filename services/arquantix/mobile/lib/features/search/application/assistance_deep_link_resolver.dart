@@ -26,6 +26,8 @@ import '../../wallet/presentation/screens/iban_screen.dart';
 import '../../wallet/presentation/screens/sell_flow/sell_flow_controller.dart';
 import '../../wallet/presentation/screens/transaction_screen.dart';
 
+import 'invest_flow_from_assistance.dart';
+
 /// Résolveur de deep-links Assistance — Phase 2b.
 ///
 /// Les agents IA peuvent attacher un `deep_link` (whitelisté côté
@@ -219,6 +221,38 @@ class AssistanceDeepLinkResolver {
         }
         return _openBundleInvest(context, bundleId);
 
+      case 'invest':
+        // Assistant CAL — `vancelian://app/invest/bundle_amount?…` &
+        // `…/invest/crypto_buy_amount?…` (compte source + montant optionnel).
+        if (segments.length < 2) {
+          _showUnavailable(
+            context,
+            deepLink,
+            reason: 'missing_invest_target',
+          );
+          return false;
+        }
+        final investSub = segments[1];
+        if (investSub == 'bundle_amount') {
+          return InvestFlowFromAssistance.openBundleAmount(context, uri);
+        }
+        if (investSub == 'crypto_buy_amount') {
+          return InvestFlowFromAssistance.openCryptoBuyAmount(context, uri);
+        }
+        if (investSub == 'unsupported') {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Pour les offres exclusives, utilise l’écran Offres dédié dans l’app.',
+              ),
+              duration: Duration(seconds: 3),
+            ),
+          );
+          return true;
+        }
+        _showUnavailable(context, deepLink, reason: 'unknown_invest_sub');
+        return false;
+
       default:
         _showUnavailable(context, deepLink, reason: 'unknown_intent');
         return false;
@@ -238,6 +272,8 @@ class AssistanceDeepLinkResolver {
     'article',
     // Phase 2 wiki — `view_bundle_detail` + `invest_bundle`.
     'bundle',
+    // Pilote CAL — flux montant avec compte source présélectionné.
+    'invest',
   };
 
   // ─────────────────────────────────────────────────────────────────

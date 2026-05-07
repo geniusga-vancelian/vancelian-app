@@ -22,7 +22,9 @@ from services.assistance.router_hot_path import (
     EXPERT_AGENTS_FOR_HOT_PATH,
     extract_last_assistant_agent,
     has_deictic,
+    has_personalized_advice_signal,
     has_topic_change_signal,
+    len_of_prior_assistant_reply,
     should_skip_router,
     should_skip_router_from_input,
 )
@@ -72,6 +74,33 @@ class TestExtractLastAssistantAgent:
 # ─────────────────────────────────────────────────────────────────────
 # has_topic_change_signal
 # ─────────────────────────────────────────────────────────────────────
+
+
+class TestHasPersonalizedAdviceSignal:
+    @pytest.mark.parametrize(
+        "msg",
+        [
+            "quel placement me conseilles tu pour ma retraite ?",
+            "quels placement me conseille tu pour ma retraite ?",
+            "Que me recommandes-tu ?",
+            "qu'est-ce que tu me conseilles sur le coffre ?",
+            "What should I invest in for retirement?",
+        ],
+    )
+    def test_detects(self, msg: str):
+        assert has_personalized_advice_signal(msg) is True
+
+    @pytest.mark.parametrize(
+        "msg",
+        [
+            "perf de ce bundle ?",
+            "c'est quoi le coffre flexible ?",
+            "et les frais ?",
+            "",
+        ],
+    )
+    def test_does_not_trigger_on_product_followup(self, msg: str):
+        assert has_personalized_advice_signal(msg) is False
 
 
 class TestHasTopicChangeSignal:
@@ -237,6 +266,14 @@ class TestShouldSkipRouterNegative:
             )
             assert decision is None, f"hot-path should NOT trigger on {msg!r}"
 
+    def test_personalized_advice_signal_blocks(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_ROUTER_HOT_PATH_ENABLED", "true")
+        decision = should_skip_router(
+            user_message="quel placement me conseilles tu pour ma retraite ?",
+            last_assistant_agent="product",
+        )
+        assert decision is None
+
     def test_agent_hint_present_blocks(self, monkeypatch):
         """Si le client a fourni un hint (clic QCM), `service.py` gère
         déjà la continuité — le hot-path ne doit pas se mêler."""
@@ -281,6 +318,60 @@ class TestShouldSkipRouterFromInput:
         decision = should_skip_router_from_input(ai)
         assert decision is not None
         assert decision.agent_id == "product"
+
+    def test_long_prior_assistant_skips_hotpath_for_router(self, monkeypatch):
+        """Question courte + dernier bot de fond → le superviseur décide."""
+        monkeypatch.setenv("ASSISTANCE_ROUTER_HOT_PATH_ENABLED", "true")
+        monkeypatch.setenv("ASSISTANCE_ROUTER_HOT_PATH_MIN_PRIOR_ASSISTANT_CHARS", "40")
+        ai = AgentInput(
+            user_message="sur quoi investir ?",
+            recent_turns=[
+                {"role": "user", "content": "rétaite"},
+                {"role": "assistant", "content": "A" * 80, "agent_used": "product"},
+                {"role": "user", "content": "sur quoi investir ?"},
+            ],
+            memory_state={},
+        )
+        assert should_skip_router_from_input(ai) is None
+
+    def test_min_prior_zero_restores_legacy_hotpath(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_ROUTER_HOT_PATH_ENABLED", "true")
+        monkeypatch.setenv("ASSISTANCE_ROUTER_HOT_PATH_MIN_PRIOR_ASSISTANT_CHARS", "0")
+        ai = AgentInput(
+            user_message="ok",
+            recent_turns=[
+                {"role": "assistant", "content": "B" * 300, "agent_used": "product"},
+                {"role": "user", "content": "ok"},
+            ],
+            memory_state={},
+        )
+        decision = should_skip_router_from_input(ai)
+        assert decision is not None
+        assert decision.agent_id == "product"
+
+    def test_len_prior_assistant_ignores_trailing_user(self):
+        turns = [
+            {"role": "assistant", "content": "Z" * 50},
+            {"role": "user", "content": "suite"},
+        ]
+        assert len_of_prior_assistant_reply(turns) == 50
+
+    def test_len_prior_counts_enriched_choices_labels(self):
+        turns = [
+            {
+                "role": "assistant",
+                "content": "Suite ?",
+                "message_type": "choices",
+                "message_payload": {
+                    "options": [
+                        {"label": "Option A avec un libellé assez long"},
+                        {"label": "Option B tout aussi longue pour le test"},
+                    ]
+                },
+            },
+            {"role": "user", "content": "ok"},
+        ]
+        assert len_of_prior_assistant_reply(turns) >= 40
 
     def test_returns_none_when_first_turn(self, monkeypatch):
         monkeypatch.setenv("ASSISTANCE_ROUTER_HOT_PATH_ENABLED", "true")

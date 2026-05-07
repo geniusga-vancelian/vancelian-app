@@ -31,6 +31,12 @@ Objet avec **5** clés, chaque note est un entier de **1 à 5** (5 = parfait) :
 | `COMPLETE` | Le cœur de la question est couvert si les sources le permettent. |
 | `DISCLAIMERS` | Taux, rendements, sortie anticipée : mentions indicatives / conditions adaptées. |
 
+Réponses **avec ton condescendant**, **accords creux** (« tu as tout à fait
+raison », « la gestion de patrimoine est essentielle » sans information
+nouvelle) ou **formules empathiques toutes faites** (« je comprends ton
+stress ») : **PAS** conformes à l’éditorial Vancelian — privilégie au
+minimum **`REWRITE`** si le fond wiki est correct ; reflète-la dans **`notes`**.
+
 ### `confidence`
 Nombre flottant entre **0.0** et **1.0** : ta confiance globale dans la
 justesse de la réponse **telle qu’affichée avant correction** (avant

@@ -166,7 +166,8 @@ class TestFullBlock:
         )
         assert out is not None
         assert "Catalogue Vancelian" in out
-        assert "read_product_knowledge" in out
+        assert "select_wiki_pages" in out
+        assert "read_wiki_page" in out
         assert "consult_specialist" in out
 
 
