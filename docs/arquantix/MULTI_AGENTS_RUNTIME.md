@@ -2,7 +2,7 @@
 
 > **Statut :** Phase 2a **LIVRÉE** (2026-05-02). Spec applicable au code en production.
 >
-> **Dernière mise à jour :** 2026-05-02 (v1.1)
+> **Dernière mise à jour :** 2026-05-06 (v1.2 — défaut runtime loop actif)
 >
 > **Objectif :** définir le pattern technique qui permet aux agents
 > Vancelian (Compliance, Advisor, Product, Market) de devenir
@@ -90,10 +90,10 @@ Trois principes-clés :
 
 ### 1.1 Différence avec Phase 1
 
-| Aspect | Phase 1 (single-shot) | Phase 2a (loop) |
+| Aspect | Phase 1 (single-shot, **legacy**) | Phase 2a (loop) |
 |---|---|---|
 | Nombre d'appels OpenAI par tour | 1 | 1 à `MAX_ITER` (typiquement 2-4) |
-| Tools | aucun (sauf router via function calling) | catalogue par agent |
+| Tools | **aucun** sur l'agent expert (ex. `ComplianceAgent.stream` : bloc texte depuis **stubs** `compliance_tools`, pas le registry OpenAI) | catalogue par agent (**function calling** réel depuis `tools/registry.py`) |
 | Capacité de raisonner sur des données fraîches | non (snapshot statique) | oui (itère pour collecter) |
 | Capacité de poser une question | non | oui via `ask_user_question` |
 | Capacité d'exécuter une action | non | oui via tools L1/L2/L3 |
@@ -129,6 +129,26 @@ data: {"agent_used": "compliance", "iter_count": 3, "tools_called": ["read_compl
 
 Le `iter_count` et `tools_called` permettent au client (admin debug)
 de visualiser le raisonnement.
+
+### 1.4 Activation du runtime loop (`ASSISTANCE_RUNTIME_LOOP_ENABLED`)
+
+**Depuis la livraison « tool-runtime-default » (2026-05) :**
+
+- **`ASSISTANCE_RUNTIME_LOOP_ENABLED` vaut `true` par défaut** (absence de variable d'environnement = activé).  
+  Implémentation : `services/assistance/agents/config.py::assistance_runtime_loop_enabled()`.
+- **Rollback explicite (incident, debug Phase 1) :** définir  
+  **`ASSISTANCE_RUNTIME_LOOP_ENABLED=false`** — les agents listés dans `ASSISTANCE_RUNTIME_LOOP_AGENTS` repassent sur le chemin **`get_agent(...).stream`** (« Phase 1 »), sans boucle ni tools OpenAI pour l'expert concerné.
+
+**Legacy Phase 1 (compliance)** quand le flag est à `false` :  
+`ComplianceAgent` injecte encore un bloc « Contexte instantané » construit depuis `compliance_tools.py` (stub : transactions récentes **souvent vides**, statut compte **neutre**). Les outils **dynamiques** du registry (`read_transactions`, `list_transactions`, stats, etc.) **ne sont pas** proposés au modèle en function calling sur ce chemin.
+
+**Agents passant par le runtime par défaut** (`ASSISTANCE_RUNTIME_LOOP_AGENTS` non défini) :  
+`compliance`, `product`, `advisor`, `market`, **`trust`**.
+
+**Sous-agent `compliance.transactional`** (après `diagnose_compliance_topic`) : expose notamment  
+`read_transaction_detail`, `list_transactions`, les **stats** (`stats_transaction_counts`, `stats_transaction_amounts`, `stats_portfolio_performance`, `stats_portfolio_allocation`), plus la base `_COMPLIANCE_BASE_TOOLS` (dont `read_transactions`, KYC/registration, documents, wiki). Voir `tools/registry.py`.
+
+**Politique `data_need` (PR3)** : le module `data_need_read_policy.py` n'**empêche** pas les réponses ni les tool calls. Il enregistre un **warning** d'audit (`policy_data_need_reads` / log) si le routeur a posé un `data_need` impliquant des lectures compte/transactions/KYC et qu'**aucun** outil de lecture attendu n'a été invoqué avant la fin du tour — utile pour l'observabilité, pas un garde-fou bloquant.
 
 ---
 
@@ -953,7 +973,7 @@ régression. Ajustement autorisé uniquement pour :
 - [x] `tools/shared/ask_user_question.py` + interrupt loop + tests
 - [x] Provider AML mock intégré dans `read_external_aml_signals` (anti-tipping-off filtering — Phase 2b extraira un `external/adapters/`)
 - [x] `repositories/compliance_repo.py` (introspectif, schema-driven) + tests
-- [x] `service.stream_assistant_turn` patché pour utiliser le runtime (flag `ASSISTANCE_RUNTIME_LOOP_ENABLED`)
+- [x] `service.stream_assistant_turn` patché pour utiliser le runtime (flag `ASSISTANCE_RUNTIME_LOOP_ENABLED`, **défaut `true`** depuis 2026-05 — rollback explicite `false` pour Phase 1 legacy)
 - [x] `_require_client` promu globalement via `services/auth/client_id_resolver.py::patch_auth_client_id_from_person` — clôture audit identité (BUG B)
 - [x] Court-circuits actor : `ADMIN_BO` 403, `ONBOARDING` 403, `SUSPENDED` réponse standardisée sans data-leak
 - [x] **Tests anti-tipping-off** : `TIPPING_OFF_BLACKLIST` + sanitizer + tests scénarios — bloquants CI
@@ -1008,6 +1028,7 @@ régression. Ajustement autorisé uniquement pour :
 |---|---|---|---|
 | 2026-05-02 | 1.0 | Pré-Phase 2a | Création initiale, validation Option X |
 | 2026-05-02 | 1.1 | Phase 2a livrée | Runtime loop + 5 tools L0 + classify_actor + court-circuits + audit identité globalisé. 286 tests verts. |
+| 2026-05-06 | 1.2 | Défaut runtime actif | `ASSISTANCE_RUNTIME_LOOP_ENABLED` **true** par défaut ; agents par défaut incluent `trust` ; doc rollback Phase 1 (stub) vs function calling registry ; rappel `data_need_read_policy` = soft warning uniquement. |
 
 > **Règle :** toute évolution structurelle (nouveau type de tool, nouveau
 > niveau d'autonomie, nouveau pattern d'adapter) **doit** incrémenter la
