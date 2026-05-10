@@ -1,0 +1,26 @@
+{
+  "flow_id": "crypto_investment_intent",
+  "version": "1",
+  "action_type": "crypto_investment_intent",
+  "enabled": true,
+  "required_slots": ["target_asset", "source_account", "amount"],
+  "execution_policy": {
+    "ai_can_execute_order": false,
+    "supports_native_deep_links_in_v1": false
+  },
+  "runtime_sources": [
+    "services.test_clients.service.TestClientService.get_cash_data",
+    "services.test_clients.service.TestClientService.get_crypto_positions",
+    "database.MarketDataInstrument"
+  ],
+  "anti_hallucination_rules": [
+    "No default source account selection when ambiguous",
+    "resolved_id populated only after backend resolver succeeds",
+    "LLM must not invent balances or instruments"
+  ],
+  "slot_provenance": {
+    "raw_fields": ["raw_provenance"],
+    "resolved_fields": ["resolved_provenance"],
+    "per_slot_confidence_required": false
+  }
+}

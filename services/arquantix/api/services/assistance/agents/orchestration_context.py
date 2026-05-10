@@ -37,6 +37,10 @@ BUSINESS_INTENTS: frozenset[str] = frozenset({
 TRANSACTION_KINDS: frozenset[str] = frozenset({
     "bundle_invest",
     "crypto_buy",
+    "crypto_investment_intent",
+    "crypto_sell",
+    "crypto_swap",
+    "deposit",
 })
 
 EMOTIONAL_STATES: frozenset[str] = frozenset({
@@ -49,6 +53,11 @@ EMOTIONAL_STATES: frozenset[str] = frozenset({
 })
 
 LEVEL_LOW_MED_HIGH: frozenset[str] = frozenset({"low", "medium", "high"})
+
+# P1 UX — création ``crypto_investment_intent`` : garder hors risque hallucination / chats informatifs.
+# Si présent ET < seuil dans ``memory_state["orchestration"]``, les tools ``crypto_investment_intent_start``
+# sont retirés du toolset tant que cette orchestration voyage dans le même tour mémoire.
+ROUTING_CONFIDENCE_CRYPTO_INTENT_DRAFT_MIN: float = 0.6
 
 DATA_NEEDS: frozenset[str] = frozenset({
     "none",
@@ -143,6 +152,16 @@ def normalize_orchestration(raw: Optional[dict[str, Any]]) -> Optional[dict[str,
     secondary = _coerce_secondary_intents(raw.get("secondary_intents"))
     transaction_kind = _coerce_transaction_kind(raw.get("transaction_kind"))
 
+    routing_conf_raw = raw.get("routing_confidence")
+    routing_conf: Optional[float] = None
+    if routing_conf_raw is not None:
+        try:
+            routing_conf = float(routing_conf_raw)
+        except (TypeError, ValueError):
+            routing_conf = None
+        else:
+            routing_conf = max(0.0, min(1.0, routing_conf))
+
     must_ack = _coerce_bool(raw.get("must_acknowledge_emotion"))
     must_data = _coerce_bool(raw.get("must_check_account_data"))
     human_esc = _coerce_bool(raw.get("needs_human_escalation"))
@@ -166,6 +185,9 @@ def normalize_orchestration(raw: Optional[dict[str, Any]]) -> Optional[dict[str,
     if transaction_kind:
         out["transaction_kind"] = transaction_kind
 
+    if routing_conf is not None:
+        out["routing_confidence"] = routing_conf
+
     return out
 
 
@@ -185,6 +207,7 @@ def orchestration_from_route_to_args(args: dict[str, Any]) -> Optional[dict[str,
         "needs_human_escalation",
         "response_style",
         "transaction_kind",
+        "routing_confidence",
     )
     sub: dict[str, Any] = {}
     for k in keys:
@@ -211,6 +234,7 @@ def render_orchestration_for_prompt(orch: Optional[dict[str, Any]]) -> str:
     order = [
         ("business_intent", "Intention métier"),
         ("transaction_kind", "Action transactionnelle (CAL)"),
+        ("routing_confidence", "Score confiance routage transactionnel"),
         ("emotional_state", "État émotionnel perçu"),
         ("urgency", "Urgence"),
         ("regulatory_risk", "Risque réglementaire / conformité"),
@@ -241,6 +265,7 @@ def render_orchestration_for_prompt(orch: Optional[dict[str, Any]]) -> str:
 
 __all__ = [
     "BUSINESS_INTENTS",
+    "ROUTING_CONFIDENCE_CRYPTO_INTENT_DRAFT_MIN",
     "TRANSACTION_KINDS",
     "EMOTIONAL_STATES",
     "DATA_NEEDS",

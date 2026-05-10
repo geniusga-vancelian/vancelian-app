@@ -58,6 +58,16 @@ from services.assistance.agents.tools.market import (
     show_featured_articles,
     show_top_movers,
 )
+from services.assistance.agents.tools.action import (
+    bundle_invest_start,
+    crypto_buy_start,
+    crypto_investment_intent_confirm,
+    crypto_investment_intent_resolve,
+    crypto_investment_intent_start,
+    crypto_sell_start,
+    crypto_swap_start,
+    deposit_present_channels,
+)
 from services.assistance.agents.tools.product import (
     read_wiki_page,
     select_wiki_pages,
@@ -249,6 +259,17 @@ TOOLS_BY_AGENT: dict[str, list[ToolModule]] = {
     "trust": [
         select_wiki_pages,
         read_wiki_page,
+        ask_user_question,
+    ],
+    "action": [
+        deposit_present_channels,
+        crypto_investment_intent_start,
+        crypto_investment_intent_resolve,
+        crypto_investment_intent_confirm,
+        crypto_buy_start,
+        crypto_sell_start,
+        crypto_swap_start,
+        bundle_invest_start,
         ask_user_question,
     ],
     "default": [ask_user_question],

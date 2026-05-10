@@ -53,6 +53,9 @@ from services.assistance.agents.conversation_state import (
     ConversationState,
     render_conversation_state_for_prompt,
 )
+from services.assistance.agents.tools.shared.deterministic_intake import (
+    resolve_intake_user_text,
+)
 from services.assistance.agents.config import (
     assistance_agent_autonomy_max,
     assistance_agent_max_iter,
@@ -65,6 +68,9 @@ from services.assistance.agents.config import (
     autonomy_le,
 )
 from services.assistance.agents.openai_client import chat_completion_with_tools
+from services.assistance.agents.orchestration_context import (
+    ROUTING_CONFIDENCE_CRYPTO_INTENT_DRAFT_MIN,
+)
 from services.assistance.agents.prompt_builder import load_agent_system_prompt
 from services.assistance.agents.runtime import tour_shared_context
 from services.assistance.text_sanitizer import strip_emojis_with_metrics
@@ -188,6 +194,10 @@ PRODUCT_KNOWLEDGE_READ_TOOLS: frozenset[str] = frozenset({
     # de la DB. Valide le guard-rail quand le client demande surtout une
     # liste d'articles d'aide sans question factuelle wiki.
     "show_featured_articles",
+    # CAL (chat-assisted lending / invest widgets) — lectures serveur sourcées
+    # comme `show_instrument_card` ; pas besoin de wiki préalable pour cadrer.
+    "show_invest_source_accounts",
+    "show_invest_confirmation_draft",
 })
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -221,6 +231,8 @@ DEDUPABLE_TOOLS: frozenset[str] = frozenset({
     "show_instrument_card",
     "show_crypto_bundles",
     "show_bundle_detail",
+    "show_invest_source_accounts",
+    "show_invest_confirmation_draft",
     # advisor / market
     "show_featured_articles",
     "show_top_movers",
@@ -251,7 +263,8 @@ DEDUP_HINT_REPEATED_CALL = (
 PRODUCT_GUARDRAIL_HINT_NO_READ = (
     "Tu n'as appelé aucun tool de lecture (read_wiki_page, "
     "show_featured_articles, show_instrument_card, show_crypto_bundles, "
-    "show_bundle_detail) avant "
+    "show_bundle_detail, show_invest_source_accounts, "
+    "show_invest_confirmation_draft) avant "
     "de répondre. C'est interdit pour les questions factuelles produit "
     "— tu risques de halluciner. Reformule en commençant par "
     "select_wiki_pages(question, "
@@ -286,10 +299,10 @@ def _check_product_guardrail(tools_called: list[str]) -> Optional[str]:
         - ``PRODUCT_GUARDRAIL_HINT_NO_READ`` sinon (aucune lecture du
           tout).
 
-    Note: ``ask_user_question`` et ``show_instrument_card`` ne sont pas
-    des « lectures » au sens strict mais show_instrument_card retourne
-    des données live (carte produit) qu'on considère équivalentes à une
-    lecture. ``ask_user_question`` ne déclenche pas de réponse finale
+    Note: ``ask_user_question`` et les tools type carte / liste serveur
+    (``show_instrument_card``, ``show_invest_source_accounts``, …)
+    retournent des données sourcées qu'on considère équivalentes à une
+    lecture wiki pour ce guard-rail. ``ask_user_question`` ne déclenche pas de réponse finale
     (il interrupt la boucle via ``interrupt_with_question``), donc le
     guard-rail ne le verra jamais en pratique.
     """
@@ -811,6 +824,56 @@ def _filter_orchestration_tools(
     return out
 
 
+def _filter_crypto_intent_routing_gate(
+    tools: Sequence[ToolModule],
+    *,
+    memory_state: Optional[Any],
+    conversation_id: UUID | str,
+) -> list[ToolModule]:
+    """Ne pas exposer `crypto_investment_intent_start` si routage peu confiant.
+
+    P1 : tant que ``orchestration.transaction_kind`` est déjà visé comme
+    ``crypto_investment_intent`` et ``routing_confidence`` est défini sous
+    le seuil, on retire le tool de création de draft pour éviter
+    déclenchements transactionnels sous ambiguïté router. Absence ou
+    parse failure de ``routing_confidence`` : pas de blocage (rétrocompat).
+    Les flows clarification / résolution hors ``_start`` restent disponibles.
+    """
+    if not isinstance(memory_state, dict):
+        return list(tools)
+    orch = memory_state.get("orchestration")
+    if not isinstance(orch, dict):
+        return list(tools)
+    if (
+        str(orch.get("transaction_kind") or "").strip().lower()
+        != "crypto_investment_intent"
+    ):
+        return list(tools)
+    rc_raw = orch.get("routing_confidence")
+    if rc_raw is None:
+        return list(tools)
+    try:
+        rc = float(rc_raw)
+    except (TypeError, ValueError):
+        return list(tools)
+    if rc >= ROUTING_CONFIDENCE_CRYPTO_INTENT_DRAFT_MIN:
+        return list(tools)
+
+    out: list[ToolModule] = []
+    for mod in tools:
+        fname = (mod.SPEC.get("function") or {}).get("name")  # type: ignore[union-attr]
+        if fname == "crypto_investment_intent_start":
+            logger.info(
+                "agent_loop.crypto_intent_start_gated routing_confidence=%s min=%s conv=%s",
+                rc,
+                ROUTING_CONFIDENCE_CRYPTO_INTENT_DRAFT_MIN,
+                conversation_id,
+            )
+            continue
+        out.append(mod)
+    return out
+
+
 async def run_agent_loop(
     *,
     agent_id: str,
@@ -956,6 +1019,11 @@ async def run_agent_loop(
         consult_in_progress=consult_in_progress,
         handoff_done=handoff_done,
     )
+    gated_tools = _filter_crypto_intent_routing_gate(
+        gated_tools,
+        memory_state=agent_input.memory_state,
+        conversation_id=conversation_id,
+    )
     tool_index = _build_tool_index(gated_tools)
     openai_tools = [to_openai_tool(m.SPEC) for m in gated_tools]  # type: ignore[arg-type]
 
@@ -995,6 +1063,133 @@ async def run_agent_loop(
     tool_call_cache: dict[tuple[str, str], dict[str, Any]] = {}
     dedup_hits: int = 0  # diag — exposé en logs en fin de tour
 
+    _wiz_autorun: Optional[Any] = None
+    _early_launch_qcm: Optional[dict[str, Any]] = None
+    crypto_buy_skip_llm_loop = False
+
+    _crypto_buy_autorun_blocked = False
+    if (
+        current_agent_id == "action"
+        and chain_depth == 0
+        and not consult_in_progress
+        and "crypto_buy_start" in tool_index
+    ):
+        try:
+            from uuid import UUID as _ConvUuid
+
+            from services.assistance.action_drafts_repo import (
+                get_latest_active_draft_row as _get_active_ci_draft,
+            )
+
+            _ci_row = _get_active_ci_draft(
+                db,
+                conversation_id=_ConvUuid(str(conversation_id)),
+                action_type="crypto_investment_intent",
+            )
+            _crypto_buy_autorun_blocked = _ci_row is not None
+        except Exception:  # noqa: BLE001
+            logger.exception("agent_loop.crypto_investment_intent_autorun_block_check_failed")
+
+    # Court-circuits CAL achat crypto (double validation : QCM intent → widget).
+    if (
+        current_agent_id == "action"
+        and chain_depth == 0
+        and not consult_in_progress
+        and "crypto_buy_start" in tool_index
+        and not _crypto_buy_autorun_blocked
+    ):
+        try:
+            from services.assistance.agents.runtime import (
+                action_crypto_buy_autorun as _cba,
+            )
+
+            _wiz_autorun = _cba.try_prepare_crypto_buy_widget_after_launch_confirm(
+                agent_input=agent_input,
+                db=db,
+                user_id=user_id,
+                actor_kind=actor_kind,
+                conversation_id=str(conversation_id),
+                correlation_id=correlation_id,
+                audit_session_id=audit_session_id,
+                embeds_collected=embeds_collected,
+                embeds_seen_keys=embeds_seen_keys,
+            )
+            if _wiz_autorun is None:
+                _early_launch_qcm = _cba.try_crypto_buy_early_launch_question_payload(
+                    agent_input=agent_input,
+                    db=db,
+                    user_id=user_id,
+                    actor_kind=actor_kind,
+                    conversation_id=str(conversation_id),
+                    correlation_id=correlation_id,
+                    audit_session_id=audit_session_id,
+                )
+        except Exception:  # noqa: BLE001
+            logger.exception("agent_loop.crypto_buy_autorun_failed")
+            _wiz_autorun = None
+            _early_launch_qcm = None
+
+        if _wiz_autorun is not None:
+            messages.extend(_wiz_autorun.injection_messages)
+            tools_called.append("crypto_buy_start")
+            _ar_res = _wiz_autorun.tool_result
+            if isinstance(_ar_res, dict):
+                tools_history.append(("crypto_buy_start", _ar_res))
+            _ar_dec = audit.persist_decision(
+                db,
+                conversation_id=conversation_id,
+                agent_id=current_agent_id,
+                iteration=0,
+                tool_name="crypto_buy_start",
+                autonomy_level="L0",
+                arguments=_wiz_autorun.tool_args,
+                result_summary=audit.result_summary(
+                    _ar_res if isinstance(_ar_res, dict) else {}
+                ),
+                correlation_id=correlation_id,
+            )
+            if _ar_dec:
+                decision_ids.append(_ar_dec)
+            if isinstance(_ar_res, dict):
+                _ar_topic = infer_topic_from_tool_call(
+                    tool_name="crypto_buy_start",
+                    tool_args=_wiz_autorun.tool_args,
+                    tool_result=_ar_res,
+                    agent_id=current_agent_id,
+                    turn_index=0,
+                )
+                if _ar_topic is not None:
+                    try:
+                        conversation_set_topic(
+                            db,
+                            conversation_id,
+                            _ar_topic,
+                            commit=False,
+                        )
+                        logger.info(
+                            "agent_loop.topic_set_autorun agent=%s tool=%s",
+                            current_agent_id,
+                            "crypto_buy_start",
+                        )
+                    except Exception:  # noqa: BLE001
+                        logger.exception(
+                            "agent_loop.topic_set_autorun_failed tool=%s",
+                            "crypto_buy_start",
+                        )
+            _au_hint = (
+                "\n\n## Exécution interne (CAL)\n"
+                "Un appel `crypto_buy_start` a **déjà produit** l’encart "
+                "**récap investissement définitif** pour ce tap.\n\n"
+                "**Ne rappelle pas** cet outil. Réponds en français, "
+                "**une** phrase très courte qui renvoie vers l’encart — "
+                "sans lien Markdown fictif."
+            )
+            if messages and isinstance(messages[0], dict):
+                if messages[0].get("role") == "system":
+                    messages[0]["content"] = str(
+                        messages[0].get("content") or ""
+                    ) + _au_hint
+
     thinking_enabled = (
         assistance_stream_thinking_enabled() and not consult_in_progress
     )
@@ -1010,7 +1205,62 @@ async def run_agent_loop(
 
     yield AgentEvent(type="delta", content="")  # warm-up event (compat)
 
-    for iteration in range(max_iter):
+    if _early_launch_qcm is not None:
+        crypto_buy_skip_llm_loop = True
+        early_break_reason = "choices_emitted"
+        _el_opts_raw = _early_launch_qcm.get("options") or []
+        early_launch_option_list: list[ChoiceOption] = []
+        for o in _el_opts_raw:
+            if not isinstance(o, dict):
+                continue
+            oid = o.get("id")
+            olabel = o.get("label")
+            if not oid or not olabel:
+                continue
+            early_launch_option_list.append(
+                ChoiceOption(
+                    id=str(oid),
+                    label=str(olabel),
+                    agent_hint=(
+                        str(o["agent_hint"]) if o.get("agent_hint") else None
+                    ),
+                    deep_link=(
+                        str(o["deep_link"]) if o.get("deep_link") else None
+                    ),
+                )
+            )
+        yield AgentEvent(
+            type="choices",
+            prompt=str(_early_launch_qcm.get("prompt") or "")[:240],
+            options=early_launch_option_list,
+            allow_freeform=bool(_early_launch_qcm.get("allow_freeform", False)),
+        )
+        tools_called.append("crypto_buy_launch_prompt")
+        _el_dec = audit.persist_decision(
+            db,
+            conversation_id=conversation_id,
+            agent_id=current_agent_id,
+            iteration=0,
+            tool_name="crypto_buy_launch_prompt",
+            autonomy_level="L0",
+            arguments={"reason": "deterministic_crypto_buy_intake_complete"},
+            result_summary=audit.result_summary(
+                {
+                    "flow": _early_launch_qcm.get("flow"),
+                    "mode": _early_launch_qcm.get("mode"),
+                }
+            ),
+            correlation_id=correlation_id,
+        )
+        if _el_dec:
+            decision_ids.append(_el_dec)
+
+    if crypto_buy_skip_llm_loop:
+        _iter_seq: list[int] = []
+    else:
+        _iter_seq = list(range(max_iter))
+
+    for iteration in _iter_seq:
         last_iteration_index = iteration
         if time.monotonic() - started_at > timeout_total:
             early_break_reason = "timeout"
@@ -1108,6 +1358,26 @@ async def run_agent_loop(
                 if not isinstance(topic_dict, dict):
                     topic_dict = None
 
+                intake_txt = resolve_intake_user_text(
+                    user_message=getattr(agent_input, "user_message", None),
+                    memory_state=memory_state,
+                    recent_turns=getattr(agent_input, "recent_turns", None),
+                )
+                pend_raw = memory_state.get("pending_action")
+                pend_dict = pend_raw if isinstance(pend_raw, dict) else None
+
+                rt_snap = getattr(agent_input, "recent_turns", None)
+                recent_turns_snapshot = (
+                    list(rt_snap) if isinstance(rt_snap, list) else None
+                )
+
+                uch_raw = memory_state.get("user_choice_hint")
+                user_choice_snap = (
+                    str(uch_raw).strip().lower()
+                    if isinstance(uch_raw, str) and uch_raw.strip()
+                    else None
+                )
+
                 ctx = ToolContext(
                     db=db,
                     client_id=str(memory_state.get("client_id"))
@@ -1126,6 +1396,10 @@ async def run_agent_loop(
                     cognitive_state=cog_state_dict,
                     objective=obj_dict,
                     current_topic=topic_dict,
+                    intake_user_text=intake_txt or None,
+                    pending_action_snapshot=pend_dict,
+                    recent_turns_snapshot=recent_turns_snapshot,
+                    user_choice_hint=user_choice_snap,
                 )
 
                 # ── Dédoublonnage des tool calls dans CE turn (Phase 2 wiki v1.4 patch) ──
@@ -1591,6 +1865,11 @@ async def run_agent_loop(
                         consult_in_progress=consult_in_progress,
                         handoff_done=handoff_done,
                     )
+                    new_gated = _filter_crypto_intent_routing_gate(
+                        new_gated,
+                        memory_state=agent_input.memory_state,
+                        conversation_id=conversation_id,
+                    )
                     tool_index = _build_tool_index(new_gated)
                     openai_tools = [
                         to_openai_tool(m.SPEC) for m in new_gated  # type: ignore[arg-type]
@@ -1653,6 +1932,11 @@ async def run_agent_loop(
                         new_gated,
                         consult_in_progress=consult_in_progress,
                         handoff_done=handoff_done,
+                    )
+                    new_gated = _filter_crypto_intent_routing_gate(
+                        new_gated,
+                        memory_state=agent_input.memory_state,
+                        conversation_id=conversation_id,
                     )
                     tool_index = _build_tool_index(new_gated)
                     openai_tools = [
@@ -1787,19 +2071,28 @@ async def run_agent_loop(
         early_break_reason = "final_answer"
         break
     else:
-        # Boucle terminée sans break (= MAX_ITER atteint).
-        # MAX_ITER_FALLBACK_MESSAGE est contrôlé côté code (pas LLM),
-        # donc en théorie sans emoji ; on passe quand même par le
-        # sanitizer pour être 100 % cohérent avec la politique.
-        early_break_reason = "max_iter"
-        sanitized_fb, n_stripped_fb = strip_emojis_with_metrics(
-            MAX_ITER_FALLBACK_MESSAGE
-        )
-        if n_stripped_fb:
-            emojis_stripped_count += int(n_stripped_fb)
-        yield AgentEvent(
-            type="delta", content=sanitized_fb or MAX_ITER_FALLBACK_MESSAGE
-        )
+        # ``for … else`` Python : ce ``else`` s'exécute aussi quand ``_iter_seq``
+        # est **vide** (aucune entrée dans la boucle) — alors qu'un court-circuit
+        # légitime (ex. pré-QCM achat crypto) a déjà tout traité hors boucle,
+        # ce qui injectait falsément ``MAX_ITER_FALLBACK_MESSAGE``.
+        if not _iter_seq:
+            if early_break_reason is None:
+                early_break_reason = "skipped_empty_iter"
+            pass
+        else:
+            # Boucle terminée sans break (= MAX_ITER atteint).
+            # MAX_ITER_FALLBACK_MESSAGE est contrôlé côté code (pas LLM),
+            # donc en théorie sans emoji ; on passe quand même par le
+            # sanitizer pour être 100 % cohérent avec la politique.
+            early_break_reason = "max_iter"
+            sanitized_fb, n_stripped_fb = strip_emojis_with_metrics(
+                MAX_ITER_FALLBACK_MESSAGE
+            )
+            if n_stripped_fb:
+                emojis_stripped_count += int(n_stripped_fb)
+            yield AgentEvent(
+                type="delta", content=sanitized_fb or MAX_ITER_FALLBACK_MESSAGE
+            )
 
     # PR3 — Politique data_need (soft) : audit si réponse finale sans tool de lecture.
     if (
