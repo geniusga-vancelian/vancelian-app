@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ContentStatus } from '@prisma/client'
+import { ContentStatus, PackagedProductType } from '@prisma/client'
 import { z } from 'zod'
 
 import { defaultLocale, type Locale } from '@/config/locales'
 import { isValidLocale } from '@/config/locales'
+import { EXCLUSIVE_OFFER_VAULT_INVESTMENT_TYPE_SLUG } from '@/lib/admin/exclusiveOfferVaultCreate'
 import { getSessionFromCookie } from '@/lib/auth'
 import { computePageLocaleCompleteness } from '@/lib/admin/pageLocaleCompleteness'
 import { computeVaultLocaleLayerInfos } from '@/lib/admin/vaultLocaleSectionStatus'
@@ -150,6 +151,14 @@ function parseVaultConfigFromRaw(rawData: unknown): z.infer<typeof vaultConfigSc
   return config
 }
 
+function applyExclusiveOfferVaultCategoryMeta<T extends { investmentTypeSlug?: string | undefined }>(
+  config: T,
+  productType: string | null | undefined,
+): T {
+  if (productType !== PackagedProductType.EXCLUSIVE_OFFER) return config
+  return { ...config, investmentTypeSlug: EXCLUSIVE_OFFER_VAULT_INVESTMENT_TYPE_SLUG }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> | { slug: string } }
@@ -205,9 +214,15 @@ export async function GET(
       (c) => c.locale === editingLocale && c.status === ContentStatus.PUBLISHED,
     )
     const rawData = draftForLocale?.data
-    const config = parseVaultConfigFromRaw(rawData)
+    let config = parseVaultConfigFromRaw(rawData)
     const publishedRaw = publishedForLocale?.data
-    const publishedConfig = publishedRaw != null ? parseVaultConfigFromRaw(publishedRaw) : null
+    let publishedConfig = publishedRaw != null ? parseVaultConfigFromRaw(publishedRaw) : null
+
+    const ppEarly = page.packagedProduct
+    config = applyExclusiveOfferVaultCategoryMeta(config, ppEarly?.productType ?? null)
+    if (publishedConfig) {
+      publishedConfig = applyExclusiveOfferVaultCategoryMeta(publishedConfig, ppEarly?.productType ?? null)
+    }
 
     const localeVaultLayers = computeVaultLocaleLayerInfos(
       contents.map((c) => ({
@@ -271,7 +286,10 @@ export async function GET(
           commercialStatus: pp.commercialStatus,
           visibility: pp.visibility,
           featuredRank: pp.featuredRank,
-          categorySlug: pp.categorySlug,
+          categorySlug:
+            pp.productType === PackagedProductType.EXCLUSIVE_OFFER
+              ? (pp.categorySlug ?? EXCLUSIVE_OFFER_VAULT_INVESTMENT_TYPE_SLUG)
+              : pp.categorySlug,
           tags: (() => {
             const t = pp.tags
             if (t == null) return [] as string[]
@@ -336,6 +354,7 @@ export async function PUT(
         template: VAULT_TEMPLATE_DB,
       },
       include: {
+        packagedProduct: { select: { productType: true } },
         sections: {
           where: { key: VAULT_SECTION_KEY },
           take: 1,
@@ -383,6 +402,11 @@ export async function PUT(
       }
     }
 
+    const dataToSave = applyExclusiveOfferVaultCategoryMeta(
+      parsed.config,
+      page.packagedProduct?.productType ?? null,
+    )
+
     await prisma.sectionContent.upsert({
       where: {
         sectionId_locale_status: {
@@ -392,14 +416,14 @@ export async function PUT(
         },
       },
       update: {
-        data: parsed.config,
+        data: dataToSave,
         updatedByUserId: session.userId,
       },
       create: {
         sectionId: section.id,
         locale: loc,
         status: ContentStatus.DRAFT,
-        data: parsed.config,
+        data: dataToSave,
         updatedByUserId: session.userId,
       },
     })

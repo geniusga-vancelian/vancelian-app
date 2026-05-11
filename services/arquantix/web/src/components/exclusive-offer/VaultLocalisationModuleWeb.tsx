@@ -8,7 +8,7 @@ import {
 } from '@/components/design-system'
 import { getActiveLocaleFromPathname } from '@/lib/i18n/publicLocalizedRouting'
 import { vaultCommonCta } from '@/lib/i18n/vaultCommonCta'
-import { isGoogleMapsIframeEmbedUrl } from '@/lib/maps/resolveMapsShareLink'
+import { isGoogleMapsIframeEmbedUrl, normalizeGoogleMapsEmbedInput } from '@/lib/maps/resolveMapsShareLink'
 
 type Props = {
   content: Record<string, unknown>
@@ -24,13 +24,15 @@ export function VaultLocalisationModuleWeb({ content }: Props) {
   const loc = getActiveLocaleFromPathname(pathname)
   const titleRaw = typeof content.moduleTitle === 'string' ? content.moduleTitle.trim() : ''
   const description = typeof content.description === 'string' ? content.description.trim() : ''
-  const embedUrl = typeof content.embedUrl === 'string' ? content.embedUrl.trim() : ''
+  const embedNorm = normalizeGoogleMapsEmbedInput(
+    typeof content.embedUrl === 'string' ? content.embedUrl : '',
+  )
 
-  const showMap = isGoogleMapsIframeEmbedUrl(embedUrl)
+  const showMap = isGoogleMapsIframeEmbedUrl(embedNorm)
   const hasDesc = description.length > 0
   const showTitle = titleRaw.length > 0
 
-  if (!showTitle && !hasDesc && !showMap && !embedUrl) {
+  if (!showTitle && !hasDesc && !showMap && !embedNorm) {
     return null
   }
 
@@ -51,7 +53,7 @@ export function VaultLocalisationModuleWeb({ content }: Props) {
             <div className="overflow-hidden rounded-2xl border border-neutral-200 shadow-sm">
               <iframe
                 title={vaultCommonCta(loc, 'map')}
-                src={embedUrl}
+                src={embedNorm}
                 className="aspect-video w-full min-h-[220px] border-0 bg-neutral-100"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
@@ -60,7 +62,7 @@ export function VaultLocalisationModuleWeb({ content }: Props) {
             </div>
           </div>
         </>
-      ) : embedUrl.length > 0 ? (
+      ) : embedNorm.length > 0 ? (
         <p className="mt-6 text-center text-sm text-amber-800">
           {vaultCommonCta(loc, 'map_embed_invalid')}
         </p>

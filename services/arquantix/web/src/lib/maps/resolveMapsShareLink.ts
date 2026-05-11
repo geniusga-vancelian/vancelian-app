@@ -3,6 +3,57 @@
  * utilisable en iframe sans clé API : .../maps?q=lat,lng&output=embed
  */
 
+/** Décode les entités HTML fréquentes dans une URL collée depuis le code d’intégration Google. */
+export function decodeMinimalHtmlEntitiesInUrl(input: string): string {
+  let s = input
+  s = s.replace(/&#(\d+);/g, (match, n: string) => {
+    const c = Number.parseInt(n, 10)
+    return Number.isFinite(c) && c >= 0 && c <= 0x10ffff ? String.fromCodePoint(c) : match
+  })
+  s = s.replace(/&#x([\da-f]+);/gi, (match, h: string) => {
+    const c = Number.parseInt(h, 16)
+    return Number.isFinite(c) && c >= 0 && c <= 0x10ffff ? String.fromCodePoint(c) : match
+  })
+  s = s.replace(/&quot;/gi, '"')
+  s = s.replace(/&apos;/gi, "'")
+  s = s.replace(/&#39;/g, "'")
+  s = s.replace(/&lt;/gi, '<')
+  s = s.replace(/&gt;/gi, '>')
+  s = s.replace(/&amp;/gi, '&')
+  return s
+}
+
+/**
+ * Extrait l’attribut src d’un fragment HTML `<iframe …>`, ou null.
+ */
+export function extractGoogleMapsIframeSrcFromHtml(html: string): string | null {
+  const quoted = html.match(/<iframe\b[^>]*\bsrc\s*=\s*(["'])([\s\S]*?)\1/i)
+  if (quoted?.[2]) {
+    const v = quoted[2].trim()
+    if (v.length > 0) return v
+  }
+  const bare = html.match(/<iframe\b[^>]*\bsrc\s*=\s*([^\s>]+)/i)
+  if (bare?.[1]) {
+    const v = bare[1].replace(/["']/g, '').trim()
+    if (v.length > 0) return v
+  }
+  return null
+}
+
+/**
+ * Normalise la saisie marketing : iframe complète → URL du src ; décodage &#39; &amp; etc.
+ * À utiliser à l’enregistrement (admin) et au rendu (rétrocompat contenu déjà stocké).
+ */
+export function normalizeGoogleMapsEmbedInput(raw: string): string {
+  let s = raw.trim()
+  if (!s) return ''
+  if (/<iframe\b/i.test(s)) {
+    const src = extractGoogleMapsIframeSrcFromHtml(s)
+    if (src) s = src
+  }
+  return decodeMinimalHtmlEntitiesInUrl(s).trim()
+}
+
 /** Hôtes autorisés pour l’URL initiale (anti-SSRF sur la requête sortante). */
 export function isAllowedMapsResolveStartUrl(raw: string): boolean {
   const t = raw.trim()
@@ -192,7 +243,7 @@ export async function fetchFinalUrl(startUrl: string): Promise<string> {
 
 /** URL utilisable en src d’iframe : /maps/embed ou /maps?...&output=embed */
 export function isGoogleMapsIframeEmbedUrl(raw: string): boolean {
-  const t = raw.trim()
+  const t = normalizeGoogleMapsEmbedInput(raw)
   if (!t.startsWith('http')) return false
   try {
     const u = new URL(t.startsWith('http') ? t : `https://${t}`)
@@ -224,13 +275,18 @@ export type ResolveMapsShareLinkResult =
  * À partir d’un lien courts ou d’une URL maps.google.com, produit une URL iframe output=embed.
  */
 export async function resolveMapsShareLinkToEmbed(startUrl: string): Promise<ResolveMapsShareLinkResult> {
-  if (!isAllowedMapsResolveStartUrl(startUrl)) {
+  const normalized = normalizeGoogleMapsEmbedInput(startUrl)
+  if (isGoogleMapsIframeEmbedUrl(normalized)) {
+    return { ok: true, embedUrl: normalized, resolvedUrl: normalized }
+  }
+
+  if (!isAllowedMapsResolveStartUrl(normalized)) {
     return { ok: false, error: 'URL non autorisée (utilisez un lien maps.app.goo.gl ou une URL Google Maps).' }
   }
 
   let finalUrl: string
   try {
-    finalUrl = await fetchFinalUrl(startUrl)
+    finalUrl = await fetchFinalUrl(normalized)
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Échec de la résolution'
     return { ok: false, error: msg }

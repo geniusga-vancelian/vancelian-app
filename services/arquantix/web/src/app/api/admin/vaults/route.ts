@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ContentStatus } from '@prisma/client'
+import { ContentStatus, PackagedProductType } from '@prisma/client'
 import { z } from 'zod'
 
+import { EXCLUSIVE_OFFER_VAULT_INVESTMENT_TYPE_SLUG } from '@/lib/admin/exclusiveOfferVaultCreate'
 import { getSessionFromCookie } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
@@ -116,6 +117,7 @@ export async function GET() {
     const pages = await prisma.page.findMany({
       where: { template: VAULT_TEMPLATE_DB },
       include: {
+        packagedProduct: { select: { productType: true } },
         sections: {
           where: { key: VAULT_SECTION_KEY },
           include: {
@@ -137,7 +139,10 @@ export async function GET() {
       const parsed = draftData ? vaultConfigSchema.safeParse(draftData) : null
       const config = parsed?.success ? parsed.data : null
       const raw = draftData as Record<string, unknown> | null
-      const investmentTypeSlug = config?.investmentTypeSlug ?? raw?.investmentTypeSlug ?? null
+      let investmentTypeSlug = config?.investmentTypeSlug ?? raw?.investmentTypeSlug ?? null
+      if (page.packagedProduct?.productType === PackagedProductType.EXCLUSIVE_OFFER) {
+        investmentTypeSlug = EXCLUSIVE_OFFER_VAULT_INVESTMENT_TYPE_SLUG
+      }
       const sortOrder = config?.sortOrder ?? (typeof raw?.sortOrder === 'number' ? raw.sortOrder : 999)
       return {
         id: page.id,

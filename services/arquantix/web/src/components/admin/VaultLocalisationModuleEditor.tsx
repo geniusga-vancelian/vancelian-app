@@ -2,7 +2,10 @@
 
 import { useState } from 'react'
 
-import { isGoogleMapsIframeEmbedUrl } from '@/lib/maps/resolveMapsShareLink'
+import {
+  isGoogleMapsIframeEmbedUrl,
+  normalizeGoogleMapsEmbedInput,
+} from '@/lib/maps/resolveMapsShareLink'
 
 type Props = {
   content: Record<string, unknown>
@@ -27,13 +30,14 @@ function looksLikeGoogleMapsShortShareLink(raw: string): boolean {
 
 /**
  * Module Localisation — titre, description, carte Google (URL d’iframe).
- * L’utilisateur copie le lien « src » depuis : Partager → Intégrer une carte.
+ * Le marketing peut coller le bloc `<iframe …>` fourni par Google (Partager → Intégrer une carte).
  */
 export function VaultLocalisationModuleEditor({ content, onPatch }: Props) {
   const moduleTitle = readString(content.moduleTitle)
   const description = readString(content.description)
   const embedUrl = readString(content.embedUrl)
-  const previewOk = isGoogleMapsIframeEmbedUrl(embedUrl)
+  const embedNorm = normalizeGoogleMapsEmbedInput(embedUrl)
+  const previewOk = isGoogleMapsIframeEmbedUrl(embedNorm)
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState<string | null>(null)
 
@@ -80,16 +84,27 @@ export function VaultLocalisationModuleEditor({ content, onPatch }: Props) {
         />
       </div>
       <div className="flex gap-1.5">
-        <input
-          type="url"
+        <textarea
           value={embedUrl}
           onChange={(e) => onPatch({ embedUrl: e.target.value })}
-          className="min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs font-mono"
-          placeholder="https://www.google.com/maps/embed?pb=… ou https://maps.app.goo.gl/…"
+          onBlur={() => {
+            const n = normalizeGoogleMapsEmbedInput(embedUrl)
+            if (n !== embedUrl) onPatch({ embedUrl: n })
+          }}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData('text')
+            if (/<iframe\b/i.test(text)) {
+              e.preventDefault()
+              onPatch({ embedUrl: normalizeGoogleMapsEmbedInput(text) })
+            }
+          }}
+          rows={2}
+          className="min-h-[4rem] min-w-0 flex-1 resize-y rounded-md border px-2 py-1.5 text-xs font-mono leading-snug"
+          placeholder="Collez le code &lt;iframe …&gt; ou l’URL https://www.google.com/maps/embed?…"
         />
         <button
           type="button"
-          disabled={resolving || !looksLikeGoogleMapsShortShareLink(embedUrl)}
+          disabled={resolving || !looksLikeGoogleMapsShortShareLink(embedNorm)}
           onClick={() => void onResolveShortLink()}
           className="shrink-0 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -99,8 +114,9 @@ export function VaultLocalisationModuleEditor({ content, onPatch }: Props) {
       {resolveError ? <p className="text-xs text-red-600">{resolveError}</p> : null}
       {embedUrl.trim().length > 0 && !previewOk && (
         <p className="text-[11px] text-amber-700">
-          URL d&apos;intégration attendue (<code>/maps/embed</code> ou <code>output=embed</code>) ou
-          lien <code>maps.app.goo.gl</code> à convertir.
+          Collez le code d&apos;intégration Google (iframe) ou une URL avec{' '}
+          <code>/maps/embed</code> / <code>output=embed</code>. Les liens courts{' '}
+          <code>maps.app.goo.gl</code> : bouton convertir.
         </p>
       )}
       {previewOk ? (
@@ -111,7 +127,7 @@ export function VaultLocalisationModuleEditor({ content, onPatch }: Props) {
           <div className="aspect-video max-h-[240px] overflow-hidden border-t border-gray-200 bg-black">
             <iframe
               title="Aperçu carte"
-              src={embedUrl.trim()}
+              src={embedNorm}
               className="h-full min-h-[200px] w-full"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"

@@ -36,10 +36,6 @@ const VISIBILITY: { value: string; label: string }[] = [
   { value: 'HIDDEN', label: 'Masqué' },
 ]
 
-function commercialLabel(value: string): string {
-  return COMMERCIAL.find((o) => o.value === value)?.label ?? value
-}
-
 function ReadOnlyMiniField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
@@ -61,7 +57,7 @@ export interface PackagedProductSettingsPanelProps {
   /** Section intégrée dans la carte identité (sans encadré indigo séparé). */
   embedded?: boolean
   /**
-   * Offre exclusive : produit packagé imposé, type et statut commercial figés (catalogue via « Plus d’actions »).
+   * Offre exclusive : type de produit figé ; statut commercial éditable ici (ou bascule rapide « Plus d’actions »).
    */
   exclusiveOfferRegistryLocks?: boolean
   /** Quand le titre est porté par un parent (ex. section repliable), ne pas dupliquer l’en-tête intégré. */
@@ -84,7 +80,8 @@ export function PackagedProductSettingsPanel({
           <span className="font-medium">Offre exclusive</span>
           <span className="text-violet-900">
             {' '}
-            — produit packagé actif pour le catalogue ; type et statut commercial ne sont pas modifiables ici.
+            — entrée catalogue offre exclusive : type de produit figé ici ; statut commercial modifiable ci-dessous
+            (ou via « Plus d&apos;actions »).
           </span>
         </div>
       )
@@ -126,7 +123,8 @@ export function PackagedProductSettingsPanel({
   const eoHelp =
     exclusiveOfferRegistryLocks && (
       <p className="text-xs text-gray-500">
-        Publication ou dépublication dans le catalogue app mobile : menu « Plus d&apos;actions ».
+        Bascule rapide Publié / Brouillon : menu « Plus d&apos;actions » (identique à un changement manuel du statut
+        ci-dessous puis Enregistrer).
       </p>
     )
 
@@ -233,7 +231,20 @@ export function PackagedProductSettingsPanel({
                 />
               </div>
               <ReadOnlyMiniField label="Type de produit">Offre exclusive</ReadOnlyMiniField>
-              <ReadOnlyMiniField label="Statut commercial">{commercialLabel(draft.commercialStatus)}</ReadOnlyMiniField>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Statut commercial</label>
+                <select
+                  value={draft.commercialStatus}
+                  onChange={(e) => set({ commercialStatus: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                >
+                  {COMMERCIAL.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </>
           ) : (
             <>

@@ -7,6 +7,63 @@ import 'package:url_launcher/url_launcher.dart';
 import '../atoms/atoms.dart';
 import 'kalai_icon.dart';
 
+/// Normalise une saisie marketing : iframe Google Maps complète → URL du `src` ;
+/// décodage des entités HTML ([&#39;] → `'`, [&amp;] → `&`, etc.).
+String normalizeLocalisationEmbedInput(String raw) {
+  var s = raw.trim();
+  if (s.isEmpty) return '';
+  if (RegExp(r'<iframe\b', caseSensitive: false).hasMatch(s)) {
+    final src = _extractIframeSrcFromHtml(s);
+    if (src != null && src.isNotEmpty) s = src;
+  }
+  return _decodeMinimalHtmlEntities(s).trim();
+}
+
+String _decodeMinimalHtmlEntities(String input) {
+  var out = input
+      .replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
+        final code = int.tryParse(m[1] ?? '');
+        if (code == null || code < 0 || code > 0x10ffff) return m[0] ?? '';
+        return String.fromCharCode(code);
+      })
+      .replaceAllMapped(RegExp(r'&#x([\da-fA-F]+);'), (m) {
+        final code = int.tryParse(m[1] ?? '', radix: 16);
+        if (code == null || code < 0 || code > 0x10ffff) return m[0] ?? '';
+        return String.fromCharCode(code);
+      });
+  out = out
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&#39;', "'")
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&amp;', '&');
+  return out;
+}
+
+String? _extractIframeSrcFromHtml(String html) {
+  final quoted = RegExp(
+    r'''<iframe\b[^>]*\bsrc\s*=\s*(["'])([\s\S]*?)\1''',
+    caseSensitive: false,
+  );
+  final mq = quoted.firstMatch(html);
+  if (mq != null) {
+    final v = mq.group(2)?.trim();
+    if (v != null && v.isNotEmpty) return v;
+  }
+  final bare = RegExp(
+    r'<iframe\b[^>]*\bsrc\s*=\s*([^\s>]+)',
+    caseSensitive: false,
+  );
+  final mb = bare.firstMatch(html);
+  if (mb != null) {
+    var v = mb.group(1)?.trim() ?? '';
+    v = v.replaceAll('"', '').replaceAll("'", '');
+    if (v.isNotEmpty) return v;
+  }
+  return null;
+}
+
 /// Carte « localisation » : zone carte (preview statique) + texte, sans barre de funding ni tags.
 ///
 /// Structure alignée sur [InvestmentCard] (hauteur de zone média 242 px, relief type DS).
@@ -49,7 +106,7 @@ class LocalisationCard extends StatelessWidget {
 
   /// Autorise uniquement les embeds Google Maps (sécurité).
   static bool isAllowedEmbedUrl(String raw) {
-    final t = raw.trim();
+    final t = normalizeLocalisationEmbedInput(raw);
     if (t.isEmpty) return false;
     final uri = Uri.tryParse(t.startsWith('http') ? t : 'https://$t');
     if (uri == null) return false;
@@ -78,8 +135,9 @@ class LocalisationCard extends StatelessWidget {
 
   /// Extrait (lat, lng) depuis une URL d'embed Google Maps.
   static ({double lat, double lng})? extractCoords(String embedUrl) {
+    final t = normalizeLocalisationEmbedInput(embedUrl);
     for (final re in [_qRegex, _pbRegex, _atRegex]) {
-      final m = re.firstMatch(embedUrl);
+      final m = re.firstMatch(t);
       if (m != null) {
         final lat = double.tryParse(m.group(1)!);
         final lng = double.tryParse(m.group(2)!);
@@ -122,7 +180,8 @@ class LocalisationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = addressTitle.trim();
     final comp = complement.trim();
-    final coords = extractCoords(embedUrl);
+    final embed = normalizeLocalisationEmbedInput(embedUrl);
+    final coords = extractCoords(embed);
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -277,7 +336,7 @@ class LocalisationCard extends StatelessWidget {
 
   Future<void> _openMapsExternally() async {
     final primary = externalMapUrl?.trim();
-    final embed = embedUrl.trim();
+    final embed = normalizeLocalisationEmbedInput(embedUrl);
     final comp = complement.trim();
 
     Uri? target;

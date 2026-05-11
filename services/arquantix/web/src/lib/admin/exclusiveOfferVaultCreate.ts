@@ -20,6 +20,12 @@ const VAULT_TEMPLATE_DB = 'vault_builder'
 const VAULT_SECTION_KEY = 'vault_builder_v1'
 const VAULT_DEFAULT_LOCALE = 'fr'
 
+/**
+ * Slug `investment_types` (seed Prisma) pour une offre créée depuis la liste Exclusive Offers :
+ * le vault n’est ni coffre (`saving-vaults`), ni bundle (`crypto-bundles`), ni mandat (`mandates`).
+ */
+export const EXCLUSIVE_OFFER_VAULT_INVESTMENT_TYPE_SLUG = 'exclusive-offers'
+
 /** Même structure par défaut que `buildDefaultConfig()` dans api/admin/vaults/route.ts */
 export function defaultVaultBuilderSectionData(): Record<string, unknown> {
   return {
@@ -65,7 +71,10 @@ export async function createExclusiveOfferVaultInTransaction(
     throw new Error('Slug invalide.')
   }
   const urlPath = calculateExclusiveOfferPageUrlPath(slug)
-  const configWithMeta = defaultVaultBuilderSectionData()
+  const configWithMeta = {
+    ...defaultVaultBuilderSectionData(),
+    investmentTypeSlug: EXCLUSIVE_OFFER_VAULT_INVESTMENT_TYPE_SLUG,
+  }
 
   const hubId = await resolveProjectsHubPageId(tx)
   const sortOrder = hubId != null ? await nextChildSortOrderUnderHub(tx, hubId) : 0
@@ -111,7 +120,7 @@ export async function createExclusiveOfferVaultInTransaction(
       commercialStatus: PackagedCommercialStatus.DRAFT,
       visibility: PackagedVisibility.PUBLIC,
       featuredRank: null,
-      categorySlug: null,
+      categorySlug: EXCLUSIVE_OFFER_VAULT_INVESTMENT_TYPE_SLUG,
     },
   })
 
