@@ -308,6 +308,15 @@ export async function translateModuleContent(
       }
       return c
     }
+    case 'VirtualVisualizationModule': {
+      if (typeof c.moduleTitle === 'string') {
+        c.moduleTitle = (await trPlain(c.moduleTitle, opts, stats)) ?? c.moduleTitle
+      }
+      if (typeof c.description === 'string') {
+        c.description = (await trPlain(c.description, opts, stats)) ?? c.description
+      }
+      return c
+    }
     default:
       return c
   }

@@ -27,6 +27,7 @@ export const VAULT_MODULE_TYPES_ADMIN = new Set<string>([
   'StepsModule',
   'VideoBlockArticleModule',
   'LocalisationModule',
+  'VirtualVisualizationModule',
 ])
 
 /**
@@ -37,6 +38,7 @@ export const VAULT_MODULE_TYPES_WEB_EXPLICIT = new Set<string>([
   'TitlePage',
   'VideoBlockArticleModule',
   'LocalisationModule',
+  'VirtualVisualizationModule',
   'MediaImageCarouselModule',
   'DocumentsListModule',
   'SimpleMarkdownContentModule',

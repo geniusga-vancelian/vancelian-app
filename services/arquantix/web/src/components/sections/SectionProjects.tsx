@@ -23,9 +23,6 @@ import {
 } from "@/lib/cms/galleryOfferPhase";
 import { siteCommonCta } from "@/lib/i18n/siteCommonCta";
 
-const OFFER_TAB_ALL = "all" as const;
-type OfferTabId = typeof OFFER_TAB_ALL | ProjectGalleryOfferPhase;
-
 type GalleryRow = {
   /** Identifiant stable (ex. packaged_product id ou slug legacy). */
   id?: string;
@@ -39,40 +36,9 @@ type GalleryRow = {
   fundedPct?: number;
   fundedText?: string;
   amountLine?: string;
-  /** Phase offre (pool) → pastille image + onglets « toutes les offres ». */
+  /** Phase offre (pool) — pastille image si `showAllExclusiveOffers` est false. */
   offerPhase?: ProjectGalleryOfferPhase | null;
 };
-
-/** Ordre aligné sur la maquette : toutes → en cours → à venir → clôturées.
- *  Les libellés sont localisés au moment du rendu via `siteCommonCta`. */
-const OFFER_STATUS_TAB_IDS: OfferTabId[] = [
-  OFFER_TAB_ALL,
-  "in_progress",
-  "upcoming",
-  "delivered",
-];
-
-function offerStatusTabLabel(
-  id: OfferTabId,
-  locale: string | null | undefined,
-): string {
-  switch (id) {
-    case "in_progress":
-      return siteCommonCta(locale, "offer_status_in_progress");
-    case "upcoming":
-      return siteCommonCta(locale, "offer_status_upcoming");
-    case "delivered":
-      return siteCommonCta(locale, "offer_status_delivered");
-    case OFFER_TAB_ALL:
-    default:
-      return siteCommonCta(locale, "offer_status_all");
-  }
-}
-
-function rowMatchesOfferTab(row: GalleryRow, tab: OfferTabId): boolean {
-  if (tab === OFFER_TAB_ALL) return true;
-  return row.offerPhase === tab;
-}
 
 /** @deprecated Utiliser `@/lib/cms/projects` — réexport pour compat imports historiques. */
 export type { ProjectShrink };
@@ -131,6 +97,7 @@ function normalizeCardInfoTags(tags: string[] | undefined): string[] {
 function mapToGalleryProjects(
   rows: GalleryRow[],
   pathLocale: ReturnType<typeof getActiveLocaleFromPathname>,
+  options?: { hideImagePhaseBadge?: boolean },
 ): Project[] {
   return rows.map((p, index) => {
     const infoTags = normalizeCardInfoTags(p.tags);
@@ -149,7 +116,9 @@ function mapToGalleryProjects(
       image:
         p.backgroundImage ||
         "https://placehold.co/378x220/f3f3f3/62656e/png?text=Arquantix",
-      imageStatusLabel: offerGalleryPhaseToImageLabel(p.offerPhase),
+      imageStatusLabel: options?.hideImagePhaseBadge
+        ? ""
+        : offerGalleryPhaseToImageLabel(p.offerPhase),
       infoTags,
       amount,
       title: p.title,
@@ -177,7 +146,6 @@ export function SectionProjects({
   const router = useRouter();
   const pathname = usePathname();
   const pathLocale = getActiveLocaleFromPathname(pathname);
-  const [offerTab, setOfferTab] = React.useState<OfferTabId>(OFFER_TAB_ALL);
   const resolvedTitle = title?.trim() || siteCommonCta(pathLocale, "projects_default_title");
   const resolvedViewAllLabel =
     viewAllButtonText?.trim() || siteCommonCta(pathLocale, "view_all_offers");
@@ -206,22 +174,11 @@ export function SectionProjects({
     rows = items;
   }
 
-  const rowsForView =
-    showAllExclusiveOffers && rows.length > 0
-      ? rows.filter((r) => rowMatchesOfferTab(r, offerTab))
-      : rows;
-
-  const projects = mapToGalleryProjects(rowsForView, pathLocale);
+  /** Grille « toutes les offres » CMS : pas d’onglets, pas de pastille phase (Coming soon / Funding / Funded). */
+  const projects = mapToGalleryProjects(rows, pathLocale, {
+    hideImagePhaseBadge: showAllExclusiveOffers,
+  });
   const sectionLabelText = eyebrow?.trim() ? eyebrow.trim() : undefined;
-
-  const statusTabs =
-    showAllExclusiveOffers && rows.length > 0
-      ? OFFER_STATUS_TAB_IDS.map((id) => ({
-          id,
-          label: offerStatusTabLabel(id, pathLocale),
-          isActive: id === offerTab,
-        }))
-      : [];
 
   return (
     <section
@@ -237,14 +194,13 @@ export function SectionProjects({
           sectionLabel={sectionLabelText}
           title={resolvedTitle}
           subtitle={description}
-          tabs={statusTabs}
+          tabs={[]}
           projects={projects}
           viewAllButtonText={resolvedViewAllLabel}
           viewAllButtonLink={buildLocalizedProjectHubPath(pathLocale)}
           showViewAllButton={!showAllExclusiveOffers}
-          onTabChange={(id) => setOfferTab(id as OfferTabId)}
           onProjectClick={(projectId) => {
-            const row = rowsForView.find(
+            const row = rows.find(
               (r, i) => (r.id || r.slug || `project-${i}`) === projectId,
             );
             if (row?.detailUrl?.trim()) {
@@ -260,11 +216,6 @@ export function SectionProjects({
         {rows.length === 0 ? (
           <p className="mx-auto mt-4 max-w-xl text-center text-sm text-neutral-500">
             {siteCommonCta(pathLocale, "no_offers_to_display")}
-          </p>
-        ) : null}
-        {rows.length > 0 && projects.length === 0 && showAllExclusiveOffers ? (
-          <p className="mx-auto mt-4 max-w-xl text-center text-sm text-muted-foreground">
-            {siteCommonCta(pathLocale, "no_offers_in_category")}
           </p>
         ) : null}
       </Container>

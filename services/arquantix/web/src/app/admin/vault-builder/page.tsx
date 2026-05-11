@@ -34,6 +34,7 @@ import {
 import { MediaField } from '@/components/admin/MediaField'
 import { VaultDocumentsListModuleEditor } from '@/components/admin/VaultDocumentsListModuleEditor'
 import { VaultLocalisationModuleEditor } from '@/components/admin/VaultLocalisationModuleEditor'
+import { VaultVirtualVisualizationModuleEditor } from '@/components/admin/VaultVirtualVisualizationModuleEditor'
 import { VaultMediaCarouselModuleEditor } from '@/components/admin/VaultMediaCarouselModuleEditor'
 import { VaultVideoBlockArticleModuleEditor } from '@/components/admin/VaultVideoBlockArticleModuleEditor'
 import { PagePreviewPanel } from '@/components/admin/PagePreviewPanel'
@@ -2013,6 +2014,13 @@ function AdminVaultBuilderPageInner() {
                                   handlePatchProductModuleContent(module.id, patch)
                                 }
                               />
+                            ) : module.type === 'VirtualVisualizationModule' ? (
+                              <VaultVirtualVisualizationModuleEditor
+                                content={module.content}
+                                onPatch={(patch) =>
+                                  handlePatchProductModuleContent(module.id, patch)
+                                }
+                              />
                             ) : (
                               <>
                                 <textarea
@@ -2388,6 +2396,11 @@ function AdminVaultBuilderPageInner() {
                       />
                     ) : module.type === 'LocalisationModule' ? (
                       <VaultLocalisationModuleEditor
+                        content={module.content}
+                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                      />
+                    ) : module.type === 'VirtualVisualizationModule' ? (
+                      <VaultVirtualVisualizationModuleEditor
                         content={module.content}
                         onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
                       />

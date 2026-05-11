@@ -354,6 +354,20 @@ export const VAULT_MODULE_DEFINITIONS: VaultModuleDefinition[] = [
       embedUrl: '',
     },
   },
+  {
+    type: 'VirtualVisualizationModule',
+    label: 'Visite virtuelle (Virtual visualization)',
+    category: 'Médias',
+    hint: 'Viewer Koma, lien iframe',
+    description:
+      'Titre, description et URL du viewer de visite virtuelle — affichée en iframe pleine largeur sur la fiche.',
+    defaultContent: {
+      moduleTitle: 'Visite virtuelle',
+      description: 'Parcourez le projet en immersion 360°.',
+      visualizationUrl:
+        'https://virtual.komavisualization.com/vrViewer/b1c04f2e-5dd7-41ef-be4e-988ee110a14c/',
+    },
+  },
 ]
 
 /** Structure catégorisée (même principe que `BLOCK_CATALOG` articles). */
@@ -433,6 +447,8 @@ export function getVaultModuleSummary(module: {
       return str(c.title) || 'Vidéos'
     case 'LocalisationModule':
       return str(c.moduleTitle) || 'Localisation'
+    case 'VirtualVisualizationModule':
+      return str(c.moduleTitle) || 'Visite virtuelle'
     case 'StepsModule':
       return str(c.title) || 'Étapes'
     default:

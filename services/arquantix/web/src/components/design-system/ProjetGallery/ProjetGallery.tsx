@@ -283,7 +283,7 @@ export function DSProjectCard({
       {/* Statut offre (pool) — atome Label (FigmaEyebrowLabel) */}
       <div className="h-[220px] relative shrink-0 w-full">
         <img alt={project.title} className="absolute inset-0 max-w-none object-cover pointer-events-none size-full" src={project.image} />
-        {!hideImageEyebrow ? (
+        {!hideImageEyebrow && project.imageStatusLabel.trim() ? (
           <div className="pointer-events-none relative flex size-full items-start p-[20px]">
             <FigmaEyebrowLabel variant="filled" textColor="#ffffff" className="rounded-[8px] bg-black px-[10px] py-[8px]">
               {project.imageStatusLabel}

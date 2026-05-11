@@ -494,6 +494,25 @@ function collectFromModuleContent(
       })
       return
     }
+    case 'VirtualVisualizationModule': {
+      pushField(out, {
+        path: `${basePath}.moduleTitle`,
+        textKind: 'plain',
+        value: c.moduleTitle as string | undefined,
+        moduleIndex,
+        moduleType,
+        scope: 'module',
+      })
+      pushField(out, {
+        path: `${basePath}.description`,
+        textKind: 'plain',
+        value: c.description as string | undefined,
+        moduleIndex,
+        moduleType,
+        scope: 'module',
+      })
+      return
+    }
     default:
       return
   }

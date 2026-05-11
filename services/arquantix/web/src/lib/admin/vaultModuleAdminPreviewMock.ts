@@ -100,6 +100,16 @@ function applyPreviewEnrichments(
           'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d83982.88784439989!2d2.3488!3d48.8534!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47e671d877937b0f%3A0xb975cc456368b1dd!2sParis!5e0!3m2!1sen!2sfr!4v1710000000000!5m2!1sen!2sfr',
       }
 
+    case 'VirtualVisualizationModule':
+      return {
+        ...base,
+        moduleTitle: 'Visite virtuelle (aperçu)',
+        description:
+          'Données de démonstration — le viewer ci-dessous charge un exemple public Koma Visualization.',
+        visualizationUrl:
+          'https://virtual.komavisualization.com/vrViewer/b1c04f2e-5dd7-41ef-be4e-988ee110a14c/',
+      }
+
     case 'SimpleMarkdownContentModule':
       return {
         ...base,

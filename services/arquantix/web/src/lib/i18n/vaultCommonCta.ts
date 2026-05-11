@@ -23,6 +23,9 @@ const FR = {
   video_iframe_fallback: 'Vidéo YouTube',
   map_embed_invalid:
     "Impossible d'afficher la carte : URL d'intégration invalide (attendu : /maps/embed ou output=embed).",
+  virtual_tour: 'Visite panoramique',
+  virtual_tour_embed_invalid:
+    "Impossible d'afficher la visite virtuelle : URL invalide (attendu : lien https vers le viewer).",
   funding_funded: 'Financé',
   funding_rate: 'Taux',
   funding_total: 'Total',
@@ -46,6 +49,9 @@ const EN = {
   video_iframe_fallback: 'YouTube video',
   map_embed_invalid:
     'Unable to display the map: invalid embed URL (expected: /maps/embed or output=embed).',
+  virtual_tour: 'Virtual tour',
+  virtual_tour_embed_invalid:
+    'Unable to display the virtual tour: invalid URL (expected: https link to the viewer).',
   funding_funded: 'Funded',
   funding_rate: 'Rate',
   funding_total: 'Total',
@@ -67,6 +73,9 @@ const IT = {
   video_iframe_fallback: 'Video YouTube',
   map_embed_invalid:
     'Impossibile mostrare la mappa: URL di incorporamento non valido (atteso: /maps/embed o output=embed).',
+  virtual_tour: 'Tour virtuale',
+  virtual_tour_embed_invalid:
+    'Impossibile mostrare la visita virtuale: URL non valido (atteso: link https al viewer).',
   funding_funded: 'Finanziato',
   funding_rate: 'Tasso',
   funding_total: 'Totale',
@@ -95,6 +104,8 @@ export const VAULT_COMMON_CTA_KEYS = [
   'watch_video_youtube',
   'video_iframe_fallback',
   'map_embed_invalid',
+  'virtual_tour',
+  'virtual_tour_embed_invalid',
   'funding_funded',
   'funding_rate',
   'funding_total',

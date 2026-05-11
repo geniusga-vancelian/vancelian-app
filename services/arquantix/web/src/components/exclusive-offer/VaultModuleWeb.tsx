@@ -25,6 +25,7 @@ import { KeyInformationTab } from '@/components/exclusive-offer/KeyInformationTa
 import { VaultMediaCarousel } from '@/components/exclusive-offer/VaultMediaCarousel'
 import { VaultVideoBlockArticle } from '@/components/exclusive-offer/VaultVideoBlockArticle'
 import { VaultLocalisationModuleWeb } from '@/components/exclusive-offer/VaultLocalisationModuleWeb'
+import { VaultVirtualVisualizationModuleWeb } from '@/components/exclusive-offer/VaultVirtualVisualizationModuleWeb'
 import { VaultDocumentsListModuleWeb } from '@/components/exclusive-offer/VaultDocumentsListModuleWeb'
 import { VaultFundingModuleSection } from '@/components/exclusive-offer/VaultFundingModuleSection'
 
@@ -102,6 +103,10 @@ export function VaultModuleWeb({ mod }: { mod: VaultModulePublic }) {
 
     case 'LocalisationModule': {
       return <VaultLocalisationModuleWeb content={c} />
+    }
+
+    case 'VirtualVisualizationModule': {
+      return <VaultVirtualVisualizationModuleWeb content={c} />
     }
 
     case 'MediaImageCarouselModule': {
