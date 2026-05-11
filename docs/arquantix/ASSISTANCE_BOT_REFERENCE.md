@@ -1,6 +1,6 @@
 # Référence technique — Bot d’assistance Vancelian (bout en bout)
 
-> **Objectif de ce document** : décrire **de façon opérationnelle et précise** le fonctionnement **complet** du bot d’assistance (API FastAPI `services/assistance`), du message utilisateur jusqu’à la réponse streamée, la persistance et la consolidation mémoire.  
+> **Objectif de ce document** : décrire **de façon opérationnelle et précise** le fonctionnement **complet** du bot d’assistance (API FastAPI sous `services/arquantix/api/services/assistance/`), du message utilisateur jusqu’à la réponse streamée, la persistance et la consolidation mémoire.  
 > **Ce n’est pas** un remplacement des specs détaillées : elle sert de **carte unique** et renvoie vers les docs de profondeur.
 
 **Dernière mise à jour :** 2026-05-07  
@@ -225,7 +225,7 @@ Les valeurs par défaut sont dans le code / `config.py` / `memory.py` / `agents/
 | `ASSISTANCE_PRODUCT_SLACK_PIPELINE_ENABLED` | Pipeline product enrichi. |
 | `ASSISTANCE_WIKI_*` | Retrieval wiki (dont LLM retriever). |
 | **`ASSISTANCE_RUNTIME_LOOP_ENABLED`** | Boucle agentique **+ function calling** (catalogue `tools/registry.py`). **Défaut : activé (`true`).** Rollback legacy : **`false`**. Voir note ci-dessous. |
-| **`ASSISTANCE_RUNTIME_LOOP_AGENTS`** | Liste CSV des agents qui passent par `run_agent_loop` ; défaut : `compliance`, `product`, `advisor`, `market`, `trust`. |
+| **`ASSISTANCE_RUNTIME_LOOP_AGENTS`** | Liste CSV des agents qui passent par `run_agent_loop` ; défaut interne : `compliance`, `product`, `advisor`, `market`, `trust`, **`action`**. **Remarque sécurité :** `action` est **fusionné** automatiquement dans l’ensemble même si le CSV l’omet ; si **`ASSISTANCE_RUNTIME_LOOP_ENABLED=false`** (ou identité / tools Action indisponibles), une **intention transactionnelle** (`action_request`, `transaction_kind`…) est **bloquée** : message fixe (pas de Phase 1 LLM texte libre côté CAL), audit `action_runtime_unavailable`. |
 
 **Note (PR tool-runtime-default, 2026-05) — runtime / outillage dynamique**
 

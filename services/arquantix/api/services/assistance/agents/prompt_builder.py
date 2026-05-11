@@ -75,6 +75,8 @@ RESPONSE_FRAMEWORK_AGENTS: frozenset[str] = frozenset({
     "compliance.remediation",
     # Lot 4 (anticipé) — agent Trust & Risk dédié à la rassurance.
     "trust",
+    # Agent Actions — widgets transactionnels guidés (dépôt, trading CAL).
+    "action",
 })
 
 

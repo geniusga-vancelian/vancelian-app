@@ -67,6 +67,27 @@ class TestTransactionKind:
         assert out is not None
         assert "transaction_kind" not in out
 
+    def test_routing_confidence_clamped(self):
+        out = normalize_orchestration({"routing_confidence": 9.99})
+        assert out is not None
+        assert out["routing_confidence"] == 1.0
+        low = normalize_orchestration({"routing_confidence": -0.5})
+        assert low is not None
+        assert low["routing_confidence"] == 0.0
+
+    def test_invalid_routing_confidence_dropped(self):
+        out = normalize_orchestration({"routing_confidence": "beaucoup"})
+        assert out is not None
+        assert "routing_confidence" not in out
+
+    def test_deposit_crypto_sell_swap_normalized(self):
+        for tk in ("deposit", "crypto_sell", "crypto_swap"):
+            out = normalize_orchestration(
+                {"business_intent": "action_request", "transaction_kind": tk},
+            )
+            assert out is not None
+            assert out["transaction_kind"] == tk
+
 
 class TestOrchestrationFromRouteToArgs:
     def test_extracts_subset(self):
@@ -83,6 +104,19 @@ class TestOrchestrationFromRouteToArgs:
         assert orch["business_intent"] == "account_operations"
         assert orch["transaction_kind"] == "bundle_invest"
         assert orch["must_acknowledge_emotion"] is True
+
+    def test_extracts_routing_confidence(self):
+        args = {
+            "agent_id": "action",
+            "confidence": 0.9,
+            "reasoning": "x",
+            "business_intent": "action_request",
+            "transaction_kind": "crypto_swap",
+            "routing_confidence": 0.88,
+        }
+        orch = orchestration_from_route_to_args(args)
+        assert orch is not None
+        assert orch["routing_confidence"] == pytest.approx(0.88)
 
     def test_no_orchestration_keys_returns_none(self):
         assert (

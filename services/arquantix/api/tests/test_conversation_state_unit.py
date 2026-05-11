@@ -63,12 +63,16 @@ class TestBuildConversationStatePendingAction:
                 "target_kind": "bundle",
                 "target_id": "550e8400-e29b-41d4-a716-446655440000",
                 "stage": "source_list",
+                "amount_from": 1000.0,
+                "currency_from": "EUR",
             }
         }
         st = build_conversation_state(memory_state=mem, recent_turns=[])
         assert st.pending_action.action_draft_id == "abc-123"
         assert st.pending_action.action_type == "bundle_invest"
         assert st.pending_action.target_kind == "bundle"
+        assert st.pending_action.amount_from == 1000.0
+        assert st.pending_action.currency_from == "EUR"
 
 
 class TestBuildConversationStateOrchestration:

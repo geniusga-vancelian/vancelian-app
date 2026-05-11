@@ -62,6 +62,24 @@ _BLOCKED_FALLBACK_EN = (
     "through the in-app Help section."
 )
 
+# Embeddables CAL (invest / achat guidé depuis le chat) — le juge wiki
+# n'a pas le contexte des cartes interactives ; on évite BLOCK abusifs.
+_PIPELINE_CAL_EMBED_TYPES: frozenset[str] = frozenset({
+    "invest_source_account_list",
+    "invest_confirmation_draft",
+})
+
+
+def _embeds_include_cal_ui(embeds: Optional[list[Any]]) -> bool:
+    if not embeds:
+        return False
+    for item in embeds:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("type") or "").strip() in _PIPELINE_CAL_EMBED_TYPES:
+            return True
+    return False
+
 _PASS1_TOOL_SPEC: dict = {
     "type": "function",
     "function": {
@@ -647,37 +665,64 @@ async def iter_product_slack_pipeline_events(
             if buffered_final is not None:
                 text = buffered_final.strip()
                 if text:
-                    judged = await asyncio.to_thread(
-                        _run_output_judge,
-                        user_message=user_message,
-                        assistant_text=text,
-                        wiki_preload_summary=wiki_summary_for_judge,
-                    )
-                    jverdict = str(judged.get("verdict") or "PASS")
-                    rewritten_apply = str(judged.get("_rewritten") or "").strip()
-                    blocked_fb = False
-                    rewritten_applied = False
-                    if jverdict == "BLOCK":
-                        lang = _language_hint_for_replies(user_message, recent_turns)
-                        text = (
-                            _BLOCKED_FALLBACK_FR
-                            if lang == "fr"
-                            else _BLOCKED_FALLBACK_EN
-                        )
-                        blocked_fb = True
-                        logger.warning(
-                            "product_slack_pipeline.judge_block conv=%s",
+                    skip_judge_cal = _embeds_include_cal_ui(event.embeds)
+                    if skip_judge_cal:
+                        logger.info(
+                            "product_slack_pipeline.output_judge_skipped_cal_embed "
+                            "conv=%s",
                             conversation_id,
                         )
-                    elif jverdict == "REWRITE" and rewritten_apply:
-                        text = rewritten_apply
-                        rewritten_applied = True
-                    judge_meta_out = judge_metadata_for_persistence(
-                        judged,
-                        rewritten_applied=rewritten_applied,
-                        blocked_fallback_applied=blocked_fb,
-                    )
-                    yield AgentEvent(type="delta", content=text)
+                        judged = normalize_judge_llm_payload(
+                            {
+                                "verdict": "PASS",
+                                "notes": "output_judge_skipped_cal_embed",
+                                "confidence": 1.0,
+                                "knowledge_gap": "none",
+                                "disclaimers_triggered": ["none"],
+                            }
+                        )
+                        judge_meta_out = judge_metadata_for_persistence(
+                            judged,
+                            rewritten_applied=False,
+                            blocked_fallback_applied=False,
+                        )
+                        yield AgentEvent(type="delta", content=text)
+                    else:
+                        judged = await asyncio.to_thread(
+                            _run_output_judge,
+                            user_message=user_message,
+                            assistant_text=text,
+                            wiki_preload_summary=wiki_summary_for_judge,
+                        )
+                        jverdict = str(judged.get("verdict") or "PASS")
+                        rewritten_apply = str(
+                            judged.get("_rewritten") or ""
+                        ).strip()
+                        blocked_fb = False
+                        rewritten_applied = False
+                        if jverdict == "BLOCK":
+                            lang = _language_hint_for_replies(
+                                user_message, recent_turns
+                            )
+                            text = (
+                                _BLOCKED_FALLBACK_FR
+                                if lang == "fr"
+                                else _BLOCKED_FALLBACK_EN
+                            )
+                            blocked_fb = True
+                            logger.warning(
+                                "product_slack_pipeline.judge_block conv=%s",
+                                conversation_id,
+                            )
+                        elif jverdict == "REWRITE" and rewritten_apply:
+                            text = rewritten_apply
+                            rewritten_applied = True
+                        judge_meta_out = judge_metadata_for_persistence(
+                            judged,
+                            rewritten_applied=rewritten_applied,
+                            blocked_fallback_applied=blocked_fb,
+                        )
+                        yield AgentEvent(type="delta", content=text)
             yield AgentEvent(
                 type="done",
                 completed=event.completed,

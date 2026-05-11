@@ -695,6 +695,15 @@ class TestProductGuardrailHelper:
         from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
         assert _check_product_guardrail(["show_instrument_card"]) is None
 
+    def test_only_show_invest_source_accounts_returns_none(self):
+        """CAL : liste des comptes source = lecture sourcée serveur."""
+        from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
+        assert _check_product_guardrail(["show_invest_source_accounts"]) is None
+
+    def test_show_invest_confirmation_draft_returns_none(self):
+        from services.assistance.agents.runtime.agent_loop import _check_product_guardrail
+        assert _check_product_guardrail(["show_invest_confirmation_draft"]) is None
+
     def test_list_topics_only_does_not_satisfy_guardrail(self):
         """Un tool inconnu / hors périmètre lecture ne satisfait pas le guard-rail."""
         from services.assistance.agents.runtime.agent_loop import (

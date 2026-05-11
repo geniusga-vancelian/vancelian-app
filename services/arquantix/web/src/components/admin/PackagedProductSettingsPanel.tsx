@@ -1,5 +1,7 @@
 'use client'
 
+import type { ReactNode } from 'react'
+
 import { Package } from 'lucide-react'
 
 export interface ProductRegistryDraft {
@@ -34,6 +36,21 @@ const VISIBILITY: { value: string; label: string }[] = [
   { value: 'HIDDEN', label: 'Masqué' },
 ]
 
+function commercialLabel(value: string): string {
+  return COMMERCIAL.find((o) => o.value === value)?.label ?? value
+}
+
+function ReadOnlyMiniField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="block text-xs font-medium text-gray-500 mb-1">{label}</div>
+      <div className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-900">
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export interface PackagedProductSettingsPanelProps {
   draft: ProductRegistryDraft
   onChange: (next: ProductRegistryDraft) => void
@@ -41,6 +58,14 @@ export interface PackagedProductSettingsPanelProps {
   serverLinked: boolean
   /** Liaison lending active : désactivation packaged refusée côté API. */
   lendingEngineLinked: boolean
+  /** Section intégrée dans la carte identité (sans encadré indigo séparé). */
+  embedded?: boolean
+  /**
+   * Offre exclusive : produit packagé imposé, type et statut commercial figés (catalogue via « Plus d’actions »).
+   */
+  exclusiveOfferRegistryLocks?: boolean
+  /** Quand le titre est porté par un parent (ex. section repliable), ne pas dupliquer l’en-tête intégré. */
+  suppressEmbeddedTitle?: boolean
 }
 
 export function PackagedProductSettingsPanel({
@@ -48,8 +73,22 @@ export function PackagedProductSettingsPanel({
   onChange,
   serverLinked,
   lendingEngineLinked,
+  embedded = false,
+  exclusiveOfferRegistryLocks = false,
+  suppressEmbeddedTitle = false,
 }: PackagedProductSettingsPanelProps) {
   const statusBanner = (() => {
+    if (exclusiveOfferRegistryLocks && serverLinked) {
+      return (
+        <div className="rounded-md border border-violet-200 bg-violet-50/80 px-3 py-2 text-sm text-violet-950">
+          <span className="font-medium">Offre exclusive</span>
+          <span className="text-violet-900">
+            {' '}
+            — produit packagé actif pour le catalogue ; type et statut commercial ne sont pas modifiables ici.
+          </span>
+        </div>
+      )
+    }
     if (serverLinked) {
       return (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
@@ -78,35 +117,71 @@ export function PackagedProductSettingsPanel({
     onChange({ ...draft, ...partial })
   }
 
-  return (
-    <div className="border border-indigo-100 rounded-lg p-4 space-y-4 bg-indigo-50/40">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-          <Package className="w-4 h-4 text-indigo-600" />
-          Product Settings (Product Registry)
-        </h3>
-      </div>
+  const shellClass = embedded
+    ? suppressEmbeddedTitle
+      ? 'space-y-4'
+      : 'pt-4 mt-4 border-t border-gray-200 space-y-4'
+    : 'border border-indigo-100 rounded-lg p-4 space-y-4 bg-indigo-50/40'
 
-      <p className="text-xs text-gray-600">
-        Métadonnées catalogue séparées du contenu CMS ci-dessous. Le slug catalogue peut différer du slug
-        page si besoin.
+  const eoHelp =
+    exclusiveOfferRegistryLocks && (
+      <p className="text-xs text-gray-500">
+        Publication ou dépublication dans le catalogue app mobile : menu « Plus d&apos;actions ».
       </p>
+    )
+
+  return (
+    <div className={shellClass}>
+      {!embedded ? (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Package className="w-4 h-4 text-indigo-600" />
+              Product Settings (Product Registry)
+            </h3>
+          </div>
+          <p className="text-xs text-gray-600">
+            Métadonnées catalogue séparées du contenu CMS ci-dessous. Le slug catalogue peut différer du slug
+            page si besoin.
+          </p>
+        </>
+      ) : suppressEmbeddedTitle ? null : (
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <Package className="w-4 h-4 text-indigo-600 shrink-0" />
+          Product (tags, visibilité)
+        </h3>
+      )}
 
       {statusBanner}
 
-      <label className="flex items-center gap-3 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-          checked={draft.enabled}
-          onChange={(e) => set({ enabled: e.target.checked })}
-        />
-        <span className="text-sm font-medium text-gray-900">Activer comme produit packagé</span>
-      </label>
+      {exclusiveOfferRegistryLocks ? (
+        <label className="flex items-center gap-3 select-none cursor-default">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            checked
+            disabled
+            aria-readonly="true"
+          />
+          <span className="text-sm font-medium text-gray-900">Produit packagé (toujours actif pour une offre exclusive)</span>
+        </label>
+      ) : (
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            checked={draft.enabled}
+            onChange={(e) => set({ enabled: e.target.checked })}
+          />
+          <span className="text-sm font-medium text-gray-900">Activer comme produit packagé</span>
+        </label>
+      )}
 
       <div
-        className={`space-y-3 ${!draft.enabled ? 'opacity-50 pointer-events-none' : ''}`}
-        aria-hidden={!draft.enabled}
+        className={`space-y-3 ${
+          !exclusiveOfferRegistryLocks && !draft.enabled ? 'opacity-50 pointer-events-none' : ''
+        }`}
+        aria-hidden={!exclusiveOfferRegistryLocks && !draft.enabled}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -116,78 +191,123 @@ export function PackagedProductSettingsPanel({
               onChange={(e) => set({ slug: e.target.value })}
               className="w-full px-3 py-2 border rounded-md text-sm font-mono"
               placeholder="mon-produit"
-              disabled={!draft.enabled}
+              disabled={!exclusiveOfferRegistryLocks && !draft.enabled}
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Type de produit</label>
-            <select
-              value={draft.productType}
-              onChange={(e) => set({ productType: e.target.value })}
-              className="w-full px-3 py-2 border rounded-md text-sm"
-              disabled={!draft.enabled}
-            >
-              {PRODUCT_TYPES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Statut commercial</label>
-            <select
-              value={draft.commercialStatus}
-              onChange={(e) => set({ commercialStatus: e.target.value })}
-              className="w-full px-3 py-2 border rounded-md text-sm"
-              disabled={!draft.enabled}
-            >
-              {COMMERCIAL.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Visibilité</label>
-            <select
-              value={draft.visibility}
-              onChange={(e) => set({ visibility: e.target.value })}
-              className="w-full px-3 py-2 border rounded-md text-sm"
-              disabled={!draft.enabled}
-            >
-              {VISIBILITY.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Rang mis en avant</label>
-            <input
-              value={draft.featuredRank}
-              onChange={(e) => {
-                const v = e.target.value
-                if (v === '' || /^\d+$/.test(v)) set({ featuredRank: v })
-              }}
-              className="w-full px-3 py-2 border rounded-md text-sm"
-              placeholder="vide = aucun"
-              inputMode="numeric"
-              disabled={!draft.enabled}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Catégorie (slug)</label>
-            <input
-              value={draft.categorySlug}
-              onChange={(e) => set({ categorySlug: e.target.value })}
-              className="w-full px-3 py-2 border rounded-md text-sm font-mono"
-              placeholder="ex. crypto"
-              disabled={!draft.enabled}
-            />
-          </div>
+          {exclusiveOfferRegistryLocks ? (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Visibilité</label>
+                <select
+                  value={draft.visibility}
+                  onChange={(e) => set({ visibility: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                >
+                  {VISIBILITY.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Rang mis en avant</label>
+                <input
+                  value={draft.featuredRank}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === '' || /^\d+$/.test(v)) set({ featuredRank: v })
+                  }}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  placeholder="vide = aucun"
+                  inputMode="numeric"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Catégorie (slug)</label>
+                <input
+                  value={draft.categorySlug}
+                  onChange={(e) => set({ categorySlug: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md text-sm font-mono"
+                  placeholder="ex. crypto"
+                />
+              </div>
+              <ReadOnlyMiniField label="Type de produit">Offre exclusive</ReadOnlyMiniField>
+              <ReadOnlyMiniField label="Statut commercial">{commercialLabel(draft.commercialStatus)}</ReadOnlyMiniField>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Type de produit</label>
+                <select
+                  value={draft.productType}
+                  onChange={(e) => set({ productType: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  disabled={!draft.enabled}
+                >
+                  {PRODUCT_TYPES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Statut commercial</label>
+                <select
+                  value={draft.commercialStatus}
+                  onChange={(e) => set({ commercialStatus: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  disabled={!draft.enabled}
+                >
+                  {COMMERCIAL.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Visibilité</label>
+                <select
+                  value={draft.visibility}
+                  onChange={(e) => set({ visibility: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  disabled={!draft.enabled}
+                >
+                  {VISIBILITY.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Rang mis en avant</label>
+                <input
+                  value={draft.featuredRank}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === '' || /^\d+$/.test(v)) set({ featuredRank: v })
+                  }}
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  placeholder="vide = aucun"
+                  inputMode="numeric"
+                  disabled={!draft.enabled}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Catégorie (slug)</label>
+                <input
+                  value={draft.categorySlug}
+                  onChange={(e) => set({ categorySlug: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md text-sm font-mono"
+                  placeholder="ex. crypto"
+                  disabled={!draft.enabled}
+                />
+              </div>
+            </>
+          )}
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Tags</label>
@@ -196,16 +316,23 @@ export function PackagedProductSettingsPanel({
             onChange={(e) => set({ tagsText: e.target.value })}
             className="w-full min-h-[72px] px-3 py-2 border rounded-md text-sm font-mono"
             placeholder="virgule ou ligne : defi, premium"
-            disabled={!draft.enabled}
+            disabled={!exclusiveOfferRegistryLocks && !draft.enabled}
           />
           <p className="text-xs text-gray-500 mt-1">Séparés par des virgules ou des retours à la ligne.</p>
         </div>
+        {eoHelp}
       </div>
 
-      {lendingEngineLinked && (
+      {lendingEngineLinked && !exclusiveOfferRegistryLocks && (
         <p className="text-xs font-medium text-amber-800 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
           Liaison lending active : la désactivation du produit packagé sera refusée tant que la liaison existe
           (section Moteur ci-dessous).
+        </p>
+      )}
+      {lendingEngineLinked && exclusiveOfferRegistryLocks && (
+        <p className="text-xs font-medium text-amber-800 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+          Liaison lending active : le produit packagé ne peut pas être retiré tant que la liaison existe (section
+          Moteur ci-dessous).
         </p>
       )}
     </div>

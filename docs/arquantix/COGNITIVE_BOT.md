@@ -17,6 +17,7 @@
 
 * [1. Pourquoi Cognitive Bot v4](#1-pourquoi-cognitive-bot-v4)
 * [2. Vue d'ensemble — les 3 couches](#2-vue-densemble--les-3-couches)
+* [2.1 Couche orchestrateur (router + dimensions métier)](#21-couche-orchestrateur-router--dimensions-métier)
 * [3. Lot 1 — State Engine (`cognitive_state.py`)](#3-lot-1--state-engine-cognitive_statepy)
 * [4. Lot 2 — Objective Engine (`conversation_objective.py`)](#4-lot-2--objective-engine-conversation_objectivepy)
 * [5. Lot 3 — Response Framework (`_response_framework.md`)](#5-lot-3--response-framework-_response_frameworkmd)
@@ -97,6 +98,22 @@ Concrètement, à chaque message client le runtime :
 L'invariant clé : **rien de tout cela ne demande de migration DB**.
 Tout est persisté dans la colonne JSONB
 `assistance_agent_decisions.arguments_json` qui existait déjà.
+
+### 2.1 Couche orchestrateur (router + dimensions métier)
+
+Le routeur n'est pas qu'un *switch* `agent_id` : sur chaque `route_to`, il peut
+remplir des **dimensions orchestrateur** (`business_intent`, `emotional_state`,
+`urgency`, `regulatory_risk`, `data_need`, `secondary_intents`, drapeaux
+`must_*`, `response_style`). Elles sont :
+
+* **normalisées** dans `services/assistance/agents/orchestration_context.py` ;
+* **stockées** dans `arguments_json.orchestration` (audit / admin) ;
+* **injectées** dans le prompt des agents experts via
+  `runtime/agent_loop._format_cognitive_blocks` (clé `memory_state["orchestration"]`
+  posée par `service.start_chat_turn`).
+
+Instructions LLM : `services/assistance/prompts/router_system.md` — section
+**[ORCHESTRATION]**.
 
 ---
 
@@ -887,6 +904,8 @@ après la boucle async. Détail dans [`CLIENT_DISCOVERY.md`](./CLIENT_DISCOVERY.
 | 1 | `services/assistance/service.py` (compute pré + final, persist) |
 | 2 | `services/assistance/agents/conversation_objective.py` |
 | 2 | `services/assistance/agents/runtime/agent_loop.py` (injection) |
+| — | `services/assistance/agents/orchestration_context.py` (normalisation + rendu prompt, 2026-05) |
+| — | `services/assistance/agents/router.py` (tool `route_to` enrichi) |
 | 3 | `services/assistance/prompts/_response_framework.md` |
 | 3 | `services/assistance/agents/prompt_builder.py` (auto-concat) |
 | 4 | `services/assistance/agents/trust.py` |

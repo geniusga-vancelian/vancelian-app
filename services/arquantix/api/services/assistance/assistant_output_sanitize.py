@@ -7,19 +7,24 @@ donc inventer des slugs inexistants. On neutralise ces liens Markdown en
 conservant le libellé visible (texte plat), et on trace le nombre de
 suppressions en log.
 
-Les URLs canoniques d'ouverture d'article restent portées par le widget
-``featured_articles_list`` émis via ``show_featured_articles`` (slugs issus
-de la base ``articles``).
+Si le tour émet un embed ``featured_articles_list`` (slugs issus de la base),
+passer ``trusted_slugs`` à ``strip_untrusted_article_links`` : les liens dont
+le slug est dans cet ensemble sont **conservés** afin que le markdown et le
+widget pointent vers les mêmes articles.
+
+Les URLs canoniques d'ouverture d'article restent aussi portées par le widget
+``featured_articles_list`` émis via ``show_featured_articles``.
 """
 
 from __future__ import annotations
 
 import re
-from typing import List, Tuple
+from typing import AbstractSet, List, Optional, Tuple
+from urllib.parse import unquote
 
-# [libellé](vancelian://app/article/slug-ici) — variantes d'espacement OK.
+# [libellé](vancelian://app/article/slug-ici) — groupe 2 = URL.
 _ARTICLE_MARKDOWN_LINK = re.compile(
-    r"\[([^\]]*)\]\(\s*vancelian://app/article/[^)]*\)",
+    r"\[([^\]]*)\]\(\s*(vancelian://app/article/[^)]*)\)",
     flags=re.IGNORECASE,
 )
 
@@ -28,6 +33,15 @@ _BARE_ARTICLE_VANCELIAN = re.compile(
     r"vancelian://app/article/[^\s\)\]>]+",
     flags=re.IGNORECASE,
 )
+
+
+def _extract_slug_from_vancelian_article_url(url: str) -> Optional[str]:
+    u = url.strip()
+    m = re.match(r"vancelian://app/article/([^)\s?#]+)", u, re.IGNORECASE)
+    if not m:
+        return None
+    return unquote(m.group(1)).strip().rstrip("/")
+
 
 # ── Promesses de bouton sans `ask_user_question` (Cognitive / compliance) ──
 # Le client ne voit de QCM/boutons que si le runtime a émis `choices`.
@@ -161,25 +175,42 @@ def strip_phantom_cta_invitations(text: str) -> Tuple[str, int]:
     return t, removals
 
 
-def strip_untrusted_article_links(text: str) -> Tuple[str, int]:
+def strip_untrusted_article_links(
+    text: str,
+    trusted_slugs: AbstractSet[str] | None = None,
+) -> Tuple[str, int]:
     """Retire les liens article non vérifiés du Markdown assistant.
+
+    Si ``trusted_slugs`` est fourni (slugs issus de ``featured_articles_list``
+    sur le même tour), les liens ``vancelian://app/article/{slug}`` dont le
+    slug appartient à l'ensemble sont **conservés**.
 
     Retourne ``(nouveau_texte, nombre_de_substitutions)``. Idempotent.
     """
     if not text:
         return text, 0
 
+    trusted = frozenset(s.strip() for s in trusted_slugs) if trusted_slugs else frozenset()
     n = 0
 
     def _md_sub(m: re.Match[str]) -> str:
         nonlocal n
+        label = m.group(1).strip()
+        url = m.group(2).strip()
+        slug = _extract_slug_from_vancelian_article_url(url)
+        if slug and slug in trusted:
+            return m.group(0)
         n += 1
-        return m.group(1).strip()
+        return label
 
     out = _ARTICLE_MARKDOWN_LINK.sub(_md_sub, text)
 
-    def _bare_sub(_: re.Match[str]) -> str:
+    def _bare_sub(m: re.Match[str]) -> str:
         nonlocal n
+        url = m.group(0)
+        slug = _extract_slug_from_vancelian_article_url(url)
+        if slug and slug in trusted:
+            return url
         n += 1
         return ""
 

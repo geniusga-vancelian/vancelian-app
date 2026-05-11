@@ -45,6 +45,7 @@ from services.assistance.agents.conversation_continuity import (
     decide_auto_qcm,
     extract_assistant_listing,
     should_embed_previous_bot_turn,
+    strip_listing_block_for_auto_qcm,
 )
 
 
@@ -138,6 +139,34 @@ class TestExtractListing:
         assert out.items[0].label == "Coffre Flexible"
         assert out.items[2].label == "Crypto Baskets"
         assert out.has_question_after is True
+        assert out.list_line_start == 1
+        assert out.list_line_end == 3
+
+    def test_strip_listing_for_auto_qcm_removes_duplicate_block(self):
+        text_plain_q = (
+            "Intro utile.\n"
+            "1. Mon compte\n"
+            "2. Produits\n"
+            "3. Conseils\n"
+            "Que souhaites-tu explorer ?"
+        )
+        listing = extract_assistant_listing(text_plain_q)
+        assert listing is not None
+        stripped = strip_listing_block_for_auto_qcm(text_plain_q, listing)
+        assert stripped == "Intro utile."
+
+    def test_strip_listing_keeps_italic_question_line(self):
+        text = (
+            "Intro.\n"
+            "1. A\n"
+            "2. B\n"
+            "3. C\n"
+            "\n"
+            "*Que souhaites-tu explorer ?*"
+        )
+        listing = extract_assistant_listing(text)
+        assert listing is not None
+        assert strip_listing_block_for_auto_qcm(text, listing) == "Intro."
 
     def test_bullet_list_with_question_trigger_no_qmark(self):
         text = (
@@ -322,6 +351,8 @@ class TestDecideAutoQcm:
         assert d.candidate is not None
         assert len(d.candidate.options) == 3
         assert d.skip_reason is None
+        assert d.source_listing is not None
+        assert d.source_listing.list_line_start == 1
 
     def test_skips_when_runtime_choices_already_present(self):
         d = decide_auto_qcm(

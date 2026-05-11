@@ -9,45 +9,20 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
-  LayoutTemplate,
   Package,
   ChevronDown,
   ChevronRight,
-  Copy,
-  ExternalLink,
   UploadCloud,
-  Eye,
-  Sparkles,
-  Languages,
+  Landmark,
+  Video,
 } from 'lucide-react'
 
 import { buildPackagedPutBodyFromDraft } from '@/lib/admin/packagedProductSchemas'
 import type { LocaleCompletenessLevel } from '@/lib/admin/pageLocaleCompleteness'
 import { AdminEditingLocaleBar } from '@/components/admin/AdminEditingLocaleBar'
 import { useAdminEditingLocale } from '@/components/admin/AdminEditingLocaleContext'
-import {
-  AdminOperationProgressModal,
-  type AdminProgressStep,
-} from '@/components/admin/AdminOperationProgressModal'
-import {
-  I18nFindingsTable,
-  vaultCheckReportAggregate,
-  vaultCheckReportToRows,
-} from '@/components/admin/I18nFindingsTable'
-import {
-  buildAutoTranslateSuccessModal,
-  buildVaultApplySuccessModal,
-  buildVaultScanSuccessModal,
-  initialApplyRunningSteps,
-  initialAutoTranslateRunningSteps,
-  initialScanRunningSteps,
-} from '@/components/admin/vaultLanguageOpModalState'
-import { LocaleCompletenessStrip } from '@/components/admin/LocaleCompletenessStrip'
-import { isValidLocale, supportedLocales, type Locale } from '@/config/locales'
-import {
-  type VaultLocaleLayerInfo,
-  vaultLocaleLayerBadgeLabel,
-} from '@/lib/admin/vaultLocaleSectionStatus'
+import { defaultLocale, isValidLocale, type Locale } from '@/config/locales'
+import { type VaultLocaleLayerInfo } from '@/lib/admin/vaultLocaleSectionStatus'
 import { toastError, toastSuccess, toastWarning } from '@/lib/admin/toast'
 import { isValidSlug, slugify } from '@/lib/utils/slugify'
 import { PackagedEngineLendingSection } from '@/components/admin/PackagedEngineLendingSection'
@@ -61,6 +36,22 @@ import { VaultDocumentsListModuleEditor } from '@/components/admin/VaultDocument
 import { VaultLocalisationModuleEditor } from '@/components/admin/VaultLocalisationModuleEditor'
 import { VaultMediaCarouselModuleEditor } from '@/components/admin/VaultMediaCarouselModuleEditor'
 import { VaultVideoBlockArticleModuleEditor } from '@/components/admin/VaultVideoBlockArticleModuleEditor'
+import { PagePreviewPanel } from '@/components/admin/PagePreviewPanel'
+import { AddVaultModuleModal } from '@/components/admin/AddVaultModuleModal'
+import { VaultModulesSection } from '@/components/admin/VaultModulesSection'
+import {
+  getVaultModuleDefaultContent,
+  getVaultModuleDefinition,
+  getVaultModuleLabel,
+} from '@/lib/admin/vaultModuleCatalog'
+import { CollapsibleAdminSection } from '@/components/admin/CollapsibleAdminSection'
+import { VAULT_BUILDER_IFRAME_PREVIEW_QUERY } from '@/lib/cms/vaultBuilderPreviewConstants'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 /**
  * Attempt to fix JSON strings that contain raw newlines inside quoted values.
@@ -183,314 +174,6 @@ interface VaultDetails {
   localeVaultLayers?: Record<Locale, VaultLocaleLayerInfo>
 }
 
-interface ModuleCatalogItem {
-  type: string
-  label: string
-  defaultContent: Record<string, unknown>
-}
-
-const MODULE_CATALOG: ModuleCatalogItem[] = [
-  {
-    type: 'TitlePage',
-    label: 'Title page module',
-    defaultContent: {
-      title: 'Titre de section',
-      subtitle: '',
-      promoVideoUrl: '',
-      promoVideoUrls: [],
-    },
-  },
-  {
-    type: 'TagsModule',
-    label: 'Tags (puces hero DS)',
-    defaultContent: {
-      tags: ['Japan', '2 chalets'],
-    },
-  },
-  {
-    type: 'FundingModule',
-    label: 'Funding (métriques)',
-    defaultContent: {
-      title: '',
-      displayMode: 'auto_product',
-      footnote: '',
-      items: [
-        { key: 'progress', label: '', enabled: true },
-        { key: 'apr', label: '', enabled: true },
-        { key: 'target', label: '', enabled: true },
-      ],
-      manual: {
-        progressPct: 0,
-        rateDisplay: '',
-        totalDisplay: '',
-      },
-    },
-  },
-  {
-    type: 'SimpleMarkdownContentModule',
-    label: 'Contenu simple Markdown + liens',
-    defaultContent: {
-      moduleTitle: 'À propos',
-      markdown:
-        'Utilisez ce bloc pour afficher du contenu **Markdown** avec paragraphes, listes et mise en forme.',
-      links: [
-        { label: 'En savoir plus', url: 'https://arquantix.com' },
-      ],
-    },
-  },
-  {
-    type: 'CompetitiveAdvantagesModule',
-    label: 'Competitive Advantages Module',
-    defaultContent: {
-      title: 'Pourquoi cette offre ?',
-      rows: [
-        {
-          icon: 'assignment_turned_in_rounded',
-          iconBackgroundColor: '#1E88E5',
-          category: 'content',
-          title: 'Process rigoureux',
-          description: 'Une sélection stricte des opportunités avec gouvernance claire.',
-        },
-        {
-          icon: 'insights_rounded',
-          iconBackgroundColor: '#16A34A',
-          category: 'success',
-          title: 'Suivi data',
-          description: 'Des indicateurs lisibles pour piloter la performance.',
-        },
-      ],
-    },
-  },
-  {
-    type: 'FaqAccordionModule',
-    label: 'FAQ Accordion Module',
-    defaultContent: {
-      title: 'FAQ',
-      intro: '',
-      footerLinkLabel: 'Voir les FAQ du projet',
-      footerCollectionSlug: 'getting-started',
-      footerCategorySlug: 'investing-basics',
-      footerFilterLabel: '',
-      items: [
-        { articleSlug: 'what-is-investing' },
-      ],
-    },
-  },
-  {
-    type: 'ContentBasDePageSansModuleBlanc',
-    label: 'content bas de page sans module blanc',
-    defaultContent: {
-      markdown:
-        "En participant à ce programme, vous confirmez avoir lu et accepté nos [conditions générales](https://arquantix.com).",
-    },
-  },
-  {
-    type: 'MarktingCardLargePortrait',
-    label: 'MarktingCardLargePortrait',
-    defaultContent: {
-      title: 'Fluidifiez vos processus de travail',
-      imageAssetPath: 'assets/marketing_card_large_portrait.png',
-      heightSize: 'large',
-    },
-  },
-  {
-    type: 'MarketingCardsSmallCarouselModule',
-    label: 'Marketing Cards Small Carousel',
-    defaultContent: {
-      items: [],
-    },
-  },
-  {
-    type: 'MarketingCardsSmallSlidingCarrousel_Portrait',
-    label: 'Marketing Cards Small Sliding Carrousel (Portrait)',
-    defaultContent: {
-      title: '',
-      carousel: false,
-      showBullets: true,
-      visibleCardsCount: 1.2,
-      cardAspectRatio: '1.2:1',
-      items: [
-        {
-          imageUrl: 'https://picsum.photos/600/800',
-          redirectUrl: 'https://arquantix.com',
-          title: 'Carte portrait',
-          description: '',
-        },
-      ],
-    },
-  },
-  {
-    type: 'MarketingCardsSmallSlidingCarrousel_Paysage',
-    label: 'Marketing Cards Small Sliding Carrousel (Paysage)',
-    defaultContent: {
-      title: '',
-      carousel: false,
-      showBullets: true,
-      items: [
-        {
-          imageUrl: 'https://picsum.photos/800/600',
-          redirectUrl: 'https://arquantix.com',
-          title: 'Carte paysage',
-          description: '',
-        },
-      ],
-    },
-  },
-  {
-    type: 'TransactionLatest10Module',
-    label: 'Transaction Latest 10 Module',
-    defaultContent: {
-      title: 'Dernières transactions',
-      limit: 10,
-    },
-  },
-  {
-    type: 'BlogALaUne',
-    label: 'Blog A la Une',
-    defaultContent: {
-      title: 'À la une',
-      limit: 3,
-    },
-  },
-  {
-    type: 'AllocationModule',
-    label: 'Allocation (Donuts)',
-    defaultContent: {
-      title: 'Allocation',
-      introText: 'Votre portefeuille génère des intérêts grâce à une allocation dynamique.',
-      size: 'large',
-      slices: [
-        { label: 'Energy', percentage: 38.2, colorHex: '#374151' },
-        { label: 'Real estate', percentage: 28.5, colorHex: '#6B7280' },
-        { label: 'Crypto', percentage: 15.0, colorHex: '#9CA3AF' },
-        { label: 'Stablecoins', percentage: 10.3, colorHex: '#D1D5DB' },
-        { label: 'Equity', percentage: 5.7, colorHex: '#E5E7EB' },
-        { label: 'Others', percentage: 2.3, colorHex: '#CBD5E1' },
-      ],
-    },
-  },
-  {
-    type: 'KeyInformationModule',
-    label: 'Key Information',
-    defaultContent: {
-      title: 'Informations clés',
-      ctaLabel: '',
-      ctaHref: '',
-      rows: [
-        {
-          label: "Type d'investissement",
-          value: 'Co-financement en actif numérique',
-          showInfoIcon: false,
-          infoLinkArticle: '',
-        },
-        {
-          label: 'Rendement annuel fixe',
-          value: '10,7% à 11,5 % APR',
-          showInfoIcon: false,
-          infoLinkArticle: '',
-        },
-        {
-          label: 'Paiement des intérêts',
-          value: 'Quotidien',
-          showInfoIcon: false,
-          infoLinkArticle: '',
-        },
-        {
-          label: "Période d'engagement",
-          value: '18 mois',
-          showInfoIcon: false,
-          infoLinkArticle: '',
-        },
-        {
-          label: 'Montant de souscription',
-          value: "Pas de ticket d'entrée minimum",
-          showInfoIcon: false,
-          infoLinkArticle: '',
-        },
-        {
-          label: 'Date de livraison',
-          value: '2025',
-          showInfoIcon: false,
-          infoLinkArticle: '',
-        },
-      ],
-    },
-  },
-  {
-    type: 'MediaImageCarouselModule',
-    label: 'Carrousel d’images (médiathèque)',
-    defaultContent: {
-      moduleTitle: '',
-      description: '',
-      imageMediaIds: [],
-    },
-  },
-  {
-    type: 'DocumentsListModule',
-    label: 'Liste de documents (médiathèque)',
-    defaultContent: {
-      moduleTitle: '',
-      description: '',
-      documentEntries: [],
-    },
-  },
-  {
-    type: 'PerformanceChart',
-    label: 'Performance Chart (Bundle)',
-    defaultContent: {
-      title: 'Performance',
-    },
-  },
-  {
-    type: 'StepsModule',
-    label: 'Étapes / timeline (Steps)',
-    defaultContent: {
-      title: 'Étapes du projet',
-      rightLabel: '',
-      subtitle: '',
-      items: [
-        {
-          dayLabel: 'Étape 1',
-          date: '1er trimestre 2026',
-          title: 'Lancement',
-          description: 'Description courte de cette étape.',
-          tags: ['Lancement'],
-        },
-        {
-          dayLabel: 'Étape 2',
-          date: '2e trimestre 2026',
-          title: 'Déploiement',
-          description: 'Suite du calendrier.',
-          tags: [],
-        },
-      ],
-    },
-  },
-  {
-    type: 'VideoBlockArticleModule',
-    label: 'Vidéos (cartes poster + lecture)',
-    defaultContent: {
-      title: 'Vidéos',
-      items: [
-        {
-          title: 'Titre de la vidéo',
-          videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-          date: '7 avril 2026',
-        },
-      ],
-    },
-  },
-  {
-    type: 'LocalisationModule',
-    label: 'Localisation (titre + description + carte Google)',
-    defaultContent: {
-      moduleTitle: 'Localisation',
-      description: 'Retrouvez l’emplacement du projet sur la carte ci-dessous.',
-      embedUrl: '',
-    },
-  },
-]
-
 const DEFAULT_CONFIG: LandingConfig = {
   templateKey: 'PageSimpleNavBarTopTitlePageContent',
   navbar: {
@@ -568,7 +251,7 @@ function upsertTitlePagePromoVideo(
   modules: LandingModule[],
   patch: { url: string; mediaId: string | null },
 ): LandingModule[] {
-  const catalogItem = MODULE_CATALOG.find((item) => item.type === 'TitlePage')
+  const catalogItem = getVaultModuleDefinition('TitlePage')
   if (!catalogItem) return modules
   const baseDefault = structuredClone(catalogItem.defaultContent) as TitlePageJson
 
@@ -601,6 +284,12 @@ function upsertTitlePagePromoVideo(
   })
 }
 
+const PRODUCT_REGISTRY_VISIBILITY_SUMMARY: Record<string, string> = {
+  PUBLIC: 'Public',
+  PRIVATE: 'Privé',
+  HIDDEN: 'Masqué',
+}
+
 function AdminVaultBuilderPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -609,22 +298,7 @@ function AdminVaultBuilderPageInner() {
   const { locale: editingLocale, setLocale: setEditingLocale } = useAdminEditingLocale()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [copyLocaleBusy, setCopyLocaleBusy] = useState(false)
-  const [autoTranslateBusy, setAutoTranslateBusy] = useState(false)
-  const [checkLangBusy, setCheckLangBusy] = useState(false)
-  const [checkLangApplyBusy, setCheckLangApplyBusy] = useState(false)
-  const [checkLangReport, setCheckLangReport] = useState<unknown>(null)
-  const [vaultOpModal, setVaultOpModal] = useState<{
-    title: string
-    subtitle?: string
-    phase: 'running' | 'success' | 'error'
-    steps: AdminProgressStep[]
-    summaryLines: string[]
-    errorMessage?: string
-    footerHint?: string
-  } | null>(null)
   const [publishVaultBusy, setPublishVaultBusy] = useState(false)
-  const [showPublishedPeek, setShowPublishedPeek] = useState(false)
   const [packagedPublishBusy, setPackagedPublishBusy] = useState(false)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -639,7 +313,6 @@ function AdminVaultBuilderPageInner() {
   const [newTitle, setNewTitle] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
-  const [moduleTypeToAdd, setModuleTypeToAdd] = useState(MODULE_CATALOG[0].type)
   const [portfolioProducts, setPortfolioProducts] = useState<PortfolioProduct[]>([])
   const [portfolioProductsExpanded, setPortfolioProductsExpanded] = useState(true)
   const [selectedProductCode, setSelectedProductCode] = useState<string | null>(null)
@@ -651,7 +324,11 @@ function AdminVaultBuilderPageInner() {
   const [productSortOrders, setProductSortOrders] = useState<Record<string, number>>({})
   const [productIsPublished, setProductIsPublished] = useState(false)
   const [productPublishStates, setProductPublishStates] = useState<Record<string, boolean>>({})
-  const [productModuleTypeToAdd, setProductModuleTypeToAdd] = useState(MODULE_CATALOG[0].type)
+  const [vaultAddModuleOpen, setVaultAddModuleOpen] = useState(false)
+  const [productAddModuleOpen, setProductAddModuleOpen] = useState(false)
+  const [previewLocale, setPreviewLocale] = useState<Locale>(defaultLocale)
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const [vaultPreviewReloadEpoch, setVaultPreviewReloadEpoch] = useState(0)
 
   // ── Create Bundle state ──
   const [showCreateBundle, setShowCreateBundle] = useState(false)
@@ -668,10 +345,6 @@ function AdminVaultBuilderPageInner() {
   >([])
   const [loadingInstruments, setLoadingInstruments] = useState(false)
 
-  const selectedModuleLabel = useMemo(
-    () => MODULE_CATALOG.find((m) => m.type === moduleTypeToAdd)?.label ?? moduleTypeToAdd,
-    [moduleTypeToAdd]
-  )
   const normalizedNewSlug = useMemo(() => slugify(newSlug.trim()), [newSlug])
 
   const vaultsByCategoryEntries = useMemo(() => {
@@ -706,6 +379,10 @@ function AdminVaultBuilderPageInner() {
     const q = searchParams?.get('editingLocale')
     if (q && isValidLocale(q)) setEditingLocale(q)
   }, [searchParams, setEditingLocale])
+
+  useEffect(() => {
+    setPreviewLocale(editingLocale)
+  }, [editingLocale])
 
   const fetchVaultPayload = useCallback(
     async (
@@ -971,10 +648,13 @@ function AdminVaultBuilderPageInner() {
     setDetails((prev) => (prev ? updater(prev) : prev))
   }
 
-  const handleAddModule = () => {
+  const addVaultModuleOfType = (type: string) => {
     if (!details) return
-    const catalogItem = MODULE_CATALOG.find((item) => item.type === moduleTypeToAdd)
-    if (!catalogItem) return
+    if (!getVaultModuleDefinition(type)) {
+      toastError(`Type de module inconnu : ${type}`)
+      return
+    }
+    const content = getVaultModuleDefaultContent(type)
     updateDetails((prev) => ({
       ...prev,
       config: {
@@ -983,14 +663,24 @@ function AdminVaultBuilderPageInner() {
           ...prev.config.modules,
           {
             id: crypto.randomUUID(),
-            type: catalogItem.type,
+            type,
             enabled: true,
-            content: structuredClone(catalogItem.defaultContent),
+            content,
           },
         ],
       },
     }))
-    toastSuccess(`Module "${selectedModuleLabel}" ajouté.`)
+    toastSuccess(`Module « ${getVaultModuleLabel(type)} » ajouté.`)
+  }
+
+  const reorderDetailModulesByIds = (orderedIds: string[]) => {
+    if (!details) return
+    updateDetails((prev) => {
+      if (!prev) return prev
+      const map = new Map(prev.config.modules.map((m) => [m.id, m]))
+      const next = orderedIds.map((id) => map.get(id)).filter(Boolean) as LandingModule[]
+      return { ...prev, config: { ...prev.config, modules: next } }
+    })
   }
 
   const handleUpdateModuleContent = (moduleId: string, raw: string) => {
@@ -1021,22 +711,6 @@ function AdminVaultBuilderPageInner() {
           m.id === moduleId ? { ...m, content: { ...m.content, ...patch } } : m
         ),
       },
-    }))
-  }
-
-  const moveModule = (moduleId: string, direction: 'up' | 'down') => {
-    if (!details) return
-    const modules = [...details.config.modules]
-    const index = modules.findIndex((m) => m.id === moduleId)
-    if (index < 0) return
-    const target = direction === 'up' ? index - 1 : index + 1
-    if (target < 0 || target >= modules.length) return
-    const tmp = modules[index]
-    modules[index] = modules[target]
-    modules[target] = tmp
-    updateDetails((prev) => ({
-      ...prev,
-      config: { ...prev.config, modules },
     }))
   }
 
@@ -1075,7 +749,7 @@ function AdminVaultBuilderPageInner() {
   }
 
   const handleSave = async () => {
-    if (!details || !productDraft) return
+    if (!details) return
     setSaving(true)
     try {
       const res = await fetch(`/api/admin/vaults/${details.page.slug}`, {
@@ -1085,7 +759,7 @@ function AdminVaultBuilderPageInner() {
         body: JSON.stringify({
           locale: editingLocale,
           title: details.page.title ?? '',
-          description: details.page.description ?? '',
+          description: '',
           config: details.config,
         }),
       })
@@ -1097,12 +771,26 @@ function AdminVaultBuilderPageInner() {
         throw new Error(issues || payload.error || 'Sauvegarde impossible')
       }
 
+      setVaultPreviewReloadEpoch((n) => n + 1)
+      updateDetails((prev) => ({
+        ...prev,
+        page: { ...prev.page, description: '' },
+      }))
+
+      if (!productDraft) {
+        toastSuccess('Brouillon vault enregistré.')
+        await refreshVaults()
+        return
+      }
+
       let putBody
       try {
         putBody = buildPackagedPutBodyFromDraft(productDraft)
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Données produit packagé invalides'
         toastError(msg)
+        toastWarning('Brouillon vault enregistré, mais pas le registre produit packagé.')
+        await refreshVaults()
         return
       }
 
@@ -1184,253 +872,6 @@ function AdminVaultBuilderPageInner() {
     }
   }
 
-  const handleCopyVaultLocale = async (toLocale: Locale) => {
-    if (!details?.page.slug) return
-    const fromLocale: Locale = 'fr'
-    if (
-      !window.confirm(
-        `Copier le français (${fromLocale.toUpperCase()}) vers ${toLocale.toUpperCase()} ?\n\n` +
-          'Les titres et descriptions PageI18n seront copiés. Le JSON du vault sera écrit en brouillon (DRAFT) pour la langue cible ; le contenu publié existant pour cette langue ne sera pas modifié par cette action.',
-      )
-    ) {
-      return
-    }
-    setCopyLocaleBusy(true)
-    try {
-      const res = await fetch(
-        `/api/admin/vaults/${encodeURIComponent(details.page.slug)}/copy-locale`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ fromLocale, toLocale }),
-        },
-      )
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(
-          typeof payload.error === 'string' ? payload.error : 'Copie impossible',
-        )
-      }
-      toastSuccess(`Contenu ${toLocale.toUpperCase()} : brouillon mis à jour depuis le FR.`)
-      setEditingLocale(toLocale)
-      await reloadVaultDetails(details.page.slug, toLocale)
-    } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : 'Copie impossible')
-    } finally {
-      setCopyLocaleBusy(false)
-    }
-  }
-
-  const handleAutoTranslateVaultLocale = async (toLocale: Locale) => {
-    if (toLocale === 'fr') return
-    if (!details?.page.slug) return
-    if (
-      !window.confirm(
-        `Auto-traduction FR → ${toLocale.toUpperCase()} (brouillon uniquement) ?\n\n` +
-          'Étapes : lecture du contenu FR → traduction OpenAI des champs autorisés → contrôle linguistique → enregistrement du DRAFT et PageI18n cible.\n\n' +
-          'Le PUBLISHED de cette langue ne sera pas modifié. Une relecture humaine reste nécessaire.',
-      )
-    ) {
-      return
-    }
-    const slug = details.page.slug
-    const locLabel = toLocale.toUpperCase()
-    setAutoTranslateBusy(true)
-    setVaultOpModal({
-      title: `Auto-traduction FR → ${locLabel}`,
-      subtitle: slug,
-      phase: 'running',
-      steps: initialAutoTranslateRunningSteps(locLabel),
-      summaryLines: [],
-    })
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => resolve())
-    })
-    try {
-      const res = await fetch(
-        `/api/admin/vaults/${encodeURIComponent(slug)}/auto-translate-locale`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ targetLocale: toLocale }),
-        },
-      )
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(
-          typeof payload.error === 'string'
-            ? [payload.error, payload.detail].filter(Boolean).join(' — ')
-            : 'Auto-traduction impossible',
-        )
-      }
-      const built = buildAutoTranslateSuccessModal(payload, locLabel, slug)
-      setVaultOpModal({
-        title: `Auto-traduction FR → ${locLabel}`,
-        subtitle: slug,
-        phase: 'success',
-        ...built,
-      })
-      setEditingLocale(toLocale)
-      await reloadVaultDetails(slug, toLocale)
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Auto-traduction impossible'
-      setVaultOpModal({
-        title: `Auto-traduction FR → ${locLabel}`,
-        subtitle: slug,
-        phase: 'error',
-        steps: [
-          {
-            id: 'fail',
-            label: 'Traduction ou enregistrement',
-            detail: msg,
-            status: 'error',
-          },
-        ],
-        summaryLines: [],
-        errorMessage: msg,
-      })
-      toastError(msg)
-    } finally {
-      setAutoTranslateBusy(false)
-    }
-  }
-
-  const handleCheckModuleLanguageScan = async () => {
-    if (!details?.page.slug) return
-    const slug = details.page.slug
-    const locLabel = editingLocale.toUpperCase()
-    setCheckLangBusy(true)
-    setCheckLangReport(null)
-    setVaultOpModal({
-      title: `Analyser les modules — ${locLabel}`,
-      subtitle: slug,
-      phase: 'running',
-      steps: initialScanRunningSteps(locLabel),
-      summaryLines: [],
-    })
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => resolve())
-    })
-    try {
-      const res = await fetch(
-        `/api/admin/vaults/${encodeURIComponent(slug)}/check-module-language/scan`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ targetLocale: editingLocale }),
-        },
-      )
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(typeof payload.error === 'string' ? payload.error : 'Scan impossible')
-      }
-      setCheckLangReport(payload)
-      const built = buildVaultScanSuccessModal(payload, locLabel, slug)
-      setVaultOpModal({
-        title: `Analyser les modules — ${locLabel}`,
-        subtitle: slug,
-        phase: 'success',
-        ...built,
-      })
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Scan impossible'
-      setVaultOpModal({
-        title: `Analyser les modules — ${locLabel}`,
-        subtitle: slug,
-        phase: 'error',
-        steps: [
-          {
-            id: 'scan-fail',
-            label: 'Analyse linguistique',
-            detail: msg,
-            status: 'error',
-          },
-        ],
-        summaryLines: [],
-        errorMessage: msg,
-      })
-      toastError(msg)
-    } finally {
-      setCheckLangBusy(false)
-    }
-  }
-
-  const handleCheckModuleLanguageApply = async () => {
-    if (!details?.page.slug) return
-    const slug = details.page.slug
-    const locLabel = editingLocale.toUpperCase()
-    if (
-      !window.confirm(
-        `Corriger automatiquement le brouillon ${locLabel} ?\n\n` +
-          'Seuls les champs détectés comme mauvaise langue ou mixtes (allowlist) seront retraduits vers cette langue. ' +
-          'Écriture DRAFT (+ PageI18n) uniquement — pas le PUBLISHED.\n\n' +
-          'Les textes NEEDS_REVIEW (trop courts) ne sont pas modifiés.',
-      )
-    ) {
-      return
-    }
-    setCheckLangApplyBusy(true)
-    setVaultOpModal({
-      title: `Corriger le brouillon — ${locLabel}`,
-      subtitle: slug,
-      phase: 'running',
-      steps: initialApplyRunningSteps(locLabel),
-      summaryLines: [],
-    })
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => resolve())
-    })
-    try {
-      const res = await fetch(
-        `/api/admin/vaults/${encodeURIComponent(slug)}/check-module-language/apply`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ targetLocale: editingLocale }),
-        },
-      )
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(
-          [payload.error, payload.detail].filter(Boolean).join(' — ') || 'Correction impossible',
-        )
-      }
-      const built = buildVaultApplySuccessModal(payload, locLabel, slug)
-      setVaultOpModal({
-        title: `Corriger le brouillon — ${locLabel}`,
-        subtitle: slug,
-        phase: 'success',
-        ...built,
-      })
-      setCheckLangReport({ ...payload, mode: 'afterApply' })
-      await reloadVaultDetails(slug, editingLocale)
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Correction impossible'
-      setVaultOpModal({
-        title: `Corriger le brouillon — ${locLabel}`,
-        subtitle: slug,
-        phase: 'error',
-        steps: [
-          {
-            id: 'apply-fail',
-            label: 'Correction ou enregistrement du brouillon',
-            detail: msg,
-            status: 'error',
-          },
-        ],
-        summaryLines: [],
-        errorMessage: msg,
-      })
-      toastError(msg)
-    } finally {
-      setCheckLangApplyBusy(false)
-    }
-  }
-
   const activeVaultLayer = useMemo(
     () => details?.localeVaultLayers?.[editingLocale],
     [details?.localeVaultLayers, editingLocale],
@@ -1443,17 +884,36 @@ function AdminVaultBuilderPageInner() {
     )
   }, [activeVaultLayer])
 
-  const vaultModuleLangRows = useMemo(() => {
-    if (!details?.page.slug || checkLangReport == null) return []
-    return vaultCheckReportToRows(checkLangReport, details.page.slug, editingLocale, {
-      exclusiveOfferWorkspace: details.packagedProduct?.productType === 'EXCLUSIVE_OFFER',
-    })
-  }, [checkLangReport, details?.page.slug, details?.packagedProduct?.productType, editingLocale])
+  const vaultLendingSectionSummary = useMemo(() => {
+    if (!details?.packagedProduct) return 'aucun produit packagé'
+    return details.packagedProduct.lendingEngineLinked ? 'moteur associé' : 'moteur non associé'
+  }, [details?.packagedProduct])
 
-  const vaultModuleLangAggregate = useMemo(
-    () => vaultCheckReportAggregate(checkLangReport),
-    [checkLangReport],
-  )
+  const promoVideoSectionSummary = useMemo(() => {
+    if (!details) return ''
+    const { url, mediaId } = readPromoVideoFromVaultModules(details.config.modules)
+    const u = url.trim()
+    if (u) return u
+    if (mediaId) return 'Vidéo (médiathèque)'
+    return 'Aucune'
+  }, [details])
+
+  const productRegistrySectionSummary = useMemo(() => {
+    if (!productDraft) return ''
+    if (!productDraft.enabled) return 'Registre désactivé'
+    const vis = PRODUCT_REGISTRY_VISIBILITY_SUMMARY[productDraft.visibility] ?? productDraft.visibility
+    const rawTags = productDraft.tagsText
+      .split(/[,\n\r]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const tagsHint =
+      rawTags.length === 0
+        ? 'sans tags'
+        : rawTags.length <= 2
+          ? rawTags.join(', ')
+          : `${rawTags.slice(0, 2).join(', ')} +${rawTags.length - 2}`
+    return `${productDraft.slug} · ${vis} · ${tagsHint}`
+  }, [productDraft])
 
   const handlePublishVaultLocale = async () => {
     if (!details?.page.slug) return
@@ -1466,7 +926,7 @@ function AdminVaultBuilderPageInner() {
         `Publier le contenu vault (modules) pour ${editingLocale.toUpperCase()} ?\n\n` +
           'Le brouillon actuel remplacera la version publiée pour cette langue uniquement. ' +
           'Les autres langues ne sont pas modifiées.\n\n' +
-          'Rappel : titre et description (PageI18n) sont enregistrés à chaque « Enregistrer le brouillon » et peuvent déjà être visibles côté SEO ; seul le corps du vault suit ce bouton « Publier la langue ».',
+          'Rappel : le nom d’offre (admin) est enregistré à chaque « Enregistrer (brouillon) » ; seul le corps du vault (modules) suit ce bouton « Publier ».',
       )
     ) {
       return
@@ -1491,6 +951,7 @@ function AdminVaultBuilderPageInner() {
       toastSuccess(
         `Langue ${editingLocale.toUpperCase()} : version publiée du vault (modules) mise à jour.`,
       )
+      setVaultPreviewReloadEpoch((n) => n + 1)
       await reloadVaultDetails(details.page.slug)
     } catch (e: unknown) {
       toastError(e instanceof Error ? e.message : 'Publication impossible')
@@ -1505,13 +966,14 @@ function AdminVaultBuilderPageInner() {
   ): LandingModule[] => {
     let result = [...modules]
     if (!result.some((m) => m.type === 'TitlePage')) {
-      const catalogItem = MODULE_CATALOG.find((item) => item.type === 'TitlePage')!
+      const titleDef = getVaultModuleDefinition('TitlePage')
+      if (!titleDef) return result
       result = [
         {
           id: crypto.randomUUID(),
           type: 'TitlePage',
           enabled: true,
-          content: structuredClone(catalogItem.defaultContent),
+          content: structuredClone(titleDef.defaultContent),
         },
         ...result,
       ]
@@ -1935,19 +1397,27 @@ function AdminVaultBuilderPageInner() {
     }
   }
 
-  const handleAddProductModule = () => {
-    const catalogItem = MODULE_CATALOG.find((item) => item.type === productModuleTypeToAdd)
-    if (!catalogItem) return
+  const addProductModuleOfType = (type: string) => {
+    if (!getVaultModuleDefinition(type)) {
+      toastError(`Type de module inconnu : ${type}`)
+      return
+    }
+    const content = getVaultModuleDefaultContent(type)
     setProductModules((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
-        type: catalogItem.type,
+        type,
         enabled: true,
-        content: structuredClone(catalogItem.defaultContent),
+        content,
       },
     ])
-    toastSuccess(`Module "${MODULE_CATALOG.find((m) => m.type === productModuleTypeToAdd)?.label ?? productModuleTypeToAdd}" ajouté.`)
+    toastSuccess(`Module « ${getVaultModuleLabel(type)} » ajouté.`)
+  }
+
+  const reorderProductModulesByIds = (orderedIds: string[]) => {
+    const map = new Map(productModules.map((m) => [m.id, m]))
+    setProductModules(orderedIds.map((id) => map.get(id)).filter(Boolean) as LandingModule[])
   }
 
   const handleUpdateProductModuleContent = (moduleId: string, raw: string) => {
@@ -1967,16 +1437,6 @@ function AdminVaultBuilderPageInner() {
         m.id === moduleId ? { ...m, content: { ...m.content, ...patch } } : m
       ),
     )
-  }
-
-  const moveProductModule = (moduleId: string, direction: 'up' | 'down') => {
-    const modules = [...productModules]
-    const index = modules.findIndex((m) => m.id === moduleId)
-    if (index < 0) return
-    const target = direction === 'up' ? index - 1 : index + 1
-    if (target < 0 || target >= modules.length) return
-    ;[modules[index], modules[target]] = [modules[target], modules[index]]
-    setProductModules(modules)
   }
 
   const REQUIRED_PRODUCT_MODULE_TYPES = ['TitlePage', 'AllocationModule', 'PerformanceChart']
@@ -2002,7 +1462,7 @@ function AdminVaultBuilderPageInner() {
             {eoWorkspace ? 'Exclusive Offer — Vault Builder' : 'Vault Builder'}
           </h1>
           <p className="text-gray-600 mt-1">
-            Créer des vaults à la demande via le builder. Template, navbar, modules et contenu dynamique.
+            Créer des vaults à la demande via le builder : identité, médias, registre catalogue, modules et contenu dynamique.
           </p>
           <div className="mt-2 flex flex-wrap gap-3 text-sm">
             <Link
@@ -2020,7 +1480,7 @@ function AdminVaultBuilderPageInner() {
             <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
               <p className="font-semibold">Édition Exclusive Offer</p>
               <p className="mt-1 text-indigo-900/90">
-                Parcours recommandé : <strong>Product Settings</strong> (registre) →{' '}
+                Parcours recommandé : <strong>informations générales</strong> (identité, médias, registre) →{' '}
                 <strong>Moteur lending</strong> → contenu (modules ci-dessous).{' '}
                 <Link
                   className="underline font-medium whitespace-nowrap"
@@ -2509,147 +1969,68 @@ function AdminVaultBuilderPageInner() {
                         />
                       </div>
 
-                      <div className="border rounded-lg p-4 space-y-4 bg-white">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <h4 className="font-semibold text-gray-900">Modules / Composants</h4>
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={productModuleTypeToAdd}
-                              onChange={(e) => setProductModuleTypeToAdd(e.target.value)}
-                              className="px-3 py-2 border rounded-md"
-                            >
-                              {MODULE_CATALOG.map((item) => (
-                                <option key={item.type} value={item.type}>
-                                  {item.label}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={handleAddProductModule}
-                              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                            >
-                              <Plus className="w-4 h-4" />
-                              Ajouter
-                            </button>
-                          </div>
-                        </div>
-
-                        {productModules.length === 0 ? (
-                          <p className="text-sm text-gray-500">
-                            Aucun module. Ajoute des composants depuis la liste.
-                          </p>
-                        ) : (
-                          <div className="space-y-3">
-                            {productModules.map((module, index) => {
-                              const isRequired = REQUIRED_PRODUCT_MODULE_TYPES.includes(module.type)
-                              return (
-                              <div key={module.id} className={`rounded-md border p-3 ${isRequired ? 'border-indigo-300 bg-indigo-50/30' : 'border-gray-200'}`}>
-                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-gray-900">
-                                      #{index + 1} · {module.type}
-                                    </span>
-                                    {isRequired && (
-                                      <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
-                                        requis
-                                      </span>
-                                    )}
-                                    <label className="text-xs inline-flex items-center gap-1">
-                                      <input
-                                        type="checkbox"
-                                        checked={module.enabled}
-                                        disabled={isRequired}
-                                        onChange={(e) =>
-                                          setProductModules((prev) =>
-                                            prev.map((m) =>
-                                              m.id === module.id
-                                                ? { ...m, enabled: e.target.checked }
-                                                : m
-                                            )
-                                          )
-                                        }
-                                      />
-                                      actif
-                                    </label>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => moveProductModule(module.id, 'up')}
-                                      className="p-1 rounded border border-gray-200 hover:bg-gray-50"
-                                      title="Monter"
-                                    >
-                                      <ArrowUp className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => moveProductModule(module.id, 'down')}
-                                      className="p-1 rounded border border-gray-200 hover:bg-gray-50"
-                                      title="Descendre"
-                                    >
-                                      <ArrowDown className="w-4 h-4" />
-                                    </button>
-                                    {!isRequired && (
-                                    <button
-                                      type="button"
-                                      onClick={() => removeProductModule(module.id)}
-                                      className="p-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
-                                      title="Supprimer"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                    )}
-                                  </div>
-                                </div>
-                                {module.type === 'MediaImageCarouselModule' ? (
-                                  <VaultMediaCarouselModuleEditor
-                                    content={module.content}
-                                    onPatch={(patch) =>
-                                      handlePatchProductModuleContent(module.id, patch)
-                                    }
-                                  />
-                                ) : module.type === 'DocumentsListModule' ? (
-                                  <VaultDocumentsListModuleEditor
-                                    content={module.content}
-                                    onPatch={(patch) =>
-                                      handlePatchProductModuleContent(module.id, patch)
-                                    }
-                                  />
-                                ) : module.type === 'VideoBlockArticleModule' ? (
-                                  <VaultVideoBlockArticleModuleEditor
-                                    content={module.content}
-                                    onPatch={(patch) =>
-                                      handlePatchProductModuleContent(module.id, patch)
-                                    }
-                                  />
-                                ) : module.type === 'LocalisationModule' ? (
-                                  <VaultLocalisationModuleEditor
-                                    content={module.content}
-                                    onPatch={(patch) =>
-                                      handlePatchProductModuleContent(module.id, patch)
-                                    }
-                                  />
-                                ) : (
-                                  <>
-                                    <textarea
-                                      defaultValue={JSON.stringify(module.content, null, 2)}
-                                      onBlur={(e) =>
-                                        handleUpdateProductModuleContent(module.id, e.target.value)
-                                      }
-                                      className="w-full min-h-[120px] p-2 border rounded-md font-mono text-xs"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      Édite le JSON puis quitte le champ pour appliquer.
-                                    </p>
-                                  </>
-                                )}
-                              </div>
-                              )
-                            })}
-                          </div>
+                      <VaultModulesSection
+                        title="Modules du produit (bundle)"
+                        modules={productModules}
+                        entityId={`portfolio-product-${selectedProductCode ?? 'none'}`}
+                        saving={productConfigSaving}
+                        onClickAddModule={() => setProductAddModuleOpen(true)}
+                        onReorderModules={reorderProductModulesByIds}
+                        onDeleteModule={removeProductModule}
+                        onToggleEnabled={(moduleId, enabled) =>
+                          setProductModules((prev) =>
+                            prev.map((m) => (m.id === moduleId ? { ...m, enabled } : m))
+                          )
+                        }
+                        isModuleLocked={(m) => REQUIRED_PRODUCT_MODULE_TYPES.includes(m.type)}
+                        renderModuleEditor={(module) => (
+                          <>
+                            {module.type === 'MediaImageCarouselModule' ? (
+                              <VaultMediaCarouselModuleEditor
+                                content={module.content}
+                                onPatch={(patch) =>
+                                  handlePatchProductModuleContent(module.id, patch)
+                                }
+                              />
+                            ) : module.type === 'DocumentsListModule' ? (
+                              <VaultDocumentsListModuleEditor
+                                content={module.content}
+                                onPatch={(patch) =>
+                                  handlePatchProductModuleContent(module.id, patch)
+                                }
+                              />
+                            ) : module.type === 'VideoBlockArticleModule' ? (
+                              <VaultVideoBlockArticleModuleEditor
+                                content={module.content}
+                                onPatch={(patch) =>
+                                  handlePatchProductModuleContent(module.id, patch)
+                                }
+                              />
+                            ) : module.type === 'LocalisationModule' ? (
+                              <VaultLocalisationModuleEditor
+                                content={module.content}
+                                onPatch={(patch) =>
+                                  handlePatchProductModuleContent(module.id, patch)
+                                }
+                              />
+                            ) : (
+                              <>
+                                <textarea
+                                  key={module.id}
+                                  defaultValue={JSON.stringify(module.content, null, 2)}
+                                  onBlur={(e) =>
+                                    handleUpdateProductModuleContent(module.id, e.target.value)
+                                  }
+                                  className="w-full min-h-[120px] p-2 border rounded-md font-mono text-xs"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Édite le JSON puis quitte le champ pour appliquer.
+                                </p>
+                              </>
+                            )}
+                          </>
                         )}
-                      </div>
+                      />
                     </div>
                   )}
                 </section>
@@ -2727,318 +2108,20 @@ function AdminVaultBuilderPageInner() {
           {!details ? (
             <p className="text-gray-500">Sélectionne un vault pour l'éditer.</p>
           ) : (
-            <div className="space-y-6">
+            <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:divide-x lg:divide-slate-200">
+              <div className="space-y-6 lg:min-w-0 lg:pr-6">
               <AdminEditingLocaleBar contextLabel="Vault" />
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-                {details.localeVaultLayers && (
-                  <div className="space-y-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                      Vault — brouillon / publié (par langue)
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {supportedLocales.map((loc) => {
-                        const info = details.localeVaultLayers![loc]
-                        const active = loc === editingLocale
-                        return (
-                          <span
-                            key={loc}
-                            className={`inline-flex max-w-full flex-col rounded-lg border px-2 py-1.5 text-left ${
-                              active
-                                ? 'border-indigo-400 bg-indigo-50/80 ring-1 ring-indigo-300'
-                                : 'border-slate-200 bg-white'
-                            }`}
-                          >
-                            <span className="text-[10px] font-bold text-slate-700">{loc.toUpperCase()}</span>
-                            <span className="text-[10px] text-slate-600 leading-tight">
-                              {vaultLocaleLayerBadgeLabel(info)}
-                            </span>
-                          </span>
-                        )
-                      })}
-                    </div>
-                    {activeVaultLayer && (
-                      <p className="text-[11px] text-slate-700 leading-snug rounded-md bg-white/80 border border-slate-200/80 px-2 py-1.5">
-                        <strong className="text-slate-800">Langue active ({editingLocale.toUpperCase()}) :</strong>{' '}
-                        {activeVaultLayer.kind === 'draft_and_published' &&
-                        activeVaultLayer.draftMatchesPublished === false
-                          ? 'Le brouillon diffère du publié — utilisez « Publier la langue » pour mettre le site à jour.'
-                          : activeVaultLayer.kind === 'draft_and_published' &&
-                              activeVaultLayer.draftMatchesPublished === true
-                            ? 'Brouillon et publié sont identiques pour cette langue.'
-                            : activeVaultLayer.kind === 'draft_only'
-                              ? 'Seul un brouillon existe : le site utilise encore une autre langue en secours ou aucune version publiée pour cette langue.'
-                              : activeVaultLayer.kind === 'published_only'
-                                ? 'Publié sans brouillon séparé (rare) — enregistrez pour créer un brouillon.'
-                                : 'Aucun contenu pour cette langue.'}
-                      </p>
-                    )}
-                    <div className="rounded-md border border-sky-200 bg-sky-50/90 px-2 py-2 text-[11px] text-sky-950 leading-snug">
-                      <strong>Site public (aperçu) :</strong> le rendu utilise d’abord la version{' '}
-                      <span className="font-mono">PUBLISHED</span>, sinon le <span className="font-mono">DRAFT</span>{' '}
-                      (résolution <span className="font-mono">either</span> — voir{' '}
-                      <span className="font-mono">resolveVaultSectionContent</span>). L’aperçu ouvre la même URL que
-                      les visiteurs : si seul le brouillon existe, c’est lui qui peut s’afficher.
-                    </div>
-                    {details.publishedConfig != null && (
-                      <div className="border border-dashed border-slate-200 rounded-md bg-white/70">
-                        <button
-                          type="button"
-                          onClick={() => setShowPublishedPeek((v) => !v)}
-                          className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[11px] font-medium text-slate-700 hover:bg-slate-50/80"
-                        >
-                          <span className="inline-flex items-center gap-1.5">
-                            <Eye className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                            Voir le publié ({editingLocale.toUpperCase()}) — lecture seule
-                          </span>
-                          <span className="text-slate-400">{showPublishedPeek ? '▼' : '▶'}</span>
-                        </button>
-                        {showPublishedPeek && (
-                          <div className="border-t border-slate-100 px-2 py-2 text-[11px] text-slate-600 space-y-1">
-                            <p>
-                              Modules publiés :{' '}
-                              <strong>{details.publishedConfig.modules?.length ?? 0}</strong> · Template :{' '}
-                              <span className="font-mono">{details.publishedConfig.templateKey}</span>
-                            </p>
-                            <p>
-                              Brouillon en cours :{' '}
-                              <strong>{details.config.modules?.length ?? 0}</strong> module(s) — comparez avec la
-                              liste ci-dessus.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <LocaleCompletenessStrip levels={details.localeCompleteness} />
-                <p className="text-[11px] text-slate-600 leading-snug">
-                  Complétude par langue : même logique que le CMS pages (contenu publié par section +
-                  titre ou description renseignée). « Partiel » inclut un brouillon sans publication.
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-                    Aperçu public
-                  </span>
-                  {supportedLocales.map((loc) => (
-                    <a
-                      key={loc}
-                      href={`/${loc}/projects/${encodeURIComponent(details.page.slug)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-slate-50"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      {loc.toUpperCase()}
-                    </a>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2 border-t border-slate-200/80 pt-3">
-                  <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide w-full">
-                    Dupliquer depuis le français
-                  </span>
-                  <p className="text-[10px] text-slate-500 w-full -mt-1 mb-1">
-                    Copie PageI18n + contenu modules : écrit uniquement le <span className="font-mono">DRAFT</span>{' '}
-                    de la langue cible. Le <span className="font-mono">PUBLISHED</span> de cette langue n’est pas
-                    modifié — publiez ensuite avec « Publier la langue ».
-                  </p>
-                  <button
-                    type="button"
-                    disabled={copyLocaleBusy ||
-                      autoTranslateBusy ||
-                      checkLangBusy ||
-                      checkLangApplyBusy ||
-                      saving ||
-                      publishVaultBusy}
-                    onClick={() => handleCopyVaultLocale('en')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    {copyLocaleBusy ? '…' : 'FR → EN (brouillon)'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={copyLocaleBusy ||
-                      autoTranslateBusy ||
-                      checkLangBusy ||
-                      checkLangApplyBusy ||
-                      saving ||
-                      publishVaultBusy}
-                    onClick={() => handleCopyVaultLocale('it')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    {copyLocaleBusy ? '…' : 'FR → IT (brouillon)'}
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 border-t border-slate-200/80 pt-3">
-                  <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide w-full">
-                    Auto-traduction (OpenAI)
-                  </span>
-                  <p className="text-[10px] text-slate-500 w-full -mt-1 mb-1">
-                    Pipeline : lecture FR → traduction des champs autorisés (allowlist) → contrôle
-                    linguistique → enregistrement du <span className="font-mono">DRAFT</span> + PageI18n cible
-                    uniquement. Relecture humaine recommandée.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={copyLocaleBusy ||
-                      autoTranslateBusy ||
-                      checkLangBusy ||
-                      checkLangApplyBusy ||
-                      saving ||
-                      publishVaultBusy}
-                    onClick={() => handleAutoTranslateVaultLocale('en')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-1.5 text-xs font-medium text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {autoTranslateBusy ? '…' : 'FR → EN auto-trad. (brouillon)'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={copyLocaleBusy ||
-                      autoTranslateBusy ||
-                      checkLangBusy ||
-                      checkLangApplyBusy ||
-                      saving ||
-                      publishVaultBusy}
-                    onClick={() => handleAutoTranslateVaultLocale('it')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-1.5 text-xs font-medium text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {autoTranslateBusy ? '…' : 'FR → IT auto-trad. (brouillon)'}
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 border-t border-slate-200/80 pt-3">
-                  <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide w-full">
-                    Check all module language
-                  </span>
-                  <p className="text-[10px] text-slate-500 w-full -mt-1 mb-1">
-                    Langue analysée = langue d’édition actuelle ({editingLocale.toUpperCase()}). Scan des champs
-                    allowlistés, détection (franc), puis correction optionnelle des champs{' '}
-                    <span className="font-mono">WRONG_LANGUAGE</span> /{' '}
-                    <span className="font-mono">MIXED_LANGUAGE</span> vers cette langue —{' '}
-                    <span className="font-mono">DRAFT</span> uniquement. Voir{' '}
-                    <code className="text-[10px]">docs/arquantix/VAULT_CHECK_MODULE_LANGUAGE.md</code>.
-                  </p>
-                  <div className="flex flex-wrap gap-2 w-full">
-                    <button
-                      type="button"
-                      disabled={
-                        copyLocaleBusy ||
-                        autoTranslateBusy ||
-                        checkLangBusy ||
-                        checkLangApplyBusy ||
-                        saving ||
-                        publishVaultBusy
-                      }
-                      onClick={handleCheckModuleLanguageScan}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      <Languages className="h-3.5 w-3.5" />
-                      {checkLangBusy ? 'Scan…' : `Analyser les modules (${editingLocale.toUpperCase()})`}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        copyLocaleBusy ||
-                        autoTranslateBusy ||
-                        checkLangBusy ||
-                        checkLangApplyBusy ||
-                        saving ||
-                        publishVaultBusy
-                      }
-                      onClick={handleCheckModuleLanguageApply}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50/90 px-3 py-1.5 text-xs font-medium text-emerald-950 hover:bg-emerald-100 disabled:opacity-50"
-                    >
-                      <Languages className="h-3.5 w-3.5" />
-                      {checkLangApplyBusy
-                        ? 'Correction…'
-                        : `Corriger le brouillon (${editingLocale.toUpperCase()})`}
-                    </button>
-                  </div>
-                  {checkLangReport != null && typeof checkLangReport === 'object' ? (
-                    <div className="w-full rounded-md border border-slate-200 bg-white p-3">
-                      <I18nFindingsTable
-                        layout="single-page"
-                        title="Dernier rapport — langue des modules"
-                        rows={vaultModuleLangRows}
-                        aggregate={vaultModuleLangAggregate}
-                        className="[&_table]:text-[11px]"
-                      />
-                      <details className="mt-3 rounded border border-slate-100 bg-slate-50/80 p-2 text-[10px] text-slate-600">
-                        <summary className="cursor-pointer font-medium text-slate-700">
-                          JSON brut (debug)
-                        </summary>
-                        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words">
-                          {JSON.stringify(checkLangReport, null, 2)}
-                        </pre>
-                      </details>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      {details.page.title || details.page.slug}
-                    </h2>
-                    {productDraft?.enabled &&
-                      details.packagedProduct &&
-                      productDraft.productType === 'EXCLUSIVE_OFFER' && (
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            productDraft.commercialStatus === 'PUBLISHED'
-                              ? 'bg-green-100 text-green-700'
-                              : productDraft.commercialStatus === 'ARCHIVED'
-                                ? 'bg-gray-200 text-gray-600'
-                                : 'bg-gray-100 text-gray-500'
-                          }`}
-                        >
-                          {productDraft.commercialStatus === 'PUBLISHED'
-                            ? 'Publié'
-                            : productDraft.commercialStatus === 'ARCHIVED'
-                              ? 'Archivé'
-                              : 'Brouillon'}
-                        </span>
-                      )}
-                  </div>
-                  <p className="text-sm text-gray-500 font-mono">{details.page.urlPath}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {productDraft?.enabled &&
-                    details.packagedProduct &&
-                    productDraft.productType === 'EXCLUSIVE_OFFER' && (
-                      <button
-                        type="button"
-                        onClick={handleToggleExclusiveOfferCatalogPublish}
-                        disabled={
-                          packagedPublishBusy || saving || publishVaultBusy || copyLocaleBusy || autoTranslateBusy
-                        }
-                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border ${
-                          productDraft.commercialStatus === 'PUBLISHED'
-                            ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                            : 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100'
-                        } disabled:opacity-50`}
-                      >
-                        {packagedPublishBusy
-                          ? '…'
-                          : productDraft.commercialStatus === 'PUBLISHED'
-                            ? 'Dépublier'
-                            : productDraft.commercialStatus === 'ARCHIVED'
-                              ? 'Republier'
-                              : 'Publier'}
-                      </button>
-                    )}
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleDeletePage}
-                    disabled={deleting || publishVaultBusy}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    onClick={handleSave}
+                    disabled={saving || packagedPublishBusy || publishVaultBusy}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    Supprimer
+                    <Save className="w-4 h-4 shrink-0" />
+                    {saving ? 'Enregistrement…' : 'Enregistrer (brouillon)'}
                   </button>
                   <button
                     type="button"
@@ -3047,8 +2130,6 @@ function AdminVaultBuilderPageInner() {
                       publishVaultBusy ||
                       saving ||
                       packagedPublishBusy ||
-                      copyLocaleBusy ||
-                      autoTranslateBusy ||
                       !canPublishVaultLocale
                     }
                     title={
@@ -3056,152 +2137,114 @@ function AdminVaultBuilderPageInner() {
                         ? 'Enregistrez un brouillon vault pour cette langue avant de publier.'
                         : 'Copie le brouillon vers PUBLISHED pour cette langue uniquement.'
                     }
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 text-sm font-medium hover:bg-emerald-100 disabled:opacity-50"
                   >
-                    <UploadCloud className="w-4 h-4" />
-                    {publishVaultBusy ? 'Publication…' : 'Publier la langue'}
+                    <UploadCloud className="w-4 h-4 shrink-0" />
+                    {publishVaultBusy ? 'Publication…' : 'Publier'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={
-                      saving || packagedPublishBusy || publishVaultBusy || copyLocaleBusy || autoTranslateBusy
-                    }
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                    <Save className="w-4 h-4" />
-                    {saving ? 'Enregistrement…' : 'Enregistrer le brouillon'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input
-                  value={details.page.title ?? ''}
-                  onChange={(e) =>
-                    updateDetails((prev) => ({
-                      ...prev,
-                      page: { ...prev.page, title: e.target.value },
-                    }))
-                  }
-                  placeholder="Titre page (admin)"
-                  className="px-3 py-2 border rounded-md"
-                />
-                <input
-                  value={details.page.description ?? ''}
-                  onChange={(e) =>
-                    updateDetails((prev) => ({
-                      ...prev,
-                      page: { ...prev.page, description: e.target.value },
-                    }))
-                  }
-                  placeholder="Description page"
-                  className="px-3 py-2 border rounded-md"
-                />
-              </div>
-              <p className="text-xs text-slate-500">
-                Titre et description : <span className="font-mono">PageI18n</span> pour{' '}
-                {editingLocale.toUpperCase()} — enregistrés à chaque « Enregistrer le brouillon » (pas de statut
-                brouillon/publié séparé en base). Les <strong>modules</strong> du vault suivent le couple{' '}
-                <span className="font-mono">DRAFT</span> / <span className="font-mono">PUBLISHED</span> ; seul le
-                bouton « Publier la langue » promeut le brouillon vers le publié pour cette langue.
-              </p>
-
-              {productDraft && (
-                <PackagedProductSettingsPanel
-                  draft={productDraft}
-                  onChange={setProductDraft}
-                  serverLinked={Boolean(details.packagedProduct)}
-                  lendingEngineLinked={Boolean(details.packagedProduct?.lendingEngineLinked)}
-                />
-              )}
-
-              <PackagedEngineLendingSection
-                packagedProductId={details.packagedProduct?.id ?? null}
-                productType={
-                  productDraft?.productType ?? details.packagedProduct?.productType ?? 'VAULT_SIMPLE'
-                }
-                hasPackagedRow={Boolean(details.packagedProduct)}
-                onRefresh={async () => {
-                  if (selectedSlug) await reloadVaultDetails(selectedSlug)
-                }}
-              />
-
-              <div className="border rounded-lg p-4 space-y-4">
-                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <LayoutTemplate className="w-4 h-4" />
-                  Template + Navbar + Title page
-                </h3>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Catégorie (Investment Type)</label>
-                  <select
-                    value={details.config.investmentTypeSlug ?? ''}
-                    onChange={(e) =>
-                      updateDetails((prev) => ({
-                        ...prev,
-                        config: {
-                          ...prev.config,
-                          investmentTypeSlug: e.target.value || undefined,
-                        },
-                      }))
-                    }
-                    className="w-full px-3 py-2 border rounded-md"
-                  >
-                    <option value="">— Aucune —</option>
-                    {investmentTypes.map((t) => (
-                      <option key={t.id} value={t.slug}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-gray-200 bg-white text-sm font-medium text-gray-800 hover:bg-gray-50"
+                      >
+                        Plus d&apos;actions
+                        <ChevronDown className="w-4 h-4 shrink-0 text-gray-500" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {productDraft?.enabled &&
+                        details.packagedProduct &&
+                        productDraft.productType === 'EXCLUSIVE_OFFER' && (
+                          <DropdownMenuItem
+                            disabled={
+                              packagedPublishBusy || saving || publishVaultBusy
+                            }
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              void handleToggleExclusiveOfferCatalogPublish()
+                            }}
+                          >
+                            {packagedPublishBusy
+                              ? '…'
+                              : productDraft.commercialStatus === 'PUBLISHED'
+                                ? 'Dépublier (catalogue offre)'
+                                : productDraft.commercialStatus === 'ARCHIVED'
+                                  ? 'Republier (catalogue offre)'
+                                  : 'Publier dans le catalogue'}
+                          </DropdownMenuItem>
+                        )}
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={deleting || publishVaultBusy}
+                        onSelect={(e) => {
+                          e.preventDefault()
+                          void handleDeletePage()
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Supprimer le vault
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Template de page</label>
-                  <select
-                    value={details.config.templateKey}
-                    onChange={(e) =>
-                      updateDetails((prev) => ({
-                        ...prev,
-                        config: { ...prev.config, templateKey: e.target.value as TemplateKey },
-                      }))
-                    }
-                    className="w-full px-3 py-2 border rounded-md"
-                  >
-                    <option value="PageSimpleNavBarTopTitlePageContent">
-                      PageSimpleNavBarTopTitlePageContent
-                    </option>
-                    <option value="ModaleFullHeightPage">ModaleFullHeightPage</option>
-                    <option value="DashboardScrollTemplate">DashboardScrollTemplate</option>
-                  </select>
-                </div>
-
-                <div>
-                  <MediaField
-                    label="Image média (header)"
-                    value={details.config.headerMediaId ?? null}
-                    onChange={(mediaId) =>
-                      updateDetails((prev) => ({
-                        ...prev,
-                        config: { ...prev.config, headerMediaId: mediaId ?? undefined },
-                      }))
-                    }
-                  />
-                </div>
-
-                {(productDraft?.productType === 'EXCLUSIVE_OFFER' ||
-                  details.packagedProduct?.productType === 'EXCLUSIVE_OFFER') && (
-                  <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-4 space-y-3">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">Vidéo promo (optionnel)</h4>
-                      <p className="text-xs text-gray-600 mt-1">
-                        Comme l&apos;image de header, mais pour une vidéo : si une URL est renseignée, l&apos;app
-                        affiche un bouton lecture sur le hero et ouvre la vidéo (navigateur / lecteur). Stockée
-                        dans le module <strong>TitlePage</strong> (<code className="text-[11px]">promoVideoUrl</code>
-                        ).
-                      </p>
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(11rem,19rem)] gap-4 md:gap-6 md:items-start">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input
+                        type="text"
+                        value={details.page.title ?? ''}
+                        onChange={(e) =>
+                          updateDetails((prev) => ({
+                            ...prev,
+                            page: { ...prev.page, title: e.target.value },
+                          }))
+                        }
+                        placeholder={details.page.slug}
+                        aria-label={"Nom de l'offre"}
+                        className="min-w-0 w-full border-0 border-b border-transparent bg-transparent px-0 py-0.5 text-xl font-semibold text-gray-900 placeholder:text-gray-400 transition-colors hover:border-gray-200 focus:border-indigo-500 focus:outline-none focus:ring-0"
+                      />
                     </div>
+                    <p className="text-sm text-gray-500 font-mono truncate" title={details.page.urlPath}>
+                      {details.page.urlPath}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Slug page{' '}
+                      <span className="font-mono text-gray-700">{details.page.slug}</span>
+                    </p>
+                  </div>
+
+                  <div className="min-w-0 w-full md:justify-self-end md:border-l md:border-gray-100 md:pl-6">
+                    <MediaField
+                      compact
+                      label="Image de couverture (header)"
+                      value={details.config.headerMediaId ?? null}
+                      onChange={(mediaId) =>
+                        updateDetails((prev) => ({
+                          ...prev,
+                          config: { ...prev.config, headerMediaId: mediaId ?? undefined },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 mt-4 border-t border-gray-100">
+                  <CollapsibleAdminSection
+                    title="Vidéo promo (optionnel)"
+                    summary={promoVideoSectionSummary}
+                    icon={<Video className="h-3.5 w-3.5" />}
+                    defaultOpen={false}
+                    className="border-violet-200 bg-violet-50/50"
+                    bodyClassName="space-y-3 border-violet-100 bg-violet-50/60 p-4"
+                  >
+                    <p className="text-xs text-gray-600">
+                      Si une URL ou un média est renseigné, l&apos;app peut afficher un bouton lecture sur le
+                      hero. Stocké dans le module <strong>TitlePage</strong> (
+                      <code className="text-[11px]">promoVideoUrl</code>
+                      ).
+                    </p>
                     <div>
                       <label className="block text-sm font-medium mb-1">URL de la vidéo (HTTPS)</label>
                       <input
@@ -3264,428 +2307,167 @@ function AdminVaultBuilderPageInner() {
                         })()
                       }}
                     />
-                  </div>
+                  </CollapsibleAdminSection>
+                </div>
+
+                {productDraft && (
+                  <CollapsibleAdminSection
+                    title="Product (tags, visibilité)"
+                    summary={productRegistrySectionSummary}
+                    icon={<Package className="h-3.5 w-3.5" />}
+                    defaultOpen={false}
+                  >
+                    <PackagedProductSettingsPanel
+                      draft={productDraft}
+                      onChange={setProductDraft}
+                      serverLinked={Boolean(details.packagedProduct)}
+                      lendingEngineLinked={Boolean(details.packagedProduct?.lendingEngineLinked)}
+                      embedded
+                      suppressEmbeddedTitle
+                      exclusiveOfferRegistryLocks={
+                        details.packagedProduct?.productType === 'EXCLUSIVE_OFFER'
+                      }
+                    />
+                  </CollapsibleAdminSection>
                 )}
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Navbar gauche (icône)</label>
-                    <select
-                      value={details.config.navbar.leftIconType}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            navbar: {
-                              ...prev.config.navbar,
-                              leftIconType: e.target.value as LeftIconType,
-                            },
-                          },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border rounded-md"
-                    >
-                      <option value="none">Aucune</option>
-                      <option value="back">Back</option>
-                      <option value="close">Close</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Redirect gauche</label>
-                    <select
-                      value={details.config.navbar.leftRedirectType}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            navbar: {
-                              ...prev.config.navbar,
-                              leftRedirectType: e.target.value as Exclude<RedirectType, 'none'>,
-                            },
-                          },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border rounded-md"
-                    >
-                      <option value="back">back</option>
-                      <option value="close">close</option>
-                      <option value="internal">internal</option>
-                      <option value="external">external</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Target gauche</label>
-                    <input
-                      value={details.config.navbar.leftTarget ?? ''}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            navbar: {
-                              ...prev.config.navbar,
-                              leftTarget: e.target.value,
-                            },
-                          },
-                        }))
-                      }
-                      placeholder="/offers ou https://..."
-                      className="w-full px-3 py-2 border rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Navbar droite (icône)</label>
-                    <select
-                      value={details.config.navbar.rightAction.icon}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            navbar: {
-                              ...prev.config.navbar,
-                              rightAction: {
-                                ...prev.config.navbar.rightAction,
-                                icon: e.target.value as RightIconType,
-                              },
-                            },
-                          },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border rounded-md"
-                    >
-                      <option value="none">Aucune</option>
-                      <option value="favorite">favorite</option>
-                      <option value="share">share</option>
-                      <option value="notifications">notifications</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Redirect droite</label>
-                    <select
-                      value={details.config.navbar.rightAction.redirectType}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            navbar: {
-                              ...prev.config.navbar,
-                              rightAction: {
-                                ...prev.config.navbar.rightAction,
-                                redirectType: e.target.value as RedirectType,
-                              },
-                            },
-                          },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border rounded-md"
-                    >
-                      <option value="none">none</option>
-                      <option value="back">back</option>
-                      <option value="close">close</option>
-                      <option value="internal">internal</option>
-                      <option value="external">external</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Target droite</label>
-                    <input
-                      value={details.config.navbar.rightAction.target ?? ''}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            navbar: {
-                              ...prev.config.navbar,
-                              rightAction: {
-                                ...prev.config.navbar.rightAction,
-                                target: e.target.value,
-                              },
-                            },
-                          },
-                        }))
-                      }
-                      placeholder="/profile ou https://..."
-                      className="w-full px-3 py-2 border rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-3">
-                  <label className="inline-flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={details.config.pageTitle.enabled}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            pageTitle: {
-                              ...prev.config.pageTitle,
-                              enabled: e.target.checked,
-                            },
-                          },
-                        }))
-                      }
-                    />
-                    Title page actif
-                  </label>
-                  <input
-                    value={details.config.pageTitle.text}
-                    onChange={(e) =>
-                      updateDetails((prev) => ({
-                        ...prev,
-                        config: {
-                          ...prev.config,
-                          pageTitle: {
-                            ...prev.config.pageTitle,
-                            text: e.target.value,
-                          },
-                        },
-                      }))
-                    }
-                    placeholder="Texte Title page"
-                    className="px-3 py-2 border rounded-md"
-                  />
-                </div>
-
-                <div className="border rounded-md p-3 space-y-3">
-                  <label className="inline-flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={details.config.fixedBottomCta.enabled}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            fixedBottomCta: {
-                              ...prev.config.fixedBottomCta,
-                              enabled: e.target.checked,
-                            },
-                          },
-                        }))
-                      }
-                    />
-                    Bouton fixe bas de page (gradient + blur)
-                  </label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input
-                      value={details.config.fixedBottomCta.label}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            fixedBottomCta: {
-                              ...prev.config.fixedBottomCta,
-                              label: e.target.value,
-                            },
-                          },
-                        }))
-                      }
-                      placeholder="Label bouton CTA"
-                      className="px-3 py-2 border rounded-md"
-                    />
-                    <select
-                      value={details.config.fixedBottomCta.redirectType}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            fixedBottomCta: {
-                              ...prev.config.fixedBottomCta,
-                              redirectType: e.target.value as RedirectType,
-                            },
-                          },
-                        }))
-                      }
-                      className="px-3 py-2 border rounded-md"
-                    >
-                      <option value="none">none</option>
-                      <option value="back">back</option>
-                      <option value="close">close</option>
-                      <option value="internal">internal</option>
-                      <option value="external">external</option>
-                    </select>
-                    <input
-                      value={details.config.fixedBottomCta.target ?? ''}
-                      onChange={(e) =>
-                        updateDetails((prev) => ({
-                          ...prev,
-                          config: {
-                            ...prev.config,
-                            fixedBottomCta: {
-                              ...prev.config.fixedBottomCta,
-                              target: e.target.value,
-                            },
-                          },
-                        }))
-                      }
-                      placeholder="/route ou https://..."
-                      className="px-3 py-2 border rounded-md"
-                    />
-                  </div>
-                </div>
               </div>
 
-              <div className="border rounded-lg p-4 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="font-semibold text-gray-900">Modules / Composants</h3>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={moduleTypeToAdd}
-                      onChange={(e) => setModuleTypeToAdd(e.target.value)}
-                      className="px-3 py-2 border rounded-md"
-                    >
-                      {MODULE_CATALOG.map((item) => (
-                        <option key={item.type} value={item.type}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleAddModule}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Ajouter
-                    </button>
-                  </div>
-                </div>
+              <CollapsibleAdminSection
+                title="Moteur lending & pool"
+                summary={vaultLendingSectionSummary}
+                icon={<Landmark className="h-3.5 w-3.5" />}
+                defaultOpen={false}
+              >
+              <PackagedEngineLendingSection
+                packagedProductId={details.packagedProduct?.id ?? null}
+                productType={
+                  productDraft?.productType ?? details.packagedProduct?.productType ?? 'VAULT_SIMPLE'
+                }
+                hasPackagedRow={Boolean(details.packagedProduct)}
+                onRefresh={async () => {
+                  if (selectedSlug) await reloadVaultDetails(selectedSlug)
+                }}
+              />
+              </CollapsibleAdminSection>
 
-                {details.config.modules.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    Aucun module sélectionné. Ajoute des composants depuis la liste.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {details.config.modules.map((module, index) => (
-                      <div key={module.id} className="rounded-md border border-gray-200 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-gray-900">
-                              #{index + 1} · {module.type}
-                            </span>
-                            <label className="text-xs inline-flex items-center gap-1">
-                              <input
-                                type="checkbox"
-                                checked={module.enabled}
-                                onChange={(e) =>
-                                  updateDetails((prev) => ({
-                                    ...prev,
-                                    config: {
-                                      ...prev.config,
-                                      modules: prev.config.modules.map((m) =>
-                                        m.id === module.id ? { ...m, enabled: e.target.checked } : m
-                                      ),
-                                    },
-                                  }))
-                                }
-                              />
-                              actif
-                            </label>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => moveModule(module.id, 'up')}
-                              className="p-1 rounded border border-gray-200 hover:bg-gray-50"
-                              title="Monter"
-                            >
-                              <ArrowUp className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveModule(module.id, 'down')}
-                              className="p-1 rounded border border-gray-200 hover:bg-gray-50"
-                              title="Descendre"
-                            >
-                              <ArrowDown className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeModule(module.id)}
-                              className="p-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
-                              title="Supprimer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                        {module.type === 'MediaImageCarouselModule' ? (
-                          <VaultMediaCarouselModuleEditor
-                            content={module.content}
-                            onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                          />
-                        ) : module.type === 'DocumentsListModule' ? (
-                          <VaultDocumentsListModuleEditor
-                            content={module.content}
-                            onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                          />
-                        ) : module.type === 'VideoBlockArticleModule' ? (
-                          <VaultVideoBlockArticleModuleEditor
-                            content={module.content}
-                            onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                          />
-                        ) : module.type === 'LocalisationModule' ? (
-                          <VaultLocalisationModuleEditor
-                            content={module.content}
-                            onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                          />
-                        ) : (
-                          <>
-                            <textarea
-                              defaultValue={JSON.stringify(module.content, null, 2)}
-                              onBlur={(e) => handleUpdateModuleContent(module.id, e.target.value)}
-                              className="w-full min-h-[160px] p-2 border rounded-md font-mono text-xs"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Édite le JSON puis quitte le champ pour appliquer.
-                            </p>
-                            {module.type === 'CompetitiveAdvantagesModule' && (
-                              <p className="text-xs text-gray-500 mt-2">
-                                Options pour la catégorie (par row) : content (blanc, comportement actuel) ; work (jaune clair #FEF9C3) ; note (bleu clair #DBEAFE) ; success (vert clair #D1FAE5) ; danger (rouge clair #FEE2E2).
-                              </p>
-                            )}
-                            {(module.type === 'MarketingCardsSmallSlidingCarrousel_Portrait' ||
-                              module.type === 'MarketingCardsSmallSlidingCarrousel_Paysage') && (
-                              <p className="text-xs text-gray-500 mt-2">
-                                Options de taille des cartes : `visibleCardsCount` (ex: 1, 1.2, 1.5, 1.8; virgule acceptee) et `cardAspectRatio` au format largeur:hauteur (ex: 1:1, 1:4, 3:4, 1:1.4).
-                              </p>
-                            )}
-                          </>
+              <VaultModulesSection
+                title="Modules du vault"
+                modules={details.config.modules}
+                entityId={details.page.id}
+                saving={saving}
+                onClickAddModule={() => setVaultAddModuleOpen(true)}
+                onReorderModules={reorderDetailModulesByIds}
+                onDeleteModule={removeModule}
+                onToggleEnabled={(moduleId, enabled) =>
+                  updateDetails((prev) => ({
+                    ...prev,
+                    config: {
+                      ...prev.config,
+                      modules: prev.config.modules.map((m) =>
+                        m.id === moduleId ? { ...m, enabled } : m
+                      ),
+                    },
+                  }))
+                }
+                renderModuleEditor={(module) => (
+                  <>
+                    {module.type === 'MediaImageCarouselModule' ? (
+                      <VaultMediaCarouselModuleEditor
+                        content={module.content}
+                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                      />
+                    ) : module.type === 'DocumentsListModule' ? (
+                      <VaultDocumentsListModuleEditor
+                        content={module.content}
+                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                      />
+                    ) : module.type === 'VideoBlockArticleModule' ? (
+                      <VaultVideoBlockArticleModuleEditor
+                        content={module.content}
+                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                      />
+                    ) : module.type === 'LocalisationModule' ? (
+                      <VaultLocalisationModuleEditor
+                        content={module.content}
+                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                      />
+                    ) : (
+                      <>
+                        <textarea
+                          key={module.id}
+                          defaultValue={JSON.stringify(module.content, null, 2)}
+                          onBlur={(e) => handleUpdateModuleContent(module.id, e.target.value)}
+                          className="w-full min-h-[160px] p-2 border rounded-md font-mono text-xs"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Édite le JSON puis quitte le champ pour appliquer.
+                        </p>
+                        {module.type === 'CompetitiveAdvantagesModule' && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Options pour la catégorie (par row) : content (blanc, comportement actuel) ; work
+                            (jaune clair #FEF9C3) ; note (bleu clair #DBEAFE) ; success (vert clair #D1FAE5) ;
+                            danger (rouge clair #FEE2E2).
+                          </p>
                         )}
-                      </div>
-                    ))}
-                  </div>
+                        {(module.type === 'MarketingCardsSmallSlidingCarrousel_Portrait' ||
+                          module.type === 'MarketingCardsSmallSlidingCarrousel_Paysage') && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Options de taille des cartes : `visibleCardsCount` (ex: 1, 1.2, 1.5, 1.8; virgule
+                            acceptee) et `cardAspectRatio` au format largeur:hauteur (ex: 1:1, 1:4, 3:4, 1:1.4).
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </>
                 )}
+              />
+
+              </div>
+
+              <div className="hidden min-h-0 min-w-0 flex-col lg:sticky lg:top-2 lg:flex lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)] lg:pl-6">
+                <PagePreviewPanel
+                  title={`${details.page.title || details.page.slug} (${previewLocale.toUpperCase()})`}
+                  previewUrl={`/${previewLocale}/projects/${encodeURIComponent(details.page.slug)}?${VAULT_BUILDER_IFRAME_PREVIEW_QUERY}=1`}
+                  dismissible={false}
+                  toolbar={{
+                    locale: previewLocale,
+                    onLocaleChange: setPreviewLocale,
+                    device: previewDevice,
+                    onDeviceChange: setPreviewDevice,
+                  }}
+                  reloadEpoch={vaultPreviewReloadEpoch}
+                  className="min-h-0 flex-1"
+                />
               </div>
             </div>
           )}
         </section>
       </div>
-      {vaultOpModal ? (
-        <AdminOperationProgressModal
-          open
-          title={vaultOpModal.title}
-          subtitle={vaultOpModal.subtitle}
-          phase={vaultOpModal.phase}
-          steps={vaultOpModal.steps}
-          summaryLines={vaultOpModal.summaryLines}
-          errorMessage={vaultOpModal.errorMessage}
-          footerHint={vaultOpModal.footerHint}
-          onClose={() => setVaultOpModal(null)}
+      {vaultAddModuleOpen && details ? (
+        <AddVaultModuleModal
+          headerTitle={`Ajouter un module — ${details.page.slug}`}
+          publicPreviewHref={`/${editingLocale}/projects/${encodeURIComponent(details.page.slug)}?${VAULT_BUILDER_IFRAME_PREVIEW_QUERY}=1`}
+          onClose={() => setVaultAddModuleOpen(false)}
+          onValidate={async (sel) => {
+            addVaultModuleOfType(sel.type)
+            setVaultAddModuleOpen(false)
+          }}
+        />
+      ) : null}
+      {productAddModuleOpen ? (
+        <AddVaultModuleModal
+          headerTitle={
+            selectedProductCode
+              ? `Ajouter un module — produit ${selectedProductCode}`
+              : 'Ajouter un module — produit'
+          }
+          headerSubtitle="Les modules sont enregistrés avec la configuration bundle (Enregistrer)."
+          publicPreviewHref={null}
+          onClose={() => setProductAddModuleOpen(false)}
+          onValidate={async (sel) => {
+            addProductModuleOfType(sel.type)
+            setProductAddModuleOpen(false)
+          }}
         />
       ) : null}
     </div>

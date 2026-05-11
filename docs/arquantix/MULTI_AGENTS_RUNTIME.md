@@ -2,7 +2,7 @@
 
 > **Statut :** Phase 2a **LIVRÉE** (2026-05-02). Spec applicable au code en production.
 >
-> **Dernière mise à jour :** 2026-05-06 (v1.2 — défaut runtime loop actif)
+> **Dernière mise à jour :** 2026-05-07 (v1.6 — roadmap exécution sécurisée §20)
 >
 > **Objectif :** définir le pattern technique qui permet aux agents
 > Vancelian (Compliance, Advisor, Product, Market) de devenir
@@ -380,6 +380,26 @@ masquées par audience » / « widget instrument bloqué FEAR »).
 Tests : `tests/test_assistance_runtime_observability_unit.py` (10
 tests : shape, sérialisation SSE, agrégation par compteur, tour
 simple sans metrics, robustesse aux types invalides).
+
+#### 2.3quinquies — Embeds sous stress + `cal_contract` (Phase 2) + payloads métier typés (Phase 3)
+
+- **Filtrage SSE** : `services/assistance/embed_gate.py` classe chaque `type` d'embed (DISCOVERY, PROMO, INFO, TRANSACTIONAL, CONFIRMATION, SECURITY). Seuls **discovery** et **promo** sont retirés quand `stop_pushing` ou émotion **fear/anger** — jamais les embeds **transactionnels** ni **`invest_confirmation_draft`**.
+- **Brouillons CAL** : `create_action_draft` enrichit `AssistanceActionDraft.payload` avec une enveloppe **`cal_contract`** (champs versionnés : `action_version`, `state`, `required_params`, `collected_params`, `missing_params`, `validation_status`, `confirmation_status`, `expires_at`, `security_level`). Les champs historiques restent à la racine du JSON pour compatibilité outils / mémoire. Cf. `services/assistance/action_draft_contract.py`.
+
+**Typed business payload validation (Phase 3)**
+
+- **`cal_contract`** = état CAL **normalisé** (machine à états, paramètres manquants, TTL, niveau de sécurité) — produit par `merge_business_payload_with_contract` **après** validation.
+- **Payload métier (racine)** = données propres à chaque `action_type` (`crypto_buy`, `bundle_invest`, `crypto_sell_guide`, `crypto_swap_guide`, `deposit_guide`, …) — validées par Pydantic **`extra="forbid"`** dans `services/assistance/action_draft_payload_schemas.py` **avant** persistance.
+- Toute **nouvelle écriture** invalide lève `InvalidActionDraftBusinessPayload` et journalise `reason=invalid_action_draft_payload` (aucune écriture silencieuse). L'ordre dans `create_action_draft` est : **validate → supersede → merge `cal_contract` → INSERT**.
+- **Lecture legacy** : les lignes historiques sans schéma strict restent lisibles (`pending_action_memory_snapshot`, merge intake) ; seules les **écritures** passent par la validation stricte.
+- Tests : `tests/test_action_draft_payload_schemas_unit.py`.
+
+**Registre produit `ActionDefinition` (Phase 3.5)**
+
+- Fichier **`services/assistance/action_registry.py`** : vérité produit pour chaque `action_type` (label FR, étapes permises, paramètres requis attendus par étape, `widget_kind` côté UI pour les flux widget-only, TTL en secondes, flags `requires_confirmation` / `requires_step_up`, grille `security_level` *produit*, nom du schéma Pydantic associé dans `allowed_payload_schema`).
+- `validate_action_draft_business_payload` enchaîne **registre** (étape / params / `widget_kind` widget) puis **Pydantic** ; désynchronisation **registre ↔ schémas** détectée par `assert_payload_models_synced_with_registry()` (voir `tests/test_action_registry_unit.py`).
+- `build_cal_contract` consomme le registre pour **TTL** (`ttl_seconds`) et pour une **montée de `security_level` L0–L2** cohérente avec la grille produit (repli 45 min si `action_type` inconnu).
+- Types **prévus** hors implémentation actuelle (KYC, onboarding, offres, coffre) : constante `PLANNED_ACTION_TYPES` — à brancher avec schéma + entrée registre au même commit.
 
 ### 2.4 Registry
 
@@ -1199,3 +1219,226 @@ async def run_agent_loop(
         early_break_reason="max_iter",
     )
 ```
+
+---
+
+## 17. Action Draft Lifecycle (Phase 4 — 2026-05-07)
+
+Les brouillons `AssistanceActionDraft` portent une **machine d’état**
+déterministe côté backend. Le LLM ou le client ne font **pas** évoluer les
+transitions : ils peuvent fournir des **signaux** (`classify_interruption_resolution`) ;
+les transitions finales sont décidées dans `action_lifecycle` + `action_drafts_repo`.
+Pour la résolution intention **structurée** (Phase 5) — voir [§18](#18-structured-conversation-resolution-phase-5--2026-05-07) ; signal LLM JSON strict (Phase 6) — [§19](#19-llm-structured-resolution-output-phase-6--2026-05-07) ; après **confirmé** — chaîne exécution sécurisée [§20](#20-roadmap--exécution-financière-sécurisée-phases-7-à-12).
+
+### 17.1 Principes
+
+| Principe | Implémentation |
+|----------|----------------|
+| Statut SQL **macro** (compat Flutter / filtres) | `draft` (actif non terminal), `superseded`, `cancelled`, `expired`, `confirmed`, `failed` |
+| États **fins** UX / audit | `payload["_lifecycle"].state` parmi : `draft`, `collecting`, `awaiting_user_choice`, `awaiting_confirmation`, terminaux idem macro |
+| TTL | `cal_contract.expires_at` (TTL issu du registre `ttl_seconds`) ; `is_action_draft_expired` ; transition auto `expired` + raison `ttl_expired` si dépassé lors d’un supersede ou de `pending_action_memory_snapshot` |
+| Une seule action active | Défaut `allow_parallel_actions=False` sur `ActionDefinition` ; `create_action_draft` supersède avant insert |
+| Interruption hors sujet | Signal `off_topic` → **`preserve_active_draft`** — pas de destruction du draft |
+| Annulation explicite | Ex. abandon QCM crypto → `cancel_active_action_drafts` → macro `cancelled`, raison `user_cancelled` |
+| Audit | Chaque transition : `persist_lifecycle_transition_audit_with_log` → `audit.persist_decision(tool_name="action_draft_lifecycle")` + log structuré |
+
+### 17.2 Diagramme (extrait — transitions autorisées)
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft
+    draft --> collecting
+    collecting --> awaiting_user_choice
+    awaiting_user_choice --> awaiting_confirmation
+    awaiting_confirmation --> confirmed
+    collecting --> cancelled
+    collecting --> superseded
+    collecting --> expired
+    awaiting_confirmation --> expired
+    confirmed --> [*]
+```
+
+**Interdites (exemples)** : tout départ depuis un état terminal ; `confirmed → collecting` ;
+`expired → confirmed` ; `cancelled → confirmed`.
+
+### 17.3 Fichiers clés
+
+- `services/assistance/action_lifecycle.py` — graphe `can_transition_lifecycle`,
+  `apply_transition_to_sql_row`, `MESSAGE_ACTION_DRAFT_EXPIRED_FR`,
+  placeholders `execution_reference` / `execution_status`.
+- `services/assistance/action_drafts_repo.py` — création avec `seed_initial_lifecycle`,
+  `supersede_previous_drafts`, `cancel_active_action_drafts`,
+  `pending_action_memory_snapshot`, `mark_action_draft_confirmed_for_client`.
+
+### 17.4 Registre produit
+
+Le champ **`allow_parallel_actions`** (par défaut `false`) permet, plus tard,
+d’exceptions produit (« multi-action » explicitement consenties). Hors override,
+**une conversation = au plus une ligne macro `draft`** à un instant donné après insert.
+
+---
+
+## 18. Structured Conversation Resolution (Phase 5 — 2026-05-07)
+
+Objectif : **`message + draft actif → décision structurée backend → lifecycle`**,
+sans que le LLM appelle directement `supersede_previous_drafts` ou `cancel_active_action_drafts`.
+
+### 18.1 Séparation des rôles
+
+| Couche | Responsabilité |
+|--------|----------------|
+| Classificateur (souvent LLM) | Produire un **`ConversationResolutionType`** + entités extraites |
+| `conversation_resolution.build_resolution_result` | Appliquer la **politique** (`should_*`) |
+| `apply_conversation_resolution` | **Seule** mutation BDD lifecycle (cancel / supersede / noop) + audit + métriques |
+
+`classify_interruption_resolution` dans `action_lifecycle` reste un **pré-mappage local**
+(noop / supersede / cancel / preserve / clarification), **sans IO**.
+
+### 18.2 Types de résolution
+
+- `same_action_continuation` — conserver le draft, pas de transition.
+- `new_action_detected` — `supersede_previous_drafts` avec raisons lifecycle Phase 4 ; le **nouveau** draft est créé par les tools dans la foulée du tour courant ou suivant.
+- `cancel_requested` — `cancel_active_action_drafts`, raison `user_cancelled`.
+- `off_topic` — draft conservé ; réponse informationnelle hors lifecycle.
+- `ambiguous` — aucune transition ; clarification.
+- `no_active_action` — pas d’opération sur les drafts.
+
+### 18.3 Diagramme (pipeline cible)
+
+```mermaid
+flowchart LR
+  U[Message user] --> AD[Draft actif ?]
+  AD --> R[ConversationResolutionResult]
+  R --> APP[apply_conversation_resolution]
+  APP --> LC[Transitions lifecycle Phase 4]
+  APP --> AUD[audit.persist_decision tool=conversation_resolution]
+  R -.-> ROUTER[Router et runtime inchangés jusqu au branchement explicite]
+```
+
+### 18.4 Intégration incrémentale
+
+- **`apply_conversation_resolution`** : API backend pour l’orchestrateur futur ou les endpoints métier qui reçoivent le JSON classifier.
+- **`start_chat_turn`** :
+  - si **`ASSISTANCE_STRUCTURED_RESOLUTION_LLM`** est actif — voir §19 (classifier JSON-only + passage possible à `apply_*`) ;
+  - sinon si **`ASSISTANCE_ACTION_RESOLUTION_HEURISTIC`** ∈ `{1,true,yes,on}` — lecture **pure** dans `memory_state` (`conversation_resolution`, `conversation_resolution_lifecycle_hint`) **sans** mutation lifecycle.
+- Par défaut (variables absentes / false) : **aucun changement de comportement** par rapport aux tours historiques.
+
+### 18.5 Observabilité
+
+- Logs structurés : préfixe `conversation_resolution.apply` (type, lifecycle_decision, compteurs).
+- Audit `tool_name="conversation_resolution"`.
+- `ResolutionMetrics` : cancel / supersede / off_topic / ambiguity / continuation / restart_after_expiry (compteurs process-wide).
+
+---
+
+## 19. LLM Structured Resolution Output (Phase 6 — 2026-05-07)
+
+Le LLM est un **Conversation Resolution Signal Provider** : uniquement JSON conforme au
+modèle **`LLMConversationResolutionSignal`** (`services/assistance/llm_resolution_schema.py`).
+Le backend **`build_resolution_result_from_llm_signal`** dérive toujours les `should_*`
+via **`resolution_type`**. **`maybe_apply_llm_resolution`** garantit :
+**pas de lifecycle** si JSON invalide, texte libre, schéma `extra forbid` violé ou
+confiance &lt; `ASSISTANCE_RESOLUTION_MIN_CONFIDENCE`.
+
+### 19.1 Schéma (contrat)
+
+| Champ | Contraintes |
+|-------|-------------|
+| `resolution_type` | `same_action_continuation`, `new_action_detected`, `cancel_requested`, `off_topic`, `ambiguous`, `no_active_action` |
+| `confidence` | `float` `[0,1]` |
+| `target_action_type` | chaîne courte ou `null` |
+| `reason` | chaîne courte (tracé équipe, pas carte UX client) |
+| `extracted_entities` | objet JSON (peut être `{}`) |
+
+Aucune autre clé (`ConfigDict(extra="forbid")`). Parsing : `parse_llm_resolution_json_string`.
+
+### 19.2 Mode API
+
+`conversation_resolution_llm.classify_user_message_via_openai` appelle **`chat_completion`**
+avec **`response_format={"type":"json_object"}`**, température 0 recommandée.
+
+### 19.3 Invalid fallback — observabilité
+
+- Audit refusal : **`tool_name=conversation_resolution_llm_invalid`** (JSON parse, erreurs Pydantic, confiance basse ou erreur OpenAI pré-validation).
+- Log JSON ligne : événement `conversation_resolution_llm.structured` avec
+  `conversation_resolution_signal`, `validated`, `lifecycle_transition`, etc.
+- **`StructuredResolutionMetrics.snapshot()`** agrège : taux succès validation, échecs, fallback faible confiance, distribution buckets de confiance, moyenne sur succès.
+
+### 19.4 Intégration `start_chat_turn` (priorité §18 vs §19)
+
+1. Charger `pending_action` via **`pending_action_memory_snapshot`** (inchangé TTL Phase 4).
+2. Si **`ASSISTANCE_STRUCTURED_RESOLUTION_LLM`** truthy :
+   `run_structured_resolution_llm_turn_if_enabled` → validate → **`apply_conversation_resolution`** uniquement après validation réussie.
+3. Sinon, heuristique dev §18 comme avant (**hints seuls**).
+
+Après **`superseded`** / **`cancelled`**, reload du snapshot pour aligner **`memory_state["pending_action"]`** sur l’état SQL.
+
+Prompt : `prompts/conversation_resolution_system.md`.
+
+---
+
+## 20. Roadmap — Exécution financière sécurisée (Phases 7 à 12)
+
+À partir des phases 1–6, le runtime conversationnel transactionnel est **déterministe et auditable au niveau draft / CAL / résolution**. Le pivot suivant n’est plus « mieux comprendre », mais **quand et comment un draft confirmé peut produire une exécution réelle**, sans replay, spoof ni contournement des politiques de sécurité. Le LLM reste hors du chemin critique d’autorisation ; la **source de vérité** est backend + preuves crypto / device / session.
+
+Chaîne cible (ordre de dépendance) :
+
+```mermaid
+flowchart TB
+  DC[Draft CAL confirmé]
+  P7[§20.1 Phase 7 — ExecutionAuthorization]
+  P8[§20.2 Phase 8 — ExecutionIntent signé]
+  P9[§20.3 Phase 9 — Step-Up Policy Engine]
+  P10[§20.4 Phase 10 — Device Trust + session fraîche]
+  P11[§20.5 Phase 11 — Audit exécution immuable]
+  P12[§20.6 Phase 12 — Connecteurs transactionnels réels]
+  DC --> P7 --> P9
+  P10 --> P7
+  P8 --> P11
+  P7 --> P8
+  P11 --> P12
+```
+
+### 20.1 Phase 7 — Execution Authorization Layer
+
+**Objectif.** Décider backend : *ce draft confirmé peut-il être exécuté maintenant ?*
+
+**Concept.** `ExecutionAuthorization` (exemple) : `draft_id`, `execution_authorized`,
+`required_security_steps[]` (biométrie, trusted device, OTP…), `authorization_state`
+(`pending_step_up`, `authorized`, `denied`, …).
+
+**Garde-fous.** Step-up, trusted device, passkey, biométrie côté canal, OTP, fraîcheur de session, anti-replay, expiration, signing, **execution token** délivré uniquement après agrégat des preuves attendues.
+
+### 20.2 Phase 8 — Signed Execution Intent
+
+**Objectif.** Sortir du seul enregistrement ORM : **`ExecutionIntent`** immuable et **signé** (chaînage `draft_id`, `payload_hash`, `created_at`, `expires_at`, `nonce`, `device_id`, `challenge_id`, `signed_by` / clé HSM ou service dédié selon design).
+
+**Principe.** Le système critique réside dans l’intention signée et vérifiable ; pas dans le prompt LLM.
+
+### 20.3 Phase 9 — Step-Up Policy Engine
+
+**Objectif.** Brancher le registre produit existant (`requires_confirmation`, `requires_step_up`,
+`security_level` / CAL L0–L2) sur un **moteur de politique exécutable** (matrice action ↔ niveau).
+
+**Exemple grossier (à affiner produit / risk).** Lecture portefeuille L0 ; montant modéré L1 ;
+gros montant / sensibilité L2 ; changement IBAN whitelist / retrait externe L3.  
+Mapping indicatif : L0 → aucun step-up ; L1 → PIN / soft device ; L2 → biométrie + session fraîche ;
+L3 → passkey + OTP + trusted device (ordre exact défini par policies versionnées).
+
+### 20.4 Phase 10 — Device Trust & Session Freshness
+
+**Objectif.** Formaliser le pipeline : **`ActionDraft`** → politique sécurité → **contrôle device trust** → **fraîcheur session** → exigences step-up → **ExecutionAuthorization**.
+
+Réutilisation des briques existantes (passkeys, biométrie onboarding, trusted device, auth continue) sous **contrat unique** consommé par l’orchestrateur d’exécution.
+
+### 20.5 Phase 11 — Immutable Execution Audit
+
+**Objectif.** Une fois l’exécution réelle constatée : **append-only** — hash payload, référence exécution, référence fournisseur, horodatage, preuve confirmation utilisateur, preuve challenge sécurité, empreinte device, métadonnées IP/device dans les limites RGPD, corrélation réglementaire. **Aucune mise à jour destructive** des enregistrements d’exécution terminaux.
+
+### 20.6 Phase 12 — Real Transaction Connectors
+
+**Objectif.** Brancher custody, exchange, fiat, ledger, transfer, RWA, abonnement vault, trading — **uniquement après** les phases 7–11 sur le chemin d’autorisation et d’audit. Sinon : risque d’exécution hors politique, replay, spoof UX, désalignement lifecycle.
+
+---
+
+**Note.** Les placeholders `execution_reference` / `execution_status` dans le lifecycle draft (Phase 4) anticipent ces phases ; leur remplissage effectif doit respecter §20–§20.5 avant toute passerelle §20.6.

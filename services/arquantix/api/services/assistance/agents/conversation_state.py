@@ -82,6 +82,9 @@ class ConversationPendingActionState(BaseModel):
     target_kind: Optional[str] = None
     target_id: Optional[str] = None
     stage: Optional[str] = None
+    # Champage JSON du brouillon (achat crypto, etc.) — exposé au prompt.
+    amount_from: Optional[float] = None
+    currency_from: Optional[str] = None
 
 
 class ConversationState(BaseModel):
@@ -419,6 +422,16 @@ def build_conversation_state(
 
     pending_action = ConversationPendingActionState()
     if isinstance(pa_raw, dict):
+        raw_af = pa_raw.get("amount_from")
+        parsed_amt: Optional[float] = None
+        if isinstance(raw_af, (int, float)):
+            parsed_amt = float(raw_af)
+        elif isinstance(raw_af, str) and raw_af.strip():
+            try:
+                parsed_amt = float(raw_af.replace(",", ".").replace(" ", ""))
+            except ValueError:
+                parsed_amt = None
+
         pending_action = ConversationPendingActionState(
             action_draft_id=(
                 str(pa_raw["action_draft_id"]).strip()
@@ -448,6 +461,13 @@ def build_conversation_state(
             stage=(
                 str(pa_raw["stage"]).strip().lower()
                 if pa_raw.get("stage")
+                else None
+            ),
+            amount_from=parsed_amt,
+            currency_from=(
+                str(pa_raw["currency_from"]).strip().upper()[:16]
+                if isinstance(pa_raw.get("currency_from"), str)
+                and pa_raw["currency_from"].strip()
                 else None
             ),
         )

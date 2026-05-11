@@ -216,3 +216,10 @@ class TestRuntimeLoopConfigDefaults:
         from services.assistance.agents import config as ag_config
 
         assert "trust" in ag_config.assistance_runtime_loop_agents()
+
+    def test_action_implicit_when_csv_omits_it(self, monkeypatch):
+        """Anciens .env : CSV sans `action` — on le ré-injecte (CAL transactionnel)."""
+        monkeypatch.setenv("ASSISTANCE_RUNTIME_LOOP_AGENTS", "compliance,product")
+        from services.assistance.agents import config as ag_config
+
+        assert "action" in ag_config.assistance_runtime_loop_agents()

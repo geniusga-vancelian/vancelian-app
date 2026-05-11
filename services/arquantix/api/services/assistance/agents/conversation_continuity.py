@@ -106,6 +106,7 @@ EMBEDS_WITH_BUILTIN_CTAS: frozenset[str] = frozenset({
     "transaction_detail",       # read_transaction_detail (compliance)
     "invest_source_account_list",
     "invest_confirmation_draft",
+    "action_widget",           # agent action CAL v2
 })
 
 
@@ -445,6 +446,10 @@ class ExtractedListing:
     items: list[ListingItem] = field(default_factory=list)
     has_question_after: bool = False
     raw_question: Optional[str] = None  # phrase question si trouvée
+    # Indices de lignes (0-based, ``text.splitlines()``) du bloc liste promu
+    # en auto-QCM — sert à retirer l’énumération Markdown du corps persisté.
+    list_line_start: Optional[int] = None
+    list_line_end: Optional[int] = None
 
 
 # Match « 1. … » ou « 1) … » ou « - … » ou « * … » en début de ligne.
@@ -527,14 +532,20 @@ def extract_assistant_listing(text: str) -> Optional[ExtractedListing]:
     lines = text.splitlines()
     # Étape 1 : détecter le bloc de liste le plus long
     best_run: list[ListingItem] = []
+    best_start: Optional[int] = None
+    best_end: Optional[int] = None
     current_run: list[ListingItem] = []
+    current_start: Optional[int] = None
     auto_index = 0
-    for line in lines:
+    for line_idx, line in enumerate(lines):
         m = _RE_LIST_LINE.match(line)
         if m is None:
             if len(current_run) >= 2 and len(current_run) > len(best_run):
                 best_run = current_run[:]
+                best_start = current_start
+                best_end = line_idx - 1
             current_run = []
+            current_start = None
             continue
         num_str, body = m.group(1), m.group(2)
         if num_str is not None:
@@ -551,11 +562,15 @@ def extract_assistant_listing(text: str) -> Optional[ExtractedListing]:
         label = _clean_label(body)
         if not label:
             continue
+        if not current_run:
+            current_start = line_idx
         current_run.append(
             ListingItem(index=idx, label=label, raw=body.strip())
         )
     if len(current_run) >= 2 and len(current_run) > len(best_run):
         best_run = current_run[:]
+        best_start = current_start
+        best_end = len(lines) - 1
 
     if len(best_run) < 2:
         return None
@@ -586,7 +601,52 @@ def extract_assistant_listing(text: str) -> Optional[ExtractedListing]:
         items=best_run,
         has_question_after=has_question,
         raw_question=raw_question,
+        list_line_start=best_start,
+        list_line_end=best_end,
     )
+
+
+def strip_listing_block_for_auto_qcm(text: str, listing: ExtractedListing) -> str:
+    """Retire l’énumération Markdown + la ligne/s de question redondantes.
+
+    Appelé quand ``decide_auto_qcm`` promeut la liste en footer cliquable :
+    le corps persisté garde l’intro (et tout ce qui précède la liste),
+    pas la répétition liste + question déjà portées par ``auto_qcm``.
+    """
+    start = listing.list_line_start
+    end = listing.list_line_end
+    if start is None or end is None:
+        return text
+    lines = text.splitlines()
+    if start < 0 or end >= len(lines) or start > end:
+        return text
+
+    remove_through = end
+    tail = end + 1
+    while tail < len(lines) and not lines[tail].strip():
+        tail += 1
+
+    if tail < len(lines):
+        qn = ""
+        if listing.raw_question:
+            qn = _normalize(listing.raw_question.strip())
+        for k in range(tail, min(tail + 5, len(lines))):
+            raw = lines[k].strip()
+            if not raw:
+                break
+            ln = _normalize(raw)
+            if qn and (qn in ln or ln in qn or ln == qn):
+                remove_through = k
+                break
+            if "?" in raw and len(raw) < 260:
+                remove_through = k
+                break
+            if raw.startswith("*") and len(raw) < 220:
+                remove_through = k
+                break
+
+    new_lines = lines[:start] + lines[remove_through + 1 :]
+    return "\n".join(new_lines).strip()
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -708,10 +768,13 @@ class AutoQcmDecision:
       ne promote pas.
     * ``skip_reason`` : raison du skip (None si promu) — utile pour
       logs/observabilité ; ne fuite jamais au client.
+    * ``source_listing`` : listing extrait du texte (lignes), pour
+      retirer l’énumération redondante du corps persisté si promu.
     """
 
     candidate: Optional[AutoQcmCandidate]
     skip_reason: Optional[str] = None
+    source_listing: Optional[ExtractedListing] = None
 
     @property
     def promoted(self) -> bool:
@@ -820,4 +883,7 @@ def decide_auto_qcm(
         # whitelist (on peut y arriver si l'env change entre les
         # appels). On reflète comme `disabled_by_env` par défaut.
         return AutoQcmDecision(None, skip_reason=SKIP_DISABLED)
-    return AutoQcmDecision(candidate=candidate)
+    return AutoQcmDecision(
+        candidate=candidate,
+        source_listing=listing,
+    )

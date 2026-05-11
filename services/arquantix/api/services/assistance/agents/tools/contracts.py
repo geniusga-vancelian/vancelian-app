@@ -22,6 +22,7 @@ from typing import (
     Any,
     Awaitable,
     Callable,
+    List,
     Literal,
     Optional,
     Protocol,
@@ -164,6 +165,16 @@ class ToolContext:
     #     ``services.assistance.agents.tools.shared.topic_context``
     #     pour la lecture défensive.
     current_topic: Optional[dict] = None
+
+    # Intake déterministe cross-tools : texte utilisateur effectif du tour
+    # (+ brouillon CAL en attente) pour regex / merge sans relire l'historique LLM.
+    intake_user_text: Optional[str] = None
+    pending_action_snapshot: Optional[dict] = None
+    # Tours bruts précédents (pour intake « montant seul » : symbole dans
+    # messages assistant précédant le dernier user).
+    recent_turns_snapshot: Optional[list[dict[str, Any]]] = None
+    # Tap QCM précédent (option ``id`` == ``agent_hint`` côté client).
+    user_choice_hint: Optional[str] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────

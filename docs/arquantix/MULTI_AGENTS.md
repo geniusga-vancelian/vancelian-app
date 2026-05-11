@@ -22,6 +22,7 @@
 > **Code de référence :** `services/arquantix/api/services/assistance/agents/`
 >
 > **Documents liés :**
+> - **`ASSISTANCE_BOT_REFERENCE.md`** — **référence unique bout en bout** (HTTP → router → agents → mémoire → SSE) **NEW 2026-05-06**
 > - `ORCHESTRATOR.md` — **doc complète du router v2** (3 niveaux,
 >   prompt complet, catalogues, hot-path, pattern advisor-first) **NEW v3.1**
 > - `COMPLIANCE_TOPICS.md` — spec Phase 2b + 2c (tree + orchestration)
@@ -32,6 +33,8 @@
 > - `MEMORY.md` — mémoire long-terme (fondation)
 > - `API.md` — endpoints REST
 > - `ARCHITECTURE.md` — vue d'ensemble système
+> - **`PRD_CONVERSATIONAL_ACTION_LAYER.md`** — PRD Action Agent + Action Widgets (draft → confirmation → exécution) **NEW 2026-05-07**
+> - **`PRD_CRYPTO_INVESTMENT_INTENT_V1.md`** — intent conversationnel `crypto_investment_intent` (sans exécution V1 ; distinct de `crypto_buy`) **NEW 2026-05-07**
 
 ---
 

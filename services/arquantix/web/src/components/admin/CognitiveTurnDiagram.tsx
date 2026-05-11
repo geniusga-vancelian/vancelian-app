@@ -8,8 +8,10 @@
  *   3. ANALYSE COG.   — emotional_intent / matched / stage / trust / knowledge
  *                       + intent_classification (primary_tag, family, tags).
  *   4. OBJECTIF       — primary_goal / next_best_action / stop_pushing.
- *   5. ROUTER         — decision_kind / agent ciblé / confidence.
- *   6. CHAÎNE         — séquence d'agents (router → primary → consults).
+ *   5. ORCHESTRATION  — business_intent / data_need / urgency / … (PR2).
+ *   6. CONV. STATE    — snapshot contractuel JSON (PR1) si persisté.
+ *   7. ROUTER         — decision_kind / agent ciblé / confidence.
+ *   8. CHAÎNE         — séquence d'agents (router → primary → consults).
  *
  * Source de vérité : `assistance_agent_decisions.arguments_json` du
  * `tool_name="router_classify"` (cf. `service._persist_router_decision`).
@@ -41,7 +43,9 @@ import {
   Layers,
   MessageSquare,
   Network,
+  SlidersHorizontal,
   Target,
+  FileStack,
 } from 'lucide-react'
 import { agentColor, type AgentDecision } from './AssistanceToolCallDetailDrawer'
 
@@ -334,6 +338,21 @@ function decisionKindColor(kind: string): string {
   }
 }
 
+/** Couleur badge pour ``orchestration.data_need`` (PR2 — audit / PR4B). */
+function dataNeedBadgeClass(v: string): string {
+  switch (v) {
+    case 'transaction_data':
+    case 'account_data':
+    case 'kyc_data':
+      return 'bg-amber-50 text-amber-800 border-amber-200'
+    case 'human_review':
+      return 'bg-red-50 text-red-700 border-red-200'
+    case 'none':
+    default:
+      return 'bg-slate-50 text-slate-600 border-slate-200'
+  }
+}
+
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text
   return `${text.slice(0, max).trim()}…`
@@ -476,6 +495,16 @@ export function CognitiveTurnDiagram({
     string,
     unknown
   > | null
+  /** PR2 — dimensions route_to normalisées (persistées router). */
+  const orchestration = (args.orchestration ?? null) as Record<
+    string,
+    unknown
+  > | null
+  /** PR1 — snapshot structuré pour replay / métriques. */
+  const conversationState = (args.conversation_state ?? null) as Record<
+    string,
+    unknown
+  > | null
   // Cognitive Bot v4 — Lot 7 V1.2 (2026-05-05) : snapshot historique du
   // bloc CLIENT DISCOVERY tel qu'envoyé au LLM ce tour. Voir
   // `service._persist_router_decision`.
@@ -514,6 +543,19 @@ export function CognitiveTurnDiagram({
     objective !== null &&
     Object.keys(objective).some(
       (k) => objective[k] !== null && objective[k] !== undefined,
+    )
+  const hasOrchestration =
+    orchestration !== null &&
+    Object.keys(orchestration).some(
+      (k) =>
+        orchestration[k] !== null && orchestration[k] !== undefined,
+    )
+  const hasConvState =
+    conversationState !== null &&
+    Object.keys(conversationState).some(
+      (k) =>
+        conversationState[k] !== null &&
+        conversationState[k] !== undefined,
     )
   const hasRouter = Boolean(routerDecision)
   const hasChain =
@@ -746,6 +788,121 @@ export function CognitiveTurnDiagram({
             « {truncate(strategy, 140)} »
           </p>
         )}
+      </StepCard>,
+    )
+  }
+
+  if (hasOrchestration && orchestration) {
+    const ORCH_ORDER = [
+      'business_intent',
+      'data_need',
+      'emotional_state',
+      'urgency',
+      'regulatory_risk',
+      'response_style',
+      'secondary_intents',
+      'must_acknowledge_emotion',
+      'must_check_account_data',
+      'needs_human_escalation',
+    ] as const
+    const seen = new Set<string>()
+    const lines: React.ReactNode[] = []
+    for (const key of ORCH_ORDER) {
+      const v = orchestration[key]
+      if (v === null || v === undefined) continue
+      seen.add(key)
+      if (key === 'data_need' && typeof v === 'string') {
+        lines.push(
+          <KvLine
+            key={key}
+            k="data_need"
+            v={v}
+            badgeClass={dataNeedBadgeClass(v)}
+          />,
+        )
+      } else if (key === 'secondary_intents' && Array.isArray(v)) {
+        const joined = v.filter((x) => typeof x === 'string').join(', ')
+        if (joined)
+          lines.push(
+            <KvLine key={key} k="secondary" v={truncate(joined, 120)} />,
+          )
+      } else if (typeof v === 'boolean') {
+        lines.push(
+          <KvLine
+            key={key}
+            k={key}
+            v={v ? 'true' : 'false'}
+            badgeClass={
+              v
+                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                : 'bg-slate-50 text-slate-600 border-slate-200'
+            }
+          />,
+        )
+      } else {
+        lines.push(
+          <KvLine key={key} k={key} v={truncate(String(v), 100)} />,
+        )
+      }
+    }
+    for (const [key, v] of Object.entries(orchestration)) {
+      if (seen.has(key)) continue
+      if (v === null || v === undefined) continue
+      lines.push(
+        <KvLine
+          key={`extra-${key}`}
+          k={key}
+          v={truncate(
+            typeof v === 'object' ? JSON.stringify(v) : String(v),
+            100,
+          )}
+        />,
+      )
+    }
+    sections.push(
+      <StepCard
+        key="orchestration"
+        icon={<SlidersHorizontal className="h-3 w-3 text-rose-600" />}
+        title="Orchestration (router)"
+        tone="objective"
+      >
+        <p className="text-[10px] text-slate-500 mb-1.5 leading-snug">
+          Intentions métier, besoin données, style — normalisés côté API
+          (cf. orchestration_context).
+        </p>
+        {lines}
+      </StepCard>,
+    )
+  }
+
+  if (hasConvState && conversationState) {
+    sections.push(
+      <StepCard
+        key="conversation_state"
+        icon={<FileStack className="h-3 w-3 text-sky-600" />}
+        title="conversation_state"
+        tone="context"
+      >
+        <p className="text-[10px] text-slate-500 mb-1.5 leading-snug">
+          Snapshot contractuel PR1 sur la ligne router (rejouable /
+          golden trace).
+        </p>
+        {Object.entries(conversationState).map(([k, v]) => {
+          if (v === null || v === undefined) return null
+          const display =
+            typeof v === 'object'
+              ? truncate(JSON.stringify(v), 140)
+              : String(v)
+          return <KvLine key={k} k={k} v={display} />
+        })}
+        <details className="mt-1.5 text-[11px]">
+          <summary className="cursor-pointer text-sky-700 hover:text-sky-900 font-medium">
+            JSON complet
+          </summary>
+          <pre className="mt-1 text-[10px] bg-sky-50/50 border border-sky-100 rounded p-2 overflow-x-auto max-h-40 whitespace-pre-wrap">
+            {JSON.stringify(conversationState, null, 2)}
+          </pre>
+        </details>
       </StepCard>,
     )
   }

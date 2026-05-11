@@ -114,6 +114,19 @@ def assistance_router_hot_path_min_prior_assistant_chars() -> int:
     return max(0, min(8000, v))
 
 
+def assistance_crypto_investment_intent_v1_only() -> bool:
+    """Quand ``True``, la garde transactionnelle achat/crypto explicite préfère
+    ``crypto_investment_intent`` à ``crypto_buy`` (parcours conversationnel V1).
+
+    Variable : ``ASSISTANCE_CRYPTO_INVESTMENT_INTENT_V1_ONLY`` — défaut **false**
+    pour ne pas modifier le comportement existant tant que le flux n’est pas piloté."""
+
+    raw = (
+        os.getenv("ASSISTANCE_CRYPTO_INVESTMENT_INTENT_V1_ONLY") or "false"
+    ).strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 def assistance_wiki_llm_retriever_enabled() -> bool:
     """Active le **Karpathy LLM-as-retriever** sur le wiki (Phase 2 wiki
     v1.4 patch 3).
@@ -424,20 +437,21 @@ def assistance_runtime_loop_enabled() -> bool:
 def assistance_runtime_loop_agents() -> set[str]:
     """Liste des agents pour lesquels le runtime loop est actif.
 
-    `ASSISTANCE_RUNTIME_LOOP_AGENTS=compliance,product,advisor,market`
-    (défaut `compliance,product,advisor,market`). Permet d'opt-in agent
-    par agent, indépendamment du kill-switch global.
+    Défaut si variable absente : ``compliance``, ``product``, ``advisor``,
+    ``market``, ``trust``, ``action``. CSV explicite via
+    ``ASSISTANCE_RUNTIME_LOOP_AGENTS=...``.
 
-    Phase 2c : `product` est ajouté au défaut pour permettre :
-      - le dispatch direct via router (questions produit/délais),
-      - les `consult_specialist` cross-agent depuis compliance.
+    **Important** : ``action`` est **toujours** inclus lorsque la liste est
+    fournie explicitement aussi : d’anciens exemples CSV l’omettaient, ce qui
+    forçait l’agent Actions en Phase 1 (sans ``run_agent_loop``) et **coupait
+    le CAL** (crypto_buy, deposit, bundles, widgets transactionnels).
 
-    Phase 2c.7 : `advisor` et `market` sont également activés par
-    défaut pour exposer les nouveaux widgets chat (cartes instrument,
-    articles à la une, top movers crypto) — sans cela, leur stream
-    reste en mode Phase 1 streaming Markdown sans tool calls.
+    Phase 2c : `product` … (consult_specialist …).
+    Phase 2c.7 : `advisor` et `market` … widgets chat.
     """
     raw = os.getenv("ASSISTANCE_RUNTIME_LOOP_AGENTS")
     if raw is None or not raw.strip():
-        return {"compliance", "product", "advisor", "market", "trust"}
-    return {part.strip().lower() for part in raw.split(",") if part.strip()}
+        return {"compliance", "product", "advisor", "market", "trust", "action"}
+    parts = {part.strip().lower() for part in raw.split(",") if part.strip()}
+    parts.add("action")
+    return parts

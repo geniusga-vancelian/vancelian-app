@@ -92,9 +92,11 @@ SPEC: ToolSpec = {
             "demandes sous prétexte d’orienter uniquement vers un site web.\n\n"
             "Réponse éditoriale (NEWS / ANALYSIS / RESEARCH en anglais comme en "
             "français) : couverture visible, titre, date ; même ouverture in-app "
-            "`open_article`. N’invente **jamais** de lien Markdown "
-            "`[texte](vancelian://app/article/...)` dans ton texte libre.\n"
-            "\n"
+            "`open_article`. Tu peux citer un ou plusieurs articles du résultat "
+            "outil avec un lien Markdown **exact** "
+            "`[titre ou extrait](vancelian://app/article/<slug>)` en reprenant "
+            "le **slug** renvoyé pour chaque entrée (ne jamais inventer de slug)."
+            "\n\n"
             "RÈGLE : tu rédiges aussi un court texte d’introduction au-dessus du "
             "widget ; le widget porte les liens cliquables vérifiés.\n"
             "\n"
@@ -104,9 +106,10 @@ SPEC: ToolSpec = {
             "- `RESEARCH` → notes de recherche ;\n"
             "- `HELP` → **aide & FAQ CMS** (articles publiés `article_type=HELP`). "
             "À utiliser quand tu veux proposer des lectures vérifiables : "
-            "le widget émet les **seuls** liens article autorisés — "
-            "n'écris **jamais** `[texte](vancelian://app/article/...)` "
-            "dans ton markdown libre.\n"
+            "le widget émet les **seuls** deep-links article primaires. Pour le "
+            "texte, si tu cites un article du résultat, tu peux ajouter "
+            "`[libellé](vancelian://app/article/<slug>)` avec le **slug** "
+            "fourni par l’outil — sinon pas de lien article dans le markdown.\n"
             "\n"
             "PARAM `query` (optionnel) : mots-clés du sujet "
             "(ex. \"bitcoin\", \"taux\", \"etf\"). Best-effort sur "
@@ -243,6 +246,7 @@ def execute(
         "query": raw_query or None,
         "articles": [
             {
+                "slug": it["slug"],
                 "title": it["title"],
                 "standfirst": it["standfirst"],
                 "published_at": it["published_at"],

@@ -14,6 +14,9 @@ Surface HTTP exposée à l'espace admin web (Next.js) sous le préfixe
   - ``GET    /{conversation_id}/decisions`` → tous les tool calls
                                               (workflow trace) ordonnés
                                               par ``iteration``.
+  - ``GET    /{conversation_id}/runtime-debug`` → timeline cognitive par
+                                                  tour utilisateur (debug
+                                                  console, JSON).
 
 Garanties :
 
@@ -46,6 +49,7 @@ from database import (
     AssistanceMessage,
     get_db,
 )
+from services.assistance.runtime_debug_timeline import build_runtime_debug_timeline
 from services.portfolio_engine.clients.models import Client as PEClient
 from services.portfolio_engine.hardening.security.context import ActorContext
 from services.portfolio_engine.hardening.security.dependencies import require_admin_or_ops
@@ -550,3 +554,43 @@ def get_conversation_decisions(
         decisions=decisions,
         total=len(decisions),
     )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# GET /{id}/runtime-debug → timeline cognitive (debug console)
+# ─────────────────────────────────────────────────────────────────────
+
+
+@admin_conversations_router.get(
+    "/{conversation_id}/runtime-debug",
+    summary="Timeline debug par tour user (cognitive / action / tools).",
+)
+def get_conversation_runtime_debug(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    actor: ActorContext = Depends(_guard),
+) -> dict[str, Any]:
+    """Rejoue l’observabilité runtime alignée sur chaque message utilisateur."""
+
+    try:
+        conv_uuid = UUID(conversation_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid conversation_id: {exc}",
+        ) from exc
+
+    if db.get(AssistanceConversation, conv_uuid) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found.",
+        )
+
+    payload = build_runtime_debug_timeline(db, conversation_id=conv_uuid)
+    logger.info(
+        "admin_conversations.runtime_debug actor=%s conv=%s turns=%d",
+        getattr(actor, "user_id", None),
+        conv_uuid,
+        len(payload.get("turns") or []),
+    )
+    return payload

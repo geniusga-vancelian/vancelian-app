@@ -14,6 +14,7 @@ import {
   Layers,
   LineChart,
   ListOrdered,
+  MousePointerClick,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -54,6 +55,13 @@ const LINKS: {
     label: 'Playbooks CAL',
     Icon: ListOrdered,
     isActive: (p) => p.startsWith('/admin/assistance/cal-playbooks'),
+  },
+  {
+    href: '/admin/assistance/agent-action-options',
+    label: 'Options action',
+    Icon: MousePointerClick,
+    isActive: (p) =>
+      p.startsWith('/admin/assistance/agent-action-options'),
   },
   {
     href: '/admin/assistance/observability',

@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Optional
 
 from services.assistance import memory as assistance_memory
 from services.assistance.agents.base import (
+    AGENT_ACTION_ID,
     AGENT_ADVISOR_ID,
     AGENT_COMPLIANCE_ID,
     AGENT_DEFAULT_ID,
@@ -40,6 +42,7 @@ from services.assistance.agents.base import (
     RouterDecision,
 )
 from services.assistance.agents.config import (
+    assistance_crypto_investment_intent_v1_only,
     assistance_router_confidence_min,
     assistance_router_model,
     assistance_router_temperature,
@@ -56,6 +59,10 @@ from services.assistance.agents.orchestration_context import (
     BUSINESS_INTENTS,
     TRANSACTION_KINDS,
     orchestration_from_route_to_args,
+)
+from services.assistance.agents.transactional_crypto_intent_patterns import (
+    matches_spot_acquisition_verb,
+    matches_spot_swap_verb,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,6 +88,145 @@ def _effective_router_user_text(agent_input: AgentInput) -> str:
             return str(turn.get("content") or "").strip()
     return ""
 
+# ── Garde-fou transactionnel déterministe (court-circuit avant LLM) ───────
+# Complète le prompt : si l'utilisateur exprime une exécution claire buy/sell/
+# swap/dépôt (FR/EN), on route tout de suite vers l'agent `action` avec
+# `action_request` + `transaction_kind` — évite les `ask_clarification` alors
+# que l'intention est opérationnelle.
+
+_TRANSACTIONAL_GUARD_CONFIDENCE = 0.92
+
+_RE_ADVISORY_ONLY = re.compile(
+    r"\b(?:"
+    r"dois-je|devrais-je|devrais je|"
+    r"should i(?:\s+buy)?|would it be wise to(?:\s+buy)?|"
+    r"worth (?:buying|\bit\b)|"
+    r"me conseille[sz]|vous conseillez|your advice(?:\s+on)?(?:\s+buy)?|"
+    r"ton avis (?:pour|sur) (?:l'(?:achat|invest)|acheter)|"
+    r"est-ce que je (?:dois|devrais)|"
+    r"savoir si (?:j'(?:ai| dois|devrais)|je (?:dois|devrais))|"
+    r"wonder(?:ing)? if i should"
+    r")\b",
+    re.I,
+)
+
+_RE_COMMITMENT = re.compile(
+    r"\b(?:"
+    r"je veux|j'aimerais|j’aimerais|je vais|il me faut|"
+    r"i(?:'|\s)d like|i want|help me (?:to )?(?:buy|purchase)|"
+    r"m'aider à (?:acheter|buy)|"
+    r"lance[rz]? (?:mon |l')?(?:achat|purchase)|"
+    r"go (?:ahead|ahead and) (?:buy|purchase)"
+    r")\b",
+    re.I,
+)
+
+# Actifs explicitement désignés (pas le mot générique « crypto » / cryptomonnaie,
+# trop bruité : pédagogie, marché, « comprendre la crypto », etc.).
+_RE_EXPLICIT_CRYPTO_ASSET = re.compile(
+    r"\b(?:"
+    r"bitcoin|btc|\beth\b|ethereum|solana|\bsol\b|xrp|dogecoin|\bdoge\b|"
+    r"stablecoins?|\busdc\b|\bearc\b|\busdt\b"
+    r")\b",
+    re.I,
+)
+
+_RE_DEPOSIT_ISSUE = re.compile(
+    r"\b(?:"
+    r"bloqu[ée]s?|blocked|refus[ée]s?|pas reçu|not received|"
+    r"failed|failure|erreur(?:\s+de)?\s*dépôt|deposit (?:fail|issue|problem)|"
+    r"problème(?:\s+avec)?\s*(?:mon\s+)?dépôt"
+    r")\b",
+    re.I,
+)
+
+
+def _transactional_route_guard(user_text: str) -> Optional[RouterDecision]:
+    """Si le message est une intention transactionnelle explicite, retourne
+    une décision vers ``action`` sans appeler le routeur LLM ; sinon ``None``.
+    """
+    raw = (user_text or "").strip()
+    if len(raw) < 8:
+        return None
+
+    t = raw.lower().replace("’", "'")
+    t = re.sub(r"\s+", " ", t).strip()
+
+    advisory = _RE_ADVISORY_ONLY.search(t) is not None
+    commitment = _RE_COMMITMENT.search(t) is not None
+    if advisory and not commitment:
+        return None
+
+    def _action(kind: str, slug: str, *, routing_confidence: float) -> RouterDecision:
+        args = {
+            "agent_id": AGENT_ACTION_ID,
+            "confidence": _TRANSACTIONAL_GUARD_CONFIDENCE,
+            "reasoning": f"transactional_guard:{slug}",
+            "business_intent": "action_request",
+            "transaction_kind": kind,
+            "routing_confidence": routing_confidence,
+        }
+        return RouterDecision(
+            agent_id=AGENT_ACTION_ID,
+            confidence=_TRANSACTIONAL_GUARD_CONFIDENCE,
+            reasoning=f"transactional_guard:{slug}",
+            orchestration=orchestration_from_route_to_args(args),
+        )
+
+    if re.search(r"\bbundle\b", t) and re.search(
+        r"\b(?:invest(?:ir|issement)?|investing|acheter|buy|souscrire|subscribe)\b",
+        t,
+    ):
+        return _action("bundle_invest", "bundle_invest", routing_confidence=0.91)
+
+    if re.search(r"\b(?:offre exclusive|exclusive offer)\b", t, re.I):
+        return None
+
+    acquisition_hit = matches_spot_acquisition_verb(t)
+    _amt_asset = (
+        r"bitcoin|btc|\beth\b|ethereum|solana|\bsol\b|usdc|eurc|usdt"
+    )
+    amt_crypto = re.search(
+        r"(?:\b(?:pour|de)\s+\d+[.,]?\d*\s*(?:€|euros?|eur|usd)(?=\s|$|[,;:.])"
+        r".*"
+        rf"\b(?:{_amt_asset})\b)|"
+        rf"(?:\b(?:{_amt_asset})\b.*"
+        r"\b(?:pour|de)\s+\d+[.,]?\d*\s*(?:€|euros?|eur|usd)(?=\s|$|[,;:.]))",
+        t,
+        re.I,
+    )
+    amt_match = amt_crypto is not None
+    crypto_hit = _RE_EXPLICIT_CRYPTO_ASSET.search(t) is not None
+    if crypto_hit and (acquisition_hit or amt_match):
+        rc = (
+            0.95 if acquisition_hit and amt_match else (0.93 if acquisition_hit else 0.88)
+        )
+        if assistance_crypto_investment_intent_v1_only():
+            return _action(
+                "crypto_investment_intent",
+                "crypto_investment_intent",
+                routing_confidence=rc,
+            )
+        return _action("crypto_buy", "crypto_buy", routing_confidence=rc)
+
+    if crypto_hit and re.search(r"\b(?:vendre|sell(?:ing)?)\b", t, re.I):
+        return _action("crypto_sell", "crypto_sell", routing_confidence=0.92)
+
+    if crypto_hit and matches_spot_swap_verb(t):
+        return _action("crypto_swap", "crypto_swap", routing_confidence=0.91)
+
+    if not _RE_DEPOSIT_ISSUE.search(t) and re.search(
+        r"\b(?:"
+        r"déposer|deposer|dépôt d'argent|depot d'argent|faire un dépôt|faire un depot|"
+        r"deposit(?:\s+(?:money|funds|cash))?|wire (?:money |funds )?to deposit"
+        r")\b",
+        t,
+        re.I,
+    ):
+        return _action("deposit", "deposit", routing_confidence=0.92)
+
+    return None
+
 
 # Liste des `agent_id` que le router est autorisé à choisir.
 # Cognitive Bot v4 — Lot 4 (2026-05-04) : ajout de `trust` pour les
@@ -92,6 +238,7 @@ ROUTABLE_AGENTS: list[str] = [
     AGENT_PRODUCT_ID,
     AGENT_MARKET_ID,
     AGENT_TRUST_ID,
+    AGENT_ACTION_ID,
 ]
 
 # Identifiants d'option valides dans le QCM produit par
@@ -168,11 +315,11 @@ def _routing_tools() -> list[dict]:
                             "type": "string",
                             "enum": sorted(TRANSACTION_KINDS),
                             "description": (
-                                "OPTIONNEL — précise l'action CAL quand "
+                                "OPTIONNEL — précise la transaction quand "
                                 "`business_intent` vaut `action_request` : "
-                                "`bundle_invest` (crypto basket / bundle), "
-                                "`crypto_buy` (achat spot d'un actif). "
-                                "Sans offre exclusive pour l'instant."
+                                "`bundle_invest`, `crypto_buy`, `crypto_sell`, "
+                                "`crypto_swap`, `deposit` "
+                                "(navigation / brouillon assisté, sans exécution chat)."
                             ),
                         },
                         "emotional_state": {
@@ -259,6 +406,16 @@ def _routing_tools() -> list[dict]:
                             ],
                             "description": (
                                 "OPTIONNEL — ton global attendu pour l'agent."
+                            ),
+                        },
+                        "routing_confidence": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                            "description": (
+                                "OPTIONNEL — confiance intra-routeur pour l’intention "
+                                "transactionnelle (garde deterministic ou nuance LLM). "
+                                "Exemple : valeur basse (<0.6) → clarification avant brouillon."
                             ),
                         },
                     },
@@ -612,7 +769,6 @@ def classify(agent_input: AgentInput) -> RouterDecision:
     sur `default` agent avec confidence 0.0 (sera lu par le service.py
     et déclenchera potentiellement un QCM générique selon le seuil).
     """
-    messages = _build_router_messages(agent_input)
     model = assistance_router_model()
     temperature = assistance_router_temperature()
     confidence_min = assistance_router_confidence_min()
@@ -627,6 +783,13 @@ def classify(agent_input: AgentInput) -> RouterDecision:
             decision.intent_classification = intent_dict
         return decision
 
+    guard_early = _transactional_route_guard(
+        _effective_router_user_text(agent_input)
+    )
+    if guard_early is not None:
+        return _attach(guard_early)
+
+    messages = _build_router_messages(agent_input)
     try:
         response_message = chat_completion_with_tools(
             messages,

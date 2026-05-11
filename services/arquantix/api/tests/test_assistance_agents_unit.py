@@ -14,6 +14,7 @@ import pytest
 
 from services.assistance.agents import registry, router as router_mod
 from services.assistance.agents.base import (
+    AGENT_ACTION_ID,
     AGENT_ADVISOR_ID,
     AGENT_COMPLIANCE_ID,
     AGENT_DEFAULT_ID,
@@ -399,6 +400,92 @@ class TestRouterClassify:
         assert d.agent_id == AGENT_DEFAULT_ID
         assert d.confidence == 0.0
         assert d.reasoning == "router_llm_failed"
+
+
+# ── Router : garde-fou transactionnel (court-circuit avant LLM) ───────────
+
+
+class TestTransactionalRouteGuard:
+    def test_crypto_buy_explicit_short_circuits_without_llm(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_CRYPTO_INVESTMENT_INTENT_V1_ONLY", "false")
+
+        def _never_call_llm(*_a, **_kw):
+            raise AssertionError("LLM must not be called when guard matches")
+
+        monkeypatch.setattr(router_mod, "chat_completion_with_tools", _never_call_llm)
+        inp = AgentInput(
+            user_message="Je veux acheter du Bitcoin pour 1000 €",
+            recent_turns=[
+                {"role": "user", "content": "Je veux acheter du Bitcoin pour 1000 €"}
+            ],
+            memory_state={},
+        )
+        d = router_mod.classify(inp)
+        assert d.agent_id == AGENT_ACTION_ID
+        assert d.is_decisive is True
+        assert "transactional_guard:crypto_buy" in d.reasoning
+        orch = d.orchestration or {}
+        assert orch.get("business_intent") == "action_request"
+        assert orch.get("transaction_kind") == "crypto_buy"
+        assert orch.get("routing_confidence") == pytest.approx(0.95)
+
+    def test_advisory_buy_question_not_short_circuited(self):
+        """« Dois-je acheter » reste hors garde ; le LLM doit trancher."""
+        assert router_mod._transactional_route_guard(
+            "dois-je acheter du bitcoin pour ma retraite ?"
+        ) is None
+
+    def test_blocked_deposit_not_action_deposit(self):
+        assert router_mod._transactional_route_guard(
+            "mon dépôt est bloqué depuis hier"
+        ) is None
+
+    def test_generic_crypto_no_named_asset_not_short_circuited(self):
+        """« Crypto » seul : éducation / flou — laisser le routeur LLM décider."""
+        assert (
+            router_mod._transactional_route_guard(
+                "je veux acheter de la crypto avec 500 €"
+            )
+            is None
+        )
+
+    def test_exclusive_offer_buy_not_short_circuited(self):
+        assert (
+            router_mod._transactional_route_guard(
+                "achète-moi une offre exclusive en bitcoin pour 500 €"
+            )
+            is None
+        )
+
+    def test_crypto_investment_intent_when_v1_only_flag(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_CRYPTO_INVESTMENT_INTENT_V1_ONLY", "true")
+        d = router_mod._transactional_route_guard(
+            "Je veux acheter du bitcoin pour 1000 €",
+        )
+        assert d is not None
+        assert d.agent_id == AGENT_ACTION_ID
+        orch = d.orchestration or {}
+        assert orch.get("transaction_kind") == "crypto_investment_intent"
+        assert orch.get("routing_confidence") == pytest.approx(0.95)
+
+    def test_investis_usdc_into_eth_crypto_intent(self, monkeypatch):
+        monkeypatch.setenv("ASSISTANCE_CRYPTO_INVESTMENT_INTENT_V1_ONLY", "true")
+        d = router_mod._transactional_route_guard(
+            "Investis tout mon USDC en ETH",
+        )
+        assert d is not None
+        orch = d.orchestration or {}
+        assert orch.get("transaction_kind") == "crypto_investment_intent"
+        assert orch.get("routing_confidence") == pytest.approx(0.93)
+
+    def test_convertir_usdc_en_eth_swaps_not_intent(self):
+        d = router_mod._transactional_route_guard(
+            "je veux convertir mes USDC en ETH",
+        )
+        assert d is not None
+        orch = d.orchestration or {}
+        assert orch.get("transaction_kind") == "crypto_swap"
+        assert orch.get("routing_confidence") == pytest.approx(0.91)
 
 
 # ── Router : redirect_off_topic (règle 6) ───────────────────────────────
@@ -897,6 +984,12 @@ class TestRouterPromptVocabulary:
         assert "Niveau 1 — Sujet identifié → routage direct" in router_prompt
         assert "Niveau 2 — Univers Vancelian mais ambigu → précision" in router_prompt
         assert "Niveau 3 — Hors univers Vancelian → recentrer" in router_prompt
+
+    def test_action_app_first_preamble_present(self, router_prompt: str):
+        """Préalable ACTION_APP_FIRST — achat crypto nommé doit aller sur action."""
+        assert "ACTION_APP_FIRST" in router_prompt
+        assert "m'aider à acheter" in router_prompt or "aider à acheter" in router_prompt
+        assert "route_to(action" in router_prompt.lower() or "agent_id=\"action\"" in router_prompt
 
     def test_rule_0bis_present(self, router_prompt: str):
         """La règle 0bis (vocabulaire produit Vancelian) doit exister."""

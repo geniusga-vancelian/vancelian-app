@@ -12,6 +12,7 @@ from typing import Optional
 
 from services.assistance.agents.assistant_default import DefaultAgent
 from services.assistance.agents.base import (
+    AGENT_ACTION_ID,
     AGENT_ADVISOR_ID,
     AGENT_COMPLIANCE_ID,
     AGENT_DEFAULT_ID,
@@ -20,6 +21,7 @@ from services.assistance.agents.base import (
     AGENT_TRUST_ID,
     AgentBase,
 )
+from services.assistance.agents.action import ActionAgent
 from services.assistance.agents.compliance import ComplianceAgent
 from services.assistance.agents.investment_advisor import InvestmentAdvisorAgent
 from services.assistance.agents.market import MarketAgent
@@ -54,4 +56,6 @@ def get_agent(agent_id: str, *, client_id: Optional[str] = None) -> AgentBase:
         return MarketAgent()
     if agent_id == AGENT_TRUST_ID:
         return TrustAgent()
+    if agent_id == AGENT_ACTION_ID:
+        return ActionAgent()
     raise ValueError(f"Unknown agent_id: {agent_id!r}")

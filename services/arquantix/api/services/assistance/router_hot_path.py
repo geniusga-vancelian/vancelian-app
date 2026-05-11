@@ -68,6 +68,7 @@ logger = logging.getLogger(__name__)
 # un acte conscient de l'inclure dans le hot-path.
 EXPERT_AGENTS_FOR_HOT_PATH: frozenset[str] = frozenset({
     "product",
+    "action",
     "compliance",
     "advisor",
     "market",

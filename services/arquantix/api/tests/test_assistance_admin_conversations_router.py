@@ -331,3 +331,44 @@ class TestDecisions:
         assert body["decisions"][-1]["error_code"] == "not_found"
         # Les arguments_json sont remappés vers `arguments`
         assert body["decisions"][0]["arguments"]["q"] == "bundles"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# GET /{id}/runtime-debug
+# ─────────────────────────────────────────────────────────────────────
+
+
+class TestRuntimeDebug:
+    def test_unknown_conv_returns_404(self, client: TestClient):
+        res = client.get(
+            f"{BASE}/{uuid4()}/runtime-debug", headers=ADMIN_HEADERS
+        )
+        assert res.status_code == 404
+
+    def test_invalid_uuid_returns_400(self, client: TestClient):
+        res = client.get(
+            f"{BASE}/not-uuid/runtime-debug", headers=ADMIN_HEADERS
+        )
+        assert res.status_code == 400
+
+    def test_seeded_returns_timeline_v1(
+        self, client: TestClient, seeded_conversation
+    ):
+        cid = seeded_conversation["conversation_id"]
+        res = client.get(f"{BASE}/{cid}/runtime-debug", headers=ADMIN_HEADERS)
+        assert res.status_code == 200
+        body = res.json()
+        assert body["conversation_id"] == cid
+        assert body["schema_version"] == "runtime_debug_timeline_v1"
+        assert isinstance(body.get("note"), str)
+        turns = body["turns"]
+        assert len(turns) == 2
+        for t in turns:
+            assert "turn_index" in t
+            assert "user_message_id" in t
+            assert "window" in t
+            assert "action_state" in t
+            assert "runtime_decision_trace" in t
+            assert "tool_traces" in t
+            assert "slot_attribution_infer_v0" in t
+            assert set(t["window"].keys()) == {"start", "end"}

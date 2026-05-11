@@ -73,6 +73,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toastError, toastSuccess } from '@/lib/admin/toast'
+import { AssistanceAdminHubNav } from '@/components/admin/AssistanceAdminHubNav'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -375,6 +376,7 @@ export default function AssistanceKnowledgeAdminPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <AssistanceAdminHubNav />
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Knowledge des agents</h1>

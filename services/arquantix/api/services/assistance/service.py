@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -21,6 +23,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from database import AssistanceConversation, AssistanceMessage, SessionLocal
+from services.assistance import action_runtime_guard
 from services.assistance import memory as assistance_memory
 from services.assistance.action_drafts_repo import pending_action_memory_snapshot
 from services.assistance import conversation_topic as assistance_conversation_topic
@@ -65,6 +68,7 @@ from services.assistance.agents.conversation_continuity import (
     build_previous_bot_context_block,
     decide_auto_qcm,
     last_assistant_enriched_from_history,
+    strip_listing_block_for_auto_qcm,
 )
 from services.assistance import client_discovery_repo as discovery_repo
 from services.assistance.agents.config import (
@@ -89,6 +93,26 @@ from services.assistance.embed_gate import gate_embeds_for_ui_experience
 from services.assistance.llm import LLMError
 
 logger = logging.getLogger(__name__)
+
+
+def _trusted_article_slugs_from_embeds(embeds: Optional[list[dict]]) -> set[str]:
+    """Slugs d'articles émis via ``featured_articles_list`` sur ce tour."""
+    if not embeds:
+        return set()
+    out: set[str] = set()
+    for emb in embeds:
+        if (emb.get("type") or "") != "featured_articles_list":
+            continue
+        items = emb.get("items")
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            s = it.get("slug")
+            if isinstance(s, str) and s.strip():
+                out.add(s.strip())
+    return out
 
 
 # Option spéciale ajoutée systématiquement à tous les QCM "choices" :
@@ -1024,14 +1048,78 @@ def start_chat_turn(
         # aucun tool ancrant n'a encore été appelé sur cette conv.
         "current_topic": _safe_get_current_topic(db, conv.id),
     }
+    if isinstance(agent_hint, str) and agent_hint.strip():
+        memory_state_dict["user_choice_hint"] = agent_hint.strip().lower()
 
+    _snap_for_resolution: Optional[dict[str, Any]] = None
     try:
-        _snap = pending_action_memory_snapshot(db, conversation_id=conv.id)
-        if _snap:
-            memory_state_dict["pending_action"] = _snap
+        _snap_loaded = pending_action_memory_snapshot(db, conversation_id=conv.id)
+        if _snap_loaded:
+            memory_state_dict["pending_action"] = _snap_loaded
+            _snap_for_resolution = _snap_loaded
     except Exception:  # noqa: BLE001 — best-effort
         logger.exception(
             "assistance.pending_action.load_failed conv=%s",
+            conv.id,
+        )
+
+    _struct_llm = (
+        os.getenv("ASSISTANCE_STRUCTURED_RESOLUTION_LLM", "").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    _hr = os.getenv("ASSISTANCE_ACTION_RESOLUTION_HEURISTIC", "").strip().lower()
+
+    try:
+        if _struct_llm:
+            from services.assistance.conversation_resolution_llm import (
+                run_structured_resolution_llm_turn_if_enabled,
+            )
+
+            _llm_turn = run_structured_resolution_llm_turn_if_enabled(
+                db,
+                conversation_id=conv.id,
+                user_message=user_content,
+                pending_action_snapshot=_snap_for_resolution,
+            )
+            if _llm_turn is not None:
+                memory_state_dict["conversation_resolution_llm"] = (
+                    _llm_turn.to_memory_dict()
+                )
+                if (
+                    _llm_turn.applied
+                    and _llm_turn.outcome
+                    and _llm_turn.outcome.lifecycle_decision
+                    in {"superseded", "cancelled"}
+                ):
+                    memory_state_dict.pop("pending_action", None)
+                    try:
+                        _snap_reload = pending_action_memory_snapshot(
+                            db, conversation_id=conv.id
+                        )
+                        if _snap_reload:
+                            memory_state_dict["pending_action"] = _snap_reload
+                    except Exception:  # noqa: BLE001
+                        logger.exception(
+                            "assistance.pending_action.reload_after_llm_resolution "
+                            "conv=%s",
+                            conv.id,
+                        )
+        elif _hr in {"1", "true", "yes", "on"}:
+            from services.assistance import conversation_resolution as _conv_resolution
+
+            _res_obj = _conv_resolution.heuristic_resolution_development_only(
+                user_content, _snap_for_resolution
+            )
+            memory_state_dict["conversation_resolution"] = _res_obj.to_audit_dict()
+            memory_state_dict["conversation_resolution_lifecycle_hint"] = {
+                "should_cancel": _res_obj.should_cancel_active_draft,
+                "should_supersede": _res_obj.should_supersede_active_draft,
+                "should_keep_draft": _res_obj.should_keep_active_draft,
+                "resolution_type": _res_obj.resolution_type,
+            }
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "assistance.conversation_resolution_llm_heuristic.failed conv=%s",
             conv.id,
         )
 
@@ -1420,6 +1508,82 @@ def _persist_router_decision(
         )
 
 
+def _client_routing_tags_for_payload(decision: RouterDecision) -> dict[str, Any]:
+    """Métadonnées cognitives pour l'UI mobile (badges au-dessus de la réponse).
+
+    Inclut le triplet routing (agent · intention · objectif) **et** les
+    dimensions ``cognitive_state`` non redondantes avec ces puces :
+
+      * ``conversation_stage`` — où en est la conversation ;
+      * ``trust_level`` — confiance synthétique [0, 1] ;
+      * ``knowledge_level`` — maturité financière déduite de la mémoire.
+
+    Stocké sous ``message_payload.metadata.routing_tags`` et clé SSE
+    top-level ``routing_tags``.
+    """
+    intent_raw = getattr(decision, "intent_classification", None) or {}
+    cog_raw = getattr(decision, "cognitive_state", None) or {}
+    cog: dict[str, Any] = dict(cog_raw) if isinstance(cog_raw, dict) else {}
+    obj = getattr(decision, "objective", None) or {}
+
+    client_intent: Optional[str] = None
+    if isinstance(intent_raw, dict):
+        pt = intent_raw.get("primary_tag")
+        fam = intent_raw.get("family")
+        if isinstance(pt, str) and pt.strip():
+            client_intent = pt.strip()
+        elif isinstance(fam, str) and fam.strip():
+            client_intent = fam.strip()
+    if not client_intent:
+        em = cog.get("emotional_intent")
+        if isinstance(em, str) and em.strip():
+            client_intent = em.strip()
+
+    primary_goal: Optional[str] = None
+    if isinstance(obj, dict):
+        pg = obj.get("primary_goal")
+        if isinstance(pg, str) and pg.strip():
+            primary_goal = pg.strip()
+
+    out: dict[str, Any] = {
+        "routed_agent_id": decision.agent_id,
+        "client_intent": client_intent,
+        "primary_goal": primary_goal,
+    }
+
+    st = cog.get("conversation_stage")
+    if isinstance(st, str) and st.strip():
+        out["conversation_stage"] = st.strip().lower()
+
+    tl_raw = cog.get("trust_level")
+    try:
+        if tl_raw is not None:
+            tf = float(tl_raw)
+            if math.isfinite(tf):
+                out["trust_level"] = round(max(0.0, min(1.0, tf)), 3)
+    except (TypeError, ValueError):
+        pass
+
+    kl = cog.get("knowledge_level")
+    if isinstance(kl, str) and kl.strip():
+        out["knowledge_level"] = kl.strip().lower()
+
+    return out
+
+
+def _merge_routing_tags_metadata(
+    payload: Optional[dict],
+    decision: RouterDecision,
+) -> Optional[dict]:
+    """Ajoute ``metadata.routing_tags`` au payload assistant (mutation copy)."""
+    tags = _client_routing_tags_for_payload(decision)
+    base = dict(payload) if isinstance(payload, dict) else {}
+    md = dict(base.get("metadata") or {}) if isinstance(base.get("metadata"), dict) else {}
+    md["routing_tags"] = tags
+    base["metadata"] = md
+    return base
+
+
 def _build_choices_payload(
     decision: RouterDecision,
 ) -> tuple[str, list[ChoiceOption], dict, str]:
@@ -1616,11 +1780,14 @@ async def stream_assistant_turn(
             prompt, options, payload_dict, fallback_text = _build_choices_payload(
                 decision
             )
+            payload_dict = _merge_routing_tags_metadata(payload_dict, decision)
+            rte = _client_routing_tags_for_payload(decision)
             yield {
                 "type": "choices",
                 "prompt": prompt,
                 "options": [o.to_dict() for o in options],
                 "allow_freeform": True,
+                "routing_tags": rte,
             }
             msg = _persist_assistant_message(
                 db,
@@ -1640,6 +1807,7 @@ async def stream_assistant_turn(
                 "completed": True,
                 "agent_used": AGENT_ROUTER_ID,
                 "message_type": "choices",
+                "routing_tags": rte,
             }
             sub_path = "off_topic" if decision.is_off_topic else "clarification"
             logger.info(
@@ -1652,6 +1820,76 @@ async def stream_assistant_turn(
                 sub_path,
             )
             # Pas de consolidation mémoire pour un QCM (pas un vrai tour).
+            return
+
+        # Phase sécurité — intentions transactionnelles sans runtime CAL Action
+        # (boucle désactivée, identité incomplète, catalogue tools vide, etc.).
+        # Ne pas appeler `ActionAgent.stream` ou un autre expert en Phase 1.
+        if action_runtime_guard.should_refuse_transactional_without_action_runtime(
+            decision,
+            actor_kind=actor_kind,
+            user_id=user_id,
+        ):
+            from services.assistance.agents.tools.shared import audit as assistance_audit
+
+            aud_args = action_runtime_guard.log_action_runtime_blocked(
+                conversation_id=conversation_id,
+                decision=decision,
+                actor_kind=actor_kind,
+                user_id=user_id,
+            )
+            assistance_audit.persist_decision(
+                db,
+                conversation_id=conversation_id,
+                agent_id=decision.agent_id,
+                iteration=0,
+                tool_name="action_runtime_guard",
+                autonomy_level="L0",
+                arguments=aud_args,
+                result_summary={"blocked": True},
+                error_code="action_runtime_unavailable",
+            )
+            full_text = action_runtime_guard.ACTION_RUNTIME_UNAVAILABLE_USER_FR
+            yield {"type": "delta", "content": full_text}
+            guard_payload = _merge_routing_tags_metadata(
+                {
+                    "metadata": {
+                        "action_runtime_guard": True,
+                        "reason": "action_runtime_unavailable",
+                    },
+                },
+                decision,
+            )
+            msg = _persist_assistant_message(
+                db,
+                conversation_id=conversation_id,
+                turn_index=user_idx + 1,
+                content=full_text,
+                agent_used=decision.agent_id,
+                message_type="text",
+                message_payload=guard_payload,
+            )
+            if msg is None:
+                yield {"type": "error", "message": "conversation_gone"}
+                return
+            yield {
+                "type": "done",
+                "message_id": str(msg.id),
+                "completed": True,
+                "agent_used": decision.agent_id,
+                "message_type": "text",
+                "content": full_text,
+                "routing_tags": _client_routing_tags_for_payload(decision),
+            }
+            logger.info(
+                "assistance.agent.tour_done conv=%s turn=%s "
+                "agent=%s latency_ms=%.0f path=action_runtime_guard",
+                conversation_id,
+                user_idx + 1,
+                decision.agent_id,
+                (time.monotonic() - started_at) * 1000,
+            )
+            _schedule_consolidation(session_factory, conversation_id)
             return
 
         # ── Cas nominal (agent répond) ──────────────────────────────
@@ -1753,6 +1991,7 @@ async def stream_assistant_turn(
                         "prompt": runtime_choices["prompt"],
                         "options": runtime_choices["options"],
                         "allow_freeform": runtime_choices["allow_freeform"],
+                        "routing_tags": _client_routing_tags_for_payload(decision),
                     }
                 elif event.type == "error":
                     # C.2 — fallback persistant : on émet l'event
@@ -1783,6 +2022,7 @@ async def stream_assistant_turn(
                             "completed": False,
                             "agent_used": fb_agent,
                             "message_type": "text",
+                            "routing_tags": _client_routing_tags_for_payload(decision),
                         }
                         logger.info(
                             "assistance.agent.tour_error_fallback "
@@ -1841,6 +2081,7 @@ async def stream_assistant_turn(
                     "completed": False,
                     "agent_used": fb_agent,
                     "message_type": "text",
+                    "routing_tags": _client_routing_tags_for_payload(decision),
                 }
                 logger.info(
                     "assistance.agent.tour_error_fallback "
@@ -1859,12 +2100,14 @@ async def stream_assistant_turn(
         # quand pas de dispatch (Phase 2a/sub-agents non-compliance).
         agent_used_persisted = final_agent_id or decision.agent_id
 
-        # Liens `vancelian://app/article/...` dans le markdown ne sont pas
-        # validés — le modèle peut inventer des slugs. On neutralise avant
-        # persistance (les seuls liens article fiables sont ceux du widget
-        # `featured_articles_list` émis par `show_featured_articles`).
+        # Liens `vancelian://app/article/...` : on retire ceux dont le slug
+        # n'est pas dans la liste du widget `featured_articles_list` du même
+        # tour (évite les slugs inventés tout en gardant les titres cliquables
+        # quand le LLM cite les mêmes articles que l'embed).
+        _trusted_slugs = _trusted_article_slugs_from_embeds(runtime_embeds)
         _sanitized, _n_article_links = strip_untrusted_article_links(
-            full_text
+            full_text,
+            trusted_slugs=_trusted_slugs,
         )
         if _n_article_links:
             logger.info(
@@ -1944,6 +2187,12 @@ async def stream_assistant_turn(
                     "source": "auto_promoted",
                     "truncated": bool(cand.truncated),
                 }
+                # Éviter liste numérotée + footer QCM redondants (même libellés).
+                src_listing = auto_qcm_decision.source_listing
+                if src_listing is not None:
+                    full_text = strip_listing_block_for_auto_qcm(
+                        full_text, src_listing
+                    )
                 logger.info(
                     "assistance.auto_qcm.emitted conv=%s agent=%s "
                     "items=%d truncated=%s",
@@ -1994,6 +2243,9 @@ async def stream_assistant_turn(
                 choices_payload["metadata"] = orchestration_meta
             if runtime_embeds:
                 choices_payload["embeds"] = runtime_embeds
+            choices_payload = _merge_routing_tags_metadata(
+                choices_payload, decision
+            )
             msg = _persist_assistant_message(
                 db,
                 conversation_id=conversation_id,
@@ -2021,6 +2273,7 @@ async def stream_assistant_turn(
                             option_strings=list(auto_qcm_payload.get("options") or []),
                         ),
                     )
+            text_payload = _merge_routing_tags_metadata(text_payload, decision)
             msg = _persist_assistant_message(
                 db,
                 conversation_id=conversation_id,
@@ -2049,6 +2302,11 @@ async def stream_assistant_turn(
             "agent_used": agent_used_persisted,
             "message_type": final_message_type,
         }
+        # Texte final **après** sanitize + strip liste auto-QCM : le mobile
+        # concatène les `delta` en mémoire, mais ce corps peut différer
+        # (ex. suppression liste redondante) — on livre la vérité BDD.
+        if final_message_type == "text":
+            done_payload["content"] = full_text.strip() or "[Réponse vide]"
         if runtime_embeds:
             done_payload["embeds"] = runtime_embeds
         # Lot 7 V1.1 — atomicité : l'auto-QCM est livré dans le `done`
@@ -2061,6 +2319,7 @@ async def stream_assistant_turn(
             done_payload["product_pipeline_output_judge"] = runtime_output_judge
         if runtime_product_wiki_preload:
             done_payload["product_pipeline_wiki_preload"] = runtime_product_wiki_preload
+        done_payload["routing_tags"] = _client_routing_tags_for_payload(decision)
         yield done_payload
 
         logger.info(

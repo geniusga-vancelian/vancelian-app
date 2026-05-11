@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,8 @@ ActionKind = Literal[
     # Crypto Bundles (Phase 2 wiki — carte crypto_bundles_card)
     "view_bundle_detail",
     "invest_bundle",
+    # Liste marchés crypto (entrée depuis agent action / swap guidance)
+    "markets_crypto",
     # Articles / News (Phase 2c.7 — featured_articles_list)
     "open_article",
     # Profil
@@ -194,6 +196,12 @@ _CATALOG: dict[str, ActionSpec] = {
         available_phase_2b=True,
         requires_param="bundle_id",
     ),
+    "markets_crypto": ActionSpec(
+        kind="markets_crypto",
+        default_label="Voir les cryptos cotées",
+        deep_link_template="vancelian://app/markets/crypto",
+        available_phase_2b=True,
+    ),
     # Phase 2c.7 — `featured_articles_list` rows. Le placeholder `{id}`
     # est rempli avec le **slug** de l'article (URL-safe) que le client
     # passe ensuite à `ArticleDetailScreen(slug:)`.
@@ -251,6 +259,24 @@ def is_available(kind: str) -> bool:
 def get_spec(kind: str) -> Optional[ActionSpec]:
     """Spec immuable (ou None si kind inconnu)."""
     return _CATALOG.get(kind)
+
+
+def catalog_entries_for_admin() -> list[dict[str, Any]]:
+    """Lecture sérialisable pour espaces admin (whitelist CTA, ordre stable)."""
+
+    rows: list[dict[str, Any]] = []
+    for kind in sorted(_CATALOG.keys()):
+        spec = _CATALOG[kind]
+        rows.append(
+            {
+                "kind": spec.kind,
+                "default_label": spec.default_label,
+                "deep_link_template": spec.deep_link_template,
+                "available_phase_2b": spec.available_phase_2b,
+                "requires_param": spec.requires_param,
+            }
+        )
+    return rows
 
 
 def build_action(
@@ -371,6 +397,7 @@ __all__ = [
     "ActionKind",
     "ActionSpec",
     "build_action",
+    "catalog_entries_for_admin",
     "get_spec",
     "is_available",
     "is_known_deep_link",

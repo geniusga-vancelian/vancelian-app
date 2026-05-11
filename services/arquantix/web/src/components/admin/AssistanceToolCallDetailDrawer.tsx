@@ -35,9 +35,12 @@ export interface AgentDecision {
 const AGENT_COLORS: Record<string, string> = {
   router: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   product: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  action: 'bg-rose-100 text-rose-800 border-rose-200',
   compliance: 'bg-amber-100 text-amber-700 border-amber-200',
   advisor: 'bg-violet-100 text-violet-700 border-violet-200',
   market: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  trust: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+  default: 'bg-slate-100 text-slate-700 border-slate-200',
 }
 
 export function agentColor(agentId: string): string {

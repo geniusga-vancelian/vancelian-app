@@ -30,6 +30,9 @@ AGENT_MARKET_ID = "market"
 # compliance.general en sous-routine pour fournir un encart factuel
 # rassurant dans une réponse synthétique.
 AGENT_TRUST_ID = "trust"
+# Agent dédié aux parcours transactionnels guidés (dépôt, buy/sell guidé,
+# bundle invest, swap — navigation native, pas d'exécution ordre chat).
+AGENT_ACTION_ID = "action"
 
 KNOWN_AGENT_IDS = frozenset({
     AGENT_DEFAULT_ID,
@@ -39,6 +42,7 @@ KNOWN_AGENT_IDS = frozenset({
     AGENT_PRODUCT_ID,
     AGENT_MARKET_ID,
     AGENT_TRUST_ID,
+    AGENT_ACTION_ID,
 })
 
 # Pseudo-`agent_hint` que le client renvoie quand l'utilisateur clique
@@ -56,6 +60,7 @@ AGENT_LABELS: dict[str, str] = {
     AGENT_PRODUCT_ID: "Produits Vancelian",
     AGENT_MARKET_ID: "Veille marché",
     AGENT_TRUST_ID: "Confiance & sécurité",
+    AGENT_ACTION_ID: "Actions rapides",
 }
 
 

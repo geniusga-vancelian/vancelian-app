@@ -88,6 +88,9 @@ from services.assistance.admin_client_discovery_router import (
 from services.assistance.admin_action_playbooks_router import (
     admin_router as assistance_admin_action_playbooks_router,
 )
+from services.assistance.admin_agent_action_options_router import (
+    admin_router as assistance_admin_agent_action_options_router,
+)
 from services.migrations.routes import router as migrations_router
 from services.portfolio_engine import router as portfolio_engine_router
 from services.customers_admin import customers_admin_router
@@ -211,6 +214,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(assistance_admin_observability_router)
     app.include_router(assistance_admin_client_discovery_router)
     app.include_router(assistance_admin_action_playbooks_router)
+    app.include_router(assistance_admin_agent_action_options_router)
     app.include_router(migrations_router)
     app.include_router(portfolio_engine_router)
     app.include_router(customers_admin_router)

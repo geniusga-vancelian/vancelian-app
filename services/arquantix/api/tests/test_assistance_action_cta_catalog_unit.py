@@ -37,6 +37,7 @@ class TestKnownKinds:
             "view_security",
             "upload_document",
             "contact_support",
+            "markets_crypto",
         ],
     )
     def test_kind_is_known(self, kind):
@@ -64,6 +65,7 @@ class TestPhase2bAvailability:
             "download_transaction_statement",  # Phase 2c.2
             "view_account_info",
             "view_security",
+            "markets_crypto",
         ],
     )
     def test_available_phase_2b(self, kind):
@@ -165,6 +167,10 @@ class TestBuildAction:
         assert action["label"] == "Voir la transaction"
 
 
+    def test_markets_crypto(self):
+        action = action_cta_catalog.build_action("markets_crypto")
+        assert action is not None
+        assert action["deep_link"] == "vancelian://app/markets/crypto"
 class TestIsKnownDeepLink:
     """Defense-in-depth : valider les deep-links forgés depuis l'extérieur."""
 
@@ -178,6 +184,7 @@ class TestIsKnownDeepLink:
             "vancelian://app/deposit/crypto",
             "vancelian://app/wallet/euro",
             "vancelian://app/wallet/iban",
+            "vancelian://app/markets/crypto",
             "vancelian://app/transactions",
             "vancelian://app/profile/account",
             "vancelian://app/profile/security",

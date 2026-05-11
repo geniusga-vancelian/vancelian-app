@@ -52,6 +52,34 @@ def _fmt_money(val: Any) -> str:
         return "0.00"
 
 
+def _normalize_quote_currency(ccy: Optional[str]) -> Optional[str]:
+    """Devise pour deep-link / brouillon (EUR/USD, …)."""
+    if ccy is None or not str(ccy).strip():
+        return None
+    u = str(ccy).strip().upper()
+    if u in {"EURO", "EUROS", "€"}:
+        return "EUR"
+    if u in {"$", "USD", "DOLLAR", "DOLLARS", "US DOLLAR"}:
+        return "USD"
+    return u[:16]
+
+
+def _amount_ccy_query(*, amount: Optional[float], currency: Optional[str]) -> str:
+    """Suffixe query `&amount=&ccy=` aligné sur ``show_invest_confirmation_draft``."""
+    if amount is None:
+        return ""
+    try:
+        af = float(amount)
+    except (TypeError, ValueError):
+        return ""
+    if af <= 0:
+        return ""
+    ccy = _normalize_quote_currency(currency) or "EUR"
+    amt = quote(f"{af:.8f}".rstrip("0").rstrip("."), safe="")
+    ccy_q = quote(ccy, safe="")
+    return f"&amount={amt}&ccy={ccy_q}"
+
+
 SPEC: ToolSpec = {
     "type": "function",
     "function": {
@@ -78,6 +106,21 @@ SPEC: ToolSpec = {
                     "description": (
                         "Identifiant cible : pour crypto_buy le SYMBOL (ex. BTC) ; "
                         "pour bundle l'UUID du produit crypto_bundle."
+                    ),
+                },
+                "amount_from": {
+                    "type": "number",
+                    "description": (
+                        "OPTIONNEL — montant que le client veut mobiliser depuis la "
+                        "devise ``currency_from`` (ex. 1000 quand il dit « 1000 € »). "
+                        "À transmettre dès que le montant est connu dans le tour."
+                    ),
+                },
+                "currency_from": {
+                    "type": "string",
+                    "description": (
+                        "OPTIONNEL — devise du montant (EUR, USD, …). Défaut implicite "
+                        "EUR si le client cite des euros sans préciser."
                     ),
                 },
             },
@@ -110,6 +153,8 @@ def execute(
     *,
     target_kind: str,
     target_id: str,
+    amount_from: Optional[float] = None,
+    currency_from: Optional[str] = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     if not ctx.client_id:
@@ -157,6 +202,8 @@ def execute(
             target_kind=tk,
             target_id=tid,
             account_key=account_key,
+            amount_from=amount_from,
+            currency_from=currency_from,
         )
         items.append(
             {
@@ -198,6 +245,8 @@ def execute(
                 target_kind=tk,
                 target_id=tid,
                 account_key=account_key,
+                amount_from=amount_from,
+                currency_from=currency_from,
             )
             name = str(raw.get("name") or asset)
             items.append(
@@ -221,6 +270,23 @@ def execute(
         title = f"Source pour acheter {buy_symbol_upper or tid}"
 
     action_type = "bundle_invest" if tk == "bundle" else "crypto_buy"
+    draft_payload: dict[str, Any] = {
+        "target_kind": tk,
+        "target_id": tid,
+        "stage": "source_list",
+        "accounts_count": len(items),
+    }
+    try:
+        if amount_from is not None:
+            af = float(amount_from)
+            if af > 0:
+                draft_payload["amount_from"] = af
+                draft_payload["currency_from"] = (
+                    _normalize_quote_currency(currency_from) or "EUR"
+                )
+    except (TypeError, ValueError):
+        pass
+
     draft_id: Optional[str] = None
     try:
         conv_uid = UUID(str(ctx.conversation_id))
@@ -229,12 +295,7 @@ def execute(
             conversation_id=conv_uid,
             client_id=cid,
             action_type=action_type,
-            payload={
-                "target_kind": tk,
-                "target_id": tid,
-                "stage": "source_list",
-                "accounts_count": len(items),
-            },
+            payload=draft_payload,
         )
         draft_id = str(draft.id)
         for it in items:
@@ -276,15 +337,29 @@ def execute(
     }
 
 
-def _build_deep_link(*, target_kind: str, target_id: str, account_key: str) -> str:
+def _build_deep_link(
+    *,
+    target_kind: str,
+    target_id: str,
+    account_key: str,
+    amount_from: Optional[float] = None,
+    currency_from: Optional[str] = None,
+) -> str:
     """Construit un deep-link Flutter whitelisté (resolver `invest/*`)."""
     ak = quote(account_key, safe="")
+    amt_q = _amount_ccy_query(amount=amount_from, currency=currency_from)
     if target_kind == "bundle":
         bid = quote(str(target_id).strip(), safe="")
-        return f"vancelian://app/invest/bundle_amount?bundle_id={bid}&account_key={ak}"
+        return (
+            f"vancelian://app/invest/bundle_amount?bundle_id={bid}&account_key={ak}"
+            f"{amt_q}"
+        )
     # crypto_buy
     sym = quote(str(target_id).strip().upper(), safe="")
-    return f"vancelian://app/invest/crypto_buy_amount?symbol={sym}&account_key={ak}"
+    return (
+        f"vancelian://app/invest/crypto_buy_amount?symbol={sym}&account_key={ak}"
+        f"{amt_q}"
+    )
 
 
 __all__ = ["SPEC", "execute"]

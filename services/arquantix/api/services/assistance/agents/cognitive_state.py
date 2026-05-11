@@ -600,7 +600,7 @@ def infer_conversation_stage(
         if "deep_link" in content or "[cta" in content.lower():
             return STAGE_CONVERSION
 
-    expert_agents = {"advisor", "product", "market"}
+    expert_agents = {"advisor", "product", "market", "action"}
     intent = intent_classification or {}
     preferred_agent = (
         str(intent.get("preferred_agent") or "").strip().lower()

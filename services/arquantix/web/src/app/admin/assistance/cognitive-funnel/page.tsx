@@ -40,6 +40,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toastError } from '@/lib/admin/toast'
+import { AssistanceAdminHubNav } from '@/components/admin/AssistanceAdminHubNav'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -301,6 +302,7 @@ export default function CognitiveFunnelPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <AssistanceAdminHubNav />
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>

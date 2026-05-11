@@ -11,6 +11,7 @@ from services.assistance.agents.base import AgentEvent, AgentInput
 from services.assistance.agents.runtime import product_slack_pipeline as psp
 from services.assistance.agents.runtime.product_slack_pipeline import (
     _build_preload_block_and_refs,
+    _embeds_include_cal_ui,
     _language_hint_for_replies,
     _run_input_guardrail,
     normalize_index_path,
@@ -154,6 +155,68 @@ def test_iter_pipeline_runs_agent_loop(monkeypatch):
     texts = [e.content for e in events if e.type == "delta" and e.content]
     assert "ok" in texts
     assert events[-1].type == "done"
+
+
+def test_embeds_include_cal_ui():
+    assert _embeds_include_cal_ui(None) is False
+    assert _embeds_include_cal_ui([]) is False
+    assert _embeds_include_cal_ui([{"type": "foo"}]) is False
+    assert _embeds_include_cal_ui([{"type": "invest_source_account_list"}]) is True
+    assert _embeds_include_cal_ui([{"type": "invest_confirmation_draft"}]) is True
+
+
+def test_pipeline_skips_output_judge_when_cal_embed(monkeypatch):
+    """Le juge wiki ne voit pas les cartes CAL — ne pas BLOCK à tort."""
+    monkeypatch.setenv("ASSISTANCE_PRODUCT_SLACK_PIPELINE_ENABLED", "true")
+    monkeypatch.setenv("ASSISTANCE_PRODUCT_PIPELINE_OUTPUT_JUDGE_ENABLED", "true")
+
+    judged_called: list[bool] = []
+
+    def spy_judge(**kwargs):
+        judged_called.append(True)
+        return psp.normalize_judge_llm_payload({"verdict": "BLOCK"})
+
+    monkeypatch.setattr(psp, "_run_output_judge", spy_judge)
+
+    guard = {"verdict": "IN_DOMAIN", "reply_fr": "", "reply_en": "", "use_wiki": False}
+    monkeypatch.setattr(psp, "_run_input_guardrail", lambda **_: guard)
+
+    async def fake_run_agent_loop(**kwargs):
+        yield AgentEvent(type="delta", content="")
+        yield AgentEvent(type="delta", content="Choisis ton compte")
+        yield AgentEvent(
+            type="done",
+            completed=True,
+            embeds=[{"type": "invest_source_account_list", "id": "list1"}],
+        )
+
+    monkeypatch.setattr(psp, "run_agent_loop", fake_run_agent_loop)
+
+    async def collect():
+        events_out: list[AgentEvent] = []
+        async for ev in psp.iter_product_slack_pipeline_events(
+            db=None,  # type: ignore[arg-type]
+            agent_id="product",
+            agent_input=AgentInput(
+                user_message="acheter btc",
+                recent_turns=[],
+                memory_state={},
+            ),
+            actor_kind=ActorKind.CUSTOMER,
+            conversation_id=uuid4(),
+            user_id=1,
+        ):
+            events_out.append(ev)
+        return events_out
+
+    events = asyncio.run(collect())
+    assert judged_called == []
+    assert events[-1].type == "done"
+    meta = events[-1].output_judge_metadata or {}
+    assert meta.get("verdict") == "PASS"
+    assert "skipped" in (meta.get("notes") or "").lower()
+    deltas = [e.content for e in events if e.type == "delta" and (e.content or "").strip()]
+    assert any("Choisis ton compte" in (t or "") for t in deltas)
 
 
 def test_guard_off_topic_emits_done_without_loop(monkeypatch):

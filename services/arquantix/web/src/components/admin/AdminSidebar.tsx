@@ -37,6 +37,7 @@ import {
   Layers,
   Wand2,
   Bot,
+  MousePointerClick,
 } from 'lucide-react'
 
 interface NavItem {
@@ -108,6 +109,11 @@ const navItems: NavItem[] = [
     label: 'Playbooks CAL (assistance)',
     href: '/admin/assistance/cal-playbooks',
     icon: ListOrdered,
+  },
+  {
+    label: 'Options agent action (assistance)',
+    href: '/admin/assistance/agent-action-options',
+    icon: MousePointerClick,
   },
   {
     label: 'Observabilité assistance',

@@ -26,7 +26,7 @@ class ChatTurnRequest(BaseModel):
     Multi-agents Phase 1 (cf. docs/arquantix/MULTI_AGENTS.md § 1.9.3) :
     `agent_hint` permet de **shortcut** le router quand l'utilisateur a
     cliqué une option d'un QCM précédent. Doit être un `agent_id` connu
-    (`compliance`, `advisor`, `product`, `market`, `default`) ou None.
+    (`compliance`, `advisor`, `product`, `market`, `action`, `trust`, `default`) ou None.
     """
 
     conversation_id: Optional[UUID] = None
