@@ -157,6 +157,8 @@ function mapToGalleryProjects(
       fundedPercentage: p.fundedPct ?? 0,
       fundedText: p.fundedText ?? "—",
       ctaLink,
+      /** EO résolues : métriques uniquement si `lending_pool_products` liée. */
+      hasLendingPool: p.fundedPct != null,
     }
   })
 }

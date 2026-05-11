@@ -7,6 +7,10 @@
  * 2. Si vide et locale demandée ≠ locale par défaut : locale par défaut, PUBLISHED puis DRAFT
  * 3. Dernier recours : n’importe quelle locale — PUBLISHED puis DRAFT
  *
+ * Mode `either_draft_first` (aperçu CMS) :
+ * 1. Locale demandée : DRAFT puis PUBLISHED
+ * 2. Même logique de fallback de locale, puis DRAFT / PUBLISHED en dernier recours.
+ *
  * Modes stricts (`PUBLISHED` ou `DRAFT` uniquement) : mêmes paliers de locale,
  * sans mélanger les statuts ; dernier recours = première ligne au statut demandé
  * en privilégiant l’ordre locale demandée → défaut → autres.
@@ -20,6 +24,7 @@ export type VaultSectionContentLike = {
 
 export type ResolveVaultSectionContentMode =
   | 'either'
+  | 'either_draft_first'
   | typeof ContentStatus.PUBLISHED
   | typeof ContentStatus.DRAFT
 
@@ -28,6 +33,7 @@ export type ResolveVaultSectionContentOptions = {
   defaultLocale: string
   /**
    * - `either` : publié puis brouillon à chaque palier (détail offre web).
+   * - `either_draft_first` : brouillon puis publié (aperçu Vault Builder authentifié).
    * - `PUBLISHED` / `DRAFT` : uniquement ce statut à chaque palier (liste mobile, détail mobile).
    */
   mode: ResolveVaultSectionContentMode
@@ -37,6 +43,13 @@ function pickEitherInBucket<T extends VaultSectionContentLike>(rows: T[]): T | u
   return (
     rows.find((c) => c.status === ContentStatus.PUBLISHED) ||
     rows.find((c) => c.status === ContentStatus.DRAFT)
+  )
+}
+
+function pickDraftFirstInBucket<T extends VaultSectionContentLike>(rows: T[]): T | undefined {
+  return (
+    rows.find((c) => c.status === ContentStatus.DRAFT) ||
+    rows.find((c) => c.status === ContentStatus.PUBLISHED)
   )
 }
 
@@ -77,6 +90,20 @@ export function resolveVaultSectionContent<T extends VaultSectionContentLike>(
   if (!contents.length) return null
 
   const { requestedLocale, defaultLocale, mode } = options
+
+  if (mode === 'either_draft_first') {
+    let content = pickDraftFirstInBucket(byLocale(contents, requestedLocale))
+    if (content) return content
+
+    if (requestedLocale !== defaultLocale) {
+      content = pickDraftFirstInBucket(byLocale(contents, defaultLocale))
+      if (content) return content
+    }
+
+    const anyDraft = contents.find((c) => c.status === ContentStatus.DRAFT)
+    const anyPub = contents.find((c) => c.status === ContentStatus.PUBLISHED)
+    return anyDraft || anyPub || null
+  }
 
   if (mode === 'either') {
     let content = pickEitherInBucket(byLocale(contents, requestedLocale))

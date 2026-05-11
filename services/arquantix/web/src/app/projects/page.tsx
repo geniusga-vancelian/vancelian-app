@@ -1,15 +1,25 @@
 import { notFound } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { Prisma } from '@prisma/client'
-import { getPageSections } from '@/lib/cms/content'
+import { getPageSections, type SectionWithContent } from '@/lib/cms/content'
 import { resolvePublicLocale } from '@/lib/i18n/resolvePublicLocale'
 import { SectionRenderer } from '@/components/cms/SectionRenderer'
 import { prisma } from '@/lib/prisma'
+import { resolveCanonicalSectionKey } from '@/lib/sections/library'
 
 export const dynamic = 'force-dynamic'
 
 /** Slug CMS de la page `/projects` (même principe que la home). */
 const PROJECTS_PAGE_SLUG = 'projects'
+
+function projectGridResolvedOfferCount(sections: SectionWithContent[]): number {
+  const grid = sections.find(
+    (s) => (resolveCanonicalSectionKey(s.key) ?? s.key) === 'project_grid',
+  )
+  if (!grid?.data) return 0
+  const rp = grid.data.resolvedProjects
+  return Array.isArray(rp) ? rp.length : 0
+}
 
 function isDatabaseUnreachable(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientInitializationError) return true
@@ -70,6 +80,15 @@ export default async function ProjectsPage({
     let sections = await getPageSections(PROJECTS_PAGE_SLUG, locale, 'published')
     if (sections.length === 0 || sections.every((s) => !s.data || Object.keys(s.data).length === 0)) {
       sections = await getPageSections(PROJECTS_PAGE_SLUG, locale, 'draft')
+    } else if (process.env.NODE_ENV === 'development') {
+      /** Brouillon souvent en avance sur le publié : évite une grille vide en local si le publish section n’a pas été fait. */
+      const pubCount = projectGridResolvedOfferCount(sections)
+      if (pubCount === 0) {
+        const draftSections = await getPageSections(PROJECTS_PAGE_SLUG, locale, 'draft')
+        if (projectGridResolvedOfferCount(draftSections) > pubCount) {
+          sections = draftSections
+        }
+      }
     }
 
     if (sections.length === 0) {

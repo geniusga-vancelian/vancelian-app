@@ -16,6 +16,7 @@ import {
   getExclusiveOfferVaultPayload,
   type ExclusiveOfferVaultPayload,
 } from '@/lib/cms/exclusiveOfferVaultPage'
+import { VAULT_BUILDER_IFRAME_PREVIEW_QUERY } from '@/lib/cms/vaultBuilderPreviewConstants'
 import { ExclusiveOfferVaultDetail } from '@/components/exclusive-offer/ExclusiveOfferVaultDetail'
 import {
   EXCLUSIVE_OFFER_GABARIT_SLUG,
@@ -26,6 +27,7 @@ import { getPageSections, type SectionWithContent } from '@/lib/cms/content'
 import { SectionRenderer, type SectionPageRendererContext } from '@/components/cms/SectionRenderer'
 import { resolveCanonicalSectionKey, getSectionType } from '@/lib/sections/library'
 import { cn } from '@/lib/utils'
+import { getSessionFromCookie } from '@/lib/auth'
 
 export type ProjectDetailSharedProps = {
   slug: string
@@ -51,6 +53,14 @@ const ALLOWED_EXCLUSIVE_OFFER_GABARIT_SECTIONS = new Set([
 ])
 
 const FULL_BLEED_OFFER_GABARIT = new Set(['cta', 'key_figures'])
+
+function vaultBuilderIframePreviewRequested(
+  searchParams: Record<string, string | string[] | undefined>,
+): boolean {
+  const raw = searchParams[VAULT_BUILDER_IFRAME_PREVIEW_QUERY]
+  const v = Array.isArray(raw) ? raw[0] : raw
+  return v === '1' || v === 'true'
+}
 
 function withFallbackExclusiveOfferVault(
   sections: SectionWithContent[],
@@ -156,6 +166,14 @@ export async function projectDetailPageContent({
   const cookieStore = await cookies()
   const locale = resolvePublicLocale({ cookieStore, searchParams, urlLocale })
 
+  const vaultBuilderPreviewRequested = vaultBuilderIframePreviewRequested(searchParams)
+  const adminSessionForVaultPreview = vaultBuilderPreviewRequested
+    ? await getSessionFromCookie()
+    : null
+  const allowExclusiveOfferAdminPreview = Boolean(
+    vaultBuilderPreviewRequested && adminSessionForVaultPreview,
+  )
+
   if (slug === EXCLUSIVE_OFFER_GABARIT_SLUG) {
     notFound()
   }
@@ -165,7 +183,9 @@ export async function projectDetailPageContent({
     select: { template: true },
   })
   if (vaultPage?.template === VAULT_BUILDER_TEMPLATE) {
-    const vaultPayload = await getExclusiveOfferVaultPayload(slug, locale)
+    const vaultPayload = await getExclusiveOfferVaultPayload(slug, locale, {
+      allowExclusiveOfferAdminPreview,
+    })
     if (!vaultPayload) {
       notFound()
     }

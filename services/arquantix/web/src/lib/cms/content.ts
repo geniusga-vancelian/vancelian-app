@@ -6,6 +6,7 @@ import {
   getExclusiveOfferCardsByPackagedProductIds,
   getExclusiveOfferCardsNewestFirst,
 } from './exclusiveOfferGallery'
+import { readShowAllExclusiveOffersFlag } from './showAllExclusiveOffersFlag'
 import { getProjectsByIds, type ProjectShrink } from './projects'
 import {
   getCommonModuleById,
@@ -179,14 +180,17 @@ export async function getPageSections(
       console.log('[getPageSections] Hero section - Media map size:', mediaMap.size)
     }
 
-    // Special handling for projects/project_grid: exclusive offers (packaged_products) ou legacy projects
-    if ((effectiveKey === 'projects' || effectiveKey === 'project_grid') && resolvedData) {
+    // Clé d'instance CMS (`project_grid_2`, …) → `project_grid` pour même logique que le renderer.
+    const canonicalGridKey = resolveCanonicalSectionKey(effectiveKey) ?? effectiveKey
+    if (canonicalGridKey === 'project_grid' && resolvedData) {
       const rawLimit = resolvedData.limit
       const limit =
         typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
           ? Math.min(20, Math.floor(rawLimit))
           : undefined
-      const showAllExclusiveOffers = resolvedData.showAllExclusiveOffers === true
+      const showAllExclusiveOffers = readShowAllExclusiveOffersFlag(
+        resolvedData.showAllExclusiveOffers,
+      )
       /** Même défaut que le formulaire CMS (`limit` absent ou invalide → 3). */
       const effectiveLimitForAll = limit ?? 3
 

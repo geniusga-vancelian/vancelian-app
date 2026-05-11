@@ -18,6 +18,7 @@ import {
   heroResolvedBackgroundUrl,
   projectGridLegacyItemToProp,
 } from '@/lib/sections/sectionRenderCoalesce'
+import { readShowAllExclusiveOffersFlag } from '@/lib/cms/showAllExclusiveOffersFlag'
 
 /**
  * Map section data to component props based on section key.
@@ -105,7 +106,7 @@ export function mapDataToComponentProps(
 
     case 'projects':
     case 'project_grid': {
-      const showAllExclusiveOffers = data.showAllExclusiveOffers === true
+      const showAllExclusiveOffers = readShowAllExclusiveOffersFlag(data.showAllExclusiveOffers)
       const viewAllButtonText = data.viewAllButtonText
       // Priority: resolvedProjects (from DB) > items (legacy hardcoded)
       if (data.resolvedProjects && data.resolvedProjects.length > 0) {

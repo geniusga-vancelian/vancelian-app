@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supportedLocales, isValidLocale, type Locale } from '@/config/locales'
@@ -48,6 +48,13 @@ export default function AdminSectionEditorPage() {
   const [hasGlossary, setHasGlossary] = useState(false)
   const [approving, setApproving] = useState(false)
 
+  /** Incrémenté à chaque `loadSection` : évite qu’une réponse réseau tardive écrase l’état local (édits rapides / plusieurs chargements). */
+  const loadGenerationRef = useRef(0)
+  const dataRef = useRef<any>({})
+  useEffect(() => {
+    dataRef.current = data
+  }, [data])
+
   useEffect(() => {
     const q = searchParams?.get('locale') ?? searchParams?.get('editingLocale')
     if (q && isValidLocale(q)) {
@@ -66,12 +73,17 @@ export default function AdminSectionEditorPage() {
 
   /** `status` permet de forcer le jeu chargé (ex. brouillon après Save) sans dépendre du state encore non mis à jour. */
   const loadSection = async (opts?: { status?: 'draft' | 'published' }) => {
+    const gen = ++loadGenerationRef.current
     try {
       const statusParam = opts?.status ?? selectedStatus
       const res = await fetch(
         `/api/admin/sections/${sectionId}?locale=${selectedLocale}&status=${statusParam}`
       )
       const result = await res.json()
+
+      if (gen !== loadGenerationRef.current) {
+        return
+      }
 
       if (result.section) {
         setSection(result.section)
@@ -93,7 +105,9 @@ export default function AdminSectionEditorPage() {
     } catch (error) {
       console.error('Error loading section:', error)
     } finally {
-      setLoading(false)
+      if (gen === loadGenerationRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -105,7 +119,7 @@ export default function AdminSectionEditorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           locale: selectedLocale,
-          data,
+          data: dataRef.current,
         }),
       })
 
@@ -150,7 +164,7 @@ export default function AdminSectionEditorPage() {
           toastSuccess('Published')
         }
         setSelectedStatus('published')
-        loadSection()
+        await loadSection({ status: 'published' })
       } else {
         const error = await res.json()
         toastError(error.error || 'Failed to publish')

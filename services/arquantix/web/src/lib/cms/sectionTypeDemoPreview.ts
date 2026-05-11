@@ -4,6 +4,7 @@ import {
   getExclusiveOfferCardsByPackagedProductIds,
   getExclusiveOfferCardsNewestFirst,
 } from '@/lib/cms/exclusiveOfferGallery'
+import { readShowAllExclusiveOffersFlag } from '@/lib/cms/showAllExclusiveOffersFlag'
 import { getProjectsByIds, type ProjectShrink } from '@/lib/cms/projects'
 import type { SectionWithContent } from '@/lib/cms/content'
 import { injectMediaUrls } from '@/lib/cms/content'
@@ -44,13 +45,13 @@ export async function getSectionTypeDemoSection(
   let resolvedData = injectMediaUrls(effectiveData as object, mediaMap) as Record<string, unknown>
   resolvedData = rewriteMediaUrlsToSiteProxyDeep(resolvedData) as Record<string, unknown>
 
-  if ((effectiveKey === 'projects' || effectiveKey === 'project_grid') && resolvedData) {
+  if (effectiveKey === 'project_grid' && resolvedData) {
     const rawLimit = resolvedData.limit
     const limit =
       typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
         ? Math.min(20, Math.floor(rawLimit))
         : undefined
-    const showAllExclusiveOffers = resolvedData.showAllExclusiveOffers === true
+    const showAllExclusiveOffers = readShowAllExclusiveOffersFlag(resolvedData.showAllExclusiveOffers)
     const effectiveLimitForAll = limit ?? 3
 
     const selectedPackagedProductIds = resolvedData.selectedPackagedProductIds as string[] | undefined

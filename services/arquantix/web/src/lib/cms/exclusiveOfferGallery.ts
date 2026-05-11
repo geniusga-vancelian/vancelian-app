@@ -109,9 +109,27 @@ const devShowDraftExclusiveOffers =
   process.env.ARQUANTIX_DEV_SHOW_DRAFT_EXCLUSIVE_OFFERS === 'true'
 
 /**
+ * Filtre `commercial_status` pour la grille / cartes EO.
+ *
+ * - **Production** : `PUBLISHED` uniquement (comportement site public).
+ * - **`next dev`** : `PUBLISHED` + `DRAFT` — aligné sur le détail vault en local (sinon la page Projects
+ *   reste vide tant que l’offre n’est pas passée « Publié » dans le registre, alors qu’elle est déjà
+ *   éditable / visible en preview).
+ * - Variable historique `ARQUANTIX_DEV_SHOW_DRAFT_EXCLUSIVE_OFFERS` : redondante en dev depuis l’alignement ci-dessus.
+ */
+export function galleryExclusiveOfferCommercialStatuses():
+  | PackagedCommercialStatus
+  | { in: PackagedCommercialStatus[] } {
+  const includeDraft =
+    process.env.NODE_ENV === 'development' || devShowDraftExclusiveOffers
+  return includeDraft
+    ? { in: [PackagedCommercialStatus.PUBLISHED, PackagedCommercialStatus.DRAFT] }
+    : PackagedCommercialStatus.PUBLISHED
+}
+
+/**
  * Cartes galerie homepage à partir d’IDs `packaged_products.id` (ordre conservé).
- * Filtre : offres publiées + visibles (site public).
- * En dev, `ARQUANTIX_DEV_SHOW_DRAFT_EXCLUSIVE_OFFERS=true` inclut aussi les EO en brouillon (même visibilité PUBLIC).
+ * Filtre : visibilité PUBLIC ; statut commercial selon {@link galleryExclusiveOfferCommercialStatuses}.
  */
 export async function getExclusiveOfferCardsByPackagedProductIds(
   orderedIds: string[],
@@ -127,9 +145,7 @@ export async function getExclusiveOfferCardsByPackagedProductIds(
     where: {
       id: { in: uuidOrdered },
       productType: PackagedProductType.EXCLUSIVE_OFFER,
-      commercialStatus: devShowDraftExclusiveOffers
-        ? { in: [PackagedCommercialStatus.PUBLISHED, PackagedCommercialStatus.DRAFT] }
-        : PackagedCommercialStatus.PUBLISHED,
+      commercialStatus: galleryExclusiveOfferCommercialStatuses(),
       visibility: PackagedVisibility.PUBLIC,
     },
     include: {
@@ -153,9 +169,7 @@ export async function getExclusiveOfferCardsByPackagedProductIds(
     orderedIds.some((x) => (x ?? '').trim().length > 0)
   ) {
     console.warn(
-      '[exclusiveOfferGallery] Certaines offres sélectionnées ne sont pas affichées : statut ≠ PUBLISHED' +
-        (devShowDraftExclusiveOffers ? '' : ' (ou activer ARQUANTIX_DEV_SHOW_DRAFT_EXCLUSIVE_OFFERS=true en dev)') +
-        ', visibilité ≠ PUBLIC, ou ID/slug inconnu.',
+      '[exclusiveOfferGallery] Certaines offres sélectionnées ne sont pas affichées (visibilité ≠ PUBLIC, statut commercial exclu en prod, ARCHIVED, ou ID/slug inconnu).',
     )
   }
 
@@ -238,8 +252,8 @@ export async function getExclusiveOfferCardsByPackagedProductIds(
 }
 
 /**
- * Offres exclusives publiées visibles sur le site, les plus récentes en premier (`updatedAt` desc),
- * puis cartes dans le même ordre (via la résolution par IDs ordonnés).
+ * Offres exclusives visibles sur le site (PUBLIC + statut commercial selon l’environnement),
+ * les plus récentes en premier (`updatedAt` desc), puis cartes dans le même ordre.
  */
 export async function getExclusiveOfferCardsNewestFirst(
   locale: string,
@@ -249,9 +263,7 @@ export async function getExclusiveOfferCardsNewestFirst(
   const rows = await prisma.packagedProduct.findMany({
     where: {
       productType: PackagedProductType.EXCLUSIVE_OFFER,
-      commercialStatus: devShowDraftExclusiveOffers
-        ? { in: [PackagedCommercialStatus.PUBLISHED, PackagedCommercialStatus.DRAFT] }
-        : PackagedCommercialStatus.PUBLISHED,
+      commercialStatus: galleryExclusiveOfferCommercialStatuses(),
       visibility: PackagedVisibility.PUBLIC,
     },
     orderBy: { updatedAt: 'desc' },

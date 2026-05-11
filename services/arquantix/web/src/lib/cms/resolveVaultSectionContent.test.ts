@@ -49,6 +49,19 @@ describe('resolveVaultSectionContent', () => {
     assert.equal(r?.id, 'fr-pub')
   })
 
+  it('mode either_draft_first : brouillon avant pub pour la même locale', () => {
+    const contents = [
+      row('en', ContentStatus.DRAFT, 'a'),
+      row('en', ContentStatus.PUBLISHED, 'b'),
+    ]
+    const r = resolveVaultSectionContent(contents, {
+      requestedLocale: 'en',
+      defaultLocale: 'fr',
+      mode: 'either_draft_first',
+    })
+    assert.equal(r?.id, 'a')
+  })
+
   it('mode PUBLISHED : paliers sans mélanger draft', () => {
     const contents = [row('en', ContentStatus.DRAFT, 'd'), row('fr', ContentStatus.PUBLISHED, 'p')]
     const r = resolveVaultSectionContent(contents, {

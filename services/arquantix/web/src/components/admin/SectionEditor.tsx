@@ -5,6 +5,7 @@ import { resolveCanonicalSectionKey } from '@/lib/sections/library'
 import { MediaField } from './MediaField'
 import { ExclusiveOfferSelector } from './ExclusiveOfferSelector'
 import { ConfirmDialog } from './ConfirmDialog'
+import { readShowAllExclusiveOffersFlag } from '@/lib/cms/showAllExclusiveOffersFlag'
 
 /** Modules communs : formulaire « Apparence » vs « Textes » (évite de dupliquer les champs traduits). */
 export type CommonModuleEditorSplit = 'design' | 'locale'
@@ -293,7 +294,7 @@ export function SectionEditor({
             id="showAllExclusiveOffers"
             type="checkbox"
             className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            checked={data.showAllExclusiveOffers === true}
+            checked={readShowAllExclusiveOffersFlag(data.showAllExclusiveOffers)}
             onChange={(e) => updateField('showAllExclusiveOffers', e.target.checked)}
           />
           <label htmlFor="showAllExclusiveOffers" className="text-sm text-gray-800">
@@ -305,7 +306,7 @@ export function SectionEditor({
           </label>
         </div>
 
-        {data.showAllExclusiveOffers !== true && (
+        {readShowAllExclusiveOffersFlag(data.showAllExclusiveOffers) !== true && (
           <div>
             <ExclusiveOfferSelector
               selectedPackagedProductIds={data.selectedPackagedProductIds || []}

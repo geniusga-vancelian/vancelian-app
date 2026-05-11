@@ -13,6 +13,7 @@ import {
   resolveVaultPresentation,
   visibilityToApi,
 } from '@/lib/catalog/packagedCatalogHelpers'
+import { galleryExclusiveOfferCommercialStatuses } from '@/lib/cms/exclusiveOfferGallery'
 
 /**
  * GET /api/mobile/flutter/catalog/products
@@ -20,6 +21,9 @@ import {
  * Catalogue unifié des produits packagés (Product Registry + contenu Vault Builder).
  *
  * Query: type, visibility, commercialStatus, locale, include_engine_data, limit
+ *
+ * `commercialStatus` omis : **production** → PUBLISHED uniquement ; **`next dev`** → PUBLISHED + DRAFT
+ * (aligné grille web / EO encore en brouillon registre). Sinon passer `draft` ou `published` explicitement.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -27,9 +31,13 @@ export async function GET(request: NextRequest) {
     const typeFilter = parseProductTypeParam(searchParams.get('type'))
     const visibilityFilter =
       parseVisibilityParam(searchParams.get('visibility')) ?? 'PUBLIC'
-    const commercialFilter =
-      parseCommercialStatusParam(searchParams.get('commercialStatus')) ??
-      'PUBLISHED'
+    const commercialExplicit = parseCommercialStatusParam(
+      searchParams.get('commercialStatus'),
+    )
+    const commercialStatusWhere =
+      commercialExplicit !== undefined
+        ? commercialExplicit
+        : galleryExclusiveOfferCommercialStatuses()
     const locale = (searchParams.get('locale') || CATALOG_DEFAULT_LOCALE).trim() || CATALOG_DEFAULT_LOCALE
     const includeEngine =
       searchParams.get('include_engine_data') === '1' ||
@@ -43,7 +51,7 @@ export async function GET(request: NextRequest) {
       where: {
         ...(typeFilter ? { productType: typeFilter } : {}),
         visibility: visibilityFilter,
-        commercialStatus: commercialFilter,
+        commercialStatus: commercialStatusWhere,
       },
       orderBy: [{ featuredRank: 'asc' }, { updatedAt: 'desc' }],
       take: limit,

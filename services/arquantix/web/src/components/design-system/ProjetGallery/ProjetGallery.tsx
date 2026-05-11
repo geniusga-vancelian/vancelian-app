@@ -27,6 +27,11 @@ export interface Project {
   fundedPercentage: number;
   fundedText?: string;
   ctaLink?: string;
+  /**
+   * `false` = aucune lending pool rattachée : pas de bandeau bas (progression + flèche).
+   * `undefined` ou `true` = comportement historique (pied affiché).
+   */
+  hasLendingPool?: boolean;
 }
 
 export interface TabItem {
@@ -245,6 +250,8 @@ export function DSProjectCard({
   hideFooter?: boolean;
   hideImageEyebrow?: boolean;
 }) {
+  const hideFundingFooter =
+    hideFooter || project.hasLendingPool === false;
   const activate = () => {
     onClick?.();
   };
@@ -325,8 +332,8 @@ export function DSProjectCard({
         </div>
       </div>
 
-      {/* État du financement */}
-      {!hideFooter ? (
+      {/* État du financement — uniquement si lending pool (EO) ou aperçu / forçage. */}
+      {!hideFundingFooter ? (
       <div className="bg-[rgba(0,0,0,0.05)] relative shrink-0 w-full">
         <div className="flex flex-row items-center justify-center size-full">
           <div className="content-stretch flex gap-[24px] items-center justify-center px-[40px] py-[24px] relative w-full">

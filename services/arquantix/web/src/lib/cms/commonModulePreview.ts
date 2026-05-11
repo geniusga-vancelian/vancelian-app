@@ -9,12 +9,13 @@ import {
   resolveCommonModuleDataForLocale,
 } from '@/lib/cms/commonModulesStorage'
 import { injectMediaUrls } from '@/lib/cms/content'
-import { getSectionType } from '@/lib/sections/library'
+import { getSectionType, resolveCanonicalSectionKey } from '@/lib/sections/library'
 import type { SectionWithContent } from '@/lib/cms/content'
 import {
   getExclusiveOfferCardsByPackagedProductIds,
   getExclusiveOfferCardsNewestFirst,
 } from '@/lib/cms/exclusiveOfferGallery'
+import { readShowAllExclusiveOffersFlag } from '@/lib/cms/showAllExclusiveOffersFlag'
 import { getProjectsByIds, type ProjectShrink } from '@/lib/cms/projects'
 
 /**
@@ -46,13 +47,14 @@ export async function getCommonModulePreviewSection(
   resolvedData = rewriteMediaUrlsToSiteProxyDeep(resolvedData) as Record<string, unknown>
 
   const key = entry.sectionKey
-  if ((key === 'projects' || key === 'project_grid') && resolvedData) {
+  const canonicalGridKey = resolveCanonicalSectionKey(key) ?? key
+  if (canonicalGridKey === 'project_grid' && resolvedData) {
     const rawLimit = resolvedData.limit
     const limit =
       typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
         ? Math.min(20, Math.floor(rawLimit))
         : undefined
-    const showAllExclusiveOffers = resolvedData.showAllExclusiveOffers === true
+    const showAllExclusiveOffers = readShowAllExclusiveOffersFlag(resolvedData.showAllExclusiveOffers)
     const effectiveLimitForAll = limit ?? 3
     const selectedPackagedProductIds = resolvedData.selectedPackagedProductIds as string[] | undefined
     const selectedProjectIds = resolvedData.selectedProjectIds as string[] | undefined

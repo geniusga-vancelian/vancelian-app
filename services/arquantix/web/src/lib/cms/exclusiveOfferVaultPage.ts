@@ -421,13 +421,25 @@ async function enrichDocumentsListModules(
   return out
 }
 
+export type GetExclusiveOfferVaultPayloadOptions = {
+  /**
+   * Aperçu authentifié CMS : ignore visibilité / statut commercial de l’offre exclusive,
+   * et résout le JSON du vault en **priorisant le DRAFT** (brouillon enregistré) plutôt que le publié.
+   * À n’activer que si `getSessionFromCookie()` a réussi pour la même requête.
+   */
+  allowExclusiveOfferAdminPreview?: boolean
+}
+
 /**
  * Charge le payload pour une page `template = vault_builder` (offre / landing Vault).
- * Retourne `null` si page absente, pas de contenu publié, ou offre exclusive non visible.
+ * Retourne `null` si page absente, pas de contenu publié (ou brouillon pour l’aperçu admin), ou offre exclusive non visible côté public.
+ *
+ * En **`next dev`** (`NODE_ENV=development`), les contrôles visibilité / statut commercial sur les offres exclusives sont **désactivés** : l’URL sans `?adminDraftPreview=` affiche la même page qu’en aperçu iframe (en production, sans aperçu admin, seules les offres **PUBLIC** et **PUBLISHED** passent — et la galerie peut inclure des brouillons en dev si `ARQUANTIX_DEV_SHOW_DRAFT_EXCLUSIVE_OFFERS=true`).
  */
 export async function getExclusiveOfferVaultPayload(
   pageSlug: string,
   localeInput: string,
+  options?: GetExclusiveOfferVaultPayloadOptions,
 ): Promise<ExclusiveOfferVaultPayload | null> {
   const locale = getLocaleOrDefault(localeInput)
 
@@ -460,7 +472,8 @@ export async function getExclusiveOfferVaultPayload(
   const content = resolveVaultSectionContent(section.contents, {
     requestedLocale: locale,
     defaultLocale,
-    mode: 'either',
+    mode:
+      options?.allowExclusiveOfferAdminPreview === true ? 'either_draft_first' : 'either',
   })
 
   if (!content) {
@@ -473,15 +486,20 @@ export async function getExclusiveOfferVaultPayload(
   })
 
   if (packaged && packaged.productType === PackagedProductType.EXCLUSIVE_OFFER) {
-    if (packaged.visibility !== PackagedVisibility.PUBLIC) {
-      return null
-    }
-    const okStatus =
-      packaged.commercialStatus === PackagedCommercialStatus.PUBLISHED ||
-      (devShowDraftExclusiveOffers &&
-        packaged.commercialStatus === PackagedCommercialStatus.DRAFT)
-    if (!okStatus) {
-      return null
+    if (!options?.allowExclusiveOfferAdminPreview) {
+      const skipPublicProductGate = process.env.NODE_ENV === 'development'
+      if (!skipPublicProductGate) {
+        if (packaged.visibility !== PackagedVisibility.PUBLIC) {
+          return null
+        }
+        const okStatus =
+          packaged.commercialStatus === PackagedCommercialStatus.PUBLISHED ||
+          (devShowDraftExclusiveOffers &&
+            packaged.commercialStatus === PackagedCommercialStatus.DRAFT)
+        if (!okStatus) {
+          return null
+        }
+      }
     }
   }
 
