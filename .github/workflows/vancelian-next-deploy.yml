@@ -1,0 +1,86 @@
+name: Vancelian Next - Deploy to ECS
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "services/arquantix/web/**"
+      - ".github/workflows/vancelian-next-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Docker image tag (default: latest)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 411714852748.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: vancelian-next
+  ECS_CLUSTER: arquantix-cluster
+  ECS_SERVICE: vancelian-next
+  ECS_TASKDEF_FAMILY: vancelian-next
+  IMAGE_TAG: ${{ inputs.tag || github.sha }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: gha-vancelian-next-deploy-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push Docker image
+        env:
+          NEXT_PUBLIC_PRIVY_APP_ID: ${{ secrets.VANCELIAN_PRIVY_APP_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEXT_PUBLIC_PRIVY_APP_ID:-}" ]; then
+            echo "::warning::VANCELIAN_PRIVY_APP_ID absent — le runtime ECS PRIVY_APP_ID reste requis."
+          fi
+          docker build \
+            --platform linux/amd64 \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.arquantix.com \
+            --build-arg NEXT_PUBLIC_BACKEND_URL=https://api.arquantix.com \
+            --build-arg NEXT_PUBLIC_SITE_URL=https://vancelian.finance \
+            --build-arg NEXT_PUBLIC_GIT_SHA=${{ github.sha }} \
+            --build-arg NEXT_PUBLIC_PRIVY_APP_ID="${NEXT_PUBLIC_PRIVY_APP_ID}" \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
+            -f services/arquantix/web/Dockerfile \
+            services/arquantix/web
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+
+      - name: Render new task definition with updated image
+        id: render-taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition-family: ${{ env.ECS_TASKDEF_FAMILY }}
+          container-name: vancelian-next
+          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          environment-variables: |
+            RUN_PRISMA_MIGRATE_ON_START=0
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-taskdef.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          wait-for-minutes: 15
