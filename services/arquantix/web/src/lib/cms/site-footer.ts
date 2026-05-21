@@ -5,16 +5,21 @@ import { resolveMedia } from '@/lib/storage/media'
 import { getLocaleOrDefault } from '@/config/locales'
 import { parseFooterStorage, resolveFooterPayloadForLocale } from '@/lib/cms/footerStorage'
 import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
+import { VANCELIAN_DARK_BG, normalizeVancelianDarkColor } from '@/lib/cms/parseEditorialTitle'
 
 export type { FooterSocialPlatform }
 
 export type SiteFooterData = {
   copyright: string
   description: string
+  companyAddress: string
+  secondaryNote: string
   links: Array<{ label: string; href: string; category?: string }>
   backgroundColor: string
   logoUrl: string | null
   logoAlt: string | null
+  /** Filtre clair sur fond sombre (DS navbar). Piloté par CMS `logoMediaInvert`. */
+  logoMediaInvert: boolean
   newsletterVisible: boolean
   newsletterTitle: string
   newsletterPlaceholder: string
@@ -36,11 +41,14 @@ export function getDefaultSiteFooterData(locale?: string): SiteFooterData {
   return {
     copyright: `© ${year} Arquantix. ${siteCommonCta(loc, 'footer_all_rights_reserved')}`,
     description: siteCommonCta(loc, 'footer_default_tagline'),
+    companyAddress: '',
+    secondaryNote: '',
     links: [],
-    backgroundColor: '#000000',
+    backgroundColor: VANCELIAN_DARK_BG,
     logoUrl: null,
     logoAlt: null,
-    newsletterVisible: true,
+    logoMediaInvert: true,
+    newsletterVisible: false,
     newsletterTitle: siteCommonCta(loc, 'footer_newsletter_default_title'),
     newsletterPlaceholder: siteCommonCta(loc, 'footer_newsletter_default_placeholder'),
     newsletterButtonLabel: siteCommonCta(loc, 'footer_newsletter_default_button'),
@@ -59,10 +67,13 @@ async function buildSiteFooterDataFromPayload(
   return {
     copyright: d.copyright?.trim() || defaults.copyright,
     description: d.description?.trim() || defaults.description,
+    companyAddress: d.companyAddress?.trim() || defaults.companyAddress,
+    secondaryNote: d.secondaryNote?.trim() || defaults.secondaryNote,
     links: Array.isArray(d.links) ? d.links : [],
-    backgroundColor: (d.backgroundColor?.trim() || defaults.backgroundColor).slice(0, 80),
+    backgroundColor: normalizeVancelianDarkColor(d.backgroundColor?.trim() || defaults.backgroundColor).slice(0, 80),
     logoUrl: media?.url ?? null,
     logoAlt: media?.alt ?? null,
+    logoMediaInvert: d.logoMediaInvert ?? defaults.logoMediaInvert,
     newsletterVisible: d.newsletterVisible ?? defaults.newsletterVisible,
     newsletterTitle: d.newsletterTitle?.trim() || defaults.newsletterTitle,
     newsletterPlaceholder: d.newsletterPlaceholder?.trim() || defaults.newsletterPlaceholder,
@@ -99,5 +110,16 @@ export async function getSiteFooterData(locale?: string): Promise<SiteFooterData
     return buildSiteFooterDataFromPayload(payload, defaults)
   } catch {
     return defaults
+  }
+}
+
+/** Logo global (navbar / portail) — même source CMS que le footer (`logoMediaId`). */
+export async function getSiteBrandLogo(
+  locale?: string,
+): Promise<Pick<SiteFooterData, 'logoUrl' | 'logoAlt'>> {
+  const data = await getSiteFooterData(locale)
+  return {
+    logoUrl: data.logoUrl,
+    logoAlt: data.logoAlt,
   }
 }

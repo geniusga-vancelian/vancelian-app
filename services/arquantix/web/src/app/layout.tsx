@@ -14,10 +14,13 @@ import {
   DEFAULT_NAV_SHELL,
   getNavShellStateForPathname,
 } from '@/lib/cms/navShellContext'
+import { getSiteMenuTheme, getDefaultMenuThemeJson } from '@/lib/cms/site-menu-theme'
+import { getSiteBrandLogo } from '@/lib/cms/site-footer'
 import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
 import { CMS_PAGE_METADATA_FALLBACK } from '@/lib/metadata/cmsPageMetadata'
 import { getSiteMetadataBase } from '@/lib/metadata/siteOrigin'
 import { figmaDsBodyRootClassName } from '@/components/design-system/extracted/tokens/surfaces'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 
 const siteMetadataBase = getSiteMetadataBase()
 
@@ -33,7 +36,23 @@ export default async function RootLayout({
 }) {
   const headersList = await headers()
   const pathname = headersList.get('x-arq-pathname') ?? '/'
+  const isPortalApp =
+    pathname.startsWith('/app') || headersList.get('x-arq-portal') === '1'
   const cookieStore = await cookies()
+  if (isPortalApp) {
+    const isPortalLogin =
+      pathname === PORTAL_ROUTES.login ||
+      pathname.startsWith(`${PORTAL_ROUTES.login}/`)
+    return (
+      <html lang="en">
+        <body className={figmaDsBodyRootClassName}>
+          {children}
+          {!isPortalLogin ? <SiteFooter /> : null}
+        </body>
+      </html>
+    )
+  }
+
   const pathLocale = headersList.get('x-arq-locale')
   const siteI18n = await getSiteI18nSettingsCached()
   const locale = resolveLayoutLocale({
@@ -94,14 +113,20 @@ export default async function RootLayout({
 
   let menuItems: MenuItem[] = menuFallback
   let initialNav = DEFAULT_NAV_SHELL
+  let menuTheme = getDefaultMenuThemeJson()
+  let brand: Awaited<ReturnType<typeof getSiteBrandLogo>> = { logoUrl: null, logoAlt: null }
   if (!shellLessPreview) {
     try {
-      const [m, n] = await Promise.all([
+      const [m, n, theme, cmsBrand] = await Promise.all([
         getPrimaryMenu(locale, { languageSwitcherEnabled: showPublicLanguageSwitcher }),
         getNavShellStateForPathname(pathname, locale, { preferDraft: preferDraftNav }),
+        getSiteMenuTheme(),
+        getSiteBrandLogo(locale),
       ])
       menuItems = m
       initialNav = n
+      menuTheme = theme
+      brand = cmsBrand
     } catch (e) {
       console.error('[RootLayout] Menu ou coquille nav indisponible — repli minimal.', e)
     }
@@ -112,7 +137,9 @@ export default async function RootLayout({
       <body className={figmaDsBodyRootClassName}>
         <SiteChrome
           menuItems={menuItems}
+          menuTheme={menuTheme}
           initialNav={initialNav}
+          brand={brand}
           showLanguageSwitcher={showPublicLanguageSwitcher}
           publicLocales={siteI18n.supportedLocales}
         >

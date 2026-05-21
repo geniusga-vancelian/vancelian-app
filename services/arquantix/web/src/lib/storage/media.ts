@@ -42,9 +42,13 @@ export function rewriteMediaUrlsToSiteProxyDeep(data: unknown): unknown {
   if (typeof mid === 'string' && mid.trim()) {
     out.mediaUrl = siteMediaProxyPath(mid.trim())
   }
-  const av = out.avatarMediaId
-  if (typeof av === 'string' && av.trim()) {
-    out.avatarMediaUrl = siteMediaProxyPath(av.trim())
+  const hover = out.hoverVideoMediaId
+  if (typeof hover === 'string' && hover.trim()) {
+    out.hoverVideoMediaUrl = siteMediaProxyPath(hover.trim())
+  }
+  const cover = out.coverMediaId
+  if (typeof cover === 'string' && cover.trim()) {
+    out.coverMediaUrl = siteMediaProxyPath(cover.trim())
   }
   return out
 }
@@ -57,9 +61,20 @@ async function resolvePublicMediaFileUrl(m: {
   id: string
   key: string
   url: string
+  mimeType: string
 }): Promise<string> {
+  /** Vidéos : proxy same-origin (évite CORS R2 + détection fiable sans extension). */
+  if (m.mimeType.startsWith('video/')) {
+    return siteMediaProxyPath(m.id)
+  }
+
+  /** Kit brand / médias seedés — proxy same-origin (R2 ou repli `public/` via streamMediaByRecord). */
+  if (m.url.startsWith('/brand/') || m.url.startsWith('/cms/')) {
+    return siteMediaProxyPath(m.id)
+  }
+
   if (!isR2Configured()) {
-    return m.url
+    return m.url.startsWith('/') ? m.url : siteMediaProxyPath(m.id)
   }
   try {
     const { getPresignedUrl } = await import('./storageClient')
@@ -143,6 +158,12 @@ export function extractMediaIds(data: any): string[] {
 
     if (typeof obj === 'object') {
       // Check known mediaId fields
+      if (obj.hoverVideoMediaId && typeof obj.hoverVideoMediaId === 'string') {
+        mediaIds.push(obj.hoverVideoMediaId)
+      }
+      if (obj.coverMediaId && typeof obj.coverMediaId === 'string') {
+        mediaIds.push(obj.coverMediaId)
+      }
       if (obj.mediaId && typeof obj.mediaId === 'string') {
         mediaIds.push(obj.mediaId)
       }

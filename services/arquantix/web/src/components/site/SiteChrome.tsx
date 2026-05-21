@@ -5,12 +5,18 @@ import { usePathname } from 'next/navigation'
 import { Navigation } from '@/components/sections/Navigation'
 import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
 import type { NavShellState } from '@/lib/cms/navShellContext'
+import type { MenuThemeJson } from '@/lib/cms/menuThemeStorage'
 import { isValidLocale, type Locale } from '@/config/locales'
 import { figmaDsSiteShellLightClassName } from '@/components/design-system/extracted/tokens/surfaces'
+import { ScrollMotionEffects } from '@/components/motion/ScrollMotionEffects'
+
+import type { SiteBrandLogo } from '@/components/ui/BrandLogo'
 
 export type SiteChromeProps = {
   menuItems: MenuItem[]
+  menuTheme: MenuThemeJson
   initialNav: NavShellState
+  brand?: SiteBrandLogo | null
   showLanguageSwitcher?: boolean
   publicLocales?: Locale[]
   children: React.ReactNode
@@ -29,7 +35,9 @@ function isHomePath(path: string): boolean {
 
 export function SiteChrome({
   menuItems,
+  menuTheme: initialMenuTheme,
   initialNav,
+  brand,
   showLanguageSwitcher = true,
   publicLocales,
   children,
@@ -54,67 +62,65 @@ export function SiteChrome({
     isHermesDesignSystemPrint
   const bareChrome = isAdmin || shellLessPreview
   const [menu, setMenu] = React.useState<MenuItem[]>(menuItems)
+  const [menuTheme, setMenuTheme] = React.useState<MenuThemeJson>(initialMenuTheme)
   const [nav, setNav] = React.useState<NavShellState>(initialNav)
-  const [forcedLocale, setForcedLocale] = React.useState<Locale | null>(null)
 
   React.useEffect(() => {
     setMenu(menuItems)
   }, [menuItems])
 
   React.useEffect(() => {
+    setMenuTheme(initialMenuTheme)
+  }, [initialMenuTheme])
+
+  React.useEffect(() => {
     setNav(initialNav)
   }, [initialNav])
+
+  const refreshMenuFromApi = React.useCallback(async (path: string, locale: Locale | null) => {
+    try {
+      const q = new URLSearchParams({ path })
+      if (path.startsWith('/preview/')) q.set('draft', '1')
+      if (locale) q.set('locale', locale)
+      const [navRes, menuRes] = await Promise.all([
+        fetch(`/api/site/nav-shell?${q}`, { next: { revalidate: 30 } }),
+        fetch(`/api/site/primary-menu?${q}`, { next: { revalidate: 30 } }),
+      ])
+      if (navRes.ok) {
+        const data = (await navRes.json()) as NavShellState
+        setNav(data)
+      }
+      if (menuRes.ok) {
+        const data = (await menuRes.json()) as { items?: MenuItem[]; theme?: MenuThemeJson }
+        if (Array.isArray(data.items) && data.items.length > 0) {
+          setMenu(data.items)
+        }
+        if (data.theme) {
+          setMenuTheme(data.theme)
+        }
+      }
+    } catch {
+      /* garder l’état courant */
+    }
+  }, [])
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return
     const onLocaleChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ locale?: unknown }>).detail
-      const locale = detail?.locale
-      setForcedLocale(
-        typeof locale === 'string' && isValidLocale(locale) ? (locale as Locale) : null,
-      )
+      const locale =
+        typeof detail?.locale === 'string' && isValidLocale(detail.locale)
+          ? (detail.locale as Locale)
+          : null
+      if (locale && !bareChrome) {
+        void refreshMenuFromApi(pathname, locale)
+      }
     }
     window.addEventListener('arq:locale-changed', onLocaleChanged)
     return () => {
       window.removeEventListener('arq:locale-changed', onLocaleChanged)
     }
-  }, [])
-
-  React.useLayoutEffect(() => {
-    if (bareChrome) return
-    let cancelled = false
-    const localeInPath =
-      pathname.match(/^\/(fr|en|it)(?:\/|$)/)?.[1] ?? null
-    const locale = localeInPath ?? forcedLocale
-    const run = async () => {
-      try {
-        const q = new URLSearchParams({ path: pathname })
-        if (pathname.startsWith('/preview/')) q.set('draft', '1')
-        if (locale) q.set('locale', locale)
-        const [navRes, menuRes] = await Promise.all([
-          fetch(`/api/site/nav-shell?${q}`, { cache: 'no-store' }),
-          fetch(`/api/site/primary-menu?${q}`, { cache: 'no-store' }),
-        ])
-        if (cancelled) return
-        if (navRes.ok) {
-          const data = (await navRes.json()) as NavShellState
-          if (!cancelled) setNav(data)
-        }
-        if (menuRes.ok) {
-          const data = (await menuRes.json()) as { items?: MenuItem[] }
-          if (!cancelled && Array.isArray(data.items) && data.items.length > 0) {
-            setMenu(data.items)
-          }
-        }
-      } catch {
-        /* garder l’état courant */
-      }
-    }
-    void run()
-    return () => {
-      cancelled = true
-    }
-  }, [pathname, bareChrome, forcedLocale])
+  }, [bareChrome, pathname, refreshMenuFromApi])
 
   if (bareChrome) {
     return <>{children}</>
@@ -137,9 +143,11 @@ export function SiteChrome({
 
   return (
     <div className={shellBg}>
+      <ScrollMotionEffects />
       <Navigation
-        key={pathname}
         menuItems={menu}
+        brand={brand}
+        menuTheme={menuTheme}
         themeColor={nav.themeColor}
         overlayHeroSecondary={overlayHeroSecondary}
         overlayHeroHomeLight={overlayHeroHomeLight}

@@ -1,24 +1,39 @@
 'use client'
 
+/**
+ * Vancelian — **Topnav** (refonte stricte DS Vancelian, pack handoff v1.0).
+ *
+ * Spec officielle : `components/topnav/topnav.css` + `topnav.html` + `topnav.js`
+ * du pack handoff dev. Caractéristiques :
+ *
+ * - Hauteur **72 px** fixe (`position: fixed; inset: 0 0 auto 0`).
+ * - Layout `grid-template-columns: 1fr auto 1fr` (logo · liens · actions).
+ * - **4 états chromatiques** auto-détectés via {@link useTopnavSurfaceObserver} :
+ *   - `transparent` : par défaut, au-dessus d'un hero — texte/logo blancs.
+ *   - `solid`       : `scrollY > 0`, fond `--v-bg`, texte anthracite.
+ *   - `warm`        : sur une section `[data-nav-surface="warm"]`, fond `--v-card-warm`.
+ *   - `dark`        : sur une section `[data-nav-surface="dark"]` (final-cta,
+ *                     testimonial fullbleed, footer) — fond `#141208`, texte
+ *                     et logo blancs.
+ * - Liens : Inter Medium 14px, padding `6px 0`, **underline subtle 1px** en
+ *   bottom (`opacity 0 → 1` au hover/active). Aucun fond ni pill.
+ * - Gap items 32 px, transitions 480 ms `var(--v-ease-in-out)`.
+ * - CTA droite : **un seul bouton primary pill** (premier bouton CMS) +
+ *   sélecteur de langue en `text-link` discret (atome DS officiel).
+ * - Mobile (≤ 1024 px) : burger + drawer plein écran, items DS-compatibles.
+ *
+ * Le mega menu desktop hérité a été retiré (non couvert par le DS Vancelian).
+ * Les items GROUP CMS rendent désormais un lien vers leur première sous-page,
+ * ce qui préserve la navigation sans rompre la grammaire visuelle.
+ */
+
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Logo } from '@/components/ui/Logo'
-import { Container } from '@/components/ui/Container'
+import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
 import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher'
 import { MobilePrimaryNavList } from '@/components/layout/MobilePrimaryNavList'
-import {
-  NAV_MENU_LINK_ACTIVE_SURFACE,
-  NAV_MENU_LINK_FRAME,
-  NAV_PRIMARY_LINK_TYPO,
-} from '@/components/design-system/nav-primary-link'
-import {
-  navBackdropBlurPx,
-  navPaletteForBlend,
-  navPaletteForLightSolidHeroBlend,
-  useTransparentHeroNavBlend,
-} from '@/hooks/useHeroSecondaryNavBlend'
 import { defaultLocale, supportedLocales, type Locale } from '@/config/locales'
 import {
   getActiveLocaleFromPathname,
@@ -26,150 +41,23 @@ import {
   localizePublicInternalHref,
   shouldSkipLocalizePublicHref,
 } from '@/lib/i18n/publicLocalizedRouting'
+import { Container } from '@/components/ui/Container'
 import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
-import { FigmaNavSubmenu } from '@/components/mega-menu/figma/FigmaNavSubmenu'
-import type { MegaMenuColumnPayload } from '@/lib/menu/buildMegaMenuColumns'
+import { Button } from '@/components/ui/button'
+import {
+  TOPNAV_HEIGHT_PX,
+  useTopnavSurfaceObserver,
+  type TopnavSurface,
+} from '@/hooks/useTopnavSurfaceObserver'
+import {
+  buildTopnavPalettes,
+  type TopnavPalette,
+} from '@/lib/cms/site-menu-theme'
+import type { MenuThemeJson } from '@/lib/cms/menuThemeStorage'
 
-type MegaSlideDir = 'forward' | 'backward'
-
-type MegaLeaving = { cols: MegaMenuColumnPayload[]; dir: MegaSlideDir }
-
-/**
- * Panneau méga-menu desktop : hauteur animée + glissement latéral selon la direction dans la barre.
- */
-function DesktopMegaMenuHoverPanel({
-  megaOpenItemId,
-  linkItems,
-  onPanelMouseEnter,
-}: {
-  megaOpenItemId: string | null
-  linkItems: MenuItem[]
-  onPanelMouseEnter: () => void
-}) {
-  const linkItemsRef = React.useRef(linkItems)
-  linkItemsRef.current = linkItems
-
-  const [leaving, setLeaving] = React.useState<MegaLeaving | null>(null)
-  const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const prevOpenIdRef = React.useRef<string | null>(null)
-  const [enterAnimClass, setEnterAnimClass] = React.useState('mega-menu-enter-initial')
-
-  const openItem = megaOpenItemId
-    ? linkItems.find((i) => i.id === megaOpenItemId)
-    : null
-  const openCols = openItem?.megaMenu?.columns
-
-  const measureRef = React.useRef<HTMLDivElement>(null)
-  const [panelHeight, setPanelHeight] = React.useState<number | null>(null)
-
-  React.useEffect(() => {
-    return () => {
-      if (leaveTimerRef.current) {
-        clearTimeout(leaveTimerRef.current)
-        leaveTimerRef.current = null
-      }
-    }
-  }, [])
-
-  React.useLayoutEffect(() => {
-    if (leaveTimerRef.current) {
-      clearTimeout(leaveTimerRef.current)
-      leaveTimerRef.current = null
-    }
-
-    const items = linkItemsRef.current
-    const item = megaOpenItemId ? items.find((i) => i.id === megaOpenItemId) : null
-    const cols = item?.megaMenu?.columns
-
-    if (!megaOpenItemId || !cols?.length) {
-      prevOpenIdRef.current = null
-      setLeaving(null)
-      setEnterAnimClass('mega-menu-enter-initial')
-      setPanelHeight(null)
-      return
-    }
-
-    const prevId = prevOpenIdRef.current
-
-    if (prevId && prevId !== megaOpenItemId) {
-      const pItem = items.find((i) => i.id === prevId)
-      const nItem = items.find((i) => i.id === megaOpenItemId)
-      const dir: MegaSlideDir =
-        pItem && nItem && nItem.order < pItem.order ? 'backward' : 'forward'
-      const prevCols = items.find((i) => i.id === prevId)?.megaMenu?.columns
-      if (prevCols?.length) {
-        setLeaving({ cols: prevCols, dir })
-        setEnterAnimClass(
-          dir === 'forward' ? 'mega-menu-enter-forward' : 'mega-menu-enter-backward',
-        )
-        leaveTimerRef.current = setTimeout(() => {
-          setLeaving(null)
-          leaveTimerRef.current = null
-        }, 300)
-      } else {
-        setEnterAnimClass('mega-menu-enter-initial')
-      }
-    } else {
-      setEnterAnimClass('mega-menu-enter-initial')
-    }
-
-    prevOpenIdRef.current = megaOpenItemId
-  }, [megaOpenItemId])
-
-  React.useLayoutEffect(() => {
-    const node = measureRef.current
-    if (!node || !megaOpenItemId || !openCols?.length) return
-
-    const update = () => {
-      const h = Math.ceil(node.getBoundingClientRect().height)
-      if (h > 0) setPanelHeight(h)
-    }
-    update()
-    const ro = new ResizeObserver(() => {
-      update()
-    })
-    ro.observe(node)
-    return () => ro.disconnect()
-  }, [megaOpenItemId, leaving])
-
-  if (!megaOpenItemId || !openCols?.length) return null
-
-  return (
-    <div
-      className="absolute left-1/2 top-full z-[80] w-[min(92vw,960px)] -translate-x-1/2 pt-3"
-      onMouseEnter={onPanelMouseEnter}
-    >
-      <div
-        className="overflow-hidden"
-        style={{
-          height: panelHeight != null ? panelHeight : undefined,
-          transition: 'height 320ms cubic-bezier(0.33, 1, 0.68, 1)',
-        }}
-      >
-        <div className="relative">
-          {leaving ? (
-            <div
-              className={cn(
-                'pointer-events-none absolute inset-x-0 top-0 z-[1]',
-                leaving.dir === 'forward' ? 'mega-menu-exit-forward' : 'mega-menu-exit-backward',
-              )}
-              aria-hidden
-            >
-              <FigmaNavSubmenu columns={leaving.cols} />
-            </div>
-          ) : null}
-          <div
-            ref={measureRef}
-            key={megaOpenItemId}
-            className={cn('relative z-[2]', enterAnimClass)}
-          >
-            <FigmaNavSubmenu columns={openCols} />
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+/* --------------------------------------------------------------------------
+ * Helpers de routage
+ * -------------------------------------------------------------------------- */
 
 function normalizePath(p: string): string {
   const t = p.replace(/\/$/, '')
@@ -199,29 +87,14 @@ function isNavItemActive(pathname: string, item: MenuItem, navLocale: Locale): b
   return p === u || p.startsWith(`${u}/`)
 }
 
-export interface NavigationProps extends React.HTMLAttributes<HTMLElement> {
-  transparent?: boolean
-  menuItems?: MenuItem[]
-  themeColor?: 'dark' | 'light'
-  /**
-   * Hero secondary en première section **avec image de fond CMS** : barre transparente,
-   * liens inversés (clair sur photo) puis fusion + blur comme ci-dessous.
-   * Sans image : laisser à false (barre blanche, thème light classique).
-   */
-  overlayHeroSecondary?: boolean
-  /**
-   * Hero **homepage** en première section **avec image CMS** : barre 100 % transparente,
-   * liens **light** (noir / gris / actif noir–blanc), même transition blur / givré au scroll
-   * que le hero-secondary.
-   */
-  overlayHeroHomeLight?: boolean
-  /**
-   * Hero blog en tête : fond neutre (gray100), barre transparente + liens foncés,
-   * même mécanique de blend au scroll que le hero secondary (sans photo).
-   */
-  overlayBlogHero?: boolean
-  showLanguageSwitcher?: boolean
-  publicLocales?: Locale[]
+/**
+ * Résout l'URL d'un item GROUP en pointant vers son premier sous-lien
+ * (le DS Vancelian ne couvre pas le mega menu — on dégrade proprement).
+ */
+function resolveGroupFallbackHref(item: MenuItem, navLocale: Locale): string | null {
+  const first = item.megaMenu?.columns?.[0]?.items?.[0]?.href
+  if (!first) return null
+  return localizePublicInternalHref(first, navLocale)
 }
 
 function inferActionStyle(item: MenuItem): 'outline' | 'text' | 'solid' {
@@ -236,7 +109,6 @@ function inferActionStyle(item: MenuItem): 'outline' | 'text' | 'solid' {
   return 'solid'
 }
 
-/** Cible de navigation pour un item BUTTON (lien interne ou externe), hors `buttonAction`. */
 function navActionButtonHref(item: MenuItem, navLocale: Locale): string | null {
   if (item.buttonAction) return null
   const raw = ((item.externalUrl || '').trim() || (item.urlPath || '').trim())
@@ -246,76 +118,207 @@ function navActionButtonHref(item: MenuItem, navLocale: Locale): string | null {
   return localizePublicInternalHref(path, navLocale)
 }
 
+/* --------------------------------------------------------------------------
+ * Props
+ * -------------------------------------------------------------------------- */
+
+export interface NavigationProps extends React.HTMLAttributes<HTMLElement> {
+  menuItems?: MenuItem[]
+  brand?: SiteBrandLogo | null
+  /** Palettes topnav CMS (`Menu.themeJson`) — repli sur tokens `--v-*` si absent. */
+  menuTheme?: MenuThemeJson | null
+  showLanguageSwitcher?: boolean
+  publicLocales?: Locale[]
+  /**
+   * @deprecated — la barre détecte automatiquement son état via
+   * `[data-nav-surface]` sur les sections. Conservé pour compat API.
+   */
+  transparent?: boolean
+  /** @deprecated — voir {@link useTopnavSurfaceObserver}. */
+  themeColor?: 'dark' | 'light'
+  /** @deprecated — voir {@link useTopnavSurfaceObserver}. */
+  overlayHeroSecondary?: boolean
+  /** @deprecated — voir {@link useTopnavSurfaceObserver}. */
+  overlayHeroHomeLight?: boolean
+  /** @deprecated — voir {@link useTopnavSurfaceObserver}. */
+  overlayBlogHero?: boolean
+}
+
+/* --------------------------------------------------------------------------
+ * Atome — lien primaire topnav (DS strict)
+ * -------------------------------------------------------------------------- */
+
+interface TopnavLinkProps {
+  href: string
+  active: boolean
+  palette: TopnavPalette
+  external?: boolean
+  newTab?: boolean
+  onClick?: () => void
+  children: React.ReactNode
+}
+
+function TopnavLink({
+  href,
+  active,
+  palette,
+  external = false,
+  newTab = false,
+  onClick,
+  children,
+}: TopnavLinkProps) {
+  return (
+    <a
+      href={href}
+      onClick={onClick}
+      target={newTab ? '_blank' : undefined}
+      rel={newTab || external ? 'noopener noreferrer' : undefined}
+      aria-current={active ? 'page' : undefined}
+      data-active={active ? '' : undefined}
+      className={cn(
+        // Lien en hauteur pleine ; indicateur via .topnav-link-indicator (globals.css).
+        'group relative flex h-full items-center font-ui text-[14px] font-medium leading-none',
+        'no-underline transition-[color] duration-150 ease-out',
+      )}
+      style={{ color: palette.linkColor }}
+    >
+      <span>{children}</span>
+      <span
+        aria-hidden
+        className={cn(
+          'topnav-link-indicator pointer-events-none absolute inset-x-0 h-px',
+          'transition-opacity duration-150 ease-out',
+          active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        )}
+        style={{ background: palette.underlineColor }}
+      />
+    </a>
+  )
+}
+
+/* --------------------------------------------------------------------------
+ * Atome — bouton CTA primary (DS strict, btn--sm)
+ * -------------------------------------------------------------------------- */
+
+interface TopnavCtaProps {
+  palette: TopnavPalette
+  href?: string | null
+  newTab?: boolean
+  onClick?: (e: React.MouseEvent) => void
+  children: React.ReactNode
+}
+
+function TopnavCta({ palette, href, newTab, onClick, children }: TopnavCtaProps) {
+  const variant = palette.ctaVariant
+  const className = cn(
+    variant === 'darkPrimary' &&
+      'hover:brightness-105 active:brightness-95',
+  )
+
+  if (href) {
+    return (
+      <Button
+        asChild
+        variant={variant}
+        size="sm"
+        className={className}
+        style={{
+          background: palette.ctaBg,
+          color: palette.ctaFg,
+        }}
+      >
+        <a
+          href={href}
+          target={newTab ? '_blank' : undefined}
+          rel={newTab ? 'noopener noreferrer' : undefined}
+          onClick={onClick}
+        >
+          {children}
+        </a>
+      </Button>
+    )
+  }
+
+  return (
+    <Button
+      type="button"
+      variant={variant}
+      size="sm"
+      className={className}
+      style={{
+        background: palette.ctaBg,
+        color: palette.ctaFg,
+      }}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  )
+}
+
+/* --------------------------------------------------------------------------
+ * Atome — text-link discret (DS .text-link)
+ * -------------------------------------------------------------------------- */
+
+interface TopnavTextLinkProps {
+  palette: TopnavPalette
+  href?: string
+  onClick?: (e: React.MouseEvent) => void
+  children: React.ReactNode
+}
+
+function TopnavTextLink({ palette, href, onClick, children }: TopnavTextLinkProps) {
+  const base = cn(
+    'inline-flex items-center font-ui text-[14px] font-medium leading-none no-underline',
+    'transition-[color] duration-150 ease-out hover:underline hover:underline-offset-[3px]',
+  )
+  const style = { color: palette.textLinkColor }
+  if (href) {
+    return (
+      <a href={href} className={base} style={style} onClick={onClick}>
+        {children}
+      </a>
+    )
+  }
+  return (
+    <button type="button" className={cn(base, 'border-0 bg-transparent cursor-pointer p-0')} style={style} onClick={onClick}>
+      {children}
+    </button>
+  )
+}
+
+/* --------------------------------------------------------------------------
+ * Composant principal
+ * -------------------------------------------------------------------------- */
+
 export function Navigation({
-  transparent: _transparent = true,
   className,
   menuItems: propMenuItems,
-  themeColor: _themeColor = 'light',
-  overlayHeroSecondary = false,
-  overlayHeroHomeLight = false,
-  overlayBlogHero = false,
+  brand,
+  menuTheme,
   showLanguageSwitcher = true,
   publicLocales: publicLocalesProp,
+  // Props legacy conservées en signature mais ignorées (auto-detect prend le relais).
+  transparent: _transparent,
+  themeColor: _themeColor,
+  overlayHeroSecondary: _overlayHeroSecondary,
+  overlayHeroHomeLight: _overlayHeroHomeLight,
+  overlayBlogHero: _overlayBlogHero,
   ...props
 }: NavigationProps) {
+  void _transparent
+  void _themeColor
+  void _overlayHeroSecondary
+  void _overlayHeroHomeLight
+  void _overlayBlogHero
+
   const pathname = usePathname() ?? ''
   const publicLocales = publicLocalesProp ?? [...supportedLocales]
   const navLocale = getActiveLocaleFromPathname(pathname)
+  const surface = useTopnavSurfaceObserver()
+  const palette = buildTopnavPalettes(menuTheme)[surface]
+
   const [mobileOpen, setMobileOpen] = React.useState(false)
-  const [scrolled, setScrolled] = React.useState(false)
-  const [isMobileViewport, setIsMobileViewport] = React.useState(false)
-  const [megaOpenItemId, setMegaOpenItemId] = React.useState<string | null>(null)
-  const megaCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const clearMegaMenuCloseTimer = React.useCallback(() => {
-    if (megaCloseTimerRef.current) {
-      clearTimeout(megaCloseTimerRef.current)
-      megaCloseTimerRef.current = null
-    }
-  }, [])
-
-  const scheduleMegaMenuClose = React.useCallback(() => {
-    clearMegaMenuCloseTimer()
-    megaCloseTimerRef.current = setTimeout(() => {
-      setMegaOpenItemId(null)
-      megaCloseTimerRef.current = null
-    }, 140)
-  }, [clearMegaMenuCloseTimer])
-
-  const glassAnchorId: string | null = overlayBlogHero
-    ? 'blog-hero'
-    : overlayHeroSecondary
-      ? 'hero-secondary'
-      : overlayHeroHomeLight
-        ? 'hero-home'
-        : null
-  const useGlass = Boolean(glassAnchorId)
-  const forceLightOnHome = overlayHeroHomeLight
-  const mobileHomePlain = overlayHeroHomeLight && isMobileViewport
-  const useGlassForUi = useGlass && !mobileHomePlain
-  const overlayOnMediaForUi =
-    (overlayHeroSecondary || overlayHeroHomeLight || overlayBlogHero) && !mobileHomePlain
-
-  React.useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > 6)
-    }
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', onScroll)
-    }
-  }, [])
-
-  React.useEffect(() => {
-    const mql = window.matchMedia('(max-width: 767px)')
-    const apply = () => setIsMobileViewport(mql.matches)
-    apply()
-    mql.addEventListener('change', apply)
-    return () => {
-      mql.removeEventListener('change', apply)
-    }
-  }, [])
 
   React.useEffect(() => {
     if (!mobileOpen) return
@@ -329,39 +332,7 @@ export function Navigation({
     }
   }, [mobileOpen])
 
-  const scrollBlend = useTransparentHeroNavBlend(useGlassForUi, glassAnchorId)
-  /** 0 = barre transparente sur le hero, 1 = givré / plein après scroll. */
-  const tBar = useGlassForUi ? scrollBlend : 1
-  const tLink =
-    forceLightOnHome ? 1 : overlayOnMediaForUi && !mobileOpen ? scrollBlend : 1
-  const tButton =
-    forceLightOnHome ? 1 : overlayOnMediaForUi && !mobileOpen ? scrollBlend : 1
-
-  const barPalette = useGlassForUi
-    ? overlayBlogHero
-      ? navPaletteForLightSolidHeroBlend(tBar)
-      : navPaletteForBlend(tBar)
-    : null
-  const linkPalette = overlayOnMediaForUi
-    ? overlayBlogHero
-      ? navPaletteForLightSolidHeroBlend(tLink)
-      : navPaletteForBlend(tLink)
-    : null
-
-  const logoDark =
-    forceLightOnHome ||
-    (!overlayOnMediaForUi && !overlayBlogHero) ||
-    mobileOpen ||
-    tBar > 0.45 ||
-    overlayBlogHero
-
-  const langTheme: 'dark' | 'light' = overlayBlogHero
-    ? 'light'
-    : forceLightOnHome
-      ? 'light'
-      : overlayOnMediaForUi && !mobileOpen && tBar < 0.45
-        ? 'dark'
-        : 'light'
+  /* ---------- Construction des items CMS (compat back-office) ---------- */
 
   const fallbackMenuItems: MenuItem[] = [
     { id: 'fallback-home', label: siteCommonCta(navLocale, 'fallback_menu_home'), urlPath: `/${navLocale}`, order: 0, type: 'LINK', isRoot: true },
@@ -369,34 +340,18 @@ export function Navigation({
     { id: 'fallback-vaults', label: siteCommonCta(navLocale, 'fallback_menu_vaults'), urlPath: '/vaults', order: 2, type: 'LINK' },
     { id: 'fallback-about', label: siteCommonCta(navLocale, 'fallback_menu_about'), urlPath: `/${navLocale}/about`, order: 3, type: 'LINK' },
     { id: 'fallback-contact', label: siteCommonCta(navLocale, 'fallback_menu_contact'), urlPath: `/${navLocale}/contact`, order: 4, type: 'LINK' },
-    ...(showLanguageSwitcher
-      ? ([
-          {
-            id: 'fallback-lang',
-            label: siteCommonCta(navLocale, 'fallback_menu_lang'),
-            urlPath: '#',
-            order: 9,
-            type: 'LANGUAGE_SWITCHER' as const,
-          },
-        ] satisfies MenuItem[])
-      : []),
-    { id: 'fallback-login', label: siteCommonCta(navLocale, 'fallback_menu_login'), urlPath: '/login', order: 10, type: 'BUTTON', buttonStyle: 'outline' },
-    { id: 'fallback-wallet', label: siteCommonCta(navLocale, 'fallback_menu_connect_wallet'), urlPath: '#', order: 11, type: 'BUTTON', buttonStyle: 'text' },
+    { id: 'fallback-login', label: siteCommonCta(navLocale, 'fallback_menu_login'), urlPath: '/app/login', order: 10, type: 'BUTTON', buttonStyle: 'primary', externalUrl: '/app/login' },
   ]
 
-  const menuItemsRaw =
-    propMenuItems && propMenuItems.length > 0 ? propMenuItems : fallbackMenuItems
-  const menuItems = showLanguageSwitcher
-    ? menuItemsRaw
-    : menuItemsRaw.filter((item) => item.type !== 'LANGUAGE_SWITCHER')
+  const menuItems = propMenuItems && propMenuItems.length > 0 ? propMenuItems : fallbackMenuItems
 
   const rawLinkItems = menuItems.filter((item) => (item.type || 'LINK') === 'LINK')
   const rawButtonItems = menuItems.filter((item) => (item.type || 'LINK') === 'BUTTON')
 
   /**
-   * Certains items édités côté back-office peuvent être enregistrés en BUTTON "text"
-   * alors qu'ils représentent un lien de navigation primaire (ex. About/A propos).
-   * On les remonte dans la zone des liens pour conserver alignement et style homogènes.
+   * Certains items édités côté back-office sont enregistrés en BUTTON "text"
+   * alors qu'ils représentent un lien de navigation primaire (ex. À propos).
+   * On les remonte dans la zone des liens pour conserver l'alignement DS.
    */
   const buttonAsLinkItems = rawButtonItems
     .filter(
@@ -422,344 +377,195 @@ export function Navigation({
     (item) => !buttonAsLinkItems.some((promoted) => promoted.id === item.id),
   )
 
-  /** Langue + boutons d’action, ordre éditorial unique (`order` menu primaire). */
-  const rightRailItems = menuItems
-    .filter((item) => {
-      if (item.type === 'LANGUAGE_SWITCHER') return true
-      if ((item.type || 'LINK') !== 'BUTTON') return false
-      return !buttonAsLinkItems.some((promoted) => promoted.id === item.id)
-    })
-    .sort((a, b) => (a.order || 0) - (b.order || 0))
-
   const isActive = (item: MenuItem) => isNavItemActive(pathname, item, navLocale)
 
-  const renderLink = (
-    item: MenuItem,
-    onNavigate?: () => void,
-    options?: { withAnchorKey?: boolean },
-  ) => {
-    const withAnchorKey = options?.withAnchorKey !== false
-    const active = isActive(item)
-    const href = localizePublicInternalHref(item.urlPath, navLocale)
-    const palette = linkPalette
-    const style: React.CSSProperties = active
-      ? {
-          backgroundColor: palette ? palette.activeBg : '#000000',
-          color: palette ? palette.activeFg : '#ffffff',
-          boxShadow: tLink < 0.98 ? '0 1px 2px rgba(0,0,0,0.08)' : undefined,
-        }
-      : {
-          color: palette ? palette.inactivePill : '#62656e',
-        }
+  /** DS strict — un seul CTA primary à droite, le premier bouton CMS. */
+  const primaryCta = buttonItems[0] ?? null
 
-    return (
-      <a
-        key={withAnchorKey ? item.id : undefined}
-        href={href}
-        onClick={onNavigate}
-        className={cn(
-          NAV_MENU_LINK_FRAME,
-          NAV_PRIMARY_LINK_TYPO,
-          'transition-[color,background-color] duration-300 ease-out hover:text-black',
-          !active && palette ? '' : !active ? 'text-[#62656e]' : '',
-        )}
-        style={style}
-      >
-        {item.label}
-      </a>
-    )
+  const handleCtaClick = (item: MenuItem) => (e: React.MouseEvent) => {
+    if (
+      item.buttonAction &&
+      typeof window !== 'undefined' &&
+      (window as unknown as Record<string, unknown>)[item.buttonAction!]
+    ) {
+      e.preventDefault()
+      ;(window as unknown as Record<string, (() => void) | undefined>)[
+        item.buttonAction!
+      ]?.()
+    }
   }
 
-  /** Lien page, groupe non cliquable, ou lien externe — barre desktop. */
-  const renderDesktopPrimaryNavItem = (
-    item: MenuItem,
-    opts?: { hasMegaMenu: boolean },
-  ) => {
-    const active = isActive(item)
-    const palette = linkPalette
-    const style: React.CSSProperties = active
-      ? {
-          backgroundColor: palette ? palette.activeBg : '#000000',
-          color: palette ? palette.activeFg : '#ffffff',
-          boxShadow: tLink < 0.98 ? '0 1px 2px rgba(0,0,0,0.08)' : undefined,
-        }
-      : {
-          color: palette ? palette.inactivePill : '#62656e',
-        }
+  /* ---------- Style de la barre (background, border, transition 480ms) ---------- */
 
+  const navBarStyle: React.CSSProperties = {
+    background: palette.background,
+    borderBottom: palette.borderBottom,
+    transition:
+      'background 480ms var(--v-ease-in-out), border-color 480ms var(--v-ease-in-out), backdrop-filter 480ms var(--v-ease-in-out)',
+  }
+
+  /* ---------- Rendu d'un item de liens (link ou group dégradé) ---------- */
+
+  const renderPrimaryLink = (item: MenuItem) => {
     const navKind = item.navigationNodeKind ?? 'PAGE'
-
-    if (navKind === 'GROUP') {
-      const hm = opts?.hasMegaMenu ?? false
-      return (
-        <button
-          type="button"
-          aria-haspopup={hm ? 'menu' : undefined}
-          aria-expanded={hm ? megaOpenItemId === item.id : undefined}
-          className={cn(
-            NAV_MENU_LINK_FRAME,
-            NAV_PRIMARY_LINK_TYPO,
-            'cursor-default border-none bg-transparent transition-[color,background-color] duration-300 ease-out hover:text-black',
-            !active && palette ? '' : !active ? 'text-[#62656e]' : '',
-          )}
-          style={style}
-        >
-          {item.label}
-        </button>
-      )
-    }
+    const active = isActive(item)
 
     if (navKind === 'EXTERNAL_LINK') {
       const raw = (item.urlPath || '').trim()
       const href = shouldSkipLocalizePublicHref(raw) ? raw : localizePublicInternalHref(raw, navLocale)
       const newTab = item.openInNewTab || isPublicHrefExternalNavigation(href)
       return (
-        <a
-          href={href}
-          target={newTab ? '_blank' : undefined}
-          rel={newTab ? 'noopener noreferrer' : undefined}
-          className={cn(
-            NAV_MENU_LINK_FRAME,
-            NAV_PRIMARY_LINK_TYPO,
-            'transition-[color,background-color] duration-300 ease-out hover:text-black',
-            !active && palette ? '' : !active ? 'text-[#62656e]' : '',
-          )}
-          style={style}
-        >
+        <TopnavLink key={item.id} href={href} active={active} palette={palette} external newTab={newTab}>
           {item.label}
-        </a>
+        </TopnavLink>
       )
     }
 
-    return renderLink(item, undefined, { withAnchorKey: false })
-  }
-
-  const renderButton = (item: MenuItem, mobile = false) => {
-    const handleClick = (e: React.MouseEvent) => {
-      if (
-        item.buttonAction &&
-        typeof window !== 'undefined' &&
-        (window as unknown as Record<string, unknown>)[item.buttonAction!]
-      ) {
-        e.preventDefault()
-        ;(window as unknown as Record<string, (() => void) | undefined>)[
-          item.buttonAction!
-        ]?.()
+    if (navKind === 'GROUP') {
+      const fallbackHref = resolveGroupFallbackHref(item, navLocale)
+      if (fallbackHref) {
+        return (
+          <TopnavLink key={item.id} href={fallbackHref} active={active} palette={palette}>
+            {item.label}
+          </TopnavLink>
+        )
       }
+      // Sans sous-page : item inactif (label seul, sans href).
+      return (
+        <span
+          key={item.id}
+          className="inline-flex items-center font-ui text-[14px] font-medium leading-none py-1.5"
+          style={{ color: palette.linkColor, opacity: 0.6 }}
+        >
+          {item.label}
+        </span>
+      )
     }
 
-    const style = inferActionStyle(item)
-    const darkUi = overlayOnMediaForUi && !overlayBlogHero && tButton < 0.5
-
-    /** Même padding / taille de texte que les entrées « tab » du menu (`NAV_MENU_LINK_FRAME` + lien mobile). */
-    const btnTypo = mobile
-      ? "font-['Avenir:Heavy',sans-serif] text-[18px] leading-[1.6] tracking-[-0.01em]"
-      : NAV_PRIMARY_LINK_TYPO
-    const btnPadFrame = mobile ? 'px-6 py-3' : 'px-3 py-2'
-
-    const inner =
-      style === 'outline' ? (
-        <span
-          className={cn(
-            btnTypo,
-            'inline-flex items-center justify-center rounded-full border transition-colors',
-            btnPadFrame,
-            mobile ? 'w-full' : '',
-            darkUi
-              ? 'border-white/70 text-white/95 hover:border-white hover:text-white'
-              : 'border-[#8a8f9a] text-[#62656e] hover:border-black hover:text-black',
-          )}
-        >
-          {item.label}
-        </span>
-      ) : style === 'text' ? (
-        <span
-          className={cn(
-            btnTypo,
-            'inline-flex items-center justify-center rounded-full transition-opacity hover:opacity-70',
-            btnPadFrame,
-            mobile ? 'w-full border border-[#8a8f9a]' : '',
-            darkUi ? 'text-white' : 'text-black',
-          )}
-        >
-          {item.label}
-        </span>
-      ) : (
-        <span
-          className={cn(
-            btnTypo,
-            'inline-flex items-center justify-center rounded-full transition-colors',
-            btnPadFrame,
-            mobile ? 'w-full' : '',
-            darkUi
-              ? 'bg-white text-black hover:bg-white/90'
-              : 'bg-black text-white hover:bg-black/90',
-          )}
-        >
-          {item.label}
-        </span>
-      )
-
-    const href = navActionButtonHref(item, navLocale)
-    const openExternal = href ? isPublicHrefExternalNavigation(href) : false
-
-    const wrapped =
-      href && !item.buttonAction ? (
-        <a
-          key={item.id}
-          href={href}
-          target={openExternal ? '_blank' : undefined}
-          rel={openExternal ? 'noopener noreferrer' : undefined}
-          className={cn('inline-flex no-underline', mobile ? 'w-full' : '')}
-        >
-          {inner}
-        </a>
-      ) : (
-        <button
-          key={item.id}
-          type="button"
-          onClick={handleClick}
-          className={cn('inline-flex cursor-pointer border-none bg-transparent p-0', mobile ? 'w-full' : '')}
-        >
-          {inner}
-        </button>
-      )
-
-    return wrapped
+    const href = localizePublicInternalHref(item.urlPath, navLocale)
+    return (
+      <TopnavLink key={item.id} href={href} active={active} palette={palette}>
+        {item.label}
+      </TopnavLink>
+    )
   }
 
-  const blurPx = useGlassForUi ? navBackdropBlurPx(tBar) : 0
+  /* ---------- Logo (filtre inversé sur surfaces sombres) ---------- */
 
-  const navBarStyle: React.CSSProperties | undefined =
-    useGlassForUi && barPalette
-      ? {
-          backgroundColor: barPalette.navBg,
-          transition:
-            'background-color 220ms ease-out, border-color 220ms ease-out, backdrop-filter 220ms ease-out, -webkit-backdrop-filter 220ms ease-out',
-          borderBottomWidth: 0,
-          borderBottomColor: 'transparent',
-          ...(blurPx > 0
-            ? {
-                backdropFilter: `saturate(160%) blur(${blurPx}px)`,
-                WebkitBackdropFilter: `saturate(160%) blur(${blurPx}px)`,
-              }
-            : {}),
-        }
-      : !useGlassForUi
-        ? {
-            backgroundColor: scrolled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0)',
-            transition:
-              'background-color 220ms ease-out, backdrop-filter 220ms ease-out, -webkit-backdrop-filter 220ms ease-out',
-            borderBottomWidth: 0,
-            borderBottomColor: 'transparent',
-            ...(scrolled
-              ? {
-                  backdropFilter: 'saturate(160%) blur(14px)',
-                  WebkitBackdropFilter: 'saturate(160%) blur(14px)',
-                }
-              : {}),
-          }
-      : undefined
+  const logoNode = (
+    <a
+      href={`/${navLocale}`}
+      className="inline-flex items-center no-underline"
+      aria-label={siteCommonCta(navLocale, 'nav_home_aria')}
+      style={{ height: 22 }}
+    >
+      <BrandLogo
+        brand={brand}
+        lockup="horizontal"
+        color="black"
+        className="block h-[22px] w-auto"
+        style={{
+          // DS strict : un seul SVG noir, filtré inversé pour surfaces sombres
+          // (équivalent `filter: brightness(0) invert(1)` du topnav.css).
+          filter: palette.logoInvert ? 'brightness(0) invert(1)' : undefined,
+          transition: 'filter 480ms var(--v-ease-in-out)',
+        }}
+      />
+    </a>
+  )
 
   return (
     <nav
+      data-topnav-surface={surface}
       className={cn(
-        'fixed left-0 right-0 top-0 z-50 w-full min-w-full max-w-[100vw] overflow-x-clip',
+        'fixed left-0 right-0 top-0 z-50 box-border w-full',
         className,
       )}
-      style={navBarStyle}
+      style={{ ...navBarStyle, height: TOPNAV_HEIGHT_PX }}
       {...props}
     >
-      <Container>
-        <div className="relative z-[70] flex h-14 items-center gap-4 md:h-[60px]">
-          <a
-            href={`/${navLocale}`}
-            className="relative aspect-[178/85.7715] w-[142px] min-w-[142px] max-w-[142px] shrink-0 no-underline"
-            aria-label={siteCommonCta(navLocale, 'nav_home_aria')}
-          >
-            <Logo
-              className="absolute inset-0 size-full min-h-0 min-w-0 transition-colors duration-300"
-              color={logoDark ? 'black' : 'white'}
-            />
-          </a>
+      {/*
+        Même `<Container>` DS que le body / footer (`.v-container`, max 1280px).
+        Layout grid 3 colonnes 1fr auto 1fr (logo · liens · actions), gap 32px.
+        Liens en hauteur pleine ; underline actif à -bottom-px (recouvre border-bottom).
+      */}
+      <Container className="h-full">
+        <div className="grid h-full grid-cols-[1fr_auto_1fr] items-stretch gap-8">
+          {/* Col 1 — logo (gauche) */}
+          <div className="flex h-full items-center justify-self-start">{logoNode}</div>
 
-          <div className="hidden min-w-0 flex-1 items-center justify-center md:flex">
-            {linkItems.length > 0 ? (
-              <div
-                className="relative flex min-h-[44px] min-w-0 flex-1 flex-col items-center"
-                onMouseLeave={scheduleMegaMenuClose}
-              >
-                <div className="flex min-h-[44px] min-w-0 flex-wrap items-center justify-center gap-[13px]">
-                  {linkItems.map((item) => {
-                    const hasMega = Boolean(
-                      item.megaMenu &&
-                        Array.isArray(item.megaMenu.columns) &&
-                        item.megaMenu.columns.length > 0,
-                    )
-                    const navKind = item.navigationNodeKind ?? 'PAGE'
-                    const ariaMega =
-                      hasMega && navKind !== 'GROUP'
-                        ? ({
-                            'aria-haspopup': 'true' as const,
-                            'aria-expanded': megaOpenItemId === item.id,
-                          } as const)
-                        : {}
-                    return (
-                      <div
-                        key={item.id}
-                        className="inline-flex"
-                        {...ariaMega}
-                        onMouseEnter={() => {
-                          clearMegaMenuCloseTimer()
-                          if (hasMega) setMegaOpenItemId(item.id)
-                          else setMegaOpenItemId(null)
-                        }}
-                      >
-                        {renderDesktopPrimaryNavItem(item, { hasMegaMenu: hasMega })}
-                      </div>
-                    )
-                  })}
-                </div>
-                {megaOpenItemId ? (
-                  <DesktopMegaMenuHoverPanel
-                    megaOpenItemId={megaOpenItemId}
-                    linkItems={linkItems}
-                    onPanelMouseEnter={clearMegaMenuCloseTimer}
-                  />
-                ) : null}
+          {/* Col 2 — liens centraux (cachés ≤ 1024px) */}
+          <nav
+            aria-label="Navigation principale"
+            className="hidden h-full justify-self-center lg:block"
+          >
+            <ul className="flex h-full list-none items-stretch gap-8 m-0 p-0">
+              {linkItems.map((item) => (
+                <li key={item.id} className="flex h-full">
+                  {renderPrimaryLink(item)}
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* Col 3 — actions droite */}
+          <div className="flex h-full items-center justify-end gap-5 sm:gap-3 justify-self-end">
+            {/* Sélecteur de langue — text-link discret (atome DS .text-link) */}
+            {showLanguageSwitcher && publicLocales.length > 1 ? (
+              <div className="hidden sm:contents">
+                <LanguageSwitcherInline palette={palette} enabledLocales={publicLocales} />
               </div>
             ) : null}
-          </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-5">
-            {rightRailItems.map((item) =>
-              item.type === 'LANGUAGE_SWITCHER' ? (
-                <span key={item.id} className="hidden md:contents">
-                  <LanguageSwitcher
-                    key={item.id}
-                    themeColor={langTheme}
-                    enabledLocales={publicLocales}
-                  />
-                </span>
-              ) : (
-                <span key={item.id} className="hidden md:contents">
-                  {renderButton(item, false)}
-                </span>
-              ),
-            )}
-            {buttonItems.length > 0 ? (
-              <span className="shrink-0 md:hidden">{renderButton(buttonItems[0], false)}</span>
+            {/* CTA primary unique (DS strict : 1 seul bouton à droite) */}
+            {primaryCta ? (
+              <div className="hidden lg:block">
+                <TopnavCta
+                  palette={palette}
+                  href={navActionButtonHref(primaryCta, navLocale) ?? undefined}
+                  newTab={
+                    !!navActionButtonHref(primaryCta, navLocale) &&
+                    isPublicHrefExternalNavigation(
+                      navActionButtonHref(primaryCta, navLocale)!,
+                    )
+                  }
+                  onClick={handleCtaClick(primaryCta)}
+                >
+                  {primaryCta.label}
+                </TopnavCta>
+              </div>
             ) : null}
 
+            {/* CTA primary mobile (visible < 1024px à côté du burger) */}
+            {primaryCta ? (
+              <div className="lg:hidden">
+                <TopnavCta
+                  palette={palette}
+                  href={navActionButtonHref(primaryCta, navLocale) ?? undefined}
+                  newTab={
+                    !!navActionButtonHref(primaryCta, navLocale) &&
+                    isPublicHrefExternalNavigation(
+                      navActionButtonHref(primaryCta, navLocale)!,
+                    )
+                  }
+                  onClick={handleCtaClick(primaryCta)}
+                >
+                  {primaryCta.label}
+                </TopnavCta>
+              </div>
+            ) : null}
+
+            {/* Burger — visible ≤ 1024px */}
             <button
               type="button"
               className={cn(
-                'relative h-10 w-10 p-2 md:hidden transition-colors duration-300',
-                logoDark ? 'text-black' : 'text-white',
+                'relative h-10 w-10 p-2 lg:hidden transition-colors duration-300',
+                'border-0 bg-transparent cursor-pointer',
               )}
               aria-expanded={mobileOpen}
               aria-label={siteCommonCta(navLocale, 'nav_menu_toggle_aria')}
               onClick={() => setMobileOpen((o) => !o)}
+              style={{ color: palette.linkColor }}
             >
               <span
                 className={cn(
@@ -782,45 +588,76 @@ export function Navigation({
             </button>
           </div>
         </div>
+      </Container>
 
-        {mobileOpen ? (
-          <div
-            className={cn(
-              'fixed inset-x-0 top-0 z-[60] flex h-[100dvh] flex-col overflow-hidden bg-white md:hidden',
-            )}
-          >
-            <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-lg flex-1 flex-col pt-[5.5rem]">
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                <MobilePrimaryNavList
-                  linkItems={linkItems}
-                  navLocale={navLocale}
-                  pathname={pathname}
-                  isActive={isActive}
-                  onNavigate={() => setMobileOpen(false)}
+      {/* Drawer mobile plein écran — fond DS bg, items DS-compatibles */}
+      {mobileOpen ? (
+        <div
+          className={cn(
+            'fixed inset-x-0 top-0 z-[60] flex h-[100dvh] flex-col overflow-hidden bg-v-bg lg:hidden',
+          )}
+        >
+          <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-lg flex-1 flex-col pt-[5.5rem]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <MobilePrimaryNavList
+                linkItems={linkItems}
+                navLocale={navLocale}
+                pathname={pathname}
+                isActive={isActive}
+                onNavigate={() => setMobileOpen(false)}
+              />
+              {showLanguageSwitcher && publicLocales.length > 1 ? (
+                <LanguageSwitcher
+                  variant="drawer-row"
+                  themeColor="light"
+                  enabledLocales={publicLocales}
                 />
-                {showLanguageSwitcher ? (
-                  <LanguageSwitcher
-                    variant="drawer-row"
-                    themeColor="light"
-                    enabledLocales={publicLocales}
-                  />
-                ) : null}
-              </div>
-              {buttonItems.length > 1 ? (
-                <div className="shrink-0 border-t border-black/[0.06] bg-white px-4 py-4">
-                  <div className="mx-auto flex w-full max-w-md flex-col gap-3">
-                    {buttonItems.slice(1).map((item) => (
-                      <div key={item.id} className="w-full">
-                        {renderButton(item, true)}
-                      </div>
-                    ))}
-                  </div>
-                </div>
               ) : null}
             </div>
+            {buttonItems.length > 1 ? (
+              <div className="shrink-0 border-t border-v-fg/[0.06] bg-v-bg px-4 py-4">
+                <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+                  {buttonItems.slice(1).map((item) => (
+                    <a
+                      key={item.id}
+                      href={navActionButtonHref(item, navLocale) ?? '#'}
+                      onClick={handleCtaClick(item)}
+                      className={cn(
+                        'inline-flex w-full items-center justify-center gap-2 whitespace-nowrap font-ui text-[14px] font-medium leading-none',
+                        'py-[14px] px-6 rounded-v-pill no-underline',
+                        'bg-v-fg text-white hover:bg-[#3B3633] transition-[background-color] duration-150 ease-out',
+                      )}
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </Container>
+        </div>
+      ) : null}
     </nav>
+  )
+}
+
+/* --------------------------------------------------------------------------
+ * Adapter inline pour LanguageSwitcher (palette DS dynamique)
+ * -------------------------------------------------------------------------- */
+
+function LanguageSwitcherInline({
+  palette,
+  enabledLocales,
+}: {
+  palette: TopnavPalette
+  enabledLocales: Locale[]
+}) {
+  const themeColor: 'dark' | 'light' = palette.logoInvert ? 'dark' : 'light'
+  return (
+    <LanguageSwitcher
+      themeColor={themeColor}
+      variant="toolbar-icon"
+      enabledLocales={enabledLocales}
+    />
   )
 }
