@@ -2,6 +2,8 @@
 
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
+import { PortalReveal } from '@/components/portal/PortalReveal'
+import { PortalInvestSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalPageIntro, PortalSectionHeading } from '@/components/portal/PortalPageIntro'
 import { PortalExclusiveOffersSection } from '@/components/portal/invest/PortalExclusiveOffersSection'
 import { PortalInvestProductAccess } from '@/components/portal/invest/PortalInvestProductAccess'
@@ -12,21 +14,6 @@ import { cn } from '@/lib/utils'
 
 const INVEST_CACHE_KEY = 'portal:invest:v2'
 
-function InvestSkeleton() {
-  return (
-    <PortalPageContainer>
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-16">
-        <div className="space-y-6">
-          <div className="h-40 animate-pulse rounded-v-card bg-v-card" />
-          <div className="h-72 animate-pulse rounded-v-card bg-v-card" />
-          <div className="h-80 animate-pulse rounded-v-card bg-v-card" />
-        </div>
-        <div className="hidden h-56 animate-pulse rounded-v-card bg-v-card-warm lg:block" />
-      </div>
-    </PortalPageContainer>
-  )
-}
-
 export function PortalInvestScreen() {
   const { data, loading, refreshing, error, refresh } = usePortalCachedScreen<PortalInvestPayload>({
     cacheKey: INVEST_CACHE_KEY,
@@ -35,7 +22,7 @@ export function PortalInvestScreen() {
     errorMessage: 'Unable to load invest products.',
   })
 
-  if (loading && !data) return <InvestSkeleton />
+  if (loading && !data) return <PortalInvestSkeleton />
 
   if (error && !data) {
     return (
@@ -57,26 +44,32 @@ export function PortalInvestScreen() {
   return (
     <PortalPageContainer>
       <PortalDashboardLayout>
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end">
-          <PortalPageIntro
-            eyebrow="Invest"
-            title={data.heroTitle}
-            description={data.heroSubtitle}
-          />
-          {data.heroImageUrl ? (
-            <div className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={data.heroImageUrl} alt="" className="aspect-[4/3] w-full object-cover" />
-            </div>
-          ) : null}
-        </div>
+        <PortalReveal index={0}>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end">
+            <PortalPageIntro
+              eyebrow="Invest"
+              title={data.heroTitle}
+              description={data.heroSubtitle}
+            />
+            {data.heroImageUrl ? (
+              <div className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={data.heroImageUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+              </div>
+            ) : null}
+          </div>
+        </PortalReveal>
 
-        <section className="flex flex-col gap-4">
-          <PortalSectionHeading title="Explore opportunities" />
-          <PortalInvestProductAccess />
-        </section>
+        <PortalReveal index={1}>
+          <section className="flex flex-col gap-4">
+            <PortalSectionHeading title="Explore opportunities" />
+            <PortalInvestProductAccess />
+          </section>
+        </PortalReveal>
 
-        <PortalExclusiveOffersSection offers={data.offers} />
+        <PortalReveal index={2}>
+          <PortalExclusiveOffersSection offers={data.offers} />
+        </PortalReveal>
 
         <button
           type="button"

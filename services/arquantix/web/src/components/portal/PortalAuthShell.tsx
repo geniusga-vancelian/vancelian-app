@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { SectionHero } from '@/components/sections/SectionHero'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
+import { PortalBackToWebsiteLink } from '@/components/portal/PortalBackToWebsiteLink'
 import { PersistentSiteFooter } from '@/components/site/PersistentSiteFooter'
 import { PortalAuthFootnote } from '@/components/portal/PortalAuthFootnote'
 import { usePortalAuthContent } from '@/components/portal/PortalAuthContentProvider'
@@ -24,7 +24,6 @@ function PortalAuthHeroPanel({ heroContent }: { heroContent: HomeHeroAuthContent
       <SectionHero
         {...heroContent}
         hideCta
-        deferBackgroundVideo
         className="portal-auth__hero"
       />
     </div>
@@ -44,19 +43,27 @@ export function PortalAuthShell({
   return (
     <div className="portal-auth-page">
       <main className="portal-auth">
-        <Link href={backToWebsiteHref} className="portal-auth__back" aria-label={backToWebsiteLabel}>
+        <PortalBackToWebsiteLink
+          href={backToWebsiteHref}
+          className="portal-auth__back"
+          aria-label={backToWebsiteLabel}
+        >
           <span className="portal-auth__back-arrow" aria-hidden="true">
             ←
           </span>
           <span>{backToWebsiteLabel}</span>
-        </Link>
+        </PortalBackToWebsiteLink>
 
         {heroContent ? <PortalAuthHeroPanel heroContent={heroContent} /> : null}
 
         <section className="portal-auth__form-wrap" aria-labelledby="portal-auth-form-title">
-          <Link href={backToWebsiteHref} className="portal-auth__logo" aria-label="Vancelian — home">
+          <PortalBackToWebsiteLink
+            href={backToWebsiteHref}
+            className="portal-auth__logo"
+            aria-label="Vancelian — home"
+          >
             <BrandLogo brand={brand} lockup="horizontal" color="black" className="h-6 w-auto" />
-          </Link>
+          </PortalBackToWebsiteLink>
 
           <div className="portal-auth__form-main">{children}</div>
 

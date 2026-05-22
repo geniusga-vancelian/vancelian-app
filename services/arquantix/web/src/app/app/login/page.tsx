@@ -6,31 +6,24 @@ import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 import { Loader2 } from 'lucide-react'
 import { PortalAuthSsoSection } from '@/components/portal/PortalAuthSsoSection'
 import { usePortalAuthContent } from '@/components/portal/PortalAuthContentProvider'
-import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
-import { PortalLoginFormPlaceholder } from '@/components/portal/PortalLoginFormPlaceholder'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { isPrivyConfigured } from '@/lib/portal/privyConfig'
+import { usePortalEmailOtpSend } from '@/lib/portal/usePortalEmailOtpSend'
 import {
   clearPortalOtpFlow,
   markPortalOtpFlowActive,
 } from '@/components/portal/PortalAuthPrivySessionHygiene'
-import { formatPrivyConfigError } from '@/lib/portal/privyConfigErrors'
+import { formatPortalPrivyAuthError } from '@/lib/portal/privyConfigErrors'
 
-function formatPrivyError(err: unknown): string {
-  return formatPrivyConfigError(
-    err,
-    'Unable to send the code. Please try again.',
-  )
-}
-
-function PortalLoginForm({ initialEmail = '' }: { initialEmail?: string }) {
+function PortalLoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const authContent = usePortalAuthContent()
   const { ready } = usePrivy()
-  const { sendCode, state } = useLoginWithEmail()
+  const sendEmailOtp = usePortalEmailOtpSend()
+  const { state } = useLoginWithEmail()
 
-  const [email, setEmail] = useState(initialEmail || searchParams?.get('email') || '')
+  const [email, setEmail] = useState(searchParams?.get('email') ?? '')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -100,19 +93,28 @@ function PortalLoginForm({ initialEmail = '' }: { initialEmail?: string }) {
 
     setSubmitting(true)
     markPortalOtpFlowActive()
+
+    const trimmedEmail = email.trim()
+    const verifyParams = new URLSearchParams({
+      email: trimmedEmail,
+      sent: '1',
+      ...(signUpMode ? { mode: 'signup' } : {}),
+    })
+    const verifyHref = `${PORTAL_ROUTES.loginVerify}?${verifyParams.toString()}`
+
     try {
-      await sendCode({ email: email.trim(), disableSignup: !signUpMode })
-      const params = new URLSearchParams({
-        email: email.trim(),
-        sent: '1',
-        ...(signUpMode ? { mode: 'signup' } : {}),
-      })
-      router.push(`${PORTAL_ROUTES.loginVerify}?${params.toString()}`)
-      // Garder le bouton en chargement jusqu’au démontage (navigation vers verify).
+      await sendEmailOtp({ email: trimmedEmail, disableSignup: !signUpMode })
+      router.push(verifyHref)
     } catch (err) {
       console.error('[portal/login] sendCode', err)
       clearPortalOtpFlow()
-      setError(formatPrivyError(err))
+      setError(
+        formatPortalPrivyAuthError(
+          err,
+          'send-code',
+          'Unable to send the code. Please try again.',
+        ),
+      )
       setSubmitting(false)
     }
   }
@@ -121,92 +123,72 @@ function PortalLoginForm({ initialEmail = '' }: { initialEmail?: string }) {
   const isBusy = submitting || isSendingCode || !ready
 
   return (
-    <>
-      <form className="portal-auth__form" onSubmit={(e) => void onSubmit(e)} noValidate>
-        <header className="portal-auth__intro">
-          <h2 className="portal-auth__form-title" id="portal-auth-form-title">
-            {copy.title}
-          </h2>
-          <p className="portal-auth__form-body">{copy.body}</p>
-        </header>
+    <form className="portal-auth__form" onSubmit={(e) => void onSubmit(e)} noValidate>
+      <header className="portal-auth__intro">
+        <h2 className="portal-auth__form-title" id="portal-auth-form-title">
+          {copy.title}
+        </h2>
+        <p className="portal-auth__form-body">{copy.body}</p>
+      </header>
 
-        {error ? <p className="portal-auth__error">{error}</p> : null}
+      {error ? <p className="portal-auth__error">{error}</p> : null}
 
-        <div className="portal-auth__field">
-          <input
-            className="portal-auth__input"
-            id="portal-email"
-            name="email"
-            type="email"
-            required
-            autoComplete="email"
-            inputMode="email"
-            spellCheck={false}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder=" "
-          />
-          <label className="portal-auth__label" htmlFor="portal-email">
-            {authContent.login.emailLabel}
-          </label>
-        </div>
+      <div className="portal-auth__field">
+        <input
+          className="portal-auth__input"
+          id="portal-email"
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          inputMode="email"
+          spellCheck={false}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder=" "
+        />
+        <label className="portal-auth__label" htmlFor="portal-email">
+          {authContent.login.emailLabel}
+        </label>
+      </div>
 
+      <button
+        className="portal-auth__btn portal-auth__btn--primary portal-auth__btn--lg portal-auth__btn--block"
+        type="submit"
+        disabled={!emailOk || isBusy}
+        aria-busy={isBusy || undefined}
+      >
+        <span>{copy.submit}</span>
+        {isBusy ? (
+          <Loader2 className="portal-auth__btn-loader h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <span className="portal-auth__btn-arrow" aria-hidden="true">
+            →
+          </span>
+        )}
+        {isBusy ? <span className="sr-only">Sending code</span> : null}
+      </button>
+
+      <PortalAuthSsoSection ssoEnabled={authContent.ssoEnabled} login={authContent.login} />
+
+      <p className="portal-auth__helper">
+        {copy.helper}{' '}
         <button
-          className="portal-auth__btn portal-auth__btn--primary portal-auth__btn--lg portal-auth__btn--block"
-          type="submit"
-          disabled={!emailOk || isBusy}
-          aria-busy={isBusy || undefined}
+          type="button"
+          className="portal-auth__link"
+          onClick={() => setAuthMode(copy.switchToSignup)}
         >
-          <span>{copy.submit}</span>
-          {isBusy ? (
-            <Loader2 className="portal-auth__btn-loader h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <span className="portal-auth__btn-arrow" aria-hidden="true">
-              →
-            </span>
-          )}
-          {isBusy ? <span className="sr-only">Sending code</span> : null}
+          {copy.switchLabel}
         </button>
-
-        <PortalAuthSsoSection ssoEnabled={authContent.ssoEnabled} login={authContent.login} />
-
-        <p className="portal-auth__helper">
-          {copy.helper}{' '}
-          <button
-            type="button"
-            className="portal-auth__link"
-            onClick={() => setAuthMode(copy.switchToSignup)}
-          >
-            {copy.switchLabel}
-          </button>
-        </p>
-      </form>
-    </>
+      </p>
+    </form>
   )
-}
-
-function PortalLoginPageGate() {
-  const { privyReady } = usePortalAuthPrivy()
-  const searchParams = useSearchParams()
-  const [email, setEmail] = useState(searchParams?.get('email') ?? '')
-
-  if (!privyReady) {
-    return (
-      <PortalLoginFormPlaceholder
-        email={email}
-        setEmail={setEmail}
-        submitDisabled
-      />
-    )
-  }
-
-  return <PortalLoginForm initialEmail={email} />
 }
 
 export default function PortalLoginPage() {
   return (
     <Suspense fallback={null}>
-      <PortalLoginPageGate />
+      <PortalLoginForm />
     </Suspense>
   )
 }

@@ -35,6 +35,11 @@ export function clearPortalOtpFlow(): void {
   }
 }
 
+/** Abandon verify/resend — permet au login de repartir sur un flux OTP propre. */
+export function abandonPortalEmailOtpFlow(): void {
+  clearPortalOtpFlow()
+}
+
 function isPortalOtpFlowActive(): boolean {
   try {
     return sessionStorage.getItem(PORTAL_OTP_FLOW_STORAGE_KEY) === '1'
@@ -80,6 +85,25 @@ function clearPrivyBrowserStorage(): void {
 }
 
 /**
+ * Réinitialise l’état email OTP Privy après « Unauthorized » (resend / sendCode).
+ * Purge d’abord le storage local, puis logout SDK si besoin — évite les courses
+ * async qui cassent le sendCode suivant sans hard refresh.
+ */
+export async function recoverPrivyEmailLoginSession(
+  logout?: () => Promise<void>,
+): Promise<void> {
+  clearPrivyBrowserStorage()
+  if (logout) {
+    try {
+      await logout()
+    } catch {
+      /* session déjà invalide */
+    }
+  }
+  clearPrivyBrowserStorage()
+}
+
+/**
  * Purge Privy après logout portail — uniquement sur /app/login, jamais pendant verify OTP.
  */
 export function PortalAuthPrivySessionHygiene() {
@@ -113,12 +137,12 @@ export function PortalAuthPrivySessionHygiene() {
       try {
         if (hasForcedReset) {
           consumePortalPrivyResetFlag()
-          clearPrivyBrowserStorage()
+          await recoverPrivyEmailLoginSession(logout)
           return
         }
 
         if (authenticated && !shouldAbortReset()) {
-          await logout()
+          await recoverPrivyEmailLoginSession(logout)
         }
       } catch (err) {
         console.error('[portal/auth] privy session reset', err)

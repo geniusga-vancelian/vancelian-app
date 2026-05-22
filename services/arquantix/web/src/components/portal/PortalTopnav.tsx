@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
@@ -11,8 +10,9 @@ import { Container } from '@/components/ui/Container'
 import { buildTopnavPalettes } from '@/lib/cms/site-menu-theme'
 import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
 import { PORTAL_PATH_PREFIX, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
-import { markPortalPrivySessionReset } from '@/components/portal/PortalAuthPrivySessionHygiene'
+import { readPortalCache } from '@/lib/portal/portalClientCache'
+import { navigateToPortalLogin } from '@/lib/portal/navigateToPortalLogin'
+import { warmPortalRoute } from '@/lib/portal/portalNavWarmup'
 import { preloadPrivyPortalProvider } from '@/lib/portal/preloadPrivyPortalProvider'
 import {
   PORTAL_MAIN_NAV_TABS,
@@ -21,7 +21,6 @@ import {
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
 import { useNavPending } from '@/components/site/NavPendingContext'
-import { PortalLogoutOverlay } from '@/components/portal/PortalLogoutOverlay'
 
 function normalizePath(path: string): string {
   const trimmed = path.replace(/\/$/, '')
@@ -46,12 +45,18 @@ interface TopnavLinkProps {
 }
 
 function TopnavLink({ href, active, palette, onClick, children }: TopnavLinkProps) {
+  const router = useRouter()
   const { setPendingPath } = useNavPending()
+
+  const handleWarm = () => warmPortalRoute(href, router)
 
   return (
     <Link
       href={href}
+      onPointerEnter={handleWarm}
+      onFocus={handleWarm}
       onClick={() => {
+        warmPortalRoute(href, router)
         setPendingPath(href)
         onClick?.()
       }}
@@ -93,9 +98,18 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
   const { effectivePath, setPendingPath } = useNavPending()
   const palette = buildTopnavPalettes(null).solid
   const [mobileOpen, setMobileOpen] = React.useState(false)
-  const [loggingOut, setLoggingOut] = React.useState(false)
-  const [initials, setInitials] = React.useState(initialsProp ?? '')
+  const loggingOutRef = React.useRef(false)
+  const [initials, setInitials] = React.useState(() => {
+    if (initialsProp) return initialsProp
+    const cached = readPortalCache<{ profile?: PortalDashboardProfile | null }>('portal:profile')
+    if (cached?.profile) return resolvePortalProfileInitials(cached.profile)
+    return ''
+  })
   const [brand, setBrand] = React.useState<SiteBrandLogo | null | undefined>(brandProp)
+
+  React.useEffect(() => {
+    warmPortalRoute(PORTAL_ROUTES.profile, router)
+  }, [router])
 
   React.useEffect(() => {
     if (initialsProp) {
@@ -142,13 +156,13 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
   }, [brandProp])
 
   React.useEffect(() => {
-    if (!mobileOpen && !loggingOut) return
+    if (!mobileOpen) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = previousOverflow
     }
-  }, [mobileOpen, loggingOut])
+  }, [mobileOpen])
 
   const handleLogoutPrefetch = () => {
     router.prefetch(PORTAL_ROUTES.login)
@@ -156,22 +170,10 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
   }
 
   const handleLogout = () => {
-    if (loggingOut) return
-    setLoggingOut(true)
+    if (loggingOutRef.current) return
+    loggingOutRef.current = true
     setMobileOpen(false)
-    markPortalPrivySessionReset()
-    invalidatePortalCache()
-    preloadPrivyPortalProvider()
-    router.prefetch(PORTAL_ROUTES.login)
-
-    void fetch('/api/portal/logout', { method: 'POST', credentials: 'include' })
-      .then(() => {
-        router.replace(PORTAL_ROUTES.login)
-      })
-      .catch((err) => {
-        console.error('[portal/logout]', err)
-        setLoggingOut(false)
-      })
+    navigateToPortalLogin(router)
   }
 
   const avatarLabel = initials.trim().slice(0, 2).toUpperCase() || '?'
@@ -185,8 +187,6 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
 
   return (
     <>
-      {loggingOut ? <PortalLogoutOverlay variant="below-topnav" /> : null}
-
       <nav
         data-topnav-surface="solid"
         className={cn('fixed left-0 right-0 top-0 z-50 box-border w-full', className)}
@@ -225,7 +225,12 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
           <div className="flex h-full items-center justify-end gap-3 justify-self-end sm:gap-4">
             <Link
               href={PORTAL_SEARCH_NAV.href}
-              onClick={() => setPendingPath(PORTAL_SEARCH_NAV.href)}
+              onPointerEnter={() => warmPortalRoute(PORTAL_SEARCH_NAV.href, router)}
+              onFocus={() => warmPortalRoute(PORTAL_SEARCH_NAV.href, router)}
+              onClick={() => {
+                warmPortalRoute(PORTAL_SEARCH_NAV.href, router)
+                setPendingPath(PORTAL_SEARCH_NAV.href)
+              }}
               aria-label={PORTAL_SEARCH_NAV.label}
               className={cn(
                 'hidden h-10 w-10 items-center justify-center rounded-v-pill lg:inline-flex',
@@ -239,7 +244,12 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
 
             <Link
               href={PORTAL_ROUTES.profile}
-              onClick={() => setPendingPath(PORTAL_ROUTES.profile)}
+              onPointerEnter={() => warmPortalRoute(PORTAL_ROUTES.profile, router)}
+              onFocus={() => warmPortalRoute(PORTAL_ROUTES.profile, router)}
+              onClick={() => {
+                warmPortalRoute(PORTAL_ROUTES.profile, router)
+                setPendingPath(PORTAL_ROUTES.profile)
+              }}
               aria-label="Profile"
               aria-current={profileActive ? 'page' : undefined}
               className={cn(
@@ -256,16 +266,11 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
               variant="ghost"
               size="sm"
               className="hidden sm:inline-flex"
-              disabled={loggingOut}
-              aria-busy={loggingOut || undefined}
               onMouseEnter={handleLogoutPrefetch}
               onFocus={handleLogoutPrefetch}
-              onClick={() => void handleLogout()}
+              onClick={() => handleLogout()}
             >
               Sign out
-              {loggingOut ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              ) : null}
             </Button>
 
             <button
@@ -313,7 +318,9 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                     <li key={tab.id}>
                       <Link
                         href={tab.href}
+                        onPointerEnter={() => warmPortalRoute(tab.href, router)}
                         onClick={() => {
+                          warmPortalRoute(tab.href, router)
                           setPendingPath(tab.href)
                           setMobileOpen(false)
                         }}
@@ -331,7 +338,9 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                 <li>
                   <Link
                     href={PORTAL_SEARCH_NAV.href}
+                    onPointerEnter={() => warmPortalRoute(PORTAL_SEARCH_NAV.href, router)}
                     onClick={() => {
+                      warmPortalRoute(PORTAL_SEARCH_NAV.href, router)
                       setPendingPath(PORTAL_SEARCH_NAV.href)
                       setMobileOpen(false)
                     }}
@@ -352,16 +361,11 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                   type="button"
                   variant="outline"
                   className="w-full"
-                  disabled={loggingOut}
-                  aria-busy={loggingOut || undefined}
                   onMouseEnter={handleLogoutPrefetch}
                   onFocus={handleLogoutPrefetch}
-                  onClick={() => void handleLogout()}
+                  onClick={() => handleLogout()}
                 >
                   Sign out
-                  {loggingOut ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : null}
                 </Button>
               </div>
             </div>

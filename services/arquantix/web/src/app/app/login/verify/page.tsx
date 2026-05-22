@@ -9,13 +9,17 @@ import { PortalAuthFormDeferShell } from '@/components/portal/PortalAuthFormDefe
 import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import { PortalVerifyFormPlaceholder } from '@/components/portal/PortalVerifyFormPlaceholder'
 import { PortalOtpInput } from '@/components/portal/PortalOtpInput'
+import { usePortalPrivyCaptcha } from '@/components/portal/PortalPrivyCaptcha'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { usePortalEmailOtpResend } from '@/lib/portal/usePortalEmailOtpResend'
 import { interpolatePortalAuthTemplate } from '@/lib/cms/portal-auth'
 import {
+  abandonPortalEmailOtpFlow,
   clearPortalOtpFlow,
   markPortalOtpFlowActive,
 } from '@/components/portal/PortalAuthPrivySessionHygiene'
-import { formatPrivyConfigError, isPrivyUnauthorizedError } from '@/lib/portal/privyConfigErrors'
+import { formatPortalPrivyAuthError } from '@/lib/portal/privyConfigErrors'
+import { navigateToPortalDashboard } from '@/lib/portal/navigateToPortalDashboard'
 
 type ExchangeError = { code?: string; message: string }
 
@@ -44,8 +48,8 @@ function parseExchangeError(data: unknown): ExchangeError {
   return { message: fallback }
 }
 
-function formatPrivyError(err: unknown, fallback: string): string {
-  return formatPrivyConfigError(err, fallback)
+function formatPrivyError(err: unknown, fallback: string, context: 'send-code' | 'verify-code'): string {
+  return formatPortalPrivyAuthError(err, context, fallback)
 }
 
 function VerifyContent() {
@@ -58,12 +62,14 @@ function VerifyContent() {
   const sentFromLogin = searchParams?.get('sent') === '1'
 
   const { ready, getAccessToken } = usePrivy()
+  const resendEmailOtp = usePortalEmailOtpResend()
+  const { prepareCaptchaForSend, resetCaptcha } = usePortalPrivyCaptcha()
   const { identityToken } = useIdentityToken()
-  const { sendCode, loginWithCode, state } = useLoginWithEmail()
+  const { loginWithCode, state } = useLoginWithEmail()
 
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
-  const [sending, setSending] = useState(false)
+  const [resending, setResending] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [sendSucceeded, setSendSucceeded] = useState(sentFromLogin)
   const [resendCountdown, setResendCountdown] = useState(sentFromLogin ? resendSeconds : 0)
@@ -72,6 +78,8 @@ function VerifyContent() {
   const verifySucceededRef = useRef(false)
   const otpAcceptedRef = useRef(false)
   const lastSubmittedOtpRef = useRef('')
+  const verifyEpochRef = useRef(0)
+  const resendingRef = useRef(false)
 
   const title = signUpMode ? authContent.verify.signupTitle : authContent.verify.loginTitle
 
@@ -90,36 +98,64 @@ function VerifyContent() {
   }, [email, router])
 
   useEffect(() => {
+    markPortalOtpFlowActive()
+    router.prefetch(PORTAL_ROUTES.dashboard)
+    return () => {
+      abandonPortalEmailOtpFlow()
+      resetCaptcha()
+    }
+  }, [resetCaptcha, router])
+
+  const handleBackToLogin = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault()
+      abandonPortalEmailOtpFlow()
+      resetCaptcha()
+      void prepareCaptchaForSend().finally(() => {
+        router.push(backToLoginHref)
+      })
+    },
+    [backToLoginHref, prepareCaptchaForSend, resetCaptcha, router],
+  )
+
+  useEffect(() => {
     if (resendCountdown <= 0) return
     const timer = window.setTimeout(() => setResendCountdown((v) => v - 1), 1000)
     return () => window.clearTimeout(timer)
   }, [resendCountdown])
 
   const sendOtp = useCallback(async () => {
-    if (!email || !ready) return
+    if (!email || !ready || resending) return
+
+    verifyEpochRef.current += 1
+    verifyInFlightRef.current = false
+    setVerifying(false)
+    setCode('')
+    lastSubmittedOtpRef.current = ''
+
     setError('')
-    setSending(true)
+    setResending(true)
+    resendingRef.current = true
     markPortalOtpFlowActive()
+
     try {
-      await sendCode({ email, disableSignup: !signUpMode })
+      await resendEmailOtp({ email, disableSignup: !signUpMode })
       setSendSucceeded(true)
       setResendCountdown(resendSeconds)
     } catch (err) {
-      console.error('[portal/login/verify] sendCode', err)
-      if (isPrivyUnauthorizedError(err)) {
-        clearPortalOtpFlow()
-        const params = new URLSearchParams({ email })
-        if (signUpMode) params.set('mode', 'signup')
-        router.replace(`${PORTAL_ROUTES.login}?${params.toString()}`)
-        return
-      }
-      setError(formatPrivyError(err, 'Unable to send the code. Please try again.'))
-      setSendSucceeded(false)
-      clearPortalOtpFlow()
+      console.error('[portal/login/verify] resendOtp', err)
+      setError(
+        formatPrivyError(err, 'Unable to send the code. Please try again.', 'send-code'),
+      )
     } finally {
-      setSending(false)
+      resendingRef.current = false
+      setResending(false)
     }
-  }, [email, ready, resendSeconds, router, sendCode, signUpMode])
+  }, [email, ready, resendEmailOtp, resendSeconds, resending, signUpMode])
+
+  const requestResend = useCallback(() => {
+    void sendOtp()
+  }, [sendOtp])
 
   const exchangeSession = useCallback(async () => {
     const privyToken = await getAccessToken()
@@ -169,34 +205,42 @@ function VerifyContent() {
         otp.length !== 6 ||
         verifyInFlightRef.current ||
         verifySucceededRef.current ||
+        resendingRef.current ||
         !ready
       ) {
         return
       }
 
+      const epoch = verifyEpochRef.current
       verifyInFlightRef.current = true
       otpAcceptedRef.current = false
       setError('')
       setVerifying(true)
       try {
         await loginWithCode({ code: otp })
+        if (epoch !== verifyEpochRef.current || resendingRef.current) return
+
         otpAcceptedRef.current = true
         await exchangeSession()
+        if (epoch !== verifyEpochRef.current || resendingRef.current) return
+
         verifySucceededRef.current = true
         clearPortalOtpFlow()
-        router.replace(PORTAL_ROUTES.dashboard)
-        router.refresh()
+        await navigateToPortalDashboard(router)
       } catch (err) {
-        if (verifySucceededRef.current) return
+        if (verifySucceededRef.current || epoch !== verifyEpochRef.current || resendingRef.current) {
+          return
+        }
 
         // OTP accepté par Privy mais échange JWT échoué — retry exchange uniquement.
         if (otpAcceptedRef.current) {
           try {
             await exchangeSession()
+            if (epoch !== verifyEpochRef.current || resendingRef.current) return
+
             verifySucceededRef.current = true
             clearPortalOtpFlow()
-            router.replace(PORTAL_ROUTES.dashboard)
-            router.refresh()
+            await navigateToPortalDashboard(router)
             return
           } catch (exchangeErr) {
             console.error('[portal/login/verify] exchange after otp', exchangeErr)
@@ -218,16 +262,17 @@ function VerifyContent() {
           formatPrivyError(
             err,
             'The code does not match. Check the email you received.',
+            'verify-code',
           ),
         )
       } finally {
         verifyInFlightRef.current = false
-        if (!verifySucceededRef.current) {
+        if (!verifySucceededRef.current && epoch === verifyEpochRef.current) {
           setVerifying(false)
         }
       }
     },
-    [exchangeSession, getAccessToken, loginWithCode, ready, router],
+    [exchangeSession, loginWithCode, ready, router],
   )
 
   useEffect(() => {
@@ -236,12 +281,7 @@ function VerifyContent() {
     void verifyOtp(code)
   }, [code, verifyOtp])
 
-  const isOtpLoading =
-    !ready ||
-    verifying ||
-    state?.status === 'submitting-code' ||
-    sending ||
-    state?.status === 'sending-code'
+  const isOtpLoading = !ready || verifying || state?.status === 'submitting-code'
 
   if (!email) return null
 
@@ -287,18 +327,20 @@ function VerifyContent() {
           ) : (
             <button
               type="button"
-              disabled={isOtpLoading}
-              onClick={() => void sendOtp()}
+              disabled={resending || verifying || !ready}
+              onClick={() => requestResend()}
+              aria-busy={resending}
               className="portal-auth__link disabled:opacity-50"
             >
               {authContent.verify.resendLabel}
+              {resending ? <span className="sr-only">Sending code</span> : null}
             </button>
           )}
         </div>
 
         <p className="portal-auth__helper">
           {authContent.verify.wrongEmailHelper}{' '}
-          <Link href={backToLoginHref} className="portal-auth__link">
+          <Link href={backToLoginHref} className="portal-auth__link" onClick={handleBackToLogin}>
             {signUpMode
               ? authContent.verify.backToSignupLabel
               : authContent.verify.backToLoginLabel}
@@ -321,10 +363,15 @@ export default function PortalLoginVerifyPage() {
 
 function VerifyGate() {
   const { privyReady } = usePortalAuthPrivy()
+  const [privyBooted, setPrivyBooted] = useState(false)
+
+  useEffect(() => {
+    if (privyReady) setPrivyBooted(true)
+  }, [privyReady])
 
   return (
-    <PortalAuthFormDeferShell loading={!privyReady}>
-      {privyReady ? <VerifyContent /> : <PortalVerifyFormPlaceholder />}
+    <PortalAuthFormDeferShell loading={!privyBooted}>
+      {privyBooted ? <VerifyContent /> : <PortalVerifyFormPlaceholder />}
     </PortalAuthFormDeferShell>
   )
 }

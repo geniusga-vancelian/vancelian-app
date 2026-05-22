@@ -19,7 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@privy-auth-internal/provider": [
+        "./node_modules/@privy-io/react-auth/dist/cjs/privy-provider-zm0SWrLy.js"
+      ],
+      "@privy-auth-internal/context": [
+        "./node_modules/@privy-io/react-auth/dist/cjs/internal-context-B_aIJuQh.js"
+      ]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

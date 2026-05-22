@@ -38,13 +38,6 @@ export default async function RootLayout({
   const isPortalApp =
     isPortalPathname(pathname) || headersList.get('x-arq-portal') === '1'
   const cookieStore = await cookies()
-  if (isPortalApp) {
-    return (
-      <html lang="en">
-        <body className={figmaDsBodyRootClassName}>{children}</body>
-      </html>
-    )
-  }
 
   const pathLocale = headersList.get('x-arq-locale')
   const siteI18n = await getSiteI18nSettingsCached()
@@ -109,7 +102,9 @@ export default async function RootLayout({
   let menuTheme = getDefaultMenuThemeJson()
   let brand: Awaited<ReturnType<typeof getSiteBrandLogo>> = { logoUrl: null, logoAlt: null }
   let initialFooterData: Awaited<ReturnType<typeof getSiteFooterData>> | undefined
-  if (!shellLessPreview) {
+  // Portail : menu minimal côté serveur, mais SiteChrome monté pour que la navbar
+  // réapparaisse après navigation client-side vers le site public (/en, etc.).
+  if (!shellLessPreview && !isPortalApp) {
     try {
       const [m, n, theme, cmsBrand, footerData] = await Promise.all([
         getPrimaryMenu(locale, { languageSwitcherEnabled: showPublicLanguageSwitcher }),
@@ -129,7 +124,7 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang={locale}>
+    <html lang={isPortalApp ? 'en' : locale}>
       <body className={figmaDsBodyRootClassName}>
         <SiteChrome
           menuItems={menuItems}

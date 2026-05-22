@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
+import { PortalReveal } from '@/components/portal/PortalReveal'
+import { PortalMarketsSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalPageIntro } from '@/components/portal/PortalPageIntro'
 import { PortalCryptoBundlesSection } from '@/components/portal/markets/PortalCryptoBundlesSection'
 import { PortalMarketsNewsSection } from '@/components/portal/markets/PortalMarketsNewsSection'
@@ -33,21 +35,6 @@ function initialLiveLists(payload: PortalMarketsPayload | null) {
     liveFavorites: payload?.favorites ?? [],
     liveAllCrypto: allCryptoBootstrap.data ?? payload?.allCrypto ?? [],
   }
-}
-
-function MarketsSkeleton() {
-  return (
-    <PortalPageContainer>
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-16">
-        <div className="space-y-6">
-          <div className="h-24 animate-pulse rounded-v-card bg-v-card" />
-          <div className="h-72 animate-pulse rounded-v-card bg-v-card" />
-          <div className="h-56 animate-pulse rounded-v-card bg-v-card" />
-        </div>
-        <div className="hidden h-56 animate-pulse rounded-v-card bg-v-card-warm lg:block" />
-      </div>
-    </PortalPageContainer>
-  )
 }
 
 function symbolsForTab(
@@ -170,7 +157,7 @@ export function PortalMarketsScreen() {
     data?.marketDataPublicBaseUrl,
   )
 
-  if (loading && !data) return <MarketsSkeleton />
+  if (loading && !data) return <PortalMarketsSkeleton />
 
   if (error && !data) {
     return (
@@ -197,31 +184,41 @@ export function PortalMarketsScreen() {
   return (
     <PortalPageContainer>
       <PortalDashboardLayout>
-        <PortalPageIntro
-          eyebrow="Markets"
-          title="Crypto Markets"
-          description="Live USD prices, top movers, thematic bundles, news and research."
-        />
+        <PortalReveal index={0}>
+          <PortalPageIntro
+            eyebrow="Markets"
+            title="Crypto Markets"
+            description="Live USD prices, top movers, thematic bundles, news and research."
+          />
+        </PortalReveal>
 
-        <PortalTopCryptoSection
-          popular={livePopular}
-          topGainers={liveGainers}
-          topLosers={liveLosers}
-          favorites={liveFavorites}
-          allCrypto={liveAllCrypto}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          loading={false}
-          allCryptoLoading={allCryptoLoading}
-          error={topCryptoError}
-          onRetry={() => void refresh()}
-        />
+        <PortalReveal index={1}>
+          <PortalTopCryptoSection
+            popular={livePopular}
+            topGainers={liveGainers}
+            topLosers={liveLosers}
+            favorites={liveFavorites}
+            allCrypto={liveAllCrypto}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            loading={false}
+            allCryptoLoading={allCryptoLoading}
+            error={topCryptoError}
+            onRetry={() => void refresh()}
+          />
+        </PortalReveal>
 
-        <PortalCryptoBundlesSection bundles={data.bundles} />
+        <PortalReveal index={2}>
+          <PortalCryptoBundlesSection bundles={data.bundles} />
+        </PortalReveal>
 
-        <PortalMarketsNewsSection items={data.news} />
+        <PortalReveal index={3}>
+          <PortalMarketsNewsSection items={data.news} />
+        </PortalReveal>
 
-        <PortalResearchSection items={data.research} />
+        <PortalReveal index={4}>
+          <PortalResearchSection items={data.research} />
+        </PortalReveal>
 
         {data.partial ? (
           <p className="m-0 font-ui text-[12px] text-v-fg-muted">

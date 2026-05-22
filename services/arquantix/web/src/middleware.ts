@@ -199,9 +199,12 @@ export async function middleware(request: NextRequest) {
     }
 
     if (isLoginSurface && portalSession) {
-      const url = request.nextUrl.clone()
-      url.pathname = PORTAL_ROUTES.dashboard
-      return NextResponse.redirect(url)
+      const signingOut = request.nextUrl.searchParams.get('signed_out') === '1'
+      if (!signingOut) {
+        const url = request.nextUrl.clone()
+        url.pathname = PORTAL_ROUTES.dashboard
+        return NextResponse.redirect(url)
+      }
     }
 
     return nextWithPortalHeaders(request)

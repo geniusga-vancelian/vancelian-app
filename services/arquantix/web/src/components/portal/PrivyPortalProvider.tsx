@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { PrivyProvider, Captcha } from '@privy-io/react-auth'
+import { PrivyProvider } from '@privy-io/react-auth'
 import { isPrivyConfigured, privyProviderProps } from '@/lib/portal/privyConfig'
 import {
   formatPrivyConfigError,
@@ -9,6 +9,7 @@ import {
   isPrivyOriginNotAllowedError,
 } from '@/lib/portal/privyConfigErrors'
 import { PortalAuthPrivySessionHygiene } from '@/components/portal/PortalAuthPrivySessionHygiene'
+import { PortalPrivyCaptchaProvider } from '@/components/portal/PortalPrivyCaptcha'
 
 type Props = {
   children: React.ReactNode
@@ -102,13 +103,10 @@ export function PrivyPortalProvider({ children, appId: appIdFromServer }: Props)
         },
       }}
     >
-      {/*
-        Requis pour useLoginWithEmail (whitelabel) : Privy injecte le token Turnstile
-        au moment de sendCode. Sans ce composant, l'envoi OTP échoue silencieusement.
-      */}
-      <Captcha delayedExecution />
-      <PortalAuthPrivySessionHygiene />
-      {children}
+      <PortalPrivyCaptchaProvider>
+        <PortalAuthPrivySessionHygiene />
+        {children}
+      </PortalPrivyCaptchaProvider>
     </PrivyProvider>
   )
 }

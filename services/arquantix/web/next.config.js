@@ -1,6 +1,8 @@
 const path = require('path')
 const fs = require('fs')
 
+const privyAuthCjs = path.join(__dirname, 'node_modules/@privy-io/react-auth/dist/cjs')
+
 /**
  * Monorepo : `next dev` s’exécute dans `services/arquantix/web` — Next ne charge pas le `.env` à la racine du dépôt.
  * On charge ../../.env si présent pour que R2 / DATABASE_URL partagés avec Docker soient visibles en local.
@@ -22,7 +24,7 @@ const nextConfig = {
    * Force la transpilation de ces dépendances (petites libs ESM/CJS) pour éviter
    * des chunks RSC où `__webpack_require__(id)` tombe sur `undefined` en dev.
    */
-  transpilePackages: ['clsx', 'tailwind-merge'],
+  transpilePackages: ['clsx', 'tailwind-merge', '@privy-io/react-auth'],
   eslint: {
     // Violations ESLint héritées : ne pas bloquer `next build` (lint séparé si besoin).
     ignoreDuringBuilds: true,
@@ -46,7 +48,22 @@ const nextConfig = {
     ],
   },
   // Timeouts de watch : utiles sur stockage cloud lent (OneDrive, iCloud) ou gros monorepos
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        // Un seul graphe CJS côté client → contexte captcha / interne partagé avec sendCode().
+        '@privy-io/react-auth': path.join(privyAuthCjs, 'index.js'),
+        '@privy-auth-internal/provider': path.join(
+          privyAuthCjs,
+          'privy-provider-zm0SWrLy.js',
+        ),
+        '@privy-auth-internal/context': path.join(
+          privyAuthCjs,
+          'internal-context-B_aIJuQh.js',
+        ),
+      }
+    }
     // Augmenter les timeouts pour les opérations de fichiers
     config.watchOptions = {
       ...config.watchOptions,

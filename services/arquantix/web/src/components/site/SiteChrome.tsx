@@ -6,6 +6,7 @@ import { Navigation } from '@/components/sections/Navigation'
 import { PersistentSiteFooter } from '@/components/site/PersistentSiteFooter'
 import { NavPendingProvider } from '@/components/site/NavPendingContext'
 import { SiteContentPending } from '@/components/site/SiteContentPending'
+import { SiteTransitionProvider } from '@/components/site/SiteTransitionContext'
 import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
 import type { NavShellState } from '@/lib/cms/navShellContext'
 import type { MenuThemeJson } from '@/lib/cms/menuThemeStorage'
@@ -75,6 +76,7 @@ export function SiteChrome({
   const [nav, setNav] = React.useState<NavShellState>(initialNav)
   const prevPathRef = React.useRef(pathname)
   const prevLocaleRef = React.useRef<Locale>(shellLocaleFromPathname(pathname))
+  const prevBareChromeRef = React.useRef(bareChrome)
   const navShellCacheRef = React.useRef<Map<string, NavShellState>>(new Map())
 
   const refreshNavShell = React.useCallback(async (path: string, locale: Locale | null) => {
@@ -128,6 +130,9 @@ export function SiteChrome({
   }, [])
 
   React.useEffect(() => {
+    const wasBareChrome = prevBareChromeRef.current
+    prevBareChromeRef.current = bareChrome
+
     if (bareChrome) return
 
     const locale = shellLocaleFromPathname(pathname)
@@ -136,6 +141,11 @@ export function SiteChrome({
 
     prevPathRef.current = pathname
     prevLocaleRef.current = locale
+
+    if (wasBareChrome) {
+      void refreshMenuFromApi(pathname, locale)
+      return
+    }
 
     if (localeChanged) {
       void refreshMenuFromApi(pathname, locale)
@@ -165,10 +175,6 @@ export function SiteChrome({
     }
   }, [bareChrome, pathname, refreshMenuFromApi])
 
-  if (bareChrome) {
-    return <>{children}</>
-  }
-
   const isHome = isHomePath(pathname)
   const overlayHeroSecondary = isHome ? false : nav.overlayHeroSecondary
   const overlayHeroHomeLight = false
@@ -184,24 +190,36 @@ export function SiteChrome({
       ? figmaDsSiteShellLightClassName
       : 'min-h-screen bg-black text-white'
 
+  const chromeContent = bareChrome ? (
+    children
+  ) : (
+    <>
+      <ScrollMotionEffects />
+      <Navigation
+        menuItems={menu}
+        brand={brand}
+        menuTheme={menuTheme}
+        themeColor={nav.themeColor}
+        overlayHeroSecondary={overlayHeroSecondary}
+        overlayHeroHomeLight={overlayHeroHomeLight}
+        overlayBlogHero={overlayBlogHero}
+        showLanguageSwitcher={showLanguageSwitcher}
+        publicLocales={publicLocales}
+      />
+      <SiteContentPending className="flex flex-1 flex-col">{children}</SiteContentPending>
+      <PersistentSiteFooter initialData={initialFooterData} />
+    </>
+  )
+
   return (
-    <NavPendingProvider>
-      <div className={cn(shellBg, 'flex min-h-screen flex-col')}>
-        <ScrollMotionEffects />
-        <Navigation
-          menuItems={menu}
-          brand={brand}
-          menuTheme={menuTheme}
-          themeColor={nav.themeColor}
-          overlayHeroSecondary={overlayHeroSecondary}
-          overlayHeroHomeLight={overlayHeroHomeLight}
-          overlayBlogHero={overlayBlogHero}
-          showLanguageSwitcher={showLanguageSwitcher}
-          publicLocales={publicLocales}
-        />
-        <SiteContentPending className="flex flex-1 flex-col">{children}</SiteContentPending>
-        <PersistentSiteFooter initialData={initialFooterData} />
-      </div>
-    </NavPendingProvider>
+    <SiteTransitionProvider brand={brand}>
+      {bareChrome ? (
+        chromeContent
+      ) : (
+        <NavPendingProvider>
+          <div className={cn(shellBg, 'flex min-h-screen flex-col')}>{chromeContent}</div>
+        </NavPendingProvider>
+      )}
+    </SiteTransitionProvider>
   )
 }

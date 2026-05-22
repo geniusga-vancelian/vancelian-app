@@ -6,14 +6,20 @@ type Props = {
   children: React.ReactNode
 }
 
-/** Shell login minimal (defaults CMS) — first paint instant pendant le chargement SSR complet. */
+/**
+ * Shell login minimal — même structure que le shell CMS (hero + formulaire)
+ * pour éviter le clignotement pendant le streaming Suspense.
+ */
 export function PortalAuthBootstrapShell({ children }: Props) {
   const content = getDefaultPortalAuthContent()
 
   return (
     <PortalAuthContentProvider content={content}>
       <PortalAuthShell
-        heroContent={null}
+        heroContent={{
+          title: content.login.title,
+          subtitle: content.login.body,
+        }}
         brand={null}
         backToWebsiteLabel={content.shell.backToWebsiteLabel}
         backToWebsiteHref={content.shell.backToWebsiteHref}

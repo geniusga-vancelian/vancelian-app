@@ -2,8 +2,7 @@
 
 import * as React from 'react'
 import { usePrivy } from '@privy-io/react-auth'
-import type { PrivyPortalProvider } from '@/components/portal/PrivyPortalProvider'
-import { preloadPrivyPortalProvider } from '@/lib/portal/preloadPrivyPortalProvider'
+import { PrivyPortalProvider } from '@/components/portal/PrivyPortalProvider'
 
 type PortalAuthPrivyContextValue = {
   privyReady: boolean
@@ -25,7 +24,6 @@ function PrivyReadyReporter() {
 
   React.useEffect(() => {
     setPrivyReady(ready)
-    return () => setPrivyReady(false)
   }, [ready, setPrivyReady])
 
   return null
@@ -37,35 +35,18 @@ type PortalAuthPrivyGateProps = {
 }
 
 /**
- * Boot Privy en arrière-plan — le shell login s’affiche sans attendre le SDK.
+ * Privy monté dès le premier render client — évite le swap children sans/s avec Provider.
  */
 export function PortalAuthPrivyGate({ children, appId }: PortalAuthPrivyGateProps) {
-  const [PrivyProvider, setPrivyProvider] = React.useState<
-    typeof PrivyPortalProvider | null
-  >(null)
   const [privyReady, setPrivyReady] = React.useState(false)
   const value = React.useMemo(() => ({ privyReady, setPrivyReady }), [privyReady])
 
-  React.useEffect(() => {
-    let cancelled = false
-    void preloadPrivyPortalProvider()?.then((mod) => {
-      if (!cancelled) setPrivyProvider(() => mod.PrivyPortalProvider)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   return (
     <PortalAuthPrivyContext.Provider value={value}>
-      {PrivyProvider ? (
-        <PrivyProvider appId={appId}>
-          <PrivyReadyReporter />
-          {children}
-        </PrivyProvider>
-      ) : (
-        children
-      )}
+      <PrivyPortalProvider appId={appId}>
+        <PrivyReadyReporter />
+        {children}
+      </PrivyPortalProvider>
     </PortalAuthPrivyContext.Provider>
   )
 }

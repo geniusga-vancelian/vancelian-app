@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   HelpCircle,
@@ -19,10 +18,14 @@ import {
   PortalSettingsRow,
 } from '@/components/portal/profile/PortalProfileUi'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
+import { PortalReveal } from '@/components/portal/PortalReveal'
+import { PortalProfileSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { Container } from '@/components/ui/Container'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
+import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { cn } from '@/lib/utils'
+
+const PROFILE_CACHE_KEY = 'portal:profile'
 
 type ProfilePayload = {
   profile: PortalDashboardProfile | null
@@ -73,41 +76,21 @@ function resolveInitials(profile: PortalDashboardProfile | null): string {
 }
 
 export function PortalProfileScreen() {
-  const router = useRouter()
-  const [data, setData] = useState<ProfilePayload | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { data, loading, error } = usePortalCachedScreen<ProfilePayload>({
+    cacheKey: PROFILE_CACHE_KEY,
+    url: '/api/portal/profile',
+    ttlMs: 120_000,
+    errorMessage: 'Unable to load your profile.',
+  })
   const [currency, setCurrency] = useState<'EUR' | 'USD'>('EUR')
   const [updatingCurrency, setUpdatingCurrency] = useState(false)
   const [emailNotifications, setEmailNotifications] = useState(false)
 
-  const loadProfile = useCallback(async () => {
-    setError('')
-    setLoading(true)
-    try {
-      const res = await fetch('/api/portal/profile', { credentials: 'include', cache: 'no-store' })
-      if (res.status === 401) {
-        router.replace(PORTAL_ROUTES.login)
-        return
-      }
-      if (!res.ok) {
-        setError('Unable to load your profile.')
-        return
-      }
-      const json = (await res.json()) as ProfilePayload
-      setData(json)
-      const ref = json.profile?.reference_currency?.trim().toUpperCase()
-      if (ref === 'USD' || ref === 'EUR') setCurrency(ref)
-    } catch {
-      setError('Unable to load your profile.')
-    } finally {
-      setLoading(false)
-    }
-  }, [router])
-
   useEffect(() => {
-    void loadProfile()
-  }, [loadProfile])
+    if (!data?.profile) return
+    const ref = data.profile.reference_currency?.trim().toUpperCase()
+    if (ref === 'USD' || ref === 'EUR') setCurrency(ref)
+  }, [data])
 
   const initials = useMemo(() => resolveInitials(data?.profile ?? null), [data])
 
@@ -127,19 +110,11 @@ export function PortalProfileScreen() {
     }
   }
 
-  if (loading) {
-    return (
-      <PortalPageContainer>
-        <div className="mx-auto max-w-2xl space-y-6">
-          <div className="h-8 w-32 animate-pulse rounded-v-input bg-v-fg-05" />
-          <div className="h-24 animate-pulse rounded-v-card bg-v-card" />
-          <div className="h-40 animate-pulse rounded-v-card bg-v-card" />
-        </div>
-      </PortalPageContainer>
-    )
+  if (loading && !data) {
+    return <PortalProfileSkeleton />
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <Container className="flex min-h-[50vh] items-center justify-center py-10">
         <p className="m-0 font-ui text-[15px] text-v-error">{error}</p>
@@ -150,129 +125,141 @@ export function PortalProfileScreen() {
   return (
     <PortalPageContainer>
       <div className="mx-auto flex max-w-2xl flex-col gap-8">
-        <header className="flex flex-col gap-1">
-          <VEyebrow>Account</VEyebrow>
-          <h1 className="m-0 font-ui text-[28px] font-semibold tracking-v-tight text-v-fg">Profil</h1>
-        </header>
+        <PortalReveal index={0}>
+          <header className="flex flex-col gap-1">
+            <VEyebrow>Account</VEyebrow>
+            <h1 className="m-0 font-ui text-[28px] font-semibold tracking-v-tight text-v-fg">Profil</h1>
+          </header>
+        </PortalReveal>
 
-        <PortalSettingsCard>
-          <PortalSettingsRow
-            title="Mon compte"
-            subtitle={resolveEmail(data?.profile ?? null)}
-            href="#"
-            leading={
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#E5E5EA] font-ui text-[14px] font-semibold text-[#3C3C43]">
-                {initials}
-              </span>
-            }
-          />
-        </PortalSettingsCard>
-
-        <section className="flex flex-col gap-3">
-          <PortalSectionTitle>Devise de référence</PortalSectionTitle>
-          <PortalSettingsCard className="p-4 sm:p-5">
-            <p className="m-0 font-ui text-[14px] leading-relaxed text-v-fg-muted">
-              Les prix et valorisations seront affichés dans la devise choisie.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <CurrencyChip
-                label="EUR (€)"
-                selected={currency === 'EUR'}
-                disabled={updatingCurrency}
-                onSelect={() => void updateCurrency('EUR')}
-              />
-              <CurrencyChip
-                label="USD ($)"
-                selected={currency === 'USD'}
-                disabled={updatingCurrency}
-                onSelect={() => void updateCurrency('USD')}
-              />
-            </div>
-          </PortalSettingsCard>
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <PortalSectionTitle>Paramètres</PortalSectionTitle>
+        <PortalReveal index={1}>
           <PortalSettingsCard>
             <PortalSettingsRow
-              title="Sécurité"
-              subtitle="Méthodes de connexion, appareils"
-              leading={<Shield className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
-            />
-            <PortalSettingsRow
-              title="Notifications"
-              subtitle="Toutes les alertes sur cet appareil"
-              leading={<Bell className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
-            />
-            <PortalSettingsRow
-              title="Langue"
-              subtitle="FR"
-              leading={<Languages className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
-            />
-            <PortalSettingsRow
-              title="Notifications email"
-              subtitle="Newsletters & rapports"
-              trailing={
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={emailNotifications}
-                  onClick={() => setEmailNotifications((value) => !value)}
-                  className={cn(
-                    'relative h-7 w-12 shrink-0 rounded-v-pill border-0 transition-colors duration-v-fast',
-                    emailNotifications ? 'bg-v-fg' : 'bg-v-fg-20',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-v-subtle transition-transform duration-v-fast',
-                      emailNotifications ? 'translate-x-[22px]' : 'translate-x-0.5',
-                    )}
-                  />
-                </button>
+              title="Mon compte"
+              subtitle={resolveEmail(data?.profile ?? null)}
+              href="#"
+              leading={
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#E5E5EA] font-ui text-[14px] font-semibold text-[#3C3C43]">
+                  {initials}
+                </span>
               }
             />
           </PortalSettingsCard>
-        </section>
+        </PortalReveal>
 
-        <section className="flex flex-col gap-3">
-          <PortalSectionTitle>Support</PortalSectionTitle>
-          <PortalSettingsCard>
-            <PortalSettingsRow
-              title="Centre d'aide"
-              href="/help"
-              leading={<HelpCircle className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
-            />
-            <PortalSettingsRow
-              title="Academy"
-              href="/help"
-              leading={<School className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
-            />
-            <PortalSettingsRow
-              title="Blog"
-              href="/blog"
-              leading={<Newspaper className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
-            />
-            <PortalSettingsRow
-              title="Assistance de compte sur mesure"
-              href="/help"
-              leading={<MessageSquare className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
-            />
-            <PortalSettingsRow
-              title="Boîte de réception"
-              leading={<Inbox className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
-            />
-          </PortalSettingsCard>
-        </section>
+        <PortalReveal index={2}>
+          <section className="flex flex-col gap-3">
+            <PortalSectionTitle>Devise de référence</PortalSectionTitle>
+            <PortalSettingsCard className="p-4 sm:p-5">
+              <p className="m-0 font-ui text-[14px] leading-relaxed text-v-fg-muted">
+                Les prix et valorisations seront affichés dans la devise choisie.
+              </p>
+              <div className="mt-4 flex gap-2">
+                <CurrencyChip
+                  label="EUR (€)"
+                  selected={currency === 'EUR'}
+                  disabled={updatingCurrency}
+                  onSelect={() => void updateCurrency('EUR')}
+                />
+                <CurrencyChip
+                  label="USD ($)"
+                  selected={currency === 'USD'}
+                  disabled={updatingCurrency}
+                  onSelect={() => void updateCurrency('USD')}
+                />
+              </div>
+            </PortalSettingsCard>
+          </section>
+        </PortalReveal>
 
-        <section className="flex flex-col gap-3">
-          <PortalSectionTitle>Informations</PortalSectionTitle>
-          <PortalSettingsCard>
-            <PortalSettingsRow title="Conditions générales" />
-            <PortalSettingsRow title="Politique de confidentialité" />
-            <PortalSettingsRow title="Version" subtitle="Web portal" trailing={null} />
-          </PortalSettingsCard>
-        </section>
+        <PortalReveal index={3}>
+          <section className="flex flex-col gap-3">
+            <PortalSectionTitle>Paramètres</PortalSectionTitle>
+            <PortalSettingsCard>
+              <PortalSettingsRow
+                title="Sécurité"
+                subtitle="Méthodes de connexion, appareils"
+                leading={<Shield className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
+              />
+              <PortalSettingsRow
+                title="Notifications"
+                subtitle="Toutes les alertes sur cet appareil"
+                leading={<Bell className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
+              />
+              <PortalSettingsRow
+                title="Langue"
+                subtitle="FR"
+                leading={<Languages className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
+              />
+              <PortalSettingsRow
+                title="Notifications email"
+                subtitle="Newsletters & rapports"
+                trailing={
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={emailNotifications}
+                    onClick={() => setEmailNotifications((value) => !value)}
+                    className={cn(
+                      'relative h-7 w-12 shrink-0 rounded-v-pill border-0 transition-colors duration-v-fast',
+                      emailNotifications ? 'bg-v-fg' : 'bg-v-fg-20',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-v-subtle transition-transform duration-v-fast',
+                        emailNotifications ? 'translate-x-[22px]' : 'translate-x-0.5',
+                      )}
+                    />
+                  </button>
+                }
+              />
+            </PortalSettingsCard>
+          </section>
+        </PortalReveal>
+
+        <PortalReveal index={4}>
+          <section className="flex flex-col gap-3">
+            <PortalSectionTitle>Support</PortalSectionTitle>
+            <PortalSettingsCard>
+              <PortalSettingsRow
+                title="Centre d'aide"
+                href="/help"
+                leading={<HelpCircle className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
+              />
+              <PortalSettingsRow
+                title="Academy"
+                href="/help"
+                leading={<School className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
+              />
+              <PortalSettingsRow
+                title="Blog"
+                href="/blog"
+                leading={<Newspaper className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
+              />
+              <PortalSettingsRow
+                title="Assistance de compte sur mesure"
+                href="/help"
+                leading={<MessageSquare className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
+              />
+              <PortalSettingsRow
+                title="Boîte de réception"
+                leading={<Inbox className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
+              />
+            </PortalSettingsCard>
+          </section>
+        </PortalReveal>
+
+        <PortalReveal index={5}>
+          <section className="flex flex-col gap-3">
+            <PortalSectionTitle>Informations</PortalSectionTitle>
+            <PortalSettingsCard>
+              <PortalSettingsRow title="Conditions générales" />
+              <PortalSettingsRow title="Politique de confidentialité" />
+              <PortalSettingsRow title="Version" subtitle="Web portal" trailing={null} />
+            </PortalSettingsCard>
+          </section>
+        </PortalReveal>
       </div>
     </PortalPageContainer>
   )

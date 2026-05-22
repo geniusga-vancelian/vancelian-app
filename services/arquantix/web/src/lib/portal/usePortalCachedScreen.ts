@@ -71,6 +71,15 @@ export function usePortalCachedScreen<T>(options: {
   )
 
   useEffect(() => {
+    const bootstrap = bootstrapRef.current
+    if (bootstrap.isFresh) {
+      const schedule =
+        typeof requestIdleCallback !== 'undefined'
+          ? (cb: () => void) => requestIdleCallback(cb, { timeout: 2500 })
+          : (cb: () => void) => window.setTimeout(cb, 120)
+      schedule(() => void revalidate(false))
+      return
+    }
     void revalidate(false)
   }, [revalidate])
 

@@ -5,8 +5,9 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PortalTopnav } from '@/components/portal/PortalTopnav'
 import { PersistentSiteFooter } from '@/components/site/PersistentSiteFooter'
+import { PortalShellMain } from '@/components/portal/PortalShellMain'
 import { NavPendingProvider } from '@/components/site/NavPendingContext'
-import { SiteContentPending } from '@/components/site/SiteContentPending'
+import { warmAllPortalMainRoutes } from '@/lib/portal/portalNavWarmup'
 import type { SiteBrandLogo } from '@/components/ui/BrandLogo'
 import type { SiteFooterData } from '@/lib/cms/site-footer'
 import type { PortalSupportContent } from '@/lib/cms/portal-support'
@@ -40,6 +41,13 @@ export function PortalShell({
   useEffect(() => {
     router.prefetch(PORTAL_ROUTES.login)
     preloadPrivyPortalProvider()
+
+    const warm = () => warmAllPortalMainRoutes(router)
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(warm, { timeout: 4000 })
+    } else {
+      window.setTimeout(warm, 800)
+    }
   }, [router])
 
   return (
@@ -53,7 +61,7 @@ export function PortalShell({
             className={cn('flex w-full flex-1 flex-col', className)}
             style={{ paddingTop: TOPNAV_HEIGHT_PX }}
           >
-            <SiteContentPending className="flex flex-1 flex-col">{children}</SiteContentPending>
+            <PortalShellMain className="flex flex-1 flex-col">{children}</PortalShellMain>
           </main>
           <PersistentSiteFooter initialData={initialFooterData} />
         </div>
