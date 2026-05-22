@@ -20,7 +20,11 @@ type StepRow = {
 }
 
 function readItems(content: Record<string, unknown>): StepRow[] {
-  const raw = content.items
+  const raw = Array.isArray(content.items)
+    ? content.items
+    : Array.isArray(content.steps)
+      ? content.steps
+      : null
   if (!Array.isArray(raw) || raw.length === 0) {
     return [
       {
@@ -70,6 +74,11 @@ export function ArticleStepsModuleEditor({ content, onPatch }: Props) {
 
   return (
     <div className="mt-2 space-y-3 border-t border-gray-100 pt-3">
+      <p className="rounded-md border border-indigo-100 bg-indigo-50/80 px-2.5 py-2 text-[11px] leading-snug text-indigo-900">
+        <span className="font-semibold">Saisie guidée</span> — aucun JSON à taper : titre du bloc, puis une ligne par
+        étape. « Terminé » = pastille validée ; la première étape non cochée affiche{' '}
+        <span className="font-medium">EN COURS</span> dans l&apos;app.
+      </p>
       <div className="grid gap-2 sm:grid-cols-2">
         <input
           type="text"
@@ -106,7 +115,11 @@ export function ArticleStepsModuleEditor({ content, onPatch }: Props) {
       <div>
         <p className="mb-1 text-xs font-medium text-gray-700">
           Étapes <span className="font-normal text-gray-500">({items.length})</span>
-          <span className="ml-2 font-normal text-gray-500">— cocher « Terminé » pour les pastilles en dégradé</span>
+          <span className="ml-2 font-normal text-gray-500">
+            — cocher « Terminé » pour les pastilles validées ;{' '}
+            <strong className="font-medium text-gray-700">« EN COURS »</strong> s’affiche sur la première étape{' '}
+            non cochée (les autres restent à venir)
+          </span>
         </p>
         <div className="space-y-1.5">
           {items.map((row, index) => {
@@ -218,7 +231,7 @@ export function ArticleStepsModuleEditor({ content, onPatch }: Props) {
                         setItems(next)
                       }}
                       className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                      placeholder="Ligne de statut (ex. Over)"
+                      placeholder="Texte au-dessus du titre (ex. Over, mars 2025)"
                     />
                     <input
                       type="text"
@@ -229,7 +242,7 @@ export function ArticleStepsModuleEditor({ content, onPatch }: Props) {
                         setItems(next)
                       }}
                       className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                      placeholder="dayLabel (optionnel)"
+                      placeholder="Étiquette jour (optionnel, ex. Jour 1)"
                     />
                   </div>
                   <textarea

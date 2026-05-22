@@ -169,10 +169,22 @@ function applyPreviewEnrichments(
         ...base,
         title: 'FAQ (aperçu)',
         intro:
-          'Les questions réelles sont chargées depuis Help en production. Ici, seul le cartouche d’en-tête est rendu.',
+          'Les questions réelles sont chargées depuis Help en production. Ici, exemple de rendu accordéon DS.',
         footerLinkLabel: 'Voir les articles d’aide',
+        footerLinkUrl: '',
         footerCollectionSlug: 'getting-started',
         footerCategorySlug: 'investing-basics',
+        items: [
+          {
+            question: 'Comment fonctionne cette offre ?',
+            standfirst:
+              'Il s’agit d’un aperçu factice. En production, les réponses proviennent des articles Help liés.',
+          },
+          {
+            question: 'Quel est le rendement visé ?',
+            standfirst: 'Le rendement affiché dans le module Funding est indicatif pour la démo.',
+          },
+        ],
       }
 
     case 'ContentBasDePageSansModuleBlanc':

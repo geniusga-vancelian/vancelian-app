@@ -6,16 +6,29 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/Container";
-import { Tag } from "@/components/ui/Tag";
+import {
+  VEyebrow,
+  VEditorialTitle,
+} from "@/components/design-system/vancelian";
 
 export interface SectionAlternateProps extends React.HTMLAttributes<HTMLElement> {}
 
+/**
+ * Bloc « About » alternate — pattern Vancelian éditorial split image/texte.
+ *
+ * Spec DS : voir doctrine pack handoff §«editorial scale» et patterns
+ * `journey` / `product-card` pour la balance image/texte. Image full-bleed
+ * dans sa moitié (border-radius 8px côté contenu), texte aligné gauche avec
+ * eyebrow + titre éditorial (italic Newsreader sur un mot-clé) + chapô.
+ *
+ * Alternance pair/impair pour rythmer la page (image gauche / image droite).
+ */
 const features = [
   {
     tag: "About us",
     title: (
       <>
-        Built on <span className="text-[#C6A47C]">real</span> assets. Delivered.
+        Built on <em>real</em> assets. Delivered.
       </>
     ),
     description: [
@@ -29,7 +42,7 @@ const features = [
     tag: "About us",
     title: (
       <>
-        Institutional <span className="text-[#C6A47C]">governance</span>. Real assets.
+        Institutional <em>governance</em>. Real assets.
       </>
     ),
     description: [
@@ -44,48 +57,40 @@ const features = [
 export function SectionAlternate({ className, ...props }: SectionAlternateProps) {
   return (
     <section
-      className={cn("w-full bg-white py-20 md:py-32", className)}
+      className={cn("w-full bg-v-bg py-24 lg:py-32", className)}
       {...props}
     >
       <Container size="wide">
-        <div className="flex flex-col gap-0">
+        <div className="flex flex-col gap-20 lg:gap-28">
           {features.map((feature, idx) => (
             <div
               key={idx}
               className={cn(
-                "flex flex-col items-center h-[520px]",
-                idx % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"
+                "flex flex-col items-center gap-10 lg:gap-16",
+                idx % 2 === 0 ? "lg:flex-row" : "lg:flex-row-reverse",
               )}
             >
-              {/* Image */}
-              <div className="basis-0 grow h-full min-h-[311px] relative">
+              <div className="basis-0 grow w-full overflow-hidden rounded-v-card">
+                {/* eslint-disable-next-line @next/next/no-img-element -- showcase asset statique */}
                 <img
                   src={feature.image}
                   alt=""
-                  className="w-full h-full object-cover"
+                  className="block aspect-[4/3] w-full object-cover"
                 />
               </div>
 
-              {/* Content */}
-              <div
-                className={cn(
-                  "basis-0 grow h-full flex flex-col justify-center gap-8 p-8 md:p-12",
-                  idx % 2 === 0 ? "border-l border-[#E6E6E6]" : "border-r border-[#E6E6E6]"
-                )}
-              >
-                <div className="flex flex-col gap-3">
-                  <div className="opacity-50">
-                    <Tag variant="default">{feature.tag}</Tag>
-                  </div>
-
-                  <h2 className="text-[#272727] text-2xl md:text-3xl uppercase tracking-wide leading-tight">
-                    {feature.title}
-                  </h2>
-                </div>
+              <div className="basis-0 grow w-full flex flex-col justify-center gap-6 lg:max-w-[480px]">
+                <VEyebrow>{feature.tag}</VEyebrow>
+                <VEditorialTitle as="h2" size="module" align="left">
+                  {feature.title}
+                </VEditorialTitle>
 
                 <div className="flex flex-col gap-4">
                   {feature.description.map((paragraph, pIdx) => (
-                    <p key={pIdx} className="text-[#272727] text-sm leading-relaxed">
+                    <p
+                      key={pIdx}
+                      className="m-0 font-ui font-normal text-[15px] leading-[1.6] text-v-fg-body"
+                    >
                       {paragraph}
                     </p>
                   ))}

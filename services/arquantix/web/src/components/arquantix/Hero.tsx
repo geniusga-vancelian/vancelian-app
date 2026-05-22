@@ -142,7 +142,7 @@ export default function Hero({ images, autoplay = true, intervalMs = 4500 }: Her
         {/* Titre */}
         <h1
           className="text-white uppercase mb-8 leading-[1.1] tracking-[0.02em] font-light text-2xl md:text-4xl lg:text-5xl xl:text-6xl"
-          style={{ fontFamily: "'Avenir', sans-serif" }}
+          style={{ fontFamily: 'var(--v-font-ui)' }}
         >
           FRACTIONAL REAL ESTATE,<br />INSTITUTIONAL RIGOR.
         </h1>
@@ -151,7 +151,7 @@ export default function Hero({ images, autoplay = true, intervalMs = 4500 }: Her
         <button
           className="inline-flex items-center justify-center text-white uppercase transition-opacity hover:opacity-90 cursor-default"
           style={{
-            fontFamily: "'Avenir', sans-serif",
+            fontFamily: 'var(--v-font-ui)',
             fontWeight: 500,
             fontSize: '10px',
             lineHeight: '110%',

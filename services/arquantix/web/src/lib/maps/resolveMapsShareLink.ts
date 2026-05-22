@@ -145,16 +145,104 @@ export function extractLatLngFromGoogleMapsUrl(resolvedUrl: string): { lat: numb
   }
 
   // Encodage type pb dans certains liens : !3dlat!4dlng
-  const pbMatch = pathSearchHash.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/)
-  if (pbMatch) {
-    const lat = Number.parseFloat(pbMatch[1])
-    const lng = Number.parseFloat(pbMatch[2])
+  const pbLatLngMatch = pathSearchHash.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/)
+  if (pbLatLngMatch) {
+    const lat = Number.parseFloat(pbLatLngMatch[1])
+    const lng = Number.parseFloat(pbLatLngMatch[2])
+    if (isValidLatLng(lat, lng)) {
+      return { lat, lng }
+    }
+  }
+
+  /** Iframe Maps `pb=` : très souvent **`!2d{lng}!3d{lat}`** (voir module Flutter LocalisationCard). */
+  const pbLngLatMatch = pathSearchHash.match(/!2d(-?\d+\.?\d*)!3d(-?\d+\.?\d*)/)
+  if (pbLngLatMatch) {
+    const lng = Number.parseFloat(pbLngLatMatch[1])
+    const lat = Number.parseFloat(pbLngLatMatch[2])
     if (isValidLatLng(lat, lng)) {
       return { lat, lng }
     }
   }
 
   return null
+}
+
+/**
+ * Dézoom / zoom depuis un lien Maps (`...@lat,lng,17z` dans l’URL ou le hash).
+ */
+function extractZoomZFromMapsPathSearchHash(pathSearchHash: string): number | null {
+  const mz = pathSearchHash.match(/@(?:-?\d+\.?\d*),(?:-?\d+\.?\d*),(\d{1,2}(?:\.\d+)?)z\b/)
+  if (mz) {
+    const z = Number.parseFloat(mz[1])
+    if (Number.isFinite(z) && z >= 1 && z <= 22) return Math.round(z)
+  }
+  return null
+}
+
+/**
+ * Si l’embed Google autorise une requête **`q=lat,lng&output=embed`**, le pin rouge « classique »
+ * est garanti là où les iframe `pb=` peuvent n’afficher qu’une zone sans marqueur explicite.
+ */
+export function preferGoogleMapsPinnedEmbedIframeSrc(embedNormalized: string): string {
+  const t = embedNormalized.trim()
+  if (!t || !isGoogleMapsIframeEmbedUrl(t)) return t
+
+  let coords = extractLatLngFromGoogleMapsUrl(t)
+  if (!coords) {
+    let u: URL
+    try {
+      u = new URL(t.startsWith('http') ? t : `https://${t}`)
+    } catch {
+      return t
+    }
+    const pb = u.searchParams.get('pb')
+    if (pb) {
+      try {
+        const decoded = decodeURIComponent(pb)
+        const m2 = decoded.match(/!2d(-?\d+\.?\d*)!3d(-?\d+\.?\d*)/)
+        if (m2) {
+          const lng = Number.parseFloat(m2[1])
+          const lat = Number.parseFloat(m2[2])
+          if (isValidLatLng(lat, lng)) coords = { lat, lng }
+        }
+        if (!coords) {
+          const m3 = decoded.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/)
+          if (m3) {
+            const lat = Number.parseFloat(m3[1])
+            const lng = Number.parseFloat(m3[2])
+            if (isValidLatLng(lat, lng)) coords = { lat, lng }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (!coords) return t
+
+  const pathSearchHash = (() => {
+    try {
+      const u = new URL(t.startsWith('http') ? t : `https://${t}`)
+      return u.pathname + u.search + u.hash
+    } catch {
+      return t
+    }
+  })()
+  const zFromEmbed = extractZoomZFromMapsPathSearchHash(pathSearchHash)
+  const zoom = zFromEmbed ?? 14
+  const pinned = buildMapsOutputEmbedUrl(coords.lat, coords.lng, zoom)
+  /** Évite boucle ou régression si l’iframe est déjà identique au format pin */
+  try {
+    const cur = new URL(t.startsWith('http') ? t : `https://${t}`)
+    const next = new URL(pinned)
+    if (cur.searchParams.get('q') === next.searchParams.get('q') && cur.searchParams.get('output') === 'embed') {
+      return t
+    }
+  } catch {
+    /* fall through */
+  }
+  return pinned
 }
 
 const MAX_HTML_FOR_COORDS = 2_800_000

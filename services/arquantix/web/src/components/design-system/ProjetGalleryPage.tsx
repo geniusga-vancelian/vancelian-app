@@ -9,10 +9,10 @@ import imgSectionTextImgBackground from "./imports/PageDeToutLesProjets/ff2a47f0
 function Frame10() {
   return (
     <div className="content-stretch flex flex-col gap-[30px] items-center not-italic relative shrink-0 text-[#272727] text-center w-[1152px]">
-      <div className="flex flex-col font-['Avenir:Heavy',sans-serif] justify-center leading-[0] min-w-full relative shrink-0 text-[56px] tracking-[-1.12px] w-[min-content]">
+      <div className="flex flex-col font-ui font-semibold justify-center leading-[0] min-w-full relative shrink-0 text-[56px] tracking-[-1.12px] w-[min-content]">
         <h1 className="block leading-none">Projects</h1>
       </div>
-      <h1 className="block font-['Avenir:Roman',sans-serif] leading-[1.6] relative shrink-0 text-[18px] w-[746px]">Arquantix provides access to fractional ownership of premium real estate assets. Every investment is structured with the same discipline, transparency and governance standards expected from an institutional financial operator.</h1>
+      <h1 className="block font-ui font-normal leading-[1.6] relative shrink-0 text-[18px] w-[746px]">Arquantix provides access to fractional ownership of premium real estate assets. Every investment is structured with the same discipline, transparency and governance standards expected from an institutional financial operator.</h1>
     </div>
   );
 }
@@ -20,7 +20,7 @@ function Frame10() {
 function Frame2() {
   return (
     <div className="bg-[#272727] content-stretch flex items-center justify-center px-[12px] py-[8px] relative rounded-[10px] shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[normal] not-italic relative shrink-0 text-[16px] text-white whitespace-nowrap">All</p>
+      <p className="font-ui font-semibold leading-[normal] not-italic relative shrink-0 text-[16px] text-white whitespace-nowrap">All</p>
     </div>
   );
 }
@@ -28,7 +28,7 @@ function Frame2() {
 function Frame4() {
   return (
     <div className="content-stretch flex items-center justify-center px-[12px] py-[8px] relative rounded-[11px] shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#9b948d] text-[16px] whitespace-nowrap">In Progress</p>
+      <p className="font-ui font-semibold leading-[normal] not-italic relative shrink-0 text-[#9b948d] text-[16px] whitespace-nowrap">In Progress</p>
     </div>
   );
 }
@@ -36,7 +36,7 @@ function Frame4() {
 function Frame3() {
   return (
     <div className="content-stretch flex items-center justify-center px-[12px] py-[8px] relative rounded-[11px] shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#9b948d] text-[16px] whitespace-nowrap">Upcoming</p>
+      <p className="font-ui font-semibold leading-[normal] not-italic relative shrink-0 text-[#9b948d] text-[16px] whitespace-nowrap">Upcoming</p>
     </div>
   );
 }
@@ -44,7 +44,7 @@ function Frame3() {
 function Frame5() {
   return (
     <div className="content-stretch flex items-center justify-center px-[12px] py-[8px] relative rounded-[11px] shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#9b948d] text-[16px] whitespace-nowrap">Delivered</p>
+      <p className="font-ui font-semibold leading-[normal] not-italic relative shrink-0 text-[#9b948d] text-[16px] whitespace-nowrap">Delivered</p>
     </div>
   );
 }
@@ -64,7 +64,7 @@ function Frame6() {
 function Tag() {
   return (
     <div className="bg-black content-stretch flex items-center justify-center px-[6px] py-[8px] relative rounded-[8px] shrink-0 w-[96px]" data-name="Tag 3">
-      <p className="font-['Avenir:Black',sans-serif] leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
+      <p className="font-ui font-bold leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
     </div>
   );
 }
@@ -72,7 +72,7 @@ function Tag() {
 function Tag2() {
   return (
     <div className="bg-black content-stretch flex items-center justify-center px-[6px] py-[8px] relative rounded-[8px] shrink-0 w-[96px]" data-name="Tag 5">
-      <p className="font-['Avenir:Black',sans-serif] leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
+      <p className="font-ui font-bold leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
     </div>
   );
 }
@@ -93,7 +93,7 @@ function Label() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 1">
       <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">Japan</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">Japan</p>
     </div>
   );
 }
@@ -102,7 +102,7 @@ function Label1() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 3">
       <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">2 Suites</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">2 Suites</p>
     </div>
   );
 }
@@ -120,7 +120,7 @@ function Label2() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 2">
       <div aria-hidden="true" className="absolute border-black border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">€560K</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">€560K</p>
     </div>
   );
 }
@@ -138,7 +138,7 @@ function Title() {
   return (
     <div className="content-stretch flex flex-col gap-[11px] items-start relative shrink-0 w-full" data-name="Title">
       <Labels />
-      <div className="flex flex-col font-['Avenir:Heavy',sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[32px] text-black tracking-[-0.32px] whitespace-nowrap">
+      <div className="flex flex-col font-ui font-semibold justify-center leading-[0] not-italic relative shrink-0 text-[32px] text-black tracking-[-0.32px] whitespace-nowrap">
         <p className="leading-[1.1]">The Heights Munduk</p>
       </div>
     </div>
@@ -151,7 +151,7 @@ function Description() {
       <div className="flex flex-col items-center size-full">
         <div className="content-stretch flex flex-col gap-[24px] items-center p-[40px] relative w-full">
           <Title />
-          <p className="font-['Avenir:Book',sans-serif] leading-[1.6] not-italic relative shrink-0 text-[#62656e] text-[14px] w-full">Exclusive mountain resort development offering premium suites with breathtaking views.</p>
+          <p className="font-ui font-normal leading-[1.6] not-italic relative shrink-0 text-[#62656e] text-[14px] w-full">Exclusive mountain resort development offering premium suites with breathtaking views.</p>
         </div>
       </div>
     </div>
@@ -167,8 +167,8 @@ function Line() {
 function TextFrame() {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">15.5%</p>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">YIELD</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">15.5%</p>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">YIELD</p>
     </div>
   );
 }
@@ -176,8 +176,8 @@ function TextFrame() {
 function TextFrame1() {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">€10K</p>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">MINIMUM INVESTMENT</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">€10K</p>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">MINIMUM INVESTMENT</p>
     </div>
   );
 }
@@ -217,7 +217,7 @@ function Card() {
 function Tag3() {
   return (
     <div className="bg-black content-stretch flex items-center justify-center px-[6px] py-[8px] relative rounded-[8px] shrink-0 w-[96px]" data-name="Tag 5">
-      <p className="font-['Avenir:Black',sans-serif] leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
+      <p className="font-ui font-bold leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
     </div>
   );
 }
@@ -237,7 +237,7 @@ function Label3() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 1">
       <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">UAE</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">UAE</p>
     </div>
   );
 }
@@ -246,7 +246,7 @@ function Label4() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 3">
       <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">1 Villa</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">1 Villa</p>
     </div>
   );
 }
@@ -264,7 +264,7 @@ function Label5() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 2">
       <div aria-hidden="true" className="absolute border-black border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">€11.5M</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">€11.5M</p>
     </div>
   );
 }
@@ -282,7 +282,7 @@ function Title1() {
   return (
     <div className="content-stretch flex flex-col gap-[11px] items-start relative shrink-0 w-full" data-name="Title">
       <Labels1 />
-      <div className="flex flex-col font-['Avenir:Heavy',sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[32px] text-black tracking-[-0.32px] whitespace-nowrap">
+      <div className="flex flex-col font-ui font-semibold justify-center leading-[0] not-italic relative shrink-0 text-[32px] text-black tracking-[-0.32px] whitespace-nowrap">
         <p className="leading-[1.1]">Dubai Al Barari</p>
       </div>
     </div>
@@ -295,7 +295,7 @@ function Description1() {
       <div className="flex flex-col items-center size-full">
         <div className="content-stretch flex flex-col gap-[24px] items-center p-[40px] relative w-full">
           <Title1 />
-          <p className="font-['Avenir:Book',sans-serif] leading-[1.6] not-italic relative shrink-0 text-[#62656e] text-[14px] w-full">{`Complete renovation of a luxury villa in Al Barari, Dubai's most exclusive green community.`}</p>
+          <p className="font-ui font-normal leading-[1.6] not-italic relative shrink-0 text-[#62656e] text-[14px] w-full">{`Complete renovation of a luxury villa in Al Barari, Dubai's most exclusive green community.`}</p>
         </div>
       </div>
     </div>
@@ -311,8 +311,8 @@ function Line1() {
 function TextFrame2() {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">12.8%</p>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">YIELD</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">12.8%</p>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">YIELD</p>
     </div>
   );
 }
@@ -320,8 +320,8 @@ function TextFrame2() {
 function TextFrame3() {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">€50K</p>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">MINIMUM INVESTMENT</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">€50K</p>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">MINIMUM INVESTMENT</p>
     </div>
   );
 }
@@ -361,7 +361,7 @@ function Card5() {
 function Tag4() {
   return (
     <div className="bg-black content-stretch flex items-center justify-center px-[6px] py-[8px] relative rounded-[8px] shrink-0 w-[96px]" data-name="Tag 5">
-      <p className="font-['Avenir:Black',sans-serif] leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
+      <p className="font-ui font-bold leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
     </div>
   );
 }
@@ -381,7 +381,7 @@ function Label6() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 1">
       <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">Portugal</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">Portugal</p>
     </div>
   );
 }
@@ -390,7 +390,7 @@ function Label7() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 3">
       <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">8 Apartments</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">8 Apartments</p>
     </div>
   );
 }
@@ -408,7 +408,7 @@ function Label8() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 2">
       <div aria-hidden="true" className="absolute border-black border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">€3.2M</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">€3.2M</p>
     </div>
   );
 }
@@ -426,7 +426,7 @@ function Title2() {
   return (
     <div className="content-stretch flex flex-col gap-[11px] items-start relative shrink-0 w-full" data-name="Title">
       <Labels2 />
-      <div className="flex flex-col font-['Avenir:Heavy',sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[32px] text-black tracking-[-0.32px] whitespace-nowrap">
+      <div className="flex flex-col font-ui font-semibold justify-center leading-[0] not-italic relative shrink-0 text-[32px] text-black tracking-[-0.32px] whitespace-nowrap">
         <p className="leading-[1.1]">Lisbon Residence</p>
       </div>
     </div>
@@ -439,7 +439,7 @@ function Description2() {
       <div className="flex flex-col items-center size-full">
         <div className="content-stretch flex flex-col gap-[24px] items-center p-[40px] relative w-full">
           <Title2 />
-          <p className="font-['Avenir:Book',sans-serif] leading-[1.6] not-italic relative shrink-0 text-[#62656e] text-[14px] w-full">Historic building renovation in Lisbon&apos;s prime location with modern luxury apartments.</p>
+          <p className="font-ui font-normal leading-[1.6] not-italic relative shrink-0 text-[#62656e] text-[14px] w-full">Historic building renovation in Lisbon&apos;s prime location with modern luxury apartments.</p>
         </div>
       </div>
     </div>
@@ -455,8 +455,8 @@ function Line2() {
 function TextFrame4() {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">14.2%</p>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">YIELD</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">14.2%</p>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">YIELD</p>
     </div>
   );
 }
@@ -464,8 +464,8 @@ function TextFrame4() {
 function TextFrame5() {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">€20K</p>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">MINIMUM INVESTMENT</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">€20K</p>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">MINIMUM INVESTMENT</p>
     </div>
   );
 }
@@ -515,7 +515,7 @@ function Cards() {
 function Tag1() {
   return (
     <div className="bg-black content-stretch flex items-center justify-center px-[6px] py-[8px] relative rounded-[8px] shrink-0 w-[96px]" data-name="Tag 3">
-      <p className="font-['Avenir:Black',sans-serif] leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
+      <p className="font-ui font-bold leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
     </div>
   );
 }
@@ -523,7 +523,7 @@ function Tag1() {
 function Tag5() {
   return (
     <div className="bg-black content-stretch flex items-center justify-center px-[6px] py-[8px] relative rounded-[8px] shrink-0 w-[96px]" data-name="Tag 5">
-      <p className="font-['Avenir:Black',sans-serif] leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
+      <p className="font-ui font-bold leading-[normal] not-italic relative shrink-0 text-[10px] text-white uppercase whitespace-nowrap">Label</p>
     </div>
   );
 }
@@ -544,7 +544,7 @@ function Label9() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 1">
       <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">Spain</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">Spain</p>
     </div>
   );
 }
@@ -553,7 +553,7 @@ function Label10() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 3">
       <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">1 Hotel</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">1 Hotel</p>
     </div>
   );
 }
@@ -571,7 +571,7 @@ function Label11() {
   return (
     <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label 2">
       <div aria-hidden="true" className="absolute border-black border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">€8.5M</p>
+      <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">€8.5M</p>
     </div>
   );
 }
@@ -589,7 +589,7 @@ function Title3() {
   return (
     <div className="content-stretch flex flex-col gap-[11px] items-start relative shrink-0 w-full" data-name="Title">
       <Labels3 />
-      <div className="flex flex-col font-['Avenir:Heavy',sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[32px] text-black tracking-[-0.32px] whitespace-nowrap">
+      <div className="flex flex-col font-ui font-semibold justify-center leading-[0] not-italic relative shrink-0 text-[32px] text-black tracking-[-0.32px] whitespace-nowrap">
         <p className="leading-[1.1]">Barcelona Boutique</p>
       </div>
     </div>
@@ -602,7 +602,7 @@ function Description3() {
       <div className="flex flex-col items-center size-full">
         <div className="content-stretch flex flex-col gap-[24px] items-center p-[40px] relative w-full">
           <Title3 />
-          <p className="font-['Avenir:Book',sans-serif] leading-[1.6] not-italic relative shrink-0 text-[#62656e] text-[14px] w-full">Boutique hotel conversion in Barcelona&apos;s Gothic Quarter with premium amenities.</p>
+          <p className="font-ui font-normal leading-[1.6] not-italic relative shrink-0 text-[#62656e] text-[14px] w-full">Boutique hotel conversion in Barcelona&apos;s Gothic Quarter with premium amenities.</p>
         </div>
       </div>
     </div>
@@ -618,8 +618,8 @@ function Line3() {
 function TextFrame6() {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">13.5%</p>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">YIELD</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">13.5%</p>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">YIELD</p>
     </div>
   );
 }
@@ -627,8 +627,8 @@ function TextFrame6() {
 function TextFrame7() {
   return (
     <div className="content-stretch flex flex-col items-start relative shrink-0">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">€30K</p>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">MINIMUM INVESTMENT</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black uppercase whitespace-nowrap">€30K</p>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[10px] text-[#62656e] uppercase whitespace-nowrap">MINIMUM INVESTMENT</p>
     </div>
   );
 }
@@ -700,7 +700,7 @@ function Text() {
         <br aria-hidden="true" />
         with institutional confidence.
       </SectionTitle>
-      <h1 className="block font-['Avenir:Roman',sans-serif] leading-[1.6] relative shrink-0 text-[#f3f3f3] text-[18px] w-[558px]">Access fractional real estate with institutional confidence.</h1>
+      <h1 className="block font-ui font-normal leading-[1.6] relative shrink-0 text-[#f3f3f3] text-[18px] w-[558px]">Access fractional real estate with institutional confidence.</h1>
     </div>
   );
 }
@@ -708,7 +708,7 @@ function Text() {
 function SubscribeButton() {
   return (
     <div className="bg-white content-stretch flex h-[36px] items-center justify-center px-[16px] py-[10px] relative rounded-[999px] shrink-0" data-name="Subscribe Button">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black tracking-[0.06px] uppercase whitespace-nowrap">Enter the investment platform</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black tracking-[0.06px] uppercase whitespace-nowrap">Enter the investment platform</p>
     </div>
   );
 }
@@ -813,7 +813,7 @@ function EmailField() {
   return (
     <div className="content-stretch flex items-center justify-between px-[20px] py-[12px] relative shrink-0 w-[348px]" data-name="Email field">
       <div aria-hidden="true" className="absolute border border-solid border-white inset-0 pointer-events-none rounded-[99px]" />
-      <p className="font-['Avenir:Book',sans-serif] leading-[normal] not-italic relative shrink-0 text-[16px] text-white whitespace-nowrap">Enter your email</p>
+      <p className="font-ui font-normal leading-[normal] not-italic relative shrink-0 text-[16px] text-white whitespace-nowrap">Enter your email</p>
       <RightArrow />
     </div>
   );
@@ -822,8 +822,8 @@ function EmailField() {
 function NewsletterTextHeading() {
   return (
     <div className="content-stretch flex flex-col gap-[16px] items-start relative shrink-0 w-full" data-name="Newsletter text + heading">
-      <h1 className="block font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[24px] text-white tracking-[-0.24px] w-full">Subscribe to our newsletter</h1>
-      <p className="font-['Avenir:Roman',sans-serif] leading-[1.4] not-italic relative shrink-0 text-[14px] text-white w-full">Stay updated with our latest projects and investment opportunities.</p>
+      <h1 className="block font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[24px] text-white tracking-[-0.24px] w-full">Subscribe to our newsletter</h1>
+      <p className="font-ui font-normal leading-[1.4] not-italic relative shrink-0 text-[14px] text-white w-full">Stay updated with our latest projects and investment opportunities.</p>
     </div>
   );
 }
@@ -846,8 +846,8 @@ function Line4() {
 function Text1() {
   return (
     <div className="content-stretch flex flex-col items-start not-italic relative shrink-0 text-white w-full" data-name="Text">
-      <h1 className="block font-['Avenir:Heavy',sans-serif] leading-[1.1] relative shrink-0 text-[16px] w-full">Arquantix</h1>
-      <p className="font-['Avenir:Book',sans-serif] leading-[1.6] relative shrink-0 text-[14px] w-full">Professional fractional real estate investment platform.</p>
+      <h1 className="block font-ui font-semibold leading-[1.1] relative shrink-0 text-[16px] w-full">Arquantix</h1>
+      <p className="font-ui font-normal leading-[1.6] relative shrink-0 text-[14px] w-full">Professional fractional real estate investment platform.</p>
     </div>
   );
 }
@@ -904,7 +904,7 @@ function Logo() {
 function Link1() {
   return (
     <div className="content-stretch flex items-center justify-center px-[12px] py-[8px] relative rounded-[11px] shrink-0" data-name="Link 2">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#62656e] text-[16px] whitespace-nowrap">Home</p>
+      <p className="font-ui font-semibold leading-[normal] not-italic relative shrink-0 text-[#62656e] text-[16px] whitespace-nowrap">Home</p>
     </div>
   );
 }
@@ -912,7 +912,7 @@ function Link1() {
 function Link() {
   return (
     <div className="bg-black content-stretch flex items-center justify-center px-[12px] py-[8px] relative rounded-[10px] shrink-0" data-name="Link 1">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[normal] not-italic relative shrink-0 text-[16px] text-white whitespace-nowrap">Projects</p>
+      <p className="font-ui font-semibold leading-[normal] not-italic relative shrink-0 text-[16px] text-white whitespace-nowrap">Projects</p>
     </div>
   );
 }
@@ -920,7 +920,7 @@ function Link() {
 function Link2() {
   return (
     <div className="content-stretch flex items-center justify-center px-[12px] py-[8px] relative rounded-[11px] shrink-0" data-name="Link 3">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#62656e] text-[16px] whitespace-nowrap">About</p>
+      <p className="font-ui font-semibold leading-[normal] not-italic relative shrink-0 text-[#62656e] text-[16px] whitespace-nowrap">About</p>
     </div>
   );
 }
@@ -928,7 +928,7 @@ function Link2() {
 function Link3() {
   return (
     <div className="content-stretch flex items-center justify-center px-[12px] py-[8px] relative rounded-[11px] shrink-0" data-name="Link 4">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#62656e] text-[16px] whitespace-nowrap">Help</p>
+      <p className="font-ui font-semibold leading-[normal] not-italic relative shrink-0 text-[#62656e] text-[16px] whitespace-nowrap">Help</p>
     </div>
   );
 }
@@ -948,7 +948,7 @@ function Button() {
   return (
     <a className="content-stretch cursor-pointer flex h-[36px] items-center justify-center px-[20px] py-[10px] relative rounded-[20px] shrink-0" data-name="Button" href="https://wa.me/6281353009603?text=Hello,%20I'm%20interested%20in%20The%20Heights%20Munduk" target="_blank">
       <div aria-hidden="true" className="absolute border border-[#62656e] border-solid inset-0 pointer-events-none rounded-[20px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[#62656e] text-[12px] text-center tracking-[0.06px] uppercase w-[89px]">login</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[#62656e] text-[12px] text-center tracking-[0.06px] uppercase w-[89px]">login</p>
     </a>
   );
 }
@@ -964,7 +964,7 @@ function Frame7() {
 function Button1() {
   return (
     <a className="bg-black content-stretch cursor-pointer flex h-[36px] items-center justify-center px-[24px] py-[11px] relative rounded-[40px] shrink-0 w-[130px]" data-name="Button" href="https://wa.me/6281353009603?text=Hello,%20I'm%20interested%20in%20The%20Heights%20Munduk" target="_blank">
-      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-center text-white tracking-[0.06px] uppercase w-[89px]">Join us</p>
+      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-center text-white tracking-[0.06px] uppercase w-[89px]">Join us</p>
     </a>
   );
 }

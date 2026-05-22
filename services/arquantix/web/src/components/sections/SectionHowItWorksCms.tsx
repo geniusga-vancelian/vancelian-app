@@ -44,9 +44,9 @@ export function SectionHowItWorksCms({
   className,
   ...rest
 }: SectionHowItWorksCmsProps) {
-  /* Bloc marketing home : fond blanc uniquement (ignore anciennes valeurs CMS `surface: dark`). */
+  /* Bloc marketing home : fond papier Vancelian uniquement (`surface: dark` legacy ignoré). */
   return (
-    <section className={cn("w-full bg-white", className)} {...rest}>
+    <section className={cn("w-full bg-v-bg", className)} {...rest}>
       <Container>
         <HowItWorks
           label={label}

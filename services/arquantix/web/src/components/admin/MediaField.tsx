@@ -81,6 +81,7 @@ export function MediaField({
   }
 
   const isImage = selectedMedia?.mimeType.startsWith('image/')
+  const isVideo = selectedMedia?.mimeType.startsWith('video/')
 
   const thumbClass = compact
     ? 'w-14 h-14 object-cover rounded border border-gray-200 shrink-0'
@@ -106,6 +107,14 @@ export function MediaField({
                 src={adminMediaFileUrl(selectedMedia.id)}
                 alt={selectedMedia.alt || selectedMedia.filename}
                 className={thumbClass}
+              />
+            ) : isVideo ? (
+              <video
+                src={adminMediaFileUrl(selectedMedia.id)}
+                className={thumbClass}
+                muted
+                playsInline
+                preload="metadata"
               />
             ) : (
               <div className={placeholderBoxClass}>

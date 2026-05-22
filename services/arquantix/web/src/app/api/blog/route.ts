@@ -5,6 +5,7 @@ import { logMobileApiFailure, mobileApiJsonError, safeApiMessageForClient } from
 import { prisma } from '@/lib/prisma'
 import { defaultLocale, getLocaleOrDefault } from '@/config/locales'
 import { calculateReadingTime } from '@/lib/blog/readingTime'
+import { absolutizeBlogFeedResultForMobile } from '@/lib/blog/absolutizeBlogApiForMobile'
 import { getBlogFeed, type BlogFeedSegment } from '@/lib/blog/articleService'
 import { formatDatabaseUrlTarget } from '@/lib/db/diagnostics'
 import { resolveLabelWithFallback } from '@/lib/i18n/resolveLabel'
@@ -96,16 +97,19 @@ export async function GET(request: NextRequest) {
     }
 
     const feedStarted = Date.now()
-    const feed = await getBlogFeed(
-      {
-        locale,
-        category,
-        articleType,
-        segment,
-        page,
-        pageSize,
-      },
-      calculateReadingTime
+    const feed = absolutizeBlogFeedResultForMobile(
+      await getBlogFeed(
+        {
+          locale,
+          category,
+          articleType,
+          segment,
+          page,
+          pageSize,
+        },
+        calculateReadingTime,
+      ),
+      request.nextUrl.origin,
     )
     console.info('[api/blog] getBlogFeed ok', {
       ms: Date.now() - feedStarted,

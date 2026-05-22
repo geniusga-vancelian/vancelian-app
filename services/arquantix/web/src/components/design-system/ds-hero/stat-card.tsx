@@ -22,10 +22,10 @@ const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
         <div className="flex h-full flex-row items-center">
           <div className="flex w-full items-center px-4 py-6 sm:px-5 sm:py-7">
             <div className="flex w-full flex-col items-start gap-2.5 text-[#62656e]">
-              <p className="font-['Avenir:Heavy',sans-serif] text-[24px] leading-[1.1] tracking-[-0.24px]">
+              <p className="font-ui font-semibold text-[24px] leading-[1.1] tracking-[-0.24px]">
                 {value}
               </p>
-              <p className="font-['Avenir:Book',sans-serif] text-[14px] leading-[1.6]">
+              <p className="font-ui font-normal text-[14px] leading-[1.6]">
                 {label}
               </p>
             </div>

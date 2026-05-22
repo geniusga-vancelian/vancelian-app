@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 
@@ -14,8 +13,31 @@ import {
 import {
   SIMPLE_MARKDOWN_MODULE_TITLE_TYPO,
   VAULT_MODULE_DESCRIPTION_TYPO,
-  VAULT_MODULE_MARKDOWN_BODY_TYPO,
+  VAULT_MODULE_HEADING_CLASS,
+  VAULT_MODULE_LINK_CLASS,
+  VAULT_MODULE_CARD_CLASS,
+  VAULT_PARAGRAPH_BODY_READING_TYPO,
+  vaultProseMarkdownClass,
+  type DsBlogArticle,
 } from '@/components/design-system'
+import { VaultFaqAccordionModuleWeb } from '@/components/exclusive-offer/VaultFaqAccordionModuleWeb'
+import {
+  VaultMarketingCardsCarouselWeb,
+  VaultMarketingLargePortraitWeb,
+} from '@/components/exclusive-offer/VaultMarketingModulesWeb'
+import {
+  VaultAllocationModuleWeb,
+  VaultPerformanceChartWeb,
+  VaultTransactionLatestModuleWeb,
+} from '@/components/exclusive-offer/VaultMetricsModulesWeb'
+import { VaultModuleHeader } from '@/components/exclusive-offer/VaultModuleHeader'
+import { ArticleBodyBulletListBlock } from '@/components/design-system/ArticleBodyBulletListBlock'
+import { ArticleBodyQuoteBlock } from '@/components/design-system/ArticleBodyQuoteBlock'
+import {
+  articleBodyMarkdownComponents,
+  articleBodyRemarkPlugins,
+  slugifyHeading,
+} from '@/components/blog/ArticleBlockStream'
 import {
   HeroOfferTagChip,
   HERO_OFFER_TAG_GAP_CLASS,
@@ -28,6 +50,8 @@ import { VaultLocalisationModuleWeb } from '@/components/exclusive-offer/VaultLo
 import { VaultVirtualVisualizationModuleWeb } from '@/components/exclusive-offer/VaultVirtualVisualizationModuleWeb'
 import { VaultDocumentsListModuleWeb } from '@/components/exclusive-offer/VaultDocumentsListModuleWeb'
 import { VaultFundingModuleSection } from '@/components/exclusive-offer/VaultFundingModuleSection'
+import { VaultBlogALaUneSliding } from '@/components/exclusive-offer/VaultBlogALaUneSliding'
+import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
 
 /** SimpleMarkdownContentModule : pas de carte bordurée ; titre centré, corps markdown justifié (pleine largeur). */
 function MarkdownBlock({
@@ -46,13 +70,7 @@ function MarkdownBlock({
       {title ? (
         <h2 className={`mb-4 ${SIMPLE_MARKDOWN_MODULE_TITLE_TYPO}`}>{title}</h2>
       ) : null}
-      <div
-        className={cn(
-          'prose prose-neutral w-full max-w-none text-justify prose-p:text-justify prose-a:text-indigo-600',
-          VAULT_MODULE_MARKDOWN_BODY_TYPO,
-          'prose-p:text-inherit prose-li:text-inherit prose-strong:text-inherit',
-        )}
-      >
+      <div className={vaultProseMarkdownClass()}>
         <ReactMarkdown>{markdown}</ReactMarkdown>
       </div>
       {Array.isArray(links) && links.length > 0 ? (
@@ -66,7 +84,7 @@ function MarkdownBlock({
                 : raw
             return (
               <li key={i}>
-                <a href={href} className="text-indigo-600 underline-offset-2 hover:underline">
+                <a href={href} className={VAULT_MODULE_LINK_CLASS}>
                   {l.label}
                 </a>
               </li>
@@ -79,7 +97,18 @@ function MarkdownBlock({
 }
 
 export function VaultModuleWeb({ mod }: { mod: VaultModulePublic }) {
+  const pathname = usePathname() ?? ''
+  const loc = getActiveLocaleFromPathname(pathname)
   const c = mod.content
+
+  const typeNorm = typeof mod.type === 'string' ? mod.type.trim().toLowerCase() : ''
+  if (typeNorm === 'stepsmodule') {
+    return (
+      <div className="w-full">
+        <ArticleStepsModule content={c} />
+      </div>
+    )
+  }
 
   switch (mod.type) {
     case 'TitlePage': {
@@ -88,7 +117,7 @@ export function VaultModuleWeb({ mod }: { mod: VaultModulePublic }) {
       return (
         <div className="space-y-3">
           {title ? (
-            <h1 className="font-['Avenir:Heavy',sans-serif] text-3xl tracking-tight text-neutral-900 md:text-[2.5rem] md:leading-tight">
+            <h1 className="font-ui text-[clamp(40px,4.6vw,56px)] font-semibold leading-[1.05] tracking-normal text-center text-v-fg">
               {title}
             </h1>
           ) : null}
@@ -172,6 +201,62 @@ export function VaultModuleWeb({ mod }: { mod: VaultModulePublic }) {
       return <VaultFundingModuleSection content={c} />
     }
 
+    case 'BlogALaUne':
+    case 'blogalaune':
+    case 'blog_a_la_une': {
+      const rawArticles = Array.isArray(c._resolvedArticles) ? c._resolvedArticles : []
+      const articles: DsBlogArticle[] = rawArticles.flatMap((row) => {
+        if (row == null || typeof row !== 'object' || Array.isArray(row)) return []
+        const o = row as Record<string, unknown>
+        const id = typeof o.id === 'string' ? o.id : ''
+        const slug = typeof o.slug === 'string' ? o.slug : ''
+        const title = typeof o.title === 'string' ? o.title : ''
+        const standfirst = typeof o.standfirst === 'string' ? o.standfirst : ''
+        const authorName = typeof o.authorName === 'string' ? o.authorName : ''
+        const coverUrl = typeof o.coverUrl === 'string' ? o.coverUrl : ''
+        const rt = typeof o.readingTime === 'number' ? o.readingTime : NaN
+        const readingTime = Number.isFinite(rt) ? rt : 0
+        let publishedAt: string | null = null
+        if (typeof o.publishedAt === 'string' && o.publishedAt.length > 0) {
+          publishedAt = o.publishedAt
+        }
+        if (!id || !slug || !title) return []
+        const item = {
+          id,
+          slug,
+          title,
+          standfirst,
+          coverUrl,
+          authorName,
+          publishedAt,
+          readingTime,
+        }
+        return [item]
+      })
+
+      if (articles.length === 0) {
+        return null
+      }
+
+      const titleRaw = typeof c.title === 'string' ? c.title.trim() : ''
+      const sectionTitle =
+        titleRaw.length > 0 ? titleRaw : siteCommonCta(loc, 'blog_featured_stories')
+
+      const blogBasePath = `/${loc}/blog`
+
+      return (
+        <VaultBlogALaUneSliding
+          title={sectionTitle}
+          ctaLabel={siteCommonCta(loc, 'view_all')}
+          ctaHref={blogBasePath}
+          articles={articles}
+          locale={loc}
+          minReadLabel={siteCommonCta(loc, 'blog_min_read')}
+          noImageLabel={siteCommonCta(loc, 'no_image')}
+        />
+      )
+    }
+
     case 'TagsModule': {
       const rawTags = Array.isArray(c.tags) ? c.tags : []
       const tags = rawTags
@@ -201,24 +286,17 @@ export function VaultModuleWeb({ mod }: { mod: VaultModulePublic }) {
           const rd = typeof row.description === 'string' ? row.description.trim() : ''
           if (!rt && !rd) return null
           return (
-            <div
-              key={i}
-              className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"
-            >
-              {rt ? <h3 className="font-semibold text-neutral-900">{rt}</h3> : null}
-              {rd ? <p className={`mt-2 ${VAULT_MODULE_DESCRIPTION_TYPO}`}>{rd}</p> : null}
+            <div key={i} className={cn(VAULT_MODULE_CARD_CLASS, 'space-y-2')}>
+              {rt ? <h3 className="m-0 font-ui text-[18px] font-semibold text-v-fg">{rt}</h3> : null}
+              {rd ? <p className={`m-0 ${VAULT_MODULE_DESCRIPTION_TYPO} !text-left`}>{rd}</p> : null}
             </div>
           )
         })
         .filter(Boolean)
       if (cells.length === 0) return null
       return (
-        <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-6">
-          {titleRaw ? (
-            <h2 className="mb-6 font-['Avenir:Heavy',sans-serif] text-xl text-neutral-900">
-              {titleRaw}
-            </h2>
-          ) : null}
+        <div className="w-full space-y-6">
+          <VaultModuleHeader title={titleRaw || undefined} />
           <div className="grid gap-4 md:grid-cols-2">{cells}</div>
         </div>
       )
@@ -247,75 +325,115 @@ export function VaultModuleWeb({ mod }: { mod: VaultModulePublic }) {
       )
     }
 
-    case 'StepsModule': {
-      return (
-        <div className="w-full">
-          <ArticleStepsModule content={c} />
-        </div>
-      )
+    case 'FaqAccordionModule': {
+      return <VaultFaqAccordionModuleWeb content={c} />
     }
 
-    case 'FaqAccordionModule': {
-      const titleRaw = typeof c.title === 'string' ? c.title.trim() : ''
-      const introRaw = typeof c.intro === 'string' ? c.intro.trim() : ''
-      const footerLabel = typeof c.footerLinkLabel === 'string' ? c.footerLinkLabel.trim() : ''
-      const coll = typeof c.footerCollectionSlug === 'string' ? c.footerCollectionSlug.trim() : ''
-      const cat = typeof c.footerCategorySlug === 'string' ? c.footerCategorySlug.trim() : ''
-      const helpHref = coll && cat ? `/help/${coll}/${cat}` : coll ? `/help/${coll}` : '/help'
-      if (!titleRaw && !introRaw && !footerLabel) {
-        return null
-      }
-      return (
-        <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
-          {titleRaw ? (
-            <h2 className="mb-2 font-['Avenir:Heavy',sans-serif] text-xl text-neutral-900">
-              {titleRaw}
-            </h2>
-          ) : null}
-          {introRaw ? <p className={VAULT_MODULE_DESCRIPTION_TYPO}>{introRaw}</p> : null}
-          {footerLabel ? (
-            <Link
-              href={helpHref}
-              className="mt-4 inline-flex text-sm font-medium text-indigo-600 hover:underline"
-            >
-              {footerLabel}
-            </Link>
-          ) : null}
-        </div>
-      )
-    }
+    case 'MarktingCardLargePortrait':
+      return <VaultMarketingLargePortraitWeb content={c} />
+
+    case 'MarketingCardsSmallCarouselModule':
+      return <VaultMarketingCardsCarouselWeb content={c} />
+
+    case 'MarketingCardsSmallSlidingCarrousel_Portrait':
+      return <VaultMarketingCardsCarouselWeb content={c} portrait />
+
+    case 'MarketingCardsSmallSlidingCarrousel_Paysage':
+      return <VaultMarketingCardsCarouselWeb content={c} />
+
+    case 'AllocationModule':
+      return <VaultAllocationModuleWeb content={c} />
+
+    case 'PerformanceChart':
+      return <VaultPerformanceChartWeb content={c} />
+
+    case 'TransactionLatest10Module':
+      return <VaultTransactionLatestModuleWeb content={c} />
 
     case 'ContentBasDePageSansModuleBlanc': {
       const markdown = typeof c.markdown === 'string' ? c.markdown : ''
       if (!markdown.trim()) return null
       return (
-        <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50/50 p-4">
-          <div
-            className={cn(
-              'prose prose-neutral max-w-none',
-              VAULT_MODULE_MARKDOWN_BODY_TYPO,
-              'prose-p:text-inherit prose-li:text-inherit prose-strong:text-inherit',
-            )}
-          >
+        <div className="rounded-v-card border border-dashed border-v-fg-20 bg-v-bg-warm/60 p-4 md:p-5">
+          <div className={vaultProseMarkdownClass('text-left')}>
             <ReactMarkdown>{markdown}</ReactMarkdown>
           </div>
         </div>
       )
     }
 
-    default:
-      // Fallback "unknown module" : visible uniquement en cas d'incohérence schéma/CMS.
-      // Non user-facing en production : exempté du garde-fou i18n vault (cf. vaultHardcodedStringsScanner).
+    case 'HEADING': {
+      const headingText = typeof c.text === 'string' ? c.text.trim() : ''
+      if (!headingText) return null
+      const headingId = slugifyHeading(headingText)
       return (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-sm text-amber-900">
-          {/* i18n-allow-next-line: fallback admin/debug — module inconnu */}
-          <p className="font-medium">Module « {mod.type} »</p>
-          {/* i18n-allow-next-line: fallback admin/debug — module inconnu */}
-          <p className="mt-1 text-xs text-amber-800">
-            {/* i18n-allow-next-line: fallback admin/debug — module inconnu */}
-            Rendu web générique — affinage possible dans VaultModuleWeb.
-          </p>
+        <h2
+          id={headingId}
+          className={VAULT_MODULE_HEADING_CLASS}
+        >
+          {headingText}
+        </h2>
+      )
+    }
+
+    case 'PARAGRAPH': {
+      const fromText = typeof c.text === 'string' ? c.text : ''
+      const fromMd = typeof c.markdown === 'string' ? c.markdown : ''
+      const body = fromText.trim().length > 0 ? fromText : fromMd
+      if (!body.trim()) return null
+      return (
+        <div
+          className={cn(VAULT_PARAGRAPH_BODY_READING_TYPO, 'not-italic my-6')}
+        >
+          <ReactMarkdown
+            remarkPlugins={[...articleBodyRemarkPlugins]}
+            components={articleBodyMarkdownComponents}
+          >
+            {body}
+          </ReactMarkdown>
         </div>
       )
+    }
+
+    case 'QUOTE': {
+      const q = typeof c.text === 'string' ? c.text : ''
+      if (!q.trim()) return null
+      return (
+        <ArticleBodyQuoteBlock
+          quote={q}
+          author={typeof c.author === 'string' ? c.author : undefined}
+        />
+      )
+    }
+
+    case 'BULLET_LIST': {
+      const rawItems = Array.isArray(c.items) ? c.items : []
+      const items = rawItems.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      if (!items.length) return null
+      return <ArticleBodyBulletListBlock items={items} />
+    }
+
+    case 'NUMBERED_LIST': {
+      const rawItems = Array.isArray(c.items) ? c.items : []
+      const items = rawItems.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      if (!items.length) return null
+      return (
+        <ol
+          className={cn(
+            'my-8 list-outside list-decimal space-y-3 pl-6 marker:font-semibold',
+            VAULT_PARAGRAPH_BODY_READING_TYPO,
+          )}
+        >
+          {items.map((item, i) => (
+            <li key={i} className="pl-1">
+              {item}
+            </li>
+          ))}
+        </ol>
+      )
+    }
+
+    default:
+      return null
   }
 }

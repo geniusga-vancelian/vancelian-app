@@ -165,7 +165,7 @@ const SECTIONS: Array<{ key: string; order: number; data: Prisma.InputJsonObject
       primaryButtonHref: '/signup',
       secondaryButtonText: 'Explore vaults',
       secondaryButtonHref: '/vaults',
-      backgroundColor: '#000000',
+      backgroundColor: '#141208',
       overlayOpacity: 0.55,
     },
   },

@@ -4,10 +4,11 @@ import { z } from 'zod'
 
 import { getSessionFromCookie } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getSiteI18nSettingsUncached } from '@/lib/i18n/siteI18nSettings'
+import { resolveVaultSectionContent } from '@/lib/cms/resolveVaultSectionContent'
 
 const LANDING_TEMPLATE_DB = 'landing_builder'
 const LANDING_SECTION_KEY = 'landing_builder_v1'
-const LANDING_DEFAULT_LOCALE = 'fr'
 
 const navbarActionSchema = z.object({
   icon: z.enum(['none', 'favorite', 'share', 'notifications']).default('none'),
@@ -103,7 +104,7 @@ function normalizeModulesFromRaw(raw: unknown): z.infer<typeof landingConfigSche
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
@@ -123,6 +124,10 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const i18n = await getSiteI18nSettingsUncached()
+    const requestedLocale =
+      (request.nextUrl.searchParams.get('locale') || '').trim() || i18n.defaultLocale
+
     const page = await prisma.page.findFirst({
       where: {
         slug,
@@ -132,13 +137,7 @@ export async function GET(
         sections: {
           where: { key: LANDING_SECTION_KEY },
           include: {
-            contents: {
-              where: {
-                locale: LANDING_DEFAULT_LOCALE,
-                status: ContentStatus.DRAFT,
-              },
-              take: 1,
-            },
+            contents: true,
           },
           take: 1,
         },
@@ -149,13 +148,23 @@ export async function GET(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 })
     }
 
-    // Même logique de lecture que l'API mobile : accès direct au contenu sans validation stricte
-    const content = page.sections[0]?.contents[0]
-    const rawData = content?.data
+    /// Résolution avec fallback locale (`requestedLocale → defaultLocale → any`)
+    /// et brouillon-prioritaire pour l'éditeur (cohérent avec `vault_builder` admin).
+    const allContents = page.sections[0]?.contents ?? []
+    const picked = resolveVaultSectionContent(allContents, {
+      requestedLocale,
+      defaultLocale: i18n.defaultLocale,
+      mode: 'either_draft_first',
+    })
 
+    const isMissingForRequestedLocale = !allContents.some(
+      (c) => c.locale === requestedLocale,
+    )
+
+    const rawData = picked?.data ?? null
     let config: z.infer<typeof landingConfigSchema>
     try {
-      const draftData =
+      const data =
         rawData == null
           ? {}
           : typeof rawData === 'string'
@@ -169,12 +178,12 @@ export async function GET(
             : typeof rawData === 'object' && rawData !== null
               ? { ...(rawData as Record<string, unknown>) }
               : {}
-      const validated = landingConfigSchema.safeParse(draftData)
+      const validated = landingConfigSchema.safeParse(data)
       if (validated.success) {
         config = validated.data
       } else {
         config = getDefaultLandingConfig()
-        config.modules = normalizeModulesFromRaw(draftData)
+        config.modules = normalizeModulesFromRaw(data)
       }
     } catch {
       config = getDefaultLandingConfig()
@@ -191,7 +200,23 @@ export async function GET(
       updatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt),
     }
 
-    return NextResponse.json({ page: pagePayload, config })
+    const localeCoverage = Array.from(new Set(allContents.map((c) => c.locale)))
+
+    return NextResponse.json({
+      page: pagePayload,
+      config,
+      meta: {
+        defaultLocale: i18n.defaultLocale,
+        supportedLocales: i18n.supportedLocales,
+        requestedLocale,
+        contentLocale: picked?.locale ?? null,
+        contentStatus: picked?.status ?? null,
+        localeCoverage,
+        /// `true` si la locale demandée n'a aucun contenu (DRAFT ou PUBLISHED) :
+        /// l'éditeur peut alors proposer "Copier depuis la locale source".
+        isFallback: isMissingForRequestedLocale,
+      },
+    })
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error))
     console.error('[api/admin/landing-pages/GET]', err.message, err.stack)
@@ -200,6 +225,15 @@ export async function GET(
       { status: 500 }
     )
   }
+}
+
+/// Statuts cibles pour le PUT.
+/// - `draft` : seul le brouillon est mis à jour (par défaut, sécurisé).
+/// - `published` : on aligne DRAFT et PUBLISHED (équivalent "Publier").
+type WriteScope = 'draft' | 'published'
+
+function parseWriteScope(value: string | null): WriteScope {
+  return value?.toLowerCase() === 'published' ? 'published' : 'draft'
 }
 
 export async function PUT(
@@ -215,6 +249,24 @@ export async function PUT(
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const i18n = await getSiteI18nSettingsUncached()
+    const requestedLocale =
+      (request.nextUrl.searchParams.get('locale') || '').trim() || i18n.defaultLocale
+    const writeScope = parseWriteScope(request.nextUrl.searchParams.get('status'))
+
+    /// Garde-fou : on n'écrit que sur une locale activée côté admin (sinon le
+    /// résolveur public ne pourrait jamais la retrouver et l'éditeur stockerait
+    /// du contenu orphelin).
+    if (
+      i18n.multilingualEnabled &&
+      !i18n.supportedLocales.includes(requestedLocale as (typeof i18n.supportedLocales)[number])
+    ) {
+      return NextResponse.json(
+        { error: `Locale "${requestedLocale}" not enabled in site settings` },
+        { status: 400 }
+      )
     }
 
     const body = await request.json()
@@ -253,14 +305,18 @@ export async function PUT(
       },
     })
 
-    // Keep DRAFT and PUBLISHED aligned for this dedicated builder.
-    const statuses: ContentStatus[] = [ContentStatus.DRAFT, ContentStatus.PUBLISHED]
+    /// `published` aligne DRAFT et PUBLISHED en une seule opération ;
+    /// `draft` ne touche **que** le brouillon (défaut, comportement non-publication).
+    const statuses: ContentStatus[] =
+      writeScope === 'published'
+        ? [ContentStatus.DRAFT, ContentStatus.PUBLISHED]
+        : [ContentStatus.DRAFT]
     for (const status of statuses) {
       await prisma.sectionContent.upsert({
         where: {
           sectionId_locale_status: {
             sectionId: section.id,
-            locale: LANDING_DEFAULT_LOCALE,
+            locale: requestedLocale,
             status,
           },
         },
@@ -270,7 +326,7 @@ export async function PUT(
         },
         create: {
           sectionId: section.id,
-          locale: LANDING_DEFAULT_LOCALE,
+          locale: requestedLocale,
           status,
           data: parsed.config,
           updatedByUserId: session.userId,
@@ -278,7 +334,13 @@ export async function PUT(
       })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      meta: {
+        contentLocale: requestedLocale,
+        writeScope,
+      },
+    })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

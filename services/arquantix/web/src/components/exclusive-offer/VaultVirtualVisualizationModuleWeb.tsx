@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   SIMPLE_MARKDOWN_MODULE_TITLE_TYPO,
   VAULT_MODULE_DESCRIPTION_TYPO,
+  VAULT_MODULE_MEDIA_FRAME_CLASS,
 } from '@/components/design-system'
 import { getActiveLocaleFromPathname } from '@/lib/i18n/publicLocalizedRouting'
 import { vaultCommonCta } from '@/lib/i18n/vaultCommonCta'
@@ -12,6 +13,7 @@ import {
   isVirtualVisualizationEmbedUrl,
   normalizeVirtualVisualizationInput,
 } from '@/lib/vault/normalizeVirtualVisualizationUrl'
+import { cn } from '@/lib/utils'
 
 type Props = {
   content: Record<string, unknown>
@@ -54,11 +56,11 @@ export function VaultVirtualVisualizationModuleWeb({ content }: Props) {
         <>
           {hasDesc || (showTitle && !hasDesc) ? <div className="h-8" aria-hidden /> : null}
           <div className="relative left-1/2 w-screen max-w-[100vw] -translate-x-1/2">
-            <div className="overflow-hidden border-y border-neutral-200 bg-neutral-100 shadow-sm">
+            <div className={cn(VAULT_MODULE_MEDIA_FRAME_CLASS, 'border-y')}>
               <iframe
                 title={vaultCommonCta(loc, 'virtual_tour')}
                 src={urlNorm}
-                className="block h-[min(85vh,920px)] w-full min-h-[480px] border-0"
+                className="block h-[min(85vh,920px)] w-full min-h-[480px] border-0 bg-v-fg-05"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
                 allowFullScreen
@@ -68,7 +70,7 @@ export function VaultVirtualVisualizationModuleWeb({ content }: Props) {
           </div>
         </>
       ) : rawUrl.length > 0 ? (
-        <p className="mt-6 text-center text-sm text-amber-800">
+        <p className="mt-6 text-center font-ui text-[14px] text-v-error">
           {vaultCommonCta(loc, 'virtual_tour_embed_invalid')}
         </p>
       ) : null}

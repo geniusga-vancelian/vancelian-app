@@ -23,6 +23,8 @@ export {
   BlogFeaturedModule,
   BlogRecentPostsModule,
   BlogCategoryRowsModule,
+  BlogArticleTeaserCard,
+  BlogCtaPillButton,
   type DsBlogArticle,
 } from "./Blog/BlogModules";
 export * from "./extracted";
@@ -36,7 +38,21 @@ export { SIMPLE_MARKDOWN_MODULE_TITLE_TYPO } from "./simpleMarkdownModuleTitle";
 export {
   VAULT_MODULE_DESCRIPTION_TYPO,
   VAULT_MODULE_MARKDOWN_BODY_TYPO,
+  VAULT_PARAGRAPH_BODY_READING_TYPO,
 } from "./vaultModuleDescription";
+export {
+  VAULT_MODULE_TITLE_TYPO,
+  VAULT_MODULE_CARD_CLASS,
+  VAULT_MODULE_CTA_CLASS,
+  VAULT_MODULE_HEADING_CLASS,
+  VAULT_MODULE_IMAGE_CLASS,
+  VAULT_MODULE_LINK_CLASS,
+  VAULT_MODULE_MEDIA_FRAME_CLASS,
+  VAULT_MODULE_STRIPE_EVEN,
+  VAULT_MODULE_STRIPE_ODD,
+  vaultProseMarkdownClass,
+  vaultStripeClass,
+} from "./vaultTokens";
 export {
   offerFundingTokens,
   OFFER_FUNDING_PARAGRAPH_LARGE_TYPO,

@@ -27,12 +27,16 @@ export const emailDsColors = {
 export const emailDsGradient = 'linear-gradient(90deg, #E885D0 0%, #FFB84D 100%)'
 
 export const emailDsFonts = {
-  /** Stack sûre e-mail (polices web optionnelles via <link> dans preview seulement) */
+  /**
+   * Stack sûre e-mail — alignée sur le DS Vancelian (Inter UI + Newsreader éditorial),
+   * avec fallbacks email-safe pour les clients qui ne chargent pas les webfonts.
+   * Polices web optionnelles via `<link>` dans le preview HTML.
+   */
   display:
-    '"Nunito Sans", "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  body: '"Nunito Sans", "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    '"Newsreader", "Iowan Old Style", Georgia, "Times New Roman", serif',
+  body: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   eyebrow:
-    '"Barlow Semi Condensed", "Avenir Next Condensed", Arial, "Helvetica Neue", Helvetica, sans-serif',
+    '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 } as const
 
 export const emailDsType = {

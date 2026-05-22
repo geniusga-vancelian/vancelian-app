@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { cookies, headers } from 'next/headers'
 import '../styles/globals.css'
-import { SiteFooter } from '@/components/site/SiteFooter'
 import { SiteChrome } from '@/components/site/SiteChrome'
 import { getPrimaryMenu, injectLanguageSwitcherIfMissing } from '@/lib/menu/getPrimaryMenu'
 import type { Locale } from '@/config/locales'
@@ -15,12 +14,12 @@ import {
   getNavShellStateForPathname,
 } from '@/lib/cms/navShellContext'
 import { getSiteMenuTheme, getDefaultMenuThemeJson } from '@/lib/cms/site-menu-theme'
-import { getSiteBrandLogo } from '@/lib/cms/site-footer'
+import { getSiteBrandLogo, getSiteFooterData } from '@/lib/cms/site-footer'
 import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
 import { CMS_PAGE_METADATA_FALLBACK } from '@/lib/metadata/cmsPageMetadata'
 import { getSiteMetadataBase } from '@/lib/metadata/siteOrigin'
 import { figmaDsBodyRootClassName } from '@/components/design-system/extracted/tokens/surfaces'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { isPortalPathname } from '@/lib/portal/portalRouting'
 
 const siteMetadataBase = getSiteMetadataBase()
 
@@ -37,18 +36,12 @@ export default async function RootLayout({
   const headersList = await headers()
   const pathname = headersList.get('x-arq-pathname') ?? '/'
   const isPortalApp =
-    pathname.startsWith('/app') || headersList.get('x-arq-portal') === '1'
+    isPortalPathname(pathname) || headersList.get('x-arq-portal') === '1'
   const cookieStore = await cookies()
   if (isPortalApp) {
-    const isPortalLogin =
-      pathname === PORTAL_ROUTES.login ||
-      pathname.startsWith(`${PORTAL_ROUTES.login}/`)
     return (
       <html lang="en">
-        <body className={figmaDsBodyRootClassName}>
-          {children}
-          {!isPortalLogin ? <SiteFooter /> : null}
-        </body>
+        <body className={figmaDsBodyRootClassName}>{children}</body>
       </html>
     )
   }
@@ -115,18 +108,21 @@ export default async function RootLayout({
   let initialNav = DEFAULT_NAV_SHELL
   let menuTheme = getDefaultMenuThemeJson()
   let brand: Awaited<ReturnType<typeof getSiteBrandLogo>> = { logoUrl: null, logoAlt: null }
+  let initialFooterData: Awaited<ReturnType<typeof getSiteFooterData>> | undefined
   if (!shellLessPreview) {
     try {
-      const [m, n, theme, cmsBrand] = await Promise.all([
+      const [m, n, theme, cmsBrand, footerData] = await Promise.all([
         getPrimaryMenu(locale, { languageSwitcherEnabled: showPublicLanguageSwitcher }),
         getNavShellStateForPathname(pathname, locale, { preferDraft: preferDraftNav }),
         getSiteMenuTheme(),
         getSiteBrandLogo(locale),
+        hideGlobalFooter ? Promise.resolve(undefined) : getSiteFooterData(locale),
       ])
       menuItems = m
       initialNav = n
       menuTheme = theme
       brand = cmsBrand
+      initialFooterData = footerData
     } catch (e) {
       console.error('[RootLayout] Menu ou coquille nav indisponible — repli minimal.', e)
     }
@@ -139,13 +135,13 @@ export default async function RootLayout({
           menuItems={menuItems}
           menuTheme={menuTheme}
           initialNav={initialNav}
+          initialFooterData={initialFooterData}
           brand={brand}
           showLanguageSwitcher={showPublicLanguageSwitcher}
           publicLocales={siteI18n.supportedLocales}
         >
           {children}
         </SiteChrome>
-        {!hideGlobalFooter ? <SiteFooter /> : null}
       </body>
     </html>
   )

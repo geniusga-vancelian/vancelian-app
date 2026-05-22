@@ -18,7 +18,7 @@ const HERO_OFFER_TAG_BG_CLASS = 'bg-neutral-700'
  * `font-black` = font-weight 900 (Tailwind). Face principale Avenir Black ; fallback sans-serif en 900.
  */
 const labelTypography = cn(
-  'text-center font-["Avenir:Black",sans-serif] text-[10px] font-black uppercase not-italic',
+  'text-center font-ui font-bold text-[10px] font-black uppercase not-italic',
   'leading-none tracking-normal text-white',
 )
 

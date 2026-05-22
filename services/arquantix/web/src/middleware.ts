@@ -14,11 +14,31 @@ import {
   buildSiteI18nCookieSetOptions,
   type SitePublicI18nPolicy,
 } from '@/lib/i18n/siteI18nPolicyCookie'
+import {
+  consolePathFromPublicRequest,
+  isConsoleHost,
+  isConsolePathname,
+  isPortalHost,
+  isPortalPathname,
+  isPublicPreviewPathname,
+  portalPathFromPublicRequest,
+  CONSOLE_PATH_PREFIX,
+  PORTAL_PATH_PREFIX,
+  PORTAL_ROUTES,
+} from '@/lib/portal/portalRouting'
+import { readPortalAccessTokenFromRequest } from '@/lib/portal/portalSession'
 
 /** Pathname pour le layout (nav / coquille). */
 function nextWithPathname(request: NextRequest) {
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-arq-pathname', request.nextUrl.pathname)
+  return NextResponse.next({ request: { headers: requestHeaders } })
+}
+
+function nextWithPortalHeaders(request: NextRequest, pathnameOverride?: string) {
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-arq-pathname', pathnameOverride ?? request.nextUrl.pathname)
+  requestHeaders.set('x-arq-portal', '1')
   return NextResponse.next({ request: { headers: requestHeaders } })
 }
 
@@ -35,9 +55,12 @@ function nextWithPathnameAndLocale(request: NextRequest, locale: Locale, policy?
 }
 
 async function fetchSitePublicI18nPolicy(request: NextRequest): Promise<SitePublicI18nPolicy> {
+  const cached = parseSiteI18nCookie(request.cookies.get(ARQUANTIX_SITE_I18N_COOKIE)?.value)
+  if (cached) return cached
+
   try {
     const url = new URL('/api/site/i18n-policy', request.nextUrl.origin)
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, { next: { revalidate: 30 } })
     if (res.ok) {
       const j = (await res.json()) as { multilingual?: boolean; defaultLocale?: string }
       const multilingual = j.multilingual !== false
@@ -73,6 +96,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
     pathname.startsWith('/_vercel') ||
+    pathname.startsWith('/fonts/') ||
     pathname === '/favicon.ico'
   ) {
     return NextResponse.next()
@@ -80,6 +104,107 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === '/health') {
     return nextWithPathname(request)
+  }
+
+  const host = request.headers.get('host')
+  const consoleHost = isConsoleHost(host)
+
+  if (consoleHost) {
+    if (isPublicPreviewPathname(pathname)) {
+      return nextWithPathname(request)
+    }
+
+    if (/^\/(fr|en|it)(?:\/|$)/.test(pathname)) {
+      const url = request.nextUrl.clone()
+      url.pathname = `${CONSOLE_PATH_PREFIX}/pages`
+      return NextResponse.redirect(url)
+    }
+
+    const consolePath = consolePathFromPublicRequest(pathname, true)
+    if (consolePath !== pathname) {
+      const url = request.nextUrl.clone()
+      url.pathname = consolePath
+      const requestHeaders = new Headers(request.headers)
+      requestHeaders.set('x-arq-pathname', consolePath)
+      requestHeaders.set('x-arq-console', '1')
+      return NextResponse.rewrite(url, {
+        request: { headers: requestHeaders },
+      })
+    }
+
+    const effectivePath = isConsolePathname(pathname) ? pathname : consolePath
+    if (
+      effectivePath === CONSOLE_PATH_PREFIX ||
+      effectivePath === `${CONSOLE_PATH_PREFIX}/`
+    ) {
+      const url = request.nextUrl.clone()
+      url.pathname = `${CONSOLE_PATH_PREFIX}/pages`
+      return NextResponse.redirect(url)
+    }
+
+    if (
+      effectivePath.startsWith(CONSOLE_PATH_PREFIX) &&
+      effectivePath !== '/admin/login' &&
+      effectivePath !== '/admin/login0' &&
+      effectivePath !== '/admin/signup' &&
+      !request.cookies.get('arq_admin_session')?.value
+    ) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/login'
+      url.searchParams.set('redirect', effectivePath)
+      return NextResponse.redirect(url)
+    }
+
+    return nextWithPathname(request)
+  }
+
+  const appHost = isPortalHost(host)
+  const portalPath = appHost ? portalPathFromPublicRequest(pathname, true) : pathname
+  const onPortalSurface = appHost || isPortalPathname(pathname)
+
+  if (onPortalSurface) {
+    if (isPublicPreviewPathname(pathname)) {
+      return nextWithPathname(request)
+    }
+
+    if (appHost && portalPath !== pathname) {
+      const url = request.nextUrl.clone()
+      url.pathname = portalPath
+      const requestHeaders = new Headers(request.headers)
+      requestHeaders.set('x-arq-pathname', portalPath)
+      requestHeaders.set('x-arq-portal', '1')
+      return NextResponse.rewrite(url, {
+        request: { headers: requestHeaders },
+      })
+    }
+
+    const effectivePath = isPortalPathname(pathname) ? pathname : portalPath
+    const portalSession = readPortalAccessTokenFromRequest(request)
+    const isLoginSurface =
+      effectivePath === PORTAL_ROUTES.login ||
+      effectivePath.startsWith(`${PORTAL_ROUTES.login}/`)
+    const isDashboard = effectivePath.startsWith(PORTAL_ROUTES.dashboard)
+
+    if (effectivePath === PORTAL_PATH_PREFIX || effectivePath === `${PORTAL_PATH_PREFIX}/`) {
+      const url = request.nextUrl.clone()
+      url.pathname = portalSession ? PORTAL_ROUTES.dashboard : PORTAL_ROUTES.login
+      return NextResponse.redirect(url)
+    }
+
+    if (isDashboard && !portalSession) {
+      const url = request.nextUrl.clone()
+      url.pathname = PORTAL_ROUTES.login
+      url.searchParams.set('redirect', effectivePath)
+      return NextResponse.redirect(url)
+    }
+
+    if (isLoginSurface && portalSession) {
+      const url = request.nextUrl.clone()
+      url.pathname = PORTAL_ROUTES.dashboard
+      return NextResponse.redirect(url)
+    }
+
+    return nextWithPortalHeaders(request)
   }
 
   if (pathname === '/guide' || pathname.startsWith('/guide/')) {

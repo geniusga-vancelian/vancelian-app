@@ -295,8 +295,8 @@ export default async function BlogPage({
                   className={cn(
                     'rounded-full px-4 py-2 text-sm transition-colors',
                     isActive
-                      ? "bg-black text-white font-['Avenir:Heavy',sans-serif]"
-                      : "bg-[#eff2fb] text-[#62656e] hover:text-black font-['Avenir:Roman',sans-serif]",
+                      ? "bg-black text-white font-ui font-semibold"
+                      : "bg-[#eff2fb] text-[#62656e] hover:text-black font-ui font-normal",
                   )}
                 >
                   {segmentLink.label}
@@ -314,8 +314,8 @@ export default async function BlogPage({
                 className={cn(
                   'rounded-full px-4 py-2 text-sm transition-colors',
                   !category
-                    ? "bg-black text-white font-['Avenir:Heavy',sans-serif]"
-                    : "bg-[#eff2fb] text-[#62656e] hover:text-black font-['Avenir:Roman',sans-serif]",
+                    ? "bg-black text-white font-ui font-semibold"
+                    : "bg-[#eff2fb] text-[#62656e] hover:text-black font-ui font-normal",
                 )}
               >
                 {siteCommonCta(locale, 'blog_filter_all')}
@@ -327,8 +327,8 @@ export default async function BlogPage({
                   className={cn(
                     'rounded-full px-4 py-2 text-sm transition-colors',
                     category === cat.slug
-                      ? "bg-black text-white font-['Avenir:Heavy',sans-serif]"
-                      : "bg-[#eff2fb] text-[#62656e] hover:text-black font-['Avenir:Roman',sans-serif]",
+                      ? "bg-black text-white font-ui font-semibold"
+                      : "bg-[#eff2fb] text-[#62656e] hover:text-black font-ui font-normal",
                   )}
                 >
                   {cat.label}

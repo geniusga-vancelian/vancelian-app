@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ContentStatus } from '@prisma/client'
 import { defaultLocale, getLocaleOrDefault } from '@/config/locales'
 import { calculateReadingTime } from '@/lib/blog/readingTime'
+import { absolutizeArticlePreviewForMobile } from '@/lib/blog/absolutizeBlogApiForMobile'
 import { getArticlesByProject } from '@/lib/blog/articleService'
 
 /**
@@ -37,7 +38,10 @@ export async function GET(
       calculateReadingTime
     )
 
-    return NextResponse.json({ articles })
+    const origin = request.nextUrl.origin
+    return NextResponse.json({
+      articles: articles.map((a) => absolutizeArticlePreviewForMobile(a, origin)),
+    })
   } catch (error) {
     console.error('Error fetching project articles:', error)
     return NextResponse.json(

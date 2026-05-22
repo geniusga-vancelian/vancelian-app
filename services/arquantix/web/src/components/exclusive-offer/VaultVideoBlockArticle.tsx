@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Play } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 
-import { SIMPLE_MARKDOWN_MODULE_TITLE_TYPO } from '@/components/design-system'
+import { SIMPLE_MARKDOWN_MODULE_TITLE_TYPO, VAULT_MODULE_MEDIA_FRAME_CLASS } from '@/components/design-system'
 import type { Locale } from '@/config/locales'
 import { getYouTubeVideoIdFromUrl } from '@/lib/youtubeEmbed'
 import { getActiveLocaleFromPathname } from '@/lib/i18n/publicLocalizedRouting'
@@ -56,12 +56,12 @@ function VideoCard({
   if (!videoId) return null
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-neutral-200 shadow-sm">
+    <article className={cn(VAULT_MODULE_MEDIA_FRAME_CLASS, 'overflow-hidden')}>
       <button
         type="button"
         onClick={() => setShowEmbed(true)}
         className={cn(
-          'group relative block w-full overflow-hidden bg-neutral-900 text-left',
+          'group relative block w-full overflow-hidden bg-v-fg text-left',
           showEmbed && 'hidden',
         )}
         aria-label={item.title ? `${watch}: ${item.title}` : watchYt}

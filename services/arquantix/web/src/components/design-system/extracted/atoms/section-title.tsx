@@ -29,18 +29,18 @@ export interface SectionTitleProps {
 
 const SIZE_CLASS: Record<SectionTitleSize, string> = {
   module:
-    "font-['Avenir:Heavy',sans-serif] font-extrabold text-[40px] leading-[1.1] tracking-[-0.01em]",
+    "font-ui font-semibold font-extrabold text-[40px] leading-[1.1] tracking-[-0.01em]",
   title:
-    "font-['Avenir:Heavy',sans-serif] font-extrabold text-[32px] leading-[1.1] tracking-[-0.01em]",
+    "font-ui font-semibold font-extrabold text-[32px] leading-[1.1] tracking-[-0.01em]",
   large:
-    "font-['Avenir:Heavy',sans-serif] font-extrabold text-[56px] leading-[1.1] tracking-[-0.01em]",
+    "font-ui font-semibold font-extrabold text-[56px] leading-[1.1] tracking-[-0.01em]",
   small:
-    "font-['Avenir:Heavy',sans-serif] font-extrabold text-[24px] leading-[1.1] tracking-[-0.01em]",
+    "font-ui font-semibold font-extrabold text-[24px] leading-[1.1] tracking-[-0.01em]",
 }
 
 /** Token DS explicite : Title small (24px, lh 110%, tracking -1%, Heavy 800). */
 export const figmaDsTitleSmallClassName =
-  "font-['Avenir:Heavy',sans-serif] font-extrabold text-[24px] leading-[1.1] tracking-[-0.01em]" as const
+  "font-ui font-semibold font-extrabold text-[24px] leading-[1.1] tracking-[-0.01em]" as const
 
 const ALIGN_OUTER: Record<SectionTitleAlign, string> = {
   left: 'items-start',

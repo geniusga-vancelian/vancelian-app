@@ -39,8 +39,8 @@ export default function Footer() {
         <div
           className="text-center"
           style={{
-            fontFamily: "'Avenir', sans-serif",
-            fontWeight: 350,
+            fontFamily: 'var(--v-font-ui)',
+            fontWeight: 400,
             fontSize: '14px',
             lineHeight: '160%',
             color: '#E6E6E6',

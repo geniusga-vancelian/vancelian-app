@@ -66,13 +66,21 @@ function parseItems(raw: unknown): ArticleStepsItemData[] {
       tagsRaw instanceof Array
         ? tagsRaw.map((e) => String(e ?? '')).filter((s) => s.length > 0)
         : []
+    const dateRaw = o.date
+    const descriptionRaw = o.description
+    const dayLabelRaw = o.dayLabel
     out.push({
-      dayLabel: typeof o.dayLabel === 'string' ? o.dayLabel : undefined,
-      date: typeof o.date === 'string' ? o.date : undefined,
+      dayLabel: typeof dayLabelRaw === 'string' ? dayLabelRaw : typeof dayLabelRaw === 'number' ? String(dayLabelRaw) : undefined,
+      date: typeof dateRaw === 'string' ? dateRaw : dateRaw != null ? String(dateRaw) : undefined,
       title,
-      description: typeof o.description === 'string' ? o.description : undefined,
+      description:
+        typeof descriptionRaw === 'string'
+          ? descriptionRaw
+          : descriptionRaw != null
+            ? String(descriptionRaw)
+            : undefined,
       tags,
-      isCompleted: o.isCompleted === true,
+      isCompleted: o.isCompleted === true || o.isCompleted === 'true' || o.isCompleted === 1,
     })
   }
   return out
@@ -158,7 +166,8 @@ export function ArticleStepsModule({ content, className, activeLabel = 'EN COURS
   const subtitle = typeof c.subtitle === 'string' ? c.subtitle.trim() : ''
   const intro = typeof c.description === 'string' ? c.description.trim() : ''
   const rightLabel = typeof c.rightLabel === 'string' ? c.rightLabel.trim() : ''
-  const items = parseItems(c.items)
+  const itemsRaw = Array.isArray(c.items) ? c.items : Array.isArray(c.steps) ? c.steps : undefined
+  const items = parseItems(itemsRaw)
   if (items.length === 0) return null
 
   const statuses = resolveStatuses(items)

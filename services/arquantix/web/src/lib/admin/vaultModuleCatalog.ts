@@ -69,6 +69,51 @@ export const VAULT_MODULE_DEFINITIONS: VaultModuleDefinition[] = [
     },
   },
   {
+    type: 'HEADING',
+    label: 'Titre',
+    category: 'Contenu & texte',
+    hint: 'Sous-titre ou intertitre',
+    description:
+      'Titre de section dans le corps de la page (équivalent bloc « Titre » de l’éditeur d’article).',
+    defaultContent: { text: 'Intertitre de section' },
+  },
+  {
+    type: 'PARAGRAPH',
+    label: 'Paragraphe',
+    category: 'Contenu & texte',
+    hint: 'Markdown supporté',
+    description:
+      'Bloc de texte avec Markdown léger (gras, italique, liens…) — même format que le blog.',
+    defaultContent: {
+      text: 'Votre **paragraphe** avec du Markdown : listes, liens, emphase.',
+    },
+  },
+  {
+    type: 'QUOTE',
+    label: 'Citation',
+    category: 'Contenu & texte',
+    hint: 'Avec attribution',
+    description: 'Citation mise en exergue avec auteur ou source optionnelle.',
+    defaultContent: {
+      text: 'Une citation percutante sur l’offre ou le marché.',
+      author: 'Source',
+    },
+  },
+  {
+    type: 'BULLET_LIST',
+    label: 'Liste à puces',
+    category: 'Contenu & texte',
+    description: 'Liste d’éléments à puces — idéal pour les points clés.',
+    defaultContent: { items: ['Premier point', 'Deuxième point'] },
+  },
+  {
+    type: 'NUMBERED_LIST',
+    label: 'Liste numérotée',
+    category: 'Contenu & texte',
+    description: 'Liste numérotée — étapes, classement ou chronologie.',
+    defaultContent: { items: ['Étape 1 — lancement', 'Étape 2 — suivi'] },
+  },
+  {
     type: 'CompetitiveAdvantagesModule',
     label: 'Competitive Advantages Module',
     category: 'Marketing & listes',
@@ -106,6 +151,7 @@ export const VAULT_MODULE_DEFINITIONS: VaultModuleDefinition[] = [
       title: 'FAQ',
       intro: '',
       footerLinkLabel: 'Voir les FAQ du projet',
+      footerLinkUrl: '',
       footerCollectionSlug: 'getting-started',
       footerCategorySlug: 'investing-basics',
       footerFilterLabel: '',
@@ -302,25 +348,36 @@ export const VAULT_MODULE_DEFINITIONS: VaultModuleDefinition[] = [
     label: 'Étapes / timeline (Steps)',
     category: 'Données & métriques',
     hint: 'Timeline verticale',
-    description: 'Suite d’étapes avec dates, titres et tags — calendrier de projet.',
+    description:
+      'Timeline verticale du calendrier projet. Édition formulaire dans le Vault Builder (titres, lignes, coches « Terminé ») — pas besoin de JSON. Règle EN COURS : première étape dont « Terminé » est décochée. Le champ sous le titre utilise `date` dans l’API (ex. « Over », date courte).',
     defaultContent: {
       title: 'Étapes du projet',
-      rightLabel: '',
       subtitle: '',
+      description: '',
+      rightLabel: '',
       items: [
         {
-          dayLabel: 'Étape 1',
-          date: '1er trimestre 2026',
-          title: 'Lancement',
-          description: 'Description courte de cette étape.',
-          tags: ['Lancement'],
+          title: 'Étape terminée (ex.)',
+          date: 'Over',
+          description: '',
+          isCompleted: true,
         },
         {
-          dayLabel: 'Étape 2',
-          date: '2e trimestre 2026',
-          title: 'Déploiement',
-          description: 'Suite du calendrier.',
-          tags: [],
+          title: 'Autre étape terminée',
+          date: 'Over',
+          description: '',
+          isCompleted: true,
+        },
+        {
+          title: 'Étape actuelle — badge EN COURS automatique',
+          date: '',
+          description: 'Tant que isCompleted est faux, c’est la première non terminée qui est « en cours ».',
+          isCompleted: false,
+        },
+        {
+          title: 'Étape suivante (à venir)',
+          date: '',
+          description: 'Gris, pastille vide.',
         },
       ],
     },
@@ -431,6 +488,20 @@ export function getVaultModuleSummary(module: {
     }
     case 'SimpleMarkdownContentModule':
       return str(c.moduleTitle) || 'Contenu Markdown'
+    case 'HEADING':
+      return str(c.text) || 'Titre'
+    case 'PARAGRAPH':
+      return str(c.text).slice(0, 80) || 'Paragraphe'
+    case 'QUOTE':
+      return str(c.text).slice(0, 60) || 'Citation'
+    case 'BULLET_LIST':
+    case 'NUMBERED_LIST': {
+      const items = c.items
+      if (Array.isArray(items) && items.length > 0) {
+        return items.map(String).join(' · ').slice(0, 80)
+      }
+      return 'Liste'
+    }
     case 'FundingModule':
       return str(c.title) || 'Funding'
     case 'FaqAccordionModule':

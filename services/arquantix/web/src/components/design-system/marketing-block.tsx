@@ -115,7 +115,7 @@ function CtaEyebrow({
       />
       <p
         className={cn(
-          "relative whitespace-nowrap font-['Avenir:Heavy',sans-serif] text-[14px] uppercase leading-none not-italic",
+          "relative whitespace-nowrap font-ui font-semibold text-[14px] uppercase leading-none not-italic",
           dark ? 'text-white' : 'text-[#62656e]',
         )}
       >
@@ -273,7 +273,7 @@ export function MarketingBlock({
                       onClick={onButtonClick}
                       className="bg-white content-stretch flex h-[36px] items-center justify-center px-[16px] py-[10px] relative rounded-[999px] shrink-0 hover:bg-gray-100 transition-colors cursor-pointer"
                     >
-                      <p className="font-['Avenir:Heavy',sans-serif] leading-[1.1] not-italic relative shrink-0 text-[12px] text-black tracking-[0.06px] uppercase whitespace-nowrap">
+                      <p className="font-ui font-semibold leading-[1.1] not-italic relative shrink-0 text-[12px] text-black tracking-[0.06px] uppercase whitespace-nowrap">
                         {buttonText}
                       </p>
                     </button>
@@ -394,7 +394,7 @@ export function MarketingBlock({
                     onClick={onButtonClick}
                     className="flex h-11 min-h-[44px] flex-none cursor-pointer items-center justify-center rounded-[999px] bg-white px-5 transition-colors hover:bg-gray-100"
                   >
-                    <span className="font-['Avenir:Heavy',sans-serif] text-[12px] uppercase tracking-[0.06px] text-black">
+                    <span className="font-ui font-semibold text-[12px] uppercase tracking-[0.06px] text-black">
                       {buttonText}
                     </span>
                   </button>
@@ -405,7 +405,7 @@ export function MarketingBlock({
                     onClick={onSecondaryButtonClick}
                     className="flex h-11 min-h-[44px] flex-none cursor-pointer items-center justify-center rounded-[999px] border border-white bg-transparent px-5 transition-colors hover:bg-white/10"
                   >
-                    <span className="font-['Avenir:Heavy',sans-serif] text-[12px] uppercase tracking-[0.06px] text-white">
+                    <span className="font-ui font-semibold text-[12px] uppercase tracking-[0.06px] text-white">
                       {secondaryButtonText}
                     </span>
                   </button>
@@ -533,7 +533,7 @@ export function MarketingBlock({
                   onClick={onButtonClick}
                   className="flex h-11 min-h-[44px] flex-none cursor-pointer items-center justify-center rounded-[999px] bg-white px-5 transition-colors hover:bg-gray-100"
                 >
-                  <span className="font-['Avenir:Heavy',sans-serif] text-[12px] uppercase tracking-[0.06px] text-black">
+                  <span className="font-ui font-semibold text-[12px] uppercase tracking-[0.06px] text-black">
                     {buttonText}
                   </span>
                 </button>
@@ -544,7 +544,7 @@ export function MarketingBlock({
                   onClick={onSecondaryButtonClick}
                   className="flex h-11 min-h-[44px] flex-none cursor-pointer items-center justify-center rounded-[999px] border border-white bg-transparent px-5 transition-colors hover:bg-white/10"
                 >
-                  <span className="font-['Avenir:Heavy',sans-serif] text-[12px] uppercase tracking-[0.06px] text-white">
+                  <span className="font-ui font-semibold text-[12px] uppercase tracking-[0.06px] text-white">
                     {secondaryButtonText}
                   </span>
                 </button>

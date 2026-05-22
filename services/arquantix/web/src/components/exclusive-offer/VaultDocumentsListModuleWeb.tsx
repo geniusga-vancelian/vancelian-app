@@ -1,30 +1,24 @@
 'use client'
 
 import { DocumentFolderIcon } from '@/components/design-system/extracted/atoms/document-folder-icon'
-import { SectionFigmaBlockHeader } from '@/components/sections/SectionFigmaBlockHeader'
+import { VaultModuleHeader } from '@/components/exclusive-offer/VaultModuleHeader'
+import { vaultStripeClass } from '@/components/design-system/vaultTokens'
 import { cn } from '@/lib/utils'
 
 export type VaultDocumentsListResolvedItem = {
   mediaId: string
   downloadUrl: string
-  /** Nom affiché (fichier médiathèque) */
   displayName: string
-  /** Libellé date (Europe/Paris, style YYYY-MM-DD HH:mm) */
   dateLabel: string
 }
 
 type Props = {
-  /** Surtitre (pastille type | … |) — aligné module Steps (SectionFigmaBlockHeader). */
   subtitle?: string
   moduleTitle?: string
   description?: string
   items: VaultDocumentsListResolvedItem[]
 }
 
-/**
- * Liste de documents — en-tête aligné sur le module **Steps** (`SectionFigmaBlockHeader` : surtitre, titre module, description 18px noir).
- * Corps : zébrage blanc / gris (#F5F5F5), coins arrondis 10px par ligne, sans contour.
- */
 export function VaultDocumentsListModuleWeb({
   subtitle,
   moduleTitle,
@@ -39,44 +33,37 @@ export function VaultDocumentsListModuleWeb({
   const hasModuleHeader = Boolean(sub || title || desc)
 
   return (
-    <div className="w-full bg-white px-0 py-6 md:py-8">
+    <div className="w-full px-0 py-6 md:py-8">
       {hasModuleHeader ? (
-        <SectionFigmaBlockHeader
-          className="!mb-8 md:!mb-10"
-          eyebrow={sub || undefined}
-          title={title || undefined}
-          description={desc || undefined}
-        />
+        <VaultModuleHeader eyebrow={sub || undefined} title={title || undefined} description={desc || undefined} />
       ) : null}
 
-      <div>
-        <ul className="flex flex-col gap-2">
-          {items.map((item, index) => (
-            <li key={`${item.mediaId}-${index}`}>
-              <a
-                href={item.downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className={cn(
-                  'flex flex-col gap-3 rounded-[10px] px-5 py-4 md:grid md:grid-cols-[28px_minmax(0,1fr)_minmax(0,140px)] md:items-center md:gap-x-6 md:px-8 md:py-5',
-                  index % 2 === 0 ? 'bg-white' : 'bg-[#F5F5F5]',
-                )}
-              >
-                <div className="flex min-w-0 items-center gap-3 md:contents">
-                  <DocumentFolderIcon className="text-[#62656E]" />
-                  <span className="min-w-0 truncate font-['Avenir:Roman',sans-serif] text-base leading-snug text-black">
-                    {item.displayName}
-                  </span>
-                </div>
-                <span className="whitespace-nowrap pl-8 font-['Avenir:Roman',sans-serif] text-base leading-snug text-black md:pl-0 md:text-center">
-                  {item.dateLabel}
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {items.map((item, index) => (
+          <li key={`${item.mediaId}-${index}`}>
+            <a
+              href={item.downloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className={cn(
+                'flex flex-col gap-3 rounded-v-card px-5 py-4 md:grid md:grid-cols-[28px_minmax(0,1fr)_minmax(0,140px)] md:items-center md:gap-x-6 md:px-8 md:py-5',
+                vaultStripeClass(index),
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-3 md:contents">
+                <DocumentFolderIcon className="text-v-fg-muted" />
+                <span className="min-w-0 truncate font-ui text-[15px] leading-snug text-v-fg md:text-base">
+                  {item.displayName}
                 </span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      </div>
+              </div>
+              <span className="whitespace-nowrap pl-8 font-ui text-[14px] leading-snug text-v-fg-body md:pl-0 md:text-center md:text-base">
+                {item.dateLabel}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

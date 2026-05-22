@@ -197,11 +197,11 @@ export function SectionBlogArticleHero({
                         {siteCommonCta(loc, 'article_by_author')}{' '}
                       </>
                     ) : null}
-                    <span className="font-['Avenir:Heavy',sans-serif] font-extrabold text-black">
+                    <span className="font-ui font-semibold font-extrabold text-black">
                       {authorName}
                     </span>
                     {authorRole?.trim() ? (
-                      <span className="font-['Avenir:Roman',sans-serif] font-normal text-[#62656e]">
+                      <span className="font-ui font-normal font-normal text-[#62656e]">
                         {' '}
                         · {authorRole}
                       </span>

@@ -72,7 +72,7 @@ function BlogCover({
   return <img src={article.coverUrl} alt={article.title} className={cn('object-cover', className)} />
 }
 
-function BlogCtaPillButton({ href, label }: { href: string; label: string }) {
+export function BlogCtaPillButton({ href, label }: { href: string; label: string }) {
   // Aligné sur le bouton "Voir toutes les offres" (ProjetGallery) : bordure absolue + typo Figma (10/500, lh 110%, tracking 0.4px) + centrage vertical via leading-[0] + p leading-[1.1]
   return (
     <Link
@@ -89,10 +89,70 @@ function BlogCtaPillButton({ href, label }: { href: string; label: string }) {
       />
       <div className="relative z-20 flex h-full w-full items-center justify-center">
         <div className="flex h-full w-full items-center justify-center px-[20px] py-[10px]">
-          <div className="flex flex-col justify-center font-['Avenir:Medium',sans-serif] leading-[0] not-italic text-[10px] text-center text-black tracking-[0.4px] uppercase transition-colors duration-200 group-hover:text-white">
+          <div className="flex flex-col justify-center font-ui font-medium leading-[0] not-italic text-[10px] text-center text-black tracking-[0.4px] uppercase transition-colors duration-200 group-hover:text-white">
             <p className="leading-[1.1] transition-colors duration-200 group-hover:text-white">{label}</p>
           </div>
         </div>
+      </div>
+    </Link>
+  )
+}
+
+/**
+ * Carte teaser article (grille « derniers articles », carrousel vault `BlogALaUne`).
+ * - `default` : titre, chapô, ligne meta auteur • date • temps de lecture (comportement historique).
+ * - `vault` : titre, **date uniquement** sous le titre (sans auteur ni séparateurs), puis chapô.
+ */
+export function BlogArticleTeaserCard({
+  article,
+  locale,
+  minReadLabel,
+  noImageLabel,
+  linkClassName,
+  variant = 'default',
+}: {
+  article: DsBlogArticle
+  locale: string
+  minReadLabel: string
+  noImageLabel: string
+  linkClassName?: string
+  /** Offre Vault : ligne meta réduite à la date, sous le titre. */
+  variant?: 'default' | 'vault'
+}) {
+  return (
+    <Link
+      href={article.slug}
+      className={cn(
+        'group block overflow-hidden rounded-[10px] bg-[#f3f3f3] transition-colors hover:bg-[#eeeeee]',
+        linkClassName,
+      )}
+    >
+      <div className="relative h-[230px] w-full shrink-0 overflow-hidden bg-[#d9e2f8]">
+        <BlogCover article={article} className="h-full w-full" noImageLabel={noImageLabel} />
+      </div>
+      <div className="px-6 pb-6 pt-5 md:px-10 md:pb-10 md:pt-8">
+        <h3 className={cn(figmaDsLinksClassName, 'line-clamp-2 text-[22px] leading-[1.12] text-black md:text-[24px]')}>
+          {article.title}
+        </h3>
+        {variant === 'vault' ? (
+          article.publishedAt ? (
+            <time
+              dateTime={article.publishedAt}
+              className="mt-2 block text-[12px] font-ui font-normal leading-[1.35] text-[#62656e]"
+            >
+              {formatArticleDateShort(new Date(article.publishedAt), locale)}
+            </time>
+          ) : null
+        ) : null}
+        <Paragraph className="mt-3 line-clamp-2 text-[#62656e]">{article.standfirst}</Paragraph>
+        {variant === 'vault' ? null : (
+          <BlogMeta
+            article={article}
+            locale={locale}
+            minReadLabel={minReadLabel}
+            className="mt-4 text-[#62656e]"
+          />
+        )}
       </div>
     </Link>
   )
@@ -263,27 +323,13 @@ export function BlogRecentPostsModule({
       </div>
       <div className={gridClassName}>
         {articles.map((article) => (
-          <Link
+          <BlogArticleTeaserCard
             key={article.id}
-            href={article.slug}
-            className="group overflow-hidden rounded-[10px] bg-[#f3f3f3] transition-colors hover:bg-[#eeeeee]"
-          >
-            <div className="relative h-[230px] w-full shrink-0 overflow-hidden bg-[#d9e2f8]">
-              <BlogCover article={article} className="h-full w-full" noImageLabel={noImageLabel} />
-            </div>
-            <div className="px-6 pb-6 pt-5 md:px-10 md:pb-10 md:pt-8">
-              <h3 className={cn(figmaDsLinksClassName, 'line-clamp-2 text-[22px] leading-[1.12] text-black md:text-[24px]')}>
-                {article.title}
-              </h3>
-              <Paragraph className="mt-3 line-clamp-2 text-[#62656e]">{article.standfirst}</Paragraph>
-              <BlogMeta
-                article={article}
-                locale={locale}
-                minReadLabel={minReadLabel}
-                className="mt-4 text-[#62656e]"
-              />
-            </div>
-          </Link>
+            article={article}
+            locale={locale}
+            minReadLabel={minReadLabel}
+            noImageLabel={noImageLabel}
+          />
         ))}
       </div>
       {mosaicPagination && mosaicPagination.totalPages > 1 ? (

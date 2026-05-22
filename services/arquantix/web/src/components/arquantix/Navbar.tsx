@@ -18,7 +18,7 @@ export default function Navbar() {
           {/* Coming Soon Button */}
           <button
             className="bg-brand-bronze hover:opacity-90 text-white px-8 py-3 rounded-full text-sm font-medium transition-opacity tracking-[0.05em] uppercase cursor-default"
-            style={{ fontFamily: '"Avenir Next", Avenir, sans-serif' }}
+            style={{ fontFamily: 'var(--v-font-ui)' }}
             disabled
           >
             Coming soon

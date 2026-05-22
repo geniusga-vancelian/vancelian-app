@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import {
   SIMPLE_MARKDOWN_MODULE_TITLE_TYPO,
   VAULT_MODULE_DESCRIPTION_TYPO,
+  VAULT_MODULE_IMAGE_CLASS,
 } from '@/components/design-system'
 import { cn } from '@/lib/utils'
 
@@ -34,7 +35,7 @@ function CarouselImage({
   priority: boolean
 }) {
   return (
-    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-neutral-100">
+    <div className={cn(VAULT_MODULE_IMAGE_CLASS, 'relative aspect-[16/10] w-full')}>
       {/* eslint-disable-next-line @next/next/no-img-element -- URLs présignées / externes */}
       <img
         src={item.url}
@@ -54,7 +55,7 @@ function CarouselImage({
 function SingleImageLayout({ item }: { item: VaultCarouselResolvedItem }) {
   return (
     <figure className="w-full">
-      <div className="overflow-hidden rounded-[14px] bg-neutral-100">
+      <div className={cn(VAULT_MODULE_IMAGE_CLASS, 'overflow-hidden rounded-v-card')}>
         {/* eslint-disable-next-line @next/next/no-img-element -- URLs présignées / externes */}
         <img
           src={item.url}
@@ -110,7 +111,7 @@ function PairedRowTwoImages({
           colClass,
         )}
       >
-        <div className="min-h-0 min-w-0 overflow-hidden rounded-xl bg-neutral-100">
+        <div className={cn('min-h-0 min-w-0 overflow-hidden', VAULT_MODULE_IMAGE_CLASS)}>
           {/* eslint-disable-next-line @next/next/no-img-element -- URLs présignées / externes */}
           <img
             src={left.url}
@@ -120,7 +121,7 @@ function PairedRowTwoImages({
             decoding="async"
           />
         </div>
-        <div className="min-h-0 min-w-0 overflow-hidden rounded-xl bg-neutral-100">
+        <div className={cn('min-h-0 min-w-0 overflow-hidden', VAULT_MODULE_IMAGE_CLASS)}>
           {/* eslint-disable-next-line @next/next/no-img-element -- URLs présignées / externes */}
           <img
             src={right.url}
@@ -184,7 +185,7 @@ function DesktopPairedRowGallery({ items }: { items: VaultCarouselResolvedItem[]
           return (
             <div
               key={row.key}
-              className="relative w-full min-w-0 overflow-hidden rounded-xl bg-neutral-100"
+              className="relative w-full min-w-0 overflow-hidden rounded-v-card bg-v-fg-05"
               style={{ height: h, minHeight: h }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- URLs présignées / externes */}

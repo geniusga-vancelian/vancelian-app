@@ -5,6 +5,7 @@ import { useState } from 'react'
 import {
   isGoogleMapsIframeEmbedUrl,
   normalizeGoogleMapsEmbedInput,
+  preferGoogleMapsPinnedEmbedIframeSrc,
 } from '@/lib/maps/resolveMapsShareLink'
 
 type Props = {
@@ -37,6 +38,7 @@ export function VaultLocalisationModuleEditor({ content, onPatch }: Props) {
   const description = readString(content.description)
   const embedUrl = readString(content.embedUrl)
   const embedNorm = normalizeGoogleMapsEmbedInput(embedUrl)
+  const previewSrc = preferGoogleMapsPinnedEmbedIframeSrc(embedNorm)
   const previewOk = isGoogleMapsIframeEmbedUrl(embedNorm)
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState<string | null>(null)
@@ -127,7 +129,7 @@ export function VaultLocalisationModuleEditor({ content, onPatch }: Props) {
           <div className="aspect-video max-h-[240px] overflow-hidden border-t border-gray-200 bg-black">
             <iframe
               title="Aperçu carte"
-              src={embedNorm}
+              src={previewSrc}
               className="h-full min-h-[200px] w-full"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"

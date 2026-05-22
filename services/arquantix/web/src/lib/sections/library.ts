@@ -49,11 +49,22 @@ export const CMS_COMPOSABLE_PAGE_TEMPLATES: string[] = [
 const heroSchema = z.object({
   title: z.string().optional(),
   subtitle: z.string().optional(),
+  eyebrow: z.string().optional(),
+  /** Stats inline (séparées par un point au rendu). */
+  inlineStats: z.array(z.string()).optional(),
+  note: z.string().optional(),
   ctaText: z.string().optional(),
   ctaLink: z.string().optional(),
+  secondaryCtaText: z.string().optional(),
+  secondaryCtaHref: z.string().optional(),
+  /** Mots animés sur la dernière ligne du titre (homepage Vancelian). */
+  typewriterWords: z.array(z.string()).optional(),
   /** Média CMS (résolu en `backgroundMediaUrl` côté serveur). */
   backgroundMediaId: z.string().optional(),
   backgroundMediaUrl: z.string().optional(),
+  /** Injecté au rendu depuis la médiathèque (détection image / vidéo). */
+  backgroundMediaMimeType: z.string().optional(),
+  backgroundMediaFilename: z.string().optional(),
   /** @deprecated Ignoré au rendu — utiliser uniquement le média CMS (`backgroundMediaId`). */
   backgroundImage: z.string().optional(),
   /** Opacité de l’image de fond seule (0 = invisible, 1 = plein). */
@@ -139,13 +150,15 @@ const ctaSchema = z.object({
   contentTextAlign: z.enum(['center', 'justify']).optional().default('center'),
   backgroundMediaId: z.string().optional(),
   /** Couleur de fond (plein) sous l’image */
-  backgroundColor: z.string().optional().default('#000000'),
+  backgroundColor: z.string().optional().default('#141208'),
   /** Opacité de l’image de fond sur la couleur (0 = invisible, 1 = opaque) */
   backgroundImageOpacity: z.number().min(0).max(1).optional().default(1),
   /** Teinte colorée additionnelle par-dessus l’image (0 = aucune) */
   overlayOpacity: z.number().min(0).max(1).optional().default(0.55),
   /** URL résolue depuis `backgroundMediaId` — nécessaire pour ne pas la perdre au `parse` Zod. */
   backgroundMediaUrl: z.string().optional(),
+  backgroundMediaMimeType: z.string().optional(),
+  backgroundMediaFilename: z.string().optional(),
   /** Alias legacy — coalescé vers les boutons principaux dans `mapDataToComponentProps`. */
   ctaText: z.string().optional(),
   ctaLink: z.string().optional(),
@@ -171,7 +184,12 @@ export const footerSocialPlatformSchema = z.enum([
 
 export const footerSchema = z.object({
   copyright: z.string().optional(),
+  /** Tagline sous le logo (baseline Home.html). */
   description: z.string().optional(),
+  /** Coordonnées / mentions courtes sous la tagline (multiligne). */
+  companyAddress: z.string().optional(),
+  /** Note secondaire en bas à droite (ex. « Made in Sophia Antipolis… »). */
+  secondaryNote: z.string().optional(),
   links: z
     .array(
       z.object({
@@ -183,8 +201,13 @@ export const footerSchema = z.object({
     .optional(),
   /** Couleur de fond du pied de page (hex ou valeur CSS courte, ex. #0a0a0a). */
   backgroundColor: z.string().max(80).optional(),
-  /** Logo au-dessus de la tagline (médiathèque). */
-  logoMediaId: z.string().uuid().nullable().optional(),
+  /** Logo au-dessus de la tagline (médiathèque — id Prisma / CUID). */
+  logoMediaId: z.string().nullable().optional(),
+  /**
+   * Affichage clair sur fond sombre : applique le filtre DS navbar
+   * (`brightness(0) invert(1)`) sur le média logo — même principe que la topnav.
+   */
+  logoMediaInvert: z.boolean().optional(),
   /** Afficher le bloc newsletter en tête de footer. */
   newsletterVisible: z.boolean().optional(),
   newsletterTitle: z.string().optional(),
@@ -259,6 +282,96 @@ const projectGridSchema = z.object({
    * le conserver évite une perte si le JSON transite par `zodSchema.parse`.
    */
   resolvedProjects: z.array(z.record(z.string(), z.unknown())).optional(),
+})
+
+const proofPressItemSchema = z.object({
+  label: z.string(),
+  variant: z.enum(['bfm', 'tribune', 'echos', 'finyear', 'text']).optional(),
+})
+
+const proofPressSchema = z.object({
+  eyebrow: z.string().optional(),
+  items: z.array(proofPressItemSchema).optional(),
+})
+
+const offerCardItemSchema = z.object({
+  href: z.string().optional(),
+  ariaLabel: z.string().optional(),
+  centerText: z.string().optional(),
+  barTitle: z.string().optional(),
+  barSubtitle: z.string().optional(),
+  barRate: z.string().optional(),
+  coverMediaId: z.string().optional(),
+  coverMediaUrl: z.string().optional(),
+  hoverVideoMediaId: z.string().optional(),
+  hoverVideoMediaUrl: z.string().optional(),
+})
+
+const offerCardsSchema = z.object({
+  eyebrow: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  viewAllButtonText: z.string().optional(),
+  viewAllButtonHref: z.string().optional(),
+  items: z.array(offerCardItemSchema).optional(),
+})
+
+const productEcosystemItemSchema = z.object({
+  iconName: z.string().optional(),
+  title: z.string(),
+  description: z.string().optional(),
+  features: z
+    .array(
+      z.object({
+        text: z.string(),
+        iconName: z.string().optional(),
+      }),
+    )
+    .optional(),
+  linkText: z.string().optional(),
+  linkHref: z.string().optional(),
+})
+
+const productEcosystemSchema = z.object({
+  eyebrow: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  items: z.array(productEcosystemItemSchema).optional(),
+})
+
+const journeyCtaSchema = z.object({
+  label: z.string(),
+  href: z.string().optional(),
+  variant: z.enum(['primary', 'secondary']).optional(),
+})
+
+const journeySchema = z.object({
+  pill: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  backgroundMediaId: z.string().optional(),
+  backgroundMediaUrl: z.string().optional(),
+  backgroundMediaMimeType: z.string().optional(),
+  backgroundMediaFilename: z.string().optional(),
+  notificationMessage: z.string().optional(),
+  ctas: z.array(journeyCtaSchema).optional(),
+})
+
+const securitySchema = z.object({
+  eyebrow: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  points: z.array(z.object({ text: z.string() })).optional(),
+  linkText: z.string().optional(),
+  linkHref: z.string().optional(),
+  logos: z
+    .array(
+      z.object({
+        label: z.string(),
+        caption: z.string().optional(),
+      }),
+    )
+    .optional(),
 })
 
 const blogListSchema = z.object({
@@ -423,6 +536,14 @@ const faqSchema = z.object({
       answerMarkdown: z.string(),
     })
   ).optional().default([]),
+  support: z.object({
+    title: z.string().optional().default(''),
+    description: z.string().optional().default(''),
+    ctaLabel: z.string().optional().default(''),
+    ctaHref: z.string().optional().default(''),
+    secondaryLinkLabel: z.string().optional().default(''),
+    secondaryLinkHref: z.string().optional().default(''),
+  }).optional(),
   ui: z.object({
     expandAllLabel: z.string().optional(),
     collapseAllLabel: z.string().optional(),
@@ -473,6 +594,8 @@ const companyMapSchema = z.object({
   description: z.string().optional(),
   backgroundMediaId: z.string().optional(),
   backgroundMediaUrl: z.string().optional(),
+  backgroundMediaMimeType: z.string().optional(),
+  backgroundMediaFilename: z.string().optional(),
   backgroundMediaAlt: z.string().optional(),
   /** Texte sous la carte — Markdown (paragraphes, listes, liens). */
   bodyContent: z.string().optional(),
@@ -486,6 +609,8 @@ const mediaTextSchema = z.object({
   description: z.string().optional(),
   imageMediaId: z.string().optional(),
   imageMediaUrl: z.string().optional(),
+  imageMediaMimeType: z.string().optional(),
+  imageMediaFilename: z.string().optional(),
   imageMediaAlt: z.string().optional(),
   /** Si true : image à droite, texte à gauche. Si false : image à gauche, texte à droite. */
   mediaRight: z.boolean().optional().default(false),
@@ -498,7 +623,9 @@ const keyFiguresSchema = z.object({
   stats: z.array(figmaStatItemSchema).max(6).optional().default([]),
   backgroundMediaId: z.string().optional(),
   backgroundMediaUrl: z.string().optional(),
-  backgroundColor: z.string().optional().default('#000000'),
+  backgroundMediaMimeType: z.string().optional(),
+  backgroundMediaFilename: z.string().optional(),
+  backgroundColor: z.string().optional().default('#141208'),
   backgroundImageOpacity: z.number().min(0).max(1).optional().default(1),
   overlayOpacity: z.number().min(0).max(1).optional().default(0),
 })
@@ -762,7 +889,7 @@ export const SECTION_TYPES: SectionType[] = [
       showPrimaryButton: true,
       showSecondaryButton: true,
       contentTextAlign: 'center',
-      backgroundColor: '#000000',
+      backgroundColor: '#141208',
       backgroundImageOpacity: 1,
       overlayOpacity: 0.55,
     },
@@ -806,6 +933,86 @@ export const SECTION_TYPES: SectionType[] = [
     zodSchema: projectGridSchema,
     allowedOnTemplates: CMS_COMPOSABLE_PAGE_TEMPLATES,
     description: 'Grid of project items (will connect to Projects DB in Phase B)',
+  },
+  {
+    key: 'proof_press',
+    label: 'Bandeau presse (proof bar)',
+    category: SectionCategory.CONTENT,
+    schemaVersion: 'v1',
+    defaultData: {
+      eyebrow: 'Ils parlent de nous',
+      items: [
+        { label: 'BFM BUSINESS', variant: 'bfm' },
+        { label: 'La Tribune', variant: 'tribune' },
+        { label: 'Les Échos', variant: 'echos' },
+        { label: 'FINYEAR', variant: 'finyear' },
+      ],
+    },
+    zodSchema: proofPressSchema,
+    allowedOnTemplates: CMS_COMPOSABLE_PAGE_TEMPLATES,
+    description: 'Logos presse monochrome (BFM, La Tribune, Les Échos, Finyear).',
+  },
+  {
+    key: 'offer_cards',
+    label: 'Offres exclusives (cartes éditoriales)',
+    category: SectionCategory.PROJECTS,
+    schemaVersion: 'v1',
+    defaultData: {
+      eyebrow: 'Offres exclusives',
+      title: "L'immobilier premium,\nfragment par fragment.",
+      description: 'Investissez dans des projets immobiliers haut de gamme tokenisés.',
+      viewAllButtonText: 'Voir toutes les offres',
+      viewAllButtonHref: '/offres-exclusives',
+      items: [],
+    },
+    zodSchema: offerCardsSchema,
+    allowedOnTemplates: CMS_COMPOSABLE_PAGE_TEMPLATES,
+    description: 'Grille 3 cartes offer-card DS avec vidéo au survol.',
+  },
+  {
+    key: 'product_ecosystem',
+    label: 'Écosystème produit',
+    category: SectionCategory.CONTENT,
+    schemaVersion: 'v1',
+    defaultData: {
+      title: "Au-delà de l'immobilier.",
+      description: 'Épargne flexible, cryptomonnaies et carte de paiement dans une seule application.',
+      items: [],
+    },
+    zodSchema: productEcosystemSchema,
+    allowedOnTemplates: CMS_COMPOSABLE_PAGE_TEMPLATES,
+    description: 'Grille 3 product-cards (icône Kalai, features, lien terracotta).',
+  },
+  {
+    key: 'journey',
+    label: 'Storytelling journey (fullbleed)',
+    category: SectionCategory.CONTENT,
+    schemaVersion: 'v1',
+    defaultData: {
+      pill: 'Étape 01',
+      title: "Nous choisissons l'actif.",
+      description: '',
+      notificationMessage: '',
+      ctas: [],
+    },
+    zodSchema: journeySchema,
+    allowedOnTemplates: CMS_COMPOSABLE_PAGE_TEMPLATES,
+    description: 'Section storytelling vidéo plein écran avec pill, notification iOS et CTAs.',
+  },
+  {
+    key: 'security',
+    label: 'Sécurité & régulation',
+    category: SectionCategory.CONTENT,
+    schemaVersion: 'v1',
+    defaultData: {
+      title: 'Régulé, audité,\ntransparent.',
+      description: '',
+      points: [],
+      logos: [],
+    },
+    zodSchema: securitySchema,
+    allowedOnTemplates: CMS_COMPOSABLE_PAGE_TEMPLATES,
+    description: 'Split texte + grille logos régulateurs (AMF, Modulr, VISA, Audit).',
   },
   {
     key: 'blog_list',
@@ -1020,6 +1227,14 @@ export const SECTION_TYPES: SectionType[] = [
       // dans le mapping renderer pour les contenus existants.
       subtitle: '',
       items: [],
+      support: {
+        title: '',
+        description: '',
+        ctaLabel: '',
+        ctaHref: '',
+        secondaryLinkLabel: '',
+        secondaryLinkHref: '',
+      },
     },
     zodSchema: faqSchema,
     allowedOnTemplates: CMS_COMPOSABLE_PAGE_TEMPLATES,
@@ -1240,7 +1455,7 @@ export const SECTION_TYPES: SectionType[] = [
         { value: 'DEC 2021', label: 'Year of launch' },
         { value: '24 months', label: 'Average duration of operations' },
       ],
-      backgroundColor: '#000000',
+      backgroundColor: '#141208',
       backgroundImageOpacity: 0.22,
       overlayOpacity: 0,
     },

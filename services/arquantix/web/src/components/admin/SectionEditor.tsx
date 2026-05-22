@@ -75,6 +75,28 @@ export function SectionEditor({
             }
             className="w-full rounded-md border border-gray-300 px-3 py-2 font-sans text-sm focus:border-indigo-500 focus:ring-indigo-500"
           />
+          <p className="mt-1 text-xs text-gray-500">
+            Style éditorial DS : entourez un mot-clé avec{' '}
+            <code className="rounded bg-gray-100 px-1 font-mono text-[11px]">&lt;em&gt;…&lt;/em&gt;</code>{' '}
+            pour le passer en Newsreader italic (ex.{' '}
+            <code className="rounded bg-gray-100 px-1 font-mono text-[11px]">
+              Bâtir son patrimoine, &lt;em&gt;aujourd&apos;hui&lt;/em&gt;.
+            </code>
+            ). Sinon, une ligne par paragraphe = saut de ligne visuel.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Surtitre (eyebrow)
+          </label>
+          <input
+            type="text"
+            value={data.eyebrow || ''}
+            onChange={(e) => updateField('eyebrow', e.target.value)}
+            placeholder="ex. Patrimoine tokenisé"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+          />
         </div>
 
         <div>
@@ -109,7 +131,7 @@ export function SectionEditor({
           <MediaField
             value={data.backgroundMediaId || null}
             onChange={(mediaId) => updateField('backgroundMediaId', mediaId)}
-            label="Image de fond (optionnelle, très légère)"
+            label="Média de fond (image ou vidéo)"
             allowClear={true}
             preview={true}
           />
@@ -181,6 +203,59 @@ export function SectionEditor({
           </label>
         </div>
 
+        {!isSecondary ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Stats inline (une par ligne)
+              </label>
+              <textarea
+                value={Array.isArray(data.inlineStats) ? data.inlineStats.join('\n') : ''}
+                onChange={(e) => {
+                  const lines = e.target.value
+                    .split('\n')
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                  updateField('inlineStats', lines.length > 0 ? lines : undefined)
+                }}
+                rows={3}
+                placeholder={'500K téléchargements\n100 M€ sous gestion'}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Mots typewriter (une par ligne, dernière ligne animée)
+              </label>
+              <textarea
+                value={Array.isArray(data.typewriterWords) ? data.typewriterWords.join('\n') : ''}
+                onChange={(e) => {
+                  const lines = e.target.value
+                    .split('\n')
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                  updateField('typewriterWords', lines.length > 0 ? lines : undefined)
+                }}
+                rows={3}
+                placeholder={"aujourd'hui\nen famille\nen crypto"}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Note sous les CTA
+              </label>
+              <input
+                type="text"
+                value={data.note || ''}
+                onChange={(e) => updateField('note', e.target.value)}
+                placeholder="Note moyenne 4,6 ★ basée sur 1 600+ avis"
+                className="w-full rounded-md border border-gray-300 px-3 py-2"
+              />
+            </div>
+          </>
+        ) : null}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Texte du bouton CTA
@@ -207,13 +282,42 @@ export function SectionEditor({
           />
         </div>
 
+        {!isSecondary ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Texte du bouton secondaire
+              </label>
+              <input
+                type="text"
+                value={data.secondaryCtaText || ''}
+                onChange={(e) => updateField('secondaryCtaText', e.target.value)}
+                placeholder="ex. Découvrir les offres"
+                className="w-full rounded-md border border-gray-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Lien du bouton secondaire
+              </label>
+              <input
+                type="text"
+                value={data.secondaryCtaHref || ''}
+                onChange={(e) => updateField('secondaryCtaHref', e.target.value)}
+                placeholder="ex. /fr/offres-exclusives"
+                className="w-full rounded-md border border-gray-300 px-3 py-2"
+              />
+            </div>
+          </>
+        ) : null}
+
         {isSecondary ? (
           <p className="text-xs text-gray-500">
-            Hero Secondary : pas de KPI ni de bloc email sur le site public.
+            Hero Secondary : pas de stats ni typewriter sur le site public.
           </p>
         ) : (
           <p className="text-xs text-gray-500">
-            Hero homepage : pas de bandeau KPI ni de champ email (retirés du rendu).
+            Hero homepage Vancelian : vidéo ou image de fond, stats, typewriter, CTA primaire + secondaire.
           </p>
         )}
       </div>
@@ -613,6 +717,77 @@ export function SectionEditor({
           <p className="text-xs text-gray-500 mt-1">
             Court paragraphe sous le titre (chapô). Champ traduisible.
           </p>
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-amber-200/80 bg-amber-50/50 p-4">
+          <p className="text-sm font-medium text-gray-800">Aside support (colonne droite sticky)</p>
+          <p className="text-xs text-gray-600">
+            Module d&apos;aide affiché à droite de l&apos;accordéon (30 %). Champs traduisibles.
+          </p>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Titre</label>
+            <input
+              type="text"
+              value={data.support?.title ?? ''}
+              onChange={(e) => updateField('support.title', e.target.value)}
+              placeholder="ex. Have a question?"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+            <textarea
+              value={data.support?.description ?? ''}
+              onChange={(e) => updateField('support.description', e.target.value)}
+              rows={2}
+              placeholder="ex. Our team responds to technical questions within 24 hours."
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Bouton — libellé</label>
+              <input
+                type="text"
+                value={data.support?.ctaLabel ?? ''}
+                onChange={(e) => updateField('support.ctaLabel', e.target.value)}
+                placeholder="ex. Contact support →"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Bouton — lien</label>
+              <input
+                type="text"
+                value={data.support?.ctaHref ?? ''}
+                onChange={(e) => updateField('support.ctaHref', e.target.value)}
+                placeholder="ex. /en/contact"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Lien secondaire — libellé</label>
+              <input
+                type="text"
+                value={data.support?.secondaryLinkLabel ?? ''}
+                onChange={(e) => updateField('support.secondaryLinkLabel', e.target.value)}
+                placeholder="ex. Full FAQ →"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Lien secondaire — URL</label>
+              <input
+                type="text"
+                value={data.support?.secondaryLinkHref ?? ''}
+                onChange={(e) => updateField('support.secondaryLinkHref', e.target.value)}
+                placeholder="ex. /en/help"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/80 p-4">
@@ -1122,7 +1297,15 @@ export function SectionEditor({
               placeholder="ex. Prêt à investir avec nous ?"
               className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
             />
-            <p className="mt-1 text-xs text-gray-500">Grand titre du bloc CTA. Champ traduisible.</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Grand titre du bloc CTA. Champ traduisible. Pour le style éditorial DS
+              (Inter + Newsreader italic), entourez les mots-clés avec{' '}
+              <code className="rounded bg-gray-100 px-1 font-mono text-[11px]">&lt;em&gt;…&lt;/em&gt;</code>
+              {' '}— ex.{' '}
+              <code className="rounded bg-gray-100 px-1 font-mono text-[11px]">
+                Prêt à acheter &lt;em&gt;votre premier Bitcoin ?&lt;/em&gt;
+              </code>
+            </p>
           </div>
 
           <div>
@@ -1194,7 +1377,7 @@ export function SectionEditor({
                 value={
                   /^#[0-9A-Fa-f]{6}$/.test(data.backgroundColor || '')
                     ? data.backgroundColor
-                    : '#000000'
+                    : '#141208'
                 }
                 onChange={(e) => updateField('backgroundColor', e.target.value)}
                 className="h-10 w-14 cursor-pointer rounded border border-gray-300"
@@ -1202,9 +1385,9 @@ export function SectionEditor({
               />
               <input
                 type="text"
-                value={data.backgroundColor ?? '#000000'}
+                value={data.backgroundColor ?? '#141208'}
                 onChange={(e) => updateField('backgroundColor', e.target.value)}
-                placeholder="#000000"
+                placeholder="#141208"
                 className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
             </div>
@@ -1697,16 +1880,16 @@ export function SectionEditor({
                 value={
                   /^#[0-9A-Fa-f]{6}$/.test(data.backgroundColor || '')
                     ? data.backgroundColor
-                    : '#000000'
+                    : '#141208'
                 }
                 onChange={(e) => updateField('backgroundColor', e.target.value)}
                 className="h-10 w-14 cursor-pointer rounded border border-gray-300"
               />
               <input
                 type="text"
-                value={data.backgroundColor ?? '#000000'}
+                value={data.backgroundColor ?? '#141208'}
                 onChange={(e) => updateField('backgroundColor', e.target.value)}
-                placeholder="#000000"
+                placeholder="#141208"
                 className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
             </div>
@@ -3142,6 +3325,109 @@ export function SectionEditor({
   if (canonical === 'common_module_ref') {
     /** Édition interdite : la référence se pose à l’ajout sur la page ; les textes sont sur la fiche module commun. */
     return null
+  }
+
+  if (canonical === 'proof_press') {
+    const items: { label?: string; variant?: string }[] = Array.isArray(data.items) ? data.items : []
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Surtitre</label>
+          <input
+            type="text"
+            value={data.eyebrow ?? ''}
+            onChange={(e) => updateField('eyebrow', e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-3 py-2"
+          />
+        </div>
+        {items.map((item, i) => (
+          <div key={i} className="rounded border border-gray-200 p-3 space-y-2">
+            <input
+              type="text"
+              value={item.label ?? ''}
+              onChange={(e) => {
+                const next = [...items]
+                next[i] = { ...next[i], label: e.target.value }
+                updateField('items', next)
+              }}
+              placeholder="Libellé"
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+            />
+            <select
+              value={item.variant ?? 'text'}
+              onChange={(e) => {
+                const next = [...items]
+                next[i] = { ...next[i], variant: e.target.value }
+                updateField('items', next)
+              }}
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+            >
+              <option value="bfm">BFM</option>
+              <option value="tribune">La Tribune</option>
+              <option value="echos">Les Échos</option>
+              <option value="finyear">Finyear</option>
+              <option value="text">Texte</option>
+            </select>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => updateField('items', [...items, { label: '', variant: 'text' }])}
+          className="rounded-md bg-indigo-600 px-3 py-2 text-sm text-white"
+        >
+          Ajouter un logo
+        </button>
+      </div>
+    )
+  }
+
+  if (canonical === 'offer_cards' || canonical === 'product_ecosystem' || canonical === 'journey' || canonical === 'security') {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600">
+          Module Vancelian « {canonical} » — éditez les champs principaux ci-dessous. Pour un contrôle
+          fin (cartes, CTAs, logos), utilisez l’éditeur JSON avancé de la page si nécessaire.
+        </p>
+        {(['eyebrow', 'title', 'description', 'pill', 'notificationMessage', 'linkText', 'linkHref', 'viewAllButtonText', 'viewAllButtonHref'] as const)
+          .filter((f) => f in (data as object) || ['eyebrow', 'title', 'description'].includes(f))
+          .map((field) => {
+            if (field === 'pill' && canonical !== 'journey') return null
+            if (field === 'notificationMessage' && canonical !== 'journey') return null
+            if (field.startsWith('viewAll') && canonical !== 'offer_cards') return null
+            if (field.startsWith('link') && canonical !== 'security') return null
+            const isTextarea = field === 'description'
+            return (
+              <div key={field}>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{field}</label>
+                {isTextarea ? (
+                  <textarea
+                    value={(data as Record<string, string>)[field] ?? ''}
+                    onChange={(e) => updateField(field, e.target.value)}
+                    rows={3}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={(data as Record<string, string>)[field] ?? ''}
+                    onChange={(e) => updateField(field, e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  />
+                )}
+              </div>
+            )
+          })}
+        {canonical === 'journey' ? (
+          <MediaField
+            value={data.backgroundMediaId || null}
+            onChange={(mediaId) => updateField('backgroundMediaId', mediaId)}
+            label="Vidéo / image de fond"
+            allowClear
+            preview
+          />
+        ) : null}
+      </div>
+    )
   }
 
   // Default: fallback to JSON editor

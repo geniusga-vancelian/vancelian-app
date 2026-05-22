@@ -4,7 +4,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { cn } from '@/lib/utils'
-import { figmaDsLinksClassName, figmaDsParagraphClassName } from '@/components/design-system/extracted'
+import { VAULT_PARAGRAPH_BODY_READING_TYPO } from '@/components/design-system'
+import { figmaDsLinksClassName } from '@/components/design-system/extracted'
 import { ArticleBodyBulletListBlock } from '@/components/design-system/ArticleBodyBulletListBlock'
 import { ArticleBodyQuoteBlock } from '@/components/design-system/ArticleBodyQuoteBlock'
 import { ArticleStepsModule } from '@/components/design-system/ArticleStepsModule'
@@ -17,9 +18,9 @@ import HowItWorksDS from '@/components/design-system/HowItWorks'
 import type { PublicArticleBlock } from '@/lib/blog/getPublicArticle'
 
 /** Plugins + composants : CommonMark seul (sans GFM) ne gère pas tableaux, strikethrough, etc. ; les sauts de ligne simples ne deviennent pas des <br> sans `remark-breaks`. */
-const articleBodyRemarkPlugins = [remarkGfm, remarkBreaks] as const
+export const articleBodyRemarkPlugins = [remarkGfm, remarkBreaks] as const
 
-const articleBodyMarkdownComponents: Partial<Components> = {
+export const articleBodyMarkdownComponents: Partial<Components> = {
   p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-[#1a1d24]">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
@@ -143,12 +144,7 @@ function renderBlock(
     case ArticleBlockType.PARAGRAPH:
       return {
         element: (
-          <div
-            className={cn(
-              figmaDsParagraphClassName,
-              'not-italic my-6 text-[#2a2d35]',
-            )}
-          >
+          <div className={cn(VAULT_PARAGRAPH_BODY_READING_TYPO, 'not-italic my-6')}>
             <ReactMarkdown
               remarkPlugins={[...articleBodyRemarkPlugins]}
               components={articleBodyMarkdownComponents}

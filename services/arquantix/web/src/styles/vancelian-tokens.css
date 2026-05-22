@@ -1,0 +1,432 @@
+/* ======================================================================
+   Vancelian Design System — tokens + base classes
+   Source : pack handoff officiel (Claude Design), README + colors_and_type.css
+   Doctrine : premium discret · Aman / Hermès / Cereal
+   ====================================================================== */
+
+/* -- Webfonts -------------------------------------------------------- */
+/* Inter via Google Fonts — 90 % de l'UI */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+/* Newsreader self-hosted (10 % éditorial / voix de marque) */
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_24pt-Light.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: italic;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_24pt-LightItalic.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_24pt-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_24pt-Italic.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_24pt-Medium.ttf") format("truetype");
+}
+/* Display optical size — pour 60–96px hero éditorial */
+@font-face {
+  font-family: "Newsreader Display";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_60pt-Light.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Newsreader Display";
+  font-style: italic;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_60pt-LightItalic.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Newsreader Display";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_60pt-Regular.ttf") format("truetype");
+}
+
+:root {
+  /* ============================================================
+     COLORS — Light theme (default), papier off-white
+     ============================================================ */
+  --v-bg:           #F7F7F4;   /* fond produit principal */
+  --v-bg-photo:     #F5F1EA;   /* fond planches photo (warm) */
+  --v-card:         #F2F1ED;   /* carte niveau 1 */
+  --v-card-warm:    #F3EDE6;   /* carte warm — testimonials, marketing */
+  --v-card-hover:   #EBEAE5;
+  --v-dark-bg:      #141208;   /* dark mode / footer */
+
+  /* Foregrounds — anthracite, jamais noir pur */
+  --v-fg:        #1A1815;
+  --v-fg-body:   #3A352F;
+  --v-fg-muted:  #6E665C;
+  --v-fg-light:  #8E867A;
+  --v-fg-20:     #C9C3B5;
+  --v-fg-10:     #E2DED4;
+  --v-fg-05:     #EFEDE6;
+  --v-dark-fg:   #EDECEC;
+
+  /* Triade chromatique identitaire (jamais simultanée en aplat) */
+  --v-terracotta:          #C0512E;     /* accent unique de marque (text-links, accents) */
+  --v-terracotta-pressed:  #A0431C;
+  --v-terracotta-bg:       #C0512E26;   /* 15 % — fonds doux */
+  --v-terracotta-bg-strong:#C0512E40;   /* 25 % — hover sur fond accent */
+
+  --v-green:     #33614D;   /* vert anglais — success / patrimoine */
+  --v-green-bg:  #33614D26;
+  --v-blue:      #0F2A47;   /* bleu de Prusse — info (SEUL bleu autorisé) */
+  --v-blue-bg:   #0F2A4726;
+
+  /* Sémantiques — la triade EST le système d'état */
+  --v-success:    var(--v-green);
+  --v-success-bg: var(--v-green-bg);
+  --v-warning:    var(--v-terracotta);
+  --v-warning-bg: var(--v-terracotta-bg);
+  --v-info:       var(--v-blue);
+  --v-info-bg:    var(--v-blue-bg);
+  --v-error:      #B83A3A;     /* seul rouge, hors triade */
+  --v-error-bg:   #B83A3A26;
+
+  /* Gris technique (neutres) */
+  --v-gray-50:  #F9FAFB;
+  --v-gray-200: #E5E7EB;
+  --v-gray-300: #D1D5DC;
+  --v-gray-500: #6A7282;
+  --v-gray-700: #364153;
+  --v-gray-900: #101828;
+
+  /* ============================================================
+     TYPOGRAPHY — base tokens
+     ============================================================ */
+  --v-font-ui:        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --v-font-editorial: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --v-font-display:   "Newsreader Display", "Newsreader", Georgia, serif;
+  /* Mono = Inter + tabular-nums (DS rule, pas de monospace face) */
+  --v-font-mono:      "Inter", system-ui, sans-serif;
+
+  --v-fw-light:    300;
+  --v-fw-regular:  400;
+  --v-fw-medium:   500;
+  --v-fw-semibold: 600;
+  --v-fw-bold:     700;
+
+  /* Line heights */
+  --v-lh-tight:    1.0;
+  --v-lh-snug:     1.05;
+  --v-lh-headline: 1.1;
+  --v-lh-compact:  1.2;
+  --v-lh-normal:   1.3;
+  --v-lh-relaxed:  1.4;
+  --v-lh-body:     1.45;
+  --v-lh-loose:    1.5;
+  --v-lh-editorial:1.55;
+
+  /* Letter spacing */
+  --v-ls-tight:     -0.03em;
+  --v-ls-normal:    0;
+  --v-ls-wide:      0.05em;
+  --v-ls-extrawide: 0.4em;
+
+  /* ============================================================
+     SPACING — base 4px, 8 paliers stricts
+     ============================================================ */
+  --v-space-0:   0;
+  --v-space-xs:  4px;
+  --v-space-sm:  8px;
+  --v-space-md:  12px;
+  --v-space-lg:  16px;
+  --v-space-xl:  24px;
+  --v-space-2xl: 32px;
+  --v-space-3xl: 48px;
+  --v-space-4xl: 64px;
+
+  /* ============================================================
+     RADIUS — 5 paliers stricts (+ alias intermédiaires marketing)
+     ============================================================ */
+  --v-radius-none:  0;
+  --v-radius-tag:   4px;
+  --v-radius-input: 6px;
+  --v-radius-card:  8px;
+  --v-radius-modal: 12px;
+  --v-radius-lg:    16px;
+  --v-radius-xl:    20px;
+  --v-radius-2xl:   24px;
+  --v-radius-pill:  999px;
+
+  /* ============================================================
+     ELEVATION — 3 niveaux seulement
+     ============================================================ */
+  --v-elev-flat:   none;
+  --v-elev-subtle: 0 1px 2px 0 rgba(26, 24, 21, 0.04);
+  --v-elev-medium: 0 8px 24px 0 rgba(26, 24, 21, 0.08);
+
+  /* ============================================================
+     MOTION — discret, court, naturel
+     ============================================================ */
+  --v-motion-fast:  120ms;
+  --v-motion-base:  200ms;
+  --v-motion-slow:  320ms;
+  --v-ease-out:     cubic-bezier(0.22, 1, 0.36, 1);
+  --v-ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ============================================================
+     CONTAINER — 12-col desktop, 8-col tablet, 4-col mobile
+     ============================================================ */
+  --v-container-mobile:  100%;
+  --v-container-tablet:  720px;
+  --v-container-desktop: 1280px;
+  --v-pad-mobile:  16px;
+  --v-pad-tablet:  24px;
+  --v-pad-desktop: 48px;
+}
+
+/* Dark theme — invert bg/fg, triade identique */
+[data-theme="dark"] {
+  --v-bg:         #141208;
+  --v-bg-photo:   #1a180e;
+  --v-card:       #1f1c14;
+  --v-card-warm:  #221e15;
+  --v-card-hover: #2a2519;
+
+  --v-fg:        #EDECEC;
+  --v-fg-body:   #D6D3CE;
+  --v-fg-muted:  #9B948A;
+  --v-fg-light:  #6E665C;
+  --v-fg-20:     #3A352F;
+  --v-fg-10:     #2A251D;
+  --v-fg-05:     #1F1C14;
+}
+
+/* ============================================================
+   SEMANTIC TYPE STYLES — composés, ready to apply
+   ============================================================ */
+
+/* UI scale (Inter) */
+.v-display    { font-family: var(--v-font-ui); font-weight: 700; font-size: 64px; line-height: 1.0;  letter-spacing: -0.03em; }
+.v-h1         { font-family: var(--v-font-ui); font-weight: 600; font-size: 44px; line-height: 1.1;  letter-spacing: 0; }
+.v-h2         { font-family: var(--v-font-ui); font-weight: 600; font-size: 30px; line-height: 1.2;  letter-spacing: 0; }
+.v-h3         { font-family: var(--v-font-ui); font-weight: 500; font-size: 22px; line-height: 1.3;  letter-spacing: 0; }
+.v-h4         { font-family: var(--v-font-ui); font-weight: 500; font-size: 17px; line-height: 1.4;  letter-spacing: 0; }
+.v-body-lg    { font-family: var(--v-font-ui); font-weight: 400; font-size: 16px; line-height: 1.5; }
+.v-body       { font-family: var(--v-font-ui); font-weight: 400; font-size: 14px; line-height: 1.5; }
+.v-body-sm    { font-family: var(--v-font-ui); font-weight: 400; font-size: 13px; line-height: 1.45; }
+.v-caption,
+.v-eyebrow    {
+  font-family: var(--v-font-ui); font-weight: 500; font-size: 11px;
+  line-height: 1.4; letter-spacing: 0.05em; text-transform: uppercase;
+}
+.v-mono       {
+  font-family: var(--v-font-mono); font-weight: 500; font-size: 13px;
+  line-height: 1.45; font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-tnum       { font-feature-settings: "tnum" on, "lnum" on; font-variant-numeric: tabular-nums; }
+
+/* Editorial scale (Newsreader) — voix de marque */
+.v-ed-display {
+  font-family: var(--v-font-display);
+  font-weight: 300; font-size: 80px; line-height: 1.05; letter-spacing: 0;
+}
+.v-ed-title {
+  font-family: var(--v-font-editorial);
+  font-weight: 400; font-size: 48px; line-height: 1.15; letter-spacing: 0;
+}
+.v-ed-body {
+  font-family: var(--v-font-editorial);
+  font-weight: 400; font-size: 20px; line-height: 1.55;
+}
+.v-ed-quote {
+  font-family: var(--v-font-editorial);
+  font-weight: 300; font-style: italic;
+  font-size: 24px; line-height: 1.4;
+}
+
+/* Wordmark VANCELIAN — Newsreader UPPERCASE 0.4em letter-spacing */
+.v-wordmark {
+  font-family: var(--v-font-editorial);
+  font-weight: 400; font-size: 17px; line-height: 1;
+  letter-spacing: 0.4em; text-transform: uppercase;
+  color: var(--v-fg);
+}
+
+/* ============================================================
+   COMPOSANTS ATOMIQUES — boutons, text-links, tags, eyebrows
+   ============================================================ */
+
+/* Container */
+.v-container {
+  width: 100%;
+  max-width: var(--v-container-desktop);
+  margin: 0 auto;
+  padding-left: var(--v-pad-desktop);
+  padding-right: var(--v-pad-desktop);
+}
+@media (max-width: 1024px) {
+  .v-container { padding-left: var(--v-pad-tablet); padding-right: var(--v-pad-tablet); }
+}
+@media (max-width: 640px) {
+  .v-container { padding-left: var(--v-pad-mobile); padding-right: var(--v-pad-mobile); }
+}
+
+/* Buttons — pill, anthracite primaire, outline secondaire */
+.v-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--v-font-ui);
+  font-weight: 500;
+  line-height: 1;
+  border-radius: var(--v-radius-pill);
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--v-motion-fast) var(--v-ease-out),
+              color var(--v-motion-fast) var(--v-ease-out),
+              border-color var(--v-motion-fast) var(--v-ease-out);
+}
+.v-btn--sm { font-size: 13px; padding: 10px 16px; }
+.v-btn--md { font-size: 14px; padding: 14px 24px; }
+.v-btn--primary {
+  background: var(--v-fg);
+  color: #FFFFFF;
+}
+.v-btn--primary:hover  { background: #3B3633; }
+.v-btn--primary:active { background: #000000; }
+.v-btn--secondary {
+  background: transparent;
+  color: var(--v-fg);
+  border: 1px solid var(--v-fg);
+}
+.v-btn--secondary:hover  { background: var(--v-fg-05); }
+.v-btn--secondary:active { background: var(--v-fg-10); }
+
+/* Variantes dark — sur fonds sombres (footer, final-cta, journey) */
+.v-btn--dark-primary {
+  background: #EDECEC;
+  color: #1A1815;
+}
+.v-btn--dark-primary:hover { background: #FFFFFF; }
+.v-btn--dark-secondary {
+  background: transparent;
+  color: #EDECEC;
+  border: 1px solid #EDECEC;
+}
+.v-btn--dark-secondary:hover { background: rgba(237, 236, 236, 0.08); }
+
+/* Eyebrow — caption uppercase 11px */
+.v-eyebrow-section {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--v-fg);
+  margin: 0 0 32px 0;
+}
+
+/* Text-link — terracotta, SEUL endroit où la couleur d'identité apparaît dans l'UI fonctionnelle */
+.v-text-link {
+  font-family: var(--v-font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--v-terracotta);
+  line-height: 1;
+  text-decoration: none;
+  transition: color var(--v-motion-fast) var(--v-ease-out);
+}
+.v-text-link:hover  { text-decoration: underline; text-underline-offset: 3px; }
+.v-text-link:active { color: var(--v-terracotta-pressed); }
+.v-text-link--dark { color: #EDECEC; }
+.v-text-link--dark:hover { color: #FFFFFF; }
+.v-text-link--dark:active { color: rgba(237, 236, 236, 0.7); }
+
+/* Tag — badge uppercase, radius 4px */
+.v-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: var(--v-radius-tag);
+  font-family: var(--v-font-ui);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.v-tag--warning {
+  background: var(--v-terracotta);
+  color: #FFFFFF;
+}
+.v-tag--success {
+  background: var(--v-green);
+  color: #FFFFFF;
+}
+.v-tag--info {
+  background: var(--v-blue);
+  color: #FFFFFF;
+}
+.v-tag--neutral {
+  background: rgba(239, 237, 230, 0.92);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--v-fg);
+}
+
+/* Cards — radius 8, fond #F2F1ED, jamais d'ombre par défaut */
+.v-card {
+  background: var(--v-card);
+  border-radius: var(--v-radius-card);
+  padding: var(--v-space-xl);
+  transition: background var(--v-motion-base) var(--v-ease-out);
+}
+.v-card--interactive {
+  cursor: pointer;
+}
+.v-card--interactive:hover {
+  background: var(--v-card-hover);
+}
+.v-card--warm {
+  background: var(--v-card-warm);
+}
+
+/* Icons — Kalai library (filled, fill="currentColor") */
+.v-icon       { width: 20px; height: 20px; flex: 0 0 20px; display: inline-block; fill: currentColor; }
+.v-icon--16   { width: 16px; height: 16px; flex: 0 0 16px; }
+.v-icon--20   { width: 20px; height: 20px; flex: 0 0 20px; }
+.v-icon--24   { width: 24px; height: 24px; flex: 0 0 24px; }
+.v-icon--32   { width: 32px; height: 32px; flex: 0 0 32px; }
+
+/* Selection — terracotta légère */
+::selection { background: var(--v-terracotta-bg-strong); color: var(--v-fg); }
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  .v-btn, .v-text-link, .v-card, .v-card--interactive {
+    transition-duration: 0.01ms !important;
+  }
+}

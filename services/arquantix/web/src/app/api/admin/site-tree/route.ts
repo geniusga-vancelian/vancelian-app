@@ -30,7 +30,11 @@ import {
 import type { Locale } from '@/config/locales'
 import type { NextRequest } from 'next/server'
 import { getAdminFooterLoadPayload } from '@/lib/cms/footerStorage'
+import { getAdminPortalAuthLoadPayload } from '@/lib/cms/portalAuthStorage'
+import { getAdminPortalSupportLoadPayload } from '@/lib/cms/portalSupportStorage'
 import { computeFooterLocalesCompleteness } from '@/lib/admin/footerLocaleCompleteness'
+import { computePortalAuthLocalesCompleteness } from '@/lib/admin/portalAuthLocaleCompleteness'
+import { computePortalSupportLocalesCompleteness } from '@/lib/admin/portalSupportLocaleCompleteness'
 import { parseCommonModulesDocument } from '@/lib/cms/commonModulesStorage'
 import { computeCommonModuleLocalesCompleteness } from '@/lib/admin/commonModuleLocaleCompleteness'
 
@@ -116,7 +120,9 @@ export async function GET(request: NextRequest) {
           select: primaryMenuForSiteTreeSelect,
         })
       }),
-      prisma.globalSettings.findFirst({ select: { footerJson: true, commonModulesJson: true } }),
+      prisma.globalSettings.findFirst({
+        select: { footerJson: true, commonModulesJson: true, portalAuthJson: true, portalSupportJson: true },
+      }),
     ])
 
     /**
@@ -246,6 +252,10 @@ export async function GET(request: NextRequest) {
     )
 
     const footerPayload = getAdminFooterLoadPayload(globalSettingsRow?.footerJson ?? {})
+    const portalAuthPayload = getAdminPortalAuthLoadPayload(globalSettingsRow?.portalAuthJson ?? null)
+    const portalSupportPayload = getAdminPortalSupportLoadPayload(
+      globalSettingsRow?.portalSupportJson ?? null,
+    )
     const commonDoc = parseCommonModulesDocument(globalSettingsRow?.commonModulesJson ?? null)
     const optionalCommonRows: SiteTreeGlobalCommonModuleRow[] = commonDoc.modules
       .slice()
@@ -269,6 +279,24 @@ export async function GET(request: NextRequest) {
         description: 'Pied de page affiché sur tout le site public (liens, newsletter, mentions).',
         localeCompleteness: computeFooterLocalesCompleteness(footerPayload.locales),
         editHref: '/admin/pages/footer',
+        systemLocked: true,
+      },
+      {
+        id: 'portal-auth',
+        kind: 'portal_auth',
+        label: 'Portail Auth',
+        description: 'Login, création de compte et code OTP (/app/login).',
+        localeCompleteness: computePortalAuthLocalesCompleteness(portalAuthPayload.locales),
+        editHref: '/admin/pages/portal-auth',
+        systemLocked: true,
+      },
+      {
+        id: 'portal-support',
+        kind: 'portal_support',
+        label: 'Support portail',
+        description: 'Panneau FAQ / aide à droite dans l’app web connectée.',
+        localeCompleteness: computePortalSupportLocalesCompleteness(portalSupportPayload.locales),
+        editHref: '/admin/pages/portal-support',
         systemLocked: true,
       },
       ...optionalCommonRows,

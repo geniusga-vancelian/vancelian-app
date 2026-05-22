@@ -28,7 +28,7 @@ const CTAButton = React.forwardRef<HTMLButtonElement, CTAButtonProps>(
         ref={ref}
         type="button"
         className={cn(
-          "relative flex shrink-0 items-center justify-center gap-2.5 rounded-[40px] font-['Avenir:Heavy',sans-serif] uppercase leading-none tracking-[0.06px] transition-all hover:opacity-90 active:scale-[0.98]",
+          "relative flex shrink-0 items-center justify-center gap-2.5 rounded-[40px] font-ui font-semibold uppercase leading-none tracking-[0.06px] transition-all hover:opacity-90 active:scale-[0.98]",
           variantClasses[variant],
           sizeClasses[size],
           className,

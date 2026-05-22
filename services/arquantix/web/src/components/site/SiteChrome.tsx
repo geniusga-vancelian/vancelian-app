@@ -3,12 +3,19 @@
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
 import { Navigation } from '@/components/sections/Navigation'
+import { PersistentSiteFooter } from '@/components/site/PersistentSiteFooter'
+import { NavPendingProvider } from '@/components/site/NavPendingContext'
+import { SiteContentPending } from '@/components/site/SiteContentPending'
 import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
 import type { NavShellState } from '@/lib/cms/navShellContext'
 import type { MenuThemeJson } from '@/lib/cms/menuThemeStorage'
 import { isValidLocale, type Locale } from '@/config/locales'
 import { figmaDsSiteShellLightClassName } from '@/components/design-system/extracted/tokens/surfaces'
 import { ScrollMotionEffects } from '@/components/motion/ScrollMotionEffects'
+import { shellLocaleFromPathname } from '@/lib/site/shellLocaleFromPathname'
+import type { SiteFooterData } from '@/lib/cms/site-footer'
+import { cn } from '@/lib/utils'
+import { isPortalPathname } from '@/lib/portal/portalRouting'
 
 import type { SiteBrandLogo } from '@/components/ui/BrandLogo'
 
@@ -16,6 +23,7 @@ export type SiteChromeProps = {
   menuItems: MenuItem[]
   menuTheme: MenuThemeJson
   initialNav: NavShellState
+  initialFooterData?: SiteFooterData
   brand?: SiteBrandLogo | null
   showLanguageSwitcher?: boolean
   publicLocales?: Locale[]
@@ -23,13 +31,12 @@ export type SiteChromeProps = {
 }
 
 /**
- * Coque site : menu fixe + fond de page, persistants entre navigations (pas de remontage du menu).
- * Routes `/admin/*`, `/preview/common-module/*`, `/preview/section/*` et `/preview/email/*` : enfants seuls (pas de menu).
+ * Coque site : menu + footer persistants entre navigations (pas de remontage ni refetch systématique).
+ * Routes `/admin/*`, `/app/*` (login/signup inclus), `/preview/common-module/*`, … : enfants seuls.
  */
 function isHomePath(path: string): boolean {
   const p = path.replace(/\/$/, '') || '/'
   if (p === '/') return true
-  // Phase 2A — home CMS sous /fr, /en, /it
   return p === '/fr' || p === '/en' || p === '/it'
 }
 
@@ -37,6 +44,7 @@ export function SiteChrome({
   menuItems,
   menuTheme: initialMenuTheme,
   initialNav,
+  initialFooterData,
   brand,
   showLanguageSwitcher = true,
   publicLocales,
@@ -60,22 +68,37 @@ export function SiteChrome({
     (pathname.startsWith('/preview/section-demo/') && !isIntegratedNavSectionDemo) ||
     isCursorDesignSystemPrint ||
     isHermesDesignSystemPrint
-  const bareChrome = isAdmin || shellLessPreview
+  const bareChrome = isAdmin || shellLessPreview || isPortalPathname(pathname)
+
   const [menu, setMenu] = React.useState<MenuItem[]>(menuItems)
   const [menuTheme, setMenuTheme] = React.useState<MenuThemeJson>(initialMenuTheme)
   const [nav, setNav] = React.useState<NavShellState>(initialNav)
+  const prevPathRef = React.useRef(pathname)
+  const prevLocaleRef = React.useRef<Locale>(shellLocaleFromPathname(pathname))
+  const navShellCacheRef = React.useRef<Map<string, NavShellState>>(new Map())
 
-  React.useEffect(() => {
-    setMenu(menuItems)
-  }, [menuItems])
+  const refreshNavShell = React.useCallback(async (path: string, locale: Locale | null) => {
+    const cacheKey = `${locale ?? 'default'}:${path}`
+    const cached = navShellCacheRef.current.get(cacheKey)
+    if (cached) {
+      setNav(cached)
+      return
+    }
 
-  React.useEffect(() => {
-    setMenuTheme(initialMenuTheme)
-  }, [initialMenuTheme])
-
-  React.useEffect(() => {
-    setNav(initialNav)
-  }, [initialNav])
+    try {
+      const q = new URLSearchParams({ path })
+      if (path.startsWith('/preview/')) q.set('draft', '1')
+      if (locale) q.set('locale', locale)
+      const navRes = await fetch(`/api/site/nav-shell?${q}`)
+      if (navRes.ok) {
+        const data = (await navRes.json()) as NavShellState
+        navShellCacheRef.current.set(cacheKey, data)
+        setNav(data)
+      }
+    } catch {
+      /* garder l’état courant */
+    }
+  }, [])
 
   const refreshMenuFromApi = React.useCallback(async (path: string, locale: Locale | null) => {
     try {
@@ -83,8 +106,8 @@ export function SiteChrome({
       if (path.startsWith('/preview/')) q.set('draft', '1')
       if (locale) q.set('locale', locale)
       const [navRes, menuRes] = await Promise.all([
-        fetch(`/api/site/nav-shell?${q}`, { next: { revalidate: 30 } }),
-        fetch(`/api/site/primary-menu?${q}`, { next: { revalidate: 30 } }),
+        fetch(`/api/site/nav-shell?${q}`),
+        fetch(`/api/site/primary-menu?${q}`),
       ])
       if (navRes.ok) {
         const data = (await navRes.json()) as NavShellState
@@ -103,6 +126,26 @@ export function SiteChrome({
       /* garder l’état courant */
     }
   }, [])
+
+  React.useEffect(() => {
+    if (bareChrome) return
+
+    const locale = shellLocaleFromPathname(pathname)
+    const localeChanged = locale !== prevLocaleRef.current
+    const pathChanged = pathname !== prevPathRef.current
+
+    prevPathRef.current = pathname
+    prevLocaleRef.current = locale
+
+    if (localeChanged) {
+      void refreshMenuFromApi(pathname, locale)
+      return
+    }
+
+    if (pathChanged) {
+      void refreshNavShell(pathname, locale)
+    }
+  }, [bareChrome, pathname, refreshMenuFromApi, refreshNavShell])
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return
@@ -142,20 +185,23 @@ export function SiteChrome({
       : 'min-h-screen bg-black text-white'
 
   return (
-    <div className={shellBg}>
-      <ScrollMotionEffects />
-      <Navigation
-        menuItems={menu}
-        brand={brand}
-        menuTheme={menuTheme}
-        themeColor={nav.themeColor}
-        overlayHeroSecondary={overlayHeroSecondary}
-        overlayHeroHomeLight={overlayHeroHomeLight}
-        overlayBlogHero={overlayBlogHero}
-        showLanguageSwitcher={showLanguageSwitcher}
-        publicLocales={publicLocales}
-      />
-      <div className="flex min-h-0 flex-col">{children}</div>
-    </div>
+    <NavPendingProvider>
+      <div className={cn(shellBg, 'flex min-h-screen flex-col')}>
+        <ScrollMotionEffects />
+        <Navigation
+          menuItems={menu}
+          brand={brand}
+          menuTheme={menuTheme}
+          themeColor={nav.themeColor}
+          overlayHeroSecondary={overlayHeroSecondary}
+          overlayHeroHomeLight={overlayHeroHomeLight}
+          overlayBlogHero={overlayBlogHero}
+          showLanguageSwitcher={showLanguageSwitcher}
+          publicLocales={publicLocales}
+        />
+        <SiteContentPending className="flex flex-1 flex-col">{children}</SiteContentPending>
+        <PersistentSiteFooter initialData={initialFooterData} />
+      </div>
+    </NavPendingProvider>
   )
 }

@@ -7,9 +7,12 @@ import { resolveLabelWithFallback, DEFAULT_LOCALE } from '@/lib/i18n/resolveLabe
 import { getLocaleOrDefault } from '@/config/locales'
 import { ensureBlogCmsPresence } from '@/lib/cms/ensureBlogCmsPresence'
 import { ensurePrimaryMenuLanguageSwitcher } from '@/lib/menu/ensurePrimaryMenuLanguageSwitcher'
+import { menuThemeJsonSchema, parseMenuThemeStorage } from '@/lib/cms/menuThemeStorage'
+import { serializeMenuThemeForSave } from '@/lib/cms/site-menu-theme'
 
 const updateMenuSchema = z.object({
   name: z.string().optional(),
+  themeJson: menuThemeJsonSchema.optional(),
 })
 
 // GET /api/admin/menus/primary - Get primary menu with ordered items
@@ -88,6 +91,7 @@ export async function GET(request: NextRequest) {
       ...menuRest,
       name: resolvedMenuName,
       nameBase: menu.name,
+      themeJson: parseMenuThemeStorage(menu.themeJson),
       items: menuItems.map((item) => {
         // Check if item is invalid: not root but page is null (pageId exists but page was deleted)
         const isInvalidTarget = !item.isRoot && item.pageId !== null && item.page === null
@@ -160,12 +164,15 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name } = updateMenuSchema.parse(body)
+    const { name, themeJson } = updateMenuSchema.parse(body)
 
     const menu = await prisma.menu.update({
       where: { key: 'primary' },
       data: {
         ...(name !== undefined && { name }),
+        ...(themeJson !== undefined && {
+          themeJson: serializeMenuThemeForSave(themeJson),
+        }),
       },
       include: {
         menuItems: {
@@ -175,7 +182,13 @@ export async function PUT(request: NextRequest) {
     })
 
     const { menuItems, ...menuRest } = menu
-    return NextResponse.json({ menu: { ...menuRest, items: menuItems } })
+    return NextResponse.json({
+      menu: {
+        ...menuRest,
+        themeJson: parseMenuThemeStorage(menu.themeJson),
+        items: menuItems,
+      },
+    })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

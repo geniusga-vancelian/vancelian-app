@@ -7,7 +7,7 @@ import { ArticleBodyBulletListBlock } from '@/components/design-system/ArticleBo
 import { ArticleBodyQuoteBlock } from '@/components/design-system/ArticleBodyQuoteBlock'
 import { ArticleStepsModule } from '@/components/design-system/ArticleStepsModule'
 import { VaultMediaCarousel } from '@/components/exclusive-offer/VaultMediaCarousel'
-import { figmaDsParagraphClassName } from '@/components/design-system/extracted'
+import { VAULT_PARAGRAPH_BODY_READING_TYPO } from '@/components/design-system'
 import { cn } from '@/lib/utils'
 import { TableOfContents } from '@/components/blog/TableOfContents'
 
@@ -56,12 +56,7 @@ function renderBlock(
     case ArticleBlockType.PARAGRAPH:
       return {
         element: (
-          <div
-            className={cn(
-              figmaDsParagraphClassName,
-              'not-italic my-6 text-[#2a2d35]',
-            )}
-          >
+          <div className={cn(VAULT_PARAGRAPH_BODY_READING_TYPO, 'not-italic my-6')}>
             <ReactMarkdown
               components={{
                 p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,

@@ -1,9 +1,19 @@
 "use client";
 
 import { useState } from "react";
-
-import { SectionTitle, figmaDsTitleSmallClassName } from "@/components/design-system/extracted";
+import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  SupportAsidePanel,
+  hasSupportAsideContent,
+  type SupportAsideContent,
+} from "@/components/design-system/SupportAsidePanel";
+import {
+  VSectionHeader,
+} from "@/components/design-system/vancelian/VSectionHeader";
+
+export type FAQSupportAside = SupportAsideContent;
 
 interface FAQItem {
   question: string;
@@ -13,170 +23,72 @@ interface FAQItem {
 interface FAQProps {
   items: FAQItem[];
   /**
-   * Titre principal de la section (atome « Section title »).
-   * Optionnel : si vide, aucun titre n'est rendu (pas de fallback hardcodé,
-   * cf. règle « contenu piloté par le CMS uniquement »).
+   * Titre principal de la section. Optionnel — si vide, aucun titre n'est
+   * rendu (doctrine « pas de fallback hardcodé »).
    */
-  headline?: string;
-  /**
-   * Surtitre / pastille au-dessus du titre. Optionnel : si non fourni
-   * (ou vide), aucun bandeau n'est rendu — pas de fallback hardcodé,
-   * pour éviter qu'un texte non passé par le pipeline i18n CMS apparaisse
-   * sur le site (cf. règle « surtitre piloté par le CMS uniquement »).
-   */
+  headline?: ReactNode;
+  /** Surtitre / pastille au-dessus du titre. Optionnel. */
   eyebrow?: string;
-  /**
-   * Description optionnelle affichée sous le titre (chapô).
-   * Optionnel : aucun rendu si vide. Aligné sur la convention
-   * Surtitre / Titre / Description des autres modules CMS.
-   */
+  /** Description optionnelle affichée sous le titre. */
   description?: string;
-  /** Libellé du bouton « tout développer » (CMS). Vide = pas de contrôle. */
+  /** Module support sticky (colonne droite 30 %). */
+  support?: FAQSupportAside;
+  /** Libellé du bouton « tout développer ». Vide = pas de contrôle. */
   expandAllLabel?: string;
-  /** Libellé du bouton « tout replier » (CMS). Vide = pas de contrôle. */
+  /** Libellé du bouton « tout replier ». Vide = pas de contrôle. */
   collapseAllLabel?: string;
 }
 
-function PlusIcon() {
-  return (
-    <div className="relative shrink-0 size-[12px]">
-      <svg className="absolute block inset-0 size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 12">
-        <g>
-          <path d="M1 6H11" stroke="white" strokeLinecap="round" strokeWidth="2" />
-          <path d="M6 11L6 1" stroke="white" strokeLinecap="round" strokeWidth="2" />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function MinusIcon() {
-  return (
-    <div className="relative shrink-0 size-[12px]">
-      <svg className="absolute block inset-0 size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 12">
-        <g>
-          <path d="M1 6H11" stroke="white" strokeLinecap="round" strokeWidth="2" />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function FAQLabel({ text }: { text: string }) {
-  return (
-    <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0">
-      <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">{text}</p>
-    </div>
-  );
-}
-
-function FAQHeader({
-  headline,
-  eyebrow,
-  description,
+/**
+ * FAQ — Vancelian Design System (`components/faq/`).
+ *
+ * Layout 70 / 30 : accordéon à gauche, aside support sticky à droite.
+ * Un seul item ouvert à la fois ; chevron rotatif ; séparateurs 1px.
+ */
+function FAQItemComponent({
+  item,
+  isOpen,
+  onToggle,
 }: {
-  headline?: string;
-  eyebrow?: string;
-  description?: string;
+  item: FAQItem;
+  isOpen: boolean;
+  onToggle: () => void;
 }) {
-  const eyebrowText = eyebrow?.trim();
-  const headlineText = headline?.trim();
-  const descriptionText = description?.trim();
-  if (!eyebrowText && !headlineText && !descriptionText) {
-    return null;
-  }
   return (
-    <div className="content-stretch flex flex-col gap-[10px] items-center relative shrink-0 w-full">
-      {eyebrowText ? <FAQLabel text={eyebrowText} /> : null}
-      {headlineText ? (
-        <SectionTitle align="center" color="#000000" size="module">
-          {headlineText}
-        </SectionTitle>
-      ) : null}
-      {descriptionText ? (
-        <p className="max-w-[720px] text-center font-['Avenir:Roman',sans-serif] text-[18px] leading-[1.6] text-black/85 whitespace-pre-wrap">
-          {descriptionText}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-const faqEase = "cubic-bezier(0.4, 0, 0.2, 1)";
-const faqDuration = "0.35s";
-
-function FAQItemComponent({ item, isOpen, onToggle }: { item: FAQItem; isOpen: boolean; onToggle: () => void }) {
-  return (
-    <div
-      className={cn(
-        "relative w-full shrink-0 overflow-hidden rounded-[10px] transition-[background-color] duration-300 ease-out motion-reduce:transition-none",
-        isOpen ? "bg-[#f3f3f3]" : "bg-transparent",
-      )}
-    >
-      {/* Zone cliquable = toute la ligne (padding + min-height WCAG ~44px) */}
+    <div className="border-b border-v-fg-10 last:border-b-0">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={isOpen}
-        className="flex w-full min-h-[52px] cursor-pointer items-center justify-between gap-8 px-[30px] py-5 text-left md:min-h-[56px] md:py-6"
+        className={cn(
+          "group flex w-full min-h-[56px] cursor-pointer items-center justify-between gap-6",
+          "py-5 text-left lg:min-h-[64px]",
+          "font-ui font-semibold text-[18px] leading-[1.35] text-v-fg lg:text-[20px]",
+          "transition-colors duration-v-base hover:text-v-fg-body motion-reduce:transition-none",
+        )}
       >
-        <div
+        <span className="min-w-0 flex-1">{item.question}</span>
+        <ChevronDown
           className={cn(
-            "relative min-w-0 flex-1 not-italic text-black",
-            figmaDsTitleSmallClassName,
-            "text-[20px] md:text-[24px]",
+            "h-5 w-5 shrink-0 text-v-fg-muted transition-transform duration-v-base motion-reduce:transition-none",
+            isOpen ? "rotate-180" : "rotate-0",
           )}
-        >
-          <span className="block">{item.question}</span>
-        </div>
-        <div
-          className={cn(
-            "relative flex size-[22px] shrink-0 items-center justify-center rounded-[20px] transition-colors duration-300 ease-out motion-reduce:transition-none",
-            isOpen ? "bg-[rgba(98,101,110,0.4)]" : "bg-[#62656e]",
-          )}
-        >
-          <span
-            className={cn(
-              "absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-out motion-reduce:transition-none",
-              isOpen ? "opacity-0" : "opacity-100",
-            )}
-            aria-hidden
-          >
-            <PlusIcon />
-          </span>
-          <span
-            className={cn(
-              "absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-out motion-reduce:transition-none",
-              isOpen ? "opacity-100" : "opacity-0",
-            )}
-            aria-hidden
-          >
-            <MinusIcon />
-          </span>
-        </div>
+          aria-hidden
+        />
       </button>
 
       <div
-        className="grid w-full transition-[grid-template-rows] motion-reduce:transition-none"
-        style={{
-          gridTemplateRows: isOpen ? "1fr" : "0fr",
-          transitionDuration: faqDuration,
-          transitionTimingFunction: faqEase,
-        }}
+        className="grid w-full transition-[grid-template-rows] duration-v-base ease-v-in-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
       >
         <div className="min-h-0 overflow-hidden" aria-hidden={!isOpen}>
           <div
             className={cn(
-              "px-[30px] pb-8 transition-[opacity,transform] motion-reduce:transition-none",
+              "pb-6 transition-[opacity,transform] duration-v-base motion-reduce:transition-none",
               isOpen ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0",
             )}
-            style={{
-              transitionDuration: faqDuration,
-              transitionTimingFunction: faqEase,
-            }}
           >
-            <p className="border-t border-black/5 pt-6 font-['Avenir:Roman',sans-serif] text-[18px] leading-[1.6] text-black whitespace-pre-wrap">
+            <p className="m-0 max-w-[640px] font-ui text-[16px] font-normal leading-[1.6] text-v-fg-body whitespace-pre-wrap">
               {item.answer}
             </p>
           </div>
@@ -191,64 +103,110 @@ export default function FAQ({
   headline,
   eyebrow,
   description,
+  support,
   expandAllLabel,
   collapseAllLabel,
 }: FAQProps) {
-  const [openItems, setOpenItems] = useState<Set<number>>(new Set());
-
-  const toggleItem = (index: number) => {
-    setOpenItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
-      } else {
-        newSet.add(index);
-      }
-      return newSet;
-    });
-  };
-
   const expandAllText = expandAllLabel?.trim();
   const collapseAllText = collapseAllLabel?.trim();
   const showGlobalControls =
     items.length > 0 && (Boolean(expandAllText) || Boolean(collapseAllText));
+  const allowMultiple = showGlobalControls;
+
+  const [openIndex, setOpenIndex] = useState<number | null>(items.length > 0 ? 0 : null);
+  const [openItems, setOpenItems] = useState<Set<number>>(new Set());
+
+  const isOpen = (index: number) =>
+    allowMultiple ? openItems.has(index) : openIndex === index;
+
+  const toggleItem = (index: number) => {
+    if (allowMultiple) {
+      setOpenItems((prev) => {
+        const next = new Set(prev);
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
+        return next;
+      });
+      return;
+    }
+    setOpenIndex((prev) => (prev === index ? null : index));
+  };
+
+  const supportAside = support ?? {};
+  const showSupport = Boolean(
+    supportAside.title?.trim() ||
+      supportAside.description?.trim() ||
+      (supportAside.ctaLabel?.trim() && supportAside.ctaHref?.trim()) ||
+      (supportAside.secondaryLinkLabel?.trim() && supportAside.secondaryLinkHref?.trim()),
+  );
 
   return (
-    <section className="relative flex w-full flex-col items-center justify-center px-0 py-0">
-      <div className="content-stretch flex flex-col gap-[32px] items-center relative shrink-0 w-full">
-        <FAQHeader headline={headline} eyebrow={eyebrow} description={description} />
-        {showGlobalControls ? (
-          <div className="flex flex-wrap items-center justify-center gap-4 px-2">
-            {expandAllText ? (
-              <button
-                type="button"
-                onClick={() => setOpenItems(new Set(items.map((_, i) => i)))}
-                className="border-0 bg-transparent p-0 font-['Avenir:Heavy',sans-serif] text-[14px] uppercase tracking-wide text-[#62656e] underline decoration-[#62656e]/40 underline-offset-4 transition-colors hover:text-black hover:decoration-black/40"
-              >
-                {expandAllText}
-              </button>
-            ) : null}
-            {collapseAllText ? (
-              <button
-                type="button"
-                onClick={() => setOpenItems(new Set())}
-                className="border-0 bg-transparent p-0 font-['Avenir:Heavy',sans-serif] text-[14px] uppercase tracking-wide text-[#62656e] underline decoration-[#62656e]/40 underline-offset-4 transition-colors hover:text-black hover:decoration-black/40"
-              >
-                {collapseAllText}
-              </button>
-            ) : null}
+    <section className="relative flex w-full flex-col">
+      <div
+        className={cn(
+          "grid grid-cols-1 items-start gap-12",
+          showSupport ? "lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-16" : "",
+        )}
+      >
+        <div className="flex min-w-0 flex-col gap-10">
+          <VSectionHeader
+            eyebrow={eyebrow}
+            title={headline}
+            description={description}
+            titleAs="h2"
+            titleSize="page"
+            align="left"
+            className="items-start text-left [&_*]:text-left"
+          />
+
+          {showGlobalControls ? (
+            <div className="flex flex-wrap items-center gap-6">
+              {expandAllText ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (allowMultiple) {
+                      setOpenItems(new Set(items.map((_, i) => i)));
+                    } else {
+                      setOpenIndex(0);
+                    }
+                  }}
+                  className="border-0 bg-transparent p-0 font-ui font-medium text-[13px] uppercase tracking-[0.05em] text-v-fg-muted underline decoration-v-fg-20 underline-offset-4 transition-colors duration-v-fast hover:text-v-fg hover:decoration-v-fg"
+                >
+                  {expandAllText}
+                </button>
+              ) : null}
+              {collapseAllText ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (allowMultiple) {
+                      setOpenItems(new Set());
+                    } else {
+                      setOpenIndex(null);
+                    }
+                  }}
+                  className="border-0 bg-transparent p-0 font-ui font-medium text-[13px] uppercase tracking-[0.05em] text-v-fg-muted underline decoration-v-fg-20 underline-offset-4 transition-colors duration-v-fast hover:text-v-fg hover:decoration-v-fg"
+                >
+                  {collapseAllText}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="flex w-full flex-col">
+            {items.map((item, index) => (
+              <FAQItemComponent
+                key={index}
+                item={item}
+                isOpen={isOpen(index)}
+                onToggle={() => toggleItem(index)}
+              />
+            ))}
           </div>
-        ) : null}
-        <div className="content-stretch flex flex-col gap-[4px] items-start relative shrink-0 w-full">
-          {items.map((item, index) => (
-            <FAQItemComponent
-              key={index}
-              item={item}
-              isOpen={openItems.has(index)}
-              onToggle={() => toggleItem(index)}
-            />
-          ))}
         </div>
+
+        {showSupport ? <SupportAsidePanel support={supportAside} /> : null}
       </div>
     </section>
   );

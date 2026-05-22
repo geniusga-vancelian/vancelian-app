@@ -74,10 +74,10 @@ export function Testimonial({
           </div>
 
           <div className="content-stretch flex flex-[1_0_0] flex-col gap-[2px] items-start min-h-px min-w-px not-italic relative">
-            <div className="flex flex-col font-['Avenir:Heavy',sans-serif] justify-center leading-[0] relative shrink-0 text-[18px] text-black tracking-[-0.18px] w-full">
+            <div className="flex flex-col font-ui font-semibold justify-center leading-[0] relative shrink-0 text-[18px] text-black tracking-[-0.18px] w-full">
               <p className="leading-[1.6]">{authorName}</p>
             </div>
-            <p className="font-['Avenir:Book',sans-serif] leading-[1.6] relative shrink-0 text-[#62656e] text-[14px] w-full">
+            <p className="font-ui font-normal leading-[1.6] relative shrink-0 text-[#62656e] text-[14px] w-full">
               {authorTitle}
             </p>
           </div>
@@ -95,7 +95,7 @@ export function Testimonial({
         {/* Testimonial Content */}
         <div className="content-stretch flex flex-col gap-[16px] items-start relative shrink-0 w-full">
           <StarRating rating={rating} />
-          <p className="font-['Avenir:Book',sans-serif] leading-[1.6] min-w-full not-italic relative shrink-0 text-[14px] text-black w-[min-content]">
+          <p className="font-ui font-normal leading-[1.6] min-w-full not-italic relative shrink-0 text-[14px] text-black w-[min-content]">
             {testimonialText}
           </p>
         </div>

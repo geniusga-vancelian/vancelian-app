@@ -20,9 +20,9 @@ export function FigmaBodyText({
   }
 
   const weightClasses = {
-    heavy: "font-['Avenir:Heavy',sans-serif]",
-    roman: "font-['Avenir:Roman',sans-serif]",
-    book: "font-['Avenir:Book',sans-serif]",
+    heavy: "font-ui font-semibold",
+    roman: "font-ui font-normal",
+    book: "font-ui font-normal",
   }
 
   const alignClasses = {

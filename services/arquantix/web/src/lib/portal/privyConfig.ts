@@ -5,7 +5,7 @@
  * (bundle iOS / package Android). Le passer au SDK React provoque
  * « Invalid nativeAppID ». Sur le web, on utilise uniquement l'appId,
  * ou un client web dédié (`NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID`) créé dans le
- * dashboard Privy (Allowed origins : http://localhost:3100, etc.).
+ * dashboard Privy (Allowed origins : http://localhost:3000, etc.).
  */
 /** Côté serveur (layout, API) — `PRIVY_APP_ID` injecté par ECS / Secrets Manager. */
 export function getPrivyAppIdServer(): string {

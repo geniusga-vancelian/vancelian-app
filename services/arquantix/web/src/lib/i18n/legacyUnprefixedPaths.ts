@@ -13,6 +13,7 @@ export const LEGACY_UNPREFIXED_TOP_LEVEL = new Set([
   'guide',
   'qa-difficiles',
   'admin',
+  'app',
   'dashboard',
   'health',
 ])

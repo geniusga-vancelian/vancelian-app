@@ -34,8 +34,11 @@ type LinkRow = { label: string; href: string; category: string }
 export type SiteFooterFormState = {
   copyright: string
   description: string
+  companyAddress: string
+  secondaryNote: string
   backgroundColor: string
   logoMediaId: string | null
+  logoMediaInvert: boolean
   newsletterVisible: boolean
   newsletterTitle: string
   newsletterPlaceholder: string
@@ -53,8 +56,11 @@ export function initialFooterForm(): SiteFooterFormState {
   return {
     copyright: '',
     description: '',
-    backgroundColor: '#000000',
+    companyAddress: '',
+    secondaryNote: '',
+    backgroundColor: '#141208',
     logoMediaId: null,
+    logoMediaInvert: true,
     newsletterVisible: true,
     newsletterTitle: 'Subscribe to our newsletter',
     newsletterPlaceholder: 'Enter your email',
@@ -83,8 +89,11 @@ function footerBlockToForm(f: Record<string, unknown>): SiteFooterFormState {
   return {
     copyright: typeof f.copyright === 'string' ? f.copyright : '',
     description: typeof f.description === 'string' ? f.description : '',
-    backgroundColor: typeof f.backgroundColor === 'string' && f.backgroundColor ? f.backgroundColor : '#000000',
+    companyAddress: typeof f.companyAddress === 'string' ? f.companyAddress : '',
+    secondaryNote: typeof f.secondaryNote === 'string' ? f.secondaryNote : '',
+    backgroundColor: typeof f.backgroundColor === 'string' && f.backgroundColor ? f.backgroundColor : '#141208',
     logoMediaId: typeof f.logoMediaId === 'string' ? f.logoMediaId : null,
+    logoMediaInvert: f.logoMediaInvert !== false,
     newsletterVisible: f.newsletterVisible !== false,
     newsletterTitle:
       typeof f.newsletterTitle === 'string' && f.newsletterTitle
@@ -118,8 +127,11 @@ function formToFooterBlock(form: SiteFooterFormState): Record<string, unknown> {
   return {
     copyright: form.copyright.trim() || undefined,
     description: form.description.trim() || undefined,
+    companyAddress: form.companyAddress.trim() || undefined,
+    secondaryNote: form.secondaryNote.trim() || undefined,
     backgroundColor: form.backgroundColor.trim() || undefined,
     logoMediaId: form.logoMediaId,
+    logoMediaInvert: form.logoMediaInvert,
     newsletterVisible: form.newsletterVisible,
     newsletterTitle: form.newsletterTitle.trim() || undefined,
     newsletterPlaceholder: form.newsletterPlaceholder.trim() || undefined,
@@ -379,7 +391,7 @@ export function SiteFooterEditor() {
                 <div className="flex flex-wrap items-center gap-3">
                   <input
                     type="color"
-                    value={form.backgroundColor.match(/^#([0-9a-fA-F]{6})$/) ? form.backgroundColor : '#000000'}
+                    value={form.backgroundColor.match(/^#([0-9a-fA-F]{6})$/) ? form.backgroundColor : '#141208'}
                     onChange={(e) => setForm((f) => ({ ...f, backgroundColor: e.target.value }))}
                     className="h-10 w-14 cursor-pointer rounded border border-gray-300 bg-white"
                     aria-label="Choix couleur"
@@ -389,10 +401,12 @@ export function SiteFooterEditor() {
                     value={form.backgroundColor}
                     onChange={(e) => setForm((f) => ({ ...f, backgroundColor: e.target.value }))}
                     className="min-w-[10rem] flex-1 rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-                    placeholder="#000000"
+                    placeholder="#141208"
                   />
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Valeur CSS (hex recommandé, ex. #0a0a0a).</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Couleur dark DS Vancelian : <code className="font-mono">#141208</code> (anthracite chaud — pas noir pur).
+                </p>
               </div>
             </div>
           </section>
@@ -405,8 +419,18 @@ export function SiteFooterEditor() {
               onChange={(id) => setForm((f) => ({ ...f, logoMediaId: id }))}
               allowClear
             />
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={form.logoMediaInvert}
+                onChange={(e) => setForm((f) => ({ ...f, logoMediaInvert: e.target.checked }))}
+                className="rounded border-gray-300"
+              />
+              Afficher en clair sur fond sombre (filtre navbar — lockup noir inversé)
+            </label>
             <p className="text-xs text-gray-500">
-              Si aucun média n’est choisi, le logo vectoriel Arquantix par défaut est utilisé.
+              Même asset que la navbar : <code className="font-mono">logo-black-h.svg</code>.
+              Cochez l’option ci-dessus pour obtenir le rendu blanc sur footer dark.
             </p>
           </section>
 
@@ -427,9 +451,29 @@ export function SiteFooterEditor() {
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                rows={3}
+                rows={2}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                placeholder="Tagline institutionnelle…"
+                placeholder="Bâtir son patrimoine, aujourd’hui."
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Adresse / mentions courtes</label>
+              <textarea
+                value={form.companyAddress}
+                onChange={(e) => setForm((f) => ({ ...f, companyAddress: e.target.value }))}
+                rows={4}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-indigo-500"
+                placeholder={'Vancelian SAS · Sophia Antipolis\nCapital social : …'}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Note bas de page (droite)</label>
+              <input
+                type="text"
+                value={form.secondaryNote}
+                onChange={(e) => setForm((f) => ({ ...f, secondaryNote: e.target.value }))}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                placeholder="Made in Sophia Antipolis · Site fait avec attention"
               />
             </div>
           </section>

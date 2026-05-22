@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * @deprecated Accordéon maison ; rendu via design-system FAQ.
+ * Wrapper CMS — rendu via design-system FAQ (layout 70/30 + aside sticky).
  */
 import React from "react";
 import FAQ from "@/components/design-system/FAQ";
 import { Container } from "@/components/ui/Container";
+import { parseEditorialTitle } from "@/lib/cms/parseEditorialTitle";
 
 export interface FaqSectionProps {
   /** Surtitre / pastille au-dessus du titre (CMS, traduisible). */
@@ -31,6 +32,14 @@ export interface FaqSectionProps {
     question: string;
     answerMarkdown: string;
   }>;
+  support?: {
+    title?: string;
+    description?: string;
+    ctaLabel?: string;
+    ctaHref?: string;
+    secondaryLinkLabel?: string;
+    secondaryLinkHref?: string;
+  };
   ui?: {
     expandAllLabel?: string;
     collapseAllLabel?: string;
@@ -52,6 +61,7 @@ export function FaqSection({
   description,
   subtitle,
   items = [],
+  support,
   ui,
 }: FaqSectionProps) {
   const mapped = items.map((item) => ({
@@ -59,19 +69,18 @@ export function FaqSection({
     answer: mdToPlain(item.answerMarkdown || ""),
   }));
 
-  // Compat douce : on lit `title` en priorité, fallback `subtitle` (legacy).
-  // Si les deux sont vides, on ne rend pas de titre (cf. règle « pas de
-  // fallback hardcodé côté site »).
-  const headline = (title?.trim() || subtitle?.trim() || undefined);
+  const headlineRaw = title?.trim() || subtitle?.trim() || undefined;
+  const headline = headlineRaw ? parseEditorialTitle(headlineRaw) : undefined;
 
   return (
-    <div className="w-full bg-white">
-      <Container className="py-8 md:py-12">
+    <div className="w-full bg-v-bg">
+      <Container className="py-20 lg:py-24">
         <FAQ
           items={mapped}
           headline={headline}
           eyebrow={eyebrow}
           description={description}
+          support={support}
           expandAllLabel={ui?.expandAllLabel}
           collapseAllLabel={ui?.collapseAllLabel}
         />

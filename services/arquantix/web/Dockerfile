@@ -15,12 +15,13 @@ RUN npm config set fetch-retries 7 \
        echo "[deps] npm ci a échoué (tentative $i/3), nouvel essai dans 8s…" >&2; \
        sleep 8; \
      done; \
-     echo "[deps] npm ci impossible après 3 essais" >&2; \
-     exit 1
+     echo "[deps] npm ci impossible — repli npm install" >&2; \
+     npm install
 
 # --- build ---
 FROM node:20-alpine AS builder
 WORKDIR /app
+ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Ensure public directory exists for Next.js build
@@ -32,6 +33,10 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+ARG NEXT_PUBLIC_SITE_URL=
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_PRIVY_APP_ID=
+ENV NEXT_PUBLIC_PRIVY_APP_ID=$NEXT_PUBLIC_PRIVY_APP_ID
 ARG NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=
 ENV NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=$NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO
 # Collecte des données de route au build : les handlers importent le client OpenAI

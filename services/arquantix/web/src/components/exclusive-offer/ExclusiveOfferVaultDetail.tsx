@@ -56,9 +56,9 @@ export function ExclusiveOfferVaultDetail({ payload }: Props) {
       />
 
       {/* Une seule bande blanche pleine largeur (évite gris sur les côtés entre blocs) */}
-      <div className="w-full min-w-0 bg-white pb-16">
+      <div className="w-full min-w-0 bg-v-bg pb-16">
         <Container className="pt-6 pb-8 md:pt-8">
-          <div className="flex flex-col gap-10">
+          <div className="flex flex-col gap-10 md:gap-12">
             {contentModules.slice(0, visibleCount).map((mod) => (
               <article key={mod.id} className="transition-opacity duration-300">
                 <VaultModuleWeb mod={mod} />
@@ -67,7 +67,7 @@ export function ExclusiveOfferVaultDetail({ payload }: Props) {
           </div>
 
           {contentModules.length === 0 ? (
-            <p className="py-8 text-center text-neutral-500 text-sm">
+            <p className="py-8 text-center font-ui text-[14px] text-v-fg-muted">
               {vaultCommonCta(loc, 'vault_no_content')}
             </p>
           ) : null}

@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Save, Trash2, ArrowUp, ArrowDown, LayoutTemplate } from 'lucide-react'
+import { Plus, Save, Trash2, ArrowUp, ArrowDown, LayoutTemplate, Globe2, UploadCloud } from 'lucide-react'
 
 import { toastError, toastSuccess } from '@/lib/admin/toast'
 import { isValidSlug, slugify } from '@/lib/utils/slugify'
+import { useAdminEditingLocale } from '@/components/admin/AdminEditingLocaleContext'
+import type { Locale } from '@/config/locales'
 
 type TemplateKey =
   | 'PageSimpleNavBarTopTitlePageContent'
@@ -58,7 +60,21 @@ interface LandingPageRow {
   configSummary: {
     templateKey: string | null
     modulesCount: number
+    contentLocale?: string | null
+    localeCoverage?: string[]
   }
+}
+
+interface LandingPageMeta {
+  defaultLocale: string
+  supportedLocales: string[]
+  requestedLocale: string
+  contentLocale: string | null
+  contentStatus: string | null
+  localeCoverage: string[]
+  /// `true` quand la locale d'édition n'a aucun contenu (DRAFT/PUBLISHED) :
+  /// l'éditeur affiche du contenu de fallback ; le prochain Save crée la variante.
+  isFallback: boolean
 }
 
 interface LandingPageDetails {
@@ -70,6 +86,7 @@ interface LandingPageDetails {
     urlPath: string
   }
   config: LandingConfig
+  meta: LandingPageMeta | null
 }
 
 interface ModuleCatalogItem {
@@ -128,6 +145,7 @@ const MODULE_CATALOG: ModuleCatalogItem[] = [
     defaultContent: {
       title: 'FAQ',
       footerLinkLabel: 'Voir les FAQ du projet',
+      footerLinkUrl: '',
       footerCollectionSlug: 'getting-started',
       footerCategorySlug: 'investing-basics',
       footerFilterLabel: '',
@@ -291,8 +309,11 @@ const withConfigDefaults = (config: Partial<LandingConfig> | null | undefined): 
 
 export default function AdminFlutterLandingPagesBuilderPage() {
   const router = useRouter()
+  const { locale: editingLocale, setLocale: setEditingLocale, editingLocales } =
+    useAdminEditingLocale()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [pages, setPages] = useState<LandingPageRow[]>([])
@@ -330,10 +351,33 @@ export default function AdminFlutterLandingPagesBuilderPage() {
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
-  const refreshPages = async (mounted = true) => {
-    const res = await fetch('/api/admin/landing-pages', { credentials: 'include' })
+  /// Recharge la page courante quand la locale d'édition change (sans relancer
+  /// l'auth ni écraser la sélection slug en cours).
+  useEffect(() => {
+    let mounted = true
+    if (!selectedSlug) return
+    ;(async () => {
+      try {
+        await loadDetails(selectedSlug, mounted, editingLocale)
+      } catch {
+        toastError('Impossible de recharger la page pour cette langue.')
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingLocale])
+
+  const refreshPages = async (mounted = true, localeOverride?: string) => {
+    const loc = (localeOverride ?? editingLocale) as string
+    const res = await fetch(
+      `/api/admin/landing-pages?locale=${encodeURIComponent(loc)}`,
+      { credentials: 'include' },
+    )
     if (!res.ok) {
       throw new Error('Failed to fetch landing pages')
     }
@@ -343,17 +387,21 @@ export default function AdminFlutterLandingPagesBuilderPage() {
     setPages(rows)
     const nextSlug = selectedSlug ?? rows[0]?.slug ?? null
     if (nextSlug) {
-      await loadDetails(nextSlug, mounted)
+      await loadDetails(nextSlug, mounted, loc)
     } else {
       setDetails(null)
       setSelectedSlug(null)
     }
   }
 
-  const loadDetails = async (slug: string, mounted = true) => {
+  const loadDetails = async (slug: string, mounted = true, localeOverride?: string) => {
     const normalizedSlug = slug?.trim().replace(/\/+$/, '') || ''
     if (!normalizedSlug) return
-    const res = await fetch(`/api/admin/landing-pages/${normalizedSlug}`, { credentials: 'include' })
+    const loc = (localeOverride ?? editingLocale) as string
+    const res = await fetch(
+      `/api/admin/landing-pages/${normalizedSlug}?locale=${encodeURIComponent(loc)}`,
+      { credentials: 'include' },
+    )
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       const message = body?.error || body?.detail || `Erreur ${res.status}`
@@ -370,6 +418,7 @@ export default function AdminFlutterLandingPagesBuilderPage() {
     setDetails({
       ...payload,
       config: withConfigDefaults(payload.config),
+      meta: payload.meta ?? null,
     })
   }
 
@@ -517,33 +566,62 @@ export default function AdminFlutterLandingPagesBuilderPage() {
     }))
   }
 
+  const writeForLocale = async (
+    scope: 'draft' | 'published',
+  ): Promise<boolean> => {
+    if (!details) return false
+    const targetLocale = (details.meta?.requestedLocale ?? editingLocale) as string
+    const url =
+      `/api/admin/landing-pages/${details.page.slug}` +
+      `?locale=${encodeURIComponent(targetLocale)}` +
+      `&status=${scope}`
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        title: details.page.title ?? '',
+        description: details.page.description ?? '',
+        config: details.config,
+      }),
+    })
+    const payload = await res.json()
+    if (!res.ok) {
+      const issues = Array.isArray(payload.issues)
+        ? payload.issues.map((i: { message?: string }) => i?.message).filter(Boolean).join(', ')
+        : ''
+      throw new Error(
+        issues || payload.error || (scope === 'published' ? 'Publication impossible' : 'Sauvegarde impossible'),
+      )
+    }
+    return true
+  }
+
   const handleSave = async () => {
     if (!details) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/admin/landing-pages/${details.page.slug}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          title: details.page.title ?? '',
-          description: details.page.description ?? '',
-          config: details.config,
-        }),
-      })
-      const payload = await res.json()
-      if (!res.ok) {
-        const issues = Array.isArray(payload.issues)
-          ? payload.issues.map((i: any) => i?.message).filter(Boolean).join(', ')
-          : ''
-        throw new Error(issues || payload.error || 'Sauvegarde impossible')
-      }
-      toastSuccess('Landing page enregistrée.')
+      await writeForLocale('draft')
+      toastSuccess('Brouillon enregistré.')
       await refreshPages()
-    } catch (e: any) {
-      toastError(e?.message || 'Sauvegarde impossible')
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : 'Sauvegarde impossible')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handlePublish = async () => {
+    if (!details) return
+    setPublishing(true)
+    try {
+      await writeForLocale('published')
+      toastSuccess('Page publiée.')
+      await refreshPages()
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : 'Publication impossible')
+    } finally {
+      setPublishing(false)
     }
   }
 
@@ -652,14 +730,50 @@ export default function AdminFlutterLandingPagesBuilderPage() {
             <p className="text-gray-500">Sélectionne une page pour l’éditer.</p>
           ) : (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">
                     {details.page.title || details.page.slug}
                   </h2>
                   <p className="text-sm text-gray-500 font-mono">{details.page.urlPath}</p>
+                  {details.meta ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-gray-200 bg-gray-50 text-gray-700">
+                        <Globe2 className="w-3 h-3" />
+                        Édition&nbsp;: <code className="font-mono">{editingLocale}</code>
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-gray-200 bg-gray-50 text-gray-700">
+                        Défaut&nbsp;: <code className="font-mono">{details.meta.defaultLocale}</code>
+                      </span>
+                      {details.meta.contentLocale && details.meta.contentLocale !== editingLocale ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-700">
+                          Contenu servi en&nbsp;: <code className="font-mono">{details.meta.contentLocale}</code>
+                          {details.meta.isFallback ? ' (fallback)' : ''}
+                        </span>
+                      ) : null}
+                      {details.meta.localeCoverage.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-gray-200 bg-gray-50 text-gray-600">
+                          Variantes&nbsp;: {details.meta.localeCoverage.join(', ')}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {editingLocales.length > 1 ? (
+                    <select
+                      value={editingLocale}
+                      onChange={(e) => setEditingLocale(e.target.value as Locale)}
+                      className="px-3 py-2 border border-gray-200 rounded-md text-sm"
+                      aria-label="Langue d'édition"
+                    >
+                      {editingLocales.map((loc) => (
+                        <option key={loc} value={loc}>
+                          {loc}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
                   <button
                     type="button"
                     onClick={handleDeletePage}
@@ -672,11 +786,21 @@ export default function AdminFlutterLandingPagesBuilderPage() {
                   <button
                     type="button"
                     onClick={handleSave}
-                    disabled={saving}
+                    disabled={saving || publishing}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    {saving ? 'Sauvegarde…' : 'Enregistrer'}
+                    {saving ? 'Sauvegarde…' : 'Enregistrer brouillon'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={saving || publishing}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                    title="Aligne le brouillon et la version publiée pour la langue en cours."
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    {publishing ? 'Publication…' : 'Publier'}
                   </button>
                 </div>
               </div>

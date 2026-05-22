@@ -5,10 +5,11 @@ import { z } from 'zod'
 import { getSessionFromCookie } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { calculateUrlPath, isValidSlug } from '@/lib/utils/slugify'
+import { getSiteI18nSettingsUncached } from '@/lib/i18n/siteI18nSettings'
+import { resolveVaultSectionContent } from '@/lib/cms/resolveVaultSectionContent'
 
 const LANDING_TEMPLATE_DB = 'landing_builder'
 const LANDING_SECTION_KEY = 'landing_builder_v1'
-const LANDING_DEFAULT_LOCALE = 'fr'
 
 const navbarActionSchema = z.object({
   icon: z.enum(['none', 'favorite', 'share', 'notifications']).default('none'),
@@ -97,12 +98,16 @@ function buildDefaultConfig() {
   })
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getSessionFromCookie()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const i18n = await getSiteI18nSettingsUncached()
+    const requestedLocale =
+      (request.nextUrl.searchParams.get('locale') || '').trim() || i18n.defaultLocale
 
     const pages = await prisma.page.findMany({
       where: { template: LANDING_TEMPLATE_DB },
@@ -110,13 +115,7 @@ export async function GET() {
         sections: {
           where: { key: LANDING_SECTION_KEY },
           include: {
-            contents: {
-              where: {
-                locale: LANDING_DEFAULT_LOCALE,
-                status: ContentStatus.DRAFT,
-              },
-              take: 1,
-            },
+            contents: true,
           },
         },
       },
@@ -124,9 +123,18 @@ export async function GET() {
     })
 
     const out = pages.map((page) => {
-      const draftData = page.sections[0]?.contents[0]?.data ?? null
-      const parsed = draftData ? landingConfigSchema.safeParse(draftData) : null
+      const contents = page.sections[0]?.contents ?? []
+      const picked = resolveVaultSectionContent(contents, {
+        requestedLocale,
+        defaultLocale: i18n.defaultLocale,
+        mode: 'either_draft_first',
+      })
+      const data = picked?.data ?? null
+      const parsed = data ? landingConfigSchema.safeParse(data) : null
       const config = parsed?.success ? parsed.data : null
+      const localeCoverage = Array.from(
+        new Set(contents.map((c) => c.locale)),
+      )
       return {
         id: page.id,
         slug: page.slug,
@@ -137,11 +145,20 @@ export async function GET() {
         configSummary: {
           templateKey: config?.templateKey ?? null,
           modulesCount: Array.isArray(config?.modules) ? config.modules.length : 0,
+          contentLocale: picked?.locale ?? null,
+          localeCoverage,
         },
       }
     })
 
-    return NextResponse.json({ pages: out })
+    return NextResponse.json({
+      pages: out,
+      meta: {
+        defaultLocale: i18n.defaultLocale,
+        supportedLocales: i18n.supportedLocales,
+        requestedLocale,
+      },
+    })
   } catch (error) {
     console.error('Error listing landing pages:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -160,6 +177,7 @@ export async function POST(request: NextRequest) {
     const slug = parsed.slug
     const urlPath = calculateUrlPath(slug)
     const config = parsed.config ?? buildDefaultConfig()
+    const i18n = await getSiteI18nSettingsUncached()
 
     const existing = await prisma.page.findFirst({
       where: {
@@ -189,13 +207,13 @@ export async function POST(request: NextRequest) {
             contents: {
               create: [
                 {
-                  locale: LANDING_DEFAULT_LOCALE,
+                  locale: i18n.defaultLocale,
                   status: ContentStatus.DRAFT,
                   data: config,
                   updatedByUserId: session.userId,
                 },
                 {
-                  locale: LANDING_DEFAULT_LOCALE,
+                  locale: i18n.defaultLocale,
                   status: ContentStatus.PUBLISHED,
                   data: config,
                   updatedByUserId: session.userId,

@@ -17,7 +17,7 @@
  *   - `links[i].category` : clé de groupement interne, pas affichée telle
  *     quelle (sert juste à fabriquer les colonnes via `buildNavColumns`).
  *   - URLs (`href`, `socialLinks[].href`) : pas du contenu textuel.
- *   - `backgroundColor`, `logoMediaId`, `newsletterVisible` : pas du texte.
+ *   - `backgroundColor`, `logoMediaId`, `logoMediaInvert`, `companyAddress`, `secondaryNote`, `newsletterVisible` : pas du texte.
  *
  * Le module ne persiste rien : il fournit l'extraction + la projection des
  * corrections dans un nouveau bloc footer. La route API se charge ensuite

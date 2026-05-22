@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { SectionTitle, figmaDsButtonLabelClassName } from "@/components/design-system/extracted";
 import { cn } from "@/lib/utils";
 import {
   getActiveLocaleFromPathname,
@@ -10,15 +9,19 @@ import {
   localizePublicInternalHref,
   shouldSkipLocalizePublicHref,
 } from "@/lib/i18n/publicLocalizedRouting";
+import {
+  VSectionHeader,
+} from "@/components/design-system/vancelian";
+import { Button } from "@/components/ui/button";
 
 interface HowItWorksStep {
   number: string;
   title: string;
   description: string;
-  /** URL résolue depuis `imageMediaId` (CMS) — ne pas stocker en JSON éditable. */
+  /** URL résolue depuis `imageMediaId` (CMS). */
   imageMediaUrl?: string;
   imageMediaAlt?: string | null;
-  /** Affichés ensemble : bouton pill sous la description si les deux sont non vides. */
+  /** Bouton secondaire sous la description si les deux sont non vides. */
   stepButtonLabel?: string;
   stepButtonHref?: string;
 }
@@ -28,249 +31,175 @@ interface HowItWorksProps {
   title?: string;
   subtitle?: string;
   steps?: HowItWorksStep[];
-  /** Si true : masque les numéros d’étape (01, 02…) sur les cartes. */
+  /** Masque les numéros 01, 02… sur les cartes. */
   hideStepNumbering?: boolean;
-  /** Fond sombre (maquette) : CTA en contour clair pour rester lisible sur noir. */
+  /** Fond sombre (carte) — texte clair. */
   surface?: "light" | "dark";
-  primaryCta?: {
-    text: string;
-    onClick?: () => void;
-    href?: string;
-  };
-  secondaryCta?: {
-    text: string;
-    onClick?: () => void;
-    href?: string;
-  };
+  primaryCta?: { text: string; onClick?: () => void; href?: string };
+  secondaryCta?: { text: string; onClick?: () => void; href?: string };
 }
 
-function Label({ text }: { text: string }) {
-  return (
-    <div className="content-stretch flex items-center justify-center px-[4px] py-[2px] relative rounded-[2px] shrink-0" data-name="Label">
-      <div aria-hidden="true" className="absolute border-[#62656e] border-l border-r border-solid inset-0 pointer-events-none rounded-[2px]" />
-      <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[#62656e] text-[14px] uppercase whitespace-nowrap">
-        {text}
-      </p>
-    </div>
-  );
-}
+/**
+ * « How it works » — Vancelian Design System.
+ *
+ * Pattern : header centré (eyebrow + titre éditorial + chapô) + grille de
+ * cartes étapes inspirée de `product-card` du pack handoff. Chaque étape
+ * porte un numéro Newsreader italic 24px (couleur muted), une image optionnelle,
+ * un titre Inter SemiBold 22px et une description body 14px muted.
+ *
+ * Grille : pile mobile, 3 colonnes desktop (`md:flex-row md:items-stretch`).
+ * Cartes : `rounded-v-card` + bordure 1px `--v-fg-20` + fond `--v-card`.
+ */
+function StepCard({
+  step,
+  hideStepNumbering,
+  surface,
+}: {
+  step: HowItWorksStep;
+  hideStepNumbering: boolean;
+  surface: "light" | "dark";
+}) {
+  const imageUrl = typeof step.imageMediaUrl === "string" ? step.imageMediaUrl.trim() : "";
+  const showImage = imageUrl.length > 0;
+  const btnLabel = typeof step.stepButtonLabel === "string" ? step.stepButtonLabel.trim() : "";
+  const btnHref = typeof step.stepButtonHref === "string" ? step.stepButtonHref.trim() : "";
+  const showStepCta = btnLabel.length > 0 && btnHref.length > 0;
 
-function Title({ label, title }: { label?: string; title?: string }) {
-  const labelText = label?.trim();
-  const showTitle = Boolean(title?.trim());
-  if (!labelText && !showTitle) return null;
-  return (
-    <div className="content-stretch flex flex-col gap-[10px] items-center relative shrink-0 w-full" data-name="Title">
-      {labelText ? <Label text={labelText} /> : null}
-      {showTitle ? (
-        <SectionTitle as="h1" align="center" color="#000000" size="module" className="whitespace-pre-wrap">
-          {title}
-        </SectionTitle>
-      ) : null}
-    </div>
-  );
-}
+  const isDark = surface === "dark";
+  const numberColor = isDark ? "text-white/65" : "text-v-fg-muted";
+  const titleColor = isDark ? "text-white" : "text-v-fg";
+  const descColor = isDark ? "text-white/75" : "text-v-fg-muted";
+  const bgClass = isDark
+    ? "bg-white/[0.04] border-white/[0.10]"
+    : "bg-v-card border-v-fg-20";
 
-function Text({ label, title, subtitle }: { label?: string; title?: string; subtitle?: string }) {
-  const showSubtitle = Boolean(subtitle?.trim());
   return (
-    <div className="content-stretch flex flex-col gap-[24px] items-center relative shrink-0 w-full" data-name="Text">
-      <Title label={label} title={title} />
-      {showSubtitle ? (
-        <p className="w-full text-center font-['Avenir:Roman',sans-serif] text-[18px] leading-[1.6] not-italic text-black">
-          {subtitle}
+    <article
+      className={cn(
+        "group flex h-full flex-1 flex-col rounded-v-card border p-8 shadow-v-subtle",
+        "transition-shadow duration-v-base ease-v-out hover:shadow-v-medium",
+        bgClass,
+      )}
+    >
+      {!hideStepNumbering ? (
+        <p
+          className={cn(
+            "m-0 font-display font-light italic text-[24px] leading-[1.1] tracking-[-0.01em]",
+            numberColor,
+          )}
+        >
+          {step.number}
         </p>
       ) : null}
-    </div>
-  );
-}
 
-function CtaPrimary({
-  text,
-  onClick,
-  href,
-  variant = "solid",
-}: {
-  text: string;
-  onClick?: () => void;
-  href?: string;
-  variant?: "solid" | "onDark";
-}) {
-  const Component = href ? "a" : "button";
-  const ext = Boolean(href && isPublicHrefExternalNavigation(href));
-  const props = href
-    ? {
-        href,
-        ...(ext ? { target: "_blank" as const, rel: "noopener noreferrer" } : {}),
-      }
-    : { onClick };
-  /** Inline-flex + padding Figma : largeur au contenu, 24px horizontal / 11px vertical, pill. */
-  const solid =
-    "inline-flex max-w-full cursor-pointer items-center justify-center rounded-full bg-black px-[24px] py-[11px] text-center no-underline shrink-0";
-  const onDark =
-    "inline-flex max-w-full cursor-pointer items-center justify-center rounded-full border border-white bg-transparent px-[24px] py-[11px] text-center no-underline shrink-0";
+      {showImage ? (
+        <div className="mt-6 flex h-[120px] w-full items-center justify-start">
+          {/* eslint-disable-next-line @next/next/no-img-element -- image étape CMS, sizing contain */}
+          <img
+            src={imageUrl}
+            alt={step.imageMediaAlt?.trim() || ""}
+            className="max-h-full max-w-full h-auto w-auto object-contain object-left"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
+      ) : null}
 
-  return (
-    <Component className={variant === "onDark" ? onDark : solid} data-name="CTA Primary" {...props}>
-      <span className={cn(figmaDsButtonLabelClassName, "text-white whitespace-nowrap")}>
-        {text}
-      </span>
-    </Component>
-  );
-}
+      <h3
+        className={cn(
+          "m-0 font-ui font-semibold text-[22px] leading-[1.3] tracking-[0] whitespace-pre-wrap",
+          !hideStepNumbering || showImage ? "mt-6" : "mt-0",
+          titleColor,
+        )}
+      >
+        {step.title}
+      </h3>
 
-function CtaSecondary({ text, onClick, href }: { text: string; onClick?: () => void; href?: string }) {
-  const Component = href ? 'a' : 'button';
-  const ext = Boolean(href && isPublicHrefExternalNavigation(href));
-  const props = href
-    ? {
-        href,
-        ...(ext ? { target: '_blank' as const, rel: 'noopener noreferrer' } : {}),
-      }
-    : { onClick };
+      <p className={cn("m-0 mt-3 font-ui font-normal text-[14px] leading-[1.55]", descColor)}>
+        {step.description}
+      </p>
 
-  return (
-    <Component
-      className="relative inline-flex max-w-full shrink-0 cursor-pointer items-center justify-center rounded-[20px] border border-black bg-transparent px-[20px] py-[10px] text-center no-underline"
-      data-name="Button"
-      {...props}
-    >
-      <span className={cn(figmaDsButtonLabelClassName, "relative z-10 text-black whitespace-nowrap")}>{text}</span>
-    </Component>
+      {showStepCta ? (
+        <div className="mt-auto pt-6">
+          <Button asChild variant={isDark ? "darkPrimary" : "default"} size="sm">
+            <a
+              href={btnHref}
+              {...(isPublicHrefExternalNavigation(btnHref)
+                ? { target: "_blank" as const, rel: "noopener noreferrer" as const }
+                : {})}
+            >
+              {btnLabel}
+            </a>
+          </Button>
+        </div>
+      ) : null}
+    </article>
   );
 }
 
 function CallToAction({
   primaryCta,
   secondaryCta,
-  primaryVariant = "solid",
+  surface,
 }: {
   primaryCta?: HowItWorksProps["primaryCta"];
   secondaryCta?: HowItWorksProps["secondaryCta"];
-  primaryVariant?: "solid" | "onDark";
+  surface: "light" | "dark";
 }) {
   if (!primaryCta && !secondaryCta) return null;
-
+  const isDark = surface === "dark";
   return (
-    <div className="content-stretch flex gap-[8px] items-center relative shrink-0" data-name="Call to action">
-      {primaryCta && (
-        <CtaPrimary
-          text={primaryCta.text}
-          onClick={primaryCta.onClick}
-          href={primaryCta.href}
-          variant={primaryVariant}
-        />
-      )}
-      {secondaryCta && (
-        <CtaSecondary
-          text={secondaryCta.text}
-          onClick={secondaryCta.onClick}
-          href={secondaryCta.href}
-        />
-      )}
-    </div>
-  );
-}
-
-function ContentHeader({
-  label,
-  title,
-  subtitle,
-}: {
-  label?: string;
-  title?: string;
-  subtitle?: string;
-}) {
-  const hasAny = Boolean(label?.trim() || title?.trim() || subtitle?.trim());
-  if (!hasAny) return null;
-  return (
-    <div className="content-stretch flex w-full flex-col items-center gap-[32px]" data-name="Content">
-      <Text label={label} title={title} subtitle={subtitle} />
-    </div>
-  );
-}
-
-function StepCard({
-  step,
-  hideStepNumbering,
-}: {
-  step: HowItWorksStep;
-  hideStepNumbering: boolean;
-}) {
-  const imageUrl = typeof step.imageMediaUrl === 'string' ? step.imageMediaUrl.trim() : ''
-  const showImage = imageUrl.length > 0
-  const btnLabel = typeof step.stepButtonLabel === 'string' ? step.stepButtonLabel.trim() : ''
-  const btnHref = typeof step.stepButtonHref === 'string' ? step.stepButtonHref.trim() : ''
-  const showStepCta = btnLabel.length > 0 && btnHref.length > 0
-
-  return (
-    <div className="relative flex h-full min-h-0 min-w-px flex-[1_0_0] flex-col rounded-[10px] bg-[#f3f3f3]">
-      <div className="relative flex w-full flex-1 flex-col items-start gap-[16px] px-[40px] pb-[50px] pt-[26px]">
-        {!hideStepNumbering ? (
-          <div className="w-full shrink-0 font-['Avenir:Light',sans-serif] text-[24px] not-italic leading-[0] tracking-[-0.24px] text-[#62656e]">
-            <p className="leading-[1.1]">{step.number}</p>
-          </div>
-        ) : null}
-        {showImage ? (
-          <div className="flex h-[120px] w-full min-w-0 shrink-0 items-center justify-start">
-            {/* eslint-disable-next-line @next/next/no-img-element -- URL média CMS (R2 / absolue) ; contain : hauteur max 120px, largeur adaptée, sans rognage */}
-            <img
-              src={imageUrl}
-              alt={step.imageMediaAlt?.trim() || ''}
-              className="max-h-full max-w-full h-auto w-auto object-contain object-left"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        ) : null}
-        <SectionTitle
-          size="title"
-          align="left"
-          color="#000000"
-          as="h3"
-          className="w-full shrink-0 whitespace-pre-wrap"
-        >
-          {step.title}
-        </SectionTitle>
-        <div className="relative w-full shrink-0">
-          <p className="font-['Avenir:Book',sans-serif] text-[14px] leading-[1.6] not-italic text-[#62656e]">
-            {step.description}
-          </p>
-        </div>
-        {showStepCta ? (
-          <div className="mt-auto shrink-0 self-start pt-2">
-            <CtaPrimary text={btnLabel} href={btnHref} variant="solid" />
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function Steps({
-  steps,
-  hideStepNumbering = false,
-}: {
-  steps: HowItWorksStep[];
-  hideStepNumbering?: boolean;
-}) {
-  return (
-    <div className="content-stretch flex w-full flex-col gap-[8px] md:flex-row md:items-stretch">
-      {steps.map((step, index) => (
-        <div key={index} className="flex min-w-0 flex-[1_0_0] flex-row items-stretch self-stretch">
-          <StepCard step={step} hideStepNumbering={hideStepNumbering} />
-        </div>
-      ))}
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      {primaryCta ? (
+        primaryCta.href ? (
+          <Button asChild variant={isDark ? "darkPrimary" : "default"} size="default">
+            <a
+              href={primaryCta.href}
+              {...(isPublicHrefExternalNavigation(primaryCta.href)
+                ? { target: "_blank" as const, rel: "noopener noreferrer" as const }
+                : {})}
+            >
+              {primaryCta.text}
+            </a>
+          </Button>
+        ) : (
+          <Button
+            variant={isDark ? "darkPrimary" : "default"}
+            size="default"
+            onClick={primaryCta.onClick}
+          >
+            {primaryCta.text}
+          </Button>
+        )
+      ) : null}
+      {secondaryCta ? (
+        secondaryCta.href ? (
+          <Button asChild variant={isDark ? "darkSecondary" : "outline"} size="default">
+            <a
+              href={secondaryCta.href}
+              {...(isPublicHrefExternalNavigation(secondaryCta.href)
+                ? { target: "_blank" as const, rel: "noopener noreferrer" as const }
+                : {})}
+            >
+              {secondaryCta.text}
+            </a>
+          </Button>
+        ) : (
+          <Button
+            variant={isDark ? "darkSecondary" : "outline"}
+            size="default"
+            onClick={secondaryCta.onClick}
+          >
+            {secondaryCta.text}
+          </Button>
+        )
+      ) : null}
     </div>
   );
 }
 
 export default function HowItWorks({
-  // ⚠️ Pas de fallback hardcodé sur le surtitre :
-  // si le module CMS `how_it_works` ne fournit pas de `label`,
-  // on n'affiche AUCUN surtitre côté site (évite un texte EN
-  // non traduit comme « How it works » qui n'a jamais transité
-  // par le pipeline i18n CMS).
+  // Pas de fallback hardcodé sur le surtitre (doctrine i18n CMS).
   label,
   title = "Start Your Investment \nJourney Today.",
   subtitle = "Fast, secure, and effortless investment opportunities for businesses and individuals.",
@@ -278,18 +207,18 @@ export default function HowItWorks({
     {
       number: "01",
       title: "Access \nthe platform",
-      description: "Create your investor account and complete compliance checks in minutes."
+      description: "Create your investor account and complete compliance checks in minutes.",
     },
     {
       number: "02",
       title: "Select \nan investment",
-      description: "Browse active and delivered projects with full data: location, structure, expected performance."
+      description: "Browse active and delivered projects with full data: location, structure, expected performance.",
     },
     {
       number: "03",
       title: "Invest in EUR\nor Crypto",
-      description: "Invest fractionally with full visibility on asset structure, returns and risk factors."
-    }
+      description: "Invest fractionally with full visibility on asset structure, returns and risk factors.",
+    },
   ],
   surface = "light",
   hideStepNumbering = false,
@@ -318,30 +247,41 @@ export default function HowItWorks({
   );
 
   const primaryResolved = primaryCta
-    ? {
-        ...primaryCta,
-        href: primaryCta.href ? resolveHref(primaryCta.href) : undefined,
-      }
+    ? { ...primaryCta, href: primaryCta.href ? resolveHref(primaryCta.href) : undefined }
     : undefined;
   const secondaryResolved = secondaryCta
-    ? {
-        ...secondaryCta,
-        href: secondaryCta.href ? resolveHref(secondaryCta.href) : undefined,
-      }
+    ? { ...secondaryCta, href: secondaryCta.href ? resolveHref(secondaryCta.href) : undefined }
     : undefined;
 
-  const primaryVariant = surface === "dark" ? "onDark" : "solid";
   return (
     <div
-      className="relative flex w-full flex-col items-center justify-center gap-8 px-0 py-10 md:gap-10 md:py-14"
+      className="relative flex w-full flex-col items-center justify-center gap-12 py-20 lg:py-24"
       data-name="How it works"
     >
-      <ContentHeader label={label} title={title} subtitle={subtitle} />
-      <Steps steps={resolvedSteps} hideStepNumbering={hideStepNumbering} />
+      <VSectionHeader
+        eyebrow={label}
+        title={title}
+        description={subtitle}
+        titleAs="h2"
+        titleSize="page"
+        tone={surface === "dark" ? "inverse" : "default"}
+      />
+
+      <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-3 md:items-stretch">
+        {resolvedSteps.map((step, index) => (
+          <StepCard
+            key={index}
+            step={step}
+            hideStepNumbering={hideStepNumbering}
+            surface={surface}
+          />
+        ))}
+      </div>
+
       <CallToAction
         primaryCta={primaryResolved}
         secondaryCta={secondaryResolved}
-        primaryVariant={primaryVariant}
+        surface={surface}
       />
     </div>
   );

@@ -5,6 +5,7 @@ export interface SectionCompanyMapProps {
   title?: string
   description?: string
   backgroundMediaUrl?: string
+  backgroundVideoUrl?: string
   backgroundMediaAlt?: string | null
   bodyContent?: string
 }
@@ -14,6 +15,7 @@ export function SectionCompanyMap({
   title,
   description,
   backgroundMediaUrl,
+  backgroundVideoUrl,
   backgroundMediaAlt,
   bodyContent,
 }: SectionCompanyMapProps) {
@@ -23,6 +25,7 @@ export function SectionCompanyMap({
       title={title}
       description={description}
       backgroundImageUrl={backgroundMediaUrl}
+      backgroundVideoUrl={backgroundVideoUrl}
       backgroundImageAlt={backgroundMediaAlt}
       bodyContent={bodyContent}
     />

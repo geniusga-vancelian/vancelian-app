@@ -53,7 +53,7 @@ const EmailInput = React.forwardRef<HTMLInputElement, EmailInputProps>(
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={cn(
-            "min-w-0 flex-1 border-none bg-transparent px-6 font-['Avenir:Book',sans-serif] text-[14px] leading-[1.6] text-[#62656e] outline-none placeholder:text-[#62656e]/70",
+            "min-w-0 flex-1 border-none bg-transparent px-6 font-ui font-normal text-[14px] leading-[1.6] text-[#62656e] outline-none placeholder:text-[#62656e]/70",
             className,
           )}
           {...props}

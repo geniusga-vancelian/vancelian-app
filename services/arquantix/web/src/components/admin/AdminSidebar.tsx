@@ -135,6 +135,7 @@ const navItems: NavItem[] = [
   { label: 'Academy', href: '/admin/academy', icon: GraduationCap },
   { label: 'Guide local', href: '/guide', icon: NotebookTabs },
   { label: 'Intégrité i18n (Lot 1)', href: '/admin/i18n/integrity', icon: Globe },
+  { label: 'UI strings (mobile)', href: '/admin/i18n/ui-strings', icon: Globe },
   { label: 'Settings', href: '/admin/settings/translation', icon: Settings },
 ]
 

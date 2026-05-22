@@ -1,14 +1,14 @@
 export const figmaDsTypography = {
   fontFamily: {
-    heavy: "font-['Avenir:Heavy',sans-serif]",
+    heavy: "font-ui font-semibold",
     /**
      * Citation (corps) : Avenir **Heavy** + **italique** (Bold 800 + Italic), pas de face « Heavy Oblique » nommée.
      */
-    heavyOblique: "font-['Avenir:Heavy',sans-serif] italic",
+    heavyOblique: "font-ui font-semibold italic",
     /** Figma — auteur de citation (blog article) : Avenir Medium Oblique. */
-    mediumOblique: "font-['Avenir:Medium Oblique',sans-serif]",
-    roman: "font-['Avenir:Roman',sans-serif]",
-    book: "font-['Avenir:Book',sans-serif]",
+    mediumOblique: "font-ui font-medium italic",
+    roman: "font-ui font-normal",
+    book: "font-ui font-normal",
   },
   fontSize: {
     xs: '14px',
@@ -172,13 +172,13 @@ export type FigmaDsTypographyToken = typeof figmaDsTypography
  * Chaîne figée pour le scanner Tailwind.
  */
 export const figmaDsButtonLabelClassName =
-  "font-['Avenir:Heavy',sans-serif] text-[12px] font-extrabold leading-[1.1] tracking-[0.005em] uppercase" as const
+  "font-ui font-semibold text-[12px] font-extrabold leading-[1.1] tracking-[0.005em] uppercase" as const
 
 /**
  * Atome **Paragraph Large Bold** — à combiner avec une couleur texte (ex. `text-black` ou `style.color`).
  */
 export const figmaDsParagraphLargeBoldClassName =
-  "font-['Avenir:Heavy',sans-serif] text-[18px] font-extrabold leading-[1.6] tracking-[-0.01em]" as const
+  "font-ui font-semibold text-[18px] font-extrabold leading-[1.6] tracking-[-0.01em]" as const
 
 /**
  * Atome **Featured post sidebar title** :
@@ -186,28 +186,28 @@ export const figmaDsParagraphLargeBoldClassName =
  * (Utilisé pour les titres de la colonne droite du module blog featured.)
  */
 export const figmaDsFeaturedPostSidebarTitleClassName =
-  "font-['Avenir:Heavy',sans-serif] text-[18px] font-extrabold leading-[1.1] tracking-[-0.01em]" as const
+  "font-ui font-semibold text-[18px] font-extrabold leading-[1.1] tracking-[-0.01em]" as const
 
 /** Atome **Paragraph Large** — Roman 400, 18px, lh 160 %, tracking 0 %. */
 export const figmaDsParagraphLargeClassName =
-  "font-['Avenir:Roman',sans-serif] text-[18px] font-normal leading-[1.6] tracking-normal" as const
+  "font-ui font-normal text-[18px] font-normal leading-[1.6] tracking-normal" as const
 
 /** Atome **Links** — Avenir Heavy 800, 16px, lh 100 %, tracking 0 %. */
 export const figmaDsLinksClassName =
-  "font-['Avenir:Heavy',sans-serif] text-[16px] font-extrabold leading-none tracking-normal" as const
+  "font-ui font-semibold text-[16px] font-extrabold leading-none tracking-normal" as const
 
 /**
  * Atome **Paragraph** — à combiner avec une couleur texte (ex. `text-black`, `#62656e` pour secondaire).
  */
 export const figmaDsParagraphClassName =
-  "font-['Avenir:Book',sans-serif] text-[14px] font-[350] leading-[160%] tracking-[0em]" as const
+  "font-ui font-normal text-[14px] font-[350] leading-[160%] tracking-[0em]" as const
 
 /** Espacement vertical entre plusieurs blocs `Paragraph` (16px, aligné Figma paragraph spacing). */
 export const figmaDsParagraphStackGapClassName = 'space-y-4' as const
 
 /** Figma **(TAG)** — Heavy 14px, lh 100 %, tracking 0 %, uppercase (couleur via classe ou `style`). */
 export const figmaDsTagClassName =
-  "font-['Avenir:Heavy',sans-serif] text-[14px] font-extrabold leading-none tracking-normal uppercase" as const
+  "font-ui font-semibold text-[14px] font-extrabold leading-none tracking-normal uppercase" as const
 
 /**
  * Conteneur **pill catégorie** (hero article / tags) — Figma :
@@ -222,14 +222,14 @@ export const figmaDsCategoryPillContainerClassName =
  * Couleur : combiner avec `text-black` / `text-*` selon le fond.
  */
 export const figmaDsLabelClassName =
-  "font-['Avenir:Black',sans-serif] text-[10px] font-black leading-none tracking-normal uppercase" as const
+  "font-ui font-bold text-[10px] font-black leading-none tracking-normal uppercase" as const
 
 /**
  * **Emphasized SM** (legacy / modules timeline) : Avenir Heavy 800, 10px — distinct du **Label** Figma (Black 900).
  * Ex. pastille « EN COURS » : padding parent `px-1.5 py-1`.
  */
 export const figmaDsLabelEmphasizedSmClassName =
-  "font-['Avenir:Heavy',sans-serif] text-[10px] font-extrabold leading-[10px] tracking-normal text-black uppercase" as const
+  "font-ui font-semibold text-[10px] font-extrabold leading-[10px] tracking-normal text-black uppercase" as const
 
 /**
  * Atome **citation 24** — `figmaDsTypography.heavyOblique24` (nom historique) :
@@ -237,7 +237,7 @@ export const figmaDsLabelEmphasizedSmClassName =
  * (Couleur au choix du parent.)
  */
 export const figmaDsHeavyOblique24ClassName =
-  "font-['Avenir:Heavy',sans-serif] text-[24px] font-extrabold italic leading-[1.1] tracking-[-0.01em]" as const
+  "font-ui font-semibold text-[24px] font-extrabold italic leading-[1.1] tracking-[-0.01em]" as const
 
 /**
  * Citation (bloc blog / help) — corps : même atome que `figmaDsHeavyOblique24ClassName` + `text-black`.
@@ -248,7 +248,7 @@ export const figmaDsArticleQuoteTextClassName = `${figmaDsHeavyOblique24ClassNam
  * Auteur / source sous la citation — Figma : plus petit, gris clair, italique.
  */
 export const figmaDsArticleQuoteAuthorClassName =
-  "font-['Avenir:Book',sans-serif] text-[14px] italic leading-[1.5] text-[#8893a0]" as const
+  "font-ui font-normal text-[14px] italic leading-[1.5] text-[#8893a0]" as const
 
 /**
  * Conteneur du module citation : traits haut / bas uniquement, pas de fond ni bordure gauche,
@@ -261,4 +261,4 @@ export const figmaDsArticleQuoteContainerClassName =
  * Guillemet décoratif à gauche — dégradé corail / rose (Figma).
  */
 export const figmaDsArticleQuoteIconClassName =
-  "font-['Avenir:Heavy',sans-serif] shrink-0 select-none text-[2.75rem] leading-none not-italic md:text-[3rem] bg-gradient-to-t from-[#ea580c] via-[#f472b6] to-[#fce7f3] bg-clip-text text-transparent" as const
+  "font-ui font-semibold shrink-0 select-none text-[2.75rem] leading-none not-italic md:text-[3rem] bg-gradient-to-t from-[#ea580c] via-[#f472b6] to-[#fce7f3] bg-clip-text text-transparent" as const

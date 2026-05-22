@@ -5,10 +5,15 @@ import { usePathname } from 'next/navigation'
 import {
   SIMPLE_MARKDOWN_MODULE_TITLE_TYPO,
   VAULT_MODULE_DESCRIPTION_TYPO,
+  VAULT_MODULE_MEDIA_FRAME_CLASS,
 } from '@/components/design-system'
 import { getActiveLocaleFromPathname } from '@/lib/i18n/publicLocalizedRouting'
 import { vaultCommonCta } from '@/lib/i18n/vaultCommonCta'
-import { isGoogleMapsIframeEmbedUrl, normalizeGoogleMapsEmbedInput } from '@/lib/maps/resolveMapsShareLink'
+import {
+  isGoogleMapsIframeEmbedUrl,
+  normalizeGoogleMapsEmbedInput,
+  preferGoogleMapsPinnedEmbedIframeSrc,
+} from '@/lib/maps/resolveMapsShareLink'
 
 type Props = {
   content: Record<string, unknown>
@@ -27,6 +32,8 @@ export function VaultLocalisationModuleWeb({ content }: Props) {
   const embedNorm = normalizeGoogleMapsEmbedInput(
     typeof content.embedUrl === 'string' ? content.embedUrl : '',
   )
+  /** Pin rouge type Google : privilégie `q=lat,lng&output=embed` quand coords extrayables depuis `pb=` */
+  const iframeSrc = preferGoogleMapsPinnedEmbedIframeSrc(embedNorm)
 
   const showMap = isGoogleMapsIframeEmbedUrl(embedNorm)
   const hasDesc = description.length > 0
@@ -50,11 +57,11 @@ export function VaultLocalisationModuleWeb({ content }: Props) {
           {(hasDesc || (showTitle && !hasDesc)) ? <div className="h-8" aria-hidden /> : null}
           {/* ~80 % de la largeur utile (comme vidéo / image pleine largeur, −20 %) */}
           <div className="mx-auto w-4/5 min-w-0 max-w-full">
-            <div className="overflow-hidden rounded-2xl border border-neutral-200 shadow-sm">
+            <div className={VAULT_MODULE_MEDIA_FRAME_CLASS}>
               <iframe
                 title={vaultCommonCta(loc, 'map')}
-                src={embedNorm}
-                className="aspect-video w-full min-h-[220px] border-0 bg-neutral-100"
+                src={iframeSrc}
+                className="aspect-video w-full min-h-[220px] border-0 bg-v-fg-05"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
                 allowFullScreen
@@ -63,7 +70,7 @@ export function VaultLocalisationModuleWeb({ content }: Props) {
           </div>
         </>
       ) : embedNorm.length > 0 ? (
-        <p className="mt-6 text-center text-sm text-amber-800">
+        <p className="mt-6 text-center font-ui text-[14px] text-v-error">
           {vaultCommonCta(loc, 'map_embed_invalid')}
         </p>
       ) : null}

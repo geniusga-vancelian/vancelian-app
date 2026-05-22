@@ -200,6 +200,7 @@ export function buildVaultModulesFromProject(input: {
       content: {
         title: 'FAQ',
         footerLinkLabel: 'Centre d’aide',
+        footerLinkUrl: '',
         footerCollectionSlug: 'getting-started',
         footerCategorySlug: 'investing-basics',
         footerFilterLabel: '',

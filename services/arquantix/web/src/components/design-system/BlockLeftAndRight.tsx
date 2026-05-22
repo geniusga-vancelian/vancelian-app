@@ -66,11 +66,11 @@ export function TextBlock({ title, description, subdescription, children }: Text
               </SectionTitle>
             ))}
           </div>
-          <h1 className="block font-['Avenir:Roman',sans-serif] leading-[1.6] relative shrink-0 text-[18px] w-full">
+          <h1 className="block font-ui font-normal leading-[1.6] relative shrink-0 text-[18px] w-full">
             {description}
           </h1>
           {subdescription && (
-            <h1 className="block font-['Avenir:Book',sans-serif] leading-[1.6] relative shrink-0 text-[14px] w-full">
+            <h1 className="block font-ui font-normal leading-[1.6] relative shrink-0 text-[14px] w-full">
               {subdescription}
             </h1>
           )}
@@ -163,7 +163,7 @@ export function Checklist({ items }: ChecklistProps) {
               </g>
             </svg>
           </div>
-          <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[12px] text-black tracking-[-0.12px] whitespace-nowrap">
+          <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[12px] text-black tracking-[-0.12px] whitespace-nowrap">
             {item.text}
           </p>
         </div>
@@ -202,7 +202,7 @@ export function TextBlockWithChecklist({ title, description, items }: TextBlockW
                 </SectionTitle>
               ))}
             </div>
-            <h1 className="block font-['Avenir:Roman',sans-serif] leading-[1.6] relative shrink-0 text-[18px] w-full">
+            <h1 className="block font-ui font-normal leading-[1.6] relative shrink-0 text-[18px] w-full">
               {description}
             </h1>
           </div>

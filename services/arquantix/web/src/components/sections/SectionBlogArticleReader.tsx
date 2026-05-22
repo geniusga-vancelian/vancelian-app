@@ -199,11 +199,11 @@ export function SectionBlogArticleReader({
                       {authorPrefixLabel?.trim() || siteCommonCta(loc, 'article_by_author')}{' '}
                     </>
                   ) : null}
-                  <span className="font-['Avenir:Heavy',sans-serif] font-extrabold text-black">
+                  <span className="font-ui font-semibold font-extrabold text-black">
                     {article.authorName}
                   </span>
                   {article.authorRole ? (
-                    <span className="font-['Avenir:Roman',sans-serif] font-normal text-[#62656e]">
+                    <span className="font-ui font-normal font-normal text-[#62656e]">
                       {' '}
                       · {article.authorRole}
                     </span>

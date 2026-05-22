@@ -39,7 +39,7 @@ export type SiteTreeNavRightRailRow =
 /** Modules réutilisables sur tout le site (footer, etc.) — section « Modules communs » dans la structure. */
 export type SiteTreeGlobalCommonModuleRow = {
   id: string
-  kind: 'footer' | 'common_reusable'
+  kind: 'footer' | 'portal_auth' | 'portal_support' | 'common_reusable'
   label: string
   description: string
   /** Présent pour les modules optionnels (ex. `cta`). */

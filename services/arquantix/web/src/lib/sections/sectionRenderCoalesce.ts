@@ -24,6 +24,15 @@ export function heroResolvedBackgroundUrl(data: { backgroundMediaUrl?: unknown }
   return typeof data.backgroundMediaUrl === 'string' ? data.backgroundMediaUrl.trim() : ''
 }
 
+/** Détecte un média vidéo (mime CMS, nom de fichier ou extension URL). */
+export function isVideoMediaUrl(url: string, mime?: unknown, filename?: unknown): boolean {
+  if (typeof mime === 'string' && mime.startsWith('video/')) return true
+  if (typeof filename === 'string' && /\.(mp4|webm|mov|m4v)$/i.test(filename.trim())) {
+    return true
+  }
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url)
+}
+
 /** CTA marketing : `primary*` prioritaire si truthy (même `''` est falsy — `||`). */
 export function ctaPrimaryFromLegacy(data: {
   primaryButtonText?: unknown

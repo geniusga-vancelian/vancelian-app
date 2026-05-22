@@ -4,9 +4,10 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { ContentStatus, type Prisma } from '@prisma/client'
+import { ArticleLinkKind, ContentStatus, type Prisma } from '@prisma/client'
 import { getPresignedUrl } from '@/lib/storage/storageClient'
 import { resolveArticleCategoryLabels } from '@/lib/blog/articleCategoryLabels'
+import { pickArticleI18n } from '@/lib/blog/articleI18nFallback'
 import { resolveArticleBlocksForPublic } from '@/lib/blog/normalizeArticleBlocks'
 import {
   parseArticleGalleryMediaIds,
@@ -27,7 +28,7 @@ export interface ArticlePreview {
   readingTime: number
   categorySlugs: string[] | null
   isMilestone: boolean
-  articleType: 'NEWS' | 'ANALYSIS'
+  articleType: 'NEWS' | 'ANALYSIS' | 'RESEARCH'
   /** True pour actualités entreprise (NEWS uniquement ; dérivé du champ DB + legacy slug `vancelian`). */
   isCompanyNews: boolean
 }
@@ -46,6 +47,13 @@ export interface BlogFeedParams {
 
 export interface ArticlesByProjectParams {
   projectId: string
+  locale: string
+  limit?: number
+}
+
+export interface ArticlesLinkedToVaultPageParams {
+  /** Slug de page vault (`articles.article_links.target_id`, normalisé minuscules côté admin). */
+  vaultPageSlugs: string[]
   locale: string
   limit?: number
 }
@@ -150,7 +158,12 @@ function buildFeedWhereClause(params: {
   const where: Prisma.ArticleWhereInput = {
     status: ContentStatus.PUBLISHED,
   }
-  if (params.articleType) where.articleType = params.articleType
+  if (params.articleType === 'ANALYSIS') {
+    // Flutter « Research » et widgets alignés sur `ANALYSIS` : inclure RESEARCH.
+    where.articleType = { in: ['ANALYSIS', 'RESEARCH'] }
+  } else if (params.articleType === 'NEWS') {
+    where.articleType = 'NEWS'
+  }
 
   const excludeIds = params.excludeIds ?? []
 
@@ -173,6 +186,16 @@ function buildFeedWhereClause(params: {
 }
 
 /**
+ * Aperçu liste : conserver RESEARCH (éditorial) au lieu de le rabattre sur NEWS.
+ */
+function normalizeArticleTypeForPreview(raw: string): 'NEWS' | 'ANALYSIS' | 'RESEARCH' {
+  const u = (raw || 'NEWS').toUpperCase()
+  if (u === 'ANALYSIS') return 'ANALYSIS'
+  if (u === 'RESEARCH') return 'RESEARCH'
+  return 'NEWS'
+}
+
+/**
  * Transform raw article to ArticlePreview with presigned URLs
  */
 async function toArticlePreview(
@@ -188,11 +211,12 @@ async function toArticlePreview(
     isCompanyNews?: boolean | null
     coverMedia: { url: string; key: string | null } | null
     blocks: Array<{ type: string; data: unknown }>
-    i18n: Array<{ title: string; standfirst: string }>
+    i18n: Array<{ locale: string; title: string; standfirst: string }>
   },
-  calculateReadingTime: ArticleBlocksReadingTimeFn
+  calculateReadingTime: ArticleBlocksReadingTimeFn,
+  requestedLocale: string,
 ): Promise<ArticlePreview | null> {
-  const i18n = article.i18n[0]
+  const i18n = pickArticleI18n(article.i18n, requestedLocale)
   if (!i18n) return null
 
   let coverUrl = article.coverMedia?.url || ''
@@ -218,7 +242,7 @@ async function toArticlePreview(
     readingTime,
     categorySlugs: parseCategorySlugs(article.categorySlugs),
     isMilestone: article.isMilestone,
-    articleType: article.articleType === 'ANALYSIS' ? 'ANALYSIS' : 'NEWS',
+    articleType: normalizeArticleTypeForPreview(article.articleType),
     isCompanyNews: effectiveIsCompanyNews({
       articleType: article.articleType,
       isCompanyNews: article.isCompanyNews,
@@ -277,10 +301,10 @@ async function loadBlogFeedInner(
     articleType = 'NEWS'
   }
 
-  const i18nWhere = { locale }
+  // Charger toutes les traductions pour permettre le fallback (locale demandée → defaultLocale → première dispo).
   const baseInclude = {
     ...ARTICLE_INCLUDE,
-    i18n: { where: i18nWhere, take: 1 },
+    i18n: true,
   }
 
   const companyArticleIds = await getCompanyNewsArticleIds()
@@ -339,7 +363,7 @@ async function loadBlogFeedInner(
       }))
 
     if (articleToUse) {
-      featured = await toArticlePreview(articleToUse, calculateReadingTime)
+      featured = await toArticlePreview(articleToUse, calculateReadingTime, locale)
       featuredId = articleToUse.id
     }
   }
@@ -366,7 +390,7 @@ async function loadBlogFeedInner(
 
     highlighted = (
       await Promise.all(
-        highlightedArticles.map((a) => toArticlePreview(a, calculateReadingTime))
+        highlightedArticles.map((a) => toArticlePreview(a, calculateReadingTime, locale))
       )
     ).filter((a): a is ArticlePreview => a !== null)
 
@@ -387,7 +411,7 @@ async function loadBlogFeedInner(
       take: 4,
     })
     companyNews = (
-      await Promise.all(stripArticles.map((a) => toArticlePreview(a, calculateReadingTime)))
+      await Promise.all(stripArticles.map((a) => toArticlePreview(a, calculateReadingTime, locale)))
     ).filter((a): a is ArticlePreview => a !== null)
   }
 
@@ -428,7 +452,7 @@ async function loadBlogFeedInner(
 
   const articles = (
     await Promise.all(
-      articlesPage.map((a) => toArticlePreview(a, calculateReadingTime))
+      articlesPage.map((a) => toArticlePreview(a, calculateReadingTime, locale))
     )
   ).filter((a): a is ArticlePreview => a !== null)
 
@@ -483,7 +507,6 @@ export async function getArticlesByProject(
   const articleIds = articleProjects.map((ap) => ap.articleId)
   if (articleIds.length === 0) return []
 
-  const i18nWhere = { locale }
   const articles = await prisma.article.findMany({
     where: {
       id: { in: articleIds },
@@ -491,15 +514,78 @@ export async function getArticlesByProject(
     },
     include: {
       ...ARTICLE_INCLUDE,
-      i18n: { where: i18nWhere, take: 1 },
+      i18n: true,
     },
     orderBy: { publishedAt: 'desc' },
   })
 
   const previews = await Promise.all(
-    articles.map((a) => toArticlePreview(a, calculateReadingTime))
+    articles.map((a) => toArticlePreview(a, calculateReadingTime, locale))
   )
   return previews.filter((a): a is ArticlePreview => a !== null)
+}
+
+/**
+ * Articles liés au vault via Related (ArticleLink.kind = VAULT, target_id = slug page vault).
+ * Ordre : plus récent lien créé en premier parmi les slugs demandés ; articles non publiés exclus.
+ */
+export async function getArticlesLinkedToVaultPageSlugs(
+  params: ArticlesLinkedToVaultPageParams,
+  calculateReadingTime: ArticleBlocksReadingTimeFn
+): Promise<ArticlePreview[]> {
+  const locale = params.locale
+  const limit = Math.min(Math.max(params.limit ?? 12, 1), 50)
+  const slugSet = new Set(
+    params.vaultPageSlugs
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.length > 0)
+  )
+  if (slugSet.size === 0) return []
+
+  const targetIds = Array.from(slugSet)
+  const links = await prisma.articleLink.findMany({
+    where: {
+      kind: ArticleLinkKind.VAULT,
+      targetId: { in: targetIds },
+    },
+    select: { articleId: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: limit * 4,
+  })
+
+  const seen = new Set<string>()
+  const articleIdsOrdered: string[] = []
+  for (const l of links) {
+    if (!seen.has(l.articleId)) {
+      seen.add(l.articleId)
+      articleIdsOrdered.push(l.articleId)
+    }
+  }
+  if (articleIdsOrdered.length === 0) return []
+
+  const articles = await prisma.article.findMany({
+    where: {
+      id: { in: articleIdsOrdered },
+      status: ContentStatus.PUBLISHED,
+    },
+    include: {
+      ...ARTICLE_INCLUDE,
+      i18n: true,
+    },
+  })
+
+  const byId = new Map(articles.map((a) => [a.id, a]))
+  const previewsOrdered: ArticlePreview[] = []
+
+  for (const id of articleIdsOrdered) {
+    const article = byId.get(id)
+    if (!article) continue
+    const preview = await toArticlePreview(article, calculateReadingTime, locale)
+    if (preview) previewsOrdered.push(preview)
+    if (previewsOrdered.length >= limit) break
+  }
+
+  return previewsOrdered
 }
 
 // ---------------------------------------------------------------------------
@@ -546,11 +632,16 @@ export async function getArticleBySlug(
   locale: string,
   calculateReadingTime: ArticleBlocksReadingTimeFn
 ): Promise<ArticleDetailApi | null> {
+  // Fallback locale : on charge toutes les traductions de l’en-tête
+  // et on choisit (locale demandée → defaultLocale → première dispo) pour
+  // éviter le 404 mobile sur les articles seedés en `en` uniquement.
+  // Pour les blocs on garde `where: { locale }` : si vide,
+  // `mergeArticleBlockLocalizedData` retombe sur `data` (donnée d’origine).
   const article = await prisma.article.findUnique({
     where: { slug },
     include: {
       coverMedia: true,
-      i18n: { where: { locale }, take: 1 },
+      i18n: true,
       blocks: {
         orderBy: { order: 'asc' },
         include: { i18n: { where: { locale }, take: 1 } },
@@ -562,7 +653,7 @@ export async function getArticleBySlug(
     return null
   }
 
-  const i18n = article.i18n[0]
+  const i18n = pickArticleI18n(article.i18n, locale)
   if (!i18n) return null
 
   let coverUrl = article.coverMedia?.url || ''

@@ -28,6 +28,11 @@ export const VAULT_MODULE_TYPES_ADMIN = new Set<string>([
   'VideoBlockArticleModule',
   'LocalisationModule',
   'VirtualVisualizationModule',
+  'HEADING',
+  'PARAGRAPH',
+  'QUOTE',
+  'BULLET_LIST',
+  'NUMBERED_LIST',
 ])
 
 /**
@@ -49,6 +54,19 @@ export const VAULT_MODULE_TYPES_WEB_EXPLICIT = new Set<string>([
   'StepsModule',
   'FaqAccordionModule',
   'ContentBasDePageSansModuleBlanc',
+  'BlogALaUne',
+  'MarktingCardLargePortrait',
+  'MarketingCardsSmallCarouselModule',
+  'MarketingCardsSmallSlidingCarrousel_Portrait',
+  'MarketingCardsSmallSlidingCarrousel_Paysage',
+  'AllocationModule',
+  'PerformanceChart',
+  'TransactionLatest10Module',
+  'HEADING',
+  'PARAGRAPH',
+  'QUOTE',
+  'BULLET_LIST',
+  'NUMBERED_LIST',
 ])
 
 export function isAdminRegisteredVaultModuleType(type: string): boolean {

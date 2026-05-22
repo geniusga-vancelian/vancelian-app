@@ -1,37 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GetObjectCommand } from '@aws-sdk/client-s3'
-import { Readable } from 'node:stream'
 import { getSessionFromCookie } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getR2S3Client } from '@/lib/storage/r2-client'
-import { getR2BucketName, isR2Configured, r2CredentialsNotConfiguredMessage } from '@/lib/storage/r2Env'
-
-const bucketName = getR2BucketName()
+import { streamMediaByRecord } from '@/lib/storage/streamMediaFile'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/admin/media/[id]/file
- * Stream fichier depuis R2 (authentifié). Utilisé pour prévisualisations admin.
+ * Stream fichier média (authentifié). R2 ou repli `public/` pour URLs locales.
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const session = await getSessionFromCookie()
     if (!session) {
       return new NextResponse('Unauthorized', { status: 401 })
-    }
-
-    if (!isR2Configured()) {
-      const msg = r2CredentialsNotConfiguredMessage()
-      console.error('[admin/media/file]', msg)
-      return new NextResponse(msg, {
-        status: 503,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      })
     }
 
     const media = await prisma.media.findUnique({
@@ -42,24 +28,18 @@ export async function GET(
       return new NextResponse('Not found', { status: 404 })
     }
 
-    const command = new GetObjectCommand({
-      Bucket: bucketName,
-      Key: media.key,
+    const streamed = await streamMediaByRecord(media, {
+      cacheControl: 'private, max-age=120',
     })
-
-    const result = await getR2S3Client().send(command)
-
-    if (!result.Body) {
-      return new NextResponse('Empty object', { status: 404 })
+    if (!streamed) {
+      return new NextResponse('Not found', { status: 404 })
     }
 
-    const nodeStream = result.Body as Readable
-    const webStream = Readable.toWeb(nodeStream)
-
-    return new NextResponse(webStream as unknown as BodyInit, {
+    return new NextResponse(streamed.body, {
       headers: {
-        'Content-Type': media.mimeType || 'application/octet-stream',
-        'Cache-Control': 'private, max-age=120',
+        'Content-Type': streamed.contentType,
+        'Cache-Control': streamed.cacheControl,
+        'Accept-Ranges': 'bytes',
       },
     })
   } catch (error) {

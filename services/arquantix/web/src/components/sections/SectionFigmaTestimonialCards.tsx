@@ -1,8 +1,7 @@
-import { FigmaTestimonialCard } from '@/components/design-system/extracted'
-import { arquantixContentTextBlockClass } from '@/lib/design/contentMaxWidth'
 import { Container } from '@/components/ui/Container'
 import { SectionFigmaBlockHeader } from '@/components/sections/SectionFigmaBlockHeader'
 import { cn } from '@/lib/utils'
+import { VTcard } from '@/components/design-system/vancelian'
 
 export interface FigmaTestimonialItem {
   author: string
@@ -13,6 +12,7 @@ export interface FigmaTestimonialItem {
   avatarMediaId?: string
   /** Injecté par getPageSections depuis avatarMediaId */
   avatarMediaUrl?: string
+  /** @deprecated Couleur de fond ignorée — le DS Vancelian utilise un fond unifié. */
   backgroundColor?: string
 }
 
@@ -20,16 +20,23 @@ export interface SectionFigmaTestimonialCardsProps {
   eyebrow?: string
   title?: string
   description?: string
-  /** 1 = une carte par ligne ; 2 = grille 2 colonnes (à partir du breakpoint `md`). */
+  /** 1 = une carte par ligne ; 2 = grille 2 colonnes (DS Vancelian par défaut). */
   cardsPerRow?: 1 | 2
   items?: FigmaTestimonialItem[]
 }
 
+/**
+ * Cartes témoignages CMS Figma — Vancelian Design System.
+ *
+ * Délègue à {@link VTcard} (pattern `tcard` du pack handoff).
+ * Le DS recommande 2 colonnes desktop, on respecte donc `cardsPerRow` par
+ * compatibilité CMS (1 = pile, 2 = grille).
+ */
 export function SectionFigmaTestimonialCards({
   eyebrow,
   title,
   description,
-  cardsPerRow = 1,
+  cardsPerRow = 2,
   items = [],
 }: SectionFigmaTestimonialCardsProps) {
   const list = items.filter((i) => i.content?.trim())
@@ -37,12 +44,10 @@ export function SectionFigmaTestimonialCards({
     eyebrow?.trim() || title?.trim() || description?.trim(),
   )
 
-  if (list.length === 0 && !hasHeader) {
-    return null
-  }
+  if (list.length === 0 && !hasHeader) return null
 
   return (
-    <section className="w-full bg-white pt-16 pb-32">
+    <section className="w-full bg-v-bg py-24 lg:py-32">
       <Container>
         <SectionFigmaBlockHeader
           eyebrow={eyebrow}
@@ -54,10 +59,10 @@ export function SectionFigmaTestimonialCards({
         {list.length > 0 ? (
           <div
             className={cn(
-              'w-full',
+              'w-full gap-6',
               cardsPerRow === 2
-                ? 'grid grid-cols-1 gap-6 md:grid-cols-2 md:items-stretch'
-                : 'flex flex-col gap-6',
+                ? 'grid grid-cols-1 md:grid-cols-2 md:items-stretch'
+                : 'flex flex-col items-stretch max-w-[680px] mx-auto',
             )}
           >
             {list.map((item, index) => {
@@ -69,21 +74,14 @@ export function SectionFigmaTestimonialCards({
                   ? item.avatar.trim()
                   : undefined)
               return (
-                <div
+                <VTcard
                   key={`${item.author}-${index}`}
-                  className={cn(
-                    cardsPerRow === 2 ? 'h-full min-w-0' : arquantixContentTextBlockClass,
-                  )}
-                >
-                  <FigmaTestimonialCard
-                    author={item.author}
-                    role={item.role}
-                    content={item.content}
-                    avatar={avatarSrc}
-                    backgroundColor={item.backgroundColor ?? '#f4f4f4'}
-                    className={cardsPerRow === 2 ? 'h-full' : undefined}
-                  />
-                </div>
+                  quote={item.content}
+                  authorName={item.author}
+                  authorRole={item.role}
+                  avatarUrl={avatarSrc}
+                  rating={0}
+                />
               )
             })}
           </div>

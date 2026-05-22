@@ -66,6 +66,7 @@ import {
 import { extractAssistantRoutingTags } from '@/lib/admin/assistanceAssistantTags'
 import remarkGfm from 'remark-gfm'
 import ReactMarkdown from 'react-markdown'
+import { AssistanceConversationMessageBody } from '@/components/admin/AssistanceConversationMessageBody'
 
 // ────────────────────────── Types ──────────────────────────
 
@@ -732,13 +733,13 @@ export default function ConversationDetailPage() {
                       </Badge>
                     )}
                   </header>
-                  <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">
+                  <AssistanceConversationMessageBody>
                     {m.content || (
                       <span className="text-slate-400 italic">
                         (contenu vide)
                       </span>
                     )}
-                  </div>
+                  </AssistanceConversationMessageBody>
                   {m.role === 'assistant' && (
                     <AssistantWikiRefsSection
                       assistantPayload={m.message_payload ?? null}

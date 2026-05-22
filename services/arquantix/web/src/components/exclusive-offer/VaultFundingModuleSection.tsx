@@ -102,7 +102,7 @@ export function VaultFundingModuleSection({ content }: { content: Record<string,
       {footnoteRaw ? (
         <div
           className={cn(
-            'prose prose-neutral max-w-none text-sm text-neutral-600',
+            'prose prose-neutral max-w-none font-ui text-[14px] text-v-fg-muted',
             'prose-p:my-2 prose-p:text-inherit',
           )}
         >

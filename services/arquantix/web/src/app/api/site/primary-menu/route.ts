@@ -5,6 +5,7 @@ import { getPublicLocaleFromPathname } from '@/lib/i18n/localizedExclusiveOfferP
 import { resolvePublicLocale } from '@/lib/i18n/resolvePublicLocale'
 import { getPrimaryMenu } from '@/lib/menu/getPrimaryMenu'
 import { getSiteI18nSettingsCached, shouldShowPublicLanguageSwitcher } from '@/lib/i18n/siteI18nSettings'
+import { getSiteMenuTheme } from '@/lib/cms/site-menu-theme'
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,10 +25,13 @@ export async function GET(request: NextRequest) {
             fallbackLocale: site.defaultLocale,
           })
 
-    const menu = await getPrimaryMenu(requestedLocale, {
-      languageSwitcherEnabled: shouldShowPublicLanguageSwitcher(site),
-    })
-    return NextResponse.json({ items: menu })
+    const [menu, theme] = await Promise.all([
+      getPrimaryMenu(requestedLocale, {
+        languageSwitcherEnabled: shouldShowPublicLanguageSwitcher(site),
+      }),
+      getSiteMenuTheme(),
+    ])
+    return NextResponse.json({ items: menu, theme })
   } catch {
     return NextResponse.json({ items: [] })
   }

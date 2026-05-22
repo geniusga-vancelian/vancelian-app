@@ -1,36 +1,48 @@
 /**
- * Palette extraite du module About Figma (référence documentation).
+ * Palette extraite — remappée sur le Design System Vancelian.
+ *
+ * Source : `src/styles/vancelian-tokens.css` (variables `--v-*`).
+ * Ces constantes sont la projection TypeScript des tokens DS pour les
+ * consommateurs qui ont besoin de hex statiques (mock data, SVGR, etc.).
+ *
+ * Pour le CSS, préférer `var(--v-bg)`, `var(--v-fg)`, etc.
  */
 
 export const figmaDsColors = {
   primary: {
-    black: '#000000',
+    /** Anthracite Vancelian — jamais noir pur. */
+    black: '#1A1815',
     white: '#FFFFFF',
   },
   neutral: {
-    gray100: '#F3F3F3',
-    gray500: '#62656E',
-    gray900: '#000000',
+    /** Papier off-white DS — substitue l'ancien `#F3F3F3`. */
+    gray100: '#F2F1ED',
+    /** Texte secondaire muted — anthracite atténué. */
+    gray500: '#6E665C',
+    /** Anthracite plein, foreground principal. */
+    gray900: '#1A1815',
   },
   text: {
-    primary: '#000000',
-    secondary: '#62656E',
-    inverse: '#F3F3F3',
+    primary: '#1A1815',
+    secondary: '#6E665C',
+    inverse: '#EDECEC',
   },
   background: {
     /**
-     * Canevas page (body, coque site) — blanc 100 %, init pages CMS.
-     * Ne pas confondre avec `neutral.gray100` (bandeaux / encarts).
+     * Canevas page (body, coque site) — papier off-white Vancelian.
+     * Substitue l'ancien blanc pur. Conforme DS : « jamais blanc 100 % ».
      */
-    light: '#FFFFFF',
+    light: '#F7F7F4',
     /** Alias sémantique = `light` (documentation / consommation TS). */
-    pageCanvas: '#FFFFFF',
-    medium: '#F3F3F3',
-    dark: '#000000',
+    pageCanvas: '#F7F7F4',
+    /** Carte niveau 1 — l'ancien `#F3F3F3` glisse vers `#F2F1ED`. */
+    medium: '#F2F1ED',
+    /** Fond dark (footer, final-cta) — `--v-dark-bg`. */
+    dark: '#141208',
   },
   border: {
-    light: '#F3F3F3',
-    medium: '#62656E',
+    light: '#E2DED4',
+    medium: '#C9C3B5',
   },
 } as const
 

@@ -1,52 +1,86 @@
-# Design system (site web Arquantix)
+# Design System — Vancelian (site web)
 
-Source : exports Figma / React (modules fusionnés). Usage principal : page `/design` et composition des pages marketing.
+> *Là où l'argent travaille.*
 
-## Typographie navigation (atomes)
+Le site web Arquantix utilise désormais le **Design System Vancelian** (handoff officiel Claude Design, v1.0 — mai 2026).
 
-| Rôle | Paramètres | Fichier |
-|------|------------|---------|
-| **Links** (atome typographie Figma) | Avenir Heavy 800, 16px, line-height 100%, letter-spacing 0% | Composant `extracted/atoms/links.tsx` → `Links` ; jeton `figmaDsLinksClassName` + `figmaDsTypography.links` |
-| **Links** (menu top) | Identique | `nav-primary-link.ts` → `NAV_PRIMARY_LINK_TYPO` (= `figmaDsLinksClassName`) |
-| **Links** (titres des entrées du méga-menu blanc) | Identique **Links** ci-dessus | `MEGA_MENU_ITEM_TITLE_TYPO` (= alias) ; module `mega-menu/figma/FigmaNavSubmenu.tsx` |
-| **Paragraph** (libellés de colonne + descriptions sous les titres du méga-menu) | Avenir Book 350, 14px, vertical trim cap height, line-height 160%, paragraph spacing 16px, letter-spacing 0% | Composant `extracted/atoms/paragraph.tsx` → `Paragraph` ; `figmaDsParagraphClassName` + `figmaDsTypography.paragraph` ; couleur `figmaDsColors.text.secondary` dans `FigmaNavSubmenu.tsx` |
-| **Titre** SimpleMarkdownContentModule (Vault / offres) | Avenir Heavy 800, 40px, line-height 110%, letter-spacing −1%, center | `simpleMarkdownModuleTitle.ts` → `SIMPLE_MARKDOWN_MODULE_TITLE_TYPO` ; jetons `figmaDsTypography.fontSize.xl`, `lineHeight.tight`, `letterSpacing.minus1PercentOfEm` |
-| **Lien menu (cadre)** | Padding 8 / 12px, `border-radius` 10px ; actif : fond noir + texte blanc | `NAV_MENU_LINK_FRAME`, `NAV_MENU_LINK_ACTIVE_SURFACE` |
+Source de vérité :
+- **CSS** : `src/styles/vancelian-tokens.css` (tokens `--v-*` + `@font-face` Inter / Newsreader + classes utilitaires sémantiques).
+- **TypeScript** : `src/components/design-system/vancelian/tokens.ts` (projection statique des hex pour mock data / SVG / emails).
+- **Tailwind** : `tailwind.config.ts` expose toute la palette via les classes `bg-v-*`, `text-v-*`, `border-v-*`, `rounded-v-*`, `shadow-v-*`, `font-ui`, `font-editorial`, `font-display`, `duration-v-*`, etc.
 
-## Modules
+Le mapping `shadcn → Vancelian` est défini dans `src/styles/design-system-theme.css` : les anciennes variables `--primary`, `--background`, `--card`, `--muted`, `--destructive`, `--radius` héritent désormais des valeurs DS. Les composants shadcn existants (`Button`, `Card`, `Input`, …) **adoptent automatiquement** la nouvelle charte sans modification.
 
-| Module | Fichier |
-|--------|---------|
-| Marketing block (gradient / image) | `marketing-block.tsx` |
-| How it works | `HowItWorks.tsx` |
-| Bloc gauche / droite | `BlockLeftAndRight.tsx`, `DecorativeOverlay.tsx` |
-| Galerie projets | `ProjetGallery/ProjetGallery.tsx`, `ProjetGalleryDemo.tsx` |
-| Témoignage | `Testimonial.tsx` |
-| FAQ | `FAQ.tsx` |
-| Pied de page | `Footer.tsx` |
-| Page « tous les projets » | `ProjetGalleryPage.tsx` |
+## Doctrine — règles inviolables
+
+1. **Aucun bleu générique ni indigo.** Le seul bleu autorisé est `info #0F2A47` (bleu de Prusse).
+2. **CTA primaire = anthracite `#1A1815`**, jamais terracotta. La terracotta `#C0512E` est réservée aux text-links et accents éditoriaux.
+3. **Inter pour tout ce qui est cliquable ou fonctionnel.** **Newsreader pour la voix de marque** (titres éditoriaux, citations, wordmark). Jamais Newsreader sur un bouton ou un input.
+4. **Wordmark VANCELIAN** : toujours Newsreader, uppercase, `letter-spacing: 0.4em`. Composant `<VancelianWordmark>` ou classe `.v-wordmark`.
+5. **Espacement strict** : 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 px. Pas de 14, 18, 20.
+6. **Radius strict** : 4 (tag) / 6 (input) / 8 (card) / 12 (modal) / 999 (pill). + alias marketing : 16 / 20 / 24.
+7. **Trois élévations seulement** : `flat` (none) / `subtle` / `medium`. Rien de plus lourd.
+8. **Icônes Kalai uniquement** (mono, `currentColor`). Tailles 16 / 20 / 24 / 32. Voir `<KalaiIcon>`.
+9. **Aucun emoji dans l'interface.** Aucun copy d'urgence / FOMO.
+10. **Français d'abord, anglais ensuite.** Nombres `12 247,80 €`, pourcentages `+12,4 %`, dates « 12 mars 2026 ».
+
+## Palette
+
+| Token | Hex | Usage |
+|---|---|---|
+| `--v-bg` | `#F7F7F4` | Fond produit (papier off-white, jamais blanc pur) |
+| `--v-card` | `#F2F1ED` | Carte niveau 1 |
+| `--v-card-warm` | `#F3EDE6` | Carte warm — testimonials, marketing |
+| `--v-fg` | `#1A1815` | Anthracite, jamais noir pur |
+| `--v-fg-muted` | `#6E665C` | Texte secondaire |
+| `--v-terracotta` | `#C0512E` | Text-links, accents éditoriaux, `warning` |
+| `--v-green` | `#33614D` | Vert anglais — `success`, patrimoine |
+| `--v-blue` | `#0F2A47` | Bleu de Prusse — `info`, institutionnel |
+| `--v-error` | `#B83A3A` | Seul rouge, hors triade |
+| `--v-dark-bg` | `#141208` | Dark mode / footer |
+| `--v-dark-fg` | `#EDECEC` | Foreground sur fond dark |
+
+## Composants atomiques
+
+| Composant | Source |
+|---|---|
+| `<Button>` | `src/components/ui/button.tsx` — variants `default` (anthracite), `outline`, `secondary`, `ghost`, `link` (terracotta), `darkPrimary`, `darkSecondary`, `destructive` |
+| `<Logo>` | `src/components/ui/Logo.tsx` — lockups horizontal / vertical / icon × noir / blanc (assets `public/brand/vancelian/`) |
+| `<VancelianWordmark>` | Idem — wordmark texte Newsreader UPPERCASE 0.4em |
+| `<KalaiIcon>` | `src/components/ui/KalaiIcon.tsx` — 473 icônes Kalai (mask-image + `currentColor`) |
+| Classes utilitaires CSS | `.v-display` / `.v-h1..h4` / `.v-body` / `.v-caption` / `.v-eyebrow-section` / `.v-text-link` / `.v-tag--*` / `.v-card` / `.v-btn--*` |
+
+## Chrome global
+
+| Élément | Source |
+|---|---|
+| Navigation | `src/components/sections/Navigation.tsx` — barre fixe, palette anthracite / off-white, états transparent / scrolled. Logo via `<Logo lockup="horizontal" />`. |
+| Footer | `src/components/design-system/Footer.tsx` (DS) + `src/components/sections/Footer.tsx` (adaptateur CMS). Fond `--v-dark-bg`, baseline Newsreader italic, titres colonnes en `.v-caption`, liens 13px medium. |
+| Body root | `src/components/design-system/extracted/tokens/surfaces.ts` — `figmaDsBodyRootClassName = "min-h-screen bg-v-bg text-v-fg antialiased"`. |
+
+## Couche héritée — DS Figma extraite (`extracted/`)
+
+L'ancien DS Figma (préfixe `figmaDs*`) reste présent dans `extracted/` pour compatibilité ascendante. Ses **tokens couleurs ont été remappés** sur la palette Vancelian (`extracted/tokens/colors.ts` → off-white / anthracite). Les composants `extracted/atoms/*` n'utilisent plus Avenir (migration via mass-update Inter — voir commit). Cette couche sera supprimée progressivement au fur et à mesure de la migration des sections.
+
+## Templates validés (4 archétypes DS)
+
+1. **Hero éditorial** — home, marketing pages
+2. **Dashboard** — espace authentifié
+3. **List view** — catalogue, transactions
+4. **Detail view** — token, profil
 
 ## Assets
 
-Imports SVG / PNG : `imports/` (dossiers `Footer`, `Arguments`, `ExclusiveOffers`, `PageDeToutLesProjets`).
+| Asset | Chemin public |
+|---|---|
+| Fonts Newsreader (12 fichiers, 3 tailles optiques) | `public/fonts/newsreader/` |
+| Lockups Vancelian (6 SVG + 4 PNG) | `public/brand/vancelian/` |
+| Icônes Kalai (473 SVG) + index JSON | `public/icons/kalai/`, `public/icons/kalai.json` |
 
-## Couche Figma extraite (zip « Extraire composants pour Design Systeme »)
+## Référence
 
-Emplacement : `extracted/` (atomes, molécules, organismes, tokens préfixés `figmaDs*`).
-
-| Rôle | Composants |
-|------|------------|
-| Texte / titres | `FigmaBodyText`, `FigmaSectionTitle`, `FigmaEyebrowLabel`, `PillActionButton` |
-| Blocs | `FigmaStatCard`, `FigmaSectionHeading`, `FigmaTestimonialCard` |
-| Sections | `FigmaSimpleHero`, `FigmaStatsGrid` |
-| Démo | `ExtractedDesignDemo` (section en tête de `/design`) |
-| Tokens | `figmaDsColors`, `figmaDsTypography`, `figmaDsSpacing`, `figmaDsBorderRadius`, `figmaDsTokens` |
-| Canevas page (fond blanc init) | `figmaDsColors.background.light` / `pageCanvas`, classes `figmaDsBodyRootClassName`, `figmaDsSiteShellLightClassName` (`extracted/tokens/surfaces.ts`) — pas de `bg-neutral-100` sur body / coque |
-
-**CMS** : sections enregistrées `figma_simple_hero`, `figma_stats_grid`, `figma_testimonial_cards` (voir `lib/sections/library.ts`). Elles composent les organismes ci-dessus sans remplacer `hero`, `testimonials`, etc.
-
-**UI shadcn** : le zip contenait aussi `calendar` / `chart` ; ils n’ont pas été copiés ici (incompatibilités de types avec `react-day-picker` v9 et `recharts` v3). Le dossier `components/ui/` existant est inchangé.
+Le bundle officiel (`Vancelian Design System-handoff`) est l'unique source de vérité visuelle. En cas de divergence entre la doc et le bundle, **le bundle gagne**.
 
 ## Flutter
 
-Le design system mobile Flutter n’est pas défini ici ; ne pas confondre avec ces fichiers.
+Le design system mobile Flutter n'est pas défini ici ; ne pas confondre avec ces fichiers.

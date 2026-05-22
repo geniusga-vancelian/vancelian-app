@@ -21,7 +21,12 @@ export default function AdminLayout({
     pathname === '/admin/login0' ||
     pathname === '/admin/signup'
 
-  if (isPublicAdminShell) {
+  /// La preview du DS Flutter doit être rendue **sans** sidebar admin et **sans**
+  /// le wrapper `AdminEditingLocaleProvider` : elle est consommée dans une iframe
+  /// qui ne doit afficher que le device frame + le composant à prévisualiser.
+  const isFlutterPreviewIframe = pathname.startsWith('/admin/flutter/preview')
+
+  if (isPublicAdminShell || isFlutterPreviewIframe) {
     return <>{children}</>
   }
 

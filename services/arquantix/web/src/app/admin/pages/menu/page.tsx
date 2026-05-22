@@ -16,6 +16,8 @@ import {
   selectMenuNameToDisplay,
 } from '@/lib/admin/menuEditorPolicy'
 import { selectActiveLocaleEditsForSave } from '@/lib/admin/menuSaveLocale'
+import type { MenuThemeJson } from '@/lib/cms/menuThemeStorage'
+import { VANCELIAN_DARK_BG } from '@/lib/cms/parseEditorialTitle'
 
 const LOCALE_LABEL: Record<Locale, string> = {
   fr: 'Français',
@@ -67,6 +69,7 @@ interface Menu {
   key: string
   name: string
   nameBase?: string
+  themeJson?: MenuThemeJson
   i18n?: MenuI18n[]
   items: MenuItem[]
 }
@@ -78,6 +81,8 @@ export default function AdminMenuPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [menuName, setMenuName] = useState('')
+  const [darkTopnavBackground, setDarkTopnavBackground] = useState('')
+  const [savingTheme, setSavingTheme] = useState(false)
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState<string | null>(null)
@@ -299,6 +304,9 @@ export default function AdminMenuPage() {
       
       setMenuI18nNames(menuNames)
       setMenuI18nStatuses(menuStatuses)
+
+      const darkBg = data.menu.themeJson?.surfaces?.dark?.background ?? ''
+      setDarkTopnavBackground(typeof darkBg === 'string' ? darkBg : '')
     } catch (error) {
       console.error('Error fetching menu:', error)
       toastError('Failed to load menu')
@@ -531,6 +539,46 @@ export default function AdminMenuPage() {
       toastError(error.message || 'Failed to save menu name')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveMenuTheme = async () => {
+    if (!menu) return
+
+    setSavingTheme(true)
+    try {
+      const trimmed = darkTopnavBackground.trim()
+      const themeJson: MenuThemeJson = {
+        version: 1,
+        surfaces: {
+          ...(menu.themeJson?.surfaces ?? {}),
+          dark: {
+            ...(menu.themeJson?.surfaces?.dark ?? {}),
+            ...(trimmed ? { background: trimmed } : {}),
+          },
+        },
+      }
+      if (!trimmed && themeJson.surfaces?.dark) {
+        delete themeJson.surfaces.dark.background
+      }
+
+      const response = await fetch('/api/admin/menus/primary', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ themeJson }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update menu theme')
+      }
+
+      toastSuccess('Apparence topnav enregistrée')
+      await fetchMenu()
+    } catch (error: unknown) {
+      toastError(error instanceof Error ? error.message : 'Erreur enregistrement thème')
+    } finally {
+      setSavingTheme(false)
     }
   }
 
@@ -951,6 +999,45 @@ export default function AdminMenuPage() {
             }
           >
             {saving ? 'Saving...' : 'Save Name'}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="text-xl font-semibold mb-2">Apparence topnav</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Couleur de la barre lorsqu&apos;elle passe au mode sombre (footer, CTA final,
+          témoignages). Laissez vide pour utiliser le token DS{' '}
+          <code className="text-xs">var(--v-dark-bg)</code> ({VANCELIAN_DARK_BG}). Le noir pur{' '}
+          <code className="text-xs">#000000</code> est automatiquement remplacé par la couleur DS.
+        </p>
+        <div className="flex items-end gap-4">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fond — mode sombre
+            </label>
+            <input
+              type="text"
+              value={darkTopnavBackground}
+              onChange={(e) => setDarkTopnavBackground(e.target.value)}
+              placeholder={`var(--v-dark-bg) ou ${VANCELIAN_DARK_BG}`}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-50 disabled:text-gray-500"
+              disabled={isStructureLocked}
+              readOnly={isStructureLocked}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveMenuTheme}
+            disabled={savingTheme || isStructureLocked}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            title={
+              isStructureLocked
+                ? `Le thème se modifie uniquement depuis ${LOCALE_LABEL[defaultLocale as Locale]}.`
+                : undefined
+            }
+          >
+            {savingTheme ? 'Enregistrement…' : 'Enregistrer l’apparence'}
           </button>
         </div>
       </div>

@@ -2,13 +2,34 @@ import { NextResponse } from 'next/server'
 import { ContentStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
+import { getSiteI18nSettingsUncached } from '@/lib/i18n/siteI18nSettings'
+import {
+  resolveVaultSectionContent,
+  type ResolveVaultSectionContentMode,
+} from '@/lib/cms/resolveVaultSectionContent'
 
 const LANDING_TEMPLATE_DB = 'landing_builder'
 const LANDING_SECTION_KEY = 'landing_builder_v1'
 
+function parseStatus(raw: string | null): ResolveVaultSectionContentMode {
+  const v = (raw ?? '').toLowerCase()
+  if (v === 'published') return ContentStatus.PUBLISHED
+  if (v === 'draft') return ContentStatus.DRAFT
+  /// Comportement par défaut **mobile public** : on ne tolère pas le brouillon.
+  return ContentStatus.PUBLISHED
+}
+
 /**
  * GET /api/mobile/flutter/landing-pages/[slug]?locale=fr&status=draft|published
- * Endpoint public pour prévisualiser un runtime landing page Flutter.
+ *
+ * Endpoint public pour la prévisualisation runtime d'une landing page Flutter.
+ *
+ * - Locale : fallback `requested → defaultLocale (AppSettings) → toute locale disponible`
+ *   (mêmes paliers que `resolveVaultSectionContent`).
+ * - Status : `published` par défaut. `draft` autorisé pour preview admin signée
+ *   (le secret est implicite : on ne révèle pas que la page existe en brouillon
+ *   tant qu'aucune publication n'est faite).
+ * - `meta.contentLocale` reflète la locale **réellement** servie après fallback.
  */
 export async function GET(
   request: Request,
@@ -21,10 +42,10 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url)
-    const locale = (searchParams.get('locale') || 'fr').trim()
-    const requestedStatus = (searchParams.get('status') || 'draft').toLowerCase()
-    const status =
-      requestedStatus === 'published' ? ContentStatus.PUBLISHED : ContentStatus.DRAFT
+    const i18n = await getSiteI18nSettingsUncached()
+    const requestedLocale =
+      (searchParams.get('locale') || '').trim() || i18n.defaultLocale
+    const mode = parseStatus(searchParams.get('status'))
 
     const page = await prisma.page.findFirst({
       where: {
@@ -35,10 +56,7 @@ export async function GET(
         sections: {
           where: { key: LANDING_SECTION_KEY },
           include: {
-            contents: {
-              where: { locale, status },
-              take: 1,
-            },
+            contents: true,
           },
           take: 1,
         },
@@ -49,10 +67,22 @@ export async function GET(
       return NextResponse.json({ error: 'Landing page not found' }, { status: 404 })
     }
 
-    const content = page.sections[0]?.contents[0]
-    if (!content) {
+    const allContents = page.sections[0]?.contents ?? []
+    const picked = resolveVaultSectionContent(allContents, {
+      requestedLocale,
+      defaultLocale: i18n.defaultLocale,
+      mode,
+    })
+
+    if (!picked) {
       return NextResponse.json(
-        { error: `No ${requestedStatus} content for locale "${locale}"` },
+        {
+          error: `No ${mode === ContentStatus.PUBLISHED ? 'published' : 'draft'} content available`,
+          meta: {
+            requestedLocale,
+            defaultLocale: i18n.defaultLocale,
+          },
+        },
         { status: 404 }
       )
     }
@@ -67,10 +97,12 @@ export async function GET(
           urlPath: page.urlPath,
           template: page.template,
         },
-        landing: content.data,
+        landing: picked.data,
         meta: {
-          locale,
-          status: requestedStatus,
+          requestedLocale,
+          contentLocale: picked.locale,
+          contentStatus: picked.status,
+          defaultLocale: i18n.defaultLocale,
         },
       },
       {
@@ -83,6 +115,15 @@ export async function GET(
     )
   } catch (error) {
     console.error('[api/mobile/flutter/landing-pages/[slug]]', error)
-    return NextResponse.json({ error: 'Internal server error', message: 'The request could not be completed.' }, { status: 500, headers: { 'Content-Type': 'application/json; charset=utf-8' } })
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        message: 'The request could not be completed.',
+      },
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      }
+    )
   }
 }

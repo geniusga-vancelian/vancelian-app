@@ -36,9 +36,10 @@ describe('publicLocalizedRouting', () => {
     assert.equal(localizePublicInternalHref('/projects/z', 'it'), '/it/projects/z')
   })
 
-  it('legacy top-level inchangé (blog, help)', () => {
+  it('legacy top-level inchangé (blog, help, app)', () => {
     assert.equal(localizePublicInternalHref('/blog/foo', 'en'), '/blog/foo')
     assert.equal(localizePublicInternalHref('/help/a/b', 'it'), '/help/a/b')
+    assert.equal(localizePublicInternalHref('/app/login', 'en'), '/app/login')
   })
 
   it('segment CMS seul → /{locale}/{slug}', () => {

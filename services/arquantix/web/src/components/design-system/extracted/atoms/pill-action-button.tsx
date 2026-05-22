@@ -30,7 +30,7 @@ export function PillActionButton({
   return (
     <button type="button" className={`${baseClasses} ${variantClasses[variant]} ${className}`} onClick={onClick}>
       <span
-        className={`font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[16px] whitespace-nowrap ${textColorClasses[variant]}`}
+        className={`font-ui font-semibold leading-none not-italic relative shrink-0 text-[16px] whitespace-nowrap ${textColorClasses[variant]}`}
       >
         {children}
       </span>

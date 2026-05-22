@@ -18,6 +18,7 @@ import { Container } from '@/components/ui/Container'
 import DsFooter from '@/components/design-system/Footer'
 import type { FooterNavColumn } from '@/components/design-system/Footer'
 import { getDefaultSiteFooterData, type SiteFooterData } from '@/lib/cms/site-footer'
+import { normalizeVancelianDarkColor } from '@/lib/cms/parseEditorialTitle'
 import { getActiveLocaleFromPathname } from '@/lib/i18n/publicLocalizedRouting'
 import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
 
@@ -63,25 +64,30 @@ export function Footer({ data, copyright, description, links, className, ...prop
 
   const defaultCategoryLabel = siteCommonCta(loc, 'footer_links_default_category')
   const navColumns = buildNavColumns(resolved.links, defaultCategoryLabel)
-  const bg = resolved.backgroundColor || '#000000'
+  // Vancelian DS — fond dark officiel `#141208` (anthracite chaud, jamais noir pur).
+  const bg = normalizeVancelianDarkColor(resolved.backgroundColor || 'var(--v-dark-bg)')
 
   return (
     <div
       data-testid="site-footer"
+      data-nav-surface="dark"
       role="contentinfo"
-      className={cn('w-full', className)}
+      className={cn('w-full border-t border-white/[0.08]', className)}
       style={{ backgroundColor: bg }}
       {...props}
     >
-      <Container>
+      <Container className="pt-20 pb-8">
         <div className="[&>footer]:w-full [&>footer]:!bg-transparent">
           <DsFooter
             copyrightText={resolved.copyright || defaults.copyright}
             tagline={resolved.description || defaults.description}
+            companyAddress={resolved.companyAddress || defaults.companyAddress}
+            secondaryNote={resolved.secondaryNote || defaults.secondaryNote}
             navColumns={navColumns}
             legalTexts={resolved.legalTexts}
             logoUrl={resolved.logoUrl}
             logoAlt={resolved.logoAlt}
+            logoMediaInvert={resolved.logoMediaInvert}
             newsletterVisible={resolved.newsletterVisible}
             newsletterTitle={resolved.newsletterTitle}
             newsletterPlaceholder={resolved.newsletterPlaceholder}

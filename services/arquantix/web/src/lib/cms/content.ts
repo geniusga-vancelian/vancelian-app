@@ -277,6 +277,19 @@ function isCommonModuleUuid(s: string): boolean {
  * fusionnées portent encore `backgroundMediaUrl: ""` (ou équivalent) qui écrasait
  * alors la valeur résolue via `backgroundMediaId` (ordre des clés dans `Object.entries`).
  */
+function applyMediaMetaFromMap(
+  resolved: Record<string, unknown>,
+  mediaMap: Map<string, MediaInfo>,
+  idKey: string,
+  prefix: string,
+): void {
+  const id = resolved[idKey]
+  if (typeof id !== 'string' || !mediaMap.has(id)) return
+  const media = mediaMap.get(id)!
+  resolved[`${prefix}MimeType`] = media.mimeType
+  resolved[`${prefix}Filename`] = media.filename
+}
+
 function reconcileMediaUrlFieldsFromMap(
   resolved: Record<string, unknown>,
   mediaMap: Map<string, MediaInfo>,
@@ -287,6 +300,7 @@ function reconcileMediaUrlFieldsFromMap(
     altKey?: string,
     wKey?: string,
     hKey?: string,
+    metaPrefix?: string,
   ) => {
     const id = resolved[idKey]
     if (typeof id !== 'string' || !mediaMap.has(id)) return
@@ -295,6 +309,7 @@ function reconcileMediaUrlFieldsFromMap(
     if (altKey) resolved[altKey] = media.alt
     if (wKey) resolved[wKey] = media.width
     if (hKey) resolved[hKey] = media.height
+    if (metaPrefix) applyMediaMetaFromMap(resolved, mediaMap, idKey, metaPrefix)
   }
   apply(
     'backgroundMediaId',
@@ -302,6 +317,7 @@ function reconcileMediaUrlFieldsFromMap(
     'backgroundMediaAlt',
     'backgroundMediaWidth',
     'backgroundMediaHeight',
+    'backgroundMedia',
   )
   apply(
     'imageMediaId',
@@ -309,9 +325,12 @@ function reconcileMediaUrlFieldsFromMap(
     'imageMediaAlt',
     'imageMediaWidth',
     'imageMediaHeight',
+    'imageMedia',
   )
-  apply('mediaId', 'mediaUrl', 'mediaAlt', 'mediaWidth', 'mediaHeight')
+  apply('mediaId', 'mediaUrl', 'mediaAlt', 'mediaWidth', 'mediaHeight', 'media')
   apply('avatarMediaId', 'avatarMediaUrl')
+  apply('coverMediaId', 'coverMediaUrl', undefined, undefined, undefined, 'coverMedia')
+  apply('hoverVideoMediaId', 'hoverVideoMediaUrl', undefined, undefined, undefined, 'hoverVideoMedia')
 }
 
 /**
@@ -346,6 +365,8 @@ export function injectMediaUrls(data: any, mediaMap: Map<string, MediaInfo>): an
           resolved.backgroundMediaAlt = media.alt
           resolved.backgroundMediaWidth = media.width
           resolved.backgroundMediaHeight = media.height
+          resolved.backgroundMediaMimeType = media.mimeType
+          resolved.backgroundMediaFilename = media.filename
           if (process.env.NODE_ENV === 'development') {
             console.log('[injectMediaUrls] Resolved backgroundMediaId:', value, 'to URL:', media.url)
           }
@@ -356,6 +377,26 @@ export function injectMediaUrls(data: any, mediaMap: Map<string, MediaInfo>): an
             console.warn('[injectMediaUrls] backgroundMediaId not found in mediaMap:', value, 'Available IDs:', Array.from(mediaMap.keys()))
           }
         }
+      } else if (key === 'coverMediaId' && typeof value === 'string') {
+        if (mediaMap.has(value)) {
+          const media = mediaMap.get(value)!
+          resolved.coverMediaId = value
+          resolved.coverMediaUrl = media.url
+          resolved.coverMediaMimeType = media.mimeType
+          resolved.coverMediaFilename = media.filename
+        } else {
+          resolved.coverMediaId = value
+        }
+      } else if (key === 'hoverVideoMediaId' && typeof value === 'string') {
+        if (mediaMap.has(value)) {
+          const media = mediaMap.get(value)!
+          resolved.hoverVideoMediaId = value
+          resolved.hoverVideoMediaUrl = media.url
+          resolved.hoverVideoMediaMimeType = media.mimeType
+          resolved.hoverVideoMediaFilename = media.filename
+        } else {
+          resolved.hoverVideoMediaId = value
+        }
       } else if (key === 'imageMediaId' && typeof value === 'string') {
         if (mediaMap.has(value)) {
           const media = mediaMap.get(value)!
@@ -364,6 +405,8 @@ export function injectMediaUrls(data: any, mediaMap: Map<string, MediaInfo>): an
           resolved.imageMediaAlt = media.alt
           resolved.imageMediaWidth = media.width
           resolved.imageMediaHeight = media.height
+          resolved.imageMediaMimeType = media.mimeType
+          resolved.imageMediaFilename = media.filename
         } else {
           resolved.imageMediaId = value
         }

@@ -17,10 +17,18 @@ import {
   VAULT_SECTION_KEY,
   resolveMediaUrl,
 } from '@/lib/catalog/packagedCatalogHelpers'
-import type { KeyInformationRow } from '@/lib/cms/exclusiveOfferTypes'
 import { resolvePageSeoFields } from '@/lib/cms/resolvePageI18nMetadata'
-import { resolveVaultSectionContent } from '@/lib/cms/resolveVaultSectionContent'
+import { resolveVaultSectionContentForExclusiveOfferPayload } from '@/lib/cms/resolveVaultSectionContent'
 import { normalizeVaultModulesFromSectionData } from '@/lib/vault/normalizeVaultModules'
+import {
+  ensureBlogALaUneFromDraftWhenRelatedNews,
+} from '@/lib/catalog/ensureBlogALaUneVaultModuleForRelatedNews'
+import {
+  getArticlesLinkedToVaultPageSlugs,
+  type ArticlePreview,
+} from '@/lib/blog/articleService'
+import { calculateReadingTime } from '@/lib/blog/readingTime'
+import type { KeyInformationRow } from '@/lib/cms/exclusiveOfferTypes'
 
 export type { KeyInformationRow } from '@/lib/cms/exclusiveOfferTypes'
 
@@ -129,6 +137,49 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return v != null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 }
 
+function isBlogAlaUneVaultModuleType(raw: string): boolean {
+  const t = raw.trim().toLowerCase()
+  return t === 'blogalaune' || t === 'blog_a_la_une'
+}
+
+/**
+ * Données blog pour le DS (chemins relatifs sous forme `{locale}/blog/...`).
+ * Injecté sous `content._resolvedArticles` pour `BlogALaUne` lors du SSR.
+ */
+function enrichBlogAlaUneVaultModulesForWeb(
+  modules: VaultModulePublic[],
+  locale: Locale,
+  previews: ArticlePreview[],
+): VaultModulePublic[] {
+  if (!previews.length) return modules
+  const activeLocale = getLocaleOrDefault(locale)
+  const blogHrefPrefix = `/${activeLocale}/blog`
+  return modules.map((m) => {
+    if (!m.enabled || !isBlogAlaUneVaultModuleType(m.type)) {
+      return m
+    }
+    const c = m.content
+    const limRaw = c.limit
+    let limit = 3
+    if (typeof limRaw === 'number' && Number.isFinite(limRaw)) limit = Math.round(limRaw)
+    else if (typeof limRaw === 'string') limit = Number.parseInt(limRaw.trim(), 10) || 3
+    limit = Math.min(Math.max(limit, 1), 24)
+
+    const _resolvedArticles = previews.slice(0, limit).map((p) => ({
+      id: p.id,
+      slug: `${blogHrefPrefix}/${p.slug}`,
+      title: p.title,
+      standfirst: p.standfirst,
+      coverUrl: p.coverUrl,
+      authorName: p.authorName,
+      publishedAt: p.publishedAt,
+      readingTime: p.readingTime,
+    }))
+
+    return { ...m, content: { ...c, _resolvedArticles } }
+  })
+}
+
 function parseTagsModuleTags(content: Record<string, unknown>): string[] {
   const rawTags = Array.isArray(content.tags) ? content.tags : []
   return rawTags
@@ -193,6 +244,7 @@ export function splitTitlePageHeroFromModules(
 async function enrichMediaCarouselModules(
   prisma: PrismaClient,
   modules: VaultModulePublic[],
+  publicOrigin?: string | null,
 ): Promise<VaultModulePublic[]> {
   const out: VaultModulePublic[] = []
   for (const m of modules) {
@@ -207,7 +259,7 @@ async function enrichMediaCarouselModules(
     )
     const carouselItems: Array<{ mediaId: string; url: string; alt: string | null }> = []
     for (const mediaId of imageMediaIds) {
-      const url = await resolveMediaUrl(prisma, mediaId)
+      const url = await resolveMediaUrl(prisma, mediaId, { publicOrigin: publicOrigin ?? undefined })
       if (!url) continue
       const row = await prisma.media.findUnique({
         where: { id: mediaId },
@@ -227,6 +279,53 @@ async function enrichMediaCarouselModules(
   return out
 }
 
+async function enrichTitlePageModuleImages(
+  prisma: PrismaClient,
+  modules: VaultModulePublic[],
+  publicOrigin?: string | null,
+): Promise<VaultModulePublic[]> {
+  const out: VaultModulePublic[] = []
+  for (const m of modules) {
+    if (m.type !== 'TitlePage') {
+      out.push(m)
+      continue
+    }
+    const c = { ...m.content }
+    const singleId =
+      typeof c.imageMediaId === 'string' && c.imageMediaId.trim().length > 0
+        ? c.imageMediaId.trim()
+        : null
+    let imageUrl = typeof c.imageUrl === 'string' ? c.imageUrl : ''
+    if (singleId && (!imageUrl || !imageUrl.trim())) {
+      const u = await resolveMediaUrl(prisma, singleId, {
+        publicOrigin: publicOrigin ?? undefined,
+      })
+      if (u) imageUrl = u
+    }
+    if ((!imageUrl || !imageUrl.trim()) && Array.isArray(c.imageMediaIds)) {
+      for (const id of c.imageMediaIds) {
+        if (typeof id === 'string' && id.trim()) {
+          const u = await resolveMediaUrl(prisma, id.trim(), {
+            publicOrigin: publicOrigin ?? undefined,
+          })
+          if (u) {
+            imageUrl = u
+            break
+          }
+        }
+      }
+    }
+    out.push({
+      ...m,
+      content: {
+        ...c,
+        ...(imageUrl.trim().length > 0 ? { imageUrl } : {}),
+      },
+    })
+  }
+  return out
+}
+
 /**
  * Résout `posterMediaId` par carte en `posterImageUrl` (pré-signée) pour le rendu app / web.
  * Conserve `posterImageUrl` saisi à la main si aucun ID médiathèque.
@@ -234,6 +333,7 @@ async function enrichMediaCarouselModules(
 async function enrichVideoBlockArticleModules(
   prisma: PrismaClient,
   modules: VaultModulePublic[],
+  publicOrigin?: string | null,
 ): Promise<VaultModulePublic[]> {
   const out: VaultModulePublic[] = []
   for (const m of modules) {
@@ -252,7 +352,9 @@ async function enrichVideoBlockArticleModules(
             : null
         let posterImageUrl = typeof row.posterImageUrl === 'string' ? row.posterImageUrl : ''
         if (posterMediaId) {
-          const url = await resolveMediaUrl(prisma, posterMediaId)
+          const url = await resolveMediaUrl(prisma, posterMediaId, {
+            publicOrigin: publicOrigin ?? undefined,
+          })
           if (url) posterImageUrl = url
         }
         return {
@@ -376,6 +478,7 @@ function enrichFundingVaultModules(
 async function enrichDocumentsListModules(
   prisma: PrismaClient,
   modules: VaultModulePublic[],
+  publicOrigin?: string | null,
 ): Promise<VaultModulePublic[]> {
   const out: VaultModulePublic[] = []
   for (const m of modules) {
@@ -394,7 +497,7 @@ async function enrichDocumentsListModules(
     }> = []
     for (const entry of entries) {
       const { mediaId, documentName } = entry
-      const url = await resolveMediaUrl(prisma, mediaId)
+      const url = await resolveMediaUrl(prisma, mediaId, { publicOrigin: publicOrigin ?? undefined })
       if (!url) continue
       const row = await prisma.media.findUnique({
         where: { id: mediaId },
@@ -419,6 +522,21 @@ async function enrichDocumentsListModules(
     })
   }
   return out
+}
+
+/**
+ * Carrousels / vidéos / documents : URLs résolues pour le client mobile (requête BFF avec `publicOrigin`).
+ */
+export async function enrichVaultModulesForMobileClient(
+  prisma: PrismaClient,
+  modules: VaultModulePublic[],
+  publicOrigin: string | null | undefined,
+): Promise<VaultModulePublic[]> {
+  let m = await enrichTitlePageModuleImages(prisma, modules, publicOrigin)
+  m = await enrichMediaCarouselModules(prisma, m, publicOrigin)
+  m = await enrichVideoBlockArticleModules(prisma, m, publicOrigin)
+  m = await enrichDocumentsListModules(prisma, m, publicOrigin)
+  return m
 }
 
 export type GetExclusiveOfferVaultPayloadOptions = {
@@ -469,11 +587,10 @@ export async function getExclusiveOfferVaultPayload(
     return null
   }
 
-  const content = resolveVaultSectionContent(section.contents, {
+  const content = resolveVaultSectionContentForExclusiveOfferPayload(section.contents, {
     requestedLocale: locale,
     defaultLocale,
-    mode:
-      options?.allowExclusiveOfferAdminPreview === true ? 'either_draft_first' : 'either',
+    previewDraftFirst: options?.allowExclusiveOfferAdminPreview === true,
   })
 
   if (!content) {
@@ -514,11 +631,48 @@ export async function getExclusiveOfferVaultPayload(
     console.warn(`[normalizeVaultModules] page=${page.slug}`, normalizeWarnings)
   }
 
-  const modulesRaw = modulesNormalized as VaultModulePublic[]
+  let modulesWorking = modulesNormalized as VaultModulePublic[]
 
-  let modules = await enrichMediaCarouselModules(prisma, modulesRaw)
+  const vaultPageSlugSet = new Set<string>()
+  if (typeof page.slug === 'string' && page.slug.trim()) {
+    vaultPageSlugSet.add(page.slug.trim().toLowerCase())
+  }
+  if (typeof packaged?.slug === 'string' && packaged.slug.trim()) {
+    vaultPageSlugSet.add(packaged.slug.trim().toLowerCase())
+  }
+
+  const relatedArticlePreviews =
+    vaultPageSlugSet.size === 0
+      ? []
+      : await getArticlesLinkedToVaultPageSlugs(
+          {
+            vaultPageSlugs: [...vaultPageSlugSet],
+            locale,
+            limit: 48,
+          },
+          calculateReadingTime,
+        )
+
+  if (relatedArticlePreviews.length > 0) {
+    const ensured = await ensureBlogALaUneFromDraftWhenRelatedNews(prisma, {
+      sectionContents: section.contents,
+      vaultData: { ...raw, modules: modulesWorking },
+      relatedArticleCount: relatedArticlePreviews.length,
+      requestedLocale: locale,
+      defaultLocale,
+      publicOrigin: null,
+      contextSlug: page.slug,
+      mergeDraftBlogOnly: true,
+    })
+    if (ensured?.modules && Array.isArray(ensured.modules)) {
+      modulesWorking = ensured.modules as VaultModulePublic[]
+    }
+  }
+
+  let modules = await enrichMediaCarouselModules(prisma, modulesWorking)
   modules = await enrichVideoBlockArticleModules(prisma, modules)
   modules = await enrichDocumentsListModules(prisma, modules)
+  modules = enrichBlogAlaUneVaultModulesForWeb(modules, locale, relatedArticlePreviews)
 
   /** Image hero : `headerMediaId` (JSON racine vault) > URL `TitlePage.content.imageUrl` si présente. */
   const headerMediaId =

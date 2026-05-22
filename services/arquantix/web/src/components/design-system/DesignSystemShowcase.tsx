@@ -267,16 +267,16 @@ function DesignSecondaryNavMock() {
       className="flex min-h-[40px] flex-wrap items-center justify-center gap-6 border-b border-neutral-200 bg-white/90 px-4 py-2"
       aria-hidden
     >
-      <span className="font-['Avenir:Heavy',sans-serif] text-[13px] text-neutral-900">
+      <span className="font-ui font-semibold text-[13px] text-neutral-900">
         Espace investisseur
       </span>
-      <span className="font-['Avenir:Book',sans-serif] text-[13px] text-[#62656e]">
+      <span className="font-ui font-normal text-[13px] text-[#62656e]">
         Documentation
       </span>
-      <span className="font-['Avenir:Book',sans-serif] text-[13px] text-[#62656e]">
+      <span className="font-ui font-normal text-[13px] text-[#62656e]">
         API &amp; intégrations
       </span>
-      <span className="font-['Avenir:Book',sans-serif] text-[13px] text-[#62656e]">
+      <span className="font-ui font-normal text-[13px] text-[#62656e]">
         Statut des services
       </span>
     </div>
@@ -683,7 +683,18 @@ export function DesignSystemShowcase() {
         description="Accordéon questions / réponses."
       >
         <div className="w-full shrink-0">
-          <FAQ items={FAQ_SAMPLE} headline="Questions Fréquentes." />
+          <FAQ
+            items={FAQ_SAMPLE}
+            headline="Questions Fréquentes."
+            support={{
+              title: "Have a question?",
+              description: "Our team responds to technical questions within 24 hours.",
+              ctaLabel: "Contact support →",
+              ctaHref: "#",
+              secondaryLinkLabel: "Full FAQ →",
+              secondaryLinkHref: "#",
+            }}
+          />
         </div>
       </Section>
 

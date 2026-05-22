@@ -1,26 +1,21 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLoginWithEmail, usePrivy, useIdentityToken } from '@privy-io/react-auth'
-import { PortalAuthShell } from '@/components/portal/PortalAuthShell'
+import { usePortalAuthContent } from '@/components/portal/PortalAuthContentProvider'
+import { PortalAuthFormDeferShell } from '@/components/portal/PortalAuthFormDeferShell'
+import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
+import { PortalVerifyFormPlaceholder } from '@/components/portal/PortalVerifyFormPlaceholder'
 import { PortalOtpInput } from '@/components/portal/PortalOtpInput'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-
-const RESEND_SECONDS = 45
-
-function readStoredPrivyIdentityToken(): string | null {
-  if (typeof window === 'undefined') return null
-  try {
-    return (
-      localStorage.getItem('privy:id-token') ??
-      localStorage.getItem('privy-id-token') ??
-      null
-    )
-  } catch {
-    return null
-  }
-}
+import { interpolatePortalAuthTemplate } from '@/lib/cms/portal-auth'
+import {
+  clearPortalOtpFlow,
+  markPortalOtpFlowActive,
+} from '@/components/portal/PortalAuthPrivySessionHygiene'
+import { formatPrivyConfigError, isPrivyUnauthorizedError } from '@/lib/portal/privyConfigErrors'
 
 type ExchangeError = { code?: string; message: string }
 
@@ -38,30 +33,26 @@ function parseExchangeError(data: unknown): ExchangeError {
     }
   }
   if (typeof row.message === 'string') return { message: row.message }
-  if (typeof row.error === 'string') return { message: row.error }
+  if (typeof row.error === 'string') {
+    return {
+      message:
+        row.error === 'exchange_failed'
+          ? 'Connexion au serveur impossible. Réessayez dans quelques secondes.'
+          : row.error,
+    }
+  }
   return { message: fallback }
 }
 
 function formatPrivyError(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message.trim()) {
-    const msg = err.message.trim()
-    if (/invalid nativeappid|invalid_native_app_id/i.test(msg)) {
-      return (
-        'Configuration Privy web incorrecte : le client ID mobile Flutter ne doit pas être utilisé sur le web.'
-      )
-    }
-    return msg
-  }
-  if (typeof err === 'object' && err !== null && 'message' in err) {
-    const msg = (err as { message?: unknown }).message
-    if (typeof msg === 'string' && msg.trim()) return msg
-  }
-  return fallback
+  return formatPrivyConfigError(err, fallback)
 }
 
 function VerifyContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const authContent = usePortalAuthContent()
+  const resendSeconds = authContent.resendSeconds
   const email = (searchParams?.get('email') ?? '').trim()
   const signUpMode = searchParams?.get('mode') === 'signup'
   const sentFromLogin = searchParams?.get('sent') === '1'
@@ -75,9 +66,22 @@ function VerifyContent() {
   const [sending, setSending] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [sendSucceeded, setSendSucceeded] = useState(sentFromLogin)
-  const [resendCountdown, setResendCountdown] = useState(sentFromLogin ? RESEND_SECONDS : 0)
+  const [resendCountdown, setResendCountdown] = useState(sentFromLogin ? resendSeconds : 0)
 
-  const title = signUpMode ? 'Email sign-up code' : 'Email sign-in code'
+  const verifyInFlightRef = useRef(false)
+  const verifySucceededRef = useRef(false)
+  const otpAcceptedRef = useRef(false)
+  const lastSubmittedOtpRef = useRef('')
+
+  const title = signUpMode ? authContent.verify.signupTitle : authContent.verify.loginTitle
+
+  const backToLoginHref = useMemo(() => {
+    const params = new URLSearchParams()
+    if (email) params.set('email', email)
+    if (signUpMode) params.set('mode', 'signup')
+    const qs = params.toString()
+    return qs ? `${PORTAL_ROUTES.login}?${qs}` : PORTAL_ROUTES.login
+  }, [email, signUpMode])
 
   useEffect(() => {
     if (!email) {
@@ -91,44 +95,46 @@ function VerifyContent() {
     return () => window.clearTimeout(timer)
   }, [resendCountdown])
 
-  useEffect(() => {
-    if (state?.status === 'error' && state.error) {
-      setError(formatPrivyError(state.error, 'Unable to send the code. Please try again.'))
-    }
-  }, [state])
-
   const sendOtp = useCallback(async () => {
     if (!email || !ready) return
     setError('')
     setSending(true)
+    markPortalOtpFlowActive()
     try {
       await sendCode({ email, disableSignup: !signUpMode })
       setSendSucceeded(true)
-      setResendCountdown(RESEND_SECONDS)
+      setResendCountdown(resendSeconds)
     } catch (err) {
       console.error('[portal/login/verify] sendCode', err)
+      if (isPrivyUnauthorizedError(err)) {
+        clearPortalOtpFlow()
+        const params = new URLSearchParams({ email })
+        if (signUpMode) params.set('mode', 'signup')
+        router.replace(`${PORTAL_ROUTES.login}?${params.toString()}`)
+        return
+      }
       setError(formatPrivyError(err, 'Unable to send the code. Please try again.'))
       setSendSucceeded(false)
+      clearPortalOtpFlow()
     } finally {
       setSending(false)
     }
-  }, [email, ready, sendCode, signUpMode])
+  }, [email, ready, resendSeconds, router, sendCode, signUpMode])
 
   const exchangeSession = useCallback(async () => {
     const privyToken = await getAccessToken()
     if (!privyToken) {
       throw new Error('missing_privy_token')
     }
-    const privyIdentityToken = identityToken ?? readStoredPrivyIdentityToken()
-
-    const callExchange = async (useSignUpMode: boolean) => {
+    const callExchange = async (useSignUpMode: boolean, withIdentityToken: boolean) => {
       const res = await fetch('/api/portal/privy/exchange', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           privy_access_token: privyToken,
-          privy_identity_token: privyIdentityToken ?? undefined,
+          privy_identity_token:
+            withIdentityToken && identityToken ? identityToken : undefined,
           signUpMode: useSignUpMode,
           email,
         }),
@@ -137,11 +143,19 @@ function VerifyContent() {
       return { res, data }
     }
 
-    let { res, data } = await callExchange(signUpMode)
+    const runExchange = async (useSignUpMode: boolean) => {
+      let attempt = await callExchange(useSignUpMode, true)
+      if (!attempt.res.ok && identityToken) {
+        attempt = await callExchange(useSignUpMode, false)
+      }
+      return attempt
+    }
+
+    let { res, data } = await runExchange(signUpMode)
     if (!res.ok) {
       const err = parseExchangeError(data)
       if (!signUpMode && err.code === 'privy.exchange.person_not_found') {
-        ;({ res, data } = await callExchange(true))
+        ;({ res, data } = await runExchange(true))
         if (res.ok) return
         throw new Error(parseExchangeError(data).message)
       }
@@ -151,17 +165,55 @@ function VerifyContent() {
 
   const verifyOtp = useCallback(
     async (otp: string) => {
-      if (otp.length !== 6 || verifying || !ready) return
+      if (
+        otp.length !== 6 ||
+        verifyInFlightRef.current ||
+        verifySucceededRef.current ||
+        !ready
+      ) {
+        return
+      }
+
+      verifyInFlightRef.current = true
+      otpAcceptedRef.current = false
       setError('')
       setVerifying(true)
       try {
         await loginWithCode({ code: otp })
+        otpAcceptedRef.current = true
         await exchangeSession()
+        verifySucceededRef.current = true
+        clearPortalOtpFlow()
         router.replace(PORTAL_ROUTES.dashboard)
         router.refresh()
       } catch (err) {
+        if (verifySucceededRef.current) return
+
+        // OTP accepté par Privy mais échange JWT échoué — retry exchange uniquement.
+        if (otpAcceptedRef.current) {
+          try {
+            await exchangeSession()
+            verifySucceededRef.current = true
+            clearPortalOtpFlow()
+            router.replace(PORTAL_ROUTES.dashboard)
+            router.refresh()
+            return
+          } catch (exchangeErr) {
+            console.error('[portal/login/verify] exchange after otp', exchangeErr)
+            setCode('')
+            lastSubmittedOtpRef.current = ''
+            setError(
+              exchangeErr instanceof Error
+                ? exchangeErr.message
+                : 'Unable to open your session. Please try again.',
+            )
+            return
+          }
+        }
+
         console.error('[portal/login/verify] loginWithCode', err)
         setCode('')
+        lastSubmittedOtpRef.current = ''
         setError(
           formatPrivyError(
             err,
@@ -169,16 +221,19 @@ function VerifyContent() {
           ),
         )
       } finally {
-        setVerifying(false)
+        verifyInFlightRef.current = false
+        if (!verifySucceededRef.current) {
+          setVerifying(false)
+        }
       }
     },
-    [exchangeSession, loginWithCode, ready, router, verifying],
+    [exchangeSession, getAccessToken, loginWithCode, ready, router],
   )
 
   useEffect(() => {
-    if (code.length === 6) {
-      void verifyOtp(code)
-    }
+    if (code.length !== 6 || code === lastSubmittedOtpRef.current) return
+    lastSubmittedOtpRef.current = code
+    void verifyOtp(code)
   }, [code, verifyOtp])
 
   const isOtpLoading =
@@ -191,28 +246,28 @@ function VerifyContent() {
   if (!email) return null
 
   return (
-    <PortalAuthShell showBack backHref={PORTAL_ROUTES.login}>
-      <div className="flex flex-col gap-8">
-        <div className="flex flex-col gap-3 text-left">
-          <h1 className="m-0 font-editorial text-[32px] font-normal leading-[1.12] text-v-fg sm:text-[36px]">
+    <>
+      <div className="portal-auth__form">
+        <header className="portal-auth__intro">
+          <h2 className="portal-auth__form-title" id="portal-auth-form-title">
             {title}
-          </h1>
+          </h2>
           {sendSucceeded ? (
-            <p className="m-0 font-ui text-[16px] leading-[1.55] text-v-fg-body">
-              Code sent to <strong className="font-semibold text-v-fg">{email}</strong>
+            <p className="portal-auth__form-body">
+              {authContent.verify.bodySent.includes('{email}') ? (
+                <>
+                  {authContent.verify.bodySent.split('{email}')[0]}
+                  <strong className="font-semibold text-v-fg">{email}</strong>
+                  {authContent.verify.bodySent.split('{email}').slice(1).join('{email}')}
+                </>
+              ) : (
+                interpolatePortalAuthTemplate(authContent.verify.bodySent, { email })
+              )}
             </p>
           ) : (
-            <p className="m-0 font-ui text-[16px] leading-[1.55] text-v-fg-body">
-              Enter the six-digit code we sent to your inbox, or resend a new code below.
-            </p>
+            <p className="portal-auth__form-body">{authContent.verify.bodyPending}</p>
           )}
-        </div>
-
-        {error ? (
-          <p className="m-0 rounded-v-card border border-red-200 bg-red-50 px-4 py-3 font-ui text-[14px] text-red-800">
-            {error}
-          </p>
-        ) : null}
+        </header>
 
         <PortalOtpInput
           value={code}
@@ -224,29 +279,52 @@ function VerifyContent() {
 
         <div className="text-center">
           {resendCountdown > 0 ? (
-            <p className="m-0 font-ui text-[14px] text-v-fg-muted">
-              Resend code in {resendCountdown}s
+            <p className="portal-auth__helper">
+              {interpolatePortalAuthTemplate(authContent.verify.resendCountdown, {
+                seconds: resendCountdown,
+              })}
             </p>
           ) : (
             <button
               type="button"
               disabled={isOtpLoading}
               onClick={() => void sendOtp()}
-              className="border-0 bg-transparent p-0 font-ui text-[14px] font-medium text-v-terracotta underline-offset-[3px] hover:underline disabled:opacity-50"
+              className="portal-auth__link disabled:opacity-50"
             >
-              Resend code
+              {authContent.verify.resendLabel}
             </button>
           )}
         </div>
+
+        <p className="portal-auth__helper">
+          {authContent.verify.wrongEmailHelper}{' '}
+          <Link href={backToLoginHref} className="portal-auth__link">
+            {signUpMode
+              ? authContent.verify.backToSignupLabel
+              : authContent.verify.backToLoginLabel}
+          </Link>
+        </p>
+
+        {error ? <p className="portal-auth__error">{error}</p> : null}
       </div>
-    </PortalAuthShell>
+    </>
   )
 }
 
 export default function PortalLoginVerifyPage() {
   return (
     <Suspense fallback={null}>
-      <VerifyContent />
+      <VerifyGate />
     </Suspense>
+  )
+}
+
+function VerifyGate() {
+  const { privyReady } = usePortalAuthPrivy()
+
+  return (
+    <PortalAuthFormDeferShell loading={!privyReady}>
+      {privyReady ? <VerifyContent /> : <PortalVerifyFormPlaceholder />}
+    </PortalAuthFormDeferShell>
   )
 }

@@ -190,7 +190,7 @@ function collectFromModuleContent(
       return
     }
     case 'FaqAccordionModule': {
-      ;['title', 'intro', 'footerLinkLabel', 'footerFilterLabel'].forEach((k) => {
+      ;['title', 'intro', 'footerLinkLabel', 'footerLinkUrl', 'footerFilterLabel'].forEach((k) => {
         pushField(out, {
           path: `${basePath}.${k}`,
           textKind: 'plain',

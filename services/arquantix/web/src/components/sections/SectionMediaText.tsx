@@ -6,6 +6,7 @@ export interface SectionMediaTextProps {
   title?: string
   description?: string
   imageMediaUrl?: string
+  videoMediaUrl?: string
   imageMediaAlt?: string | null
   mediaRight?: boolean
 }
@@ -15,6 +16,7 @@ export function SectionMediaText({
   title = '',
   description = '',
   imageMediaUrl,
+  videoMediaUrl,
   imageMediaAlt,
   mediaRight = false,
 }: SectionMediaTextProps) {
@@ -24,6 +26,7 @@ export function SectionMediaText({
       title={title}
       description={description}
       imageSrc={imageMediaUrl}
+      videoSrc={videoMediaUrl}
       imageAlt={imageMediaAlt}
       mediaRight={mediaRight === true}
     />

@@ -201,7 +201,7 @@ function SlidingPillTabs({
               key={tab.id}
               value={tab.id}
               className={cn(
-                "relative z-[1] inline-flex h-auto min-w-0 flex-1 items-center justify-center rounded-full border border-transparent px-2 py-2.5 font-['Avenir:Heavy',sans-serif] text-[20px] leading-[1.1] tracking-[-0.01em] shadow-none md:px-4",
+                "relative z-[1] inline-flex h-auto min-w-0 flex-1 items-center justify-center rounded-full border border-transparent px-2 py-2.5 font-ui font-semibold text-[20px] leading-[1.1] tracking-[-0.01em] shadow-none md:px-4",
                 "bg-transparent transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
                 "text-muted-foreground data-[state=active]:text-white",
                 "data-[state=active]:border-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none",
@@ -340,7 +340,7 @@ export function DSProjectCard({
             {/* Progress */}
             <div className="content-stretch flex flex-[1_0_0] flex-col gap-[8px] items-start min-h-px min-w-px relative">
               <div className="content-stretch flex items-center relative shrink-0 w-full">
-                <p className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">
+                <p className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[14px] text-black uppercase whitespace-nowrap">
                   {project.fundedText || `Funded ${project.fundedPercentage}%`}
                 </p>
               </div>
@@ -382,7 +382,7 @@ export default function ProjetGallery({
         </SectionTitle>
       </div>
       {subtitle && (
-        <p className="font-['Avenir:Roman',sans-serif] leading-[1.6] not-italic relative shrink-0 text-[18px] text-black text-center w-full">
+        <p className="font-ui font-normal leading-[1.6] not-italic relative shrink-0 text-[18px] text-black text-center w-full">
           {subtitle}
         </p>
       )}
@@ -436,7 +436,7 @@ export default function ProjetGallery({
                     <div aria-hidden="true" className="absolute border border-[#62656e] border-solid inset-0 pointer-events-none rounded-[20px]" />
                     <div className="flex flex-row items-center justify-center size-full">
                       <div className="content-stretch flex h-full items-center justify-center px-[20px] py-[10px] relative">
-                        <div className="flex flex-col font-['Avenir:Medium',sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[10px] text-black text-center tracking-[0.4px] uppercase whitespace-nowrap">
+                        <div className="flex flex-col font-ui font-medium justify-center leading-[0] not-italic relative shrink-0 text-[10px] text-black text-center tracking-[0.4px] uppercase whitespace-nowrap">
                           <p className="leading-[1.1]">{viewAllButtonText}</p>
                         </div>
                       </div>
@@ -447,7 +447,7 @@ export default function ProjetGallery({
                     <div aria-hidden="true" className="absolute border border-[#62656e] border-solid inset-0 pointer-events-none rounded-[20px]" />
                     <div className="flex flex-row items-center justify-center size-full">
                       <div className="content-stretch flex h-full items-center justify-center px-[20px] py-[10px] relative">
-                        <div className="flex flex-col font-['Avenir:Medium',sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[10px] text-black text-center tracking-[0.4px] uppercase whitespace-nowrap">
+                        <div className="flex flex-col font-ui font-medium justify-center leading-[0] not-italic relative shrink-0 text-[10px] text-black text-center tracking-[0.4px] uppercase whitespace-nowrap">
                           <p className="leading-[1.1]">{viewAllButtonText}</p>
                         </div>
                       </div>

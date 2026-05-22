@@ -36,6 +36,11 @@ import { SectionHowItWorksCms } from '@/components/sections/SectionHowItWorksCms
 import { SectionFigmaSimpleHero } from '@/components/sections/SectionFigmaSimpleHero'
 import { SectionFigmaStatsGrid } from '@/components/sections/SectionFigmaStatsGrid'
 import { SectionFigmaTestimonialCards } from '@/components/sections/SectionFigmaTestimonialCards'
+import { SectionProofPress } from '@/components/sections/SectionProofPress'
+import { SectionOfferCards } from '@/components/sections/SectionOfferCards'
+import { SectionProductEcosystem } from '@/components/sections/SectionProductEcosystem'
+import { SectionJourney } from '@/components/sections/SectionJourney'
+import { SectionSecurity } from '@/components/sections/SectionSecurity'
 import { SectionKeyFigures } from '@/components/sections/SectionKeyFigures'
 import { SectionMediaText } from '@/components/sections/SectionMediaText'
 import { SectionCompanyMap } from '@/components/sections/SectionCompanyMap'
@@ -113,6 +118,11 @@ export const SECTION_REGISTRY: Record<string, SectionComponent> = {
   figma_stats_grid: SectionFigmaStatsGrid as SectionComponent,
   key_figures: SectionKeyFigures as SectionComponent,
   figma_testimonial_cards: SectionFigmaTestimonialCards as SectionComponent,
+  proof_press: SectionProofPress as SectionComponent,
+  offer_cards: SectionOfferCards as SectionComponent,
+  product_ecosystem: SectionProductEcosystem as SectionComponent,
+  journey: SectionJourney as SectionComponent,
+  security: SectionSecurity as SectionComponent,
   media_text: SectionMediaText as SectionComponent,
   company_map: SectionCompanyMap as SectionComponent,
 }

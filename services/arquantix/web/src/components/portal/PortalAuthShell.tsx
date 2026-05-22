@@ -1,43 +1,70 @@
 'use client'
 
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
-import { BrandLogo } from '@/components/ui/BrandLogo'
+import { SectionHero } from '@/components/sections/SectionHero'
+import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
+import { PersistentSiteFooter } from '@/components/site/PersistentSiteFooter'
+import { PortalAuthFootnote } from '@/components/portal/PortalAuthFootnote'
+import { usePortalAuthContent } from '@/components/portal/PortalAuthContentProvider'
+import type { HomeHeroAuthContent } from '@/lib/cms/resolveHomeHeroAuthContent'
+import type { SiteFooterData } from '@/lib/cms/site-footer'
 
 type Props = {
   children: React.ReactNode
-  className?: string
-  showBack?: boolean
-  backHref?: string
+  heroContent: HomeHeroAuthContent | null
+  brand?: SiteBrandLogo | null
+  initialFooterData?: SiteFooterData
+  backToWebsiteLabel?: string
+  backToWebsiteHref?: string
+}
+
+function PortalAuthHeroPanel({ heroContent }: { heroContent: HomeHeroAuthContent }) {
+  return (
+    <div className="portal-auth__media">
+      <SectionHero
+        {...heroContent}
+        hideCta
+        deferBackgroundVideo
+        className="portal-auth__hero"
+      />
+    </div>
+  )
 }
 
 export function PortalAuthShell({
   children,
-  className,
-  showBack = false,
-  backHref = '/app/login',
+  heroContent,
+  brand,
+  initialFooterData,
+  backToWebsiteLabel = 'Back to the website',
+  backToWebsiteHref = '/en',
 }: Props) {
-  return (
-    <div className={cn('flex min-h-screen flex-col bg-v-bg', className)}>
-      <header className="flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link href="/app/login" className="inline-flex items-center" aria-label="Vancelian">
-          <BrandLogo color="black" className="h-6 w-auto" />
-        </Link>
-        {showBack ? (
-          <Link
-            href={backHref}
-            className="font-ui text-[14px] font-medium text-v-fg-muted transition-colors hover:text-v-fg"
-          >
-            ← Retour
-          </Link>
-        ) : (
-          <span className="w-12" aria-hidden />
-        )}
-      </header>
+  const authContent = usePortalAuthContent()
 
-      <main className="flex flex-1 flex-col items-center justify-center px-6 pb-16 pt-4">
-        <div className="w-full max-w-[440px]">{children}</div>
+  return (
+    <div className="portal-auth-page">
+      <main className="portal-auth">
+        <Link href={backToWebsiteHref} className="portal-auth__back" aria-label={backToWebsiteLabel}>
+          <span className="portal-auth__back-arrow" aria-hidden="true">
+            ←
+          </span>
+          <span>{backToWebsiteLabel}</span>
+        </Link>
+
+        {heroContent ? <PortalAuthHeroPanel heroContent={heroContent} /> : null}
+
+        <section className="portal-auth__form-wrap" aria-labelledby="portal-auth-form-title">
+          <Link href={backToWebsiteHref} className="portal-auth__logo" aria-label="Vancelian — home">
+            <BrandLogo brand={brand} lockup="horizontal" color="black" className="h-6 w-auto" />
+          </Link>
+
+          <div className="portal-auth__form-main">{children}</div>
+
+          <PortalAuthFootnote content={authContent.legal} />
+        </section>
       </main>
+
+      <PersistentSiteFooter initialData={initialFooterData} />
     </div>
   )
 }

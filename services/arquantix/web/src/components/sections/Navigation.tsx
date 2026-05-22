@@ -28,9 +28,12 @@
  */
 
 import * as React from 'react'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
+import { PublicNavLink } from '@/components/site/PublicNavLink'
+import { useNavPending } from '@/components/site/NavPendingContext'
 import type { MenuItem } from '@/lib/menu/getPrimaryMenu'
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher'
 import { MobilePrimaryNavList } from '@/components/layout/MobilePrimaryNavList'
@@ -168,7 +171,7 @@ function TopnavLink({
   children,
 }: TopnavLinkProps) {
   return (
-    <a
+    <PublicNavLink
       href={href}
       onClick={onClick}
       target={newTab ? '_blank' : undefined}
@@ -192,7 +195,7 @@ function TopnavLink({
         )}
         style={{ background: palette.underlineColor }}
       />
-    </a>
+    </PublicNavLink>
   )
 }
 
@@ -227,14 +230,14 @@ function TopnavCta({ palette, href, newTab, onClick, children }: TopnavCtaProps)
           color: palette.ctaFg,
         }}
       >
-        <a
+        <PublicNavLink
           href={href}
           target={newTab ? '_blank' : undefined}
           rel={newTab ? 'noopener noreferrer' : undefined}
           onClick={onClick}
         >
           {children}
-        </a>
+        </PublicNavLink>
       </Button>
     )
   }
@@ -275,9 +278,9 @@ function TopnavTextLink({ palette, href, onClick, children }: TopnavTextLinkProp
   const style = { color: palette.textLinkColor }
   if (href) {
     return (
-      <a href={href} className={base} style={style} onClick={onClick}>
+      <PublicNavLink href={href} className={base} style={style} onClick={onClick}>
         {children}
-      </a>
+      </PublicNavLink>
     )
   }
   return (
@@ -312,9 +315,9 @@ export function Navigation({
   void _overlayHeroHomeLight
   void _overlayBlogHero
 
-  const pathname = usePathname() ?? ''
+  const { effectivePath } = useNavPending()
   const publicLocales = publicLocalesProp ?? [...supportedLocales]
-  const navLocale = getActiveLocaleFromPathname(pathname)
+  const navLocale = getActiveLocaleFromPathname(effectivePath)
   const surface = useTopnavSurfaceObserver()
   const palette = buildTopnavPalettes(menuTheme)[surface]
 
@@ -377,7 +380,7 @@ export function Navigation({
     (item) => !buttonAsLinkItems.some((promoted) => promoted.id === item.id),
   )
 
-  const isActive = (item: MenuItem) => isNavItemActive(pathname, item, navLocale)
+  const isActive = (item: MenuItem) => isNavItemActive(effectivePath, item, navLocale)
 
   /** DS strict — un seul CTA primary à droite, le premier bouton CMS. */
   const primaryCta = buttonItems[0] ?? null
@@ -453,7 +456,7 @@ export function Navigation({
   /* ---------- Logo (filtre inversé sur surfaces sombres) ---------- */
 
   const logoNode = (
-    <a
+    <Link
       href={`/${navLocale}`}
       className="inline-flex items-center no-underline"
       aria-label={siteCommonCta(navLocale, 'nav_home_aria')}
@@ -471,7 +474,7 @@ export function Navigation({
           transition: 'filter 480ms var(--v-ease-in-out)',
         }}
       />
-    </a>
+    </Link>
   )
 
   return (
@@ -602,7 +605,7 @@ export function Navigation({
               <MobilePrimaryNavList
                 linkItems={linkItems}
                 navLocale={navLocale}
-                pathname={pathname}
+                pathname={effectivePath}
                 isActive={isActive}
                 onNavigate={() => setMobileOpen(false)}
               />

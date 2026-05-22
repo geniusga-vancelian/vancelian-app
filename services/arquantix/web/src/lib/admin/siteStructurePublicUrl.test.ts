@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import type { SiteTreeNode } from '@/lib/cms/buildSiteTree'
-import { siteStructurePublicUrl } from './siteStructurePublicUrl'
+import { siteStructurePreviewUrl, siteStructurePublicUrl } from './siteStructurePublicUrl'
 import {
   EXCLUSIVE_OFFER_GABARIT_SLUG,
   EXCLUSIVE_OFFER_GABARIT_TEMPLATE,
@@ -110,6 +110,48 @@ describe('siteStructurePublicUrl', () => {
         'it',
       ),
       '/it/blog/mon-article',
+    )
+  })
+})
+
+describe('siteStructurePreviewUrl', () => {
+  it('home → /preview/home?locale=…', () => {
+    assert.equal(
+      siteStructurePreviewUrl(node({ slug: 'home', urlPath: '/', template: 'homepage' }), 'en'),
+      '/preview/home?locale=en',
+    )
+  })
+
+  it('page CMS → /preview/{slug}?locale=…', () => {
+    assert.equal(
+      siteStructurePreviewUrl(node({ slug: 'about', urlPath: '/about', template: 'homepage' }), 'fr'),
+      '/preview/about?locale=fr',
+    )
+  })
+
+  it('vault → /preview/{slug}?locale=… (pas /{locale}/projects/…)', () => {
+    assert.equal(
+      siteStructurePreviewUrl(
+        node({ slug: 'offre-x', urlPath: '/projects/offre-x', template: VAULT_BUILDER_TEMPLATE }),
+        'en',
+      ),
+      '/preview/offre-x?locale=en',
+    )
+  })
+
+  it('article blog virtuel → /preview/article/{id}?locale=…', () => {
+    assert.equal(
+      siteStructurePreviewUrl(
+        node({
+          slug: 'mon-article',
+          urlPath: '/blog/mon-article',
+          template: 'blog_article',
+          isVirtual: true,
+          articleId: 'art1',
+        }),
+        'fr',
+      ),
+      '/preview/article/art1?locale=fr',
     )
   })
 })

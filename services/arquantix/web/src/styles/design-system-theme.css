@@ -1,86 +1,111 @@
 /**
- * Source de vérité couleurs / tokens — export Figma « Extraire composants pour Design System »
- * (sync manuel depuis le bundle ZIP ; ne pas dupliquer ailleurs).
+ * Tokens shadcn/Tailwind remappés vers le Design System Vancelian.
+ *
+ * Source de vérité : `src/styles/vancelian-tokens.css` (variables `--v-*`).
+ * Ce fichier expose les mêmes noms historiques (`--background`, `--primary`, …)
+ * pour que les composants shadcn existants héritent automatiquement de la
+ * nouvelle charte (palette off-white / anthracite / terracotta).
  */
 
 :root {
   --font-size: 16px;
-  --background: #ffffff;
-  --foreground: oklch(0.145 0 0);
-  --card: #ffffff;
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: #030213;
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0.0058 264.53);
-  --secondary-foreground: #030213;
-  --muted: #ececf0;
-  --muted-foreground: #717182;
-  --accent: #e9ebef;
-  --accent-foreground: #030213;
-  --destructive: #d4183d;
-  --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.1);
+
+  /* ============================================================
+     Surfaces — papier off-white, jamais blanc pur
+     ============================================================ */
+  --background: var(--v-bg);              /* #F7F7F4 */
+  --foreground: var(--v-fg);              /* #1A1815 */
+  --card: var(--v-card);                  /* #F2F1ED */
+  --card-foreground: var(--v-fg);
+  --popover: var(--v-bg);
+  --popover-foreground: var(--v-fg);
+
+  /* ============================================================
+     Primary / Secondary / Accent
+     Décision Vancelian : CTA primaire = anthracite, jamais terracotta.
+     Terracotta = uniquement text-links et accents éditoriaux.
+     ============================================================ */
+  --primary: var(--v-fg);                 /* #1A1815 (anthracite, pas #030213) */
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--v-fg-05);            /* #EFEDE6 (subtle bg) */
+  --secondary-foreground: var(--v-fg);
+
+  --muted: var(--v-fg-05);
+  --muted-foreground: var(--v-fg-muted);  /* #6E665C */
+  --accent: var(--v-card);                /* #F2F1ED (jamais terracotta en aplat) */
+  --accent-foreground: var(--v-fg);
+
+  /* Erreur — seul rouge autorisé, hors triade identitaire */
+  --destructive: var(--v-error);          /* #B83A3A */
+  --destructive-foreground: #FFFFFF;
+
+  /* Borders / inputs */
+  --border: var(--v-fg-10);               /* #E2DED4 */
   --input: transparent;
-  --input-background: #f3f3f5;
-  --switch-background: #cbced4;
+  --input-background: var(--v-card);
+  --switch-background: var(--v-fg-20);
+  --ring: var(--v-fg);
+
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #030213;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  /* Ponts utilisés par le code métier / Tailwind brand (inchangés côté noms) */
-  --color-black: #0b0d10;
-  --color-bronze: #742232;
-  --color-neutral: #e6e6e6;
+
+  /* Charts — triade identitaire + neutres (jamais simultanée en aplat) */
+  --chart-1: var(--v-terracotta);
+  --chart-2: var(--v-green);
+  --chart-3: var(--v-blue);
+  --chart-4: var(--v-fg-muted);
+  --chart-5: var(--v-fg-light);
+
+  /* Radius DS : 8px = carte (palier le plus utilisé pour shadcn) */
+  --radius: 8px;
+
+  /* Sidebar admin (héritée shadcn — on reste neutre) */
+  --sidebar: var(--v-card);
+  --sidebar-foreground: var(--v-fg);
+  --sidebar-primary: var(--v-fg);
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: var(--v-card-hover);
+  --sidebar-accent-foreground: var(--v-fg);
+  --sidebar-border: var(--v-fg-10);
+  --sidebar-ring: var(--v-fg);
+
+  /* ============================================================
+     Ponts brand historiques (compatibilité ascendante)
+     Remappés vers la triade Vancelian — on garde les noms pour ne
+     pas casser les classes Tailwind `brand-*` / `neutral-*` existantes.
+     ============================================================ */
+  --color-black: var(--v-fg);             /* #1A1815 */
+  --color-bronze: var(--v-terracotta);    /* #C0512E (était #742232) */
+  --color-neutral: var(--v-fg-10);
 }
 
+[data-theme="dark"],
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --background: var(--v-bg);
+  --foreground: var(--v-fg);
+  --card: var(--v-card);
+  --card-foreground: var(--v-fg);
+  --popover: var(--v-bg);
+  --popover-foreground: var(--v-fg);
+  --primary: var(--v-fg);
+  --primary-foreground: #1A1815;
+  --secondary: var(--v-card-hover);
+  --secondary-foreground: var(--v-fg);
+  --muted: var(--v-card-hover);
+  --muted-foreground: var(--v-fg-muted);
+  --accent: var(--v-card-hover);
+  --accent-foreground: var(--v-fg);
+  --destructive: var(--v-error);
+  --destructive-foreground: #FFFFFF;
+  --border: var(--v-fg-10);
+  --input: var(--v-fg-10);
+  --ring: var(--v-fg);
+  --sidebar: var(--v-card);
+  --sidebar-foreground: var(--v-fg);
+  --sidebar-primary: var(--v-fg);
+  --sidebar-primary-foreground: #1A1815;
+  --sidebar-accent: var(--v-card-hover);
+  --sidebar-accent-foreground: var(--v-fg);
+  --sidebar-border: var(--v-fg-10);
+  --sidebar-ring: var(--v-fg);
 }

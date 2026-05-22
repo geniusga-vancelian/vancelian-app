@@ -1,29 +1,23 @@
-import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
-import { readPortalAccessToken } from '@/lib/portal/portalSession'
-import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
+import { getSiteFooterData } from '@/lib/cms/site-footer'
+import { getPortalSupportContent } from '@/lib/cms/portal-support'
 import { PortalShell } from '@/components/portal/PortalShell'
-import { getSiteBrandLogo } from '@/lib/cms/site-footer'
-
-async function readPortalInitials(): Promise<string | undefined> {
-  const token = await readPortalAccessToken()
-  if (!token) return undefined
-  try {
-    const res = await portalUpstreamFetch('/api/app/profile', {
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!res.ok) return undefined
-    const profile = await res.json().catch(() => null)
-    const initials = resolvePortalProfileInitials(profile)
-    return initials || undefined
-  } catch {
-    return undefined
-  }
-}
 
 export default async function PortalShellLayout({ children }: { children: React.ReactNode }) {
-  const [initials, brand] = await Promise.all([readPortalInitials(), getSiteBrandLogo('fr')])
+  let initialFooterData: Awaited<ReturnType<typeof getSiteFooterData>> | undefined
+  let initialSupportContent: Awaited<ReturnType<typeof getPortalSupportContent>> | undefined
+  try {
+    initialFooterData = await getSiteFooterData('fr')
+  } catch {
+    initialFooterData = undefined
+  }
+  try {
+    initialSupportContent = await getPortalSupportContent('fr')
+  } catch {
+    initialSupportContent = undefined
+  }
+
   return (
-    <PortalShell initials={initials} brand={brand}>
+    <PortalShell initialFooterData={initialFooterData} initialSupportContent={initialSupportContent}>
       {children}
     </PortalShell>
   )

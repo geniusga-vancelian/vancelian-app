@@ -15,6 +15,7 @@ import {
   shouldSkipLocalizePublicHref,
 } from '@/lib/i18n/publicLocalizedRouting'
 import type { Locale } from '@/config/locales'
+import { PublicNavLink } from '@/components/site/PublicNavLink'
 
 const DEFAULT_MEGA_ICON = '/mega-menu-default-icon.png'
 
@@ -95,7 +96,7 @@ export function MobilePrimaryNavList({
           const active = isActive(item)
           return (
             <li key={item.id} className="border-b border-black/[0.06]">
-              <a
+              <PublicNavLink
                 href={href}
                 target={newTab ? '_blank' : undefined}
                 rel={newTab ? 'noopener noreferrer' : undefined}
@@ -109,7 +110,7 @@ export function MobilePrimaryNavList({
                 )}
               >
                 {item.label}
-              </a>
+              </PublicNavLink>
             </li>
           )
         }
@@ -119,7 +120,7 @@ export function MobilePrimaryNavList({
           const href = localizePublicInternalHref(item.urlPath, navLocale)
           return (
             <li key={item.id} className="border-b border-black/[0.06]">
-              <a
+              <PublicNavLink
                 href={href}
                 onClick={onNavigate}
                 className={cn(
@@ -131,7 +132,7 @@ export function MobilePrimaryNavList({
                 )}
               >
                 {item.label}
-              </a>
+              </PublicNavLink>
             </li>
           )
         }
@@ -185,7 +186,7 @@ export function MobilePrimaryNavList({
                         const iconSrc = row.iconUrl && row.iconUrl.length > 0 ? row.iconUrl : DEFAULT_MEGA_ICON
                         return (
                           <li key={row.id}>
-                            <a
+                            <PublicNavLink
                               href={row.href}
                               onClick={onNavigate}
                               className={cn(
@@ -218,7 +219,7 @@ export function MobilePrimaryNavList({
                                   </Paragraph>
                                 ) : null}
                               </div>
-                            </a>
+                            </PublicNavLink>
                           </li>
                         )
                       })}

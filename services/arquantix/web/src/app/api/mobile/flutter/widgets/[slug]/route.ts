@@ -8,6 +8,8 @@ import {
   signInternalBackendJwtAu,
 } from '@/lib/backend-jwt'
 import { effectiveIsCompanyNews, getCompanyNewsArticleIds } from '@/lib/blog/articleService'
+import { pickArticleI18n } from '@/lib/blog/articleI18nFallback'
+import { absolutizeMediaUrlForApiClient } from '@/lib/catalog/packagedCatalogHelpers'
 
 type JsonRecord = Record<string, unknown>
 
@@ -122,13 +124,16 @@ async function fetchBackendBundles(): Promise<BackendBundle[]> {
   return json as BackendBundle[]
 }
 
-type FeedContext = { assetSlug?: string }
+type FeedContext = { assetSlug?: string; publicOrigin?: string | null }
 
 async function resolveFeedData(
   feedSchema: JsonRecord,
   locale: string,
   context?: FeedContext
 ) {
+  const publicOrigin = context?.publicOrigin ?? null
+  const absCover = (url: string | null | undefined): string =>
+    absolutizeMediaUrlForApiClient(url ?? null, publicOrigin) ?? ''
   const feedType = asString(feedSchema.feedType).trim()
   const source = asRecord(feedSchema.source) ?? {}
 
@@ -163,7 +168,7 @@ async function resolveFeedData(
       },
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
       include: {
-        i18n: { where: { locale }, take: 1 },
+        i18n: true,
         coverMedia: true,
       },
       take: Math.min(80, limit * 10),
@@ -213,15 +218,16 @@ async function resolveFeedData(
             : ''
         const categoryLabel = catSlug ? categoryLabelBySlug.get(catSlug) ?? '' : ''
         const categoryLabels = categoryLabelsForSlugs(a.categorySlugs, categoryLabelBySlug)
-        const standfirst = a.i18n[0]?.standfirst ?? ''
+        const i18n = pickArticleI18n(a.i18n, locale)
+        const standfirst = i18n?.standfirst ?? ''
         return {
           id: a.id,
           slug: a.slug,
-          title: a.i18n[0]?.title ?? a.slug,
+          title: i18n?.title ?? a.slug,
           authorName: a.authorName,
           publishedAt: a.publishedAt?.toISOString() ?? null,
           publishedDate: publishedRef ? dateFormatter.format(publishedRef) : '',
-          coverUrl,
+          coverUrl: absCover(coverUrl),
           readingTime: estimateReadingTime(standfirst),
           categorySlug: catSlug || null,
           categoryLabel: categoryLabel || null,
@@ -269,7 +275,7 @@ async function resolveFeedData(
       },
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
       include: {
-        i18n: { where: { locale }, take: 1 },
+        i18n: true,
         coverMedia: true,
       },
       take: limit,
@@ -309,15 +315,16 @@ async function resolveFeedData(
             : ''
         const categoryLabel = catSlug ? categoryLabelBySlug.get(catSlug) ?? '' : ''
         const categoryLabels = categoryLabelsForSlugs(a.categorySlugs, categoryLabelBySlug)
-        const standfirst = a.i18n[0]?.standfirst ?? ''
+        const i18n = pickArticleI18n(a.i18n, locale)
+        const standfirst = i18n?.standfirst ?? ''
         return {
           id: a.id,
           slug: a.slug,
-          title: a.i18n[0]?.title ?? a.slug,
+          title: i18n?.title ?? a.slug,
           authorName: a.authorName,
           publishedAt: a.publishedAt?.toISOString() ?? null,
           publishedDate: publishedRef ? dateFormatter.format(publishedRef) : '',
-          coverUrl,
+          coverUrl: absCover(coverUrl),
           readingTime: estimateReadingTime(standfirst),
           categorySlug: catSlug || null,
           categoryLabel: categoryLabel || null,
@@ -349,10 +356,7 @@ async function resolveFeedData(
             },
             orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
             include: {
-              i18n: {
-                where: { locale },
-                take: 1,
-              },
+              i18n: true,
               coverMedia: true,
             },
             take: limit,
@@ -395,15 +399,16 @@ async function resolveFeedData(
           : ''
         const categoryLabel = categorySlug ? (categoryLabelBySlug.get(categorySlug) ?? '') : ''
         const categoryLabels = categoryLabelsForSlugs(a.categorySlugs, categoryLabelBySlug)
-        const standfirst = a.i18n[0]?.standfirst ?? ''
+        const i18n = pickArticleI18n(a.i18n, locale)
+        const standfirst = i18n?.standfirst ?? ''
         return {
           id: a.id,
           slug: a.slug,
-          title: a.i18n[0]?.title ?? a.slug,
+          title: i18n?.title ?? a.slug,
           authorName: a.authorName,
           publishedAt: a.publishedAt?.toISOString() ?? null,
           publishedDate: publishedRef ? dateFormatter.format(publishedRef) : '',
-          coverUrl,
+          coverUrl: absCover(coverUrl),
           readingTime: estimateReadingTime(standfirst),
           categorySlug: categorySlug || null,
           categoryLabel: categoryLabel || null,
@@ -431,10 +436,7 @@ async function resolveFeedData(
       },
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
       include: {
-        i18n: {
-          where: { locale },
-          take: 1,
-        },
+        i18n: true,
         coverMedia: true,
       },
       take: limit,
@@ -477,15 +479,16 @@ async function resolveFeedData(
           : ''
         const categoryLabel = categorySlug ? (categoryLabelBySlug.get(categorySlug) ?? '') : ''
         const categoryLabels = categoryLabelsForSlugs(a.categorySlugs, categoryLabelBySlug)
-        const standfirst = a.i18n[0]?.standfirst ?? ''
+        const i18n = pickArticleI18n(a.i18n, locale)
+        const standfirst = i18n?.standfirst ?? ''
         return {
           id: a.id,
           slug: a.slug,
-          title: a.i18n[0]?.title ?? a.slug,
+          title: i18n?.title ?? a.slug,
           authorName: a.authorName,
           publishedAt: a.publishedAt?.toISOString() ?? null,
           publishedDate: publishedRef ? dateFormatter.format(publishedRef) : '',
-          coverUrl,
+          coverUrl: absCover(coverUrl),
           readingTime: estimateReadingTime(standfirst),
           categorySlug: categorySlug || null,
           categoryLabel: categoryLabel || null,
@@ -506,10 +509,7 @@ async function resolveFeedData(
       where: { status: ContentStatus.PUBLISHED },
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
       include: {
-        i18n: {
-          where: { locale },
-          take: 1,
-        },
+        i18n: true,
       },
       take: 200,
     })
@@ -521,14 +521,17 @@ async function resolveFeedData(
         return slugs.map((v) => String(v)).includes(categorySlug)
       })
       .slice(0, limit)
-      .map((a) => ({
-        id: a.id,
-        slug: a.slug,
-        title: a.i18n[0]?.title ?? a.slug,
-        standfirst: a.i18n[0]?.standfirst ?? '',
-        publishedAt: a.publishedAt,
-        articleType: a.articleType,
-      }))
+      .map((a) => {
+        const i18n = pickArticleI18n(a.i18n, locale)
+        return {
+          id: a.id,
+          slug: a.slug,
+          title: i18n?.title ?? a.slug,
+          standfirst: i18n?.standfirst ?? '',
+          publishedAt: a.publishedAt,
+          articleType: a.articleType,
+        }
+      })
 
     return { feedType, items }
   }
@@ -704,10 +707,12 @@ export async function GET(
     if (!slug) {
       return NextResponse.json({ error: 'Invalid slug' }, { status: 400 })
     }
-    const { searchParams } = new URL(request.url)
+    const reqUrl = new URL(request.url)
+    const { searchParams } = reqUrl
     const locale = searchParams.get('locale')?.trim() || 'fr'
     const assetSlug = searchParams.get('assetSlug')?.trim()?.toLowerCase() ?? undefined
-    const context: FeedContext | undefined = assetSlug ? { assetSlug } : undefined
+    const publicOrigin = reqUrl.origin
+    const context: FeedContext = { ...(assetSlug ? { assetSlug } : {}), publicOrigin }
 
     const widget = await prisma.dsComponent.findFirst({
       where: {

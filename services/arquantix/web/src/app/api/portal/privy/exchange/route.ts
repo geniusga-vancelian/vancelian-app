@@ -68,9 +68,32 @@ export async function POST(request: NextRequest) {
       cache: 'no-store',
     })
 
-    const data = await upstream.json().catch(() => null)
+    const raw = await upstream.text()
+    let data: unknown = null
+    if (raw.trim()) {
+      try {
+        data = JSON.parse(raw)
+      } catch {
+        console.error('[api/portal/privy/exchange] non-json upstream', {
+          status: upstream.status,
+          bodyPreview: raw.slice(0, 240),
+        })
+      }
+    }
     if (!upstream.ok) {
-      return NextResponse.json(data ?? { error: 'exchange_failed' }, { status: upstream.status })
+      if (data && typeof data === 'object') {
+        return NextResponse.json(data, { status: upstream.status })
+      }
+      return NextResponse.json(
+        {
+          error: 'exchange_failed',
+          message:
+            upstream.status >= 502
+              ? 'Le service d’authentification est temporairement indisponible. Réessayez dans quelques secondes.'
+              : 'Échange de session impossible. Réessayez.',
+        },
+        { status: upstream.status >= 502 ? 502 : upstream.status || 502 },
+      )
     }
 
     const session = parseExchangeResponse(data)

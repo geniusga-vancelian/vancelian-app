@@ -18,7 +18,7 @@ import {
 } from '@/lib/catalog/packagedCatalogHelpers'
 import { defaultLocale, getLocaleOrDefault, supportedLocales, type Locale } from '@/config/locales'
 import { siteStructureEditorHref } from '@/lib/admin/siteStructureEditorHref'
-import { siteStructurePublicUrl } from '@/lib/admin/siteStructurePublicUrl'
+import { siteStructurePreviewUrl, siteStructurePublicUrl } from '@/lib/admin/siteStructurePublicUrl'
 import { analyzeSiteTreeStructure } from '@/lib/admin/siteStructureTreeMeta'
 import { mustStayStructuralRoot } from '@/lib/admin/pageStructureValidation'
 import {
@@ -937,7 +937,7 @@ export function SiteStructureTree({
       return `/preview/common-module/${encodeURIComponent(previewCommonModuleRow.id)}?locale=${encodeURIComponent(loc)}`
     }
     if (previewNode) {
-      return siteStructurePublicUrl(previewNode, previewLocale)
+      return siteStructurePreviewUrl(previewNode, previewLocale)
     }
     return ''
   }, [previewCommonModuleRow, previewNode, previewLocale])

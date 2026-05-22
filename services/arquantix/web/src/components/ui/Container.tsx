@@ -6,7 +6,9 @@ export interface ContainerProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Largeur de contenu alignée site-wide (~1280px), centrée, padding horizontal responsive.
+ * Largeur de contenu site-wide — classe DS `.v-container`
+ * (1280px max, padding 48 / 24 / 16 px selon breakpoint).
+ * Même conteneur que les modules CMS (`FaqSection`, `Footer`, etc.).
  */
 export function Container({
   size = "default",
@@ -17,7 +19,7 @@ export function Container({
   return (
     <div
       className={cn(
-        "mx-auto w-full max-w-[1280px] px-6 lg:px-8",
+        "v-container",
         size === "narrow" && "max-w-[960px]",
         size === "wide" && "max-w-[1440px]",
         className,

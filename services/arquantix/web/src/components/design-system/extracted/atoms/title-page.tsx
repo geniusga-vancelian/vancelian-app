@@ -44,7 +44,7 @@ export function Titlepage({
       <Comp
         id={id}
         className={cn(
-          "m-0 block w-full font-['Avenir:Heavy',sans-serif] font-extrabold text-[48px] leading-none tracking-[-0.02em] md:text-[clamp(3rem,5vw,56px)]",
+          "m-0 block w-full font-ui font-semibold font-extrabold text-[48px] leading-none tracking-[-0.02em] md:text-[clamp(3rem,5vw,56px)]",
           ALIGN_INNER[align],
           className,
         )}

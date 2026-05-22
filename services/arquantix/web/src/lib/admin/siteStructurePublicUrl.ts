@@ -53,3 +53,28 @@ export function siteStructurePublicUrl(
   const path = node.urlPath.startsWith('/') ? node.urlPath : `/${node.urlPath}`
   return `/${loc}${path}`
 }
+
+export function cmsPagePreviewUrl(slug: string, locale: string): string {
+  const loc = getLocaleOrDefault(locale)
+  return `/preview/${encodeURIComponent(slug)}?locale=${encodeURIComponent(loc)}`
+}
+
+/**
+ * URL d’aperçu admin (iframe CMS) — toujours sous `/preview/*`.
+ *
+ * Sur `console.*`, les URLs publiques `/{locale}` sont redirigées vers `/admin/pages` ;
+ * l’iframe doit donc cibler les routes d’aperçu brouillon (auth admin), identiques en local et en prod.
+ */
+export function siteStructurePreviewUrl(
+  node: SiteTreeNode,
+  locale: string,
+): string {
+  const loc = getLocaleOrDefault(locale)
+  const q = `locale=${encodeURIComponent(loc)}`
+
+  if (node.isVirtual && node.articleId) {
+    return `/preview/article/${encodeURIComponent(node.articleId)}?${q}`
+  }
+
+  return `/preview/${encodeURIComponent(node.slug)}?${q}`
+}

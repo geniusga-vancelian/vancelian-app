@@ -32,11 +32,8 @@ import {
   type ProductRegistryDraft,
 } from '@/components/admin/PackagedProductSettingsPanel'
 import { MediaField } from '@/components/admin/MediaField'
-import { VaultDocumentsListModuleEditor } from '@/components/admin/VaultDocumentsListModuleEditor'
-import { VaultLocalisationModuleEditor } from '@/components/admin/VaultLocalisationModuleEditor'
-import { VaultVirtualVisualizationModuleEditor } from '@/components/admin/VaultVirtualVisualizationModuleEditor'
-import { VaultMediaCarouselModuleEditor } from '@/components/admin/VaultMediaCarouselModuleEditor'
-import { VaultVideoBlockArticleModuleEditor } from '@/components/admin/VaultVideoBlockArticleModuleEditor'
+import { normalizeVaultModulesParagraphContents } from '@/lib/admin/coerceVaultParagraphModuleContent'
+import { VaultStructuredModuleEditor } from '@/components/admin/VaultStructuredModuleEditor'
 import { PagePreviewPanel } from '@/components/admin/PagePreviewPanel'
 import { AddVaultModuleModal } from '@/components/admin/AddVaultModuleModal'
 import { VaultModulesSection } from '@/components/admin/VaultModulesSection'
@@ -46,7 +43,7 @@ import {
   getVaultModuleLabel,
 } from '@/lib/admin/vaultModuleCatalog'
 import { CollapsibleAdminSection } from '@/components/admin/CollapsibleAdminSection'
-import { VAULT_BUILDER_IFRAME_PREVIEW_QUERY } from '@/lib/cms/vaultBuilderPreviewConstants'
+import { cmsPagePreviewUrl } from '@/lib/admin/siteStructurePublicUrl'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -222,7 +219,9 @@ const withConfigDefaults = (config: Partial<LandingConfig> | null | undefined): 
     ...DEFAULT_CONFIG.fixedBottomCta,
     ...(config?.fixedBottomCta ?? {}),
   },
-  modules: Array.isArray(config?.modules) ? (config.modules as LandingModule[]) : [],
+  modules: normalizeVaultModulesParagraphContents(
+    Array.isArray(config?.modules) ? (config.modules as LandingModule[]) : [],
+  ),
   headerMediaId: config?.headerMediaId ?? undefined,
   investmentTypeSlug: config?.investmentTypeSlug ?? undefined,
   sortOrder: config?.sortOrder ?? 999,
@@ -708,9 +707,18 @@ function AdminVaultBuilderPageInner() {
       ...prev,
       config: {
         ...prev.config,
-        modules: prev.config.modules.map((m) =>
-          m.id === moduleId ? { ...m, content: { ...m.content, ...patch } } : m
-        ),
+        modules: prev.config.modules.map((m) => {
+          if (m.id !== moduleId) return m
+          const base =
+            m.content != null && typeof m.content === 'object' && !Array.isArray(m.content)
+              ? { ...(m.content as Record<string, unknown>) }
+              : {}
+          const merged = { ...base, ...patch }
+          if (m.type === 'PARAGRAPH' && 'text' in patch) {
+            delete merged.markdown
+          }
+          return { ...m, content: merged }
+        }),
       },
     }))
   }
@@ -1285,20 +1293,26 @@ function AdminVaultBuilderPageInner() {
         setProductHeaderMediaId(data.headerMediaId ?? null)
         setProductDetailMediaId(data.detailMediaId ?? null)
         const raw = Array.isArray(data.modules) ? data.modules : []
-        setProductModules(ensureRequiredProductModules(raw, product))
+        setProductModules(
+          normalizeVaultModulesParagraphContents(ensureRequiredProductModules(raw, product)),
+        )
         setProductSortOrder(typeof data.sortOrder === 'number' ? data.sortOrder : 999)
         setProductIsPublished(data.isPublished === true)
       } else {
         setProductHeaderMediaId(null)
         setProductDetailMediaId(null)
-        setProductModules(ensureRequiredProductModules([], product))
+        setProductModules(
+          normalizeVaultModulesParagraphContents(ensureRequiredProductModules([], product)),
+        )
         setProductSortOrder(999)
         setProductIsPublished(false)
       }
     } catch {
       setProductHeaderMediaId(null)
       setProductDetailMediaId(null)
-      setProductModules(ensureRequiredProductModules([], product))
+      setProductModules(
+        normalizeVaultModulesParagraphContents(ensureRequiredProductModules([], product)),
+      )
       setProductSortOrder(999)
       setProductIsPublished(false)
     }
@@ -1434,9 +1448,18 @@ function AdminVaultBuilderPageInner() {
 
   const handlePatchProductModuleContent = (moduleId: string, patch: Record<string, unknown>) => {
     setProductModules((prev) =>
-      prev.map((m) =>
-        m.id === moduleId ? { ...m, content: { ...m.content, ...patch } } : m
-      ),
+      prev.map((m) => {
+        if (m.id !== moduleId) return m
+        const base =
+          m.content != null && typeof m.content === 'object' && !Array.isArray(m.content)
+            ? { ...(m.content as Record<string, unknown>) }
+            : {}
+        const merged = { ...base, ...patch }
+        if (m.type === 'PARAGRAPH' && 'text' in patch) {
+          delete merged.markdown
+        }
+        return { ...m, content: merged }
+      }),
     )
   }
 
@@ -1985,58 +2008,17 @@ function AdminVaultBuilderPageInner() {
                         }
                         isModuleLocked={(m) => REQUIRED_PRODUCT_MODULE_TYPES.includes(m.type)}
                         renderModuleEditor={(module) => (
-                          <>
-                            {module.type === 'MediaImageCarouselModule' ? (
-                              <VaultMediaCarouselModuleEditor
-                                content={module.content}
-                                onPatch={(patch) =>
-                                  handlePatchProductModuleContent(module.id, patch)
-                                }
-                              />
-                            ) : module.type === 'DocumentsListModule' ? (
-                              <VaultDocumentsListModuleEditor
-                                content={module.content}
-                                onPatch={(patch) =>
-                                  handlePatchProductModuleContent(module.id, patch)
-                                }
-                              />
-                            ) : module.type === 'VideoBlockArticleModule' ? (
-                              <VaultVideoBlockArticleModuleEditor
-                                content={module.content}
-                                onPatch={(patch) =>
-                                  handlePatchProductModuleContent(module.id, patch)
-                                }
-                              />
-                            ) : module.type === 'LocalisationModule' ? (
-                              <VaultLocalisationModuleEditor
-                                content={module.content}
-                                onPatch={(patch) =>
-                                  handlePatchProductModuleContent(module.id, patch)
-                                }
-                              />
-                            ) : module.type === 'VirtualVisualizationModule' ? (
-                              <VaultVirtualVisualizationModuleEditor
-                                content={module.content}
-                                onPatch={(patch) =>
-                                  handlePatchProductModuleContent(module.id, patch)
-                                }
-                              />
-                            ) : (
-                              <>
-                                <textarea
-                                  key={module.id}
-                                  defaultValue={JSON.stringify(module.content, null, 2)}
-                                  onBlur={(e) =>
-                                    handleUpdateProductModuleContent(module.id, e.target.value)
-                                  }
-                                  className="w-full min-h-[120px] p-2 border rounded-md font-mono text-xs"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Édite le JSON puis quitte le champ pour appliquer.
-                                </p>
-                              </>
-                            )}
-                          </>
+                          <VaultStructuredModuleEditor
+                            moduleId={module.id}
+                            moduleType={module.type}
+                            content={module.content as Record<string, unknown>}
+                            onPatch={(patch) =>
+                              handlePatchProductModuleContent(module.id, patch)
+                            }
+                            onReplaceContentJson={(raw) =>
+                              handleUpdateProductModuleContent(module.id, raw)
+                            }
+                          />
                         )}
                       />
                     </div>
@@ -2114,7 +2096,7 @@ function AdminVaultBuilderPageInner() {
 
         <section className="bg-white rounded-lg shadow border border-gray-100 p-5">
           {!details ? (
-            <p className="text-gray-500">Sélectionne un vault pour l'éditer.</p>
+            <p className="text-gray-500">Sélectionne un vault pour l&apos;éditer.</p>
           ) : (
             <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:divide-x lg:divide-slate-200">
               <div className="space-y-6 lg:min-w-0 lg:pr-6">
@@ -2378,60 +2360,13 @@ function AdminVaultBuilderPageInner() {
                   }))
                 }
                 renderModuleEditor={(module) => (
-                  <>
-                    {module.type === 'MediaImageCarouselModule' ? (
-                      <VaultMediaCarouselModuleEditor
-                        content={module.content}
-                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                      />
-                    ) : module.type === 'DocumentsListModule' ? (
-                      <VaultDocumentsListModuleEditor
-                        content={module.content}
-                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                      />
-                    ) : module.type === 'VideoBlockArticleModule' ? (
-                      <VaultVideoBlockArticleModuleEditor
-                        content={module.content}
-                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                      />
-                    ) : module.type === 'LocalisationModule' ? (
-                      <VaultLocalisationModuleEditor
-                        content={module.content}
-                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                      />
-                    ) : module.type === 'VirtualVisualizationModule' ? (
-                      <VaultVirtualVisualizationModuleEditor
-                        content={module.content}
-                        onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
-                      />
-                    ) : (
-                      <>
-                        <textarea
-                          key={module.id}
-                          defaultValue={JSON.stringify(module.content, null, 2)}
-                          onBlur={(e) => handleUpdateModuleContent(module.id, e.target.value)}
-                          className="w-full min-h-[160px] p-2 border rounded-md font-mono text-xs"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Édite le JSON puis quitte le champ pour appliquer.
-                        </p>
-                        {module.type === 'CompetitiveAdvantagesModule' && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Options pour la catégorie (par row) : content (blanc, comportement actuel) ; work
-                            (jaune clair #FEF9C3) ; note (bleu clair #DBEAFE) ; success (vert clair #D1FAE5) ;
-                            danger (rouge clair #FEE2E2).
-                          </p>
-                        )}
-                        {(module.type === 'MarketingCardsSmallSlidingCarrousel_Portrait' ||
-                          module.type === 'MarketingCardsSmallSlidingCarrousel_Paysage') && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Options de taille des cartes : `visibleCardsCount` (ex: 1, 1.2, 1.5, 1.8; virgule
-                            acceptee) et `cardAspectRatio` au format largeur:hauteur (ex: 1:1, 1:4, 3:4, 1:1.4).
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </>
+                  <VaultStructuredModuleEditor
+                    moduleId={module.id}
+                    moduleType={module.type}
+                    content={module.content as Record<string, unknown>}
+                    onPatch={(patch) => handlePatchModuleContentObject(module.id, patch)}
+                    onReplaceContentJson={(raw) => handleUpdateModuleContent(module.id, raw)}
+                  />
                 )}
               />
 
@@ -2440,7 +2375,7 @@ function AdminVaultBuilderPageInner() {
               <div className="hidden min-h-0 min-w-0 flex-col lg:sticky lg:top-2 lg:flex lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)] lg:pl-6">
                 <PagePreviewPanel
                   title={`${details.page.title || details.page.slug} (${previewLocale.toUpperCase()})`}
-                  previewUrl={`/${previewLocale}/projects/${encodeURIComponent(details.page.slug)}?${VAULT_BUILDER_IFRAME_PREVIEW_QUERY}=1`}
+                  previewUrl={cmsPagePreviewUrl(details.page.slug, previewLocale)}
                   dismissible={false}
                   toolbar={{
                     locale: previewLocale,
@@ -2459,7 +2394,7 @@ function AdminVaultBuilderPageInner() {
       {vaultAddModuleOpen && details ? (
         <AddVaultModuleModal
           headerTitle={`Ajouter un module — ${details.page.slug}`}
-          publicPreviewHref={`/${editingLocale}/projects/${encodeURIComponent(details.page.slug)}?${VAULT_BUILDER_IFRAME_PREVIEW_QUERY}=1`}
+          publicPreviewHref={cmsPagePreviewUrl(details.page.slug, editingLocale)}
           onClose={() => setVaultAddModuleOpen(false)}
           onValidate={async (sel) => {
             addVaultModuleOfType(sel.type)

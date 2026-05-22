@@ -27,6 +27,7 @@ import { galleryExclusiveOfferCommercialStatuses } from '@/lib/cms/exclusiveOffe
  */
 export async function GET(request: NextRequest) {
   try {
+    const publicOrigin = request.nextUrl.origin
     const { searchParams } = new URL(request.url)
     const typeFilter = parseProductTypeParam(searchParams.get('type'))
     const visibilityFilter =
@@ -63,6 +64,7 @@ export async function GET(request: NextRequest) {
           prisma,
           pageId: row.pageId,
           locale,
+          publicOrigin,
         })
         let snapshot: Record<string, unknown> | null | undefined
         if (

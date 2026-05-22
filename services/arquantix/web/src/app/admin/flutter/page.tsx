@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -11,6 +11,8 @@ import {
   ChevronRight,
   GitBranch,
 } from 'lucide-react'
+
+import { DeviceFrame } from '@/components/admin/flutter-preview/DeviceFrame'
 
 interface DsComponent {
   id: string
@@ -189,6 +191,12 @@ export default function AdminFlutterPage() {
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState<string | null>(null)
   const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>(ROOT_EXPANDED_NODE_IDS)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+
+  const previewSrc = useMemo(
+    () => (selectedNodeId ? `/admin/flutter/preview/${selectedNodeId}` : null),
+    [selectedNodeId],
+  )
 
   const toggleNode = (id: string) => {
     setExpandedNodeIds((prev) =>
@@ -199,6 +207,7 @@ export default function AdminFlutterPage() {
   const renderNode = (node: AppTreeNode, depth = 0) => {
     const hasChildren = Boolean(node.children?.length)
     const isExpanded = expandedNodeIds.includes(node.id)
+    const isSelected = selectedNodeId === node.id
     const kindLabel =
       node.kind === 'page'
         ? 'Page'
@@ -209,14 +218,34 @@ export default function AdminFlutterPage() {
     return (
       <li key={node.id}>
         <div
-          className="flex items-center justify-between gap-4 py-2 px-3 rounded hover:bg-indigo-50/70"
+          className={`flex items-center justify-between gap-4 py-2 px-3 rounded transition-colors ${
+            isSelected
+              ? 'bg-indigo-50 border border-indigo-300 ring-1 ring-indigo-200'
+              : 'border border-transparent hover:bg-indigo-50/70'
+          }`}
           style={{ marginLeft: `${depth * 18}px` }}
         >
-          <div className="min-w-0 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedNodeId(node.id)}
+            className="min-w-0 flex items-center gap-2 flex-1 text-left cursor-pointer"
+            aria-pressed={isSelected}
+          >
             {hasChildren ? (
-              <button
-                type="button"
-                onClick={() => toggleNode(node.id)}
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleNode(node.id)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    toggleNode(node.id)
+                  }
+                }}
                 aria-label={isExpanded ? 'Replier la branche' : 'Déplier la branche'}
                 className="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-indigo-100 text-gray-500"
               >
@@ -224,17 +253,22 @@ export default function AdminFlutterPage() {
                   className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                   aria-hidden
                 />
-              </button>
+              </span>
             ) : (
               <span className="w-5 h-5" />
             )}
-            <span className="font-medium text-gray-900">{node.label}</span>
+            <span className={`font-medium ${isSelected ? 'text-indigo-900' : 'text-gray-900'}`}>
+              {node.label}
+            </span>
             <span className="text-xs text-gray-500 ml-2">[{kindLabel}]</span>
-          </div>
+          </button>
           {node.to ? (
             <button
               type="button"
-              onClick={() => router.push(node.to!)}
+              onClick={(e) => {
+                e.stopPropagation()
+                router.push(node.to!)
+              }}
               className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
             >
               Voir JSON
@@ -294,6 +328,13 @@ export default function AdminFlutterPage() {
         >
           <LayoutGrid className="w-4 h-4" />
           Builder Landing Pages
+        </Link>
+        <Link
+          href="/admin/flutter/shell"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+        >
+          <Layers className="w-4 h-4" />
+          App — Tabs principaux
         </Link>
         <Link
           href="/admin/widget-builder"
@@ -450,35 +491,69 @@ export default function AdminFlutterPage() {
         })()}
       </section>
 
-      {/* Lien doc */}
+      {/* Arborescence + preview DS Flutter en split */}
       <section className="mb-10">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <GitBranch className="w-5 h-5 text-indigo-600" />
           Arborescence de l’application
         </h2>
         <p className="text-gray-600 mb-4 text-sm">
-          Vue en arbre d’exécution: pages niveau 1, puis sous-pages, puis modules.
+          Vue en arbre d’exécution: pages niveau 1, puis sous-pages, puis modules. Cliquez un nœud pour afficher la preview DS Flutter à droite.
         </p>
-        <div className="bg-white rounded-lg shadow border border-gray-100 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              type="button"
-              onClick={() => setExpandedNodeIds(ALL_EXPANDABLE_NODE_IDS)}
-              className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
-            >
-              Tout déplier
-            </button>
-            <button
-              type="button"
-              onClick={() => setExpandedNodeIds([])}
-              className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
-            >
-              Tout replier
-            </button>
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_440px] gap-6 items-start">
+          <div className="bg-white rounded-lg shadow border border-gray-100 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setExpandedNodeIds(ALL_EXPANDABLE_NODE_IDS)}
+                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
+              >
+                Tout déplier
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpandedNodeIds([])}
+                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
+              >
+                Tout replier
+              </button>
+              {selectedNodeId ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedNodeId(null)}
+                  className="text-xs px-2 py-1 rounded border border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  Désélectionner
+                </button>
+              ) : null}
+            </div>
+            <ul className="space-y-1">
+              {APP_ARBORESCENCE.map((node) => renderNode(node))}
+            </ul>
           </div>
-          <ul className="space-y-1">
-            {APP_ARBORESCENCE.map((node) => renderNode(node))}
-          </ul>
+          <div className="hidden xl:flex justify-center sticky top-6">
+            <div>
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 text-center">
+                Preview DS Flutter
+              </div>
+              <DeviceFrame src={previewSrc} title={selectedNodeId ?? 'Preview'} />
+              {selectedNodeId ? (
+                <div className="mt-3 text-xs text-gray-600 text-center break-words max-w-[399px]">
+                  Node : <code className="bg-gray-100 px-1 py-0.5 rounded">{selectedNodeId}</code>
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-gray-500 text-center max-w-[399px]">
+                  Cliquez sur un nœud à gauche pour le prévisualiser ici.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* En dessous de XL : preview en plein, sous l'arbre */}
+        <div className="xl:hidden mt-6 flex justify-center">
+          <div>
+            <DeviceFrame src={previewSrc} title={selectedNodeId ?? 'Preview'} />
+          </div>
         </div>
       </section>
 

@@ -184,7 +184,7 @@ export function SectionProjects({
     <section
       id="projects"
       className={cn(
-        "w-full bg-white pb-8 pt-0 md:pb-12",
+        "w-full bg-v-bg pb-16 pt-0 lg:pb-24",
         className,
       )}
       {...props}
@@ -214,7 +214,7 @@ export function SectionProjects({
           }}
         />
         {rows.length === 0 ? (
-          <p className="mx-auto mt-4 max-w-xl text-center text-sm text-neutral-500">
+          <p className="mx-auto mt-6 max-w-xl text-center font-ui text-sm text-v-fg-muted">
             {siteCommonCta(pathLocale, "no_offers_to_display")}
           </p>
         ) : null}

@@ -4,7 +4,7 @@ export type MainTitleAlign = 'left' | 'center' | 'right'
 
 /** Classes du bloc titre (hero homepage) — à réutiliser p.ex. sur `GradientHeading`. */
 export const mainTitleTypographyClassName =
-  "font-['Avenir:Medium',sans-serif] font-medium text-[48px] leading-none tracking-[-0.02em] not-italic md:text-[clamp(3rem,6vw,72px)]"
+  "font-ui font-medium font-medium text-[48px] leading-none tracking-[-0.02em] not-italic md:text-[clamp(3rem,6vw,72px)]"
 
 const ALIGN_OUTER: Record<MainTitleAlign, string> = {
   left: 'items-start',

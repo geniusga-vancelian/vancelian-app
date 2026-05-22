@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { ContentStatus } from '@prisma/client'
 
-import { resolveVaultSectionContent } from './resolveVaultSectionContent'
+import {
+  resolveVaultSectionContent,
+  resolveVaultSectionContentForCatalog,
+  resolveVaultSectionContentForExclusiveOfferPayload,
+} from './resolveVaultSectionContent'
 
 function row(
   locale: string,
@@ -93,5 +97,111 @@ describe('resolveVaultSectionContent', () => {
       mode: ContentStatus.DRAFT,
     })
     assert.equal(r?.id, 'dr')
+  })
+})
+
+describe('resolveVaultSectionContentForCatalog', () => {
+  it('FR vide + EN rempli → sert EN (app en locale fr)', () => {
+    const contents = [
+      {
+        locale: 'fr',
+        status: ContentStatus.PUBLISHED,
+        id: 'fr-pub',
+        data: { modules: [] },
+      },
+      {
+        locale: 'en',
+        status: ContentStatus.PUBLISHED,
+        id: 'en-pub',
+        data: { modules: [{ type: 'StepsModule' }] },
+      },
+    ]
+    const r = resolveVaultSectionContentForCatalog(contents, {
+      requestedLocale: 'fr',
+      defaultLocale: 'fr',
+    })
+    assert.equal(r?.id, 'en-pub')
+  })
+
+  it('pub FR sans modules mais brouillon FR rempli → reste intra-FR', () => {
+    const contents = [
+      {
+        locale: 'fr',
+        status: ContentStatus.PUBLISHED,
+        id: 'fr-pub',
+        data: { modules: [] },
+      },
+      {
+        locale: 'fr',
+        status: ContentStatus.DRAFT,
+        id: 'fr-draft',
+        data: { modules: [{ type: 'A' }] },
+      },
+    ]
+    const r = resolveVaultSectionContentForCatalog(contents, {
+      requestedLocale: 'fr',
+      defaultLocale: 'fr',
+    })
+    assert.equal(r?.id, 'fr-draft')
+  })
+})
+
+describe('resolveVaultSectionContentForExclusiveOfferPayload', () => {
+  it('public : aligné catalogue — FR vide + EN rempli (defaultLocale en)', () => {
+    const contents = [
+      {
+        locale: 'fr',
+        status: ContentStatus.PUBLISHED,
+        id: 'fr-pub',
+        data: { modules: [] },
+      },
+      {
+        locale: 'en',
+        status: ContentStatus.PUBLISHED,
+        id: 'en-pub',
+        data: { modules: [{ type: 'StepsModule' }] },
+      },
+    ]
+    const r = resolveVaultSectionContentForExclusiveOfferPayload(contents, {
+      requestedLocale: 'fr',
+      defaultLocale: 'en',
+      previewDraftFirst: false,
+    })
+    assert.equal(r?.id, 'en-pub')
+  })
+
+  it('preview draft-first : préfère EN brouillon lorsque FR totalement vide', () => {
+    const contents = [
+      {
+        locale: 'fr',
+        status: ContentStatus.PUBLISHED,
+        id: 'fr-pub',
+        data: { modules: [] },
+      },
+      {
+        locale: 'fr',
+        status: ContentStatus.DRAFT,
+        id: 'fr-draft',
+        data: { modules: [] },
+      },
+      {
+        locale: 'en',
+        status: ContentStatus.PUBLISHED,
+        id: 'en-pub',
+        data: { modules: [{ type: 'PARAGRAPH' }] },
+      },
+      {
+        locale: 'en',
+        status: ContentStatus.DRAFT,
+        id: 'en-draft',
+        data: { modules: [{ type: 'StepsModule' }] },
+      },
+    ]
+    const r = resolveVaultSectionContentForExclusiveOfferPayload(contents, {
+      requestedLocale: 'fr',
+      defaultLocale: 'en',
+      previewDraftFirst: true,
+    })
+    assert.equal(r?.id, 'en-draft')
   })
 })

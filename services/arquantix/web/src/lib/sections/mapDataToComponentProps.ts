@@ -9,6 +9,7 @@ import { siteCommonCta } from '@/lib/i18n/siteCommonCta'
 import type { PublicArticle } from '@/lib/blog/getPublicArticle'
 import type { ExclusiveOfferVaultPayload } from '@/lib/cms/exclusiveOfferVaultPage'
 import { getLocaleOrDefault } from '@/config/locales'
+import { normalizeVancelianDarkColor } from '@/lib/cms/parseEditorialTitle'
 import { publicArticlePageUrl } from '@/lib/blog/articlePublicPageUrl'
 import type { SectionPageRendererContext } from '@/lib/sections/sectionPageRendererTypes'
 import {
@@ -19,6 +20,10 @@ import {
   projectGridLegacyItemToProp,
 } from '@/lib/sections/sectionRenderCoalesce'
 import { readShowAllExclusiveOffersFlag } from '@/lib/cms/showAllExclusiveOffersFlag'
+import {
+  splitCmsBackgroundMedia,
+  splitCmsInlineMedia,
+} from '@/lib/storage/mediaKind'
 
 /**
  * Map section data to component props based on section key.
@@ -49,6 +54,7 @@ export function mapDataToComponentProps(
       /** Uniquement le média choisi en CMS (`backgroundMediaId` → `backgroundMediaUrl`). */
       const heroBackgroundUrl = heroResolvedBackgroundUrl(data)
       const backgroundImageOpacity = heroBackgroundOpacity01(data.backgroundImageOpacity)
+      const heroMedia = splitCmsBackgroundMedia(data)
 
       if (process.env.NODE_ENV === 'development') {
         console.log('[SectionRenderer] Hero data mapping:', {
@@ -58,21 +64,27 @@ export function mapDataToComponentProps(
         })
       }
       const isSecondary = key === 'hero_secondary'
-      const hasHeroBackground = Boolean(heroBackgroundUrl)
       const tagList = Array.isArray(data.tags)
         ? data.tags
             .map((t: unknown) => String(t).trim())
             .filter((t: string) => t.length > 0)
         : []
       return {
-        backgroundImage: heroBackgroundUrl || undefined,
+        backgroundImage: heroMedia.imageUrl,
+        backgroundVideoUrl: heroMedia.videoUrl,
         backgroundImageOpacity,
         variant: isSecondary ? 'secondary' : 'homepage',
         /**
          * Même règle que `ExclusiveOfferVaultDetail` : avec image, seul le thème du contenu
          * (texte / pastilles / CTA) passe en contraste sur photo — espacements et typo inchangés dans `SectionHero`.
          */
-        inverseOverlay: isSecondary && hasHeroBackground,
+        inverseOverlay: isSecondary && Boolean(heroBackgroundUrl),
+        eyebrow: data.eyebrow,
+        inlineStats: Array.isArray(data.inlineStats) ? data.inlineStats : undefined,
+        note: data.note,
+        typewriterWords: Array.isArray(data.typewriterWords) ? data.typewriterWords : undefined,
+        secondaryCtaText: data.secondaryCtaText,
+        secondaryCtaHref: data.secondaryCtaHref,
         title: data.title,
         subtitle: data.subtitle,
         ctaText: data.ctaText,
@@ -131,6 +143,7 @@ export function mapDataToComponentProps(
 
     case 'cta': {
       const primary = ctaPrimaryFromLegacy(data)
+      const bg = splitCmsBackgroundMedia(data)
       return {
         eyebrow: data.eyebrow,
         title: data.title,
@@ -143,11 +156,13 @@ export function mapDataToComponentProps(
         showSecondaryButton: data.showSecondaryButton !== false,
         contentTextAlign:
           data.contentTextAlign === 'justify' ? ('justify' as const) : ('center' as const),
-        backgroundMediaUrl: data.backgroundMediaUrl,
-        backgroundColor:
+        backgroundMediaUrl: bg.imageUrl,
+        backgroundVideoUrl: bg.videoUrl,
+        backgroundColor: normalizeVancelianDarkColor(
           typeof data.backgroundColor === 'string' && data.backgroundColor.trim()
             ? data.backgroundColor.trim()
-            : '#000000',
+            : undefined,
+        ),
         backgroundImageOpacity:
           typeof data.backgroundImageOpacity === 'number' &&
           Number.isFinite(data.backgroundImageOpacity)
@@ -321,6 +336,11 @@ export function mapDataToComponentProps(
         description: data.description,
         subtitle: data.subtitle,
         items: data.items || [],
+        ...(data.support != null &&
+        typeof data.support === 'object' &&
+        !Array.isArray(data.support)
+          ? { support: data.support }
+          : {}),
         ...(data.ui != null &&
         typeof data.ui === 'object' &&
         !Array.isArray(data.ui) &&
@@ -470,16 +490,19 @@ export function mapDataToComponentProps(
           data.columns === 6 ? 6 : data.columns === 4 ? 4 : 3,
       }
 
-    case 'key_figures':
+    case 'key_figures': {
+      const bg = splitCmsBackgroundMedia(data)
       return {
         eyebrow: data.eyebrow,
         title: data.title,
         stats: Array.isArray(data.stats) ? data.stats : [],
-        backgroundMediaUrl: data.backgroundMediaUrl,
-        backgroundColor:
+        backgroundMediaUrl: bg.imageUrl,
+        backgroundVideoUrl: bg.videoUrl,
+        backgroundColor: normalizeVancelianDarkColor(
           typeof data.backgroundColor === 'string' && data.backgroundColor.trim()
             ? data.backgroundColor.trim()
-            : '#000000',
+            : undefined,
+        ),
         backgroundImageOpacity:
           typeof data.backgroundImageOpacity === 'number' &&
           Number.isFinite(data.backgroundImageOpacity)
@@ -490,6 +513,7 @@ export function mapDataToComponentProps(
             ? Math.min(1, Math.max(0, data.overlayOpacity))
             : 0,
       }
+    }
 
     case 'figma_testimonial_cards':
       return {
@@ -500,30 +524,79 @@ export function mapDataToComponentProps(
         items: Array.isArray(data.items) ? data.items : [],
       }
 
-    case 'media_text':
+    case 'proof_press':
       return {
-        // `eyebrow` (surtitre) : CMS-driven et traduisible (cf. policy).
+        eyebrow: data.eyebrow,
+        items: Array.isArray(data.items) ? data.items : [],
+      }
+
+    case 'offer_cards':
+      return {
         eyebrow: data.eyebrow,
         title: data.title,
         description: data.description,
-        imageMediaUrl:
-          typeof data.imageMediaUrl === 'string' ? data.imageMediaUrl.trim() : undefined,
+        viewAllButtonText: data.viewAllButtonText,
+        viewAllButtonHref: data.viewAllButtonHref,
+        items: Array.isArray(data.items) ? data.items : [],
+      }
+
+    case 'product_ecosystem':
+      return {
+        eyebrow: data.eyebrow,
+        title: data.title,
+        description: data.description,
+        items: Array.isArray(data.items) ? data.items : [],
+      }
+
+    case 'journey': {
+      const bg = splitCmsBackgroundMedia(data)
+      return {
+        pill: data.pill,
+        title: data.title,
+        description: data.description,
+        backgroundMediaUrl: bg.videoUrl ?? bg.imageUrl,
+        backgroundMediaMimeType: bg.videoUrl ? 'video/mp4' : data.backgroundMediaMimeType,
+        notificationMessage: data.notificationMessage,
+        ctas: Array.isArray(data.ctas) ? data.ctas : [],
+      }
+    }
+
+    case 'security':
+      return {
+        eyebrow: data.eyebrow,
+        title: data.title,
+        description: data.description,
+        points: Array.isArray(data.points) ? data.points : [],
+        linkText: data.linkText,
+        linkHref: data.linkHref,
+        logos: Array.isArray(data.logos) ? data.logos : [],
+      }
+
+    case 'media_text': {
+      const media = splitCmsInlineMedia(data)
+      return {
+        eyebrow: data.eyebrow,
+        title: data.title,
+        description: data.description,
+        imageMediaUrl: media.imageUrl,
+        videoMediaUrl: media.videoUrl,
         imageMediaAlt: data.imageMediaAlt,
         mediaRight: data.mediaRight === true,
       }
+    }
 
-    case 'company_map':
+    case 'company_map': {
+      const bg = splitCmsBackgroundMedia(data)
       return {
         eyebrow: data.eyebrow,
         title: data.title,
         description: data.description,
-        backgroundMediaUrl:
-          typeof data.backgroundMediaUrl === 'string'
-            ? data.backgroundMediaUrl.trim()
-            : undefined,
+        backgroundMediaUrl: bg.imageUrl,
+        backgroundVideoUrl: bg.videoUrl,
         backgroundMediaAlt: data.backgroundMediaAlt,
         bodyContent: data.bodyContent,
       }
+    }
 
     default:
       // For unknown sections, pass data as-is with sectionKey instead of key (key is reserved in React)

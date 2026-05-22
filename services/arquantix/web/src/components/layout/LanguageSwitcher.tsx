@@ -109,7 +109,7 @@ export function LanguageSwitcher({
           aria-selected={loc === locale}
           onClick={() => handleLocaleChange(loc)}
           className={cn(
-            "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left font-['Avenir:Heavy',sans-serif] text-[15px] leading-none tracking-normal text-[#62656E] transition-colors hover:bg-black/[0.04] hover:text-black",
+            "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left font-ui font-semibold text-[15px] leading-none tracking-normal text-[#62656E] transition-colors hover:bg-black/[0.04] hover:text-black",
             loc === locale && 'text-black',
           )}
         >

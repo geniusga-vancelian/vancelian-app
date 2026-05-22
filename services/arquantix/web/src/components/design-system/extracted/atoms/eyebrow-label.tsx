@@ -31,7 +31,7 @@ export function FigmaEyebrowLabel({
         />
       )}
       <p
-        className="font-['Avenir:Heavy',sans-serif] leading-none not-italic relative shrink-0 text-[14px] uppercase whitespace-nowrap"
+        className="font-ui font-semibold leading-none not-italic relative shrink-0 text-[14px] uppercase whitespace-nowrap"
         style={{ color: textColor }}
       >
         {children}

@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils'
 import { prisma } from '@/lib/prisma'
 import { BlogTemplatePageView } from '@/components/cms/BlogTemplatePageView'
 import { parseBlogListingSearchParams } from '@/lib/blog/parseBlogListingSearchParams'
+import { VAULT_BUILDER_TEMPLATE } from '@/lib/catalog/packagedCatalogHelpers'
+import { projectDetailPageContent } from '@/lib/routes/projectDetailPageShared'
+import { VAULT_BUILDER_IFRAME_PREVIEW_QUERY } from '@/lib/cms/vaultBuilderPreviewConstants'
 
 interface PreviewPageProps {
   params: { slug: string }
@@ -51,6 +54,18 @@ export default async function PreviewPage({
         contentStatus="draft"
       />
     )
+  }
+
+  if (cmsPage?.template === VAULT_BUILDER_TEMPLATE) {
+    return projectDetailPageContent({
+      slug: params.slug,
+      searchParams: {
+        ...searchParams,
+        [VAULT_BUILDER_IFRAME_PREVIEW_QUERY]: '1',
+        locale,
+      },
+      urlLocale: locale,
+    })
   }
 
   const sections = await getPageSections(params.slug, locale, 'draft')

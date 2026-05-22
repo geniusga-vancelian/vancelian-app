@@ -1,67 +1,105 @@
+"use client";
+
+/**
+ * Citation isolée fullbleed — Vancelian Design System.
+ *
+ * Pattern : une seule citation éditoriale, centrée, sur fond image avec
+ * overlay sombre. Composé en interne par {@link VTcard} ? Non : ici le DS
+ * privilégie un rendu « éditorial pleine page » sans encadré — texte en
+ * Newsreader Display italic sur fond photo, attribution en bas.
+ *
+ * Voir doctrine pack handoff §«hero éditorial» pour les principes de
+ * composition (full-bleed, dark overlay, balance typographique).
+ */
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { Tag } from "@/components/ui/Tag";
+import { Container } from "@/components/ui/Container";
+import { VEyebrow } from "@/components/design-system/vancelian";
 
 export interface SectionTestimonialProps extends React.HTMLAttributes<HTMLElement> {
+  /** Surtitre éditorial (caption uppercase). */
   tag?: string;
+  /** Citation — affichée en Newsreader Display Light Italic. */
   quote?: string;
+  /** Nom de l'auteur. */
   author?: string;
+  /** Rôle / titre sous l'auteur. */
   role?: string;
+  /** URL d'image de fond. */
   backgroundImage?: string;
 }
 
-export function SectionTestimonial({ 
-  tag = "Citation",
-  quote = "\"L'architecture est un fait d'art, un phénomène qui suscite l'émotion, au-delà des problèmes de construction. La construction sert à faire tenir, l'architecture à émouvoir.\"",
-  author = "Le Corbusier",
-  role = "Architecte",
+export function SectionTestimonial({
+  tag,
+  quote,
+  author,
+  role,
   backgroundImage,
   className,
-  ...props 
+  ...props
 }: SectionTestimonialProps) {
+  const q = quote?.trim();
+  const a = author?.trim();
+  if (!q && !a) return null;
+
   return (
     <section
-      className={cn("relative w-full h-[680px] overflow-hidden", className)}
+      data-nav-surface="dark"
+      className={cn(
+        "relative w-full overflow-hidden bg-v-dark-bg",
+        "py-32 lg:py-40",
+        className,
+      )}
       {...props}
     >
-      {/* Background Image + Dark Overlay */}
-      <div className="absolute inset-0 z-0">
-        <img
-          src={backgroundImage || "/images/testimonial-background.png"}
-          alt=""
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/80" />
-      </div>
+      {backgroundImage ? (
+        <div className="absolute inset-0 z-0" aria-hidden>
+          {/* eslint-disable-next-line @next/next/no-img-element -- image fond éditorial CMS */}
+          <img
+            src={backgroundImage}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover object-center"
+            sizes="100vw"
+          />
+          <div className="absolute inset-0 bg-[rgba(20,18,8,0.78)]" />
+        </div>
+      ) : null}
 
-      {/* Content */}
-      <div className="relative z-10 flex items-center justify-center h-full px-16 py-16">
-        <figure className="max-w-4xl">
-          <div className="flex flex-col gap-10 items-start w-full">
-            {/* Tag */}
-            <div className="opacity-50">
-              <Tag>{tag}</Tag>
-            </div>
+      <Container className="relative z-10">
+        <figure className="mx-auto flex max-w-[820px] flex-col items-center text-center">
+          {tag?.trim() ? <VEyebrow tone="inverse">{tag}</VEyebrow> : null}
 
-            {/* Quote */}
-            <blockquote className="text-white text-3xl md:text-4xl uppercase tracking-wider leading-tight">
-              {quote}
-            </blockquote>
-
-            {/* Author */}
-            <figcaption className="flex flex-col gap-1">
-              <cite className="text-[#C6A47C] text-lg not-italic uppercase">
-                {author}
-              </cite>
-              {role && (
-                <p className="text-[#E6E6E6] text-sm">
-                  {role}
-                </p>
+          {q ? (
+            <blockquote
+              className={cn(
+                "m-0 font-display font-light italic text-balance",
+                "text-[clamp(28px,3.8vw,44px)] leading-[1.3] tracking-[0]",
+                "text-white",
+                tag ? "mt-8" : "mt-0",
               )}
+            >
+              <span aria-hidden="true">« </span>
+              {q.replace(/^["«»]+|["«»]+$/g, "").trim()}
+              <span aria-hidden="true"> »</span>
+            </blockquote>
+          ) : null}
+
+          {(a || role?.trim()) ? (
+            <figcaption className="mt-12 flex flex-col items-center gap-1">
+              {a ? (
+                <cite className="font-ui font-semibold text-[15px] leading-tight text-white not-italic">
+                  {a}
+                </cite>
+              ) : null}
+              {role?.trim() ? (
+                <span className="font-ui font-normal text-[13px] leading-tight text-white/70">
+                  {role}
+                </span>
+              ) : null}
             </figcaption>
-          </div>
+          ) : null}
         </figure>
-      </div>
+      </Container>
     </section>
   );
 }

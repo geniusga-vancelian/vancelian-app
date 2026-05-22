@@ -27,6 +27,7 @@ model AdminUser {
   /// Compte CMS Next (au plus un) lié pour le BFF — pas de résolution JWT par email.
   cmsUser                    User?
   person                     Persons?  @relation("AdminUserPerson", fields: [personId], references: [id], onUpdate: NoAction, map: "fk_admin_users_person_id_persons")
+  assistanceAgentDecisionsReviewed AssistanceAgentDecision[]
 
   /// Unicité côté Prisma Client. En base Alembic 130, l’index partiel reste `ix_admin_users_email` ; ce nom Prisma évite le conflit `db push` (CREATE … already exists).
   @@unique([email], map: "uq_prisma_admin_users_email")
@@ -73,8 +74,8 @@ model AppRuntimeSettings {
 
 model AppSettings {
   id                   String   @id
-  supportedLocales     String   @default("[\"en\",\"fr\",\"it\"]") @map("supported_locales")
-  defaultLocale        String   @default("en") @map("default_locale")
+  supportedLocales     String   @default("[\"fr\",\"en\",\"ar\",\"it\"]") @map("supported_locales")
+  defaultLocale        String   @default("fr") @map("default_locale")
   multilingualEnabled  Boolean  @default(true) @map("multilingual_enabled")
   translationGlossary  Json?    @map("translation_glossary")
   updatedAt            DateTime @updatedAt @map("updated_at")
@@ -306,8 +307,14 @@ model AssistanceConversation {
   summarizedUntilTurn    Int?                @map("summarized_until_turn")
   /// Palier 2 D.2.1 — horodatage de la dernière consolidation mémoire.
   summaryUpdatedAt       DateTime?           @map("summary_updated_at") @db.Timestamptz(6)
+  /// Phase 2 wiki v1.4 — sujet actif (migration Alembic 150).
+  currentTopic           Json?               @map("current_topic") @db.JsonB
   peClients              PeClients           @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   assistanceMessages     AssistanceMessage[]
+  assistanceActionDrafts AssistanceActionDraft[]
+  assistanceAgentDecisions AssistanceAgentDecision[]
+  assistanceFloatingParameters AssistanceFloatingParameter[]
+  discoveryProjectsSource AssistanceClientDiscoveryProject[]
 
   @@index([clientId, lastMessageAt], map: "ix_assistance_conversations_client_last")
   @@index([clientId, status], map: "ix_assistance_conversations_client_status")
@@ -326,6 +333,7 @@ model AssistanceMessage {
   messageType            String                 @default("text") @map("message_type") @db.VarChar(16)
   messagePayload         Json?                  @map("message_payload")
   assistanceConversation AssistanceConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  assistanceAgentDecisions AssistanceAgentDecision[]
 
   @@unique([conversationId, turnIndex], map: "uq_assistance_messages_conversation_turn")
   @@index([conversationId, createdAt], map: "ix_assistance_messages_conversation_created")
@@ -336,7 +344,7 @@ model AssistanceMessage {
 /// Catalogue CAL (Alembic 155) — parcours transactionnels édités en admin ; runtime Python.
 model AssistanceActionPlaybook {
   id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  actionKey        String   @unique @map("action_key") @db.VarChar(64)
+  actionKey        String   @unique(map: "uq_assistance_action_playbooks_action_key") @map("action_key") @db.VarChar(64)
   label            String   @db.VarChar(200)
   description      String?  @db.Text
   transactionKind  String   @map("transaction_kind") @db.VarChar(32)
@@ -380,6 +388,19 @@ model AssistanceAgentDecision {
   errorCode         String?   @map("error_code") @db.VarChar(32)
   correlationId     String?   @map("correlation_id") @db.VarChar(64)
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Cognitive Bot v4 — colonnes dénormalisées (migration Alembic 152).
+  emotionalIntent     String?   @map("emotional_intent") @db.VarChar(32)
+  conversationStage   String?   @map("conversation_stage") @db.VarChar(16)
+  knowledgeLevel      String?   @map("knowledge_level") @db.VarChar(8)
+  trustLevel          Float?    @map("trust_level")
+  primaryGoal         String?   @map("primary_goal") @db.VarChar(16)
+  nextBestAction      String?   @map("next_best_action") @db.VarChar(20)
+
+  assistanceConversation AssistanceConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_assistance_agent_decisions_conversation_id")
+  assistanceMessage      AssistanceMessage?     @relation(fields: [messageId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_assistance_agent_decisions_message_id")
+  targetPeClient         PeClients?             @relation("AssistanceAgentDecisionTargetClient", fields: [targetClientId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_assistance_agent_decisions_target_client")
+  targetPerson           Persons?               @relation("AssistanceAgentDecisionTargetPerson", fields: [targetPersonId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_assistance_agent_decisions_target_person")
+  reviewedByAdmin        AdminUser?             @relation(fields: [reviewedBy], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_assistance_agent_decisions_reviewed_by")
 
   @@index([conversationId, iteration], map: "ix_assistance_agent_decisions_conv_iter")
   @@index([agentId, createdAt], map: "ix_assistance_agent_decisions_agent_created")
@@ -387,6 +408,84 @@ model AssistanceAgentDecision {
   @@index([autonomyLevel], map: "ix_assistance_agent_decisions_autonomy_level")
   @@index([targetClientId, createdAt], map: "ix_assistance_agent_decisions_target_client")
   @@map("assistance_agent_decisions")
+}
+
+/// Brouillon transactionnel CAL (Alembic 154) — audit runtime Python.
+model AssistanceActionDraft {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  clientId       String   @map("client_id") @db.Uuid
+  actionType     String   @map("action_type") @db.VarChar(64)
+  status         String   @default("draft") @db.VarChar(32)
+  payload        Json     @default("{}") @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assistanceConversation AssistanceConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peClients              PeClients              @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([conversationId], map: "ix_assistance_action_drafts_conversation_id")
+  @@index([clientId, createdAt(sort: Desc)], map: "ix_assistance_action_drafts_client_created")
+  @@map("assistance_action_drafts")
+}
+
+/// Cognitive Bot v4 — projets client cross-conversation (Alembic 153).
+model AssistanceClientDiscoveryProject {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  personId             String    @map("person_id") @db.Uuid
+  conversationIdSource String?   @map("conversation_id_source") @db.Uuid
+  label                String    @db.VarChar(80)
+  status               String    @default("active") @db.VarChar(16)
+  confidence           Float?
+  parameters           Json      @default("{}") @db.JsonB
+  createdAtTurn        Int?      @map("created_at_turn")
+  lastTouchedAtTurn    Int?      @map("last_touched_at_turn")
+  notes                String?
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  person                       Persons                         @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_acdp_person_id")
+  sourceConversation           AssistanceConversation?         @relation(fields: [conversationIdSource], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_acdp_conversation_id_source")
+  assistanceFloatingParameters AssistanceFloatingParameter[]
+
+  @@index([conversationIdSource], map: "ix_acdp_conv_source")
+  @@index([personId, lastTouchedAtTurn(sort: Desc)], map: "ix_acdp_person_touched")
+  @@map("assistance_client_discovery_projects")
+}
+
+/// Cognitive Bot v4 — paramètres flottants en attente d'attribution (Alembic 153).
+model AssistanceFloatingParameter {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId      String    @map("conversation_id") @db.Uuid
+  personId            String    @map("person_id") @db.Uuid
+  parameterKind       String    @map("parameter_kind") @db.VarChar(32)
+  parameterValue      Json      @default("{}") @map("parameter_value") @db.JsonB
+  status              String    @default("pending_attribution") @db.VarChar(24)
+  attributedProjectId String?   @map("attributed_project_id") @db.Uuid
+  createdAtTurn       Int?      @map("created_at_turn")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt          DateTime? @map("resolved_at") @db.Timestamptz(6)
+
+  assistanceConversation AssistanceConversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_afp_conversation_id")
+  person                 Persons                         @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_afp_person_id")
+  attributedProject      AssistanceClientDiscoveryProject? @relation(fields: [attributedProjectId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_afp_attributed_project_id")
+
+  @@map("assistance_floating_parameters")
+}
+
+/// Base de connaissances agent product (Alembic 149) — admin + tools L0 Python.
+model ProductKnowledge {
+  slug         String   @id @db.VarChar(80)
+  topic        String   @db.VarChar(40)
+  title        String   @db.VarChar(200)
+  body         String   @db.Text
+  metadataJson Json     @default("{}") @map("metadata_json") @db.JsonB
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([topic], map: "ix_product_knowledge_topic")
+  @@map("product_knowledge")
 }
 
 model BacktestInstrumentSeries {
@@ -1246,6 +1345,14 @@ model GlobalSettings {
    */
   footerJson        Json?     @map("footer_json") @db.Json
   /**
+   * Copy portail auth (login, signup, code OTP, mentions) — /admin/pages/portal-auth.
+   */
+  portalAuthJson    Json?     @map("portal_auth_json") @db.JsonB
+  /**
+   * Panneau support / FAQ (colonne droite app web) — /admin/pages/portal-support.
+   */
+  portalSupportJson Json?     @map("portal_support_json") @db.JsonB
+  /**
    * Modules communs réutilisables (CTA, etc.) — Zone 2 Structure du site.
    * Format : `{ version: 1, modules: [...] }` — voir `src/lib/cms/commonModulesStorage.ts`.
    */
@@ -1790,6 +1897,8 @@ model Menu {
   id        String     @id @default(cuid())
   key       String     @unique
   name      String
+  /// Palettes topnav (surfaces transparent / solid / warm / dark) — édité via /admin/pages/menu.
+  themeJson Json?      @map("theme_json")
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
   i18n      MenuI18n[]
@@ -1996,6 +2105,9 @@ model PeClients {
   /// Réinjectée dans le system prompt à chaque tour.
   assistanceLongMemory                  Json                          @default("{}") @map("assistance_long_memory")
   assistanceConversations               AssistanceConversation[]
+  assistanceActionDrafts                AssistanceActionDraft[]
+  assistanceAgentDecisionsTarget        AssistanceAgentDecision[] @relation("AssistanceAgentDecisionTargetClient")
+  personCryptoWallets                   PersonCryptoWallet[]
   borrowerInterestAccruals              BorrowerInterestAccruals[]
   clientFavorites                       ClientFavorites[]
   cryptoPositions                       CryptoPositions[]
@@ -2836,6 +2948,50 @@ model PeWalletContainers {
   @@map("pe_wallet_containers")
 }
 
+/// Bridge Privy / identités externes (Alembic 156) — runtime Python.
+model PersonExternalIdentity {
+  id              String   @id @db.Uuid
+  personId        String   @map("person_id") @db.Uuid
+  provider        String
+  externalSubject String   @map("external_subject")
+  externalEmail   String?  @map("external_email")
+  externalPhone   String?  @map("external_phone")
+  metadataJson    Json?    @map("metadata_json") @db.JsonB
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  person Persons @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([provider, externalSubject], map: "uq_person_external_identities_provider_subject")
+  @@index([personId], map: "ix_person_external_identities_person_id")
+  @@map("person_external_identities")
+}
+
+/// Wallets non custodial liés à une personne (Alembic 156) — runtime Python.
+model PersonCryptoWallet {
+  id           String    @id @db.Uuid
+  personId     String    @map("person_id") @db.Uuid
+  peClientId   String?   @map("pe_client_id") @db.Uuid
+  provider     String
+  walletType   String    @map("wallet_type")
+  chainType    String    @map("chain_type")
+  chainId      Int?      @map("chain_id")
+  address      String
+  isPrimary    Boolean   @default(true) @map("is_primary")
+  metadataJson Json?     @map("metadata_json") @db.JsonB
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  person   Persons    @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  peClient PeClients? @relation(fields: [peClientId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([provider, chainType, address], map: "uq_person_crypto_wallets_provider_chain_address")
+  @@index([personId], map: "ix_person_crypto_wallets_person_id")
+  @@index([peClientId], map: "ix_person_crypto_wallets_pe_client_id")
+  @@map("person_crypto_wallets")
+}
+
 model Persons {
   id                          String                        @id @db.Uuid
   status                      String                        @default("active")
@@ -2856,6 +3012,11 @@ model Persons {
   registrationExecutionEvents RegistrationExecutionEvents[]
   registrationSession         RegistrationSession[]
   twoFactorChallenges         TwoFactorChallenges[]
+  personExternalIdentities    PersonExternalIdentity[]
+  personCryptoWallets         PersonCryptoWallet[]
+  assistanceClientDiscoveryProjects AssistanceClientDiscoveryProject[]
+  assistanceFloatingParameters AssistanceFloatingParameter[]
+  assistanceAgentDecisionsTarget AssistanceAgentDecision[] @relation("AssistanceAgentDecisionTargetPerson")
 
   @@index([clientId], map: "ix_persons_client_id")
   @@index([jurisdiction], map: "ix_persons_jurisdiction")
@@ -3336,6 +3497,54 @@ model SectionContent {
   @@map("section_contents")
 }
 
+/// **UI strings remote bundle** — overrides CMS des strings ARB Flutter.
+///
+/// Pattern fintech (Revolut/Lokalise) : la source de vérité texte reste les
+/// fichiers `app_*.arb` Flutter (compilés dans le binaire, garantissent
+/// offline + cold start). La table `cms_ui_strings` stocke uniquement les
+/// **overrides** par `(key, locale, status)`, exposés via `/api/mobile/flutter/ui-strings`
+/// et fusionnés par le runtime Dart `RemoteStringsService` au-dessus de
+/// `AppLocalizations`.
+///
+/// Workflow identique à `SectionContent` : DRAFT en édition admin, copie
+/// vers PUBLISHED au moment de "Publier". Bundle public = PUBLISHED only.
+///
+/// La `key` suit la taxonomie hiérarchique `<namespace>.<section>.<element>`
+/// (ex. `common.invest`, `module.my_account.title`, `screen.dashboard.heroSubtitle`,
+/// `error.payment.insufficientFunds`). Voir `src/lib/i18n/uiStrings/keyTaxonomy.ts`.
+model CmsUiString {
+  id        String        @id @default(cuid())
+  /// Clé hiérarchique (ex. `module.my_account.title`). **Immutable** une fois publiée.
+  key       String
+  /// Premier segment de `key` (ex. `common`, `module`, `screen`, `error`) — dénormalisé pour filtrage admin rapide.
+  namespace String
+  /// Code BCP-47 (`en`, `fr`, …). Aligné sur `app_settings.supported_locales`.
+  locale    String
+  /// Override texte. Si `value === sourceText` → équivaut à pas d'override (l'app utilisera son fallback ARB).
+  value     String        @db.Text
+  /// Snapshot de la valeur ARB de la **locale source** (defaultLocale) au moment de l'extraction. Sert de référence aux traducteurs (et au diff "override vs source").
+  sourceText String?      @db.Text
+  /// Description optionnelle issue du metadata `@key.description` ARB.
+  description String?     @db.Text
+  /// Placeholders ICU détectés dans la valeur ARB (JSON `{ count: { type: "int" } }`). Sert au validateur côté admin.
+  placeholders Json?
+  status    ContentStatus
+  /// Statut de traduction (cohérent avec `SectionContent.translationStatus`).
+  translationStatus TranslationStatus @default(ORIGINAL) @map("translation_status")
+  /// Origine de l'enregistrement : `arb_extract`, `manual`, `lokalise_pull`. Auditable.
+  source    String        @default("arb_extract")
+  updatedAt DateTime      @default(now()) @updatedAt @map("updated_at")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedBy User?         @relation("CmsUiStringEditor", fields: [updatedByUserId], references: [id])
+
+  @@unique([key, locale, status])
+  @@index([namespace, locale, status])
+  @@index([locale, status])
+  @@index([key])
+  @@map("cms_ui_strings")
+}
+
 model Section {
   id            String           @id @default(cuid())
   pageId        String           @map("page_id")
@@ -3417,6 +3626,7 @@ model User {
   adminUser              AdminUser?       @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
   media                  Media[]
   updatedSectionContents SectionContent[] @relation("SectionContentEditor")
+  updatedCmsUiStrings    CmsUiString[]    @relation("CmsUiStringEditor")
   sessions               Session[]
 
   @@map("users")

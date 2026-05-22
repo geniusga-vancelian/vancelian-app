@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { Loader2 } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
@@ -10,12 +11,17 @@ import { Container } from '@/components/ui/Container'
 import { buildTopnavPalettes } from '@/lib/cms/site-menu-theme'
 import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
 import { PORTAL_PATH_PREFIX, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
+import { markPortalPrivySessionReset } from '@/components/portal/PortalAuthPrivySessionHygiene'
+import { preloadPrivyPortalProvider } from '@/lib/portal/preloadPrivyPortalProvider'
 import {
   PORTAL_MAIN_NAV_TABS,
   PORTAL_SEARCH_NAV,
 } from '@/lib/portal/portalNavModel'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
+import { useNavPending } from '@/components/site/NavPendingContext'
+import { PortalLogoutOverlay } from '@/components/portal/PortalLogoutOverlay'
 
 function normalizePath(path: string): string {
   const trimmed = path.replace(/\/$/, '')
@@ -40,10 +46,15 @@ interface TopnavLinkProps {
 }
 
 function TopnavLink({ href, active, palette, onClick, children }: TopnavLinkProps) {
+  const { setPendingPath } = useNavPending()
+
   return (
     <Link
       href={href}
-      onClick={onClick}
+      onClick={() => {
+        setPendingPath(href)
+        onClick?.()
+      }}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'group relative flex h-full items-center font-ui text-[14px] font-medium leading-none',
@@ -76,12 +87,15 @@ type PortalTopnavProps = {
  * liens underline), avec les tabs mobile (Home / Invest / Markets / Design)
  * + action Search + profil + déconnexion.
  */
-export function PortalTopnav({ initials: initialsProp, brand, className }: PortalTopnavProps) {
+export function PortalTopnav({ initials: initialsProp, brand: brandProp, className }: PortalTopnavProps) {
   const pathname = usePathname() ?? ''
   const router = useRouter()
+  const { effectivePath, setPendingPath } = useNavPending()
   const palette = buildTopnavPalettes(null).solid
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const [loggingOut, setLoggingOut] = React.useState(false)
   const [initials, setInitials] = React.useState(initialsProp ?? '')
+  const [brand, setBrand] = React.useState<SiteBrandLogo | null | undefined>(brandProp)
 
   React.useEffect(() => {
     if (initialsProp) {
@@ -107,22 +121,61 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
   }, [initialsProp])
 
   React.useEffect(() => {
-    if (!mobileOpen) return
+    if (brandProp) {
+      setBrand(brandProp)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/site/brand-logo?locale=fr')
+        if (!res.ok) return
+        const json = (await res.json()) as SiteBrandLogo
+        if (!cancelled) setBrand(json)
+      } catch {
+        // ignore — fallback logo below
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [brandProp])
+
+  React.useEffect(() => {
+    if (!mobileOpen && !loggingOut) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = previousOverflow
     }
-  }, [mobileOpen])
+  }, [mobileOpen, loggingOut])
 
-  const handleLogout = async () => {
-    await fetch('/api/portal/logout', { method: 'POST' })
-    router.replace(PORTAL_ROUTES.login)
-    router.refresh()
+  const handleLogoutPrefetch = () => {
+    router.prefetch(PORTAL_ROUTES.login)
+    preloadPrivyPortalProvider()
+  }
+
+  const handleLogout = () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setMobileOpen(false)
+    markPortalPrivySessionReset()
+    invalidatePortalCache()
+    preloadPrivyPortalProvider()
+    router.prefetch(PORTAL_ROUTES.login)
+
+    void fetch('/api/portal/logout', { method: 'POST', credentials: 'include' })
+      .then(() => {
+        router.replace(PORTAL_ROUTES.login)
+      })
+      .catch((err) => {
+        console.error('[portal/logout]', err)
+        setLoggingOut(false)
+      })
   }
 
   const avatarLabel = initials.trim().slice(0, 2).toUpperCase() || '?'
-  const profileActive = isNavActive(pathname, PORTAL_ROUTES.profile)
+  const profileActive = isNavActive(effectivePath, PORTAL_ROUTES.profile)
 
   const navBarStyle: React.CSSProperties = {
     background: palette.background,
@@ -131,11 +184,14 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
   }
 
   return (
-    <nav
-      data-topnav-surface="solid"
-      className={cn('fixed left-0 right-0 top-0 z-50 box-border w-full', className)}
-      style={navBarStyle}
-    >
+    <>
+      {loggingOut ? <PortalLogoutOverlay variant="below-topnav" /> : null}
+
+      <nav
+        data-topnav-surface="solid"
+        className={cn('fixed left-0 right-0 top-0 z-50 box-border w-full', className)}
+        style={navBarStyle}
+      >
       <Container className="h-full">
         <div className="grid h-full grid-cols-[1fr_auto_1fr] items-stretch gap-8">
           <div className="flex h-full items-center justify-self-start">
@@ -158,7 +214,7 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
             <ul className="m-0 flex h-full list-none items-stretch gap-8 p-0">
               {PORTAL_MAIN_NAV_TABS.map((tab) => (
                 <li key={tab.id} className="flex h-full">
-                  <TopnavLink href={tab.href} active={isNavActive(pathname, tab.href)} palette={palette}>
+                  <TopnavLink href={tab.href} active={isNavActive(effectivePath, tab.href)} palette={palette}>
                     {tab.label}
                   </TopnavLink>
                 </li>
@@ -169,11 +225,12 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
           <div className="flex h-full items-center justify-end gap-3 justify-self-end sm:gap-4">
             <Link
               href={PORTAL_SEARCH_NAV.href}
+              onClick={() => setPendingPath(PORTAL_SEARCH_NAV.href)}
               aria-label={PORTAL_SEARCH_NAV.label}
               className={cn(
                 'hidden h-10 w-10 items-center justify-center rounded-v-pill lg:inline-flex',
                 'transition-colors duration-v-fast hover:bg-v-fg-05',
-                isNavActive(pathname, PORTAL_SEARCH_NAV.href) && 'bg-v-fg-05',
+                isNavActive(effectivePath, PORTAL_SEARCH_NAV.href) && 'bg-v-fg-05',
               )}
               style={{ color: palette.linkColor }}
             >
@@ -182,6 +239,7 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
 
             <Link
               href={PORTAL_ROUTES.profile}
+              onClick={() => setPendingPath(PORTAL_ROUTES.profile)}
               aria-label="Profile"
               aria-current={profileActive ? 'page' : undefined}
               className={cn(
@@ -198,9 +256,16 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
               variant="ghost"
               size="sm"
               className="hidden sm:inline-flex"
+              disabled={loggingOut}
+              aria-busy={loggingOut || undefined}
+              onMouseEnter={handleLogoutPrefetch}
+              onFocus={handleLogoutPrefetch}
               onClick={() => void handleLogout()}
             >
               Sign out
+              {loggingOut ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : null}
             </Button>
 
             <button
@@ -243,12 +308,15 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
               <ul className="m-0 flex list-none flex-col gap-1 p-0">
                 {PORTAL_MAIN_NAV_TABS.map((tab) => {
-                  const active = isNavActive(pathname, tab.href)
+                  const active = isNavActive(effectivePath, tab.href)
                   return (
                     <li key={tab.id}>
                       <Link
                         href={tab.href}
-                        onClick={() => setMobileOpen(false)}
+                        onClick={() => {
+                          setPendingPath(tab.href)
+                          setMobileOpen(false)
+                        }}
                         className={cn(
                           'flex items-center gap-3 rounded-v-input px-3 py-3 font-ui text-[16px] font-medium no-underline',
                           active ? 'bg-v-fg-05 text-v-fg' : 'text-v-fg-body',
@@ -263,10 +331,13 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
                 <li>
                   <Link
                     href={PORTAL_SEARCH_NAV.href}
-                    onClick={() => setMobileOpen(false)}
+                    onClick={() => {
+                      setPendingPath(PORTAL_SEARCH_NAV.href)
+                      setMobileOpen(false)
+                    }}
                     className={cn(
                       'flex items-center gap-3 rounded-v-input px-3 py-3 font-ui text-[16px] font-medium no-underline',
-                      isNavActive(pathname, PORTAL_SEARCH_NAV.href)
+                      isNavActive(effectivePath, PORTAL_SEARCH_NAV.href)
                         ? 'bg-v-fg-05 text-v-fg'
                         : 'text-v-fg-body',
                     )}
@@ -281,12 +352,16 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
                   type="button"
                   variant="outline"
                   className="w-full"
-                  onClick={() => {
-                    setMobileOpen(false)
-                    void handleLogout()
-                  }}
+                  disabled={loggingOut}
+                  aria-busy={loggingOut || undefined}
+                  onMouseEnter={handleLogoutPrefetch}
+                  onFocus={handleLogoutPrefetch}
+                  onClick={() => void handleLogout()}
                 >
                   Sign out
+                  {loggingOut ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : null}
                 </Button>
               </div>
             </div>
@@ -294,5 +369,6 @@ export function PortalTopnav({ initials: initialsProp, brand, className }: Porta
         </div>
       ) : null}
     </nav>
+    </>
   )
 }
