@@ -147,7 +147,8 @@ def _wallets_in_from_linked_raw(raw: Optional[List[Dict[str, Any]]]) -> List[Pri
         if str(item.get("type") or "").strip().lower() not in ("", "wallet") and not item.get("address"):
             continue
         norm = normalize_privy_wallet_payload(item)
-        if norm is None:
+        if norm is None or (norm.chain_type or "").strip().lower() != "evm":
+            # Ne pas bloquer login/signup si Privy expose aussi Solana / autres chaînes.
             continue
         out.append(
             PrivyExchangeWalletIn(

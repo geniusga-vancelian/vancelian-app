@@ -57,6 +57,7 @@ from services.auth.signup_mobile_routes import router as signup_mobile_router
 from services.auth.local_passcode_ack_routes import router as local_passcode_ack_router
 from services.auth.privy_exchange_routes import router as privy_exchange_router
 from services.auth.privy_signup_exchange_routes import router as privy_signup_exchange_router
+from services.auth.privy_link_routes import router as privy_link_router
 from services.auth.privy_person_wallets_routes import router as privy_person_wallets_router
 from services.translate import translate_page_payload
 from services.bundles import router as bundles_router
@@ -269,6 +270,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(local_passcode_ack_router)
     app.include_router(privy_exchange_router)
     app.include_router(privy_signup_exchange_router)
+    app.include_router(privy_link_router)
     app.include_router(privy_person_wallets_router)
     app.include_router(device_attestation_router)
     app.include_router(device_credentials_router)

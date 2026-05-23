@@ -169,3 +169,56 @@ def test_signup_privy_exchange_jwt_uses_body_email_when_access_token_has_no_emai
     )
     assert res.status_code == 200, res.text
     assert db.query(AdminUser).filter(AdminUser.email == email).first() is not None
+
+
+def test_signup_privy_exchange_ignores_non_evm_wallets_from_jwt(
+    client,
+    db,
+    monkeypatch,
+):
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from datetime import datetime, timedelta, timezone
+
+    priv_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+    priv_pem = priv_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    pub_pem = priv_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    app_id = f"privy-signup-app-{uuid.uuid4().hex[:8]}"
+    monkeypatch.setenv("PRIVY_EXCHANGE_VERIFICATION_MODE", "jwt")
+    monkeypatch.setenv("PRIVY_APP_ID", app_id)
+    monkeypatch.setenv("PRIVY_JWT_VERIFICATION_KEY", pub_pem)
+
+    ext = f"jwt-signup-sol-{uuid.uuid4().hex[:12]}"
+    email = f"jwt-signup-sol-{uuid.uuid4().hex[:8]}@example.com"
+    claims = {
+        "sub": ext,
+        "iss": "privy.io",
+        "aud": app_id,
+        "exp": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+        "linked_accounts": [
+            {"type": "email", "address": email, "latest_verified_at": 999},
+            {
+                "type": "wallet",
+                "address": "0x" + ("ab" * 20),
+                "chain_type": "solana",
+                "wallet_client_type": "privy",
+            },
+        ],
+    }
+    bearer = jose_jwt.encode(claims, priv_pem, algorithm="ES256")
+
+    res = client.post(
+        "/auth/signup/privy/exchange",
+        json={"privy_access_token": bearer, "email": email},
+        headers={"X-Device-ID": f"dev-{uuid.uuid4().hex[:8]}"},
+    )
+    assert res.status_code == 200, res.text
+    assert db.query(AdminUser).filter(AdminUser.email == email).first() is not None

@@ -182,6 +182,11 @@ function VerifyContent() {
         if (res.ok) return
         throw new Error(parsePortalExchangeError(data).message)
       }
+      if (signUpMode && err.code === 'signup_email_use_login') {
+        ;({ res, data } = await runExchange(false))
+        if (res.ok) return
+        throw new Error(parsePortalExchangeError(data).message)
+      }
       throw new Error(err.message)
     }
   }, [email, getAccessToken, identityToken, signUpMode])

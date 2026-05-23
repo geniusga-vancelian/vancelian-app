@@ -22,6 +22,7 @@ import {
   shouldShowUnlockEuroBanner,
 } from '@/lib/portal/dashboardFormat'
 import type { PortalDashboardPayload } from '@/lib/portal/dashboardTypes'
+import { resolvePortalDepositHref } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
 const DASHBOARD_CACHE_KEY = 'portal:dashboard'
@@ -47,6 +48,8 @@ export function PortalDashboardScreen() {
     const chartValues = normalizeChartSeries(data.globalHistory?.points ?? [])
     const displayName = resolveDisplayName(data)
     const showUnlockEuroBanner = shouldShowUnlockEuroBanner(data.profile)
+    const hasPrivyWallet = (data.privyPersonWallets?.wallets?.length ?? 0) > 0
+    const depositHref = resolvePortalDepositHref(hasPrivyWallet)
 
     return {
       currency,
@@ -56,6 +59,7 @@ export function PortalDashboardScreen() {
       chartValues,
       displayName,
       showUnlockEuroBanner,
+      depositHref,
       registrationProgress: data.profile?.registration_derived_progress_percent,
     }
   }, [data])
@@ -83,6 +87,7 @@ export function PortalDashboardScreen() {
               balanceLabel={derived.balanceLabel}
               performanceLabel={derived.performanceLabel}
               chartValues={derived.chartValues}
+              depositHref={derived.depositHref}
               className="pt-0"
             />
           </PortalReveal>

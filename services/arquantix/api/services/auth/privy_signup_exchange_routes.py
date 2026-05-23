@@ -39,7 +39,7 @@ from services.auth.security_setup_state import (
     ACCOUNT_STATE_PARTIAL,
     derive_account_state,
 )
-from services.client_identity.service import ClientIdentityService
+from services.client_identity.service import AlreadyLinkedError, ClientIdentityService
 from services.customer_identity.profile_email import ensure_person_collected_email
 
 router = APIRouter(prefix="/auth", tags=["auth-privy-signup"])
@@ -222,14 +222,27 @@ def post_privy_signup_exchange(
             },
         ) from exc
 
-    ClientIdentityService.ensure_pe_client_for_login_user(
-        db,
-        person_id=person.id,
-        client_email=email,
-        actor_type="privy.signup.exchange",
-        actor_id=privy_uid[:128],
-    )
-    db.flush()
+    try:
+        ClientIdentityService.ensure_pe_client_for_login_user(
+            db,
+            person_id=person.id,
+            client_email=email,
+            actor_type="privy.signup.exchange",
+            actor_id=privy_uid[:128],
+        )
+        db.flush()
+    except AlreadyLinkedError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "privy.signup.email_unavailable",
+                "message": (
+                    "Impossible de poursuivre cette inscription pour cet e-mail. "
+                    "Utilisez « Me connecter » ou une autre adresse."
+                ),
+            },
+        ) from exc
 
     from services.auth.person_identity_bridge import get_pe_client_for_person
     from services.auth.privy_exchange_routes import (

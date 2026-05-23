@@ -13,6 +13,16 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
     'Aucun compte Vancelian trouvé pour cet e-mail. Vérifiez l’adresse ou créez un compte.',
   'privy.exchange.identity_conflict':
     'Ce compte est déjà associé à un autre profil. Contactez le support.',
+  signup_email_use_login:
+    'Cet e-mail est déjà en cours d’inscription. Utilisez « Me connecter » pour continuer.',
+  signup_email_unavailable:
+    'Impossible de créer un compte avec cet e-mail. Connectez-vous ou utilisez une autre adresse.',
+  'privy.signup.email_required':
+    'E-mail requis pour l’inscription. Revenez en arrière et recommencez.',
+  'privy.signup.identity_conflict':
+    'Ce compte Privy est déjà associé à un autre profil. Contactez le support.',
+  'privy.wallet_chain_unsupported':
+    'Wallet non pris en charge sur cette plateforme. Réessayez ou contactez le support.',
   'privy.token_invalid': 'Session expirée. Revenez à la connexion et recommencez.',
   'privy.token_missing': 'Session expirée. Revenez à la connexion et recommencez.',
 }
@@ -33,6 +43,9 @@ export function parsePortalExchangeError(data: unknown): PortalExchangeError {
   const detail = row.detail
 
   if (typeof detail === 'string' && detail.trim()) {
+    if (detail.trim().toLowerCase() === 'not found') {
+      return { message: 'Service d’authentification indisponible. Réessayez dans quelques secondes.' }
+    }
     return { message: detail.trim() }
   }
 

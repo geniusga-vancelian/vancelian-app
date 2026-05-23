@@ -100,9 +100,11 @@ export function PortalCryptoWalletScreen() {
                 <ArrowLeftRight className="h-4 w-4" />
                 Échanger
               </Button>
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
-                <Plus className="h-4 w-4" />
-                Déposer
+              <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
+                <Link href={PORTAL_ROUTES.walletDeposit}>
+                  <Plus className="h-4 w-4" />
+                  Déposer
+                </Link>
               </Button>
               <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
                 <ArrowUpRight className="h-4 w-4" />

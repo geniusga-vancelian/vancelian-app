@@ -1,11 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowUpRight, BarChart3, Plus, Wallet } from 'lucide-react'
+import { ArrowLeftRight, ArrowUpRight, Plus } from 'lucide-react'
 import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { Button } from '@/components/ui/button'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -14,6 +13,7 @@ type Props = {
   performanceLabel: string
   periodLabel?: string
   chartValues: number[]
+  depositHref: string
   className?: string
 }
 
@@ -27,6 +27,7 @@ export function PortalDashboardHeader({
   performanceLabel,
   periodLabel = 'All time',
   chartValues,
+  depositHref,
   className,
 }: Props) {
   const perfPositive = !performanceLabel.startsWith('-')
@@ -65,23 +66,19 @@ export function PortalDashboardHeader({
       </article>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" className="gap-1.5" disabled>
-          <Plus className="h-4 w-4" />
-          Deposit
+        <Button type="button" size="sm" className="gap-1.5" asChild>
+          <Link href={depositHref}>
+            <Plus className="h-4 w-4" />
+            Deposit
+          </Link>
         </Button>
         <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
           <ArrowUpRight className="h-4 w-4" />
           Send
         </Button>
         <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
-          <BarChart3 className="h-4 w-4" />
-          Buy
-        </Button>
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
-          <Link href={PORTAL_ROUTES.cryptoWallet}>
-            <Wallet className="h-4 w-4" />
-            Crypto wallet
-          </Link>
+          <ArrowLeftRight className="h-4 w-4" />
+          Exchange
         </Button>
       </div>
     </section>

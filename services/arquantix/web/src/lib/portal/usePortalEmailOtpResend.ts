@@ -81,7 +81,9 @@ export function usePortalEmailOtpResend() {
 
       while (true) {
         try {
-          if (useFreshFlow) {
+          // Inscription : toujours renvoyer avec disableSignup=false (le flux actif
+          // Privy n’expose pas disableSignup sur sendCodeEmail).
+          if (useFreshFlow || !disableSignup) {
             await dispatchFresh()
             return
           }

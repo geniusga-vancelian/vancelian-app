@@ -8,6 +8,8 @@ export const PORTAL_ROUTES = {
   registration: `${PORTAL_PATH_PREFIX}/registration`,
   dashboard: `${PORTAL_PATH_PREFIX}/dashboard`,
   cryptoWallet: `${PORTAL_PATH_PREFIX}/wallet/crypto`,
+  walletDeposit: `${PORTAL_PATH_PREFIX}/wallet/deposit`,
+  walletCreate: `${PORTAL_PATH_PREFIX}/wallet/create`,
   invest: `${PORTAL_PATH_PREFIX}/invest`,
   markets: `${PORTAL_PATH_PREFIX}/markets`,
   design: `${PORTAL_PATH_PREFIX}/design`,
@@ -26,6 +28,11 @@ export function resolveAccountsRowHref(rowId: string, locked?: boolean): string 
 export function portalCryptoWalletAssetRoute(asset: string): string {
   const ticker = asset.trim().toLowerCase()
   return `${PORTAL_ROUTES.cryptoWallet}/${encodeURIComponent(ticker || 'btc')}`
+}
+
+/** Deposit — adresse EVM si wallet lié, sinon création wallet. */
+export function resolvePortalDepositHref(hasPrivyWallet: boolean): string {
+  return hasPrivyWallet ? PORTAL_ROUTES.walletDeposit : PORTAL_ROUTES.walletCreate
 }
 
 /** Détail crypto marché — `/app/markets/btc` (aligné Flutter `/crypto/{slug}`). */

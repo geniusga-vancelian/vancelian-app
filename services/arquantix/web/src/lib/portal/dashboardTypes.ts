@@ -75,6 +75,18 @@ export type PortalPlacementsSummary = {
   positions_count?: number
 } | null
 
+export type PortalPrivyPersonWallets = {
+  wallets?: Array<{
+    id?: string
+    address?: string
+    chain_type?: string
+    chain_id?: number | null
+    wallet_type?: string
+    provider?: string
+    is_primary?: boolean
+  }>
+} | null
+
 export type PortalDashboardPayload = {
   bootstrap: PortalDashboardBootstrap
   profile: PortalDashboardProfile
@@ -85,6 +97,7 @@ export type PortalDashboardPayload = {
   placements: PortalPlacementsSummary
   notifications: { count?: number } | null
   newsWidget: PortalNewsWidgetData | null
+  privyPersonWallets?: PortalPrivyPersonWallets
   partial?: boolean
 }
 

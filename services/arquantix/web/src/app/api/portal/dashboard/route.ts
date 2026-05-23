@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
     placements,
     notifications,
     newsWidget,
+    privyPersonWallets,
   ] = await Promise.all([
     fetchUpstreamJson('/api/app/bootstrap'),
     fetchUpstreamJson('/api/app/profile'),
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
     fetchUpstreamJson('/api/app/lending/earn/positions'),
     fetchUpstreamJson('/api/app/notifications/unread-count'),
     loadPortalTop10NewsWidget(locale, origin).catch(() => null),
+    fetchUpstreamJson('/auth/privy/person-wallets'),
   ])
 
   const currency =
@@ -111,6 +113,7 @@ export async function GET(request: NextRequest) {
     placements: placements.ok ? placements.data : null,
     notifications: notifications.ok ? notifications.data : null,
     newsWidget,
+    privyPersonWallets: privyPersonWallets.ok ? privyPersonWallets.data : null,
     partial,
   })
 }

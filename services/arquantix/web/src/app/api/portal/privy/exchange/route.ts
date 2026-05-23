@@ -8,11 +8,19 @@ import {
 } from '@/lib/portal/portalSession'
 import { isUpstreamExchangeUnavailable } from '@/lib/portal/parsePortalExchangeError'
 
+type ExchangeWalletIn = {
+  address: string
+  chain_type: string
+  chain_id?: number
+  wallet_type: string
+}
+
 type ExchangeBody = {
   privy_access_token?: string
   privy_identity_token?: string
   signUpMode?: boolean
   email?: string
+  wallets?: ExchangeWalletIn[]
 }
 
 function parseExchangeResponse(data: unknown): PortalSessionPayload | null {
@@ -49,13 +57,16 @@ export async function POST(request: NextRequest) {
 
     const deviceId = readPortalDeviceIdFromRequest(request)
     const path = body.signUpMode ? '/auth/signup/privy/exchange' : '/auth/privy/exchange'
-    const payload: Record<string, string> = { privy_access_token: privyToken }
+    const payload: Record<string, unknown> = { privy_access_token: privyToken }
     const identityToken = body.privy_identity_token?.trim()
     if (identityToken) {
       payload.privy_identity_token = identityToken
     }
     if (body.email?.trim()) {
       payload.email = body.email.trim()
+    }
+    if (Array.isArray(body.wallets) && body.wallets.length > 0) {
+      payload.wallets = body.wallets
     }
 
     const upstream = await fetch(buildBackendUrl(path), {

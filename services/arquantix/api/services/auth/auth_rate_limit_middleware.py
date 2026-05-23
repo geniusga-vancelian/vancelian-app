@@ -45,7 +45,7 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
                 limiter.check_login(client_ip_for_rl(request))
             elif path == "/auth/passkeys/prompt":
                 limiter.check_login(client_ip_for_rl(request))
-            elif path == "/auth/privy/exchange":
+            elif path in ("/auth/privy/exchange", "/auth/signup/privy/exchange"):
                 limiter.check_login(client_ip_for_rl(request))
         except HTTPException as exc:
             if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
