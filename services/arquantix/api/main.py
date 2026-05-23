@@ -55,6 +55,8 @@ from services.auth.adaptive_auth_routes import router as adaptive_auth_router
 from services.auth.mobile_otp_login_routes import router as mobile_otp_login_router
 from services.auth.signup_mobile_routes import router as signup_mobile_router
 from services.auth.local_passcode_ack_routes import router as local_passcode_ack_router
+from services.auth.privy_exchange_routes import router as privy_exchange_router
+from services.auth.privy_signup_exchange_routes import router as privy_signup_exchange_router
 from services.translate import translate_page_payload
 from services.bundles import router as bundles_router
 from services.diagnostics import router as diagnostics_router
@@ -258,6 +260,8 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(mobile_otp_login_router)
     app.include_router(signup_mobile_router)
     app.include_router(local_passcode_ack_router)
+    app.include_router(privy_exchange_router)
+    app.include_router(privy_signup_exchange_router)
     app.include_router(device_attestation_router)
     app.include_router(device_credentials_router)
 

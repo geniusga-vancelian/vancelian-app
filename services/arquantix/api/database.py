@@ -1026,6 +1026,99 @@ class Person(Base):
         order_by="TwoFactorChallenge.created_at.desc()",
     )
 
+    external_identities = relationship(
+        "PersonExternalIdentity",
+        back_populates="person",
+        lazy="dynamic",
+    )
+    crypto_wallets_user_controlled = relationship(
+        "PersonCryptoWallet",
+        back_populates="person",
+        lazy="dynamic",
+    )
+
+
+class PersonExternalIdentity(Base):
+    """Identité externe (Privy, etc.) — toujours liée à ``persons.id`` (pas ``admin_users``)."""
+
+    __tablename__ = "person_external_identities"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "external_subject",
+            name="uq_person_external_identities_provider_subject",
+        ),
+        Index("ix_person_external_identities_person_id", "person_id"),
+        {"schema": "public"},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
+    person_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.persons.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider = Column(Text, nullable=False)
+    external_subject = Column(Text, nullable=False)
+    external_email = Column(Text, nullable=True)
+    external_phone = Column(Text, nullable=True)
+    metadata_json = Column(JSONB(astext_type=Text), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    person = relationship("Person", back_populates="external_identities")
+
+
+class PersonCryptoWallet(Base):
+    """Wallet non-custodial / user-controlled — distinct de ``crypto_positions`` et custody interne."""
+
+    __tablename__ = "person_crypto_wallets"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "chain_type",
+            "address",
+            name="uq_person_crypto_wallets_provider_chain_address",
+        ),
+        Index("ix_person_crypto_wallets_person_id", "person_id"),
+        Index("ix_person_crypto_wallets_pe_client_id", "pe_client_id"),
+        {"schema": "public"},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
+    person_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.persons.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    pe_client_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.pe_clients.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    provider = Column(Text, nullable=False)
+    wallet_type = Column(Text, nullable=False)
+    chain_type = Column(Text, nullable=False)
+    chain_id = Column(Integer, nullable=True)
+    address = Column(Text, nullable=False)
+    is_primary = Column(Boolean, nullable=False, server_default=text("true"))
+    metadata_json = Column(JSONB(astext_type=Text), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    person = relationship("Person", back_populates="crypto_wallets_user_controlled")
+
 
 class TwoFactorChallenge(Base):
     """SMS/email OTP and TOTP verification challenges (reusable via purpose)."""
