@@ -812,8 +812,10 @@ def reset_financial_test_state(
 ):
     """
     Remet à zéro l'état financier de test : transactions, webhooks, ledger entries,
-    orders, positions, settlement deltas ; remet les balances custody à 0.
-    Conserve : comptes, clients, providers, ledger_accounts, produits/templates/bundles.
+    orders, positions, settlement deltas, ledger Privy ; remet les balances à 0 ;
+    supprime les comptes IBAN clients fictifs (client_deposit_account).
+    Conserve : identities, wallets Privy, pe_clients, settlement company, providers,
+    ledger_accounts (structure), produits/templates/bundles.
     Protégé admin/ops.
     """
     from services.financial_reset import run_reset

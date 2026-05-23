@@ -38,6 +38,8 @@ PRÉSERVANT la configuration :
     │                     pe_rebalance_previews, pe_strategy_evaluations
     ├── PE orders         pe_orders
     ├── Exchange/crypto   exchange_orders, crypto_positions, crypto_settlement_deltas
+    ├── Privy ledger      privy_webhook_events, person_wallet_deposits (+ soldes person_wallet_balances → 0)
+    ├── Relevés PDF       client_operation_statement_snapshots
     ├── Alertes           notifications, price_alerts
     ├── Audit             pe_audit_events, audit_events
     ├── Opérationnel      pe_idempotency_keys, pe_job_runs, pe_reconciliation_reports
@@ -48,9 +50,15 @@ PRÉSERVANT la configuration :
   REMIS À ZÉRO :
     ├── custody_account_balances  → available/pending = 0
     ├── crypto_custody_balances   → actual/expected = 0
+    ├── person_wallet_balances    → balance/available_balance = 0
+    ├── pe_ledger_accounts        → balance = 0 (cache dénormalisé)
     ├── lending_pools             → total_committed/borrowed/utilization = 0
     ├── lending_pool_products     → current_raised = 0, status → fundraising (si actif)
     └── Redis                     → alerts:* + notif_dedup:* keys
+
+  SUPPRIMÉ (comptes IBAN clients fictifs — pas de vrai SEPA prod) :
+    └── custody_accounts WHERE account_type = client_deposit_account
+        (conserve company_settlement_account + providers)
 """
 from __future__ import annotations
 
@@ -106,6 +114,11 @@ TABLES_DELETE_ORDER = [
     "exchange_orders",
     "crypto_positions",
     "crypto_settlement_deltas",
+    # ── Privy user-wallet ledger (migration 158+) ─────────
+    "person_wallet_deposits",
+    "privy_webhook_events",
+    # ── Relevés opérations figés ──────────────────────────
+    "client_operation_statement_snapshots",
     # ── Alerts & notifications ────────────────────────────
     "notifications",
     "price_alerts",
@@ -131,6 +144,7 @@ TABLES_DELETE_ORDER = [
 
 # Tables for counting (activity + balance tables)
 COUNTED_TABLES = TABLES_DELETE_ORDER + [
+    "person_wallet_balances",
     "custody_account_balances",
     "custody_accounts",
     "crypto_custody_accounts",
@@ -202,6 +216,9 @@ def run_reset(dry_run: bool = False) -> dict:
         "deleted": {},
         "balances_updated": 0,
         "crypto_balances_updated": 0,
+        "privy_balances_updated": 0,
+        "pe_ledger_accounts_zeroed": 0,
+        "client_deposit_accounts_deleted": 0,
         "lending_pools_reset": 0,
         "lending_products_reset": 0,
         "redis_keys_purged": 0,
@@ -319,6 +336,46 @@ def run_reset(dry_run: bool = False) -> dict:
         except Exception as e:
             db.rollback()
             report["errors"].append(f"update crypto_custody_balances: {e}")
+
+        # ─── 5b. Reset soldes Privy user-wallet → 0 ─────────
+        try:
+            r = db.execute(text("""
+                UPDATE public.person_wallet_balances
+                SET balance = 0,
+                    available_balance = 0,
+                    last_synced_at = :now
+            """), {"now": now})
+            report["privy_balances_updated"] = r.rowcount
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            err_str = str(e)
+            if "does not exist" not in err_str and "UndefinedTable" not in err_str:
+                report["errors"].append(f"update person_wallet_balances: {e}")
+
+        # ─── 5c. Cache PE ledger accounts → 0 ───────────────
+        try:
+            r = db.execute(text("""
+                UPDATE public.pe_ledger_accounts
+                SET balance = 0
+            """))
+            report["pe_ledger_accounts_zeroed"] = r.rowcount
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            report["errors"].append(f"update pe_ledger_accounts: {e}")
+
+        # ─── 5d. Supprimer comptes IBAN clients fictifs ───────
+        try:
+            r = db.execute(text("""
+                DELETE FROM public.custody_accounts
+                WHERE account_type = 'client_deposit_account'
+            """))
+            report["client_deposit_accounts_deleted"] = r.rowcount
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            report["errors"].append(f"delete client_deposit custody_accounts: {e}")
 
         # ─── 6. Reset lending_pools stats → 0 ───────────────
         try:
