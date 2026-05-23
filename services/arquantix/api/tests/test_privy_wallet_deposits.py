@@ -130,6 +130,43 @@ def test_webhook_duplicate_is_idempotent(client: TestClient, db: Session):
     assert len(dep_res.json()["deposits"]) == 1
 
 
+def test_webhook_failed_event_can_be_retried(client: TestClient, db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_privy_wallet(db, pe)
+    db.flush()
+
+    payload = {
+        "type": "wallet.funds_deposited",
+        "id": f"evt_{uuid.uuid4().hex[:16]}",
+        "data": {
+            "to_address": wallet.address,
+            "transaction_hash": f"0x{uuid.uuid4().hex}{uuid.uuid4().hex[:32]}",
+            "chain_id": "eip155:1",
+            "asset": {"type": "erc20", "symbol": "USDT"},
+            "contract_address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "amount": "10000000",
+            "log_index": 0,
+        },
+    }
+    svix_id = f"msg_{uuid.uuid4().hex[:8]}"
+    headers = {"svix-id": svix_id}
+
+    first = client.post("/api/webhooks/privy", json=payload, headers=headers)
+    assert first.status_code == 200
+    assert first.json()["processing_status"] == "processed"
+
+    second = client.post("/api/webhooks/privy", json=payload, headers=headers)
+    assert second.status_code == 200
+    assert second.json()["processing_status"] in ("duplicate", "processed")
+
+    auth = mobile_auth_headers(db, pe)
+    usdt = next(
+        b for b in client.get("/api/app/privy-wallet/balances", headers=auth).json()["balances"]
+        if b["asset"] == "USDT"
+    )
+    assert usdt["balance"] == "10"
+
+
 def test_webhook_unknown_wallet_address_fails(client: TestClient, db: Session):
     payload = _deposit_payload(to_address=_wallet_address())
     res = client.post(

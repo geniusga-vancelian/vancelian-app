@@ -62,6 +62,10 @@ export type PortalCryptoSummary = {
     total_value_usd?: number | string
     positions_count?: number
   }
+  positions?: Array<{
+    asset?: string
+    portfolio_scope?: string
+  }>
 } | null
 
 export type PortalPlacementsSummary = {

@@ -70,10 +70,7 @@ async def receive_privy_webhook(
     )
     db.flush()
 
-    if event.processing_status in (
-        PrivyWebhookEventStatus.DUPLICATE.value,
-        PrivyWebhookEventStatus.FAILED.value,
-    ):
+    if event.processing_status == PrivyWebhookEventStatus.DUPLICATE.value:
         db.commit()
         return {
             "status": "ok",

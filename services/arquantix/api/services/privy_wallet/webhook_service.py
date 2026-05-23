@@ -78,29 +78,58 @@ class PrivyWebhookProcessor:
             existing = self._event_repo.find_by_idempotency_key(db, dedupe_key)
             if existing is None and svix_id:
                 existing = self._event_repo.find_by_svix_id(db, svix_id)
-            if existing and existing.processing_status in (
-                PrivyWebhookEventStatus.PROCESSED.value,
-                PrivyWebhookEventStatus.DUPLICATE.value,
-            ):
-                if existing.payload_hash == payload_hash:
+            if existing:
+                if existing.processing_status in (
+                    PrivyWebhookEventStatus.PROCESSED.value,
+                    PrivyWebhookEventStatus.DUPLICATE.value,
+                ) and existing.payload_hash == payload_hash:
                     existing.retry_count = (existing.retry_count or 0) + 1
                     self._event_repo.update_status(
                         db, existing, status=PrivyWebhookEventStatus.DUPLICATE.value
                     )
                     return existing
 
-        event = self._event_repo.create(
-            db,
-            data={
-                "svix_id": svix_id,
-                "idempotency_key": dedupe_key,
-                "event_type": event_type,
-                "external_reference": external_reference,
-                "payload_raw": payload,
-                "payload_hash": payload_hash,
-                "processing_status": PrivyWebhookEventStatus.RECEIVED.value,
-            },
-        )
+                existing.payload_raw = payload
+                existing.payload_hash = payload_hash
+                existing.event_type = event_type
+                existing.external_reference = external_reference
+                existing.error_message = None
+                existing.retry_count = (existing.retry_count or 0) + 1
+                self._event_repo.update_status(
+                    db, existing, status=PrivyWebhookEventStatus.RECEIVED.value
+                )
+                return existing
+
+        try:
+            event = self._event_repo.create(
+                db,
+                data={
+                    "svix_id": svix_id,
+                    "idempotency_key": dedupe_key,
+                    "event_type": event_type,
+                    "external_reference": external_reference,
+                    "payload_raw": payload,
+                    "payload_hash": payload_hash,
+                    "processing_status": PrivyWebhookEventStatus.RECEIVED.value,
+                },
+            )
+        except Exception as exc:
+            if svix_id and "uq_privy_webhook_events_svix_id" in str(exc):
+                db.rollback()
+                existing = self._event_repo.find_by_svix_id(db, svix_id)
+                if existing is None:
+                    raise
+                existing.payload_raw = payload
+                existing.payload_hash = payload_hash
+                existing.event_type = event_type
+                existing.external_reference = external_reference
+                existing.error_message = None
+                existing.retry_count = (existing.retry_count or 0) + 1
+                self._event_repo.update_status(
+                    db, existing, status=PrivyWebhookEventStatus.RECEIVED.value
+                )
+                return existing
+            raise
         return event
 
     def process_event(self, db: Session, event: PrivyWebhookEvent) -> str:

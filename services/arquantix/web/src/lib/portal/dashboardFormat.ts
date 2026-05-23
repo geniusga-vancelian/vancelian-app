@@ -97,6 +97,10 @@ export function buildWalletRows(
 ): PortalWalletRow[] {
   const eurBalance = toNumber(cash?.cash_account?.available_balance)
   const cryptoCount = crypto?.summary?.positions_count ?? 0
+  const privyCount =
+    crypto?.positions?.filter(
+      (p) => p.portfolio_scope === 'privy' || p.portfolio_scope === 'merged',
+    ).length ?? 0
   const cryptoValue =
     currency === 'USD'
       ? toNumber(crypto?.summary?.total_value_usd, toNumber(crypto?.summary?.total_value_eur))
@@ -147,7 +151,10 @@ export function buildWalletRows(
     {
       id: 'crypto',
       title: 'Crypto',
-      subtitle: `${cryptoCount} crypto asset${cryptoCount === 1 ? '' : 's'}`,
+      subtitle:
+        privyCount > 0
+          ? `${cryptoCount} actif${cryptoCount === 1 ? '' : 's'} · incl. wallet Privy`
+          : `${cryptoCount} crypto asset${cryptoCount === 1 ? '' : 's'}`,
       balance: formatPortalMoney(cryptoValue, currency),
       numericBalance: cryptoValue,
       iconKey: 'crypto',

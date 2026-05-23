@@ -190,6 +190,37 @@ class PrivyWalletAdminService:
             message=msg,
         )
 
+    def replay_webhook_event(self, db: Session, event_id: UUID) -> PrivyReplayWebhookResponse:
+        from .enums import PrivyWebhookEventStatus
+        from .repository import PrivyWebhookEventRepository
+
+        event = PrivyWebhookEventRepository.get_by_id(db, event_id)
+        if event is None:
+            raise PrivyWalletNotFoundError("Webhook event not found")
+
+        if event.processing_status == PrivyWebhookEventStatus.PROCESSED.value:
+            return PrivyReplayWebhookResponse(
+                event_id=event.id,
+                deposit_id=event.linked_deposit_id,
+                processing_status=event.processing_status,
+                message="Événement déjà traité.",
+            )
+
+        PrivyWebhookEventRepository.update_status(
+            db,
+            event,
+            status=PrivyWebhookEventStatus.RECEIVED.value,
+            error_message=None,
+        )
+        result = self._processor.process_event(db, event)
+        db.refresh(event)
+        return PrivyReplayWebhookResponse(
+            event_id=event.id,
+            deposit_id=event.linked_deposit_id,
+            processing_status=result,
+            message="Webhook rejoué.",
+        )
+
 
 def _human_to_atomic(amount: Decimal, asset: str) -> str:
     precision = ASSET_PRECISION.get(asset.upper(), 18)

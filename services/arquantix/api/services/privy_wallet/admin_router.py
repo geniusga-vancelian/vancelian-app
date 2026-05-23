@@ -21,6 +21,7 @@ from .schemas import (
     PrivyInfraReadinessResponse,
     PrivyReconcileWalletsRequest,
     PrivyReconcileWalletsResponse,
+    PrivyReplayWebhookResponse,
     PrivySimulateDepositRequest,
     PrivySimulateDepositResponse,
 )
@@ -79,6 +80,24 @@ def privy_customer_readiness(
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
     return result
+
+
+@privy_wallet_admin_router.post(
+    "/replay-webhook/{event_id}",
+    response_model=PrivyReplayWebhookResponse,
+)
+def replay_privy_webhook(
+    event_id: UUID,
+    db: Session = Depends(get_db),
+    _actor=Depends(_guard),
+):
+    """Rejoue un webhook Privy échoué ou en attente (ex. retry dashboard Privy)."""
+    try:
+        result = _svc.replay_webhook_event(db, event_id)
+        db.commit()
+        return result
+    except PrivyWalletNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @privy_wallet_admin_router.post(

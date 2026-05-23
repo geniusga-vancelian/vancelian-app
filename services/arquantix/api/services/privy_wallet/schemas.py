@@ -76,6 +76,13 @@ class PrivySimulateDepositResponse(BaseModel):
     message: str
 
 
+class PrivyReplayWebhookResponse(BaseModel):
+    event_id: UUID
+    deposit_id: Optional[UUID] = None
+    processing_status: str
+    message: str
+
+
 class PrivyReconcileWalletsRequest(BaseModel):
     person_id: UUID
     manual_address: Optional[str] = Field(

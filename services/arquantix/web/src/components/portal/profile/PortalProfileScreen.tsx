@@ -17,6 +17,7 @@ import {
   PortalSettingsCard,
   PortalSettingsRow,
 } from '@/components/portal/profile/PortalProfileUi'
+import { PortalPrivyWalletSection } from '@/components/portal/profile/PortalPrivyWalletSection'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalProfileSkeleton } from '@/components/portal/PortalRouteSkeleton'
@@ -173,6 +174,10 @@ export function PortalProfileScreen() {
         </PortalReveal>
 
         <PortalReveal index={3}>
+          <PortalPrivyWalletSection />
+        </PortalReveal>
+
+        <PortalReveal index={4}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Paramètres</PortalSectionTitle>
             <PortalSettingsCard>
@@ -218,7 +223,7 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={4}>
+        <PortalReveal index={5}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Support</PortalSectionTitle>
             <PortalSettingsCard>
@@ -250,7 +255,7 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={5}>
+        <PortalReveal index={6}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Informations</PortalSectionTitle>
             <PortalSettingsCard>
