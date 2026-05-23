@@ -158,7 +158,22 @@ def _price_asset(
     bal = Decimal(str(balance))
     if bal <= 0:
         return None, None, None, None
-    provider_symbol = ASSET_PROVIDER_SYMBOL_MAP.get(asset.upper())
+
+    asset_u = asset.upper()
+    if asset_u == "EURC":
+        p_eur = Decimal("1")
+        val_eur = (bal * p_eur).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        p_usdt = (p_eur * eurusdt_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        val_usd = (bal * p_usdt).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return f"{p_eur:.2f}", f"{val_eur:.2f}", f"{p_usdt:.2f}", f"{val_usd:.2f}"
+    if asset_u == "USDT":
+        p_usdt = Decimal("1")
+        p_eur = usdt_to_eur(p_usdt, eurusdt_rate)
+        val_eur = (bal * p_eur).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        val_usd = (bal * p_usdt).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return f"{p_eur:.2f}", f"{val_eur:.2f}", f"{p_usdt:.2f}", f"{val_usd:.2f}"
+
+    provider_symbol = ASSET_PROVIDER_SYMBOL_MAP.get(asset_u)
     if not provider_symbol:
         return None, None, None, None
     inst = (

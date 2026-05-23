@@ -6,11 +6,17 @@ from decimal import Decimal, InvalidOperation
 
 from services.exchange.assets import ASSET_PRECISION, SUPPORTED_ASSETS
 
-# Ethereum mainnet — contrats ERC-20 connus (lowercase pour comparaison).
+# Ethereum mainnet — contrats ERC-20 alignés watchlist Privy (ETH natif via NATIVE_SYMBOL_BY_CHAIN).
+ETHEREUM_MAINNET_ERC20: dict[str, str] = {
+    "USDC": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "EURC": "0x1abaea1f781e1f27444163d08077255fb56359a",
+    "USDT": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+}
+
 ERC20_CONTRACT_TO_ASSET: dict[int, dict[str, str]] = {
     1: {
-        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": "USDC",
-        "0x1abaea1f781e1f27444163d08077255fb56359a": "EURC",
+        contract.lower(): asset
+        for asset, contract in ETHEREUM_MAINNET_ERC20.items()
     },
 }
 

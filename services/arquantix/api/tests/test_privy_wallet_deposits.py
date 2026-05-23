@@ -173,6 +173,52 @@ def test_deposits_filter_by_asset(client: TestClient, db: Session):
     assert deposits[0]["amount"] == "1"
 
 
+@pytest.mark.parametrize(
+    ("asset", "contract", "amount_atomic", "expected"),
+    [
+        ("USDT", "0xdac17f958d2ee523a2206206994597c13d831ec7", "10000000", "10"),
+        ("EURC", "0x1abaea1f781e1f27444163d08077255fb56359a", "5000000", "5"),
+    ],
+)
+def test_webhook_erc20_watchlist_assets(
+    client: TestClient,
+    db: Session,
+    asset: str,
+    contract: str,
+    amount_atomic: str,
+    expected: str,
+):
+    pe = make_linked_client(db)
+    wallet = _seed_privy_wallet(db, pe)
+    db.flush()
+
+    payload = {
+        "type": "wallet.funds_deposited",
+        "id": f"evt_{uuid.uuid4().hex[:16]}",
+        "data": {
+            "to_address": wallet.address,
+            "transaction_hash": f"0x{uuid.uuid4().hex}{uuid.uuid4().hex[:32]}",
+            "chain_id": "eip155:1",
+            "asset": {"type": "erc20", "symbol": asset},
+            "contract_address": contract,
+            "amount": amount_atomic,
+            "log_index": 0,
+        },
+    }
+    res = client.post(
+        "/api/webhooks/privy",
+        json=payload,
+        headers={"svix-id": f"msg_{uuid.uuid4().hex[:8]}"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["processing_status"] == "processed"
+
+    auth = mobile_auth_headers(db, pe)
+    balances = client.get("/api/app/privy-wallet/balances", headers=auth).json()["balances"]
+    row = next(b for b in balances if b["asset"] == asset)
+    assert row["balance"] == expected
+
+
 def test_get_deposit_detail(client: TestClient, db: Session):
     pe = make_linked_client(db)
     wallet = _seed_privy_wallet(db, pe)

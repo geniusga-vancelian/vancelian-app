@@ -241,5 +241,7 @@ def _customer_next_steps(blockers: list[str], primary: Any) -> list[str]:
     if any("WEBHOOK" in b or "Migration" in b or "jwt" in b.lower() for b in blockers):
         steps.append("Consolider infra prod (voir GET /api/admin/privy-wallet/infra-readiness).")
     if primary and not blockers:
-        steps.append(f"Dépôt test : envoyer USDC (Ethereum mainnet) vers {primary.address}.")
+        steps.append(
+            f"Dépôt test : envoyer USDC, USDT, EURC ou ETH (Ethereum mainnet) vers {primary.address}."
+        )
     return steps

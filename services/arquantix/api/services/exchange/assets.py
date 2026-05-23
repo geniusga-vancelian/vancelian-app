@@ -11,7 +11,7 @@ from decimal import Decimal
 SUPPORTED_ASSETS: set[str] = {
     "BTC", "ETH", "SOL", "XRP", "ADA",
     "BNB", "DOGE", "AVAX", "LINK", "DOT",
-    "USDC", "EURC",
+    "USDC", "USDT", "EURC",
 }
 
 ASSET_PRECISION: dict[str, int] = {
@@ -26,6 +26,7 @@ ASSET_PRECISION: dict[str, int] = {
     "LINK": 8,
     "DOT": 8,
     "USDC": 6,
+    "USDT": 6,
     "EURC": 6,
 }
 
