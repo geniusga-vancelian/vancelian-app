@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     if (identityToken) {
       payload.privy_identity_token = identityToken
     }
-    if (body.signUpMode && body.email?.trim()) {
+    if (body.email?.trim()) {
       payload.email = body.email.trim()
     }
 

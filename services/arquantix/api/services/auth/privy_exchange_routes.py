@@ -22,7 +22,9 @@ from services.auth.person_identity_bridge import (
 )
 from services.auth.refresh_session import MOBILE_APP_NOT_ALLOWED_DETAIL
 from services.auth.privy_token_verifier import (
+    MODE_JWT,
     PrivyVerifyError,
+    _exchange_mode,
     enrich_verified_privy_access,
     verify_privy_access_token,
 )
@@ -60,6 +62,10 @@ class PrivyExchangeRequest(BaseModel):
         None,
         description="Identity token Privy (JWT) — contient souvent l’e-mail via linked_accounts.",
     )
+    email: Optional[str] = Field(
+        None,
+        description="Adresse OTP saisie côté client — repli JWT si access/identity token sans e-mail.",
+    )
     wallets: Optional[List[PrivyExchangeWalletIn]] = None
 
 
@@ -81,6 +87,20 @@ class PrivyExchangeResponse(BaseModel):
     person_id: str
     pe_client_id: str
     wallets: List[PrivyExchangeWalletOut] = Field(default_factory=list)
+
+
+def _resolved_login_email(
+    verified_email: Optional[str],
+    body_email: Optional[str],
+) -> Optional[str]:
+    """Repli e-mail OTP (web) quand le JWT Privy n’embarque pas l’adresse (prod jwt)."""
+    email = (verified_email or "").strip().lower()
+    if email:
+        return email
+    fallback = (body_email or "").strip().lower()
+    if _exchange_mode() == MODE_JWT and fallback and "@" in fallback:
+        return fallback
+    return None
 
 
 def _validate_evm_address(addr: str) -> str:
@@ -260,10 +280,11 @@ def post_privy_exchange(
         ) from exc
 
     privy_uid = verified.privy_user_id
+    resolved_email = _resolved_login_email(verified.email, body.email)
     person = _resolve_person_for_privy_exchange(
         db,
         privy_user_id=privy_uid,
-        verified_email=verified.email,
+        verified_email=resolved_email,
         verified_phone=verified.phone,
     )
     if person is None:
@@ -279,7 +300,7 @@ def post_privy_exchange(
         db,
         person_id=person.id,
         privy_user_id=privy_uid,
-        email=verified.email,
+        email=resolved_email,
         phone=verified.phone,
     )
 
@@ -288,7 +309,7 @@ def post_privy_exchange(
         ClientIdentityService.ensure_pe_client_for_login_user(
             db,
             person_id=person.id,
-            client_email=verified.email,
+            client_email=resolved_email,
             actor_type="privy.exchange",
             actor_id=privy_uid[:128],
         )

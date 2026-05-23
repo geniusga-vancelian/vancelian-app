@@ -52,6 +52,20 @@ function formatPrivyError(err: unknown, fallback: string, context: 'send-code' |
   return formatPortalPrivyAuthError(err, context, fallback)
 }
 
+/** Privy peut exposer le access token une frame après loginWithCode (prod / latence réseau). */
+async function resolvePrivyAccessToken(
+  getAccessToken: () => Promise<string | null | undefined>,
+): Promise<string | null> {
+  for (const delayMs of [0, 80, 200]) {
+    if (delayMs > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, delayMs))
+    }
+    const token = (await getAccessToken())?.trim()
+    if (token) return token
+  }
+  return null
+}
+
 function VerifyContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -158,7 +172,7 @@ function VerifyContent() {
   }, [sendOtp])
 
   const exchangeSession = useCallback(async () => {
-    const privyToken = await getAccessToken()
+    const privyToken = await resolvePrivyAccessToken(getAccessToken)
     if (!privyToken) {
       throw new Error('missing_privy_token')
     }

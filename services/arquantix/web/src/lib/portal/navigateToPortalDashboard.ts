@@ -14,14 +14,19 @@ type PortalDashboardRouter = {
  * précharge le dashboard en cache pour éviter le skeleton au premier paint.
  */
 export async function navigateToPortalDashboard(router: PortalDashboardRouter): Promise<void> {
-  try {
-    await revalidatePortalCache<unknown>(
-      DASHBOARD_CACHE_KEY,
-      DASHBOARD_API_URL,
-      DASHBOARD_CACHE_TTL_MS,
-    )
-  } catch {
+  void revalidatePortalCache<unknown>(
+    DASHBOARD_CACHE_KEY,
+    DASHBOARD_API_URL,
+    DASHBOARD_CACHE_TTL_MS,
+  ).catch(() => {
     /* le dashboard re-fetchera au montage si le warm-up échoue */
+  })
+
+  // Navigation pleine page : garantit l’envoi des cookies httpOnly posés par /privy/exchange
+  // (router.replace SPA peut arriver avant que le jar soit visible côté middleware).
+  if (typeof window !== 'undefined') {
+    window.location.assign(PORTAL_ROUTES.dashboard)
+    return
   }
 
   router.replace(PORTAL_ROUTES.dashboard)
