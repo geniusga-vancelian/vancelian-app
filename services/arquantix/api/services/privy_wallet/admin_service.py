@@ -22,6 +22,7 @@ from .schemas import (
     PrivyReconcileWalletItem,
     PrivyReconcileWalletsRequest,
     PrivyReconcileWalletsResponse,
+    PrivyReplayWebhookResponse,
     PrivySimulateDepositRequest,
     PrivySimulateDepositResponse,
 )
