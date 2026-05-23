@@ -6,6 +6,7 @@ import {
   type PortalSessionPayload,
   applyPortalSessionCookies,
 } from '@/lib/portal/portalSession'
+import { isUpstreamExchangeUnavailable } from '@/lib/portal/parsePortalExchangeError'
 
 type ExchangeBody = {
   privy_access_token?: string
@@ -111,6 +112,15 @@ export async function POST(request: NextRequest) {
     return res
   } catch (error) {
     console.error('[api/portal/privy/exchange]', error)
-    return NextResponse.json({ error: 'internal_error' }, { status: 500 })
+    const upstreamDown = isUpstreamExchangeUnavailable(error)
+    return NextResponse.json(
+      {
+        error: 'exchange_failed',
+        message: upstreamDown
+          ? 'Le service d’authentification est temporairement indisponible. Réessayez dans quelques secondes.'
+          : 'Échange de session impossible. Réessayez.',
+      },
+      { status: upstreamDown ? 502 : 500 },
+    )
   }
 }

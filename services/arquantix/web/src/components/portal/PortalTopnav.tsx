@@ -5,15 +5,13 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
-import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
 import { buildTopnavPalettes } from '@/lib/cms/site-menu-theme'
 import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
 import { PORTAL_PATH_PREFIX, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { readPortalCache } from '@/lib/portal/portalClientCache'
-import { navigateToPortalLogin } from '@/lib/portal/navigateToPortalLogin'
+import { PortalSignOutButton } from '@/components/portal/PortalSignOutButton'
 import { warmPortalRoute } from '@/lib/portal/portalNavWarmup'
-import { preloadPrivyPortalProvider } from '@/lib/portal/preloadPrivyPortalProvider'
 import {
   PORTAL_MAIN_NAV_TABS,
   PORTAL_SEARCH_NAV,
@@ -98,7 +96,6 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
   const { effectivePath, setPendingPath } = useNavPending()
   const palette = buildTopnavPalettes(null).solid
   const [mobileOpen, setMobileOpen] = React.useState(false)
-  const loggingOutRef = React.useRef(false)
   const [initials, setInitials] = React.useState(() => {
     if (initialsProp) return initialsProp
     const cached = readPortalCache<{ profile?: PortalDashboardProfile | null }>('portal:profile')
@@ -163,18 +160,6 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
       document.body.style.overflow = previousOverflow
     }
   }, [mobileOpen])
-
-  const handleLogoutPrefetch = () => {
-    router.prefetch(PORTAL_ROUTES.login)
-    preloadPrivyPortalProvider()
-  }
-
-  const handleLogout = () => {
-    if (loggingOutRef.current) return
-    loggingOutRef.current = true
-    setMobileOpen(false)
-    navigateToPortalLogin(router)
-  }
 
   const avatarLabel = initials.trim().slice(0, 2).toUpperCase() || '?'
   const profileActive = isNavActive(effectivePath, PORTAL_ROUTES.profile)
@@ -261,17 +246,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
               {avatarLabel}
             </Link>
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="hidden sm:inline-flex"
-              onMouseEnter={handleLogoutPrefetch}
-              onFocus={handleLogoutPrefetch}
-              onClick={() => handleLogout()}
-            >
-              Sign out
-            </Button>
+            <PortalSignOutButton className="hidden sm:inline-flex" />
 
             <button
               type="button"
@@ -357,16 +332,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                 </li>
               </ul>
               <div className="mt-6 border-t border-v-fg-10 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onMouseEnter={handleLogoutPrefetch}
-                  onFocus={handleLogoutPrefetch}
-                  onClick={() => handleLogout()}
-                >
-                  Sign out
-                </Button>
+                <PortalSignOutButton className="w-full" />
               </div>
             </div>
           </div>

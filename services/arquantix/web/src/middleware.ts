@@ -39,6 +39,9 @@ function nextWithPortalHeaders(request: NextRequest, pathnameOverride?: string) 
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-arq-pathname', pathnameOverride ?? request.nextUrl.pathname)
   requestHeaders.set('x-arq-portal', '1')
+  if (request.nextUrl.searchParams.get('signed_out') === '1') {
+    requestHeaders.set('x-portal-fast-auth', '1')
+  }
   return NextResponse.next({ request: { headers: requestHeaders } })
 }
 

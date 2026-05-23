@@ -164,13 +164,18 @@ function mergePortalAuthContent(
 export async function getPortalAuthContent(
   locale: Locale = PORTAL_AUTH_RUNTIME_LOCALE,
 ): Promise<PortalAuthContent> {
-  const row = await prisma.globalSettings.findFirst({ select: { portalAuthJson: true } })
-  const parsed = parsePortalAuthStorage(row?.portalAuthJson ?? null)
-  const resendSeconds =
-    parsed.kind === 'v2' && parsed.doc.resendSeconds ? parsed.doc.resendSeconds : 45
-  const ssoEnabled = parsed.kind === 'v2' && parsed.doc.ssoEnabled === true
-  const block = resolvePortalAuthBlockForLocale(parsed, locale)
-  return mergePortalAuthContent(block, resendSeconds, ssoEnabled)
+  try {
+    const row = await prisma.globalSettings.findFirst({ select: { portalAuthJson: true } })
+    const parsed = parsePortalAuthStorage(row?.portalAuthJson ?? null)
+    const resendSeconds =
+      parsed.kind === 'v2' && parsed.doc.resendSeconds ? parsed.doc.resendSeconds : 45
+    const ssoEnabled = parsed.kind === 'v2' && parsed.doc.ssoEnabled === true
+    const block = resolvePortalAuthBlockForLocale(parsed, locale)
+    return mergePortalAuthContent(block, resendSeconds, ssoEnabled)
+  } catch (e) {
+    console.error('[getPortalAuthContent]', e)
+    return getDefaultPortalAuthContent()
+  }
 }
 
 /** Remplace `{key}` dans les templates CMS (ex. `{email}`, `{seconds}`). */

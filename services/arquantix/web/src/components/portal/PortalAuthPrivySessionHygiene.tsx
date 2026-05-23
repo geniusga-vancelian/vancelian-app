@@ -71,7 +71,7 @@ function isVerifyPathname(pathname: string): boolean {
 }
 
 /** Purge synchrone des tokens Privy persistés (sans appeler logout() async). */
-function clearPrivyBrowserStorage(): void {
+export function clearPrivyBrowserStorage(): void {
   if (typeof window === 'undefined') return
   try {
     for (const key of Object.keys(localStorage)) {
@@ -137,12 +137,14 @@ export function PortalAuthPrivySessionHygiene() {
       try {
         if (hasForcedReset) {
           consumePortalPrivyResetFlag()
-          await recoverPrivyEmailLoginSession(logout)
+          clearPrivyBrowserStorage()
+          void logout?.().catch(() => {})
           return
         }
 
         if (authenticated && !shouldAbortReset()) {
-          await recoverPrivyEmailLoginSession(logout)
+          clearPrivyBrowserStorage()
+          void logout?.().catch(() => {})
         }
       } catch (err) {
         console.error('[portal/auth] privy session reset', err)

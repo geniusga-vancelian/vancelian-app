@@ -36,17 +36,16 @@ body:has(.portal-auth) nav[data-topnav-surface] {
   }
 }
 
-@media (max-width: 767px) {
-  .portal-auth {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .portal-auth {
     animation: none;
     opacity: 1;
   }
+}
+
+.portal-auth--instant {
+  animation: none;
+  opacity: 1;
 }
 
 /* ── Left : homepage hero (SectionHero / VHero) ── */
@@ -134,21 +133,6 @@ body:has(.portal-auth) nav[data-topnav-surface] {
   }
 }
 
-@media (max-width: 767px) {
-  .portal-auth__back {
-    top: 24px;
-    left: 24px;
-    color: var(--v-fg);
-    border-color: var(--v-fg-20);
-    white-space: normal;
-    max-width: calc(100% - 48px);
-  }
-  .portal-auth__back:hover {
-    border-color: var(--v-fg);
-    background: var(--v-fg-05);
-  }
-}
-
 /* ── Right : form panel ── */
 
 .portal-auth__form-wrap {
@@ -171,17 +155,6 @@ body:has(.portal-auth) nav[data-topnav-surface] {
   align-items: center;
   justify-content: center;
   min-height: 0;
-}
-
-@media (max-width: 767px) {
-  .portal-auth__form-wrap {
-    padding: 32px 32px 88px;
-  }
-
-  .portal-auth__form-main {
-    justify-content: flex-start;
-    padding-top: 72px;
-  }
 }
 
 /* Panneau formulaire — boot Privy non bloquant (logout → login rapide) */
@@ -264,12 +237,104 @@ body:has(.portal-auth) nav[data-topnav-surface] {
   }
 }
 
+/*
+ * Layout single-panel : colonne hero absente du layout.
+ * - viewport ≤767px (hero masqué via display:none)
+ * - .portal-auth--single-panel (hero CMS indisponible, écran plus large)
+ */
 @media (max-width: 767px) {
-  .portal-auth__logo {
-    left: 50%;
-    top: 48px;
-    transform: translateX(-50%);
+  .portal-auth {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: unset;
   }
+
+  .portal-auth > .portal-auth__back {
+    position: relative;
+    top: auto;
+    left: auto;
+    align-self: flex-start;
+    flex-shrink: 0;
+    margin: calc(24px + env(safe-area-inset-top, 0px)) 24px 0;
+    max-width: calc(100% - 48px);
+    color: var(--v-fg);
+    border-color: var(--v-fg-20);
+    white-space: normal;
+  }
+
+  .portal-auth > .portal-auth__back:hover {
+    border-color: var(--v-fg);
+    background: var(--v-fg-05);
+  }
+
+  .portal-auth .portal-auth__form-wrap {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 0;
+    padding: 16px 32px 96px;
+  }
+
+  .portal-auth .portal-auth__form-main {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+
+  .portal-auth .portal-auth__logo {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
+    margin: 0 auto 40px;
+    flex-shrink: 0;
+  }
+}
+
+.portal-auth--single-panel {
+  display: flex;
+  flex-direction: column;
+  grid-template-columns: unset;
+}
+
+.portal-auth--single-panel > .portal-auth__back {
+  position: relative;
+  top: auto;
+  left: auto;
+  align-self: flex-start;
+  flex-shrink: 0;
+  margin: calc(32px + env(safe-area-inset-top, 0px)) 48px 0;
+  max-width: calc(100% - 96px);
+  color: var(--v-fg);
+  border-color: var(--v-fg-20);
+  white-space: normal;
+}
+
+.portal-auth--single-panel > .portal-auth__back:hover {
+  border-color: var(--v-fg);
+  background: var(--v-fg-05);
+}
+
+.portal-auth--single-panel .portal-auth__form-wrap {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-height: 0;
+  width: 100%;
+  padding: 16px 48px 96px;
+}
+
+.portal-auth--single-panel .portal-auth__form-main {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  padding-top: 0;
+}
+
+.portal-auth--single-panel .portal-auth__logo {
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  margin: 0 auto 40px;
+  flex-shrink: 0;
 }
 
 .portal-auth__form {

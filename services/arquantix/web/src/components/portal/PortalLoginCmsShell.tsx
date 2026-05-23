@@ -2,19 +2,18 @@ import { PortalAuthShell } from '@/components/portal/PortalAuthShell'
 import { PortalAuthContentProvider } from '@/components/portal/PortalAuthContentProvider'
 import { resolveHomeHeroAuthContent } from '@/lib/cms/resolveHomeHeroAuthContent'
 import { getPortalAuthContent } from '@/lib/cms/portal-auth'
-import { getSiteBrandLogo, getSiteFooterData } from '@/lib/cms/site-footer'
+import { getSiteBrandLogo } from '@/lib/cms/site-footer'
 import { defaultLocale } from '@/config/locales'
 
 type Props = {
   children: React.ReactNode
 }
 
-/** Shell login complet — hero CMS, footer, copy admin (streamé après le bootstrap). */
+/** Shell login complet — hero CMS + copy admin (streamé après le bootstrap). */
 export async function PortalLoginCmsShell({ children }: Props) {
-  const [heroContent, brand, footerData, portalAuthContent] = await Promise.all([
+  const [heroContent, brand, portalAuthContent] = await Promise.all([
     resolveHomeHeroAuthContent(),
     getSiteBrandLogo(defaultLocale),
-    getSiteFooterData(defaultLocale),
     getPortalAuthContent(),
   ])
 
@@ -23,7 +22,6 @@ export async function PortalLoginCmsShell({ children }: Props) {
       <PortalAuthShell
         heroContent={heroContent}
         brand={brand}
-        initialFooterData={footerData}
         backToWebsiteLabel={portalAuthContent.shell.backToWebsiteLabel}
         backToWebsiteHref={portalAuthContent.shell.backToWebsiteHref}
       >

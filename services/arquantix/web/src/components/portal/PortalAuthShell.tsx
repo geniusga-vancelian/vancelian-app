@@ -3,19 +3,20 @@
 import { SectionHero } from '@/components/sections/SectionHero'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
 import { PortalBackToWebsiteLink } from '@/components/portal/PortalBackToWebsiteLink'
-import { PersistentSiteFooter } from '@/components/site/PersistentSiteFooter'
 import { PortalAuthFootnote } from '@/components/portal/PortalAuthFootnote'
 import { usePortalAuthContent } from '@/components/portal/PortalAuthContentProvider'
 import type { HomeHeroAuthContent } from '@/lib/cms/resolveHomeHeroAuthContent'
-import type { SiteFooterData } from '@/lib/cms/site-footer'
+import { cn } from '@/lib/utils'
 
 type Props = {
   children: React.ReactNode
   heroContent: HomeHeroAuthContent | null
   brand?: SiteBrandLogo | null
-  initialFooterData?: SiteFooterData
   backToWebsiteLabel?: string
   backToWebsiteHref?: string
+  instant?: boolean
+  /** Colonne hero vide sur desktop pendant le bootstrap (évite layout single-panel). */
+  preserveDesktopHeroColumn?: boolean
 }
 
 function PortalAuthHeroPanel({ heroContent }: { heroContent: HomeHeroAuthContent }) {
@@ -34,15 +35,23 @@ export function PortalAuthShell({
   children,
   heroContent,
   brand,
-  initialFooterData,
   backToWebsiteLabel = 'Back to the website',
   backToWebsiteHref = '/en',
+  instant = false,
+  preserveDesktopHeroColumn = false,
 }: Props) {
   const authContent = usePortalAuthContent()
+  const singlePanel = !heroContent && !preserveDesktopHeroColumn
 
   return (
     <div className="portal-auth-page">
-      <main className="portal-auth">
+      <main
+        className={cn(
+          'portal-auth',
+          singlePanel && 'portal-auth--single-panel',
+          instant && 'portal-auth--instant',
+        )}
+      >
         <PortalBackToWebsiteLink
           href={backToWebsiteHref}
           className="portal-auth__back"
@@ -54,7 +63,11 @@ export function PortalAuthShell({
           <span>{backToWebsiteLabel}</span>
         </PortalBackToWebsiteLink>
 
-        {heroContent ? <PortalAuthHeroPanel heroContent={heroContent} /> : null}
+        {heroContent ? (
+          <PortalAuthHeroPanel heroContent={heroContent} />
+        ) : preserveDesktopHeroColumn ? (
+          <div className="portal-auth__media portal-auth__media--placeholder" aria-hidden />
+        ) : null}
 
         <section className="portal-auth__form-wrap" aria-labelledby="portal-auth-form-title">
           <PortalBackToWebsiteLink
@@ -70,8 +83,6 @@ export function PortalAuthShell({
           <PortalAuthFootnote content={authContent.legal} />
         </section>
       </main>
-
-      <PersistentSiteFooter initialData={initialFooterData} />
     </div>
   )
 }

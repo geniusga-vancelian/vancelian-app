@@ -34,9 +34,14 @@ async function resolveHomeHeroSectionData(): Promise<Record<string, unknown> | u
  * même mapping CMS que {@link SectionHero} sur la homepage publique.
  */
 export async function resolveHomeHeroAuthContent(): Promise<HomeHeroAuthContent | null> {
-  const data = await resolveHomeHeroSectionData()
-  if (!data) return null
+  try {
+    const data = await resolveHomeHeroSectionData()
+    if (!data) return null
 
-  const props = mapDataToComponentProps('hero', data, defaultLocale) as HomeHeroAuthContent
-  return props
+    const props = mapDataToComponentProps('hero', data, defaultLocale) as HomeHeroAuthContent
+    return props
+  } catch (e) {
+    console.error('[resolveHomeHeroAuthContent]', e)
+    return null
+  }
 }

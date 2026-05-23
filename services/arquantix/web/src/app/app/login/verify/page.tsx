@@ -5,9 +5,8 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLoginWithEmail, usePrivy, useIdentityToken } from '@privy-io/react-auth'
 import { usePortalAuthContent } from '@/components/portal/PortalAuthContentProvider'
-import { PortalAuthFormDeferShell } from '@/components/portal/PortalAuthFormDeferShell'
 import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
-import { PortalVerifyFormPlaceholder } from '@/components/portal/PortalVerifyFormPlaceholder'
+import { PortalAuthVerifySkeleton } from '@/components/portal/PortalAuthVerifySkeleton'
 import { PortalOtpInput } from '@/components/portal/PortalOtpInput'
 import { usePortalPrivyCaptcha } from '@/components/portal/PortalPrivyCaptcha'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
@@ -20,33 +19,7 @@ import {
 } from '@/components/portal/PortalAuthPrivySessionHygiene'
 import { formatPortalPrivyAuthError } from '@/lib/portal/privyConfigErrors'
 import { navigateToPortalDashboard } from '@/lib/portal/navigateToPortalDashboard'
-
-type ExchangeError = { code?: string; message: string }
-
-function parseExchangeError(data: unknown): ExchangeError {
-  const fallback = 'Unable to open your session. Please try again.'
-  if (!data || typeof data !== 'object') return { message: fallback }
-  const row = data as Record<string, unknown>
-  const detail = row.detail
-  if (typeof detail === 'string') return { message: detail }
-  if (detail && typeof detail === 'object') {
-    const d = detail as Record<string, unknown>
-    return {
-      code: typeof d.code === 'string' ? d.code : undefined,
-      message: typeof d.message === 'string' ? d.message : fallback,
-    }
-  }
-  if (typeof row.message === 'string') return { message: row.message }
-  if (typeof row.error === 'string') {
-    return {
-      message:
-        row.error === 'exchange_failed'
-          ? 'Connexion au serveur impossible. Réessayez dans quelques secondes.'
-          : row.error,
-    }
-  }
-  return { message: fallback }
-}
+import { parsePortalExchangeError } from '@/lib/portal/parsePortalExchangeError'
 
 function formatPrivyError(err: unknown, fallback: string, context: 'send-code' | 'verify-code'): string {
   return formatPortalPrivyAuthError(err, context, fallback)
@@ -203,11 +176,11 @@ function VerifyContent() {
 
     let { res, data } = await runExchange(signUpMode)
     if (!res.ok) {
-      const err = parseExchangeError(data)
+      const err = parsePortalExchangeError(data)
       if (!signUpMode && err.code === 'privy.exchange.person_not_found') {
         ;({ res, data } = await runExchange(true))
         if (res.ok) return
-        throw new Error(parseExchangeError(data).message)
+        throw new Error(parsePortalExchangeError(data).message)
       }
       throw new Error(err.message)
     }
@@ -369,7 +342,7 @@ function VerifyContent() {
 
 export default function PortalLoginVerifyPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PortalAuthVerifySkeleton />}>
       <VerifyGate />
     </Suspense>
   )
@@ -377,15 +350,14 @@ export default function PortalLoginVerifyPage() {
 
 function VerifyGate() {
   const { privyReady } = usePortalAuthPrivy()
-  const [privyBooted, setPrivyBooted] = useState(false)
 
-  useEffect(() => {
-    if (privyReady) setPrivyBooted(true)
-  }, [privyReady])
+  if (!privyReady) {
+    return <PortalAuthVerifySkeleton />
+  }
 
   return (
-    <PortalAuthFormDeferShell loading={!privyBooted}>
-      {privyBooted ? <VerifyContent /> : <PortalVerifyFormPlaceholder />}
-    </PortalAuthFormDeferShell>
+    <Suspense fallback={<PortalAuthVerifySkeleton />}>
+      <VerifyContent />
+    </Suspense>
   )
 }

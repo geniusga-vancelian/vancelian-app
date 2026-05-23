@@ -4,14 +4,14 @@ import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
 import { cn } from '@/lib/utils'
 
 type PortalLogoutOverlayProps = {
-  /** `below-topnav` : filtre le contenu sous le menu (logout rapide). */
+  /** `below-topnav` : filtre le contenu sous le menu. `fullscreen` : toute la page. */
   variant?: 'fullscreen' | 'below-topnav'
   className?: string
 }
 
-/** Voile pendant la déconnexion — menu reste visible et interactif. */
+/** Voile immédiat pendant la déconnexion — feedback visuel avant redirect login. */
 export function PortalLogoutOverlay({
-  variant = 'below-topnav',
+  variant = 'fullscreen',
   className,
 }: PortalLogoutOverlayProps) {
   const belowTopnav = variant === 'below-topnav'
@@ -21,7 +21,8 @@ export function PortalLogoutOverlay({
       className={cn(
         'fixed left-0 right-0',
         belowTopnav ? 'z-40' : 'inset-0 z-[200]',
-        'bg-v-bg/55 backdrop-blur-[4px]',
+        'cursor-wait bg-v-bg/60 backdrop-blur-[6px]',
+        'pointer-events-auto',
         className,
       )}
       style={belowTopnav ? { top: TOPNAV_HEIGHT_PX, bottom: 0 } : undefined}

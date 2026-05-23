@@ -14,6 +14,11 @@ import {
   markPortalOtpFlowActive,
 } from '@/components/portal/PortalAuthPrivySessionHygiene'
 import { formatPortalPrivyAuthError } from '@/lib/portal/privyConfigErrors'
+import { PortalAuthVerifySkeleton } from '@/components/portal/PortalAuthVerifySkeleton'
+import {
+  PORTAL_LOGIN_SIGNED_OUT_PARAM,
+  stripPortalLoginSignedOutParam,
+} from '@/lib/portal/navigateToPortalLogin'
 
 function PortalLoginForm() {
   const router = useRouter()
@@ -26,12 +31,21 @@ function PortalLoginForm() {
   const [email, setEmail] = useState(searchParams?.get('email') ?? '')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [navigatingToVerify, setNavigatingToVerify] = useState(false)
 
   const signUpMode = searchParams?.get('mode') === 'signup'
 
   useEffect(() => {
     router.prefetch(PORTAL_ROUTES.loginVerify)
   }, [router])
+
+  useEffect(() => {
+    if (searchParams?.get(PORTAL_LOGIN_SIGNED_OUT_PARAM) !== '1') return
+    const timer = window.setTimeout(() => {
+      stripPortalLoginSignedOutParam()
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [searchParams])
 
   const setAuthMode = useCallback(
     (signup: boolean) => {
@@ -104,6 +118,7 @@ function PortalLoginForm() {
 
     try {
       await sendEmailOtp({ email: trimmedEmail, disableSignup: !signUpMode })
+      setNavigatingToVerify(true)
       router.push(verifyHref)
     } catch (err) {
       console.error('[portal/login] sendCode', err)
@@ -121,6 +136,10 @@ function PortalLoginForm() {
 
   const isSendingCode = state?.status === 'sending-code'
   const isBusy = submitting || isSendingCode || !ready
+
+  if (navigatingToVerify) {
+    return <PortalAuthVerifySkeleton />
+  }
 
   return (
     <form className="portal-auth__form" onSubmit={(e) => void onSubmit(e)} noValidate>
