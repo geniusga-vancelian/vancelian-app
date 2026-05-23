@@ -587,6 +587,7 @@ class TestClientService:
         from services.privy_wallet.repository import PersonWalletDepositRepository
         from services.privy_wallet.transaction_merge import (
             exchange_order_to_crypto_tx,
+            list_orphan_webhook_crypto_txs,
             merge_crypto_transactions,
         )
 
@@ -598,12 +599,16 @@ class TestClientService:
 
         person_id = getattr(client, "person_id", None)
         privy_rows: list = []
+        orphan_txs: list = []
         if person_id is not None:
             privy_rows = PersonWalletDepositRepository().list_for_person(
                 db, person_id, asset=asset, limit=200
             )
+            orphan_txs = list_orphan_webhook_crypto_txs(
+                db, person_id=person_id, asset=asset, limit=200
+            )
 
-        txs = merge_crypto_transactions(exchange_txs, privy_rows)
+        txs = merge_crypto_transactions(exchange_txs, privy_rows, extra_txs=orphan_txs)
 
         return {
             "client": client,

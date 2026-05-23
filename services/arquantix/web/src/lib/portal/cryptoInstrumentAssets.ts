@@ -50,6 +50,9 @@ export const CRYPTO_ASSET_BRAND: Record<string, string> = {
 export function normalizeCryptoBaseTicker(raw: string): string {
   let u = raw.trim().toUpperCase()
   if (!u) return u
+  const aliased = TICKER_ALIASES[u] ?? u
+  // Tickers canoniques (EURC, USDC…) — ne pas découper le suffixe EUR/USD.
+  if (BUNDLED_EXPORT_TICKERS.has(aliased)) return aliased
   for (const suffix of QUOTE_SUFFIXES) {
     if (u.length > suffix.length && u.endsWith(suffix)) {
       const base = u.slice(0, -suffix.length)
@@ -59,7 +62,7 @@ export function normalizeCryptoBaseTicker(raw: string): string {
       }
     }
   }
-  return u
+  return TICKER_ALIASES[u] ?? u
 }
 
 export function cryptoBrandColor(ticker: string): string {

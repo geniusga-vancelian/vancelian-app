@@ -35,6 +35,8 @@ interface ListItem {
   created_at: string
   updated_at: string
   pe_client_id: string | null
+  has_privy_wallet?: boolean
+  privy_wallet_count?: number
 }
 
 interface ListResponse {
@@ -193,6 +195,7 @@ export default function AdminCustomersPage() {
                     <TableHead className="font-semibold text-slate-700">Nom</TableHead>
                     <TableHead className="font-semibold text-slate-700">Pays</TableHead>
                     <TableHead className="font-semibold text-slate-700">Progression</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Wallet Privy</TableHead>
                     <TableHead className="font-semibold text-slate-700">Créé</TableHead>
                     <TableHead className="font-semibold text-slate-700">Maj</TableHead>
                     <TableHead className="w-[100px] text-right font-semibold text-slate-700">Action</TableHead>
@@ -220,6 +223,15 @@ export default function AdminCustomersPage() {
                             {Math.round(row.registration_progress.completion_ratio * 100)}% complétude
                           </span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {row.has_privy_wallet ? (
+                          <Badge className="bg-violet-700 hover:bg-violet-700 text-white border-transparent text-xs">
+                            {row.privy_wallet_count ?? 1} wallet{(row.privy_wallet_count ?? 1) > 1 ? 's' : ''}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-slate-600 whitespace-nowrap">{formatDt(row.created_at)}</TableCell>
                       <TableCell className="text-xs text-slate-600 whitespace-nowrap">{formatDt(row.updated_at)}</TableCell>

@@ -36,7 +36,7 @@ export function applyPortalSessionCookies(
 }
 
 export function clearPortalSessionCookies(res: NextResponse): NextResponse {
-  const clear = { path: '/', maxAge: 0 }
+  const clear = { ...portalCookieOptions(), maxAge: 0 }
   res.cookies.set(PORTAL_ACCESS_COOKIE, '', clear)
   res.cookies.set(PORTAL_REFRESH_COOKIE, '', clear)
   return res

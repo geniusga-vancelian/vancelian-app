@@ -1,17 +1,17 @@
 'use client'
 
 import { useMemo } from 'react'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
 import { PortalAccountsCard } from '@/components/portal/dashboard/PortalAccountsCard'
 import { PortalDashboardHeader } from '@/components/portal/dashboard/PortalDashboardHeader'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
+import { PortalUnlockEuroBanner } from '@/components/portal/dashboard/PortalUnlockEuroBanner'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalNewsWidgetSection } from '@/components/portal/dashboard/PortalNewsWidgetSection'
-import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
 import {
+  applyWalletRowAccess,
   buildWalletRows,
   formatPerformancePct,
   normalizeChartSeries,
@@ -19,9 +19,7 @@ import {
   resolveHeaderBalance,
   resolvePerformancePct,
   resolveReferenceCurrency,
-  shouldShowActivationModule,
-  shouldShowMyAccountsCard,
-  hasEuroCashAccount,
+  shouldShowUnlockEuroBanner,
 } from '@/lib/portal/dashboardFormat'
 import type { PortalDashboardPayload } from '@/lib/portal/dashboardTypes'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -39,13 +37,16 @@ export function PortalDashboardScreen() {
   const derived = useMemo(() => {
     if (!data) return null
     const currency = resolveReferenceCurrency(data)
-    const rows = buildWalletRows(data.cash, data.crypto, data.placements, currency)
+    const rows = applyWalletRowAccess(
+      buildWalletRows(data.cash, data.crypto, data.placements, currency),
+      data.profile,
+      data.cash,
+    )
     const balanceLabel = resolveHeaderBalance(data.globalStatistics, rows, currency)
     const performancePct = resolvePerformancePct(data.globalStatistics)
     const chartValues = normalizeChartSeries(data.globalHistory?.points ?? [])
     const displayName = resolveDisplayName(data)
-    const showAccounts = shouldShowMyAccountsCard(data.profile, hasEuroCashAccount(data.cash))
-    const showActivation = shouldShowActivationModule(data.profile)
+    const showUnlockEuroBanner = shouldShowUnlockEuroBanner(data.profile)
 
     return {
       currency,
@@ -54,8 +55,8 @@ export function PortalDashboardScreen() {
       performanceLabel: formatPerformancePct(performancePct),
       chartValues,
       displayName,
-      showAccounts,
-      showActivation,
+      showUnlockEuroBanner,
+      registrationProgress: data.profile?.registration_derived_progress_percent,
     }
   }, [data])
 
@@ -86,25 +87,15 @@ export function PortalDashboardScreen() {
             />
           </PortalReveal>
 
-          {derived.showActivation ? (
+          {derived.showUnlockEuroBanner ? (
             <PortalReveal index={1}>
-              <article className="rounded-v-card border border-v-fg-10 bg-v-card p-4 shadow-v-subtle sm:p-5">
-                <VEyebrow className="mb-2">Get started</VEyebrow>
-                <p className="m-0 font-ui text-[15px] leading-relaxed text-v-fg-body">
-                  Complete your activation journey to unlock investing on Vancelian.
-                </p>
-                <Button type="button" className="mt-4 w-full sm:w-auto">
-                  Continue activation
-                </Button>
-              </article>
+              <PortalUnlockEuroBanner progressPercent={derived.registrationProgress} />
             </PortalReveal>
           ) : null}
 
-          {derived.showAccounts ? (
-            <PortalReveal index={2}>
-              <PortalAccountsCard rows={derived.rows} />
-            </PortalReveal>
-          ) : null}
+          <PortalReveal index={2}>
+            <PortalAccountsCard rows={derived.rows} />
+          </PortalReveal>
 
           <PortalReveal index={3}>
             <PortalNewsWidgetSection locale="fr" initialData={data.newsWidget} />

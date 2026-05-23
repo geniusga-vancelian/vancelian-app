@@ -1,3 +1,4 @@
+import type { NextRequest } from 'next/server'
 import { PORTAL_ROUTES, isPortalAuthPathname } from '@/lib/portal/portalRouting'
 
 const PORTAL_LOGIN_SIGNED_OUT_PARAM = 'signed_out' as const
@@ -26,4 +27,20 @@ export function resolvePortalLogoutRedirectPath(redirectParam: string | null | u
   } catch {
     return fallback
   }
+}
+
+/** Construit une URL absolue sûre pour `NextResponse.redirect` (Next.js exige une URL absolue). */
+export function resolvePortalLogoutRedirectUrl(
+  request: Pick<NextRequest, 'headers' | 'nextUrl'>,
+  redirectParam: string | null | undefined,
+): string {
+  const path = resolvePortalLogoutRedirectPath(redirectParam)
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host')
+  if (host) {
+    const proto =
+      request.headers.get('x-forwarded-proto') ??
+      (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https')
+    return `${proto}://${host}${path}`
+  }
+  return new URL(path, request.nextUrl.origin).toString()
 }

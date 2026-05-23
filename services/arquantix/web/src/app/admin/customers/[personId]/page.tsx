@@ -18,8 +18,10 @@ import {
 } from '@/components/ui/alert-dialog'
 import { toastError, toastSuccess } from '@/lib/admin/toast'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Input } from '@/components/ui/input'
 import { ArrowLeft, FileText, Info, RefreshCw, Snowflake, Sun, Trash2 } from 'lucide-react'
 import { AssistanceConversationsSection } from '@/components/admin/AssistanceConversationsSection'
+import { CustomerPortfolioSection } from '@/components/admin/CustomerPortfolioSection'
 
 interface SessionSummary {
   session_id?: string
@@ -30,6 +32,42 @@ interface SessionSummary {
   current_step_key?: string
   current_screen_key?: string
   updated_at?: string
+}
+
+interface PrivyWalletItem {
+  id: string
+  address: string
+  chain_type: string
+  chain_id?: number | null
+  wallet_type: string
+  provider: string
+  is_primary: boolean
+}
+
+interface PrivyWalletsSection {
+  identity?: {
+    privy_user_id?: string | null
+    external_email?: string | null
+    is_linked?: boolean
+  } | null
+  wallets: PrivyWalletItem[]
+  balances: {
+    asset: string
+    balance: string
+    available_balance: string
+    wallet_address?: string | null
+  }[]
+  recent_deposits: {
+    id: string
+    asset: string
+    amount: string
+    status: string
+    tx_hash: string
+    title: string
+    created_at: string
+  }[]
+  reconcile_available?: boolean
+  availability: 'available' | 'not_available'
 }
 
 interface Detail {
@@ -50,6 +88,7 @@ interface Detail {
   }
   kyc: Record<string, unknown>
   wallet: Record<string, unknown>
+  privy_wallets?: PrivyWalletsSection
   transactions: { message: string }
   security: { message: string }
   debug: { person_profile_keys: string[]; collected_slugs_sample: string[]; hints: string }
@@ -136,9 +175,13 @@ export default function CustomerDetailPage() {
 
   async function parseErrorMessage(res: Response): Promise<string> {
     try {
-      const j = (await res.json()) as { detail?: unknown }
+      const j = (await res.json()) as { detail?: unknown; message?: string }
+      if (typeof j.message === 'string') return j.message
       const d = j.detail
       if (typeof d === 'string') return d
+      if (d && typeof d === 'object' && 'message' in d && typeof (d as { message?: string }).message === 'string') {
+        return (d as { message: string }).message
+      }
       if (Array.isArray(d) && d[0] && typeof (d[0] as { msg?: string }).msg === 'string') {
         return (d[0] as { msg: string }).msg
       }
@@ -691,24 +734,22 @@ export default function CustomerDetailPage() {
         />
       </Section>
 
-      <Section title="Portefeuille">
+      <Section title="Portefeuille & patrimoine" id="portfolio">
         {data.wallet.availability === 'available' ? (
-          <dl>
+          <dl className="mb-6">
             <Row label="E-mail (compte investissement)" value={String(data.wallet.email ?? '')} />
-            <Row label="Statut" value={String(data.wallet.client_status ?? '')} />
-            <Row label="KYC" value={String(data.wallet.kyc_status ?? '')} />
+            <Row label="Statut compte" value={String(data.wallet.client_status ?? '')} />
             <Row label="Devise de référence" value={String(data.wallet.reference_currency ?? '')} />
           </dl>
         ) : (
-          <PlaceholderBlock
-            title="Aucun compte investissement"
-            message="Aucun portefeuille client n’est encore associé à cette personne — les relevés EUR et documents basés sur les mouvements restent indisponibles jusqu’à ce lien."
-          />
+          <div className="mb-6">
+            <PlaceholderBlock
+              title="Compte investissement absent"
+              message="Certaines sections (fiat, exchange) restent vides tant qu’aucun pe_client n’est lié. Les soldes Privy on-chain restent visibles si le wallet est lié."
+            />
+          </div>
         )}
-      </Section>
-
-      <Section title="Transactions & mouvements">
-        <PlaceholderBlock title="Not available yet" message={data.transactions.message} />
+        <CustomerPortfolioSection personId={personId} />
       </Section>
 
       <Section title="Sécurité & sessions">

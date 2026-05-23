@@ -19,15 +19,13 @@ export type PortalDashboardProfile = {
   account_status?: string
   kyc_status?: string
   client_status?: string
+  registration_completion_ratio?: number
+  registration_macro_stage?: string
   registration_missing_steps?: string[]
   registration_derived_progress_percent?: number
-  activation_journey?: {
-    show_module?: boolean
-    stages?: Array<{
-      key?: string
-      ux_status?: string
-    }>
-  } | null
+  registration_derived_completed_count?: number
+  registration_derived_total_count?: number
+  registration_derived_next_step_key?: string
 } | null
 
 export type PortalDashboardCash = {
@@ -65,6 +63,10 @@ export type PortalCryptoSummary = {
   positions?: Array<{
     asset?: string
     portfolio_scope?: string
+    estimated_value_eur?: number | string
+    estimated_value_usd?: number | string
+    privy_balance?: number | string
+    platform_balance?: number | string
   }>
 } | null
 
@@ -95,4 +97,7 @@ export type PortalWalletRow = {
   iconKey: 'euro' | 'savings' | 'offers' | 'portfolio' | 'crypto'
   /** Teinte DS (`--v-blue`, `--v-green`, etc.) pour l’icône compte. */
   iconTone: 'blue' | 'green' | 'terracotta' | 'fg' | 'fg-body'
+  /** Ligne désactivée (ex. compte Euro avant fin d’inscription). */
+  locked?: boolean
+  ctaLabel?: string
 }

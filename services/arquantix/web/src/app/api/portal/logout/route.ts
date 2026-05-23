@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clearPortalSessionCookies } from '@/lib/portal/portalSession'
-import { resolvePortalLogoutRedirectPath } from '@/lib/portal/resolvePortalLogoutRedirectPath'
+import { resolvePortalLogoutRedirectUrl } from '@/lib/portal/resolvePortalLogoutRedirectPath'
 
-/** Déconnexion navigateur : purge cookies puis redirect relatif (303). */
+/** Déconnexion navigateur : purge cookies puis redirect absolu (303). */
 export async function GET(request: NextRequest) {
-  const redirectPath = resolvePortalLogoutRedirectPath(
+  const redirectUrl = resolvePortalLogoutRedirectUrl(
+    request,
     request.nextUrl.searchParams.get('redirect'),
   )
-  const res = NextResponse.redirect(redirectPath, 303)
+  const res = NextResponse.redirect(redirectUrl, 303)
   clearPortalSessionCookies(res)
   return res
 }

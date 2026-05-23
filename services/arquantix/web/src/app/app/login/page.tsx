@@ -8,6 +8,7 @@ import { PortalAuthSsoSection } from '@/components/portal/PortalAuthSsoSection'
 import { usePortalAuthContent } from '@/components/portal/PortalAuthContentProvider'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { isPrivyConfigured } from '@/lib/portal/privyConfig'
+import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import { usePortalEmailOtpSend } from '@/lib/portal/usePortalEmailOtpSend'
 import {
   clearPortalOtpFlow,
@@ -25,6 +26,7 @@ function PortalLoginForm() {
   const searchParams = useSearchParams()
   const authContent = usePortalAuthContent()
   const { ready } = usePrivy()
+  const { privyAppId } = usePortalAuthPrivy()
   const sendEmailOtp = usePortalEmailOtpSend()
   const { state } = useLoginWithEmail()
 
@@ -96,7 +98,7 @@ function PortalLoginForm() {
       setError('Please enter a valid email address.')
       return
     }
-    if (!isPrivyConfigured()) {
+    if (!isPrivyConfigured(privyAppId)) {
       setError('Email sign-in is unavailable (Privy is not configured for this build).')
       return
     }

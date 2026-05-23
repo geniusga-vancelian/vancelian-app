@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { buildBackendUrl } from '@/lib/backend'
+import { resolveDashboardCryptoSummary } from '@/lib/portal/dashboardFormat'
+import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
-import { parseTop10NewsWidget } from '@/lib/portal/parseTop10NewsWidget'
+import { loadPortalTop10NewsWidget } from '@/lib/portal/loadTop10NewsWidget'
 
 async function fetchUpstreamJson(path: string) {
   const res = await portalUpstreamFetch(path, { signal: AbortSignal.timeout(15000) })
@@ -9,21 +12,13 @@ async function fetchUpstreamJson(path: string) {
   return { ok: res.ok, data }
 }
 
-async function fetchNewsWidget(origin: string, locale: string) {
-  try {
-    const widgetUrl = new URL('/api/mobile/flutter/widgets/top10news', origin)
-    widgetUrl.searchParams.set('locale', locale)
-    const res = await fetch(widgetUrl, { next: { revalidate: 60 } })
-    if (!res.ok) return null
-    const raw = await res.json()
-    const parsed = parseTop10NewsWidget(raw)
-    if (!parsed || parsed.items.length === 0) {
-      return { title: 'Vancelian News', items: [], headerHref: '/blog' }
-    }
-    return parsed
-  } catch {
-    return null
-  }
+async function fetchBackendJson(path: string) {
+  const res = await fetch(buildBackendUrl(path), {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(15000),
+  })
+  const data = await res.json().catch(() => null)
+  return { ok: res.ok, data }
 }
 
 /** Agrège les données home Flutter pour le dashboard portail (cookie httpOnly). */
@@ -42,7 +37,8 @@ export async function GET(request: NextRequest) {
     cash,
     globalStatistics,
     globalHistory,
-    crypto,
+    cryptoPositions,
+    privyBalances,
     placements,
     notifications,
     newsWidget,
@@ -53,10 +49,47 @@ export async function GET(request: NextRequest) {
     fetchUpstreamJson('/api/app/portfolio/global/statistics'),
     fetchUpstreamJson('/api/app/portfolio/global/history?period=ALL'),
     fetchUpstreamJson('/api/app/crypto-positions'),
+    fetchUpstreamJson('/api/app/privy-wallet/balances'),
     fetchUpstreamJson('/api/app/lending/earn/positions'),
     fetchUpstreamJson('/api/app/notifications/unread-count'),
-    fetchNewsWidget(origin, locale),
+    loadPortalTop10NewsWidget(locale, origin).catch(() => null),
   ])
+
+  const currency =
+    bootstrap.ok && bootstrap.data && typeof bootstrap.data === 'object'
+      ? String(
+          (bootstrap.data as Record<string, unknown>).client &&
+            typeof (bootstrap.data as Record<string, unknown>).client === 'object'
+            ? ((bootstrap.data as Record<string, unknown>).client as Record<string, unknown>)
+                .reference_currency ?? 'EUR'
+            : 'EUR',
+        )
+          .trim()
+          .toUpperCase()
+      : 'EUR'
+
+  const privyList = Array.isArray(
+    (privyBalances.data as { balances?: unknown } | null)?.balances,
+  )
+    ? ((privyBalances.data as { balances: { asset?: string }[] }).balances ?? [])
+    : []
+  const symbols = [...new Set(privyList.map((b) => tickerToProviderSymbol(String(b.asset ?? ''))))]
+    .filter(Boolean)
+    .join(',')
+
+  const marketRes =
+    symbols.length > 0
+      ? await fetchBackendJson(
+          `/api/market-data/market-summary?symbols=${encodeURIComponent(symbols)}`,
+        )
+      : { ok: false, data: null }
+
+  const crypto = resolveDashboardCryptoSummary(
+    cryptoPositions.ok ? cryptoPositions.data : null,
+    privyBalances.ok ? privyBalances.data : null,
+    marketRes.ok ? marketRes.data : null,
+    currency,
+  )
 
   const partial =
     !bootstrap.ok ||
@@ -64,7 +97,8 @@ export async function GET(request: NextRequest) {
     !cash.ok ||
     !globalStatistics.ok ||
     !globalHistory.ok ||
-    !crypto.ok ||
+    !cryptoPositions.ok ||
+    !privyBalances.ok ||
     !placements.ok
 
   return NextResponse.json({
@@ -73,7 +107,7 @@ export async function GET(request: NextRequest) {
     cash: cash.ok ? cash.data : null,
     globalStatistics: globalStatistics.ok ? globalStatistics.data : null,
     globalHistory: globalHistory.ok ? globalHistory.data : null,
-    crypto: crypto.ok ? crypto.data : null,
+    crypto,
     placements: placements.ok ? placements.data : null,
     notifications: notifications.ok ? notifications.data : null,
     newsWidget,

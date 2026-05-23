@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
   getPrivyAppId,
+  getPrivyAppIdServer,
   getPrivyWebClientId,
   isPrivyConfigured,
 } from '@/lib/portal/privyConfig'
@@ -8,7 +9,7 @@ import { getBackendBaseUrl } from '@/lib/backend'
 
 /** Diagnostic portail — vérifie env + reachability API (sans exposer de secrets). */
 export async function GET() {
-  const privyAppId = getPrivyAppId()
+  const privyAppId = getPrivyAppIdServer() || getPrivyAppId()
   const privyWebClientId = getPrivyWebClientId()
 
   let apiHealth: number | null = null
@@ -20,7 +21,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    privyConfigured: isPrivyConfigured(),
+    privyConfigured: isPrivyConfigured(privyAppId),
     privyAppIdPrefix: privyAppId ? privyAppId.slice(0, 8) : null,
     privyWebClientIdConfigured: Boolean(privyWebClientId),
     privyWebClientIdPrefix: privyWebClientId ? privyWebClientId.slice(0, 12) : null,

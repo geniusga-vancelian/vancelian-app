@@ -94,6 +94,12 @@ export function PortalRouteSkeleton({ route }: { route: string }) {
   if (normalized === PORTAL_ROUTES.profile) {
     return <PortalProfileSkeleton />
   }
+  if (
+    normalized === PORTAL_ROUTES.cryptoWallet ||
+    normalized.startsWith(`${PORTAL_ROUTES.cryptoWallet}/`)
+  ) {
+    return <PortalDashboardSkeleton />
+  }
 
   return <PortalGenericSkeleton />
 }

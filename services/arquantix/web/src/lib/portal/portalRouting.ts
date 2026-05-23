@@ -5,13 +5,28 @@ export const PORTAL_ROUTES = {
   login: `${PORTAL_PATH_PREFIX}/login`,
   loginVerify: `${PORTAL_PATH_PREFIX}/login/verify`,
   loggedOut: `${PORTAL_PATH_PREFIX}/logged-out`,
+  registration: `${PORTAL_PATH_PREFIX}/registration`,
   dashboard: `${PORTAL_PATH_PREFIX}/dashboard`,
+  cryptoWallet: `${PORTAL_PATH_PREFIX}/wallet/crypto`,
   invest: `${PORTAL_PATH_PREFIX}/invest`,
   markets: `${PORTAL_PATH_PREFIX}/markets`,
   design: `${PORTAL_PATH_PREFIX}/design`,
   search: `${PORTAL_PATH_PREFIX}/search`,
   profile: `${PORTAL_PATH_PREFIX}/profile`,
 } as const
+
+/** Lien dashboard « My accounts » → hub wallet ou inscription EUR. */
+export function resolveAccountsRowHref(rowId: string, locked?: boolean): string | undefined {
+  if (locked) return PORTAL_ROUTES.registration
+  if (rowId === 'crypto') return PORTAL_ROUTES.cryptoWallet
+  return undefined
+}
+
+/** Détail crypto wallet — `/app/wallet/crypto/btc` (position détenue, pas marché seul). */
+export function portalCryptoWalletAssetRoute(asset: string): string {
+  const ticker = asset.trim().toLowerCase()
+  return `${PORTAL_ROUTES.cryptoWallet}/${encodeURIComponent(ticker || 'btc')}`
+}
 
 /** Détail crypto marché — `/app/markets/btc` (aligné Flutter `/crypto/{slug}`). */
 export function portalCryptoInstrumentRoute(ticker: string): string {

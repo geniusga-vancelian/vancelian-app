@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from services.privy_wallet.models import PersonWalletDeposit
 from services.privy_wallet.service import _format_decimal
@@ -103,9 +106,19 @@ def merge_crypto_transactions(
     privy_rows: list[PersonWalletDeposit],
     *,
     limit: int = 200,
+    extra_txs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Fusionne et trie par date décroissante."""
     merged = list(exchange_txs) + [privy_deposit_to_crypto_tx(row) for row in privy_rows]
+    if extra_txs:
+        seen = {str(tx.get("id")) for tx in merged if tx.get("id") is not None}
+        for tx in extra_txs:
+            tx_id = tx.get("id")
+            if tx_id is not None and str(tx_id) in seen:
+                continue
+            merged.append(tx)
+            if tx_id is not None:
+                seen.add(str(tx_id))
     merged.sort(key=_tx_sort_key, reverse=True)
     return merged[:limit]
 
@@ -120,3 +133,96 @@ def _tx_sort_key(tx: dict[str, Any]) -> datetime:
         except ValueError:
             pass
     return datetime.min.replace(tzinfo=None)
+
+
+def list_orphan_webhook_crypto_txs(
+    db: Session,
+    *,
+    person_id: UUID,
+    asset: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Reconstitue les dépôts Privy lorsque le ledger a perdu la ligne mais le webhook est processed."""
+    from services.privy_wallet.asset_mapping import format_amount_display
+    from services.privy_wallet.enums import PrivyWebhookEventStatus
+    from services.privy_wallet.models import PrivyWebhookEvent
+    from services.privy_wallet.repository import PersonCryptoWalletRepository
+    from services.privy_wallet.webhook_service import PrivyWebhookProcessor
+
+    wallets = PersonCryptoWalletRepository.list_active_for_person(db, person_id)
+    if not wallets:
+        return []
+    addresses = {w.address.lower() for w in wallets}
+    asset_u = asset.upper() if asset else None
+
+    events = (
+        db.query(PrivyWebhookEvent)
+        .filter(
+            PrivyWebhookEvent.processing_status == PrivyWebhookEventStatus.PROCESSED.value,
+            PrivyWebhookEvent.event_type == "wallet.funds_deposited",
+            PrivyWebhookEvent.linked_deposit_id.isnot(None),
+        )
+        .order_by(PrivyWebhookEvent.received_at.desc())
+        .limit(max(limit * 4, 50))
+        .all()
+    )
+
+    txs: list[dict[str, Any]] = []
+    for event in events:
+        linked_id = event.linked_deposit_id
+        if linked_id is None:
+            continue
+        deposit_exists = (
+            db.query(PersonWalletDeposit.id)
+            .filter(PersonWalletDeposit.id == linked_id)
+            .first()
+        )
+        if deposit_exists:
+            continue
+
+        try:
+            normalized = PrivyWebhookProcessor._normalize_deposit_payload(event.payload_raw)
+        except Exception:
+            continue
+
+        if normalized.to_address not in addresses:
+            continue
+        if asset_u and normalized.asset.upper() != asset_u:
+            continue
+
+        amount = _format_decimal(normalized.amount)
+        chain_label = normalized.chain_type.upper()
+        if normalized.chain_id is not None:
+            chain_label = f"{chain_label} ({normalized.chain_id})"
+        amount_display = format_amount_display(normalized.amount, normalized.asset)
+        asset_name = ASSET_NAMES.get(normalized.asset, normalized.asset)
+
+        txs.append(
+            {
+                "id": linked_id,
+                "side": "deposit",
+                "asset": normalized.asset,
+                "amount_crypto": amount,
+                "amount_fiat": "0",
+                "price": "0",
+                "currency": "EUR",
+                "status": "confirmed",
+                "fee_amount": None,
+                "fee_asset": None,
+                "external_reference": normalized.tx_hash,
+                "created_at": event.received_at,
+                "title": f"Dépôt {asset_name}",
+                "subtitle": f"+{amount_display} {normalized.asset} · Wallet Privy · {chain_label}",
+                "direction": "credit",
+                "from_asset": None,
+                "to_asset": normalized.asset,
+                "transaction_kind": "privy_deposit_in",
+                "source_system": "privy",
+                "tx_hash": normalized.tx_hash,
+                "custody_provider": "privy",
+            }
+        )
+        if len(txs) >= limit:
+            break
+
+    return txs

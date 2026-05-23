@@ -7,11 +7,14 @@ import { PrivyPortalProvider } from '@/components/portal/PrivyPortalProvider'
 type PortalAuthPrivyContextValue = {
   privyReady: boolean
   setPrivyReady: (ready: boolean) => void
+  /** App ID injecté par le layout serveur (`PRIVY_APP_ID` / ECS). */
+  privyAppId: string
 }
 
 const PortalAuthPrivyContext = React.createContext<PortalAuthPrivyContextValue>({
   privyReady: false,
   setPrivyReady: () => {},
+  privyAppId: '',
 })
 
 export function usePortalAuthPrivy(): PortalAuthPrivyContextValue {
@@ -39,7 +42,10 @@ type PortalAuthPrivyGateProps = {
  */
 export function PortalAuthPrivyGate({ children, appId }: PortalAuthPrivyGateProps) {
   const [privyReady, setPrivyReady] = React.useState(false)
-  const value = React.useMemo(() => ({ privyReady, setPrivyReady }), [privyReady])
+  const value = React.useMemo(
+    () => ({ privyReady, setPrivyReady, privyAppId: appId }),
+    [privyReady, appId],
+  )
 
   return (
     <PortalAuthPrivyContext.Provider value={value}>

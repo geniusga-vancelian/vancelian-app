@@ -8,6 +8,11 @@ import type {
   PortalPlacementsSummary,
   PortalWalletRow,
 } from '@/lib/portal/dashboardTypes'
+import {
+  buildPrivyWalletPositionsSummary,
+  parseCryptoPositionsPayload,
+} from '@/lib/portal/cryptoWalletFormat'
+import type { PortalCryptoPositionsSummary } from '@/lib/portal/cryptoWalletTypes'
 
 function toNumber(value: unknown, fallback = 0): number {
   if (value == null) return fallback
@@ -53,40 +58,175 @@ export function normalizeChartSeries(points: PortalGlobalHistoryPoint[]): number
 }
 
 export function hasEuroCashAccount(cash: PortalDashboardCash): boolean {
-  return cash?.cash_account != null
+  const account = cash?.cash_account
+  if (!account) return false
+  const currency = (account.currency ?? 'EUR').trim().toUpperCase()
+  return currency === 'EUR'
 }
 
-export function isFirstDepositComplete(profile: PortalDashboardProfile): boolean {
-  const stages = profile?.activation_journey?.stages ?? []
-  const deposit = stages.find((s) => s.key === 'first_deposit')
-  return deposit?.ux_status === 'completed'
-}
-
-export function shouldShowMyAccountsCard(
-  profile: PortalDashboardProfile,
-  hasEuroAccount: boolean,
-): boolean {
-  if (hasEuroAccount) return true
+/**
+ * Aligné sur `should_show_registration_resume` (API Python / Flutter).
+ * True tant que l’inscription n’est pas terminée.
+ */
+export function shouldShowRegistrationResume(profile: PortalDashboardProfile): boolean {
   if (!profile) return true
-  const journey = profile.activation_journey
-  if (journey) return isFirstDepositComplete(profile)
-  return !shouldShowActivationModule(profile)
-}
 
-export function shouldShowActivationModule(profile: PortalDashboardProfile): boolean {
-  if (!profile) return false
-  const journey = profile.activation_journey
-  if (journey) {
-    if (!journey.show_module) return false
-    return !isFirstDepositComplete(profile)
-  }
   const status = (profile.client_status ?? '').trim().toUpperCase()
-  if (status === 'PARTIAL') return true
   const missing = profile.registration_missing_steps ?? []
-  if (missing.length > 0) return true
+  const nextKey = profile.registration_derived_next_step_key?.trim() ?? ''
+  const macro = (profile.registration_macro_stage ?? '').trim().toLowerCase()
+  const ratio = profile.registration_completion_ratio
   const progress = profile.registration_derived_progress_percent
+  const total = profile.registration_derived_total_count
+  const completed = profile.registration_derived_completed_count
+
+  if (status === 'ACTIVE') {
+    if (total != null && total > 0 && completed != null && completed < total) return true
+    if (missing.length > 0) return true
+    if (nextKey) {
+      if (progress != null && progress >= 100 && missing.length === 0) {
+        // fall through
+      } else {
+        return true
+      }
+    }
+    if (macro && macro !== 'active_client') return true
+    if (ratio != null && ratio < 0.999) return true
+    if (progress != null && progress < 100) return true
+    return false
+  }
+
+  if (total != null && total > 0 && completed != null && completed < total) return true
+  if (status === 'PARTIAL') return true
+  if (missing.length > 0) return true
+  if (nextKey) return true
+  if (macro && macro !== 'active_client') return true
+  if (ratio != null && ratio < 0.999) return true
   if (progress != null && progress < 100) return true
   return false
+}
+
+export function isRegistrationComplete(profile: PortalDashboardProfile): boolean {
+  return !shouldShowRegistrationResume(profile)
+}
+
+export function shouldShowUnlockEuroBanner(profile: PortalDashboardProfile): boolean {
+  return shouldShowRegistrationResume(profile)
+}
+
+export function applyWalletRowAccess(
+  rows: PortalWalletRow[],
+  profile: PortalDashboardProfile,
+  cash: PortalDashboardCash,
+): PortalWalletRow[] {
+  const hasEuro = hasEuroCashAccount(cash)
+  const registrationComplete = isRegistrationComplete(profile)
+
+  return rows.map((row) => {
+    if (row.id !== 'euro') return row
+
+    if (hasEuro || registrationComplete) {
+      return { ...row, locked: false }
+    }
+
+    return {
+      ...row,
+      locked: true,
+      subtitle: 'Complete registration to unlock',
+      ctaLabel: 'Complete registration',
+      balance: '—',
+      numericBalance: 0,
+    }
+  })
+}
+
+/** Valeur d’une position crypto dans la devise de référence client. */
+export function selectReferenceMoneyValue(
+  currency: string,
+  eur?: number | string,
+  usd?: number | string,
+): number {
+  if (currency === 'USD') {
+    return toNumber(usd, toNumber(eur))
+  }
+  return toNumber(eur, toNumber(usd))
+}
+
+/** Somme des valorisations positions crypto — aligné Flutter `pref.selectValue` sur le portefeuille. */
+export function resolveCryptoPortfolioTotal(
+  crypto: PortalCryptoSummary,
+  currency: string,
+): number {
+  const positions = crypto?.positions ?? []
+  if (positions.length > 0) {
+    const sum = positions.reduce(
+      (acc, position) =>
+        acc +
+        selectReferenceMoneyValue(
+          currency,
+          position.estimated_value_eur,
+          position.estimated_value_usd,
+        ),
+      0,
+    )
+    if (sum > 0) return sum
+  }
+
+  return selectReferenceMoneyValue(
+    currency,
+    crypto?.summary?.total_value_eur,
+    crypto?.summary?.total_value_usd,
+  )
+}
+
+function toPortalCryptoSummary(parsed: PortalCryptoPositionsSummary): PortalCryptoSummary {
+  return {
+    summary: {
+      total_value_eur: parsed.totalValueEur,
+      total_value_usd: parsed.totalValueUsd,
+      positions_count: parsed.positionsCount,
+    },
+    positions: parsed.positions.map((position) => ({
+      asset: position.asset,
+      portfolio_scope: position.portfolioScope,
+      estimated_value_eur: position.estimatedValueEur,
+      estimated_value_usd: position.estimatedValueUsd,
+      privy_balance: position.privyBalance,
+      platform_balance: position.platformBalance,
+    })),
+  }
+}
+
+/** Agrège crypto-positions API + soldes Privy réels pour le dashboard. */
+export function resolveDashboardCryptoSummary(
+  cryptoPositionsRaw: unknown,
+  privyRaw: unknown,
+  marketRaw: unknown,
+  currency: string,
+): PortalCryptoSummary | null {
+  let crypto: PortalCryptoSummary | null = null
+
+  if (cryptoPositionsRaw) {
+    crypto = toPortalCryptoSummary(parseCryptoPositionsPayload(cryptoPositionsRaw))
+  }
+
+  if (privyRaw) {
+    const privyBuilt = buildPrivyWalletPositionsSummary(privyRaw, marketRaw, currency)
+    if (privyBuilt.positions.length > 0) {
+      const hasPlatform =
+        crypto?.positions?.some(
+          (position) =>
+            position.portfolio_scope &&
+            position.portfolio_scope !== 'privy' &&
+            position.portfolio_scope !== 'merged',
+        ) ?? false
+      if (!hasPlatform) {
+        crypto = toPortalCryptoSummary(privyBuilt)
+      }
+    }
+  }
+
+  return crypto
 }
 
 export function buildWalletRows(
@@ -96,15 +236,12 @@ export function buildWalletRows(
   currency: string,
 ): PortalWalletRow[] {
   const eurBalance = toNumber(cash?.cash_account?.available_balance)
-  const cryptoCount = crypto?.summary?.positions_count ?? 0
+  const cryptoCount = crypto?.summary?.positions_count ?? crypto?.positions?.length ?? 0
   const privyCount =
     crypto?.positions?.filter(
       (p) => p.portfolio_scope === 'privy' || p.portfolio_scope === 'merged',
     ).length ?? 0
-  const cryptoValue =
-    currency === 'USD'
-      ? toNumber(crypto?.summary?.total_value_usd, toNumber(crypto?.summary?.total_value_eur))
-      : toNumber(crypto?.summary?.total_value_eur)
+  const cryptoValue = resolveCryptoPortfolioTotal(crypto, currency)
   const placementsCount = placements?.positions_count ?? 0
   const placementsValue = toNumber(placements?.total_earn_value_eur)
 
@@ -153,8 +290,8 @@ export function buildWalletRows(
       title: 'Crypto',
       subtitle:
         privyCount > 0
-          ? `${cryptoCount} actif${cryptoCount === 1 ? '' : 's'} · incl. wallet Privy`
-          : `${cryptoCount} crypto asset${cryptoCount === 1 ? '' : 's'}`,
+          ? `${cryptoCount} crypto-actif${cryptoCount === 1 ? '' : 's'} · incl. Privy`
+          : `${cryptoCount} crypto-actif${cryptoCount === 1 ? '' : 's'}`,
       balance: formatPortalMoney(cryptoValue, currency),
       numericBalance: cryptoValue,
       iconKey: 'crypto',
@@ -173,7 +310,7 @@ export function resolveHeaderBalance(
     return formatPortalMoney(fromStats, stats?.currency?.toUpperCase() || currency)
   }
   const sum = rows
-    .filter((r) => r.id === 'euro' || r.id === 'crypto')
+    .filter((r) => !r.locked && (r.id === 'euro' || r.id === 'crypto'))
     .reduce((acc, r) => acc + r.numericBalance, 0)
   return formatPortalMoney(sum, currency)
 }
