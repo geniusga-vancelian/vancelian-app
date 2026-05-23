@@ -57,6 +57,7 @@ from services.auth.signup_mobile_routes import router as signup_mobile_router
 from services.auth.local_passcode_ack_routes import router as local_passcode_ack_router
 from services.auth.privy_exchange_routes import router as privy_exchange_router
 from services.auth.privy_signup_exchange_routes import router as privy_signup_exchange_router
+from services.auth.privy_person_wallets_routes import router as privy_person_wallets_router
 from services.translate import translate_page_payload
 from services.bundles import router as bundles_router
 from services.diagnostics import router as diagnostics_router
@@ -101,6 +102,9 @@ from services.test_clients import (
     mobile_flutter_router as test_clients_mobile_flutter_router,
 )
 from services.custody import custody_admin_router, custody_transfer_router, custody_webhook_router
+from services.privy_wallet.webhook_router import privy_webhook_router
+from services.privy_wallet.routes import privy_wallet_app_router
+from services.privy_wallet.admin_router import privy_wallet_admin_router
 from services.exchange import exchange_admin_router, exchange_router
 from services.price_alerts import price_alerts_router, orders_router
 from services.favorites.router import router as favorites_router
@@ -225,6 +229,9 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(custody_admin_router)
     app.include_router(custody_transfer_router)
     app.include_router(custody_webhook_router)
+    app.include_router(privy_webhook_router)
+    app.include_router(privy_wallet_app_router)
+    app.include_router(privy_wallet_admin_router)
     app.include_router(exchange_router)
     app.include_router(exchange_admin_router)
     app.include_router(price_alerts_router)
@@ -262,6 +269,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(local_passcode_ack_router)
     app.include_router(privy_exchange_router)
     app.include_router(privy_signup_exchange_router)
+    app.include_router(privy_person_wallets_router)
     app.include_router(device_attestation_router)
     app.include_router(device_credentials_router)
 

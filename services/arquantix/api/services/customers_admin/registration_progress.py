@@ -433,6 +433,8 @@ def _completion_ratio(
         "date_of_birth",
         "residence_country",
         "home_address",
+        "mobile_phone",
+        "phone_verification",
         "contact_email",
         "email_verification_optional",
         "terms",

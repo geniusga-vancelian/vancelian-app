@@ -435,5 +435,12 @@ def build_mobile_profile_dict(db: Session, client: Client) -> dict[str, Any]:
             logger.warning("mobile_profile: activation_journey skipped: %s", exc)
 
         out["security_preferences"] = security_preferences_dict(person)
+        pj_change = (person.profile_json or {}).get("contact_email_change")
+        if isinstance(pj_change, dict) and pj_change:
+            out["contact_email_change"] = {
+                k: pj_change.get(k)
+                for k in ("pending_email", "status", "requested_at", "confirmed_at")
+                if pj_change.get(k) is not None
+            }
 
     return out

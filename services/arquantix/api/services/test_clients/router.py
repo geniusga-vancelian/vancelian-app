@@ -17,9 +17,18 @@ from services.auth.device_attestation_dependencies import require_device_attesta
 from services.portfolio_engine.clients.enums import ReferenceCurrency
 from services.portfolio_engine.clients.models import Client as PeClient
 
+from services.auth.privy_token_verifier import PrivyVerifyError, verify_privy_access_token
+
+from .mobile_contact_email import (
+    confirm_contact_email_change,
+    request_contact_email_change,
+)
 from .schemas import (
     BootstrapResponse,
     BootstrapClientPayload,
+    ContactEmailConfirmRequest,
+    ContactEmailConfirmResponse,
+    ContactEmailRequest,
     MobileAppProfileResponse,
     MobileSecurityPreferencesRead,
     SecurityPreferencesStructuredPatch,
@@ -176,6 +185,103 @@ def patch_security_preferences_mobile_flutter(
     return MobileSecurityPreferencesRead.model_validate(
         build_security_preferences_read_dict(security_blob_from_person(person.profile_json))
     )
+
+
+@mobile_flutter_router.post(
+    "/profile/contact-email/request",
+    response_model=MobileAppProfileResponse,
+    summary="Demander un changement d’e-mail (statut pending, OTP Privy requis)",
+)
+def post_contact_email_change_request(
+    payload: ContactEmailRequest,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+    _pr_e: None = Depends(require_device_attestation_mobile()),
+):
+    person = load_person_for_client(db, client)
+    if person is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Person profile not found for this client.",
+        )
+    try:
+        request_contact_email_change(person, payload.email)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    db.add(person)
+    db.commit()
+    db.refresh(person)
+    return MobileAppProfileResponse.model_validate(build_mobile_profile_dict(db, client))
+
+
+@mobile_flutter_router.post(
+    "/profile/contact-email/confirm",
+    response_model=ContactEmailConfirmResponse,
+    summary="Confirmer le changement d’e-mail après OTP Privy (statut confirmed en base)",
+)
+def post_contact_email_change_confirm(
+    payload: ContactEmailConfirmRequest,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+    _pr_e: None = Depends(require_device_attestation_mobile()),
+):
+    person = load_person_for_client(db, client)
+    if person is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Person profile not found for this client.",
+        )
+    try:
+        verified = verify_privy_access_token(payload.privy_access_token)
+    except PrivyVerifyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+
+    from database import PersonExternalIdentity
+    from services.auth.person_identity_bridge import PROVIDER_PRIVY
+
+    privy_link = (
+        db.query(PersonExternalIdentity)
+        .filter(
+            PersonExternalIdentity.person_id == person.id,
+            PersonExternalIdentity.provider == PROVIDER_PRIVY,
+        )
+        .first()
+    )
+    if (
+        privy_link is not None
+        and privy_link.external_subject != verified.privy_user_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "contact_email.privy_mismatch",
+                "message": "Le jeton Privy ne correspond pas à l’identité liée au compte.",
+            },
+        )
+
+    try:
+        result = confirm_contact_email_change(
+            db,
+            person=person,
+            client=client,
+            new_email=payload.email,
+            verified_privy_email=verified.email,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    db.commit()
+    db.refresh(person)
+    return ContactEmailConfirmResponse.model_validate(result)
 
 
 class ReferenceCurrencyUpdate(BaseModel):
@@ -520,15 +626,28 @@ def get_direct_crypto_positions(
         reverse=True,
     )
 
+    from services.privy_wallet.patrimony_merge import merge_app_crypto_positions
+
+    person_id = getattr(client, "person_id", None)
+    merged = merge_app_crypto_positions(enriched, db, person_id=person_id)
+
+    total_value_eur = D("0")
+    total_value_usd = D("0")
+    for entry in merged:
+        if entry.get("estimated_value_eur"):
+            total_value_eur += D(str(entry["estimated_value_eur"]))
+        if entry.get("estimated_value_usd"):
+            total_value_usd += D(str(entry["estimated_value_usd"]))
+
     return {
         "client": {"id": str(client.id), "name": getattr(client, "name", ""), "email": getattr(client, "email", "")},
         "summary": {
             "total_value_eur": f"{total_value_eur:.2f}",
             "total_value_usd": f"{total_value_usd:.2f}",
-            "positions_count": len(enriched),
+            "positions_count": len(merged),
             "scope": "direct",
         },
-        "positions": enriched,
+        "positions": merged,
     }
 
 
@@ -1047,11 +1166,14 @@ def get_global_portfolio_statistics(
 
     breakdown_data = get_portfolio_breakdown(db, client.id)
 
+    from services.privy_wallet.patrimony_merge import merge_app_crypto_positions, privy_nav_eur
+
     # get_portfolio_breakdown returns EUR; convert to ref_currency if needed
     eurusdt_rate = _get_fx_rate(db)
     _to_ref = (lambda v: round(v * float(eurusdt_rate), 2)) if ref_currency != "EUR" else (lambda v: v)
 
-    tv_f = _to_ref(breakdown_data["total_value"])
+    privy_eur = float(privy_nav_eur(db, getattr(client, "person_id", None)))
+    tv_f = _to_ref(breakdown_data["total_value"]) + _to_ref(privy_eur)
     fiat_balance = _to_ref(breakdown_data["fiat"])
     direct_crypto_f = _to_ref(breakdown_data["crypto_direct"])
     bundle_total_f = _to_ref(breakdown_data["bundles"])
@@ -1073,6 +1195,31 @@ def get_global_portfolio_statistics(
         cv = float(s.get("current_value", 0))
         pnl_ = float(s.get("unrealized_pnl", 0)) + float(s.get("realized_pnl", 0))
         alloc_items.append({"asset": pos.asset, "value": cv, "pnl": round(pnl_, 2)})
+
+    platform_dicts = [
+        {
+            "asset": pos.asset,
+            "balance": str(pos.balance),
+            "available_balance": str(pos.available_balance),
+        }
+        for pos in positions
+        if pos.balance > 0
+    ]
+    merged_positions = merge_app_crypto_positions(
+        platform_dicts, db, person_id=getattr(client, "person_id", None)
+    )
+    by_asset = {a["asset"]: a for a in alloc_items if a["asset"] != "EUR"}
+    for row in merged_positions:
+        asset = row.get("asset")
+        if not asset:
+            continue
+        merged_val = float(row.get("estimated_value_eur") or 0)
+        scope = row.get("portfolio_scope") or "direct"
+        if asset in by_asset:
+            if scope == "merged" and merged_val > 0:
+                by_asset[asset]["value"] = merged_val
+        elif scope == "privy" and merged_val > 0:
+            alloc_items.append({"asset": asset, "value": merged_val, "pnl": 0.0})
     if fiat_balance > 0:
         alloc_items.append({"asset": "EUR", "value": fiat_balance, "pnl": 0.0})
     alloc_items.sort(key=lambda x: x["value"], reverse=True)
@@ -1104,6 +1251,7 @@ def get_global_portfolio_statistics(
         "crypto_direct_pct": breakdown_data["crypto_direct_pct"],
         "bundles": round(bundle_total_f, 2),
         "bundles_pct": breakdown_data["bundles_pct"],
+        "privy": round(_to_ref(privy_eur), 2),
     }
 
     # Cashflow

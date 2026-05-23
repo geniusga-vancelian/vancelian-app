@@ -126,6 +126,8 @@ class CustomerAdminListItem(BaseModel):
     created_at: datetime
     updated_at: datetime
     pe_client_id: Optional[UUID] = None
+    has_privy_wallet: bool = False
+    privy_wallet_count: int = 0
 
 
 class CustomerAdminListResponse(BaseModel):
@@ -203,6 +205,48 @@ class WalletSummary(BaseModel):
     availability: Literal["available", "not_available"] = "not_available"
 
 
+class PrivyWalletAdminItem(BaseModel):
+    id: UUID
+    address: str
+    chain_type: str
+    chain_id: Optional[int] = None
+    wallet_type: str
+    provider: str
+    is_primary: bool
+
+
+class PrivyIdentityAdminItem(BaseModel):
+    privy_user_id: Optional[str] = None
+    external_email: Optional[str] = None
+    is_linked: bool = False
+
+
+class PrivyWalletBalanceAdminItem(BaseModel):
+    asset: str
+    balance: str
+    available_balance: str
+    wallet_address: Optional[str] = None
+
+
+class PrivyWalletDepositAdminItem(BaseModel):
+    id: UUID
+    asset: str
+    amount: str
+    status: str
+    tx_hash: str
+    title: str
+    created_at: datetime
+
+
+class PrivyWalletsSection(BaseModel):
+    identity: Optional[PrivyIdentityAdminItem] = None
+    wallets: List[PrivyWalletAdminItem] = Field(default_factory=list)
+    balances: List[PrivyWalletBalanceAdminItem] = Field(default_factory=list)
+    recent_deposits: List[PrivyWalletDepositAdminItem] = Field(default_factory=list)
+    reconcile_available: bool = False
+    availability: Literal["available", "not_available"] = "not_available"
+
+
 class TransactionPlaceholder(BaseModel):
     message: str = "Not available yet — agrégation transactions à brancher."
     availability: Literal["placeholder"] = "placeholder"
@@ -225,6 +269,7 @@ class CustomerAdminDetail(BaseModel):
     registration_progress: RegistrationProgressBlock
     kyc: KycSection
     wallet: WalletSummary
+    privy_wallets: PrivyWalletsSection
     transactions: TransactionPlaceholder
     security: SecurityPlaceholder
     debug: DebugSummary
@@ -232,3 +277,93 @@ class CustomerAdminDetail(BaseModel):
         default=None,
         description="Extrait léger profile_json.collected pour support (pas un dump complet).",
     )
+
+
+class CustomerPortfolioSummary(BaseModel):
+    total_value_eur: str = "0.00"
+    fiat_value_eur: str = "0.00"
+    crypto_value_eur: str = "0.00"
+    privy_value_eur: str = "0.00"
+    exclusive_offers_value_eur: str = "0.00"
+    bundles_value_eur: str = "0.00"
+    crypto_direct_value_eur: str = "0.00"
+    breakdown_bundles_eur: str = "0.00"
+    positions_count: int = 0
+    exclusive_offers_count: int = 0
+    bundles_count: int = 0
+    transactions_count: int = 0
+
+
+class CustomerPortfolioCryptoItem(BaseModel):
+    asset: str
+    name: str
+    total_balance: str
+    total_available: str
+    platform_balance: str
+    platform_available: str
+    privy_balance: str
+    privy_available: str
+    source: Literal["platform", "privy", "merged"]
+    portfolio_scope: str
+    price_eur: Optional[str] = None
+    estimated_value_eur: Optional[str] = None
+
+
+class CustomerPortfolioExclusiveOfferItem(BaseModel):
+    pool_id: str
+    lending_pool_product_id: Optional[str] = None
+    project_id: Optional[str] = None
+    title: str
+    asset: str
+    status: Optional[str] = None
+    total_supplied: str
+    earning_amount: str
+    idle_amount: str
+    accrued_interest: str
+    value_eur: str
+    apy: Optional[float] = None
+
+
+class CustomerPortfolioBundlePosition(BaseModel):
+    asset: str
+    quantity: str
+    position_type: str
+    market_value_eur: Optional[str] = None
+
+
+class CustomerPortfolioBundleItem(BaseModel):
+    portfolio_id: UUID
+    name: str
+    status: str
+    origin_product_id: Optional[str] = None
+    total_value_eur: str
+    positions_count: int
+    positions: List[CustomerPortfolioBundlePosition] = Field(default_factory=list)
+
+
+class CustomerPortfolioTransactionItem(BaseModel):
+    id: UUID
+    source: Literal["privy_deposit", "custody", "exchange"]
+    category: Literal["crypto", "fiat"]
+    direction: str
+    asset: str
+    amount: str
+    currency: str
+    status: str
+    title: str
+    subtitle: Optional[str] = None
+    reference: Optional[str] = None
+    created_at: datetime
+
+
+class CustomerPortfolioResponse(BaseModel):
+    person_id: UUID
+    pe_client_id: Optional[UUID] = None
+    reference_currency: Optional[str] = None
+    availability: Literal["available", "partial", "not_available"] = "not_available"
+    summary: CustomerPortfolioSummary
+    crypto: List[CustomerPortfolioCryptoItem] = Field(default_factory=list)
+    exclusive_offers: List[CustomerPortfolioExclusiveOfferItem] = Field(default_factory=list)
+    bundles: List[CustomerPortfolioBundleItem] = Field(default_factory=list)
+    transactions: List[CustomerPortfolioTransactionItem] = Field(default_factory=list)
+    privy_admin: PrivyWalletsSection

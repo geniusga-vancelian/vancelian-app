@@ -11,6 +11,8 @@ from services.auth.auth_rate_limit import build_auth_rate_limiter, client_ip_for
 
 class AuthRateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        if getattr(request.app.state, "testing", False):
+            return await call_next(request)
         path = request.url.path
         method = request.method.upper()
         if method != "POST":
@@ -42,6 +44,8 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
             elif path in ("/auth/passkeys/register/start", "/auth/passkeys/register/finish"):
                 limiter.check_login(client_ip_for_rl(request))
             elif path == "/auth/passkeys/prompt":
+                limiter.check_login(client_ip_for_rl(request))
+            elif path == "/auth/privy/exchange":
                 limiter.check_login(client_ip_for_rl(request))
         except HTTPException as exc:
             if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:

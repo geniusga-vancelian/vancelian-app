@@ -19,12 +19,12 @@ from services.custody.repository import (
 class OperationRef:
     """Identité documentaire : même couple que pour un futur OperationStatementPayload."""
 
-    source_system: str  # "custody" | "exchange"
+    source_system: str  # "custody" | "exchange" | "privy"
     source_id: UUID
 
 
 class OperationResolver:
-    """Reproduit la logique de résolution de ``get_transaction_detail`` (custody puis exchange)."""
+    """Reproduit la logique de résolution de ``get_transaction_detail``."""
 
     @staticmethod
     def resolve(db: Session, client: Client, transaction_id: UUID) -> OperationRef | None:
@@ -45,5 +45,15 @@ class OperationResolver:
         )
         if order is not None:
             return OperationRef(source_system="exchange", source_id=transaction_id)
+
+        person_id = getattr(client, "person_id", None)
+        if person_id is not None:
+            from services.privy_wallet.repository import PersonWalletDepositRepository
+
+            deposit = PersonWalletDepositRepository().get_for_person(
+                db, transaction_id, person_id
+            )
+            if deposit is not None:
+                return OperationRef(source_system="privy", source_id=transaction_id)
 
         return None

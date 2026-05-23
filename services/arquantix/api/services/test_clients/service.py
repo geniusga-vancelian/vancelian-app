@@ -364,16 +364,33 @@ class TestClientService:
             reverse=True,
         )
 
+        from services.privy_wallet.patrimony_merge import merge_app_crypto_positions
+
+        person_id = getattr(client, "person_id", None)
+        merged = merge_app_crypto_positions(enriched, db, person_id=person_id)
+
+        total_value_eur = Decimal("0")
+        total_value_usd = Decimal("0")
+        direct_count = 0
+        for row in merged:
+            if row.get("estimated_value_eur"):
+                total_value_eur += Decimal(str(row["estimated_value_eur"]))
+            if row.get("estimated_value_usd"):
+                total_value_usd += Decimal(str(row["estimated_value_usd"]))
+            scope = row.get("portfolio_scope") or "direct"
+            if scope in ("direct", "privy", "merged"):
+                direct_count += 1
+
         return {
             "client": client,
             "summary": {
                 "total_value_eur": f"{total_value_eur:.2f}",
                 "total_value_usd": f"{total_value_usd:.2f}",
-                "positions_count": len(enriched),
+                "positions_count": len(merged),
                 "direct_positions_count": direct_count,
                 "bundles_count": bundles_with_holdings,
             },
-            "positions": enriched,
+            "positions": merged,
         }
 
     def get_crypto_wallet_detail(
@@ -399,8 +416,14 @@ class TestClientService:
         positions = CryptoPositionRepository.list_by_client(db, client.id)
         pos = next((p for p in positions if p.asset == asset), None)
 
-        if pos is None:
+        from services.privy_wallet.patrimony_merge import find_merged_position
+
+        merged = find_merged_position(db, person_id=getattr(client, "person_id", None), asset=asset)
+        if pos is None and merged is None:
             return {"client": client, "detail": None}
+
+        if pos is None and merged is not None:
+            return self._build_privy_only_wallet_detail(db, client=client, merged=merged, asset=asset)
 
         precision = ASSET_PRECISION.get(asset, 8)
         total_balance = Decimal(str(pos.balance))
@@ -462,9 +485,7 @@ class TestClientService:
                 return f"+{val:.2f}"
             return f"{val:.2f}"
 
-        return {
-            "client": client,
-            "detail": {
+        detail = {
                 "asset": asset,
                 "name": ASSET_NAMES.get(asset, asset),
                 "icon_key": asset.lower(),
@@ -488,52 +509,101 @@ class TestClientService:
                 "total_gain_usd": _signed(total_pnl_usd),
                 "total_gains": _signed(total_pnl_eur),
                 "total_gains_pct": f"{total_gains_eur_pct:+.2f}" if total_gains_eur_pct is not None else None,
+            }
+        if merged is not None:
+            detail["portfolio_scope"] = merged.get("portfolio_scope")
+            detail["privy_balance"] = merged.get("privy_balance")
+            detail["platform_balance"] = merged.get("platform_balance")
+            merged_bal = Decimal(str(merged.get("balance") or balance_str))
+            if merged_bal > 0:
+                detail["volume"] = f"{merged_bal:.{precision}f}"
+            if merged.get("estimated_value_eur"):
+                detail["total_value_eur"] = merged["estimated_value_eur"]
+            if merged.get("estimated_value_usd"):
+                detail["total_value_usd"] = merged["estimated_value_usd"]
+
+        return {
+            "client": client,
+            "detail": detail,
+        }
+
+    @staticmethod
+    def _build_privy_only_wallet_detail(
+        db: Session,
+        *,
+        client: Client,
+        merged: dict,
+        asset: str,
+    ) -> dict:
+        from decimal import Decimal, ROUND_HALF_UP
+
+        from services.exchange.assets import ASSET_PRECISION
+        from .schemas import ASSET_NAMES
+
+        asset = asset.upper()
+        precision = ASSET_PRECISION.get(asset, 8)
+        balance = Decimal(str(merged.get("balance") or "0"))
+        balance_str = f"{balance:.{precision}f}"
+        total_value_eur = merged.get("estimated_value_eur") or "0.00"
+        total_value_usd = merged.get("estimated_value_usd")
+
+        return {
+            "client": client,
+            "detail": {
+                "asset": asset,
+                "name": ASSET_NAMES.get(asset, asset),
+                "icon_key": asset.lower(),
+                "volume": balance_str,
+                "current_price_eur": merged.get("price_eur"),
+                "current_price_usd": merged.get("price_usd"),
+                "total_value_eur": total_value_eur,
+                "total_value_usd": total_value_usd,
+                "avg_buy_price_eur": None,
+                "avg_buy_price_usd": None,
+                "average_purchase_price": None,
+                "cost_basis": None,
+                "unrealized_gain_eur": "0.00",
+                "unrealized_gain_usd": "0.00",
+                "unrealized_gains": "0.00",
+                "unrealized_gains_pct": None,
+                "realized_gain_eur": "0.00",
+                "realized_gain_usd": "0.00",
+                "realized_gains": "0.00",
+                "total_gain_eur": "0.00",
+                "total_gain_usd": "0.00",
+                "total_gains": "0.00",
+                "total_gains_pct": None,
+                "portfolio_scope": merged.get("portfolio_scope") or "privy",
+                "privy_balance": merged.get("privy_balance") or balance_str,
+                "platform_balance": merged.get("platform_balance") or "0",
             },
         }
 
     def get_crypto_transactions(
         self, db: Session, asset: str, *, client: Client
     ) -> dict:
-        """Return exchange orders for the client filtered by asset."""
+        """Return exchange orders + Privy ledger entries for the asset."""
         from services.exchange.repository import ExchangeOrderRepository
-        from .schemas import ASSET_NAMES
+        from services.privy_wallet.repository import PersonWalletDepositRepository
+        from services.privy_wallet.transaction_merge import (
+            exchange_order_to_crypto_tx,
+            merge_crypto_transactions,
+        )
 
         asset = asset.upper()
         orders = ExchangeOrderRepository.list_by_client_asset(db, client.id, asset)
+        exchange_txs = [
+            exchange_order_to_crypto_tx(o, asset=asset) for o in orders
+        ]
 
-        txs = []
-        for o in orders:
-            is_swap = o.from_asset is not None and o.to_asset is not None and o.from_asset != o.currency
-            from_a = o.from_asset or (o.currency if o.side == "buy" else asset)
-            to_a = o.to_asset or (asset if o.side == "buy" else o.currency)
+        person_id = getattr(client, "person_id", None)
+        privy_rows: list = []
+        if person_id is not None:
+            privy_rows = PersonWalletDepositRepository().list_for_person(
+                db, person_id, asset=asset, limit=200
+            )
 
-            if is_swap:
-                side_label = f"{from_a} → {to_a}"
-            else:
-                side_label = "Achat" if o.side == "buy" else "Vente"
-            title = f"{side_label} {ASSET_NAMES.get(asset, asset)}" if not is_swap else side_label
-            subtitle = f"{o.amount_fiat:.2f} EUR" if o.side == "buy" else f"{o.amount_crypto} {asset}"
-            direction = "credit" if o.side == "buy" else "debit"
-
-            txs.append({
-                "id": str(o.id),
-                "side": o.side,
-                "asset": o.asset,
-                "amount_crypto": f"{o.amount_crypto}",
-                "amount_fiat": f"{o.amount_fiat:.2f}",
-                "price": f"{o.price:.2f}",
-                "currency": o.currency,
-                "status": o.status,
-                "fee_amount": f"{o.fee_amount}" if o.fee_amount else None,
-                "fee_asset": o.fee_asset,
-                "external_reference": o.external_reference,
-                "created_at": o.created_at.isoformat() if o.created_at else None,
-                "title": title,
-                "subtitle": subtitle,
-                "direction": direction,
-                "from_asset": o.from_asset,
-                "to_asset": o.to_asset,
-            })
+        txs = merge_crypto_transactions(exchange_txs, privy_rows)
 
         return {
             "client": client,
@@ -561,6 +631,9 @@ class TestClientService:
         ref = OperationResolver.resolve(db, client, transaction_id)
         if ref is None:
             return None
+
+        if ref.source_system == "privy":
+            return self._get_privy_deposit_detail(db, client, transaction_id, STATUS_LABEL_MAP)
 
         if ref.source_system == "custody":
             tx = CustodyTransactionRepository.get_by_id(db, transaction_id)
@@ -614,6 +687,67 @@ class TestClientService:
             }
 
         return self._get_exchange_order_detail(db, client, transaction_id, CURRENCY_SYMBOLS, STATUS_LABEL_MAP)
+
+    def _get_privy_deposit_detail(
+        self,
+        db: Session,
+        client: Client,
+        deposit_id: UUID,
+        status_labels: dict,
+    ) -> Optional[dict]:
+        from services.privy_wallet.repository import PersonWalletDepositRepository
+        from services.privy_wallet.service import _format_decimal
+
+        person_id = getattr(client, "person_id", None)
+        if person_id is None:
+            return None
+
+        row = PersonWalletDepositRepository().get_for_person(db, deposit_id, person_id)
+        if row is None:
+            return None
+
+        chain_label = row.chain_type.upper()
+        if row.chain_id is not None:
+            chain_label = f"{chain_label} (chain {row.chain_id})"
+
+        narrative_parts = [
+            f"Hash : {row.tx_hash}",
+            f"Réseau : {chain_label}",
+        ]
+        if row.from_address:
+            narrative_parts.append(f"De : {row.from_address}")
+        narrative_parts.append(f"Vers : {row.to_address}")
+        if row.confirmations:
+            narrative_parts.append(f"Confirmations : {row.confirmations}")
+
+        amount = _format_decimal(row.amount)
+        return {
+            "id": str(row.id),
+            "transaction_type": "crypto_deposit",
+            "transaction_kind": row.transaction_kind,
+            "direction": row.direction,
+            "amount": amount,
+            "currency": row.asset,
+            "currency_symbol": row.asset,
+            "status": row.status,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "title": row.title,
+            "status_label": status_labels.get(row.status, row.status.title()),
+            "source_system": "privy",
+            "source_id": str(row.id),
+            "external_reference": row.tx_hash,
+            "provider_reference": row.tx_hash,
+            "provider_name": "Privy",
+            "remitter_name": None,
+            "remitter_iban": None,
+            "remitter_bank_name": None,
+            "account_holder_name": None,
+            "target_iban": None,
+            "booking_date": None,
+            "value_date": None,
+            "narrative": " · ".join(narrative_parts),
+        }
 
     def _get_exchange_order_detail(
         self, db: Session, client, order_id: UUID,
@@ -680,4 +814,5 @@ class TestClientService:
             "booking_date": None,
             "value_date": None,
             "narrative": narrative,
+            "custody_provider": "privy",
         }

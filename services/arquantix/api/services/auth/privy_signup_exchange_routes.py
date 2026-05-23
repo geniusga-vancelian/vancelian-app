@@ -232,7 +232,10 @@ def post_privy_signup_exchange(
     db.flush()
 
     from services.auth.person_identity_bridge import get_pe_client_for_person
-    from services.auth.privy_exchange_routes import _persist_request_wallets
+    from services.auth.privy_exchange_routes import (
+        _persist_request_wallets,
+        _resolve_exchange_wallets,
+    )
 
     pe_client = get_pe_client_for_person(db, person_id=person.id)
     if pe_client is None:
@@ -249,7 +252,7 @@ def post_privy_signup_exchange(
             db,
             person_id=person.id,
             pe_client_id=pe_client.id,
-            wallets=body.wallets,
+            wallets=_resolve_exchange_wallets(body.wallets, verified.linked_wallets),
         )
     except HTTPException:
         raise

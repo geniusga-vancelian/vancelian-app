@@ -30,6 +30,7 @@ from services.auth.privy_token_verifier import (
 )
 from services.auth.refresh_session import issue_fresh_auth_session
 from services.client_identity.service import ClientIdentityService
+from services.privy_wallet.wallet_sync import normalize_privy_wallet_payload
 
 router = APIRouter(prefix="/auth", tags=["auth-privy-exchange"])
 
@@ -134,6 +135,39 @@ def _sync_privy_identity_metadata(
         external_phone=phone,
         metadata_json=None,
     )
+
+
+def _wallets_in_from_linked_raw(raw: Optional[List[Dict[str, Any]]]) -> List[PrivyExchangeWalletIn]:
+    if not raw:
+        return []
+    out: List[PrivyExchangeWalletIn] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("type") or "").strip().lower() not in ("", "wallet") and not item.get("address"):
+            continue
+        norm = normalize_privy_wallet_payload(item)
+        if norm is None:
+            continue
+        out.append(
+            PrivyExchangeWalletIn(
+                address=norm.address,
+                chain_type=norm.chain_type,
+                chain_id=norm.chain_id,
+                wallet_type=norm.wallet_type,
+            )
+        )
+    return out
+
+
+def _resolve_exchange_wallets(
+    body_wallets: Optional[List[PrivyExchangeWalletIn]],
+    linked_wallets: Optional[List[Dict[str, Any]]],
+) -> Optional[List[PrivyExchangeWalletIn]]:
+    if body_wallets:
+        return body_wallets
+    from_token = _wallets_in_from_linked_raw(linked_wallets)
+    return from_token or None
 
 
 def _persist_request_wallets(
@@ -322,7 +356,7 @@ def post_privy_exchange(
             db,
             person_id=person.id,
             pe_client_id=pe_client.id,
-            wallets=body.wallets,
+            wallets=_resolve_exchange_wallets(body.wallets, verified.linked_wallets),
         )
     except HTTPException:
         raise

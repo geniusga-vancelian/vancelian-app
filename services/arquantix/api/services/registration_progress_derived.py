@@ -15,6 +15,8 @@ ORDERED_CANONICAL_KEYS: List[str] = [
     "date_of_birth",
     "residence_country",
     "home_address",
+    "mobile_phone",
+    "phone_verification",
     "contact_email",
     "email_verification_optional",
     "terms",
@@ -33,6 +35,8 @@ CANONICAL_KEY_TO_SCREEN_KEY: Dict[str, str] = {
     "date_of_birth": "dob_form",
     "residence_country": "residence_country_form",
     "home_address": "home_address_form",
+    "mobile_phone": "mobile_phone_form",
+    "phone_verification": "phone_verification_sms",
     "contact_email": "email_form",
     "email_verification_optional": "email_otp_optional_form",
     "terms": "terms_form",
@@ -50,6 +54,8 @@ CANONICAL_LABELS_FR: Dict[str, str] = {
     "date_of_birth": "Date de naissance",
     "residence_country": "Pays de résidence",
     "home_address": "Adresse du domicile",
+    "mobile_phone": "Numéro de mobile",
+    "phone_verification": "Vérification mobile",
     "contact_email": "Adresse e-mail",
     "email_verification_optional": "Vérification e-mail",
     "terms": "Conditions générales",
@@ -104,6 +110,19 @@ def _check_home_address(c: Dict[str, Any]) -> bool:
     if _nonempty(get_collected_value(c, "address_line_1")):
         return True
     return _nonempty(get_collected_value(c, "address_metadata"))
+
+
+def _check_mobile_phone(c: Dict[str, Any]) -> bool:
+    return _nonempty(
+        get_collected_value(c, "phone_e164")
+        or get_collected_value(c, "phone_number")
+    )
+
+
+def _check_phone_verification(c: Dict[str, Any]) -> bool:
+    if get_collected_value(c, "phone_verified") is True:
+        return True
+    return _nonempty(get_collected_value(c, "phone_verified_at"))
 
 
 def _check_contact_email(c: Dict[str, Any]) -> bool:
@@ -175,6 +194,8 @@ _CHECKERS: Dict[str, Any] = {
     "date_of_birth": _check_dob,
     "residence_country": _check_residence,
     "home_address": _check_home_address,
+    "mobile_phone": _check_mobile_phone,
+    "phone_verification": _check_phone_verification,
     "contact_email": _check_contact_email,
     "email_verification_optional": _check_email_verification_optional,
     "terms": _check_terms,

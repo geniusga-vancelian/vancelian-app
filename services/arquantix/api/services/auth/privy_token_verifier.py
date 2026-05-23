@@ -284,10 +284,12 @@ def merge_privy_identity_token(
     claims = _decode_privy_jwt_claims(token, app_id=app_id, pem=pem)
     sub = claims.get("sub")
     if not sub or str(sub).strip() != verified.privy_user_id:
-        raise PrivyVerifyError(
-            "privy.identity_token_subject_mismatch",
-            "Le identity token Privy ne correspond pas à la session en cours.",
+        # Identity token périmé (ex. localStorage web) : ignorer, l’access token fait foi.
+        logger.info(
+            "privy.identity_token_subject_mismatch_ignored",
+            extra={"access_sub": verified.privy_user_id[:32]},
         )
+        return verified
 
     email, phone, linked_wallets = _extract_email_phone_wallets(claims)
     if not email and not phone and not linked_wallets:

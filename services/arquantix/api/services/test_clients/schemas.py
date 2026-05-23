@@ -46,6 +46,28 @@ class MobileProfileContactSection(BaseModel):
     phone: Optional[str] = None
 
 
+class MobileContactEmailChangeSection(BaseModel):
+    pending_email: Optional[str] = None
+    status: Optional[str] = None  # pending | confirmed
+    requested_at: Optional[str] = None
+    confirmed_at: Optional[str] = None
+
+
+class ContactEmailRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=320)
+
+
+class ContactEmailConfirmRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=320)
+    privy_access_token: str = Field(..., min_length=1)
+
+
+class ContactEmailConfirmResponse(BaseModel):
+    email: str
+    status: str = "confirmed"
+    confirmed_at: Optional[str] = None
+
+
 class MobileProfileEmploymentSection(BaseModel):
     employment_status: Optional[str] = None
     job_title: Optional[str] = None
@@ -223,6 +245,7 @@ class MobileAppProfileResponse(BaseModel):
     registration_derived_total_count: Optional[int] = None
     activation_journey: Optional[ActivationJourneyPayload] = None
     security_preferences: Optional[MobileSecurityPreferencesRead] = None
+    contact_email_change: Optional[MobileContactEmailChangeSection] = None
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +390,8 @@ class CryptoPositionPayload(BaseModel):
     performance_1d_pct: Optional[str] = None
     icon_key: str
     portfolio_scope: Optional[str] = None
+    privy_balance: Optional[str] = None
+    platform_balance: Optional[str] = None
 
 
 class CryptoPositionsSummary(BaseModel):
@@ -407,6 +432,9 @@ class CryptoWalletDetailPayload(BaseModel):
     total_gain_usd: Optional[str] = None
     total_gains: Optional[str] = None
     total_gains_pct: Optional[str] = None
+    portfolio_scope: Optional[str] = None
+    privy_balance: Optional[str] = None
+    platform_balance: Optional[str] = None
 
 
 class CryptoWalletDetailResponse(BaseModel):
@@ -432,6 +460,10 @@ class CryptoTransactionPayload(BaseModel):
     direction: str
     from_asset: Optional[str] = None
     to_asset: Optional[str] = None
+    transaction_kind: Optional[str] = None
+    source_system: Optional[str] = None
+    tx_hash: Optional[str] = None
+    custody_provider: Optional[str] = None
 
 
 class CryptoTransactionsResponse(BaseModel):

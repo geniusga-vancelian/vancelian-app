@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy import and_, asc, cast, desc, func, or_, String
 from sqlalchemy.orm import Session
 
-from database import AdminUser, Person, RegistrationSession, TwoFactorChallenge
+from database import AdminUser, Person, PersonCryptoWallet, PersonExternalIdentity, RegistrationSession, TwoFactorChallenge
 from services.portfolio_engine.clients.models import Client as PeClient
 from services.registration.service import get_person_collected_value
 
@@ -31,6 +31,11 @@ from .schemas import (
     DebugSummary,
     IdentitySection,
     KycSection,
+    PrivyIdentityAdminItem,
+    PrivyWalletAdminItem,
+    PrivyWalletBalanceAdminItem,
+    PrivyWalletDepositAdminItem,
+    PrivyWalletsSection,
     RegistrationProgressBlock,
     RegistrationSection,
     RegistrationSessionSummary,
@@ -38,6 +43,14 @@ from .schemas import (
     TransactionPlaceholder,
     WalletSummary,
 )
+from services.privy_wallet.repository import (
+    PersonCryptoWalletRepository,
+    PersonWalletBalanceRepository,
+    PersonWalletDepositRepository,
+)
+from services.privy_wallet.service import _format_decimal
+from services.auth.person_identity_bridge import PROVIDER_PRIVY
+from services.privy_wallet.privy_api_client import privy_server_api_configured
 
 
 def _eligible_person_filter(db: Session):
@@ -175,6 +188,99 @@ def _to_progress_block(person: Person, pe: Optional[PeClient], db: Session) -> R
     return compute_canonical_registration_progress(db, person, pe)
 
 
+def _privy_wallet_counts_for_persons(db: Session, person_ids: list[UUID]) -> dict[UUID, int]:
+    if not person_ids:
+        return {}
+    rows = (
+        db.query(PersonCryptoWallet.person_id, func.count(PersonCryptoWallet.id))
+        .filter(
+            PersonCryptoWallet.person_id.in_(person_ids),
+            PersonCryptoWallet.revoked_at.is_(None),
+        )
+        .group_by(PersonCryptoWallet.person_id)
+        .all()
+    )
+    return {person_id: int(count) for person_id, count in rows}
+
+
+def _build_privy_wallets_section(db: Session, person_id: UUID) -> PrivyWalletsSection:
+    wallet_repo = PersonCryptoWalletRepository()
+    balance_repo = PersonWalletBalanceRepository()
+    deposit_repo = PersonWalletDepositRepository()
+
+    identity_row = (
+        db.query(PersonExternalIdentity)
+        .filter(
+            PersonExternalIdentity.person_id == person_id,
+            PersonExternalIdentity.provider == PROVIDER_PRIVY,
+        )
+        .order_by(PersonExternalIdentity.created_at.asc())
+        .first()
+    )
+    identity = PrivyIdentityAdminItem(
+        privy_user_id=identity_row.external_subject if identity_row else None,
+        external_email=identity_row.external_email if identity_row else None,
+        is_linked=identity_row is not None,
+    )
+
+    wallets = wallet_repo.list_active_for_person(db, person_id)
+    if not wallets:
+        return PrivyWalletsSection(
+            identity=identity,
+            reconcile_available=privy_server_api_configured() or identity.is_linked,
+            availability="not_available",
+        )
+
+    wallet_by_id = {w.id: w for w in wallets}
+    wallet_items = [
+        PrivyWalletAdminItem(
+            id=w.id,
+            address=w.address,
+            chain_type=w.chain_type,
+            chain_id=w.chain_id,
+            wallet_type=w.wallet_type,
+            provider=w.provider,
+            is_primary=bool(w.is_primary),
+        )
+        for w in wallets
+    ]
+
+    balance_items: list[PrivyWalletBalanceAdminItem] = []
+    for row in balance_repo.list_for_person(db, person_id):
+        wallet = wallet_by_id.get(row.person_crypto_wallet_id)
+        balance_items.append(
+            PrivyWalletBalanceAdminItem(
+                asset=row.asset,
+                balance=_format_decimal(row.balance),
+                available_balance=_format_decimal(row.available_balance),
+                wallet_address=wallet.address if wallet else None,
+            )
+        )
+
+    deposit_items: list[PrivyWalletDepositAdminItem] = []
+    for row in deposit_repo.list_for_person(db, person_id, limit=10):
+        deposit_items.append(
+            PrivyWalletDepositAdminItem(
+                id=row.id,
+                asset=row.asset,
+                amount=_format_decimal(row.amount),
+                status=row.status,
+                tx_hash=row.tx_hash,
+                title=row.title,
+                created_at=row.created_at,
+            )
+        )
+
+    return PrivyWalletsSection(
+        identity=identity,
+        wallets=wallet_items,
+        balances=balance_items,
+        recent_deposits=deposit_items,
+        reconcile_available=privy_server_api_configured() or identity.is_linked,
+        availability="available",
+    )
+
+
 def list_customers(
     db: Session,
     *,
@@ -227,12 +333,15 @@ def list_customers(
     base = base.order_by(desc(order_col) if is_desc else asc(order_col))
 
     rows = base.offset((page - 1) * page_size).limit(page_size).all()
+    person_ids = [person.id for person in rows]
+    privy_counts = _privy_wallet_counts_for_persons(db, person_ids)
 
     items: list[CustomerAdminListItem] = []
     for person in rows:
         pe = _pe_client_for_person(db, person)
         fields = _extract_identity_fields(person, db)
         email = fields.get("email") or (pe.email if pe else None)
+        wallet_count = privy_counts.get(person.id, 0)
         items.append(
             CustomerAdminListItem(
                 person_id=person.id,
@@ -245,6 +354,8 @@ def list_customers(
                 created_at=person.created_at,
                 updated_at=person.updated_at,
                 pe_client_id=pe.id if pe else None,
+                has_privy_wallet=wallet_count > 0,
+                privy_wallet_count=wallet_count,
             )
         )
 
@@ -388,6 +499,7 @@ def get_customer_detail(db: Session, person_id: UUID) -> Optional[CustomerAdminD
             availability="partial",
         ),
         wallet=wallet,
+        privy_wallets=_build_privy_wallets_section(db, person.id),
         transactions=TransactionPlaceholder(),
         security=SecurityPlaceholder(),
         debug=DebugSummary(

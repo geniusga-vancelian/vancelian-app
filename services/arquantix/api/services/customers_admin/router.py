@@ -12,8 +12,9 @@ from services.portfolio_engine.hardening.security.dependencies import require_ad
 
 from .customer_documents import router as customer_documents_router
 from .lifecycle import set_person_login_frozen, wipe_customer_data
-from .schemas import CustomerAdminDetail, CustomerAdminListResponse, CustomerCustodySearchResponse
+from .schemas import CustomerAdminDetail, CustomerAdminListResponse, CustomerCustodySearchResponse, CustomerPortfolioResponse
 from .service import get_customer_detail, list_customers, search_customers_for_custody
+from .portfolio import get_customer_portfolio
 
 router = APIRouter(prefix="/api/admin/customers", tags=["customers-admin"])
 router.include_router(customer_documents_router)
@@ -78,6 +79,23 @@ def get_customer_endpoint(
             detail="Customer not found or not eligible for this dashboard",
         )
     return detail
+
+
+@router.get("/{person_id}/portfolio", response_model=CustomerPortfolioResponse)
+def get_customer_portfolio_endpoint(
+    person_id: UUID,
+    tx_limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _actor=Depends(_guard),
+):
+    """Vue portefeuille unifiée : crypto (PE + Privy), offres exclusives, bundles, transactions."""
+    portfolio = get_customer_portfolio(db, person_id, tx_limit=tx_limit)
+    if portfolio is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer not found",
+        )
+    return portfolio
 
 
 @router.post("/{person_id}/freeze")
