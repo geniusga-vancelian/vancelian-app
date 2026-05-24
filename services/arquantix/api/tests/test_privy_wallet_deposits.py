@@ -76,6 +76,43 @@ def _deposit_payload(*, to_address: str, amount_wei: str = "1000000000000000000"
     }
 
 
+def test_webhook_native_token_hyphen_payload(client: TestClient, db: Session):
+    """Privy dashboard envoie asset.type = native-token (pas native_token)."""
+    pe = make_linked_client(db)
+    wallet = _seed_privy_wallet(db, pe)
+    db.flush()
+
+    payload = {
+        "type": "wallet.funds_deposited",
+        "id": f"evt_{uuid.uuid4().hex[:16]}",
+        "data": {
+            "to_address": wallet.address,
+            "from_address": f"0x{uuid.uuid4().hex[:40]}",
+            "transaction_hash": f"0x{uuid.uuid4().hex}{uuid.uuid4().hex[:32]}",
+            "caip2": "eip155:1",
+            "asset": {"type": "native-token", "address": None},
+            "amount": "10000000000000000",
+            "log_index": 0,
+            "block_number": 25164497,
+            "confirmations": 1,
+        },
+    }
+    res = client.post(
+        "/api/webhooks/privy",
+        json=payload,
+        headers={"svix-id": f"msg_{uuid.uuid4().hex[:8]}"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["processing_status"] == "processed"
+
+    auth = mobile_auth_headers(db, pe)
+    eth = next(
+        b for b in client.get("/api/app/privy-wallet/balances", headers=auth).json()["balances"]
+        if b["asset"] == "ETH"
+    )
+    assert eth["balance"] == "0.01"
+
+
 def test_webhook_deposit_credits_balance_and_deposit_row(client: TestClient, db: Session):
     pe = make_linked_client(db)
     wallet = _seed_privy_wallet(db, pe)

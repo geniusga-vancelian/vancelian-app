@@ -83,7 +83,7 @@ def resolve_asset_symbol(
                 return sym_u
 
         asset_type = str(asset_payload.get("type") or asset_payload.get("asset_type") or "").lower()
-        if asset_type in ("native", "native_token"):
+        if asset_type in ("native", "native_token", "native-token"):
             if chain_id is not None:
                 return NATIVE_SYMBOL_BY_CHAIN.get(chain_id, "ETH")
             return "ETH"
