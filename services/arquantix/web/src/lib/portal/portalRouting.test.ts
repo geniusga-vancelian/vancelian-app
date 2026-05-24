@@ -2,8 +2,23 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   isFullSitePreviewPathname,
+  isPortalPublicStaticPathname,
   isPublicPreviewPathname,
 } from './portalRouting'
+
+describe('isPortalPublicStaticPathname', () => {
+  it('identifie les assets publics du portail', () => {
+    assert.equal(isPortalPublicStaticPathname('/crypto_svgs/btc.svg'), true)
+    assert.equal(isPortalPublicStaticPathname('/brand/vancelian/sso-apple.svg'), true)
+    assert.equal(isPortalPublicStaticPathname('/icons/kalai/wallet.svg'), true)
+  })
+
+  it('rejette les routes applicatives', () => {
+    assert.equal(isPortalPublicStaticPathname('/markets'), false)
+    assert.equal(isPortalPublicStaticPathname('/app/markets'), false)
+    assert.equal(isPortalPublicStaticPathname('/login'), false)
+  })
+})
 
 describe('isPublicPreviewPathname', () => {
   it('accepte /preview et sous-chemins', () => {

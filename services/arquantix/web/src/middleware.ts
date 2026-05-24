@@ -20,6 +20,7 @@ import {
   isConsolePathname,
   isPortalHost,
   isPortalPathname,
+  isPortalPublicStaticPathname,
   isPublicPreviewPathname,
   portalPathFromPublicRequest,
   CONSOLE_PATH_PREFIX,
@@ -100,7 +101,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api') ||
     pathname.startsWith('/_vercel') ||
     pathname.startsWith('/fonts/') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    isPortalPublicStaticPathname(pathname)
   ) {
     return NextResponse.next()
   }

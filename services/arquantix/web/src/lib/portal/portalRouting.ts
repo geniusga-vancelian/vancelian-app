@@ -95,6 +95,22 @@ export function isPortalPathname(pathname: string): boolean {
   return pathname === PORTAL_PATH_PREFIX || pathname.startsWith(`${PORTAL_PATH_PREFIX}/`)
 }
 
+/**
+ * Fichiers servis depuis `public/` — ne pas réécrire sous `/app/*` sur `app.*`.
+ * Sans cela, `/crypto_svgs/btc.svg` devient `/app/crypto_svgs/btc.svg` (404).
+ */
+export function isPortalPublicStaticPathname(pathname: string): boolean {
+  if (
+    pathname.startsWith('/crypto_svgs/') ||
+    pathname.startsWith('/brand/') ||
+    pathname.startsWith('/icons/') ||
+    pathname.startsWith('/images/')
+  ) {
+    return true
+  }
+  return /\.[a-z0-9]{2,5}$/i.test(pathname)
+}
+
 /** Login / signup / verify OTP — jamais de topnav site publique. */
 export function isPortalAuthPathname(pathname: string): boolean {
   const normalized = pathname.replace(/\/$/, '') || '/'
