@@ -93,7 +93,7 @@ export function PortalSwapFlow() {
   }, [loadCatalog])
 
   useEffect(() => {
-    if (!catalog || preselectApplied) return
+    if (!catalog || preselectApplied || !searchParams) return
     const toParam = searchParams.get('to')?.trim().toUpperCase()
     if (!toParam || !isSwapV1Token(toParam)) return
     const dest = destinationAssets.find((a) => a.symbol.toUpperCase() === toParam)
