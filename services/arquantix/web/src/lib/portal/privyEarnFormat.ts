@@ -19,10 +19,10 @@ function toStringValue(value: unknown, fallback = '0'): string {
 
 export function formatEarnTokenAmount(raw: string, decimals: number, maxFraction = 4): string {
   const value = BigInt(raw || '0')
-  const base = 10n ** BigInt(Math.max(0, decimals))
+  const base = BigInt(10) ** BigInt(Math.max(0, decimals))
   const whole = value / base
   const fraction = value % base
-  if (fraction === 0n) return whole.toString()
+  if (fraction === BigInt(0)) return whole.toString()
   const fracStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '')
   const trimmed = fracStr.slice(0, maxFraction).replace(/0+$/, '')
   return trimmed ? `${whole}.${trimmed}` : whole.toString()
@@ -80,7 +80,7 @@ export function mapPrivyEarnVaultPosition(
 
   const assetsBig = BigInt(assetsInVault || '0')
   const netDeposited = BigInt(totalDeposited || '0') - BigInt(totalWithdrawn || '0')
-  const earnedRaw = assetsBig > netDeposited ? assetsBig - netDeposited : 0n
+  const earnedRaw = assetsBig > netDeposited ? assetsBig - netDeposited : BigInt(0)
 
   return {
     vaultId,

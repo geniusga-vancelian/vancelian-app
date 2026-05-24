@@ -108,9 +108,9 @@ async function finalizePrivyEarnLedger(args: {
     personId: args.personId,
     privyActionId: action.id,
     status: ledgerStatus,
-    txHash: action.transactionHash,
+    txHash: action.transactionHash ?? null,
     blockNumber,
-    errorMessage,
+    errorMessage: errorMessage ?? null,
   })
 
   if (ledgerStatus !== 'success' && ledgerStatus !== 'pending') {
@@ -120,8 +120,8 @@ async function finalizePrivyEarnLedger(args: {
       vaultAddress: args.vaultAddress,
       operation: args.operation,
       status: ledgerStatus,
-      txHash: action.transactionHash,
-      errorMessage,
+      txHash: action.transactionHash ?? null,
+      errorMessage: errorMessage ?? null,
     })
   }
 

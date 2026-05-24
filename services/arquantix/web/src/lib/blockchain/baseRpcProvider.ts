@@ -1,4 +1,4 @@
-import { createPublicClient, fallback, http, type PublicClient } from 'viem'
+import { createPublicClient, fallback, http } from 'viem'
 import { base } from 'viem/chains'
 
 /** RPC public Base — dernier recours uniquement, jamais provider principal. */
@@ -93,13 +93,15 @@ function createFallbackTransport(urls: string[]) {
 }
 
 /** Client viem Base avec fallback multi-provider + retry. */
-export function createBasePublicClient(options?: { side?: BaseRpcSide }): PublicClient {
+export function createBasePublicClient(options?: { side?: BaseRpcSide }) {
   const urls = resolveBaseRpcUrls(options)
   return createPublicClient({
     chain: base,
     transport: createFallbackTransport(urls),
   })
 }
+
+export type BasePublicClient = ReturnType<typeof createBasePublicClient>
 
 export type BaseRpcProviderProbe = {
   label: string

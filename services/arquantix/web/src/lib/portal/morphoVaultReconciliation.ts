@@ -1,4 +1,4 @@
-import type { PortalMorphoVaultConfig } from '@prisma/client'
+import type { PortalMorphoVaultConfig, Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { MORPHO_CHAIN_ID, normalizeVaultAddress } from '@/lib/portal/morphoConstants'
@@ -224,7 +224,7 @@ export async function runMorphoVaultReconciliation(): Promise<MorphoReconciliati
       mismatchCount,
       missingOnchainCount,
       missingLedgerCount,
-      logJson: logs,
+      logJson: logs as Prisma.InputJsonValue,
     },
   })
 
