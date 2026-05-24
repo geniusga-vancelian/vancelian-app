@@ -4,6 +4,7 @@ import { normalizeVaultAddress } from '@/lib/portal/morphoConstants'
 import {
   getMorphoUsdcBetaEmails,
   getMorphoUsdcBetaPersonIds,
+  isMorphoUsdcBetaAllowAllUsers,
   isMorphoUsdcBetaEnabled,
   isMorphoUsdcDepositsDisabled,
   isMorphoUsdcWithdrawsDisabled,
@@ -16,6 +17,7 @@ export type MorphoBetaDashboardStats = {
   withdrawsDisabled: boolean
   allowlistPersonIdsCount: number
   allowlistEmailsCount: number
+  allowAllUsers: boolean
   betaActiveUsersCount: number
   totalDepositedUsdc: number
   totalWithdrawnUsdc: number
@@ -111,6 +113,7 @@ export async function getMorphoBetaDashboardStats(args?: {
     withdrawsDisabled: isMorphoUsdcWithdrawsDisabled(),
     allowlistPersonIdsCount: getMorphoUsdcBetaPersonIds().size,
     allowlistEmailsCount: getMorphoUsdcBetaEmails().size,
+    allowAllUsers: isMorphoUsdcBetaAllowAllUsers(),
     betaActiveUsersCount: activePersonIds.size,
     totalDepositedUsdc: rawToUsdc(totalDepositedRaw),
     totalWithdrawnUsdc: rawToUsdc(totalWithdrawnRaw),

@@ -4,6 +4,7 @@ import { afterEach, describe, it } from 'node:test'
 import {
   getMorphoUsdcBetaLimits,
   getMorphoUsdcBetaPersonIds,
+  isMorphoUsdcBetaAllowAllUsers,
   isMorphoUsdcBetaEnabled,
   isMorphoUsdcDepositsDisabled,
 } from './morphoUsdcBetaConfig'
@@ -14,6 +15,8 @@ const ENV_KEYS = [
   'MORPHO_USDC_BETA_MIN_DEPOSIT_USDC',
   'MORPHO_USDC_BETA_MAX_DEPOSIT_USDC',
   'MORPHO_USDC_BETA_PERSON_IDS',
+  'MORPHO_USDC_BETA_ALLOW_ALL_USERS',
+  'MORPHO_USDC_MAX_GLOBAL_EXPOSURE_RAW',
 ]
 
 function saveEnv(): Record<string, string | undefined> {
@@ -66,7 +69,29 @@ describe('morphoUsdcBetaConfig', () => {
       assert.equal(limits.minDepositRaw, BigInt(10_000_000))
       assert.equal(limits.maxDepositRaw, BigInt(100_000_000))
       assert.equal(limits.maxUserExposureRaw, BigInt(500_000_000))
-      assert.equal(limits.maxGlobalExposureRaw, BigInt(5_000_000_000))
+      assert.equal(limits.maxGlobalExposureRaw, BigInt(10_000_000_000))
+    } finally {
+      restoreEnv(saved)
+    }
+  })
+
+  it('autorise tous les utilisateurs quand ALLOW_ALL_USERS=true', () => {
+    const saved = saveEnv()
+    try {
+      process.env.MORPHO_USDC_BETA_ALLOW_ALL_USERS = 'true'
+      assert.equal(isMorphoUsdcBetaAllowAllUsers(), true)
+    } finally {
+      restoreEnv(saved)
+    }
+  })
+
+  it('lit les plafonds depuis les env RAW', () => {
+    const saved = saveEnv()
+    try {
+      for (const key of ENV_KEYS) delete process.env[key]
+      process.env.MORPHO_USDC_MAX_GLOBAL_EXPOSURE_RAW = '10000000000'
+      const limits = getMorphoUsdcBetaLimits()
+      assert.equal(limits.maxGlobalExposureRaw, BigInt(10_000_000_000))
     } finally {
       restoreEnv(saved)
     }

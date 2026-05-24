@@ -3,6 +3,7 @@ import {
   getMorphoUsdcBetaEmails,
   getMorphoUsdcBetaPersonIds,
   getMorphoUsdcBetaProfileTag,
+  isMorphoUsdcBetaAllowAllUsers,
   isMorphoUsdcBetaEnabled,
   isMorphoUsdcBetaIncludeAdmins,
   isMorphoUsdcDepositsDisabled,
@@ -87,6 +88,7 @@ export async function loadMorphoBetaAccessContext(personId: string): Promise<Mor
 
 export async function isMorphoUsdcBetaAllowlisted(personId: string): Promise<boolean> {
   if (!isMorphoUsdcBetaEnabled()) return true
+  if (isMorphoUsdcBetaAllowAllUsers()) return true
 
   const ctx = await loadMorphoBetaAccessContext(personId)
   const personIds = getMorphoUsdcBetaPersonIds()
@@ -162,7 +164,9 @@ export async function getMorphoBetaPortalFlags(personId: string | null): Promise
   const allowed = personId ? await isMorphoUsdcBetaAllowlisted(personId) : false
   let message: string | null = null
   if (!allowed) {
-    message = 'Ce produit est en beta privée. Contactez le support pour y accéder.'
+    message = isMorphoUsdcBetaAllowAllUsers()
+      ? null
+      : 'Ce produit est en beta privée. Contactez le support pour y accéder.'
   } else if (depositsDisabled) {
     message = 'Les dépôts sont suspendus. Vous pouvez retirer vos fonds.'
   }

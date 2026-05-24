@@ -43,6 +43,7 @@ type MonitoringSnapshot = {
     withdrawsDisabled: boolean
     allowlistPersonIdsCount: number
     allowlistEmailsCount: number
+    allowAllUsers: boolean
     betaActiveUsersCount: number
     totalDepositedUsdc: number
     totalWithdrawnUsdc: number
@@ -291,9 +292,11 @@ export default function AdminMorphoVaultMonitoringPage() {
                 <p className="m-0 mt-1 text-xl font-semibold text-slate-900">{snapshot.beta.betaActiveUsersCount}</p>
               </div>
               <div className="rounded-lg border border-indigo-100 bg-white p-3">
-                <p className="m-0 text-xs uppercase tracking-wide text-slate-500">Allowlist (person / email)</p>
+                <p className="m-0 text-xs uppercase tracking-wide text-slate-500">Accès beta</p>
                 <p className="m-0 mt-1 font-semibold text-slate-900">
-                  {snapshot.beta.allowlistPersonIdsCount} / {snapshot.beta.allowlistEmailsCount}
+                  {snapshot.beta.allowAllUsers
+                    ? 'Tous les utilisateurs'
+                    : `Allowlist ${snapshot.beta.allowlistPersonIdsCount} / ${snapshot.beta.allowlistEmailsCount}`}
                 </p>
               </div>
               <div className="rounded-lg border border-indigo-100 bg-white p-3">

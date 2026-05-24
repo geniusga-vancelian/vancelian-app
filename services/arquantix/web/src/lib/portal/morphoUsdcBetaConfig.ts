@@ -38,6 +38,10 @@ export function isMorphoUsdcBetaIncludeAdmins(): boolean {
   return readBool('MORPHO_USDC_BETA_INCLUDE_ADMINS', false)
 }
 
+export function isMorphoUsdcBetaAllowAllUsers(): boolean {
+  return readBool('MORPHO_USDC_BETA_ALLOW_ALL_USERS', false)
+}
+
 export function getMorphoUsdcBetaPersonIds(): Set<string> {
   return new Set(readCsv('MORPHO_USDC_BETA_PERSON_IDS').map((id) => id.toLowerCase()))
 }
@@ -51,6 +55,20 @@ export function getMorphoUsdcBetaProfileTag(): string | null {
   return tag || null
 }
 
+function readRawLimit(rawNames: string[], usdcName: string, defaultRaw: bigint): bigint {
+  for (const name of rawNames) {
+    const raw = process.env[name]?.trim()
+    if (!raw) continue
+    try {
+      const value = BigInt(raw)
+      return value >= BigInt(0) ? value : defaultRaw
+    } catch {
+      continue
+    }
+  }
+  return readUsdcToRaw(usdcName, Number(defaultRaw) / 1_000_000)
+}
+
 export type MorphoUsdcBetaLimits = {
   minDepositRaw: bigint
   maxDepositRaw: bigint
@@ -61,10 +79,26 @@ export type MorphoUsdcBetaLimits = {
 
 export function getMorphoUsdcBetaLimits(): MorphoUsdcBetaLimits {
   return {
-    minDepositRaw: readUsdcToRaw('MORPHO_USDC_BETA_MIN_DEPOSIT_USDC', 10),
-    maxDepositRaw: readUsdcToRaw('MORPHO_USDC_BETA_MAX_DEPOSIT_USDC', 100),
-    maxUserExposureRaw: readUsdcToRaw('MORPHO_USDC_BETA_MAX_USER_EXPOSURE_USDC', 500),
-    maxGlobalExposureRaw: readUsdcToRaw('MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_USDC', 5000),
+    minDepositRaw: readRawLimit(
+      ['MORPHO_USDC_BETA_MIN_DEPOSIT_RAW', 'MORPHO_USDC_MIN_DEPOSIT_RAW'],
+      'MORPHO_USDC_BETA_MIN_DEPOSIT_USDC',
+      BigInt(10_000_000),
+    ),
+    maxDepositRaw: readRawLimit(
+      ['MORPHO_USDC_BETA_MAX_DEPOSIT_RAW', 'MORPHO_USDC_MAX_DEPOSIT_RAW'],
+      'MORPHO_USDC_BETA_MAX_DEPOSIT_USDC',
+      BigInt(100_000_000),
+    ),
+    maxUserExposureRaw: readRawLimit(
+      ['MORPHO_USDC_BETA_MAX_USER_EXPOSURE_RAW', 'MORPHO_USDC_MAX_USER_EXPOSURE_RAW'],
+      'MORPHO_USDC_BETA_MAX_USER_EXPOSURE_USDC',
+      BigInt(500_000_000),
+    ),
+    maxGlobalExposureRaw: readRawLimit(
+      ['MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_RAW', 'MORPHO_USDC_MAX_GLOBAL_EXPOSURE_RAW'],
+      'MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_USDC',
+      BigInt(10_000_000_000),
+    ),
     assetDecimals: 6,
   }
 }
