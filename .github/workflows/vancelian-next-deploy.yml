@@ -48,10 +48,14 @@ jobs:
       - name: Build & push Docker image
         env:
           NEXT_PUBLIC_PRIVY_APP_ID: ${{ secrets.VANCELIAN_PRIVY_APP_ID }}
+          NEXT_PUBLIC_BASE_RPC_URL: ${{ secrets.VANCELIAN_BASE_RPC_URL }}
         run: |
           set -euo pipefail
           if [ -z "${NEXT_PUBLIC_PRIVY_APP_ID:-}" ]; then
             echo "::warning::VANCELIAN_PRIVY_APP_ID absent — le runtime ECS PRIVY_APP_ID reste requis."
+          fi
+          if [ -z "${NEXT_PUBLIC_BASE_RPC_URL:-}" ]; then
+            echo "::warning::VANCELIAN_BASE_RPC_URL absent — le client utilisera le RPC public Base en fallback."
           fi
           docker build \
             --platform linux/amd64 \
@@ -60,6 +64,7 @@ jobs:
             --build-arg NEXT_PUBLIC_SITE_URL=https://vancelian.finance \
             --build-arg NEXT_PUBLIC_GIT_SHA=${{ github.sha }} \
             --build-arg NEXT_PUBLIC_PRIVY_APP_ID="${NEXT_PUBLIC_PRIVY_APP_ID}" \
+            --build-arg NEXT_PUBLIC_BASE_RPC_URL="${NEXT_PUBLIC_BASE_RPC_URL}" \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
             -f services/arquantix/web/Dockerfile \

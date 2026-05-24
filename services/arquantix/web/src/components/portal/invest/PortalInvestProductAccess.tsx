@@ -20,16 +20,18 @@ type ProductAccess = {
   value: string
   icon: LucideIcon
   iconClassName: string
+  scrollTo?: string
 }
 
 const INVEST_PRODUCT_ACCESS: ProductAccess[] = [
   {
     id: 'savings',
     title: 'Épargne rémunérée',
-    description: 'Jusqu’à 9% APY, disponible à tout moment.',
-    value: '9% max',
+    description: 'Vaults Morpho USDC — dépôt et retrait on-chain.',
+    value: 'Morpho',
     icon: Wallet,
     iconClassName: 'bg-[#E8F0FE] text-[#2563EB]',
+    scrollTo: '#earn-vaults',
   },
   {
     id: 'exclusive',
@@ -84,6 +86,13 @@ export function PortalInvestProductAccess() {
           key={item.id}
           title={item.title}
           subtitle={item.description}
+          onClick={
+            item.scrollTo
+              ? () => {
+                  document.querySelector(item.scrollTo!)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              : undefined
+          }
           leading={<AccessIcon icon={item.icon} className={item.iconClassName} />}
           trailing={
             <span className="flex items-center gap-2">

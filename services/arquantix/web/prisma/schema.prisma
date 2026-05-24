@@ -3111,6 +3111,174 @@ model PortfolioProductConfig {
   @@map("portfolio_product_configs")
 }
 
+enum PortalMorphoIntegrationMode {
+  direct_morpho
+  privy_earn
+}
+
+model PortalMorphoVaultConfig {
+  id              String                      @id @default(cuid())
+  vaultAddress    String                      @unique @map("vault_address")
+  chainId         Int                         @default(8453) @map("chain_id")
+  integrationMode PortalMorphoIntegrationMode @map("integration_mode")
+  privyVaultId    String?                     @map("privy_vault_id")
+  label           String?
+  description     String?
+  curator         String?
+  sortOrder       Int                         @default(999) @map("sort_order")
+  isPublished     Boolean                     @default(false) @map("is_published")
+  createdAt       DateTime                    @default(now()) @map("created_at")
+  updatedAt       DateTime                    @updatedAt @map("updated_at")
+
+  @@index([sortOrder])
+  @@index([isPublished])
+  @@map("portal_morpho_vault_configs")
+}
+
+enum OnchainVaultOperation {
+  deposit
+  withdraw
+  approve
+}
+
+enum OnchainVaultTransactionStatus {
+  pending
+  success
+  reverted
+  failed
+}
+
+enum MorphoReconciliationStatus {
+  matched
+  mismatch
+  missing_onchain
+  missing_ledger
+}
+
+model DefiVaultRegistry {
+  id              String   @id @default(cuid())
+  chainId         Int      @map("chain_id")
+  vaultAddress    String   @map("vault_address")
+  morphoVersion   String   @map("morpho_version")
+  assetAddress    String   @map("asset_address")
+  assetSymbol     String   @map("asset_symbol")
+  assetDecimals   Int      @default(6) @map("asset_decimals")
+  name            String?
+  curator         String?
+  integrationMode String?  @map("integration_mode")
+  privyVaultId    String?  @map("privy_vault_id")
+  portalConfigId  String?  @map("portal_config_id")
+  isActive        Boolean  @default(true) @map("is_active")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([chainId, vaultAddress], map: "defi_vault_registry_chain_vault_key")
+  @@index([portalConfigId], map: "defi_vault_registry_portal_config_id_idx")
+  @@map("defi_vault_registry")
+}
+
+model UserVaultPosition {
+  id               String    @id @default(cuid())
+  personId         String    @map("person_id") @db.Uuid
+  vaultAddress     String    @map("vault_address")
+  chainId          Int       @map("chain_id")
+  chainType        String    @default("evm") @map("chain_type")
+  walletAddress    String    @map("wallet_address")
+  privyWalletId    String?   @map("privy_wallet_id")
+  assetSymbol      String    @map("asset_symbol")
+  assetDecimals    Int       @default(6) @map("asset_decimals")
+  principalNetRaw  String    @default("0") @map("principal_net_raw")
+  costBasisUnknown Boolean   @default(false) @map("cost_basis_unknown")
+  lastAssetsRaw    String?   @map("last_assets_raw")
+  lastSharesRaw    String?   @map("last_shares_raw")
+  lastSyncedAt     DateTime? @map("last_synced_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@unique([personId, chainId, vaultAddress, walletAddress], map: "user_vault_positions_person_vault_wallet_key")
+  @@index([personId], map: "user_vault_positions_person_id_idx")
+  @@index([privyWalletId], map: "user_vault_positions_privy_wallet_id_idx")
+  @@map("user_vault_positions")
+}
+
+model OnchainVaultTransaction {
+  id              String                        @id @default(cuid())
+  personId        String                        @map("person_id") @db.Uuid
+  vaultAddress    String                        @map("vault_address")
+  chainId         Int                           @map("chain_id")
+  chainType       String                        @default("evm") @map("chain_type")
+  walletAddress   String                        @map("wallet_address")
+  privyWalletId   String?                       @map("privy_wallet_id")
+  operation       OnchainVaultOperation
+  amountRaw       String                        @map("amount_raw")
+  assetSymbol     String                        @map("asset_symbol")
+  assetDecimals   Int                           @default(6) @map("asset_decimals")
+  txHash          String?                       @map("tx_hash")
+  status          OnchainVaultTransactionStatus @default(pending)
+  idempotencyKey  String                        @map("idempotency_key")
+  privyActionId   String?                       @map("privy_action_id")
+  blockNumber     BigInt?                       @map("block_number")
+  integrationMode String                        @map("integration_mode")
+  txIndex         Int                           @default(0) @map("tx_index")
+  groupKey        String?                       @map("group_key")
+  errorMessage    String?                       @map("error_message")
+  metadataJson    Json?                         @map("metadata_json")
+  createdAt       DateTime                      @default(now()) @map("created_at")
+  updatedAt       DateTime                      @updatedAt @map("updated_at")
+
+  @@unique([personId, vaultAddress, operation, idempotencyKey, txIndex], map: "onchain_vault_tx_idempotency_key")
+  @@index([personId, vaultAddress], map: "onchain_vault_tx_person_vault_idx")
+  @@index([txHash], map: "onchain_vault_tx_hash_idx")
+  @@index([status], map: "onchain_vault_tx_status_idx")
+  @@index([groupKey], map: "onchain_vault_tx_group_key_idx")
+  @@index([privyWalletId], map: "onchain_vault_tx_privy_wallet_id_idx")
+  @@map("onchain_vault_transactions")
+}
+
+model MorphoVaultReconciliationRun {
+  id                  String   @id @default(cuid())
+  startedAt           DateTime @default(now()) @map("started_at")
+  finishedAt          DateTime? @map("finished_at")
+  itemsChecked        Int      @default(0) @map("items_checked")
+  matchedCount        Int      @default(0) @map("matched_count")
+  mismatchCount       Int      @default(0) @map("mismatch_count")
+  missingOnchainCount Int      @default(0) @map("missing_onchain_count")
+  missingLedgerCount  Int      @default(0) @map("missing_ledger_count")
+  logJson             Json?    @map("log_json")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  items MorphoVaultReconciliationItem[]
+
+  @@map("morpho_vault_reconciliation_runs")
+}
+
+model MorphoVaultReconciliationItem {
+  id               String                     @id @default(cuid())
+  runId            String                     @map("run_id")
+  personId         String                     @map("person_id") @db.Uuid
+  vaultAddress     String                     @map("vault_address")
+  walletAddress    String                     @map("wallet_address")
+  privyWalletId    String?                    @map("privy_wallet_id")
+  integrationMode  String                     @map("integration_mode")
+  status           MorphoReconciliationStatus
+  ledgerAssetsRaw  String?                    @map("ledger_assets_raw")
+  onchainAssetsRaw String?                    @map("onchain_assets_raw")
+  deltaAssetsRaw   String?                    @map("delta_assets_raw")
+  ledgerSharesRaw  String?                    @map("ledger_shares_raw")
+  onchainSharesRaw String?                    @map("onchain_shares_raw")
+  deltaSharesRaw   String?                    @map("delta_shares_raw")
+  detailsJson      Json?                      @map("details_json")
+  createdAt        DateTime                   @default(now()) @map("created_at")
+
+  run MorphoVaultReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([runId], map: "morpho_reconciliation_items_run_id_idx")
+  @@index([status], map: "morpho_reconciliation_items_status_idx")
+  @@index([personId], map: "morpho_reconciliation_items_person_id_idx")
+  @@map("morpho_vault_reconciliation_items")
+}
+
 model PresentationDeckVersions {
   id                                                                           String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   presentationId                                                               String                      @map("presentation_id") @db.Uuid

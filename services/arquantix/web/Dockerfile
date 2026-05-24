@@ -39,6 +39,8 @@ ARG NEXT_PUBLIC_SITE_URL=
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ARG NEXT_PUBLIC_PRIVY_APP_ID=
 ENV NEXT_PUBLIC_PRIVY_APP_ID=$NEXT_PUBLIC_PRIVY_APP_ID
+ARG NEXT_PUBLIC_BASE_RPC_URL=
+ENV NEXT_PUBLIC_BASE_RPC_URL=$NEXT_PUBLIC_BASE_RPC_URL
 ARG NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=
 ENV NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO=$NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO
 # Collecte des données de route au build : les handlers importent le client OpenAI
@@ -61,6 +63,10 @@ COPY --from=builder /app/next.config.js* ./
 COPY --from=builder /app/public ./public
 # Migrations : nécessaire pour `prisma migrate deploy` au démarrage (enum ArticleBlockType, etc. sur arquantix_fresh).
 COPY --from=builder /app/prisma ./prisma
+# Jobs Morpho one-shot / cron ECS (tsx scripts → src/lib).
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 EXPOSE 3000
 ENV PORT=3000

@@ -1,0 +1,15 @@
+# Exemple crontab Morpho USDC Volt
+# Copier vers crontab ops après adaptation des chemins.
+#
+# APP_ROOT=/opt/vancelian-app/services/arquantix/web
+# ENV_FILE=/opt/vancelian-app/services/arquantix/web/.env.production
+# LOG_DIR=/var/log/vancelian
+
+# Registry sync — toutes les 6h
+0 */6 * * * cd /opt/vancelian-app/services/arquantix/web && set -a && source .env.production && set +a && pnpm morpho:sync-vault-registry >> /var/log/vancelian/morpho-sync-registry.log 2>&1
+
+# Réconciliation — quotidien 06:00 UTC
+0 6 * * * cd /opt/vancelian-app/services/arquantix/web && set -a && source .env.production && set +a && pnpm morpho:reconcile >> /var/log/vancelian/morpho-reconcile.log 2>&1
+
+# Backfill — MANUEL UNIQUEMENT (ne pas activer en cron)
+# 0 3 * * 0 cd ... && pnpm morpho:backfill-positions

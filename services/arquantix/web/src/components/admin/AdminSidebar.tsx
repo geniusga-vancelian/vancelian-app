@@ -38,6 +38,7 @@ import {
   Wand2,
   Bot,
   MousePointerClick,
+  Activity,
 } from 'lucide-react'
 
 interface NavItem {
@@ -124,6 +125,8 @@ const navItems: NavItem[] = [
   { label: 'Risk rules (F.5)', href: '/admin/risk/rules', icon: Shield },
   { label: 'Flutter', href: '/admin/flutter', icon: Smartphone },
   { label: 'Vault Builder', href: '/admin/vault-builder', icon: Archive },
+  { label: 'Morpho Vaults', href: '/admin/morpho-vaults', icon: Coins },
+  { label: 'Morpho Monitoring', href: '/admin/morpho-vaults/monitoring', icon: Activity },
   {
     label: 'Exclusive Offers (Vault Builder)',
     href: '/admin/vault-builder/exclusive-offers',
