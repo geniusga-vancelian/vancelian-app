@@ -13,6 +13,7 @@ import {
   mapWidgetResearchItems,
 } from '@/lib/portal/marketsFormat'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
+import { resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 
 async function fetchJson(url: string) {
   const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
@@ -36,16 +37,17 @@ export async function GET(
 
   const symbol = tickerToProviderSymbol(ticker)
   const assetSlug = ticker.toLowerCase()
-  const origin = request.nextUrl.origin
+  const publicOrigin = request.nextUrl.origin
+  const bffOrigin = resolvePortalBffOrigin(publicOrigin)
   const marketDataPublicBaseUrl = getMarketDataPublicBaseUrl()
 
   const [summaryRes, blogWidgetRes, researchWidgetRes] = await Promise.all([
     fetchJson(buildBackendUrl(`/api/market-data/market-summary?symbols=${encodeURIComponent(symbol)}`)),
     fetchJson(
-      `${origin}/api/mobile/flutter/widgets/blog-a-la-une?locale=fr&assetSlug=${encodeURIComponent(assetSlug)}`,
+      `${bffOrigin}/api/mobile/flutter/widgets/blog-a-la-une?locale=fr&assetSlug=${encodeURIComponent(assetSlug)}`,
     ),
     fetchJson(
-      `${origin}/api/mobile/flutter/widgets/research-a-la-une?locale=fr&assetSlug=${encodeURIComponent(assetSlug)}`,
+      `${bffOrigin}/api/mobile/flutter/widgets/research-a-la-une?locale=fr&assetSlug=${encodeURIComponent(assetSlug)}`,
     ),
   ])
 
@@ -88,8 +90,8 @@ export async function GET(
     change24hAbs,
     logoUrl: mapped?.logoUrl ?? null,
     instrumentId,
-    news: mapWidgetNewsItems(blogFeed, origin),
-    research: mapWidgetResearchItems(researchFeed, origin),
+    news: mapWidgetNewsItems(blogFeed, publicOrigin),
+    research: mapWidgetResearchItems(researchFeed, publicOrigin),
     marketDataPublicBaseUrl,
     partial: !summaryRes.ok,
   }

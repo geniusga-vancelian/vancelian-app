@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildBackendUrl } from '@/lib/backend'
 import { getMarketDataPublicBaseUrl } from '@/lib/portal/marketDataPublic'
-import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
+import { portalUpstreamFetch, resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import {
   mapCryptoBundles,
@@ -20,12 +20,14 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 export async function GET(request: NextRequest) {
+  try {
   const token = await readPortalAccessToken()
   if (!token) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const origin = request.nextUrl.origin
+  const publicOrigin = request.nextUrl.origin
+  const bffOrigin = resolvePortalBffOrigin(publicOrigin)
   const symbols = PORTAL_DEFAULT_CRYPTO_SYMBOLS.join(',')
 
   const [popularRes, moversRes, newsRes, configsRes, researchRes, bundleRes, favoritesRes] =
@@ -34,9 +36,9 @@ export async function GET(request: NextRequest) {
         buildBackendUrl(`/api/market-data/market-summary?symbols=${encodeURIComponent(symbols)}`),
       ),
       fetchJson(buildBackendUrl('/api/market-data/top-movers?limit=10')),
-      fetchJson(`${origin}/api/blog?articleType=NEWS&page=1&pageSize=5&locale=fr`),
-      fetchJson(`${origin}/api/mobile/flutter/portfolio-products/configs`),
-      fetchJson(`${origin}/api/mobile/flutter/widgets/top10research?locale=fr`),
+      fetchJson(`${bffOrigin}/api/blog?articleType=NEWS&page=1&pageSize=5&locale=fr`),
+      fetchJson(`${bffOrigin}/api/mobile/flutter/portfolio-products/configs`),
+      fetchJson(`${bffOrigin}/api/mobile/flutter/widgets/top10research?locale=fr`),
       portalUpstreamFetch('/api/app/bundle/catalog'),
       portalUpstreamFetch('/api/app/favorites?entity_type=instrument'),
     ])
@@ -54,7 +56,7 @@ export async function GET(request: NextRequest) {
   const topGainers = mapMarketSummaryList(movers?.top_gainers ?? movers?.topGainers, mapOptions)
   const topLosers = mapMarketSummaryList(movers?.top_losers ?? movers?.topLosers, mapOptions)
 
-  const newsItems = mapMarketsNewsFeed(newsRes.data, { maxItems: 5, origin })
+  const newsItems = mapMarketsNewsFeed(newsRes.data, { maxItems: 5, origin: publicOrigin })
   const configs = ((configsRes.data as { configs?: Record<string, unknown> })?.configs ?? {}) as Record<
     string,
     { headerMediaUrl?: string | null; cardTitle?: string | null; performance1d?: number | null }
@@ -115,4 +117,8 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json(payload)
+  } catch (error) {
+    console.error('[api/portal/markets GET]', error)
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 })
+  }
 }
