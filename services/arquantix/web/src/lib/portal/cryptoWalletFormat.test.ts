@@ -1,11 +1,42 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildPrivyWalletPositionsSummary,
   formatCryptoTransactionAmount,
   isIncomingCryptoTransaction,
   mergeCryptoWalletTransactions,
   parsePrivyWalletDeposits,
+  resolvePositionSubtitle,
 } from './cryptoWalletFormat'
+
+describe('buildPrivyWalletPositionsSummary', () => {
+  it('includes dedicated Solana wallet at zero balance', () => {
+    const summary = buildPrivyWalletPositionsSummary(
+      {
+        summary: { positions_count: 1, wallet_count: 1 },
+        balances: [
+          {
+            asset: 'SOL',
+            name: 'Solana',
+            balance: '0',
+            available_balance: '0',
+            icon_key: 'sol',
+            chain_type: 'solana',
+            dedicated_wallet: true,
+            wallet_address: 'G3LsoYMqDp3NAEHG5DQT9SB3JfouXH9heUGLLmHLd6QR',
+          },
+        ],
+      },
+      null,
+      'EUR',
+    )
+    assert.equal(summary.positions.length, 1)
+    assert.equal(summary.positions[0]?.asset, 'SOL')
+    assert.equal(summary.positions[0]?.balance, 0)
+    assert.equal(summary.positions[0]?.dedicatedWallet, true)
+    assert.match(resolvePositionSubtitle(summary.positions[0]!), /Wallet Solana · 0\.0000 SOL/)
+  })
+})
 
 describe('parsePrivyWalletDeposits', () => {
   it('maps credit direction to deposit side', () => {

@@ -69,6 +69,13 @@ const WARMUP_BY_ROUTE: Record<string, WarmupConfig[]> = {
       ttlMs: 60_000,
     },
   ],
+  [PORTAL_ROUTES.walletDepositSol]: [
+    {
+      cacheKey: 'portal:wallets:solana',
+      url: '/api/portal/wallets/solana',
+      ttlMs: 60_000,
+    },
+  ],
   [PORTAL_ROUTES.walletCreate]: [
     {
       cacheKey: 'portal:profile',

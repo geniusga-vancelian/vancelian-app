@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.market_data.fx import get_eurusdt_rate, usdt_to_eur
+from services.privy_wallet.dedicated_wallet_assets import dedicated_wallet_placeholders_for_person
 from services.privy_wallet.repository import PersonWalletBalanceRepository
 from services.privy_wallet.service import _format_decimal
 from services.test_clients.schemas import ASSET_NAMES
@@ -31,7 +32,13 @@ def merge_app_crypto_positions(
         for row in PersonWalletBalanceRepository().list_for_person(db, person_id)
         if Decimal(str(row.balance)) > 0
     ]
-    if not privy_rows and not platform_positions:
+    assets_with_positive = {str(row.asset or "").upper() for row in privy_rows if row.asset}
+    dedicated_placeholders = dedicated_wallet_placeholders_for_person(
+        db,
+        person_id=person_id,
+        exclude_assets=assets_with_positive,
+    )
+    if not privy_rows and not platform_positions and not dedicated_placeholders:
         return []
 
     eurusdt_rate = get_eurusdt_rate(db, strict=False)
@@ -100,9 +107,16 @@ def merge_app_crypto_positions(
             if privy_bal != "0" and entry["platform_balance"] != "0":
                 entry["portfolio_scope"] = "merged"
 
+    for placeholder in dedicated_placeholders:
+        asset = str(placeholder.get("asset") or "").upper()
+        if not asset or asset in merged:
+            continue
+        merged[asset] = placeholder
+
     out: list[dict[str, Any]] = []
     for asset, entry in merged.items():
-        if Decimal(str(entry.get("balance") or "0")) <= 0:
+        balance = Decimal(str(entry.get("balance") or "0"))
+        if balance <= 0 and not entry.get("dedicated_wallet"):
             continue
         if "platform_balance" not in entry:
             entry["platform_balance"] = str(entry.get("balance") or "0")

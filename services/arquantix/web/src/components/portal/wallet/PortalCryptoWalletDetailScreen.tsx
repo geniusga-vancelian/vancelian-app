@@ -36,6 +36,7 @@ import type { PortalCryptoWalletDetailPayload } from '@/lib/portal/cryptoWalletT
 import {
   PORTAL_ROUTES,
   portalCryptoInstrumentRoute,
+  portalDedicatedDepositRoute,
 } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { cn } from '@/lib/utils'
@@ -95,6 +96,8 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
   if (!detail || !data) return null
 
   const privyOnly = isPrivyOnlyScope(detail.portfolioScope)
+  const dedicatedDepositHref = portalDedicatedDepositRoute(ticker)
+  const canDeposit = Boolean(dedicatedDepositHref)
   const livePrice =
     selectMoneyValue(currency, detail.currentPriceEur, detail.currentPriceUsd) ?? undefined
   const changePct = data.change24hPct
@@ -159,10 +162,12 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
             </section>
 
             <div className="flex flex-wrap gap-2">
-              {privyOnly ? (
-                <Button type="button" size="sm" className="gap-1.5" disabled>
-                  <Plus className="h-4 w-4" />
-                  Dépôt
+              {canDeposit && dedicatedDepositHref ? (
+                <Button type="button" size="sm" className="gap-1.5" asChild>
+                  <PortalNavLink href={dedicatedDepositHref}>
+                    <Plus className="h-4 w-4" />
+                    Dépôt
+                  </PortalNavLink>
                 </Button>
               ) : (
                 <>

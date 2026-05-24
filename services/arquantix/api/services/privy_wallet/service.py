@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from services.test_clients.schemas import ASSET_NAMES
 
+from .dedicated_wallet_assets import native_asset_for_dedicated_wallet
 from .repository import (
     PersonCryptoWalletRepository,
     PersonWalletBalanceRepository,
@@ -45,11 +46,14 @@ class PrivyWalletLedgerService:
         rows = self._balance_repo.list_for_person(db, person_id)
 
         balances: list[PrivyWalletBalancePayload] = []
+        assets_with_positive_balance: set[str] = set()
+
         for row in rows:
             if Decimal(str(row.balance)) <= 0:
                 continue
             wallet = wallet_by_id.get(row.person_crypto_wallet_id)
             asset = row.asset.upper()
+            assets_with_positive_balance.add(asset)
             balances.append(
                 PrivyWalletBalancePayload(
                     asset=asset,
@@ -60,6 +64,27 @@ class PrivyWalletLedgerService:
                     wallet_address=wallet.address if wallet else None,
                     chain_type=wallet.chain_type if wallet else None,
                     chain_id=wallet.chain_id if wallet else None,
+                    dedicated_wallet=False,
+                )
+            )
+
+        dedicated_assets_added: set[str] = set()
+        for wallet in wallets:
+            asset = native_asset_for_dedicated_wallet(wallet.chain_type)
+            if not asset or asset in assets_with_positive_balance or asset in dedicated_assets_added:
+                continue
+            dedicated_assets_added.add(asset)
+            balances.append(
+                PrivyWalletBalancePayload(
+                    asset=asset,
+                    name=ASSET_NAMES.get(asset, asset),
+                    balance="0",
+                    available_balance="0",
+                    icon_key=_ICON_KEYS.get(asset, asset.lower()),
+                    wallet_address=wallet.address,
+                    chain_type=wallet.chain_type,
+                    chain_id=wallet.chain_id,
+                    dedicated_wallet=True,
                 )
             )
 

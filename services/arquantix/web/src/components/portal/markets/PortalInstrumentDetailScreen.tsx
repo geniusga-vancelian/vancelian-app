@@ -8,6 +8,7 @@ import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalInstrumentChartModule } from '@/components/portal/markets/PortalInstrumentChartModule'
+import { PortalSolanaWalletSection } from '@/components/portal/markets/PortalSolanaWalletSection'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalMarketsNewsSection } from '@/components/portal/markets/PortalMarketsNewsSection'
 import { PortalResearchSection } from '@/components/portal/markets/PortalResearchSection'
@@ -225,6 +226,7 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
   if (!data) return null
 
   const perfPositive = (periodPerf?.absUsd ?? 0) >= 0
+  const isSolInstrument = ticker.trim().toUpperCase() === 'SOL'
 
   return (
     <PortalPageContainer>
@@ -318,6 +320,8 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
             </div>
           </div>
         </section>
+
+        {isSolInstrument ? <PortalSolanaWalletSection /> : null}
 
         <PortalMarketsNewsSection items={data.news} />
 

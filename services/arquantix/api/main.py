@@ -59,6 +59,7 @@ from services.auth.privy_exchange_routes import router as privy_exchange_router
 from services.auth.privy_signup_exchange_routes import router as privy_signup_exchange_router
 from services.auth.privy_link_routes import router as privy_link_router
 from services.auth.privy_person_wallets_routes import router as privy_person_wallets_router
+from services.privy.solana_wallet_routes import solana_wallet_router
 from services.translate import translate_page_payload
 from services.bundles import router as bundles_router
 from services.diagnostics import router as diagnostics_router
@@ -272,6 +273,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(privy_signup_exchange_router)
     app.include_router(privy_link_router)
     app.include_router(privy_person_wallets_router)
+    app.include_router(solana_wallet_router)
     app.include_router(device_attestation_router)
     app.include_router(device_credentials_router)
 

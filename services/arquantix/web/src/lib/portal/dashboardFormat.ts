@@ -169,7 +169,7 @@ export function resolveCryptoPortfolioTotal(
         ),
       0,
     )
-    if (sum > 0) return sum
+    return sum
   }
 
   return selectReferenceMoneyValue(

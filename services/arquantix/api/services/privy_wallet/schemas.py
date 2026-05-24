@@ -17,6 +17,7 @@ class PrivyWalletBalancePayload(BaseModel):
     wallet_address: Optional[str] = None
     chain_type: Optional[str] = None
     chain_id: Optional[int] = None
+    dedicated_wallet: bool = False
 
 
 class PrivyWalletBalancesSummary(BaseModel):

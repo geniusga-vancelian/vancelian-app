@@ -9,6 +9,7 @@ export const PORTAL_ROUTES = {
   dashboard: `${PORTAL_PATH_PREFIX}/dashboard`,
   cryptoWallet: `${PORTAL_PATH_PREFIX}/wallet/crypto`,
   walletDeposit: `${PORTAL_PATH_PREFIX}/wallet/deposit`,
+  walletDepositSol: `${PORTAL_PATH_PREFIX}/wallet/deposit/sol`,
   walletCreate: `${PORTAL_PATH_PREFIX}/wallet/create`,
   invest: `${PORTAL_PATH_PREFIX}/invest`,
   markets: `${PORTAL_PATH_PREFIX}/markets`,
@@ -33,6 +34,17 @@ export function portalCryptoWalletAssetRoute(asset: string): string {
 /** Deposit — adresse EVM si wallet lié, sinon création wallet. */
 export function resolvePortalDepositHref(hasPrivyWallet: boolean): string {
   return hasPrivyWallet ? PORTAL_ROUTES.walletDeposit : PORTAL_ROUTES.walletCreate
+}
+
+/** Page dépôt pour wallets Privy dédiés (Solana, futurs BTC/XRP…). */
+export function portalDedicatedDepositRoute(asset: string): string | null {
+  const ticker = asset.trim().toUpperCase()
+  if (ticker === 'SOL') return PORTAL_ROUTES.walletDepositSol
+  return null
+}
+
+export function supportsDedicatedPrivyDeposit(asset: string): boolean {
+  return portalDedicatedDepositRoute(asset) !== null
 }
 
 /** Détail crypto marché — `/app/markets/btc` (aligné Flutter `/crypto/{slug}`). */

@@ -15,6 +15,9 @@ export type PortalCryptoPosition = {
   portfolioScope?: string
   privyBalance?: number
   platformBalance?: number
+  chainType?: string
+  dedicatedWallet?: boolean
+  walletAddress?: string
 }
 
 export type PortalCryptoPositionsSummary = {

@@ -59,6 +59,10 @@ export function parseCryptoPositionsPayload(raw: unknown): PortalCryptoPositions
         typeof item.portfolio_scope === 'string' ? item.portfolio_scope : undefined,
       privyBalance: toOptionalNumber(item.privy_balance),
       platformBalance: toOptionalNumber(item.platform_balance),
+      chainType: typeof item.chain_type === 'string' ? item.chain_type : undefined,
+      dedicatedWallet: item.dedicated_wallet === true,
+      walletAddress:
+        typeof item.wallet_address === 'string' ? item.wallet_address : undefined,
     }))
     .filter((p) => p.asset)
 
@@ -208,9 +212,13 @@ export function buildPrivyWalletPositionsSummary(
         portfolioScope: 'privy',
         privyBalance: balance,
         platformBalance: 0,
+        chainType: typeof item.chain_type === 'string' ? item.chain_type : undefined,
+        dedicatedWallet: item.dedicated_wallet === true,
+        walletAddress:
+          typeof item.wallet_address === 'string' ? item.wallet_address : undefined,
       }
     })
-    .filter((p) => p.asset && p.balance > 0)
+    .filter((p) => p.asset && (p.balance > 0 || p.dedicatedWallet))
 
   positions.sort(
     (a, b) =>
@@ -398,6 +406,13 @@ export function formatCryptoVolume(balance: number, asset: string): string {
 
 export function resolvePositionSubtitle(position: PortalCryptoPosition): string {
   const volumeStr = formatCryptoVolume(position.balance, position.asset)
+  if (position.dedicatedWallet && position.chainType) {
+    const chainLabel =
+      position.chainType.toLowerCase() === 'solana'
+        ? 'Solana'
+        : position.chainType.charAt(0).toUpperCase() + position.chainType.slice(1)
+    return `Wallet ${chainLabel} · ${volumeStr}`
+  }
   if (position.portfolioScope === 'privy') return `Wallet Privy · ${volumeStr}`
   if (position.portfolioScope === 'merged') return `${volumeStr} · incl. Privy`
   return volumeStr

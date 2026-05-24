@@ -392,6 +392,9 @@ class CryptoPositionPayload(BaseModel):
     portfolio_scope: Optional[str] = None
     privy_balance: Optional[str] = None
     platform_balance: Optional[str] = None
+    dedicated_wallet: Optional[bool] = None
+    chain_type: Optional[str] = None
+    wallet_address: Optional[str] = None
 
 
 class CryptoPositionsSummary(BaseModel):
