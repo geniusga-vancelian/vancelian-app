@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { useRouter } from 'next/navigation'
 import { ArrowDown, ArrowLeft, ArrowUp, Star } from 'lucide-react'
 import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
@@ -214,9 +214,9 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
       <PortalPageContainer>
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 text-center">
           <p className="m-0 font-ui text-[15px] text-v-error">{error}</p>
-          <Link href={PORTAL_ROUTES.markets} className="v-text-link font-ui text-[14px]">
+          <PortalNavLink href={PORTAL_ROUTES.markets} className="v-text-link font-ui text-[14px]">
             Back to Markets
-          </Link>
+          </PortalNavLink>
         </div>
       </PortalPageContainer>
     )
@@ -229,13 +229,13 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
   return (
     <PortalPageContainer>
       <PortalDashboardLayout>
-        <Link
+        <PortalNavLink
           href={PORTAL_ROUTES.markets}
           className="inline-flex w-fit items-center gap-2 font-ui text-[14px] font-medium text-v-fg-body no-underline transition-colors hover:text-v-fg"
         >
           <ArrowLeft className="h-4 w-4" />
           Markets
-        </Link>
+        </PortalNavLink>
 
         <section className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-fg-05">
           <div className="flex flex-col gap-5 p-5 sm:p-6">

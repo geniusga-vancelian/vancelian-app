@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
 import type { PortalResearchItem } from '@/lib/portal/marketsTypes'
 
@@ -11,7 +11,7 @@ type Props = {
 
 function ResearchCard({ item }: { item: PortalResearchItem }) {
   return (
-    <Link
+    <PortalNavLink
       href={item.href}
       className="group block h-full overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle no-underline transition-shadow duration-v-fast hover:shadow-v-medium"
     >
@@ -40,7 +40,7 @@ function ResearchCard({ item }: { item: PortalResearchItem }) {
         </h3>
         <p className="mt-2 mb-0 font-ui text-[12px] text-v-fg-muted">{item.readingTime} min read</p>
       </div>
-    </Link>
+    </PortalNavLink>
   )
 }
 

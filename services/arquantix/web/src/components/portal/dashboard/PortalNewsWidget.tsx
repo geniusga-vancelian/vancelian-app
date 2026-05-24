@@ -1,10 +1,8 @@
 'use client'
 
-import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
-import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import { PortalModuleTitleLink } from '@/components/portal/PortalModuleTitleLink'
 import type { PortalNewsItem, PortalNewsWidgetData } from '@/lib/portal/parseTop10NewsWidget'
-import { cn } from '@/lib/utils'
 
 type Props = {
   data: PortalNewsWidgetData
@@ -15,9 +13,9 @@ function NewsCard({ item, minReadLabel }: { item: PortalNewsItem; minReadLabel: 
   const meta = item.publishedDate?.trim() || `${item.readingTime} ${minReadLabel}`
 
   return (
-    <Link
+    <PortalNavLink
       href={item.href}
-      className="group block overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle transition-shadow duration-v-fast hover:shadow-v-medium"
+      className="group block h-full overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle transition-shadow duration-v-fast hover:shadow-v-medium"
     >
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-v-fg-05">
         {item.coverUrl ? (
@@ -44,56 +42,31 @@ function NewsCard({ item, minReadLabel }: { item: PortalNewsItem; minReadLabel: 
         </h3>
         <p className="mt-2 mb-0 font-ui text-[12px] text-v-fg-muted">{meta}</p>
       </div>
-    </Link>
+    </PortalNavLink>
   )
 }
 
-/** Module « Vancelian News » — carrousel horizontal (équivalent Flutter `BlogALaUne`). */
+/** Module « Vancelian News » — grille responsive 1 / 2 colonnes (équivalent Flutter `BlogALaUne`). */
 export function PortalNewsWidget({ data, minReadLabel = 'min read' }: Props) {
   if (data.items.length === 0) return null
 
-  const multi = data.items.length > 1
   const headerHref = data.headerHref ?? '/blog'
 
   return (
     <section className="flex flex-col gap-3">
       {headerHref ? (
-        <Link
-          href={headerHref}
-          className="group flex items-center justify-between gap-2 no-underline"
-        >
-          <h2 className="m-0 font-ui text-[18px] font-semibold text-v-fg">{data.title}</h2>
-          <ChevronRight
-            className="h-5 w-5 text-v-fg-muted transition-transform duration-v-fast group-hover:translate-x-0.5 group-hover:text-v-fg"
-            aria-hidden
-          />
-        </Link>
+        <PortalModuleTitleLink href={headerHref} title={data.title} />
       ) : (
         <h2 className="m-0 font-ui text-[18px] font-semibold text-v-fg">{data.title}</h2>
       )}
 
-      <Carousel
-        opts={{
-          align: 'start',
-          containScroll: 'trimSnaps',
-          dragFree: true,
-        }}
-        className="w-full min-w-0"
-      >
-        <CarouselContent className={cn(multi ? '-ml-3' : '!ml-0')}>
-          {data.items.map((item) => (
-            <CarouselItem
-              key={item.id}
-              className={cn(
-                'min-h-0 shrink-0',
-                multi ? 'basis-[92%] pl-3 sm:basis-[72%] lg:basis-[340px]' : '!basis-full !pl-0',
-              )}
-            >
-              <NewsCard item={item} minReadLabel={minReadLabel} />
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
+      <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2">
+        {data.items.map((item) => (
+          <li key={item.id} className="min-w-0">
+            <NewsCard item={item} minReadLabel={minReadLabel} />
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { ChevronRight, PieChart } from 'lucide-react'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import {
@@ -83,9 +83,9 @@ export function PortalCryptoWalletPositionsCard({
 
           return (
             <li key={`position-${position.asset}`}>
-              <Link
+              <PortalNavLink
                 href={href}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-v-fast hover:bg-v-card-hover"
+                className="flex w-full items-center gap-3 px-4 py-3.5 text-left no-underline transition-colors duration-v-fast hover:bg-v-card-hover"
               >
                 <PortalCryptoAvatar
                   ticker={position.asset}
@@ -124,7 +124,7 @@ export function PortalCryptoWalletPositionsCard({
                   </span>
                   <ChevronRight className="h-4 w-4 text-v-fg-muted" aria-hidden />
                 </span>
-              </Link>
+              </PortalNavLink>
             </li>
           )
         })}

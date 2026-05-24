@@ -1,13 +1,12 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
 import {
   PortalSettingsCard,
   PortalSettingsRow,
 } from '@/components/portal/profile/PortalProfileUi'
 import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import type { PortalCryptoAsset } from '@/lib/portal/marketsTypes'
 import { formatChangePct } from '@/lib/portal/marketsFormat'
 import { portalCryptoInstrumentRoute } from '@/lib/portal/portalRouting'
@@ -105,18 +104,7 @@ export function PortalTopCryptoSection({
 
   return (
     <section className="flex flex-col gap-4">
-      <PortalSectionHeading
-        title="Top Crypto"
-        action={
-          <Link
-            href="/app/search"
-            className="inline-flex items-center gap-1 font-ui text-[13px] font-medium text-v-terracotta no-underline hover:underline"
-          >
-            See more
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        }
-      />
+      <PortalSectionHeading title="Top Crypto" href={PORTAL_ROUTES.markets} />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((item) => (

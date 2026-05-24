@@ -231,8 +231,8 @@ export function resolveDashboardCryptoSummary(
 
 export function buildWalletRows(
   cash: PortalDashboardCash,
-  crypto: PortalCryptoSummary,
-  placements: PortalPlacementsSummary,
+  crypto: PortalCryptoSummary | null,
+  placements: PortalPlacementsSummary | null,
   currency: string,
 ): PortalWalletRow[] {
   const eurBalance = toNumber(cash?.cash_account?.available_balance)

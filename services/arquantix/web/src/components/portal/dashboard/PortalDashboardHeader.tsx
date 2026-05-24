@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { ArrowLeftRight, ArrowUpRight, Plus } from 'lucide-react'
 import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
@@ -67,10 +67,10 @@ export function PortalDashboardHeader({
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" className="gap-1.5" asChild>
-          <Link href={depositHref}>
+          <PortalNavLink href={depositHref}>
             <Plus className="h-4 w-4" />
             Deposit
-          </Link>
+          </PortalNavLink>
         </Button>
         <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
           <ArrowUpRight className="h-4 w-4" />

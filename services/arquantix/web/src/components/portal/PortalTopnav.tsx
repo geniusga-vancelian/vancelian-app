@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
@@ -19,6 +19,30 @@ import {
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
 import { useNavPending } from '@/components/site/NavPendingContext'
+
+type ProfileAvatarState = {
+  initials: string
+  loaded: boolean
+}
+
+function resolveInitialProfileState(initialsProp?: string): ProfileAvatarState {
+  if (initialsProp?.trim()) {
+    return {
+      initials: initialsProp.trim().slice(0, 2).toUpperCase(),
+      loaded: true,
+    }
+  }
+  const cached = readPortalCache<{ profile?: PortalDashboardProfile | null }>('portal:profile')
+  if (cached?.profile) {
+    const resolved = resolvePortalProfileInitials(cached.profile)
+    if (resolved) return { initials: resolved, loaded: true }
+  }
+  return { initials: '', loaded: false }
+}
+
+function resolveAvatarLabel(initials: string): string {
+  return initials.trim().slice(0, 2).toUpperCase() || '?'
+}
 
 function normalizePath(path: string): string {
   const trimmed = path.replace(/\/$/, '')
@@ -43,21 +67,10 @@ interface TopnavLinkProps {
 }
 
 function TopnavLink({ href, active, palette, onClick, children }: TopnavLinkProps) {
-  const router = useRouter()
-  const { setPendingPath } = useNavPending()
-
-  const handleWarm = () => warmPortalRoute(href, router)
-
   return (
-    <Link
+    <PortalNavLink
       href={href}
-      onPointerEnter={handleWarm}
-      onFocus={handleWarm}
-      onClick={() => {
-        warmPortalRoute(href, router)
-        setPendingPath(href)
-        onClick?.()
-      }}
+      onClick={() => onClick?.()}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'group relative flex h-full items-center font-ui text-[14px] font-medium leading-none',
@@ -75,7 +88,7 @@ function TopnavLink({ href, active, palette, onClick, children }: TopnavLinkProp
         )}
         style={{ background: palette.underlineColor }}
       />
-    </Link>
+    </PortalNavLink>
   )
 }
 
@@ -93,15 +106,12 @@ type PortalTopnavProps = {
 export function PortalTopnav({ initials: initialsProp, brand: brandProp, className }: PortalTopnavProps) {
   const pathname = usePathname() ?? ''
   const router = useRouter()
-  const { effectivePath, setPendingPath } = useNavPending()
+  const { effectivePath } = useNavPending()
   const palette = buildTopnavPalettes(null).solid
   const [mobileOpen, setMobileOpen] = React.useState(false)
-  const [initials, setInitials] = React.useState(() => {
-    if (initialsProp) return initialsProp
-    const cached = readPortalCache<{ profile?: PortalDashboardProfile | null }>('portal:profile')
-    if (cached?.profile) return resolvePortalProfileInitials(cached.profile)
-    return ''
-  })
+  const [profileAvatar, setProfileAvatar] = React.useState<ProfileAvatarState>(() =>
+    resolveInitialProfileState(initialsProp),
+  )
   const [brand, setBrand] = React.useState<SiteBrandLogo | null | undefined>(brandProp)
 
   React.useEffect(() => {
@@ -109,21 +119,36 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
   }, [router])
 
   React.useEffect(() => {
-    if (initialsProp) {
-      setInitials(initialsProp)
+    if (initialsProp?.trim()) {
+      setProfileAvatar({
+        initials: initialsProp.trim().slice(0, 2).toUpperCase(),
+        loaded: true,
+      })
       return
     }
+
     let cancelled = false
     ;(async () => {
       try {
         const res = await fetch('/api/portal/profile', { credentials: 'include', cache: 'no-store' })
-        if (!res.ok) return
+        if (cancelled) return
+        if (!res.ok) {
+          setProfileAvatar((prev) =>
+            prev.loaded ? prev : { initials: resolveAvatarLabel(''), loaded: true },
+          )
+          return
+        }
         const json = (await res.json()) as { profile?: PortalDashboardProfile | null }
         if (!cancelled) {
-          setInitials(resolvePortalProfileInitials(json.profile))
+          const resolved = resolvePortalProfileInitials(json.profile)
+          setProfileAvatar({ initials: resolved, loaded: true })
         }
       } catch {
-        // ignore — avatar fallback below
+        if (!cancelled) {
+          setProfileAvatar((prev) =>
+            prev.loaded ? prev : { initials: resolveAvatarLabel(''), loaded: true },
+          )
+        }
       }
     })()
     return () => {
@@ -161,7 +186,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
     }
   }, [mobileOpen])
 
-  const avatarLabel = initials.trim().slice(0, 2).toUpperCase() || '?'
+  const avatarLabel = resolveAvatarLabel(profileAvatar.initials)
   const profileActive = isNavActive(effectivePath, PORTAL_ROUTES.profile)
 
   const navBarStyle: React.CSSProperties = {
@@ -180,7 +205,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
       <Container className="h-full">
         <div className="grid h-full grid-cols-[1fr_auto_1fr] items-stretch gap-8">
           <div className="flex h-full items-center justify-self-start">
-            <Link
+            <PortalNavLink
               href={PORTAL_ROUTES.dashboard}
               className="inline-flex items-center no-underline"
               aria-label="Vancelian"
@@ -192,7 +217,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                 color="black"
                 className="block h-[22px] w-auto"
               />
-            </Link>
+            </PortalNavLink>
           </div>
 
           <nav aria-label="Navigation portail" className="hidden h-full justify-self-center lg:block">
@@ -208,14 +233,8 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
           </nav>
 
           <div className="flex h-full items-center justify-end gap-3 justify-self-end sm:gap-4">
-            <Link
+            <PortalNavLink
               href={PORTAL_SEARCH_NAV.href}
-              onPointerEnter={() => warmPortalRoute(PORTAL_SEARCH_NAV.href, router)}
-              onFocus={() => warmPortalRoute(PORTAL_SEARCH_NAV.href, router)}
-              onClick={() => {
-                warmPortalRoute(PORTAL_SEARCH_NAV.href, router)
-                setPendingPath(PORTAL_SEARCH_NAV.href)
-              }}
               aria-label={PORTAL_SEARCH_NAV.label}
               className={cn(
                 'hidden h-10 w-10 items-center justify-center rounded-v-pill lg:inline-flex',
@@ -225,26 +244,29 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
               style={{ color: palette.linkColor }}
             >
               <PORTAL_SEARCH_NAV.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            </Link>
+            </PortalNavLink>
 
-            <Link
-              href={PORTAL_ROUTES.profile}
-              onPointerEnter={() => warmPortalRoute(PORTAL_ROUTES.profile, router)}
-              onFocus={() => warmPortalRoute(PORTAL_ROUTES.profile, router)}
-              onClick={() => {
-                warmPortalRoute(PORTAL_ROUTES.profile, router)
-                setPendingPath(PORTAL_ROUTES.profile)
-              }}
-              aria-label="Profile"
-              aria-current={profileActive ? 'page' : undefined}
-              className={cn(
-                'inline-flex h-9 w-9 items-center justify-center rounded-v-pill font-ui text-[12px] font-semibold text-white transition-opacity duration-v-fast hover:opacity-90',
-                profileActive ? 'ring-2 ring-v-terracotta ring-offset-2 ring-offset-v-bg' : '',
-              )}
-              style={{ background: 'var(--v-fg)' }}
-            >
-              {avatarLabel}
-            </Link>
+            {!profileAvatar.loaded ? (
+              <div
+                className="portal-shimmer h-9 w-9 shrink-0 rounded-v-pill"
+                role="status"
+                aria-live="polite"
+                aria-label="Loading profile"
+              />
+            ) : (
+              <PortalNavLink
+                href={PORTAL_ROUTES.profile}
+                aria-label="Profile"
+                aria-current={profileActive ? 'page' : undefined}
+                className={cn(
+                  'portal-reveal inline-flex h-9 w-9 items-center justify-center rounded-v-pill font-ui text-[12px] font-semibold text-white transition-opacity duration-v-fast hover:opacity-90',
+                  profileActive ? 'ring-2 ring-v-terracotta ring-offset-2 ring-offset-v-bg' : '',
+                )}
+                style={{ background: 'var(--v-fg)' }}
+              >
+                {avatarLabel}
+              </PortalNavLink>
+            )}
 
             <PortalSignOutButton className="hidden sm:inline-flex" />
 
@@ -291,14 +313,9 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                   const active = isNavActive(effectivePath, tab.href)
                   return (
                     <li key={tab.id}>
-                      <Link
+                      <PortalNavLink
                         href={tab.href}
-                        onPointerEnter={() => warmPortalRoute(tab.href, router)}
-                        onClick={() => {
-                          warmPortalRoute(tab.href, router)
-                          setPendingPath(tab.href)
-                          setMobileOpen(false)
-                        }}
+                        onClick={() => setMobileOpen(false)}
                         className={cn(
                           'flex items-center gap-3 rounded-v-input px-3 py-3 font-ui text-[16px] font-medium no-underline',
                           active ? 'bg-v-fg-05 text-v-fg' : 'text-v-fg-body',
@@ -306,19 +323,14 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                       >
                         <tab.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
                         {tab.label}
-                      </Link>
+                      </PortalNavLink>
                     </li>
                   )
                 })}
                 <li>
-                  <Link
+                  <PortalNavLink
                     href={PORTAL_SEARCH_NAV.href}
-                    onPointerEnter={() => warmPortalRoute(PORTAL_SEARCH_NAV.href, router)}
-                    onClick={() => {
-                      warmPortalRoute(PORTAL_SEARCH_NAV.href, router)
-                      setPendingPath(PORTAL_SEARCH_NAV.href)
-                      setMobileOpen(false)
-                    }}
+                    onClick={() => setMobileOpen(false)}
                     className={cn(
                       'flex items-center gap-3 rounded-v-input px-3 py-3 font-ui text-[16px] font-medium no-underline',
                       isNavActive(effectivePath, PORTAL_SEARCH_NAV.href)
@@ -328,7 +340,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                   >
                     <PORTAL_SEARCH_NAV.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
                     {PORTAL_SEARCH_NAV.label}
-                  </Link>
+                  </PortalNavLink>
                 </li>
               </ul>
               <div className="mt-6 border-t border-v-fg-10 pt-4">

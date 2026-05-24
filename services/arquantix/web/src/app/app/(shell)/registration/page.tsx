@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { Button } from '@/components/ui/button'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
@@ -20,7 +20,7 @@ export default function PortalRegistrationPage() {
           using your crypto wallet.
         </p>
         <Button type="button" asChild className="w-fit">
-          <Link href={PORTAL_ROUTES.dashboard}>Back to dashboard</Link>
+          <PortalNavLink href={PORTAL_ROUTES.dashboard}>Back to dashboard</PortalNavLink>
         </Button>
       </div>
     </PortalPageContainer>

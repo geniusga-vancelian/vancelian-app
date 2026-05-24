@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import type { PortalWalletRow } from '@/lib/portal/dashboardTypes'
 import { portalWalletIcon, portalWalletIconToneClass } from '@/components/portal/dashboard/portalWalletIcons'
 import { resolveAccountsRowHref } from '@/lib/portal/portalRouting'
@@ -10,9 +10,13 @@ import { cn } from '@/lib/utils'
 type Props = {
   rows: PortalWalletRow[]
   title?: string
+  /** Crypto / placements encore en chargement — shimmer sur les lignes concernées. */
+  portfolioPending?: boolean
 }
 
-export function PortalAccountsCard({ rows, title = 'My accounts' }: Props) {
+const PORTFOLIO_ROW_IDS = new Set(['crypto', 'offers'])
+
+export function PortalAccountsCard({ rows, title = 'My accounts', portfolioPending = false }: Props) {
   return (
     <article className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
       <div className="border-b border-v-fg-10 px-4 py-3">
@@ -23,6 +27,7 @@ export function PortalAccountsCard({ rows, title = 'My accounts' }: Props) {
           const Icon = portalWalletIcon(row.iconKey)
           const locked = row.locked === true
           const href = resolveAccountsRowHref(row.id, locked)
+          const rowPending = portfolioPending && PORTFOLIO_ROW_IDS.has(row.id)
 
           const content = (
             <>
@@ -49,7 +54,9 @@ export function PortalAccountsCard({ rows, title = 'My accounts' }: Props) {
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-1">
-                {locked && row.ctaLabel ? (
+                {rowPending ? (
+                  <span className="portal-shimmer h-5 w-16 rounded-v-input" aria-hidden />
+                ) : locked && row.ctaLabel ? (
                   <span className="font-ui text-[13px] font-medium text-v-blue">{row.ctaLabel}</span>
                 ) : (
                   <span className="font-ui text-[15px] font-semibold tabular-nums text-v-fg">
@@ -64,7 +71,7 @@ export function PortalAccountsCard({ rows, title = 'My accounts' }: Props) {
           return (
             <li key={row.id}>
               {href ? (
-                <Link
+                <PortalNavLink
                   href={href}
                   className={cn(
                     'flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left no-underline transition-colors duration-v-fast hover:bg-v-card-hover',
@@ -72,7 +79,7 @@ export function PortalAccountsCard({ rows, title = 'My accounts' }: Props) {
                   )}
                 >
                   {content}
-                </Link>
+                </PortalNavLink>
               ) : (
                 <button
                   type="button"

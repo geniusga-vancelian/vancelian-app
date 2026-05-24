@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import {
   ArrowLeft,
   ArrowLeftRight,
@@ -70,13 +70,13 @@ export function PortalCryptoWalletScreen() {
       <PortalDashboardLayout>
         <PortalReveal index={0}>
           <div className="flex flex-col gap-4">
-            <Link
+            <PortalNavLink
               href={PORTAL_ROUTES.dashboard}
               className="inline-flex w-fit items-center gap-1.5 font-ui text-[13px] text-v-fg-muted no-underline transition-colors hover:text-v-fg"
             >
               <ArrowLeft className="h-4 w-4" />
               Dashboard
-            </Link>
+            </PortalNavLink>
 
             <section className="overflow-hidden rounded-v-card border border-[#0D1B2A]/20 bg-[#0D1B2A] p-4 text-white shadow-v-subtle sm:p-5">
               <VEyebrow className="text-white/70">Wallet</VEyebrow>
@@ -101,10 +101,10 @@ export function PortalCryptoWalletScreen() {
                 Échanger
               </Button>
               <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
-                <Link href={PORTAL_ROUTES.walletDeposit}>
+                <PortalNavLink href={PORTAL_ROUTES.walletDeposit}>
                   <Plus className="h-4 w-4" />
                   Déposer
-                </Link>
+                </PortalNavLink>
               </Button>
               <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
                 <ArrowUpRight className="h-4 w-4" />

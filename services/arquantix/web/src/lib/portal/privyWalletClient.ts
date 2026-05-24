@@ -1,4 +1,5 @@
 import { parsePortalExchangeError } from '@/lib/portal/parsePortalExchangeError'
+import { readPortalCache, writePortalCache } from '@/lib/portal/portalClientCache'
 
 export type PortalPersonCryptoWallet = {
   id: string
@@ -69,6 +70,15 @@ export function resolvePrimaryPersonCryptoWallet(
   return wallets.find((w) => w.is_primary) ?? wallets[0] ?? null
 }
 
+const PERSON_WALLETS_CACHE_KEY = 'portal:privy-person-wallets'
+
+/** Bootstrap synchrone depuis le cache warmup (navigation deposit). */
+export function readCachedPortalPersonCryptoWallets(): PortalPersonCryptoWallet[] {
+  const cached = readPortalCache<{ wallets?: unknown }>(PERSON_WALLETS_CACHE_KEY)
+  if (!cached) return []
+  return parsePersonWallets(cached)
+}
+
 export async function fetchPortalPersonCryptoWallets(): Promise<PortalPersonCryptoWallet[]> {
   const res = await fetch('/api/portal/privy/person-wallets', {
     credentials: 'include',
@@ -82,6 +92,7 @@ export async function fetchPortalPersonCryptoWallets(): Promise<PortalPersonCryp
     const err = parsePortalExchangeError(data)
     throw new Error(err.message)
   }
+  writePortalCache(PERSON_WALLETS_CACHE_KEY, data, 60_000)
   return parsePersonWallets(data)
 }
 

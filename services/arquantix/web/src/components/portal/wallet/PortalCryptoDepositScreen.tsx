@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
@@ -8,7 +8,6 @@ import {
   Check,
   Copy,
   ExternalLink,
-  Loader2,
   Shield,
   Wallet,
 } from 'lucide-react'
@@ -24,36 +23,42 @@ import {
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import {
   fetchPortalPersonCryptoWallets,
+  readCachedPortalPersonCryptoWallets,
   resolvePrimaryPersonCryptoWallet,
   type PortalPersonCryptoWallet,
 } from '@/lib/portal/privyWalletClient'
+import { cn } from '@/lib/utils'
 
 const DEPOSIT_STEPS = [
   {
-    title: 'Copiez votre adresse',
-    body: 'Utilisez le bouton ci-dessous ou sélectionnez l’adresse pour la copier.',
+    title: 'Copy your address',
+    body: 'Use the button below or select the address to copy it.',
   },
   {
-    title: 'Envoyez depuis un wallet externe',
-    body: 'Exchange (Binance, Coinbase…) ou wallet personnel — uniquement sur le réseau indiqué.',
+    title: 'Send from an external wallet',
+    body: 'From an exchange (Binance, Coinbase…) or personal wallet — on the network shown only.',
   },
   {
-    title: 'Attendez la confirmation',
-    body: 'Une fois la transaction confirmée on-chain, le solde apparaît dans votre wallet Vancelian.',
+    title: 'Wait for confirmation',
+    body: 'Once the transaction is confirmed on-chain, the balance appears in your Vancelian wallet.',
   },
 ] as const
 
+/** Default EVM network shown before wallet metadata loads. */
+const DEFAULT_CHAIN_ID = 1
+
 export function PortalCryptoDepositScreen() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const cachedWallets = useMemo(() => readCachedPortalPersonCryptoWallets(), [])
+  const [wallets, setWallets] = useState<PortalPersonCryptoWallet[]>(cachedWallets)
+  const [addressLoading, setAddressLoading] = useState(cachedWallets.length === 0)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
-  const [wallets, setWallets] = useState<PortalPersonCryptoWallet[]>([])
   const [copied, setCopied] = useState(false)
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
-    else setError('')
+    setError('')
     try {
       const rows = await fetchPortalPersonCryptoWallets()
       setWallets(rows)
@@ -62,9 +67,9 @@ export function PortalCryptoDepositScreen() {
         return
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossible de charger votre adresse de dépôt.')
+      setError(err instanceof Error ? err.message : 'Unable to load your deposit address.')
     } finally {
-      setLoading(false)
+      setAddressLoading(false)
       setRefreshing(false)
     }
   }, [router])
@@ -74,11 +79,13 @@ export function PortalCryptoDepositScreen() {
   }, [load])
 
   const primaryWallet = useMemo(() => resolvePrimaryPersonCryptoWallet(wallets), [wallets])
-  const networkLabel = formatEvmNetworkLabel(primaryWallet?.chain_id)
-  const networkShort = formatEvmNetworkShort(primaryWallet?.chain_id)
+  const chainId = primaryWallet?.chain_id ?? DEFAULT_CHAIN_ID
+  const networkLabel = formatEvmNetworkLabel(chainId)
+  const networkShort = formatEvmNetworkShort(chainId)
   const explorerUrl = primaryWallet
     ? resolveEvmExplorerAddressUrl(primaryWallet.address, primaryWallet.chain_id)
     : null
+  const addressReady = Boolean(primaryWallet?.address) && !addressLoading
 
   const copyAddress = useCallback(async (address: string) => {
     try {
@@ -86,55 +93,33 @@ export function PortalCryptoDepositScreen() {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2500)
     } catch {
-      setError('Copie impossible — sélectionnez l’adresse manuellement.')
+      setError('Copy failed — select the address manually.')
     }
   }, [])
 
-  if (loading) {
-    return (
-      <PortalPageContainer className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-v-fg-muted" aria-hidden />
-        <span className="sr-only">Chargement</span>
-      </PortalPageContainer>
-    )
-  }
-
-  if (!primaryWallet) {
-    return (
-      <PortalPageContainer className="py-8 sm:py-10">
-        <div className="mx-auto w-full max-w-lg text-center">
-          <p className="m-0 font-ui text-[15px] text-v-error">
-            {error || 'Aucune adresse de dépôt disponible.'}
-          </p>
-          <Button type="button" className="mt-4" onClick={() => void load()}>
-            Réessayer
-          </Button>
-        </div>
-      </PortalPageContainer>
-    )
-  }
-
-  const otherWallets = wallets.filter((w) => w.id !== primaryWallet.id)
+  const otherWallets = primaryWallet
+    ? wallets.filter((w) => w.id !== primaryWallet.id)
+    : []
 
   return (
     <PortalPageContainer className="py-8 sm:py-10">
       <div className="mx-auto w-full max-w-xl">
-        <Link
+        <PortalNavLink
           href={PORTAL_ROUTES.dashboard}
           className="mb-6 inline-flex items-center gap-1.5 font-ui text-[13px] text-v-fg-muted no-underline transition-colors hover:text-v-fg"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Dashboard
-        </Link>
+        </PortalNavLink>
 
         <div className="mb-6">
-          <VEyebrow>Dépôt</VEyebrow>
+          <VEyebrow>Deposit</VEyebrow>
           <h1 className="m-0 font-ui text-[26px] font-semibold tracking-v-tight text-v-fg sm:text-[28px]">
-            Recevoir des cryptos
+            Receive crypto
           </h1>
           <p className="mt-2 mb-0 max-w-prose font-ui text-[15px] leading-relaxed text-v-fg-body">
-            Transférez des actifs vers votre wallet embedded Vancelian (non custodial, sécurisé par
-            Privy). Seul le réseau EVM ci-dessous est accepté.
+            Transfer assets to your Vancelian embedded wallet (non-custodial, secured by Privy).
+            Only the EVM network below is supported.
           </p>
         </div>
 
@@ -142,7 +127,7 @@ export function PortalCryptoDepositScreen() {
           <section className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
             <div className="border-b border-v-fg-10 bg-v-fg-05 px-4 py-3 sm:px-5">
               <p className="m-0 font-ui text-[12px] font-semibold uppercase tracking-wide text-v-fg-muted">
-                Réseau de dépôt
+                Deposit network
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center rounded-v-pill bg-[#0D1B2A] px-3 py-1 font-ui text-[13px] font-semibold text-white">
@@ -151,14 +136,14 @@ export function PortalCryptoDepositScreen() {
                 <span className="font-ui text-[15px] font-semibold text-v-fg">{networkLabel}</span>
               </div>
               <p className="mt-2 mb-0 font-ui text-[13px] text-v-fg-muted">
-                {networkShort} — tokens compatibles uniquement (ex. ETH, USDC, USDT sur ce réseau).
+                {networkShort} — compatible tokens only (e.g. ETH, USDC, USDT on this network).
               </p>
             </div>
 
             <div className="px-4 py-5 sm:px-5">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="m-0 font-ui text-[13px] font-semibold uppercase tracking-wide text-v-fg-muted">
-                  Votre adresse de dépôt
+                  Your deposit address
                 </p>
                 <span className="inline-flex items-center gap-1 font-ui text-[12px] text-v-fg-muted">
                   <Shield className="h-3.5 w-3.5" aria-hidden />
@@ -169,39 +154,54 @@ export function PortalCryptoDepositScreen() {
               <div
                 className="rounded-v-card border border-v-fg-10 bg-v-fg-05 px-3 py-3 sm:px-4"
                 role="group"
-                aria-label="Adresse EVM de dépôt"
+                aria-label="EVM deposit address"
+                aria-busy={addressLoading}
               >
-                <p
-                  className="m-0 break-all font-mono text-[14px] leading-relaxed text-v-fg sm:text-[15px]"
-                  tabIndex={0}
-                >
-                  {primaryWallet.address}
-                </p>
+                {addressReady ? (
+                  <p
+                    className="m-0 break-all font-mono text-[14px] leading-relaxed text-v-fg sm:text-[15px]"
+                    tabIndex={0}
+                  >
+                    {primaryWallet!.address}
+                  </p>
+                ) : (
+                  <div className="portal-shimmer h-[22px] w-full max-w-md rounded-v-input" aria-hidden />
+                )}
               </div>
+
+              {!addressLoading && !primaryWallet && error ? (
+                <p className="mt-3 m-0 font-ui text-[14px] text-v-error">{error}</p>
+              ) : null}
 
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Button
                   type="button"
                   className="w-full gap-2 sm:flex-1"
-                  onClick={() => void copyAddress(primaryWallet.address)}
+                  disabled={!addressReady}
+                  onClick={() => primaryWallet && void copyAddress(primaryWallet.address)}
                 >
                   {copied ? (
                     <>
                       <Check className="h-4 w-4" aria-hidden />
-                      Adresse copiée
+                      Address copied
                     </>
                   ) : (
                     <>
                       <Copy className="h-4 w-4" aria-hidden />
-                      Copier l’adresse
+                      Copy address
                     </>
                   )}
                 </Button>
-                {explorerUrl ? (
+                {addressLoading ? (
+                  <div
+                    className="portal-shimmer h-10 w-full rounded-v-pill sm:w-[168px]"
+                    aria-hidden
+                  />
+                ) : explorerUrl ? (
                   <Button type="button" variant="outline" className="w-full gap-2 sm:w-auto" asChild>
                     <a href={explorerUrl} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-4 w-4" aria-hidden />
-                      Vérifier on-chain
+                      Verify on-chain
                     </a>
                   </Button>
                 ) : null}
@@ -217,20 +217,18 @@ export function PortalCryptoDepositScreen() {
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden />
               <div>
                 <p className="m-0 font-ui text-[14px] font-semibold text-amber-950">
-                  Envoyez uniquement sur ce réseau EVM
+                  Send only on this EVM network
                 </p>
                 <ul className="mt-2 mb-0 list-disc space-y-1 pl-4 font-ui text-[13px] leading-relaxed text-amber-950/90">
                   <li>
-                    N’envoyez pas de BTC, SOL, XRP, TRX ou tout actif d’un autre réseau — les fonds
-                    peuvent être perdus définitivement.
+                    Do not send BTC, SOL, XRP, TRX or any asset from another network — funds may be
+                    permanently lost.
                   </li>
                   <li>
-                    Vérifiez le réseau choisi sur votre exchange avant de valider le retrait (
+                    Check the network on your exchange before confirming the withdrawal (
                     {networkLabel}).
                   </li>
-                  <li>
-                    Les dépôts peuvent prendre plusieurs minutes selon la congestion blockchain.
-                  </li>
+                  <li>Deposits may take several minutes depending on blockchain congestion.</li>
                 </ul>
               </div>
             </div>
@@ -238,7 +236,7 @@ export function PortalCryptoDepositScreen() {
 
           <section className="rounded-v-card border border-v-fg-10 bg-v-card px-4 py-5 shadow-v-subtle sm:px-5">
             <p className="m-0 font-ui text-[13px] font-semibold uppercase tracking-wide text-v-fg-muted">
-              Comment ça marche
+              How it works
             </p>
             <ol className="mt-4 m-0 list-none space-y-4 p-0">
               {DEPOSIT_STEPS.map((step, index) => (
@@ -260,7 +258,7 @@ export function PortalCryptoDepositScreen() {
           {otherWallets.length > 0 ? (
             <section className="rounded-v-card border border-v-fg-10 bg-v-card px-4 py-4 sm:px-5">
               <p className="m-0 font-ui text-[13px] font-semibold uppercase tracking-wide text-v-fg-muted">
-                Autres adresses
+                Other addresses
               </p>
               <ul className="mt-3 m-0 list-none space-y-3 p-0">
                 {otherWallets.map((wallet) => (
@@ -284,7 +282,7 @@ export function PortalCryptoDepositScreen() {
                       onClick={() => void copyAddress(wallet.address)}
                     >
                       <Copy className="h-3.5 w-3.5" aria-hidden />
-                      Copier
+                      Copy
                     </Button>
                   </li>
                 ))}
@@ -294,22 +292,26 @@ export function PortalCryptoDepositScreen() {
 
           <div className="flex flex-wrap items-center gap-3 pt-1">
             <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
-              <Link href={PORTAL_ROUTES.cryptoWallet}>
+              <PortalNavLink href={PORTAL_ROUTES.cryptoWallet}>
                 <Wallet className="h-4 w-4" aria-hidden />
-                Voir mon wallet crypto
-              </Link>
+                View crypto wallet
+              </PortalNavLink>
             </Button>
             <button
               type="button"
               disabled={refreshing}
               onClick={() => void load(true)}
-              className="v-text-link border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50"
+              className={cn(
+                'v-text-link border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50',
+              )}
             >
-              {refreshing ? 'Actualisation…' : 'Actualiser'}
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
 
-          {error ? <p className="portal-auth__error m-0">{error}</p> : null}
+          {error && addressReady ? (
+            <p className="portal-auth__error m-0">{error}</p>
+          ) : null}
         </div>
       </div>
     </PortalPageContainer>

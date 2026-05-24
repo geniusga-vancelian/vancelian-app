@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { OfferFundingProgressBar } from '@/components/design-system/offerFunding/OfferFundingProgressBar'
 import { Button } from '@/components/ui/button'
 import type { PortalExclusiveOffer } from '@/lib/portal/investTypes'
@@ -78,7 +78,7 @@ export function PortalExclusiveOfferCard({ offer, className }: Props) {
         </div>
 
         <Button type="button" className="mt-auto w-full" asChild>
-          <Link href={offer.href}>Invest</Link>
+          <PortalNavLink href={offer.href}>Invest</PortalNavLink>
         </Button>
       </div>
     </article>

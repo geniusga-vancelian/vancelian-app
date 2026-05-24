@@ -32,9 +32,9 @@ export function PortalSignOutButton({ className }: Props) {
       onClick={handleClick}
       aria-busy={loggingOut || undefined}
       className={cn(
-        'group inline-flex items-center justify-center gap-2',
-        'rounded-v-pill bg-v-fg-05 font-ui text-[13px] font-medium leading-none text-v-fg',
-        'px-4 py-[10px] no-underline transition-colors duration-v-fast ease-v-out',
+        'group inline-flex h-9 shrink-0 items-center justify-center gap-2',
+        'rounded-v-pill bg-v-fg-05 px-3 font-ui text-[13px] font-medium leading-none text-v-fg',
+        'no-underline transition-colors duration-v-fast ease-v-out',
         'hover:bg-v-fg-10 active:bg-v-fg-10',
         loggingOut && 'pointer-events-none',
         className,

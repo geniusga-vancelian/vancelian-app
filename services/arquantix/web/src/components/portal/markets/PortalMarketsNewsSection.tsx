@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import { formatArticleDateShort } from '@/lib/blog/formatDates'
 import {
   PortalSettingsCard,
@@ -90,17 +89,7 @@ export function PortalMarketsNewsSection({
 
   return (
     <section className="flex flex-col gap-4">
-      <PortalSectionHeading
-        title={title}
-        action={
-          <Link
-            href="/blog"
-            className="font-ui text-[13px] font-medium text-v-terracotta no-underline hover:underline"
-          >
-            View all
-          </Link>
-        }
-      />
+      <PortalSectionHeading title={title} href="/blog" />
 
       {showTabs ? (
         <div className="flex flex-wrap gap-2">

@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
 import { Button } from '@/components/ui/button'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
@@ -25,7 +25,7 @@ export function PortalUnlockEuroBanner({ progressPercent }: Props) {
         <p className="m-0 mt-2 font-ui text-[13px] text-v-fg-muted">Registration · {progress}</p>
       ) : null}
       <Button type="button" asChild className="mt-4 w-full sm:w-auto">
-        <Link href={PORTAL_ROUTES.registration}>Complete registration</Link>
+        <PortalNavLink href={PORTAL_ROUTES.registration}>Complete registration</PortalNavLink>
       </Button>
     </article>
   )

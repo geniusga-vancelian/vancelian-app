@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import Link from 'next/link'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { cn } from '@/lib/utils'
 
 export function PortalSettingsCard({ children, className }: { children: ReactNode; className?: string }) {
@@ -59,9 +59,9 @@ export function PortalSettingsRow({
 
   if (href) {
     return (
-      <Link href={href} className={cn(rowClass, 'no-underline')}>
+      <PortalNavLink href={href} className={cn(rowClass, 'no-underline')}>
         {content}
-      </Link>
+      </PortalNavLink>
     )
   }
 

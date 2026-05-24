@@ -1,8 +1,6 @@
 'use client'
 
-import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useMemo } from 'react'
 import {
   ArrowDown,
   ArrowLeft,
@@ -17,6 +15,7 @@ import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
@@ -38,6 +37,7 @@ import {
   PORTAL_ROUTES,
   portalCryptoInstrumentRoute,
 } from '@/lib/portal/portalRouting'
+import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -56,42 +56,14 @@ function InfoRow({ label, value, valueClassName }: { label: string; value: strin
 }
 
 export function PortalCryptoWalletDetailScreen({ asset }: Props) {
-  const router = useRouter()
   const ticker = asset.trim().toUpperCase()
-  const [data, setData] = useState<PortalCryptoWalletDetailPayload | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
-
-  const load = useCallback(async () => {
-    setError('')
-    try {
-      const res = await fetch(`/api/portal/crypto-wallet/${encodeURIComponent(ticker)}`, {
-        credentials: 'include',
-        cache: 'no-store',
-      })
-      if (res.status === 401) {
-        router.replace(PORTAL_ROUTES.login)
-        return
-      }
-      if (!res.ok) {
-        setError('Impossible de charger les détails.')
-        return
-      }
-      const json = (await res.json()) as PortalCryptoWalletDetailPayload
-      setData(json)
-    } catch {
-      setError('Impossible de charger les détails.')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [router, ticker])
-
-  useEffect(() => {
-    setLoading(true)
-    void load()
-  }, [load])
+  const { data, loading, refreshing, error, refresh } =
+    usePortalCachedScreen<PortalCryptoWalletDetailPayload>({
+      cacheKey: `portal:crypto-wallet:${ticker}`,
+      url: `/api/portal/crypto-wallet/${encodeURIComponent(ticker)}`,
+      ttlMs: 45_000,
+      errorMessage: 'Impossible de charger les détails.',
+    })
 
   const detail = data?.detail
   const currency = data?.currency ?? 'EUR'
@@ -113,7 +85,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
     return (
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-error">{error}</p>
-        <Button type="button" onClick={() => void load()}>
+        <Button type="button" onClick={() => void refresh()}>
           Réessayer
         </Button>
       </Container>
@@ -141,13 +113,13 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
       <PortalDashboardLayout>
         <PortalReveal index={0}>
           <div className="flex flex-col gap-4">
-            <Link
+            <PortalNavLink
               href={PORTAL_ROUTES.cryptoWallet}
               className="inline-flex w-fit items-center gap-1.5 font-ui text-[13px] text-v-fg-muted no-underline transition-colors hover:text-v-fg"
             >
               <ArrowLeft className="h-4 w-4" />
               Crypto wallet
-            </Link>
+            </PortalNavLink>
 
             <section
               className="overflow-hidden rounded-v-card border border-black/10 p-4 text-white shadow-v-subtle sm:p-5"
@@ -225,7 +197,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
             <div className="border-b border-v-fg-10 px-4 py-3">
               <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">Instrument</h2>
             </div>
-            <Link
+            <PortalNavLink
               href={portalCryptoInstrumentRoute(ticker)}
               className="flex items-center gap-3 px-4 py-3.5 no-underline transition-colors hover:bg-v-card-hover"
             >
@@ -252,7 +224,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
                 </span>
               </span>
               <ChevronRight className="h-4 w-4 text-v-fg-muted" />
-            </Link>
+            </PortalNavLink>
           </article>
         </PortalReveal>
 
@@ -347,10 +319,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
         <button
           type="button"
           disabled={refreshing}
-          onClick={() => {
-            setRefreshing(true)
-            void load()
-          }}
+          onClick={() => void refresh()}
           className="v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50"
         >
           {refreshing ? 'Actualisation…' : 'Actualiser'}

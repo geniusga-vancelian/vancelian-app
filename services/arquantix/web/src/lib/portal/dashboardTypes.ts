@@ -93,11 +93,30 @@ export type PortalDashboardPayload = {
   cash: PortalDashboardCash
   globalStatistics: PortalGlobalStatistics
   globalHistory: { points?: PortalGlobalHistoryPoint[] } | null
-  crypto: PortalCryptoSummary
-  placements: PortalPlacementsSummary
+  crypto: PortalCryptoSummary | null
+  placements: PortalPlacementsSummary | null
   notifications: { count?: number } | null
   newsWidget: PortalNewsWidgetData | null
   privyPersonWallets?: PortalPrivyPersonWallets
+  partial?: boolean
+}
+
+/** Section rapide — header + comptes EUR + Privy metadata. */
+export type PortalDashboardCorePayload = {
+  bootstrap: PortalDashboardBootstrap
+  profile: PortalDashboardProfile
+  cash: PortalDashboardCash
+  globalStatistics: PortalGlobalStatistics
+  globalHistory: { points?: PortalGlobalHistoryPoint[] } | null
+  notifications: { count?: number } | null
+  privyPersonWallets?: PortalPrivyPersonWallets
+  partial?: boolean
+}
+
+/** Section portfolio — crypto + placements (plus lourd). */
+export type PortalDashboardPortfolioPayload = {
+  crypto: PortalCryptoSummary | null
+  placements: PortalPlacementsSummary
   partial?: boolean
 }
 
