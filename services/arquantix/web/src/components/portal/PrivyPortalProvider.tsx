@@ -100,6 +100,7 @@ export function PrivyPortalProvider({ children, appId: appIdFromServer }: Props)
         },
         embeddedWallets: {
           createOnLogin: 'off',
+          showWalletUIs: false,
         },
       }}
     >

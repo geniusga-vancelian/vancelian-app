@@ -3,8 +3,9 @@ FROM node:20-alpine AS deps
 # libc6-compat : résolution binaire Prisma sur musl — ca-certificates : TLS fiables pour npm / téléchargement engines
 RUN apk add --no-cache libc6-compat ca-certificates
 WORKDIR /app
-COPY package*.json ./
-COPY prisma ./prisma
+# Contexte de build = racine monorepo (CI / compose recovery).
+COPY services/arquantix/web/package*.json ./
+COPY services/arquantix/web/prisma ./prisma
 # postinstall @prisma/engines = téléchargement binaires — ECONNRESET fréquent en CI / VPN : reprises + retry npm
 RUN npm config set fetch-retries 7 \
   && npm config set fetch-retry-mintimeout 20000 \
@@ -23,9 +24,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-# Ensure public directory exists for Next.js build
-RUN mkdir -p ./public
+COPY services/arquantix/web/ .
+# public/crypto_svgs est un symlink git vers mobile/ — non résolu dans l'image Docker.
+RUN rm -rf ./public/crypto_svgs
+COPY services/arquantix/mobile/assets/crypto_svgs/ ./public/crypto_svgs/
 ARG NEXT_PUBLIC_GIT_SHA
 ENV NEXT_PUBLIC_GIT_SHA=$NEXT_PUBLIC_GIT_SHA
 # Aligné avec l’API FastAPI (PORT=8000 par défaut) — doit être cohérent au moment du build (client bundle)

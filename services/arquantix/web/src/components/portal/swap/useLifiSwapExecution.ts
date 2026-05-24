@@ -72,7 +72,11 @@ export function useLifiSwapExecution(swapMockMode = false) {
           value: normalizeSwapTxValue(tx.value),
           ...(gasLimit !== undefined ? { gasLimit } : {}),
         },
-        { address: wallet.address, sponsor: true },
+        {
+          address: wallet.address,
+          sponsor: true,
+          uiOptions: { showWalletUIs: false },
+        },
       )
 
       const normalizedHash = normalizeTxHash(hash)

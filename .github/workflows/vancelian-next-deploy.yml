@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
     paths:
       - "services/arquantix/web/**"
+      - "services/arquantix/mobile/assets/crypto_svgs/**"
       - ".github/workflows/vancelian-next-deploy.yml"
   workflow_dispatch:
     inputs:
@@ -62,7 +63,7 @@ jobs:
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
             -f services/arquantix/web/Dockerfile \
-            services/arquantix/web
+            .
           docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
 
