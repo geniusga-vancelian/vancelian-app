@@ -11,6 +11,9 @@ class CryptoPositionsData {
   final int positionsCount;
   final List<CryptoPositionItem> positions;
 
+  bool get hasPrivyLedgerPositions =>
+      positions.any((p) => p.isPrivyLedger);
+
   factory CryptoPositionsData.fromJson(Map<String, dynamic> json) {
     final summary = json['summary'] as Map<String, dynamic>? ?? {};
     final list = json['positions'] as List<dynamic>? ?? [];
@@ -38,6 +41,9 @@ class CryptoPositionItem {
     this.estimatedValueUsd,
     this.performance1dPct,
     required this.iconKey,
+    this.portfolioScope,
+    this.privyBalance,
+    this.platformBalance,
   });
 
   final String asset;
@@ -50,6 +56,14 @@ class CryptoPositionItem {
   final double? estimatedValueUsd;
   final double? performance1dPct;
   final String iconKey;
+  final String? portfolioScope;
+  final double? privyBalance;
+  final double? platformBalance;
+
+  bool get isPrivyLedger =>
+      portfolioScope == 'privy' || portfolioScope == 'merged';
+
+  bool get isPrivyOnly => portfolioScope == 'privy';
 
   factory CryptoPositionItem.fromJson(Map<String, dynamic> json) {
     return CryptoPositionItem(
@@ -73,6 +87,13 @@ class CryptoPositionItem {
           ? double.tryParse(json['performance_1d_pct'].toString().replaceAll('+', ''))
           : null,
       iconKey: json['icon_key'] as String? ?? '',
+      portfolioScope: json['portfolio_scope'] as String?,
+      privyBalance: json['privy_balance'] != null
+          ? double.tryParse(json['privy_balance'].toString())
+          : null,
+      platformBalance: json['platform_balance'] != null
+          ? double.tryParse(json['platform_balance'].toString())
+          : null,
     );
   }
 }

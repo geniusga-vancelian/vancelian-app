@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config.dart';
+import '../../../core/locale_preference.dart';
 import '../../../core/session_bearer_http.dart';
 import '../../landing_preview/data/landing_page_builder_api.dart';
 
@@ -18,11 +19,12 @@ class VaultBuilderApi {
   Future<LandingPagePayload> fetchBySlug(
     String slug, {
     bool draft = false,
-    String locale = 'fr',
+    String? locale,
     bool forceRefresh = false,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uriBase = Uri.parse(
-      '${Config.vaultUrl(slug)}?status=${draft ? 'draft' : 'published'}&locale=$locale',
+      '${Config.vaultUrl(slug)}?status=${draft ? 'draft' : 'published'}&locale=$effectiveLocale',
     );
     final uri = forceRefresh
         ? uriBase.replace(

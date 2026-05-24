@@ -64,7 +64,7 @@ class AllCryptoItem {
 class AllCryptoApi {
   /// Charge l’ensemble des cryptos en base via l’API market-data (all-crypto).
   /// Avec session : envoie le Bearer (même résolution d’identité que les flux d’achat).
-  Future<List<AllCryptoItem>> getAllCryptos({String locale = 'fr'}) async {
+  Future<List<AllCryptoItem>> getAllCryptos({String? locale}) async {
     final uri = Uri.parse(Config.allCryptoUrl);
     final response = await http.get(
       uri,

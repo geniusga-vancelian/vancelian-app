@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config.dart';
+import '../../../core/locale_preference.dart';
 import '../domain/models/academy_center_models.dart';
 
 class AcademyApiException implements Exception {
@@ -46,9 +47,10 @@ class AcademyApi {
     );
   }
 
-  Future<List<AcademyCollectionItem>> getCollections({String locale = 'fr'}) async {
+  Future<List<AcademyCollectionItem>> getCollections({String? locale}) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.academyCollectionsUrl).replace(
-      queryParameters: {'locale': locale},
+      queryParameters: {'locale': effectiveLocale},
     );
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
@@ -68,11 +70,12 @@ class AcademyApi {
 
   Future<AcademyCategoryListResponse> getCategories({
     required String collectionSlug,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(
       Config.academyCollectionCategoriesUrl(collectionSlug),
-    ).replace(queryParameters: {'locale': locale});
+    ).replace(queryParameters: {'locale': effectiveLocale});
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
       throw AcademyApiException(
@@ -87,11 +90,12 @@ class AcademyApi {
   Future<AcademyArticleListResponse> getArticles({
     required String collectionSlug,
     required String categorySlug,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(
       Config.academyCategoryArticlesUrl(collectionSlug, categorySlug),
-    ).replace(queryParameters: {'locale': locale});
+    ).replace(queryParameters: {'locale': effectiveLocale});
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
       throw AcademyApiException(
@@ -104,9 +108,10 @@ class AcademyApi {
   }
 
   /// Récupère un article Academy par son slug global (premier publié).
-  Future<AcademyArticleDetail?> getArticleBySlug(String slug, {String locale = 'fr'}) async {
+  Future<AcademyArticleDetail?> getArticleBySlug(String slug, {String? locale}) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.academyArticleBySlugUrl).replace(
-      queryParameters: {'slug': slug, 'locale': locale},
+      queryParameters: {'slug': slug, 'locale': effectiveLocale},
     );
     final response = await _getWithRetry(uri);
     if (response.statusCode == 404) return null;
@@ -126,11 +131,12 @@ class AcademyApi {
     required String collectionSlug,
     required String categorySlug,
     required String articleSlug,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(
       Config.academyArticleDetailUrl(collectionSlug, categorySlug, articleSlug),
-    ).replace(queryParameters: {'locale': locale});
+    ).replace(queryParameters: {'locale': effectiveLocale});
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
       throw AcademyApiException(
@@ -147,13 +153,14 @@ class AcademyApi {
   Future<List<AcademyTaggedArticleItem>> getArticlesByTag({
     required String tagType,
     required String tagId,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.academyArticlesByTagUrl).replace(
       queryParameters: {
         'type': tagType,
         'id': tagId,
-        'locale': locale,
+        'locale': effectiveLocale,
       },
     );
     final response = await _getWithRetry(uri);

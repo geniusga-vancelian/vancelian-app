@@ -44,6 +44,8 @@
       }
     }
   },
+  "exclusiveOfferVirtualTourEmbedInvalid": "Impossible d'afficher la visite virtuelle : URL invalide ou non prise en charge.",
+  "exclusiveOfferVirtualTourOpenBrowser": "Ouvrir dans le navigateur",
   "articleReadingTimeMinutes": "{count} min de lecture",
   "@articleReadingTimeMinutes": {
     "description": "Durée de lecture d'un article (ex. « 5 min de lecture »)",

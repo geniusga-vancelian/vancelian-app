@@ -49,22 +49,30 @@ class StepItem {
   /// Désérialisation JSON pour chargement dynamique de modules.
   /// Structure attendue : { "dayLabel"?,"date"?,"title","description"?,"tags"?,"imageUrl"?,"isCompleted"? }
   static StepItem? fromJson(dynamic json) {
-    if (json is! Map<String, dynamic>) return null;
-    final title = json['title'] as String?;
-    if (title == null || title.isEmpty) return null;
-    final tagsRaw = json['tags'];
+    if (json is! Map) return null;
+    final j = Map<String, dynamic>.from(json);
+    final titleRaw = j['title'];
+    final title = titleRaw != null ? titleRaw.toString().trim() : '';
+    if (title.isEmpty) return null;
+    final tagsRaw = j['tags'];
     final tags = tagsRaw is List
         ? tagsRaw.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
         : <String>[];
+    String? optStr(dynamic v) {
+      if (v == null) return null;
+      if (v is String) return v;
+      return v.toString();
+    }
+
     return StepItem(
-      index: json['index'] as int?,
-      dayLabel: json['dayLabel'] as String?,
-      date: json['date'] as String?,
+      index: j['index'] is int ? j['index'] as int : int.tryParse('${j['index']}'),
+      dayLabel: optStr(j['dayLabel']),
+      date: optStr(j['date']),
       title: title,
-      description: json['description'] as String?,
+      description: optStr(j['description']),
       tags: tags,
-      imageUrl: json['imageUrl'] as String?,
-      isCompleted: json['isCompleted'] == true,
+      imageUrl: optStr(j['imageUrl']),
+      isCompleted: j['isCompleted'] == true || j['isCompleted'] == 1 || j['isCompleted']?.toString() == 'true',
     );
   }
 

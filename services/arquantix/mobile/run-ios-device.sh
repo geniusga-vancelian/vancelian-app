@@ -22,6 +22,9 @@ export PATH="/opt/homebrew/bin:$PATH"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# shellcheck source=scripts/flutter_local_env.sh
+source "$SCRIPT_DIR/scripts/flutter_local_env.sh"
+
 # Détection IP LAN pour les défauts (en0 / en1) — voir scripts/ios_dev_network.sh
 export ARQUANTIX_IOS_USE_LAN_DEFAULT=1
 
@@ -105,4 +108,4 @@ echo ""
 flutter run -d "$DEVICE_ID" \
   --dart-define=API_BASE_URL="$API_URL" \
   --dart-define=AUTH_API_BASE_URL="$AUTH_URL" \
-  "$@"
+  "${FLUTTER_EXTRA_DART_DEFINES[@]}" "$@"

@@ -8,6 +8,7 @@ import '../../../../core/jank_trace.dart';
 import '../../../../core/navigation/auth_slide_route.dart';
 import '../../../../design_system/atoms/app_spacing.dart';
 import '../../../../design_system/components/app_primary_button.dart';
+import '../../../security/login/presentation/login_email_fallback_screen.dart';
 import '../../../security/login/presentation/login_phone_screen.dart';
 import '../widgets/brand_hero_intro/brand_hero_intro.dart';
 
@@ -87,14 +88,16 @@ class _WelcomeLandingScreenState extends State<WelcomeLandingScreen> {
   Future<void> _onLogin(BuildContext context) async {
     JankTrace.tap('login');
     await Navigator.of(context).push<bool>(
-      authSlideRoute<bool>((_) => const LoginPhoneScreen()),
+      authSlideRoute<bool>((_) => const LoginEmailFallbackScreen()),
     );
   }
 
   void _onSignUp(BuildContext context) {
     JankTrace.tap('register');
     Navigator.of(context).push<void>(
-      authSlideRoute<void>((_) => const LoginPhoneScreen(signUpMode: true)),
+      authSlideRoute<void>(
+        (_) => const LoginEmailFallbackScreen(signUpMode: true),
+      ),
     );
   }
 

@@ -1,3 +1,5 @@
+import 'package:arquantix_news/core/article_editorial_type.dart';
+
 /// Bloc de contenu d'un article
 class ArticleBlock {
   final String id;
@@ -160,9 +162,7 @@ class ArticleDetail {
               ?.map((e) => ArticleBlock.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      articleType: (json['articleType']?.toString().toUpperCase() == 'ANALYSIS')
-          ? 'ANALYSIS'
-          : 'NEWS',
+      articleType: articleEditorialTypeFromJson(json['articleType']),
       isCompanyNews: json['isCompanyNews'] == true,
     );
   }

@@ -41,6 +41,7 @@ dependencies:
   #   backend qui appelle l'API OpenAI Whisper. Permet une qualité supérieure
   #   au prix d'une latence réseau et d'un coût par minute.
   record: ^6.2.0
+  privy_flutter: ^0.7.0
 
 dev_dependencies:
   flutter_test:

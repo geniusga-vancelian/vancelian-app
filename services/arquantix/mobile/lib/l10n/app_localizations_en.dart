@@ -91,6 +91,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get exclusiveOfferVirtualTourEmbedInvalid =>
+      'Unable to display the virtual tour: invalid or unsupported URL.';
+
+  @override
+  String get exclusiveOfferVirtualTourOpenBrowser => 'Open in browser';
+
+  @override
   String articleReadingTimeMinutes(int count) {
     return '$count min read';
   }

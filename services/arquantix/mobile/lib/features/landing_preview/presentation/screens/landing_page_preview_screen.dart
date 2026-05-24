@@ -66,6 +66,7 @@ class LandingPagePreviewScreen extends StatefulWidget {
     this.extraNavBarActions = const [],
     this.useImmersiveExclusiveTemplate = false,
     this.bundleAllocations,
+    this.useDraft = true,
   });
 
   final String initialSlug;
@@ -84,6 +85,12 @@ class LandingPagePreviewScreen extends StatefulWidget {
 
   /// Allocations produit (GET détail) pour empiler les avatars crypto dans le hero bundle.
   final List<ProductAllocationSummary>? bundleAllocations;
+
+  /// Lit le **brouillon** (preview admin) si `true`, sinon le **publié** (runtime
+  /// production — utilisé par [CmsPageScreen] quand l'app affiche une page CMS
+  /// dans son shell). Défaut historique = `true` pour ne rien casser des
+  /// usages existants (preview admin, `showAsBottomModal`).
+  final bool useDraft;
 
   static Future<T?> showAsBottomModal<T>(
     BuildContext context, {
@@ -166,7 +173,7 @@ class _LandingPagePreviewScreenState extends State<LandingPagePreviewScreen> {
     try {
       final payload = await _api.fetchBySlug(
         slug,
-        draft: true,
+        draft: widget.useDraft,
         forceRefresh: forceRefresh,
       );
       if (!mounted) return;
@@ -371,9 +378,9 @@ class _LandingPagePreviewScreenState extends State<LandingPagePreviewScreen> {
 
   /// Récupère un article par slug : essai Help (FAQ) d'abord, puis Blog.
   Future<Object?> _fetchArticleBySlug(String slug) async {
-    final help = await HelpApi().getArticleBySlug(slug, locale: 'fr');
+    final help = await HelpApi().getArticleBySlug(slug);
     if (help != null) return help;
-    final blog = await BlogApi().getArticle(slug, locale: 'fr');
+    final blog = await BlogApi().getArticle(slug);
     return blog;
   }
 

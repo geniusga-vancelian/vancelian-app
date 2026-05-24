@@ -317,7 +317,10 @@ _interactive_device_pick() {
   lines=()
   ids=()
 
-  mapfile -t lines < <(export _TK_JSON="$json"; python3 <<'PY'
+  # Bash 3.2 (macOS) n'a pas mapfile — remplir lines[] avec read.
+  while IFS= read -r line || [ -n "$line" ]; do
+    lines+=("$line")
+  done < <(export _TK_JSON="$json"; python3 <<'PY'
 import json, os
 j = json.loads(os.environ["_TK_JSON"])
 usb, w, sims = j.get("usb") or [], j.get("wireless") or [], j.get("simulator") or []
@@ -610,6 +613,16 @@ run_flutter() {
   fi
   blue "Étape 3/3 : flutter run (build + install ; Ctrl+C pour arrêter)…"
   cd "$LOCAL_MOBILE"
+  # Même logique que services/arquantix/mobile/scripts/flutter_local_env.sh :
+  # charge ${LOCAL_MOBILE}/.env.flutter et prépare FLUTTER_EXTRA_DART_DEFINES (Privy, etc.).
+  if [[ -f "$LOCAL_MOBILE/scripts/flutter_local_env.sh" ]]; then
+    SCRIPT_DIR="$LOCAL_MOBILE"
+    # shellcheck source=/dev/null
+    source "$LOCAL_MOBILE/scripts/flutter_local_env.sh"
+  else
+    yellow "Attention : scripts/flutter_local_env.sh introuvable sous $LOCAL_MOBILE — defines Privy non chargés."
+    FLUTTER_EXTRA_DART_DEFINES=()
+  fi
   local run_mode="$mode"
   if [ "${USE_FLUTTER_DEBUG:-}" = "1" ] && [ "$mode" = "profile" ]; then
     run_mode="debug"
@@ -628,6 +641,7 @@ run_flutter() {
     --dart-define=API_BASE_URL="http://${ip}:3000" \
     --dart-define=AUTH_API_BASE_URL="http://${ip}:8000" \
     --dart-define=TRACE_JANK=true \
+    "${FLUTTER_EXTRA_DART_DEFINES[@]}" \
     $extra
 }
 

@@ -1,3 +1,5 @@
+import '../../../../core/article_editorial_type.dart';
+
 /// Article preview (liste / feed)
 class ArticlePreview {
   final String id;
@@ -64,9 +66,7 @@ class ArticlePreview {
           ?.map((e) => e.toString())
           .toList(),
       isMilestone: json['isMilestone'] == true,
-      articleType: json['articleType']?.toString().toUpperCase() == 'ANALYSIS'
-          ? 'ANALYSIS'
-          : 'NEWS',
+      articleType: articleEditorialTypeFromJson(json['articleType']),
       isCompanyNews: json['isCompanyNews'] == true,
       projectIds: projectIds,
     );

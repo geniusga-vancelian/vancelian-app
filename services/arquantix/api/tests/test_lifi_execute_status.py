@@ -1,0 +1,78 @@
+"""Tests refresh statut LI.FI → CONFIRMED."""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from decimal import Decimal
+from unittest.mock import MagicMock
+from uuid import uuid4
+
+import pytest
+
+from services.lifi.enums import SwapSessionStatus
+from services.lifi.lifi_client import LifiClient
+from services.lifi.lifi_execute_service import LifiExecuteService
+from services.lifi.models import PersonWalletSwap
+
+
+@pytest.fixture
+def submitted_swap():
+    return PersonWalletSwap(
+        id=uuid4(),
+        person_id=uuid4(),
+        status=SwapSessionStatus.SUBMITTED.value,
+        from_asset="USDC",
+        to_asset="ETH",
+        from_chain="base",
+        to_chain="ethereum",
+        amount_in=Decimal("1000"),
+        tx_hash="0xabc123",
+        lifi_tool="stargateV2",
+        audit_log=[],
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+
+def test_refresh_lifi_status_confirmed(submitted_swap):
+    mock_client = MagicMock(spec=LifiClient)
+    mock_client.get_status.return_value = {
+        "status": "DONE",
+        "substatus": "COMPLETED",
+        "substatusMessage": "The transfer is complete.",
+    }
+    svc = LifiExecuteService(lifi_client=mock_client)
+    db = MagicMock()
+
+    svc.refresh_lifi_status(db, submitted_swap)
+
+    assert submitted_swap.status == SwapSessionStatus.CONFIRMED.value
+    assert submitted_swap.confirmed_at is not None
+    db.commit.assert_called()
+
+
+def test_refresh_lifi_status_stays_submitted_when_pending(submitted_swap):
+    mock_client = MagicMock(spec=LifiClient)
+    mock_client.get_status.return_value = {"status": "PENDING", "substatus": "WAIT_DESTINATION_TRANSACTION"}
+    svc = LifiExecuteService(lifi_client=mock_client)
+    db = MagicMock()
+
+    svc.refresh_lifi_status(db, submitted_swap)
+
+    assert submitted_swap.status == SwapSessionStatus.SUBMITTED.value
+    db.commit.assert_called()
+
+
+def test_refresh_lifi_status_failed(submitted_swap):
+    mock_client = MagicMock(spec=LifiClient)
+    mock_client.get_status.return_value = {
+        "status": "FAILED",
+        "substatus": "SLIPPAGE_EXCEEDED",
+        "substatusMessage": "Slippage too high",
+    }
+    svc = LifiExecuteService(lifi_client=mock_client)
+    db = MagicMock()
+
+    svc.refresh_lifi_status(db, submitted_swap)
+
+    assert submitted_swap.status == SwapSessionStatus.FAILED.value
+    assert "Slippage" in (submitted_swap.error_message or "")

@@ -26,11 +26,10 @@ class OffersRepository {
   /// Liste des offres exclusives : Product Registry si activé, sinon projets CMS.
   Future<List<OfferProject>> getProjects() async {
     if (!Config.useCatalogForExclusiveOffers) {
-      return _api.getProjects(locale: 'fr', limit: 50);
+      return _api.getProjects(limit: 50);
     }
     try {
       final items = await _catalogApi.getProducts(
-        locale: 'fr',
         limit: 50,
         commercialStatus: Config.catalogListCommercialStatus.isEmpty
             ? null
@@ -53,7 +52,7 @@ class OffersRepository {
         if (kDebugMode) {
           debugPrint('[OffersRepository] fallback (debug): $e');
         }
-        return _api.getProjects(locale: 'fr', limit: 50);
+        return _api.getProjects(limit: 50);
       }
       rethrow;
     }

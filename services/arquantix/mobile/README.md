@@ -16,6 +16,15 @@ cd services/arquantix/mobile
 flutter pub get
 ```
 
+## Configuration locale `.env.flutter` (Privy, URLs auth)
+
+À la racine de **`services/arquantix/mobile/`**, copie `.env.flutter.example` vers **`.env.flutter`** (fichier **non versionné**) et renseigne au minimum :
+
+- `PRIVY_APP_ID`, `PRIVY_APP_CLIENT_ID`
+- facultatif : `API_BASE_URL`, `AUTH_API_BASE_URL`, `PRIVY_OAUTH_SCHEME`
+
+Les scripts **`./run-ios.sh`**, **`./run-android.sh`**, **`./run.sh`** et **`./run-ios-device.sh`** chargent `.env.flutter` et repassent les variables en **`--dart-define`** (voir `scripts/flutter_local_env.sh`).
+
 ## Configuration de l’API
 
 Par défaut, l’app appelle `http://localhost:3000`. Pour un émulateur Android, utilisez `10.0.2.2` à la place de `localhost` :

@@ -53,6 +53,8 @@
       }
     }
   },
+  "exclusiveOfferVirtualTourEmbedInvalid": "Unable to display the virtual tour: invalid or unsupported URL.",
+  "exclusiveOfferVirtualTourOpenBrowser": "Open in browser",
   "articleReadingTimeMinutes": "{count} min read",
   "@articleReadingTimeMinutes": {
     "description": "Reading time of an article (e.g. \"5 min read\")",

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/config.dart';
 import '../../../core/http_error_display.dart';
+import '../../../core/locale_preference.dart';
 import '../../../core/session_bearer_http.dart';
 import '../../../design_system/components/assets_bundles_module.dart';
 import '../../../design_system/components/marketing_cards_module.dart';
@@ -157,12 +158,13 @@ class VaultsApi {
   /// Si [assetSlug] est fourni (ex. btc, eth), le feed peut être filtré par crypto (widget blog-a-la-une).
   Future<List<VaultsMarketingCardsFeedSection>> getMarketingCardsSectionsFromWidget(
     String widgetSlug, {
-    String locale = 'fr',
+    String? locale,
     String? assetSlug,
     /// Incrémenté au pull-to-refresh pour éviter le cache HTTP/CDN (hot reload contenu + images).
     int? cacheBust,
   }) async {
-    final queryParams = <String, String>{'locale': locale};
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
+    final queryParams = <String, String>{'locale': effectiveLocale};
     if (assetSlug != null && assetSlug.trim().isNotEmpty) {
       queryParams['assetSlug'] = assetSlug.trim().toLowerCase();
     }

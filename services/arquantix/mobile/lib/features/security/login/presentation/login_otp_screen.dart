@@ -411,6 +411,7 @@ class _LoginOtpScreenState extends State<LoginOtpScreen> {
           MaterialPageRoute<bool>(
             builder: (_) => LoginEmailFallbackScreen(
               phoneE164: widget.phoneE164,
+              passkeyOnly: true,
             ),
           ),
         );

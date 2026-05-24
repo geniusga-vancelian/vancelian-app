@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config.dart';
+import '../../../core/locale_preference.dart';
 import '../../../core/session_bearer_http.dart';
 import '../domain/models/offer_project.dart';
 
@@ -31,10 +32,11 @@ class OffersApi {
       SessionBearerHttp.jsonHeadersAppScoped(uri: uri, debugTag: tag);
 
   /// Récupère la liste des projets publiés (image, titre, catégorie).
-  Future<List<OfferProject>> getProjects({String locale = 'fr', int limit = 50}) async {
+  Future<List<OfferProject>> getProjects({String? locale, int limit = 50}) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.projectsUrl).replace(
       queryParameters: {
-        'locale': locale,
+        'locale': effectiveLocale,
         'limit': limit.toString(),
       },
     );
@@ -54,7 +56,9 @@ class OffersApi {
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final list = json['projects'] as List<dynamic>? ?? [];
     return list
-        .map((e) => OfferProject(
+        .map((e) {
+          final rawSlug = (e['slug'] as String?)?.trim();
+          return OfferProject(
               id: e['id'] as String,
               imageUrl: e['coverUrl'] as String? ?? '',
               title: e['title'] as String? ?? '',
@@ -101,9 +105,13 @@ class OffersApi {
               entryAssetsAllowed: (e['entryAssetsAllowed'] as List<dynamic>?)
                   ?.map((a) => a.toString())
                   .toList(),
+              /// Slug page CMS — pour offres `eo-…` alignées sur le registre, permet le même
+              /// chargement détail que le catalogue (`GET …/catalog/products/{slug}`).
+              catalogSlug: (rawSlug != null && rawSlug.isNotEmpty) ? rawSlug : null,
               vaultHeroTags: const [],
               vaultFunding: null,
-            ))
+            );
+        })
         .toList();
   }
 

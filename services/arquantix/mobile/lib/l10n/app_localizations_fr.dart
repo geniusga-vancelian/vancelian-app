@@ -95,6 +95,14 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get exclusiveOfferVirtualTourEmbedInvalid =>
+      'Impossible d\'afficher la visite virtuelle : URL invalide ou non prise en charge.';
+
+  @override
+  String get exclusiveOfferVirtualTourOpenBrowser =>
+      'Ouvrir dans le navigateur';
+
+  @override
   String articleReadingTimeMinutes(int count) {
     return '$count min de lecture';
   }

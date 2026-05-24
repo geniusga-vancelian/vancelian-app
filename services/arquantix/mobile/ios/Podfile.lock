@@ -4,6 +4,7 @@ PODS:
   - CwlCatchExceptionSupport (2.2.1)
   - device_info_plus (0.0.1):
     - Flutter
+  - Factory (2.4.3)
   - Flutter (1.0.0)
   - flutter_secure_storage (6.0.0):
     - Flutter
@@ -20,6 +21,11 @@ PODS:
     - FlutterMacOS
   - permission_handler_apple (9.3.0):
     - Flutter
+  - privy_flutter (0.0.1):
+    - Factory (= 2.4.3)
+    - Flutter
+    - PrivySDK (= 2.10.1)
+  - PrivySDK (2.10.1)
   - record_ios (1.2.0):
     - Flutter
   - share_plus (0.0.1):
@@ -51,6 +57,7 @@ DEPENDENCIES:
   - passkeys_darwin (from `.symlinks/plugins/passkeys_darwin/darwin`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+  - privy_flutter (from `.symlinks/plugins/privy_flutter/ios`)
   - record_ios (from `.symlinks/plugins/record_ios/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - speech_to_text (from `.symlinks/plugins/speech_to_text/darwin`)
@@ -64,6 +71,8 @@ SPEC REPOS:
   trunk:
     - CwlCatchException
     - CwlCatchExceptionSupport
+    - Factory
+    - PrivySDK
 
 EXTERNAL SOURCES:
   device_info_plus:
@@ -82,6 +91,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
+  privy_flutter:
+    :path: ".symlinks/plugins/privy_flutter/ios"
   record_ios:
     :path: ".symlinks/plugins/record_ios/ios"
   share_plus:
@@ -103,6 +114,7 @@ SPEC CHECKSUMS:
   CwlCatchException: 7acc161b299a6de7f0a46a6ed741eae2c8b4d75a
   CwlCatchExceptionSupport: 54ccab8d8c78907b57f99717fb19d4cc3bce02dc
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
+  Factory: 9d20d8cb56fc44b341d6dad1cf67dc93e9ae7788
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
   local_auth_darwin: c3ee6cce0a8d56be34c8ccb66ba31f7f180aaebb
@@ -110,6 +122,8 @@ SPEC CHECKSUMS:
   passkeys_darwin: 0a09d3b26cea8de1ec3bb8f8c7c159981f63bbc7
   path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
+  privy_flutter: ab3a42d60ccebcb608a4017eae79a107071e352c
+  PrivySDK: c23a01dadfba43d5905c631c62f2ef686acd06c1
   record_ios: 412daca2350b228e698fffcd08f1f94ceb1e3844
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   speech_to_text: 3b313d98516d3d0406cea424782ec25470c59d19
@@ -119,6 +133,6 @@ SPEC CHECKSUMS:
   video_player_avfoundation: dd410b52df6d2466a42d28550e33e4146928280a
   webview_flutter_wkwebview: 8ebf4fded22593026f7dbff1fbff31ea98573c8d
 
-PODFILE CHECKSUM: 0f4d047ed7ad03d682f31e17ea404af0b793eab0
+PODFILE CHECKSUM: 3257e9fb0e252b39b1a3771d0def4ed05e2c6517
 
 COCOAPODS: 1.16.2

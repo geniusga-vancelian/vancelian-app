@@ -7,6 +7,8 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
 import 'core/app_info_service.dart';
+import 'core/i18n/remote_strings_service.dart';
+import 'core/locale_preference.dart';
 import 'core/startup/arquantix_shader_warm_up.dart';
 
 /// Initialisations lourdes (PackageInfo, données de locale pour `DateFormat`)
@@ -16,7 +18,12 @@ Future<void> _warmStartServices() async {
   await Future.wait<void>([
     AppInfoService.init(),
     initializeDateFormatting('fr_FR', null),
+    initializeDateFormatting('en_US', null),
+    LocalePreference.instance.bootstrap(),
   ]);
+  /// Doit être bootstrappé **après** [LocalePreference] (souscrit à ses
+  /// notifications). Best-effort — pas de blocage cold start.
+  unawaited(RemoteStringsService.instance.bootstrap());
 }
 
 void main() async {

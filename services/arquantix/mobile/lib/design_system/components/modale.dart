@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../atoms/app_colors.dart';
+import '../atoms/app_spacing.dart';
 import '../atoms/app_typography.dart';
 import '../atoms/kalai_icons.dart';
 import 'app_primary_button.dart';
@@ -43,11 +44,24 @@ class ModaleButtonConfig {
   final Future<void> Function()? onTapAsync;
   final bool closeOnTap;
 
+  /// Surcharge la variante DS du bouton (par défaut : `primary` pour le primaire,
+  /// `gray` pour le secondaire).
+  final AppPrimaryButtonVariant? variant;
+
+  /// Icône / widget affiché **après** le libellé (chevron pour une action de redirection).
+  final Widget? trailing;
+
+  /// Surcharge la couleur du texte / contour (ex. ghost noir).
+  final Color? foregroundColor;
+
   const ModaleButtonConfig({
     required this.label,
     this.onTap,
     this.onTapAsync,
     this.closeOnTap = true,
+    this.variant,
+    this.trailing,
+    this.foregroundColor,
   });
 }
 
@@ -242,30 +256,65 @@ class _ModaleOverlayHostState extends State<_ModaleOverlayHost>
       );
     }
 
-    if (hasPrimary) {
+    if (hasPrimary && hasSecondary) {
+      bodyChildren.add(
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FractionallySizedBox(
+              widthFactor: 0.75,
+              child: AppPrimaryButton(
+                label: p.primaryButton!.label,
+                variant: p.primaryButton!.variant ??
+                    AppPrimaryButtonVariant.primary,
+                shrinkWrap: true,
+                trailing: p.primaryButton!.trailing,
+                foregroundColor: p.primaryButton!.foregroundColor,
+                onPressed: () => _onButtonTap(p.primaryButton!),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.s2),
+            FractionallySizedBox(
+              widthFactor: 0.75,
+              child: AppPrimaryButton(
+                label: p.secondaryButton!.label,
+                variant: p.secondaryButton!.variant ??
+                    AppPrimaryButtonVariant.gray,
+                shrinkWrap: true,
+                trailing: p.secondaryButton!.trailing,
+                foregroundColor: p.secondaryButton!.foregroundColor,
+                onPressed: () => _onButtonTap(p.secondaryButton!),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (hasPrimary) {
       bodyChildren.add(
         FractionallySizedBox(
           widthFactor: 0.75,
           child: AppPrimaryButton(
             label: p.primaryButton!.label,
-            variant: hasSecondary
-                ? AppPrimaryButtonVariant.primary
-                : AppPrimaryButtonVariant.gray,
+            variant: p.primaryButton!.variant ??
+                AppPrimaryButtonVariant.gray,
             shrinkWrap: true,
+            trailing: p.primaryButton!.trailing,
+            foregroundColor: p.primaryButton!.foregroundColor,
             onPressed: () => _onButtonTap(p.primaryButton!),
           ),
         ),
       );
-    }
-
-    if (hasSecondary) {
+    } else if (hasSecondary) {
       bodyChildren.add(
         FractionallySizedBox(
           widthFactor: 0.75,
           child: AppPrimaryButton(
             label: p.secondaryButton!.label,
-            variant: AppPrimaryButtonVariant.gray,
+            variant:
+                p.secondaryButton!.variant ?? AppPrimaryButtonVariant.gray,
             shrinkWrap: true,
+            trailing: p.secondaryButton!.trailing,
+            foregroundColor: p.secondaryButton!.foregroundColor,
             onPressed: () => _onButtonTap(p.secondaryButton!),
           ),
         ),

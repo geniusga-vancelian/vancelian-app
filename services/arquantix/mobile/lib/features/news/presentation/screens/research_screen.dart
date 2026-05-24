@@ -57,7 +57,6 @@ class _ResearchScreenState extends State<ResearchScreen> {
     });
     try {
       final data = await _api.getFeed(
-        locale: 'fr',
         articleType: 'ANALYSIS',
         category: _selectedCategory,
         page: page,

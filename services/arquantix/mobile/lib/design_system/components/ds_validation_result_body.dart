@@ -15,6 +15,7 @@ class DsValidationResultBody extends StatelessWidget {
     this.headlineColor,
     this.messageTitle,
     this.messageDescription,
+    this.messageDescriptionStyle,
     this.messageCaption,
     this.stepperIcon,
   });
@@ -25,6 +26,9 @@ class DsValidationResultBody extends StatelessWidget {
   final Color? headlineColor;
   final String? messageTitle;
   final String? messageDescription;
+
+  /// Style du [messageDescription] (défaut : petit gris via [DsMessageCard]).
+  final TextStyle? messageDescriptionStyle;
   final String? messageCaption;
   final Widget? stepperIcon;
 
@@ -62,6 +66,7 @@ class DsValidationResultBody extends StatelessWidget {
           DsMessageCard(
             title: messageTitle,
             description: messageDescription,
+            descriptionStyle: messageDescriptionStyle,
             caption: messageCaption,
           ),
         ],

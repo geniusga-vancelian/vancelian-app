@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config.dart';
+import '../../../core/locale_preference.dart';
 import '../../../core/session_bearer_http.dart';
 
 class LandingPageBuilderApiException implements Exception {
@@ -40,11 +41,12 @@ class LandingPageBuilderApi {
   Future<LandingPagePayload> fetchBySlug(
     String slug, {
     bool draft = true,
-    String locale = 'fr',
+    String? locale,
     bool forceRefresh = false,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uriBase = Uri.parse(
-      '${Config.flutterLandingPageUrl(slug)}?status=${draft ? 'draft' : 'published'}&locale=$locale',
+      '${Config.flutterLandingPageUrl(slug)}?status=${draft ? 'draft' : 'published'}&locale=$effectiveLocale',
     );
     final uri = forceRefresh
         ? uriBase.replace(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/article_editorial_type.dart';
 import '../../../../design_system/design_system.dart';
 import '../../data/blog_api.dart';
 import '../../domain/models/article.dart';
@@ -53,7 +54,6 @@ class _BlogScreenState extends State<BlogScreen> {
     });
     try {
       final data = await _api.getFeed(
-        locale: 'fr',
         category: _selectedCategory,
         page: page,
         pageSize: 20,
@@ -140,7 +140,8 @@ class _BlogScreenState extends State<BlogScreen> {
   }
 
   String _editorialLabel(ArticlePreview a) {
-    if (a.articleType == 'ANALYSIS') return 'Analysis';
+    final ed = editorialBadgeLabel(a.articleType);
+    if (ed.isNotEmpty) return ed;
     if (a.isCompanyNews) return 'Company News';
     return 'Market News';
   }

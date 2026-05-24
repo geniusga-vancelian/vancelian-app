@@ -47,6 +47,15 @@ class Config {
   static String cryptoTransactionsUrl(String asset) =>
       '$apiBaseUrl/api/mobile/flutter/crypto-positions/$asset/transactions';
 
+  static String get privyWalletBalancesUrl =>
+      '$apiBaseUrl/api/mobile/flutter/privy-wallet/balances';
+
+  static String get privyWalletDepositsUrl =>
+      '$apiBaseUrl/api/mobile/flutter/privy-wallet/deposits';
+
+  static String privyWalletDepositDetailUrl(String depositId) =>
+      '$apiBaseUrl/api/mobile/flutter/privy-wallet/deposits/$depositId';
+
   static String transactionDetailUrl(String id) =>
       '$apiBaseUrl/api/mobile/flutter/transactions/$id';
 
@@ -55,6 +64,17 @@ class Config {
       '$apiBaseUrl/api/mobile/flutter/transactions/$transactionId/operation-statement.pdf';
 
   static String get bootstrapUrl => '$apiBaseUrl/api/mobile/flutter/bootstrap';
+
+  /// Politique i18n publique (locales activées + locale canonique) — alimente
+  /// le sélecteur de langue dans le profil et le service `LocalePreference`.
+  /// Réponse : `{ multilingual, defaultLocale, supportedLocales }`.
+  static String get i18nPolicyUrl => '$apiBaseUrl/api/site/i18n-policy';
+
+  /// Bundle d'overrides UI strings (CMS) servis au runtime Flutter. Source de
+  /// vérité **complémentaire** des fichiers ARB : seules les keys overridées
+  /// côté admin sont renvoyées, le reste tombe sur les ARB compilés. Voir
+  /// `core/i18n/remote_strings_service.dart`.
+  static String get uiStringsUrl => '$apiBaseUrl/api/mobile/flutter/ui-strings';
 
   /// Config écran welcome (URL image héro depuis R2 / CDN via le BFF Next).
   static String get welcomeConfigUrl => '$apiBaseUrl/api/mobile/flutter/welcome';
@@ -153,6 +173,14 @@ class Config {
   static String get mobileSecurityPreferencesUrl =>
       '$apiBaseUrl/api/mobile/flutter/profile/security-preferences';
 
+  /// Déprécié côté app : [MobileContactEmailApi] appelle FastAPI via [SecureApiConfig.resolvedAuthApiBaseUrl].
+  static String get mobileContactEmailRequestUrl =>
+      '$apiBaseUrl/api/mobile/flutter/profile/contact-email/request';
+
+  /// Déprécié côté app : [MobileContactEmailApi] appelle FastAPI via [SecureApiConfig.resolvedAuthApiBaseUrl].
+  static String get mobileContactEmailConfirmUrl =>
+      '$apiBaseUrl/api/mobile/flutter/profile/contact-email/confirm';
+
   static String get referenceCurrencyUrl =>
       '$apiBaseUrl/api/mobile/flutter/profile/reference-currency';
 
@@ -200,6 +228,18 @@ class Config {
 
   static String get exchangeSwapUrl =>
       '$apiBaseUrl/api/mobile/flutter/exchange/swap';
+
+  static String get lifiSwapSupportedAssetsUrl =>
+      '$apiBaseUrl/api/mobile/flutter/swaps/supported-assets';
+
+  static String get lifiSwapQuoteUrl =>
+      '$apiBaseUrl/api/mobile/flutter/swaps/quote';
+
+  static String get lifiSwapExecuteUrl =>
+      '$apiBaseUrl/api/mobile/flutter/swaps/execute';
+
+  static String lifiSwapStatusUrl(String swapId) =>
+      '$apiBaseUrl/api/mobile/flutter/swaps/$swapId';
 
   static String get exchangeSellAllPreviewUrl =>
       '$apiBaseUrl/api/mobile/flutter/exchange/sell-all/preview';

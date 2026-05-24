@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/config.dart';
 import '../../../../core/profile_identity_coordinator.dart';
+import '../../../../core/secure_api_config.dart';
 import '../../../../core/session_bearer_http.dart';
 import '../../../../core/http_error_display.dart';
 import '../../../../core/currency_preference.dart';
@@ -39,6 +40,8 @@ import '../../../placements/presentation/screens/placements_screen.dart';
 import '../../../wallet/presentation/screens/all_crypto_positions_screen.dart';
 import '../../../wallet/presentation/screens/compte_euro_screen.dart';
 import '../../../wallet/presentation/screens/global_statistics_screen.dart';
+import '../../../wallet/presentation/privy_wallet_create_entry.dart';
+import '../../../wallet/privy/privy_dart_defines.dart';
 import '../../../offers/presentation/screens/offers_screen.dart';
 import '../../../offers/presentation/widgets/vaults_marketing_cards_feed.dart';
 import 'package:intl/intl.dart';
@@ -47,6 +50,7 @@ import '../../../wallet/data/cash_api.dart';
 import '../../../wallet/domain/models/cash_data.dart';
 import '../../../auth/application/auth_logout.dart';
 import '../../../../core/session_identity_context.dart';
+import '../../../../core/privy_identity_bridge_service.dart';
 import '../../../../core/registration_resume_prompt_gate.dart';
 import '../../../profile/data/mobile_app_profile.dart';
 import '../../../profile/debug/mobile_app_profile_registration_debug.dart';
@@ -120,6 +124,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   /// Incrémenté au pull-to-refresh pour forcer le rechargement du widget news (cache-bust API + images).
   int _vancelianNewsRefreshNonce = 0;
+
+  /// Wallets Privy persistés (`GET /auth/privy/person-wallets`). -1 = chargement inconnu / erreur.
+  int _personCryptoWalletCount = -1;
 
   @override
   void initState() {
@@ -198,6 +205,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _loadPlacementsData(),
         _loadHeroChart(),
         _loadUnreadNotificationCount(),
+        _loadPersonCryptoWalletsSnapshot(),
       ]);
       // Même source que Mon compte : initiales depuis GET /profile (JWT), après bootstrap.
       if (hasSession) {
@@ -252,6 +260,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
     }
   }
+
+  Future<void> _loadPersonCryptoWalletsSnapshot() async {
+    if (!SecureApiConfig.hasAuthBackend) {
+      if (mounted) setState(() => _personCryptoWalletCount = 0);
+      return;
+    }
+    if (!(await SessionService.instance.hasSessionCredentials())) {
+      if (mounted) setState(() => _personCryptoWalletCount = 0);
+      return;
+    }
+    try {
+      final list =
+          await PrivyIdentityBridgeService.instance.fetchAuthenticatedPersonCryptoWallets();
+      if (mounted) setState(() => _personCryptoWalletCount = list.length);
+    } catch (_) {
+      if (mounted) setState(() => _personCryptoWalletCount = -1);
+    }
+  }
+
+  String _heroMoreButtonLabel() =>
+      _personCryptoWalletCount > 0 ? 'Mon wallet crypto' : 'Create wallet';
 
   Future<void> _loadBootstrap() async {
     try {
@@ -447,7 +476,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
     try {
       final data = await _api.getFeed(
-        locale: 'fr',
         page: 1,
         pageSize: 20,
       );
@@ -530,7 +558,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
       if (item.title == 'Crypto' && _cryptoData != null) {
         final crypto = _cryptoData!;
-        final countLabel = '${crypto.positionsCount} crypto-actif${crypto.positionsCount > 1 ? 's' : ''}';
+        final countLabel = crypto.hasPrivyLedgerPositions
+            ? '${crypto.positionsCount} crypto-actif${crypto.positionsCount > 1 ? 's' : ''} · incl. Privy'
+            : '${crypto.positionsCount} crypto-actif${crypto.positionsCount > 1 ? 's' : ''}';
         final cryptoValue = pref.selectValue(
           eur: crypto.totalValueEur,
           usd: crypto.totalValueUsd,
@@ -935,6 +965,59 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _openPrivyCreateWallet() async {
+    if (!mounted) return;
+    if (!SecureApiConfig.hasAuthBackend) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'API d’authentification non configurée (AUTH_API_BASE_URL).',
+          ),
+        ),
+      );
+      return;
+    }
+    try {
+      final existing =
+          await PrivyIdentityBridgeService.instance.fetchAuthenticatedPersonCryptoWallets();
+      if (!mounted) return;
+      if (existing.isNotEmpty) {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => const DepositCryptoScreen(),
+          ),
+        );
+        return;
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Impossible de vérifier si un wallet existe déjà. Réessayez dans quelques instants.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!PrivyDartDefines.isConfigured ||
+        !PrivyDartDefines.isOAuthRedirectConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+              'Privy non configuré : PRIVY_APP_ID, PRIVY_APP_CLIENT_ID '
+              '(et scheme OAuth natif pour le SDK). Voir .env.flutter.',
+            ),
+        ),
+      );
+      return;
+    }
+    final created = await openPrivyWalletEmailCreationFlow(context);
+    if (created && mounted) {
+      await _loadPersonCryptoWalletsSnapshot();
+    }
+  }
+
   void _onActivationTargetRoute(String route) {
     final stepKey = activationStepKeyForTargetRoute(route);
     if (stepKey != null) {
@@ -1121,7 +1204,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       case 'invest':
         return () {};
       case 'more':
-        return () {};
+        return () => unawaited(_openPrivyCreateWallet());
       default:
         return () {};
     }
@@ -1138,6 +1221,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       case 'invest':
       case 'transfer':
         return Icons.swap_horiz_rounded;
+      case 'more':
+        return Icons.account_balance_wallet_rounded;
       default:
         return Icons.more_horiz_rounded;
     }
@@ -1157,7 +1242,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       case 'invest':
         return 'Acheter';
       case 'more':
-        return 'Plus';
+        return _heroMoreButtonLabel();
       default:
         return key;
     }
@@ -1185,9 +1270,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           onTap: () {},
         ),
         CircleButtonItem(
-          icon: Icons.more_horiz_rounded,
-          label: 'Plus',
-          onTap: () {},
+          icon: Icons.account_balance_wallet_rounded,
+          label: _heroMoreButtonLabel(),
+          onTap: () => unawaited(_openPrivyCreateWallet()),
         ),
       ];
       return (items: items, callbacks: items.map((e) => e.onTap).toList());
@@ -1216,7 +1301,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         items.add(
           CircleButtonItem(
             icon: _iconForHeaderAction(key),
-            label: label.isEmpty ? _labelForHeaderAction(key) : label,
+            label: key == 'more'
+                ? _heroMoreButtonLabel()
+                : (label.isEmpty ? _labelForHeaderAction(key) : label),
             onTap: _callbackForHeaderAction(key),
             isPrimary: key == 'deposit',
           ),
@@ -1243,9 +1330,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           onTap: () {},
         ),
         CircleButtonItem(
-          icon: Icons.more_horiz_rounded,
-          label: 'Plus',
-          onTap: () {},
+          icon: Icons.account_balance_wallet_rounded,
+          label: _heroMoreButtonLabel(),
+          onTap: () => unawaited(_openPrivyCreateWallet()),
         ),
       ];
       return (items: fallback, callbacks: fallback.map((e) => e.onTap).toList());

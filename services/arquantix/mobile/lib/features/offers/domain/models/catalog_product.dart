@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../../news/domain/models/article.dart';
+
 /// Réponse élément de GET /api/mobile/flutter/catalog/products
 class CatalogListItem {
   CatalogListItem({
@@ -66,17 +68,37 @@ class CatalogProductDetail {
     required this.packagedProduct,
     required this.presentation,
     this.vaultData,
+    this.relatedArticles = const [],
     required this.engine,
   });
 
   final CatalogPackagedMeta packagedProduct;
   final CatalogPresentation presentation;
   final Map<String, dynamic>? vaultData;
+  /// Articles liés au vault (Related → vault, `article_links` kind VAULT).
+  final List<ArticlePreview> relatedArticles;
   final CatalogEngineBlock engine;
 
   factory CatalogProductDetail.fromJson(Map<String, dynamic> json) {
-    final vault = json['vault'] as Map<String, dynamic>?;
-    final data = vault != null ? vault['data'] : null;
+    Map<String, dynamic>? vaultDataMap;
+    final vaultRaw = json['vault'];
+    if (vaultRaw is Map) {
+      final v = Map<String, dynamic>.from(vaultRaw);
+      final dataRaw = v['data'];
+      if (dataRaw is Map) {
+        vaultDataMap = Map<String, dynamic>.from(dataRaw);
+      }
+    }
+    final rawRelated = json['relatedArticles'] as List<dynamic>? ?? const [];
+    final relatedArticles = <ArticlePreview>[];
+    for (final raw in rawRelated) {
+      if (raw is! Map<String, dynamic>) continue;
+      try {
+        relatedArticles.add(ArticlePreview.fromJson(raw));
+      } catch (_) {
+        // Une entrée mal formée ne doit pas vider tout le tableau (détail catalogue).
+      }
+    }
     return CatalogProductDetail(
       packagedProduct: CatalogPackagedMeta.fromJson(
         json['packagedProduct'] as Map<String, dynamic>? ?? const {},
@@ -84,7 +106,8 @@ class CatalogProductDetail {
       presentation: CatalogPresentation.fromJson(
         json['presentation'] as Map<String, dynamic>? ?? const {},
       ),
-      vaultData: data is Map<String, dynamic> ? data : null,
+      vaultData: vaultDataMap,
+      relatedArticles: relatedArticles,
       engine: CatalogEngineBlock.fromJson(json['engine'] as Map<String, dynamic>? ?? const {}),
     );
   }

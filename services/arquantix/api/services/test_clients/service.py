@@ -585,10 +585,12 @@ class TestClientService:
         """Return exchange orders + Privy ledger entries for the asset."""
         from services.exchange.repository import ExchangeOrderRepository
         from services.privy_wallet.repository import PersonWalletDepositRepository
+        from services.lifi.swap_repository import PersonWalletSwapRepository
         from services.privy_wallet.transaction_merge import (
             exchange_order_to_crypto_tx,
             list_orphan_webhook_crypto_txs,
             merge_crypto_transactions,
+            person_wallet_swap_to_crypto_tx,
         )
 
         asset = asset.upper()
@@ -600,6 +602,7 @@ class TestClientService:
         person_id = getattr(client, "person_id", None)
         privy_rows: list = []
         orphan_txs: list = []
+        swap_txs: list = []
         if person_id is not None:
             privy_rows = PersonWalletDepositRepository().list_for_person(
                 db, person_id, asset=asset, limit=200
@@ -607,8 +610,19 @@ class TestClientService:
             orphan_txs = list_orphan_webhook_crypto_txs(
                 db, person_id=person_id, asset=asset, limit=200
             )
+            swap_rows = PersonWalletSwapRepository.list_confirmed_for_person_asset(
+                db, person_id=person_id, asset=asset, limit=200
+            )
+            for swap in swap_rows:
+                mapped = person_wallet_swap_to_crypto_tx(swap, asset=asset)
+                if mapped is not None:
+                    swap_txs.append(mapped)
 
-        txs = merge_crypto_transactions(exchange_txs, privy_rows, extra_txs=orphan_txs)
+        txs = merge_crypto_transactions(
+            exchange_txs,
+            privy_rows,
+            extra_txs=[*orphan_txs, *swap_txs],
+        )
 
         return {
             "client": client,

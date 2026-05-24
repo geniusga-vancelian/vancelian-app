@@ -1,13 +1,18 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/app_info_service.dart';
 import '../../../../core/currency_preference.dart';
+import '../../../../core/i18n/tr.dart';
+import '../../../../core/locale_preference.dart';
 import '../../../../core/profile_identity_coordinator.dart';
 import '../../../../core/profile_leading_preference.dart';
 import '../../../../core/secure_api_config.dart';
 import '../../data/mobile_app_profile.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../academy/presentation/screens/academy_center_screen.dart';
+import '../../../wallet/presentation/screens/privy_wallet_dev_screen.dart';
+import '../../../wallet/presentation/screens/privy_wallet_oauth_screen.dart';
 import '../../../help/presentation/screens/help_center_screen.dart';
 import '../../../notifications/presentation/screens/notification_center_screen.dart';
 import '../../../registration/screens/registration_flow_launcher_screen.dart';
@@ -16,6 +21,7 @@ import '../../../security/passkeys/presentation/passkey_management_screen.dart';
 import '../../../news/presentation/screens/blog_screen.dart';
 import '../../../search/presentation/screens/assistance_conversations_screen.dart';
 import 'account_info_screen.dart';
+import 'language_settings_screen.dart';
 import 'notification_settings_screen.dart';
 import 'security_screen.dart';
 
@@ -119,7 +125,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-              title: 'Mon compte',
+              title: tr(key: 'module.my_account.title', fallback: 'Mon compte'),
               subtitle: _monCompteSubtitle(),
               showChevron: true,
               onTap: () => _push(const AccountInfoScreen()),
@@ -199,6 +205,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           showChevron: true,
           onTap: () => _push(const NotificationSettingsScreen()),
         ),
+        ListenableBuilder(
+          listenable: LocalePreference.instance,
+          builder: (context, _) {
+            return SettingsListItem(
+              leading: const Icon(
+                Icons.language_outlined,
+                size: 24,
+                color: AppColors.textPrimary,
+              ),
+              title: 'Langue',
+              subtitle: _languageSubtitle(),
+              showChevron: true,
+              onTap: () => _push(const LanguageSettingsScreen()),
+            );
+          },
+        ),
         SettingsListItem(
           title: 'Notifications email',
           subtitle: 'Newsletters & rapports',
@@ -209,6 +231,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ],
     );
+  }
+
+  String _languageSubtitle() {
+    final pref = LocalePreference.instance;
+    final code = pref.locale.toUpperCase();
+    final supported = pref.supportedLocales;
+    if (supported.length <= 1) return code;
+    return '$code • ${supported.length} disponibles';
   }
 
   Widget _buildSupportCard() {
@@ -283,6 +313,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           showChevron: true,
           onTap: () => _push(const RegistrationFlowLauncherScreen()),
         ),
+        if (kDebugMode)
+          SettingsListItem(
+            leading: const Icon(
+              Icons.account_balance_wallet_outlined,
+              size: 24,
+              color: AppColors.indigo,
+            ),
+            title: 'Wallet Privy (OAuth — debug)',
+            subtitle:
+                'Google / Apple — le parcours principal utilise l’e-mail OTP Privy',
+            showChevron: true,
+            onTap: () => _push(const PrivyWalletOAuthScreen()),
+          ),
+        if (kDebugMode)
+          SettingsListItem(
+            leading: const Icon(
+              Icons.science_rounded,
+              size: 24,
+              color: AppColors.gray3,
+            ),
+            title: 'Privy wallet (labo OTP)',
+            subtitle: 'Étapes manuelles (email OTP, dev)',
+            showChevron: true,
+            onTap: () => _push(const PrivyWalletDevScreen()),
+          ),
       ],
     );
   }

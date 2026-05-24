@@ -17,6 +17,8 @@ import '../../../security/passcode/data/passcode_service.dart';
 import '../../../security/passcode/data/session_service.dart';
 import '../../../security/passcode/domain/secure_access_config.dart';
 import '../../../security/passcode/presentation/screens/passcode_unlock_screen.dart';
+import '../../data/app_shell_service.dart';
+import '../../../cms_page/presentation/screens/cms_page_screen.dart';
 
 /// Shell principal : contenu + AppTabBar flottant (glassmorphism, sliding pill).
 /// Le contenu s'étend SOUS la barre pour que la transparence/blur affiche le contenu.
@@ -33,22 +35,42 @@ class _MainShellScreenState extends State<MainShellScreen>
   DateTime? _pausedAt;
   bool _resumeUnlockOpen = false;
 
-  static const int _searchIndex = 4;
+  /// Le bouton « Search » reste un **action button** distinct (hors tab bar).
+  /// Son index logique synthétique vaut `tabs.length` : il est calculé à la
+  /// volée dans `build` depuis l'état `AppShellService` courant.
 
-  static const _tabItems = [
-    AppTabBarItemData(icon: Icons.home_rounded, label: 'Accueil'),
-    AppTabBarItemData(icon: Icons.trending_up_rounded, label: 'Investir'),
-    AppTabBarItemData(icon: Icons.currency_bitcoin, label: 'Markets'),
-    AppTabBarItemData(icon: Icons.radio_rounded, label: 'Design'),
-  ];
+  /// Construit la `Widget` correspondant à un tab CMS résolu. Pour cette V1,
+  /// seules les `native_tab` connues sont câblées : tout autre `target` est
+  /// rendu comme une page placeholder visible (pas de crash) — le mapping CMS
+  /// → page sera étendu au jalon 3 (pages d'app pilotées CMS).
+  Widget _pageForTab(AppShellTab tab) {
+    final target = tab.target;
+    if (target is NativeTabTarget) {
+      switch (target.value) {
+        case 'home':
+          return const HomeScreen();
+        case 'offers':
+          return const OffersScreen();
+        case 'markets':
+          return const MarketsScreen();
+        case 'design_system':
+          return const DesignSystemShowcaseScreen();
+      }
+    }
+    if (target is CmsPageTarget) {
+      return CmsPageScreen(slug: target.slug);
+    }
+    /// `external_url` ne peut pas vivre dans la tab bar (il faut sortir de l'app
+    /// ou ouvrir un browser embedded) — placeholder explicite pour l'instant.
+    return _UnsupportedTabPlaceholder(label: tab.label);
+  }
 
-  List<Widget> _buildPages() => [
-        const HomeScreen(),
-        const OffersScreen(),
-        const MarketsScreen(),
-        const DesignSystemShowcaseScreen(),
-        SearchScreen(onBack: () => setState(() => _selectedIndex = 0)),
-      ];
+  List<Widget> _buildPages(List<AppShellTab> tabs) {
+    return [
+      for (final tab in tabs) _pageForTab(tab),
+      SearchScreen(onBack: () => setState(() => _selectedIndex = 0)),
+    ];
+  }
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
@@ -60,6 +82,8 @@ class _MainShellScreenState extends State<MainShellScreen>
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _maybeOfferPushReloginOnboarding());
+    /// Bootstrap silencieux du shell distant — fallback compilé garanti.
+    AppShellService.instance.bootstrap();
   }
 
   /// Re-prompt unique : skip inscription → première montée du shell **hors** fin de parcours inscription.
@@ -139,49 +163,101 @@ class _MainShellScreenState extends State<MainShellScreen>
 
   @override
   Widget build(BuildContext context) {
-    final showNav = _selectedIndex != _searchIndex;
+    return ListenableBuilder(
+      listenable: AppShellService.instance,
+      builder: (context, _) {
+        final tabs = AppShellService.instance.tabs;
+        final searchIndex = tabs.length;
+        /// Si la liste de tabs distante a réduit (ex. admin a désactivé un tab
+        /// pendant la session), on borne l'index sélectionné pour éviter un
+        /// crash de l'`IndexedStack`.
+        if (_selectedIndex > searchIndex) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _selectedIndex = 0);
+          });
+        }
+        final tabItems =
+            tabs.map((t) => t.toTabBarItem()).toList(growable: false);
+        final showNav = _selectedIndex != searchIndex;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: _buildPages(),
-            ),
-          ),
-          if (showNav)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppColors.pageBackground.withValues(alpha: 0.0),
-                      AppColors.pageBackground.withValues(alpha: 1.0),
-                    ],
-                  ),
+        return Scaffold(
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: IndexedStack(
+                  index: _selectedIndex.clamp(0, searchIndex).toInt(),
+                  children: _buildPages(tabs),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.pageEdge),
-                  child: SafeArea(
-                    top: false,
-                    child: AppTabBar(
-                      items: _tabItems,
-                      selectedIndex: _selectedIndex,
-                      onTap: _onItemTapped,
-                      actionIcon: Icons.search_rounded,
-                      onActionTap: () => _onItemTapped(_searchIndex),
+              ),
+              if (showNav)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppColors.pageBackground.withValues(alpha: 0.0),
+                          AppColors.pageBackground.withValues(alpha: 1.0),
+                        ],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.pageEdge),
+                      child: SafeArea(
+                        top: false,
+                        child: AppTabBar(
+                          items: tabItems,
+                          selectedIndex:
+                              _selectedIndex.clamp(0, tabItems.length - 1).toInt(),
+                          onTap: _onItemTapped,
+                          actionIcon: Icons.search_rounded,
+                          onActionTap: () => _onItemTapped(searchIndex),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Placeholder rendu si une `target` CMS n'est pas encore mappée côté Dart
+/// (ex. `cms_page` créée par l'admin avant le runtime CMS pages — jalon 3).
+class _UnsupportedTabPlaceholder extends StatelessWidget {
+  const _UnsupportedTabPlaceholder({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.pageBackground,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.construction_rounded, size: 48),
+                const SizedBox(height: 12),
+                Text(
+                  '$label — bientôt disponible',
+                  style: AppTypography.bodyRegular,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }

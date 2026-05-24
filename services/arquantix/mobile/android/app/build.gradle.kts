@@ -21,7 +21,8 @@ android {
 
     defaultConfig {
         applicationId = "com.vancelian.app"
-        minSdk = flutter.minSdkVersion
+        // privy_flutter exige Android API 27+ (cf. pub.dev/privy_flutter).
+        minSdk = maxOf(flutter.minSdkVersion, 27)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

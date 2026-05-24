@@ -101,7 +101,7 @@ class HomeDashboardPreload {
   static Future<void> _prefetchBlogFeed() async {
     try {
       final api = BlogApi();
-      await api.getFeed(locale: 'fr', page: 1, pageSize: 20);
+      await api.getFeed(page: 1, pageSize: 20);
     } catch (e) {
       debugPrint('[HomeDashboardPreload] blog feed: $e');
     }

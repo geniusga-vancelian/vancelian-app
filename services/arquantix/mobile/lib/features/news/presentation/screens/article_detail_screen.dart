@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/article_editorial_type.dart';
 import '../../../../core/article_paragraph_segments.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -171,7 +172,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       switch (widget.source) {
         case ArticleDetailSource.news:
           final article =
-              await _blogApi.getArticle(widget.slug!, locale: 'fr');
+              await _blogApi.getArticle(widget.slug!);
           if (!mounted) return;
           setState(() {
             _article = article;
@@ -327,8 +328,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   }
 
   List<ArticleCategoryBadgeData> _newsHeroBadges(ArticleDetail a) {
-    final editorial = a.articleType == 'ANALYSIS'
-        ? 'Analysis'
+    final ed = editorialBadgeLabel(a.articleType);
+    final editorial = ed.isNotEmpty
+        ? ed
         : a.isCompanyNews
             ? 'Company News'
             : 'Market News';

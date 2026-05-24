@@ -69,6 +69,51 @@ def exchange_order_to_crypto_tx(order: Any, *, asset: str) -> dict[str, Any]:
     }
 
 
+def person_wallet_swap_to_crypto_tx(swap: Any, *, asset: str) -> dict[str, Any] | None:
+    """Mappe un swap LI.FI confirmé vers une ligne d'historique pour l'actif consulté."""
+    asset_u = asset.strip().upper()
+    from_asset = str(swap.from_asset).upper()
+    to_asset = str(swap.to_asset).upper()
+    if asset_u not in {from_asset, to_asset}:
+        return None
+
+    amount_in = _format_decimal(swap.amount_in)
+    amount_out = _format_decimal(swap.estimated_receive)
+    is_outgoing = asset_u == from_asset
+    amount_crypto = amount_in if is_outgoing else amount_out
+    direction = "debit" if is_outgoing else "credit"
+    sign = "-" if is_outgoing else "+"
+    chain_label = str(swap.from_chain or "").strip().capitalize()
+    if swap.from_chain == swap.to_chain and chain_label:
+        chain_suffix = f" · {chain_label}"
+    else:
+        chain_suffix = f" · {swap.from_chain} → {swap.to_chain}"
+
+    return {
+        "id": swap.id,
+        "side": "swap",
+        "asset": asset_u,
+        "amount_crypto": amount_crypto,
+        "amount_fiat": "0",
+        "price": "0",
+        "currency": "EUR",
+        "status": "confirmed",
+        "fee_amount": _format_decimal(swap.vancelian_fee) if swap.vancelian_fee else None,
+        "fee_asset": swap.from_asset if swap.vancelian_fee else None,
+        "external_reference": swap.tx_hash,
+        "created_at": swap.confirmed_at or swap.created_at,
+        "title": f"Échange {from_asset} → {to_asset}",
+        "subtitle": f"{sign}{amount_crypto} {asset_u}{chain_suffix}",
+        "direction": direction,
+        "from_asset": from_asset,
+        "to_asset": to_asset,
+        "transaction_kind": "crypto_swap",
+        "source_system": "lifi_swap",
+        "tx_hash": swap.tx_hash,
+        "custody_provider": "privy",
+    }
+
+
 def privy_deposit_to_crypto_tx(row: PersonWalletDeposit) -> dict[str, Any]:
     """Mappe un dépôt ledger Privy vers un dict ``CryptoTransactionPayload``."""
     amount = _format_decimal(row.amount)

@@ -336,7 +336,6 @@ class _MarketsScreenState extends State<MarketsScreen> {
     setState(() => _loadingLatestNews = true);
     try {
       final data = await _blogApi.getFeed(
-        locale: 'fr',
         articleType: 'NEWS',
         page: 1,
         pageSize: effectiveMax,

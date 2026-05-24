@@ -14,6 +14,7 @@ import '../../../markets/presentation/widgets/top_crypto_assets_module.dart';
 import '../../data/crypto_positions_api.dart';
 import '../../data/wallet_history_api.dart';
 import '../../domain/models/crypto_wallet_detail.dart';
+import '../../../deposit/presentation/screens/deposit_crypto_screen.dart';
 import '../../../alerts/presentation/screens/alerts_list_screen.dart';
 import '../../../alerts/presentation/screens/orders_list_screen.dart';
 import 'buy_flow/buy_flow_controller.dart';
@@ -281,14 +282,39 @@ class _CryptoWalletDetailScreenState extends State<CryptoWalletDetailScreen> {
   }
 
   Widget _buildHeroSubtitle(CryptoWalletDetail d) {
+    final suffix = d.includesPrivy && !d.isPrivyOnly
+        ? ' · incl. wallet Privy'
+        : d.isPrivyOnly
+            ? ' · wallet Privy'
+            : '';
     return Text(
-      '${d.volume} ${d.asset}',
+      '${d.volume} ${d.asset}$suffix',
       style: AppTypography.bodySmall.copyWith(color: Colors.white70),
       textAlign: TextAlign.center,
     );
   }
 
   Widget _buildHeroActionButtons() {
+    final detail = _detail;
+    if (detail != null && detail.isPrivyOnly) {
+      return CircleButtonRow(
+        items: [
+          CircleButtonItem(
+            icon: Icons.arrow_downward_rounded,
+            label: 'Dépôt',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DepositCryptoScreen(),
+                ),
+              );
+            },
+            isPrimary: true,
+          ),
+        ],
+      );
+    }
+
     return CircleButtonRow(
       items: [
         CircleButtonItem(
@@ -837,16 +863,39 @@ class _CryptoTransactionsPageState extends State<_CryptoTransactionsPage> {
   }
 
   TransactionListItemData _mapTxToItem(CryptoTransactionItem tx) {
+    final hh = tx.createdAt.hour.toString().padLeft(2, '0');
+    final mm = tx.createdAt.minute.toString().padLeft(2, '0');
+    final timeLabel = '$hh:$mm';
+
+    if (tx.isPrivyDeposit) {
+      final cryptoFormatted = _formatCryptoAmount(tx.amountCrypto);
+      final amountLabel = '+$cryptoFormatted ${tx.asset}';
+      return TransactionListItemData(
+        leadingWidget: CircleAvatar(
+          radius: 20,
+          backgroundColor: const Color(0xFF22C55E).withValues(alpha: 0.12),
+          child: const Icon(Icons.arrow_downward_rounded, color: Color(0xFF22C55E), size: 20),
+        ),
+        title: tx.title.isNotEmpty ? tx.title : 'Dépôt ${tx.asset}',
+        subtitle: tx.subtitle.isNotEmpty ? tx.subtitle : timeLabel,
+        amount: amountLabel,
+        secondaryAmount: timeLabel,
+        onTap: () => _openTransactionDetail(
+          tx,
+          tx.asset,
+          tx.asset,
+          amountLabel,
+          isDeposit: true,
+        ),
+      );
+    }
+
     final isBuy = tx.side == 'buy';
     final sign = isBuy ? '+' : '-';
     final cryptoFormatted = _formatCryptoAmount(tx.amountCrypto);
     final amountLabel = '$sign$cryptoFormatted ${tx.asset}';
     final fiatLabel = _eurFormatter.format(double.tryParse(tx.amountFiat) ?? 0);
     final fiatSign = isBuy ? '-' : '+';
-
-    final hh = tx.createdAt.hour.toString().padLeft(2, '0');
-    final mm = tx.createdAt.minute.toString().padLeft(2, '0');
-    final timeLabel = '$hh:$mm';
 
     final assetUpper = tx.asset.toUpperCase();
 
@@ -886,8 +935,9 @@ class _CryptoTransactionsPageState extends State<_CryptoTransactionsPage> {
     CryptoTransactionItem tx,
     String fromAsset,
     String toAsset,
-    String formattedAmount,
-  ) {
+    String formattedAmount, {
+    bool isDeposit = false,
+  }) {
     final hh = tx.createdAt.hour.toString().padLeft(2, '0');
     final mm = tx.createdAt.minute.toString().padLeft(2, '0');
     final dateStr = '${tx.createdAt.day} ${_frenchMonths[tx.createdAt.month - 1]} ${tx.createdAt.year} \u2022 $hh:$mm';
@@ -896,11 +946,15 @@ class _CryptoTransactionsPageState extends State<_CryptoTransactionsPage> {
       MaterialPageRoute<void>(
         builder: (_) => TransactionScreen(
           transactionId: tx.id,
-          merchant: '$fromAsset → $toAsset',
+          merchant: isDeposit
+              ? (tx.title.isNotEmpty ? tx.title : 'Dépôt $fromAsset')
+              : '$fromAsset → $toAsset',
           dateTime: dateStr,
           amount: formattedAmount,
-          icon: Icons.swap_horiz_rounded,
-          iconColor: tx.side == 'buy' ? const Color(0xFF22C55E) : const Color(0xFFF97316),
+          icon: isDeposit ? Icons.arrow_downward_rounded : Icons.swap_horiz_rounded,
+          iconColor: isDeposit
+              ? const Color(0xFF22C55E)
+              : (tx.side == 'buy' ? const Color(0xFF22C55E) : const Color(0xFFF97316)),
         ),
       ),
     );

@@ -7,7 +7,7 @@ import 'app_section_title.dart';
 import 'app_skeleton.dart';
 
 /// Skeleton du module « Vancelian News » / Blog à la une : cartes grises en **scroll horizontal**
-/// (même logique de largeur que [BlogALaUne], ~1,2 carte visible).
+/// (même logique de largeur que [BlogALaUne] / [ExclusiveOffersCarousel], peek ~1,05 carte).
 class VancelianNewsModuleSkeleton extends StatelessWidget {
   const VancelianNewsModuleSkeleton({
     super.key,
@@ -21,11 +21,11 @@ class VancelianNewsModuleSkeleton extends StatelessWidget {
   static const double _imageBlockHeight = 167;
   static const double _cardRadius = 16;
 
-  /// Aligné sur [BlogALaUne] : marge page, gap titre → carousel, peek 2e carte.
+  /// Marges et peek alignés sur [BlogALaUne] / [ExclusiveOffersCarousel].
   static const double _horizontalMargin = AppSpacing.xl;
   static const double _shadowPaddingVertical = AppSpacing.sm;
   static const double _titleToCarouselGap = AppSpacing.md - _shadowPaddingVertical;
-  static const double _visibleCardsCount = 1.2;
+  static const double _visibleCardsCount = 1.05;
 
   /// Hauteur indicative alignée sur la carte [NewsCard] (image + texte + meta).
   static const double _carouselBlockHeight =

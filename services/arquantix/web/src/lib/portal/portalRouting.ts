@@ -10,13 +10,26 @@ export const PORTAL_ROUTES = {
   cryptoWallet: `${PORTAL_PATH_PREFIX}/wallet/crypto`,
   walletDeposit: `${PORTAL_PATH_PREFIX}/wallet/deposit`,
   walletDepositSol: `${PORTAL_PATH_PREFIX}/wallet/deposit/sol`,
+  walletSwap: `${PORTAL_PATH_PREFIX}/wallet/swap`,
   walletCreate: `${PORTAL_PATH_PREFIX}/wallet/create`,
+  myWallets: `${PORTAL_PATH_PREFIX}/wallets`,
   invest: `${PORTAL_PATH_PREFIX}/invest`,
   markets: `${PORTAL_PATH_PREFIX}/markets`,
   design: `${PORTAL_PATH_PREFIX}/design`,
   search: `${PORTAL_PATH_PREFIX}/search`,
   profile: `${PORTAL_PATH_PREFIX}/profile`,
 } as const
+
+/** Flow swap LI.FI — destination optionnelle via query (`?to=ETH&toChain=ethereum`). */
+export function portalSwapRoute(options?: { to?: string; toChain?: string }): string {
+  const base = PORTAL_ROUTES.walletSwap
+  const to = options?.to?.trim().toUpperCase()
+  if (!to) return base
+  const params = new URLSearchParams({ to })
+  const chain = options?.toChain?.trim().toLowerCase()
+  if (chain) params.set('toChain', chain)
+  return `${base}?${params.toString()}`
+}
 
 /** Lien dashboard « My accounts » → hub wallet ou inscription EUR. */
 export function resolveAccountsRowHref(rowId: string, locked?: boolean): string | undefined {
@@ -34,6 +47,12 @@ export function portalCryptoWalletAssetRoute(asset: string): string {
 /** Deposit — adresse EVM si wallet lié, sinon création wallet. */
 export function resolvePortalDepositHref(hasPrivyWallet: boolean): string {
   return hasPrivyWallet ? PORTAL_ROUTES.walletDeposit : PORTAL_ROUTES.walletCreate
+}
+
+/** Page création wallet Privy — EVM par défaut, Solana via query. */
+export function portalWalletCreateRoute(chain: 'evm' | 'solana' = 'evm'): string {
+  if (chain === 'solana') return `${PORTAL_ROUTES.walletCreate}?chain=solana`
+  return PORTAL_ROUTES.walletCreate
 }
 
 /** Page dépôt pour wallets Privy dédiés (Solana, futurs BTC/XRP…). */

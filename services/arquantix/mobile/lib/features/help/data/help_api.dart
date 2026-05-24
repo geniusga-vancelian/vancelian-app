@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config.dart';
+import '../../../core/locale_preference.dart';
 import '../domain/models/help_center_models.dart';
 
 class HelpApiException implements Exception {
@@ -43,9 +44,10 @@ class HelpApi {
     );
   }
 
-  Future<List<HelpCollectionItem>> getCollections({String locale = 'fr'}) async {
+  Future<List<HelpCollectionItem>> getCollections({String? locale}) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.helpCollectionsUrl).replace(
-      queryParameters: {'locale': locale},
+      queryParameters: {'locale': effectiveLocale},
     );
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
@@ -68,16 +70,17 @@ class HelpApi {
   /// `collection` / `category`. Titres seuls si [titleOnly].
   Future<List<HelpSearchResultItem>> searchHelpArticles({
     required String query,
-    String locale = 'fr',
+    String? locale,
     String? collectionSlug,
     String? categorySlug,
     bool titleOnly = true,
     int minLength = 3,
     int limit = 50,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final params = <String, String>{
       'q': query,
-      'locale': locale,
+      'locale': effectiveLocale,
       'limit': '$limit',
       'minLength': '$minLength',
       'titleOnly': titleOnly ? '1' : '0',
@@ -109,11 +112,12 @@ class HelpApi {
 
   Future<HelpCategoryListResponse> getCategories({
     required String collectionSlug,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(
       Config.helpCollectionCategoriesUrl(collectionSlug),
-    ).replace(queryParameters: {'locale': locale});
+    ).replace(queryParameters: {'locale': effectiveLocale});
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
       throw HelpApiException(
@@ -128,10 +132,11 @@ class HelpApi {
   /// Hub collection : tags dédupliqués depuis les articles, ou liste plate.
   Future<HelpCollectionBrowseResponse> getCollectionBrowse({
     required String collectionSlug,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.helpCollectionBrowseUrl(collectionSlug)).replace(
-      queryParameters: {'locale': locale},
+      queryParameters: {'locale': effectiveLocale},
     );
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
@@ -147,11 +152,12 @@ class HelpApi {
   Future<HelpArticleListResponse> getArticles({
     required String collectionSlug,
     required String categorySlug,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(
       Config.helpCategoryArticlesUrl(collectionSlug, categorySlug),
-    ).replace(queryParameters: {'locale': locale});
+    ).replace(queryParameters: {'locale': effectiveLocale});
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
       throw HelpApiException(
@@ -166,10 +172,11 @@ class HelpApi {
   /// Tous les articles Help publiés dans la collection (parcours « plat »).
   Future<HelpArticleListResponse> getAllArticlesInCollection({
     required String collectionSlug,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.helpCollectionAllArticlesUrl(collectionSlug)).replace(
-      queryParameters: {'locale': locale},
+      queryParameters: {'locale': effectiveLocale},
     );
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
@@ -183,9 +190,10 @@ class HelpApi {
   }
 
   /// Récupère un article Help par son slug (premier trouvé parmi les articles publiés).
-  Future<HelpArticleDetail?> getArticleBySlug(String slug, {String locale = 'fr'}) async {
+  Future<HelpArticleDetail?> getArticleBySlug(String slug, {String? locale}) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.helpArticleBySlugUrl).replace(
-      queryParameters: {'slug': slug, 'locale': locale},
+      queryParameters: {'slug': slug, 'locale': effectiveLocale},
     );
     final response = await _getWithRetry(uri);
     if (response.statusCode == 404) return null;
@@ -205,11 +213,12 @@ class HelpApi {
     required String collectionSlug,
     required String categorySlug,
     required String articleSlug,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(
       Config.helpArticleDetailUrl(collectionSlug, categorySlug, articleSlug),
-    ).replace(queryParameters: {'locale': locale});
+    ).replace(queryParameters: {'locale': effectiveLocale});
     final response = await _getWithRetry(uri);
     if (response.statusCode != 200) {
       throw HelpApiException(
@@ -224,13 +233,14 @@ class HelpApi {
   Future<List<HelpTaggedArticleItem>> getArticlesByTag({
     required String tagType,
     required String tagId,
-    String locale = 'fr',
+    String? locale,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.helpArticlesByTagUrl).replace(
       queryParameters: {
         'type': tagType,
         'id': tagId,
-        'locale': locale,
+        'locale': effectiveLocale,
       },
     );
     final response = await _getWithRetry(uri);

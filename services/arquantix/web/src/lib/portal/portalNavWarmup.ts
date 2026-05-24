@@ -76,11 +76,30 @@ const WARMUP_BY_ROUTE: Record<string, WarmupConfig[]> = {
       ttlMs: 60_000,
     },
   ],
+  [PORTAL_ROUTES.walletSwap]: [
+    {
+      cacheKey: 'portal:crypto-wallet',
+      url: '/api/portal/crypto-wallet',
+      ttlMs: 45_000,
+    },
+  ],
   [PORTAL_ROUTES.walletCreate]: [
     {
       cacheKey: 'portal:profile',
       url: '/api/portal/profile',
       ttlMs: 120_000,
+    },
+  ],
+  [PORTAL_ROUTES.myWallets]: [
+    {
+      cacheKey: 'portal:privy-person-wallets',
+      url: '/api/portal/privy/person-wallets',
+      ttlMs: 60_000,
+    },
+    {
+      cacheKey: 'portal:wallets:solana',
+      url: '/api/portal/wallets/solana',
+      ttlMs: 60_000,
     },
   ],
 }

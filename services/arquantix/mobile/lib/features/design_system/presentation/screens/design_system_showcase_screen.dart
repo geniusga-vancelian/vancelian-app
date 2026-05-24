@@ -1750,6 +1750,7 @@ class DesignSystemShowcaseScreen extends StatelessWidget {
         StepsModuleWidget(
           title: 'Itinéraire',
           horizontalMargin: 0,
+          showSectionTitleAboveCard: true,
           steps: const [
             StepItem(
               title: 'Période de souscription',

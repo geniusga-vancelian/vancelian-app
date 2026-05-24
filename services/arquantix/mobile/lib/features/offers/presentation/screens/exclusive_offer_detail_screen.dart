@@ -3,9 +3,12 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/config.dart';
+import '../../../../core/i18n/tr.dart';
+import '../../../../core/locale_preference.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../l10n/app_localizations_en.dart';
@@ -14,6 +17,7 @@ import '../../../help/data/help_api.dart';
 import '../../../help/domain/models/help_center_models.dart';
 import '../../../news/data/blog_api.dart';
 import '../../../news/domain/models/article.dart';
+import '../../../news/presentation/markdown/article_paragraph_markdown.dart';
 import '../../../news/presentation/screens/article_detail_screen.dart';
 import '../../../help/presentation/screens/help_tagged_articles_screen.dart';
 import '../../../wallet/presentation/trading_flow_session_guard.dart';
@@ -24,11 +28,15 @@ import '../../data/offers_api.dart';
 import '../../domain/catalog_offer_mapper.dart';
 import '../../domain/models/offer_project.dart';
 import '../../domain/models/vault_offer_builder_models.dart';
+import '../../domain/vault_exclusive_offer_modules.dart';
 import 'lending_invest_flow/lending_invest_source_screen.dart';
 import 'offer_documents_screen.dart';
+import '../widgets/vault_documents_list_module.dart';
+import '../widgets/vault_virtual_visualization_module.dart';
 
 /// Sous-titre hero : premier module Vault Builder [TitlePage] (`content.subtitle`).
-/// Premier module [StepsModule] du vault (offre exclusive) : titre + étapes pour [StepsModuleWidget].
+/// Premier module Vault [StepsModule] : titre + étapes pour [StepsModuleWidget].
+/// [type] ou alias legacy [module], comparaison insensible à la casse ([normalizeVaultModules]).
 ({String title, String rightLabel, List<StepItem> steps})? stepsModuleFromVault(
   Map<String, dynamic>? vaultData, {
   String Function(int itemCount)? defaultStepsCountLabel,
@@ -40,13 +48,16 @@ import 'offer_documents_screen.dart';
     if (raw is! Map) continue;
     final m = Map<String, dynamic>.from(raw);
     if (m['enabled'] == false) continue;
-    if (m['type'] != 'StepsModule') continue;
+    final rawType = (m['type'] ?? m['module'])?.toString().trim().toLowerCase() ?? '';
+    if (rawType != 'stepsmodule') continue;
     final c = m['content'];
     if (c is! Map) continue;
     final content = Map<String, dynamic>.from(c);
+    // Alias éditeur / legacy — aligné Vault web [ArticleStepsModule] qui lit `items`.
+    final itemsRaw = content['items'] ?? content['steps'];
+    final items = StepItem.listFromJson(itemsRaw);
+    if (items.isEmpty) continue;
     final title = (content['title'] ?? '').toString().trim();
-    final items = StepItem.listFromJson(content['items']);
-    if (title.isEmpty || items.isEmpty) return null;
     final rightRaw = (content['rightLabel'] ?? '').toString().trim();
     final rightLabel = rightRaw.isNotEmpty
         ? rightRaw
@@ -160,10 +171,119 @@ String? subtitleFromVaultTitlePageModule(Map<String, dynamic>? vaultData) {
   return null;
 }
 
+/// Premier module Vault [BlogALaUne] activé — titre module + limite (articles Related → vault).
+({String title, int limit})? blogAlaUneModuleConfigFromVault(Map<String, dynamic>? vaultData) {
+  if (vaultData == null) return null;
+  final modules = vaultData['modules'];
+  if (modules is! List) return null;
+  for (final raw in modules) {
+    if (raw is! Map) continue;
+    final m = Map<String, dynamic>.from(raw);
+    if (m['enabled'] == false) continue;
+    final rawType = (m['type'] ?? m['module'])?.toString().trim().toLowerCase() ?? '';
+    if (rawType != 'blogalaune' && rawType != 'blog_a_la_une') continue;
+    final c = m['content'];
+    if (c is! Map) continue;
+    final content = Map<String, dynamic>.from(c);
+    final titleRaw = (content['title'] ?? '').toString().trim();
+    final limRaw = content['limit'];
+    var limit = 3;
+    if (limRaw is num) limit = limRaw.round();
+    if (limRaw is String) limit = int.tryParse(limRaw.trim()) ?? 3;
+    limit = limit.clamp(1, 24);
+    return (title: titleRaw.isEmpty ? 'À la une' : titleRaw, limit: limit);
+  }
+  return null;
+}
+
 /// Même ordre que le Vault Builder : [KeyInformationModule] avant [SimpleMarkdownContentModule].
 /// Les layouts DS historiques avaient `description` avant `widget_table_information`.
 /// Écart vertical **entre** chaque module du body (spec produit : 40px exactement).
 const double _kExclusiveOfferBodyModuleSpacing = AppSpacing.s10;
+
+/// Clés Flutter pour les blocs dont la **position dans la page suit l’ordre du Vault Builder**
+/// (`vaultData.modules`), et non plus des heuristiques (ex. tout coller avant/après « news »).
+const Set<String> _kExclusiveOfferVaultPositionedKeys = {
+  'vault_related_news',
+  'vault_documents_list',
+  'vault_virtual_visualization',
+  'video_block_article',
+  'localisation',
+};
+
+List<String> _mergeExclusiveOfferLayoutWithVaultPositionedOrder(
+  List<String> layoutModules,
+  List<String> vaultPositionedKeysInBuilderOrder,
+) {
+  if (vaultPositionedKeysInBuilderOrder.isEmpty) {
+    return List<String>.from(layoutModules);
+  }
+
+  var slot = layoutModules.indexWhere(_kExclusiveOfferVaultPositionedKeys.contains);
+  if (slot < 0) {
+    const anchorKeys = [
+      'project_news',
+      'faq',
+      'description',
+      'how_it_works',
+      'steps_date',
+      'steps',
+      'competitive_advantages',
+      'widget_table_information',
+      'allocation',
+    ];
+    for (final anchor in anchorKeys) {
+      final j = layoutModules.indexOf(anchor);
+      if (j >= 0) {
+        slot = j;
+        break;
+      }
+    }
+  }
+  if (slot < 0) slot = layoutModules.length;
+
+  final burst = vaultPositionedKeysInBuilderOrder;
+  final out = <String>[];
+  var didBurst = false;
+  for (var i = 0; i < layoutModules.length; i++) {
+    if (!didBurst && i == slot) {
+      out.addAll(burst);
+      didBurst = true;
+    }
+    final k = layoutModules[i];
+    if (_kExclusiveOfferVaultPositionedKeys.contains(k)) {
+      continue;
+    }
+    // [steps_date] est injecté depuis le Vault Builder avec le burst ; le gabarit DS garde souvent
+    // [steps] — ne pas rejouer le même bloc une deuxième fois plus bas dans la page.
+    if ((k == 'steps' || k == 'steps_date') &&
+        vaultPositionedKeysInBuilderOrder.contains('steps_date')) {
+      continue;
+    }
+    out.add(k);
+  }
+  if (!didBurst) {
+    out.addAll(burst);
+  }
+  return out;
+}
+
+/// Un seul slot « étapes » dans le corps : `steps` et `steps_date` sont synonymes côté Flutter.
+/// Évite un doublon quand le burst Vault contient déjà [steps_date] et que le gabarit liste encore
+/// [steps] (ou l’inverse), ou quand le JSON répète les deux clés.
+List<String> _dedupeExclusiveOfferStepsSlots(List<String> order) {
+  var hasStepsSlot = false;
+  final out = <String>[];
+  for (final k in order) {
+    final isSteps = k == 'steps' || k == 'steps_date';
+    if (isSteps) {
+      if (hasStepsSlot) continue;
+      hasStepsSlot = true;
+    }
+    out.add(k);
+  }
+  return out;
+}
 
 List<String> _orderKeyInfoBeforeDescription(List<String> order) {
   final iWi = order.indexOf('widget_table_information');
@@ -176,6 +296,86 @@ List<String> _orderKeyInfoBeforeDescription(List<String> order) {
   final newDesc = out.indexOf('description');
   out.insert(newDesc, 'widget_table_information');
   return out;
+}
+
+/// Ajoute la clé [steps_date] au layout lorsque le vault expose un [StepsModule] lisible mais que
+/// le gabarit DS oubli cette entrée dans `structure.body.modules`.
+List<String> _ensureExclusiveOfferStepsDateSlot(
+  List<String> order, {
+  required bool vaultHasRenderableSteps,
+}) {
+  if (!vaultHasRenderableSteps) return order;
+  if (order.contains('steps_date') || order.contains('steps')) return order;
+  const anchors = [
+    'project_news',
+    'vault_related_news',
+    'faq',
+    'how_it_works',
+    'allocation',
+  ];
+  for (final a in anchors) {
+    final i = order.indexOf(a);
+    if (i >= 0) {
+      final out = List<String>.from(order);
+      out.insert(i, 'steps_date');
+      return out;
+    }
+  }
+  const secondary = [
+    'description',
+    'widget_table_information',
+    'competitive_advantages',
+  ];
+  for (final a in secondary) {
+    final i = order.indexOf(a);
+    if (i >= 0) {
+      final out = List<String>.from(order);
+      out.insert(i, 'steps_date');
+      return out;
+    }
+  }
+  return [...order, 'steps_date'];
+}
+
+/// Ajoute la clé [faq] lorsque le projet porte une FAQ (Vault [FaqAccordionModule] → [_p.faq])
+/// mais que le gabarit DS ne la référence pas dans [structure.body.modules].
+List<String> _ensureExclusiveOfferFaqSlot(
+  List<String> order, {
+  required bool projectHasRenderableFaq,
+}) {
+  if (!projectHasRenderableFaq) return order;
+  if (order.contains('faq')) return order;
+  const anchors = [
+    'project_news',
+    'vault_related_news',
+    'allocation',
+    'how_it_works',
+    'description',
+    'widget_table_information',
+    'competitive_advantages',
+  ];
+  for (final a in anchors) {
+    final i = order.indexOf(a);
+    if (i >= 0) {
+      final out = List<String>.from(order);
+      out.insert(i, 'faq');
+      return out;
+    }
+  }
+  const secondary = [
+    'steps_date',
+    'steps',
+    'collection_progress',
+  ];
+  for (final a in secondary) {
+    final i = order.indexOf(a);
+    if (i >= 0) {
+      final out = List<String>.from(order);
+      out.insert(i, 'faq');
+      return out;
+    }
+  }
+  return [...order, 'faq'];
 }
 
 /// Page de détail d'une offre exclusive.
@@ -211,6 +411,8 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
   /// JSON vault brut (modules) pour modules non mappés dans [CatalogOfferMapper], ex. [StepsModule].
   Map<String, dynamic>? _vaultData;
   List<ArticlePreview> _projectNews = const [];
+  /// Articles avec Related → vault (`article_links` kind VAULT), renvoyés par le catalogue.
+  List<ArticlePreview> _vaultRelatedArticles = const [];
   Map<String, dynamic>? _offerLayout;
   String? _descriptionOverride;
   List<Map<String, dynamic>>? _descriptionLinksOverride;
@@ -440,6 +642,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
         setState(() {
           _catalogMerged = CatalogOfferMapper.mergeWithDetail(widget.project, detail);
           _vaultData = detail.vaultData;
+          _vaultRelatedArticles = detail.relatedArticles;
           _vaultTitlePageHeroSubtitle = subtitleFromVaultTitlePageModule(detail.vaultData);
           _descriptionOverride = null;
           _descriptionLinksOverride = null;
@@ -456,7 +659,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     }
 
     try {
-      final projects = await _offersApi.getProjects(locale: 'fr', limit: 100);
+      final projects = await _offersApi.getProjects(limit: 100);
       final match = projects.where((p) => p.id == widget.project.id).cast<OfferProject?>().firstWhere(
             (p) => p != null,
             orElse: () => null,
@@ -465,6 +668,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
       setState(() {
         _catalogMerged = null;
         _vaultData = null;
+        _vaultRelatedArticles = const [];
         _vaultTitlePageHeroSubtitle = null;
         _descriptionOverride = match.description;
         _descriptionLinksOverride = match.descriptionLinks;
@@ -549,6 +753,22 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     );
   }
 
+  /// Meta [NewsCard] pour les articles liés vault (Blog à la une) : date uniquement,
+  /// sans durée de lecture ni nom d’auteur.
+  String? _publishedAtNewsMeta(BuildContext context, DateTime? publishedAt) {
+    if (publishedAt == null) return null;
+    final locale = Localizations.localeOf(context);
+    final localeTag = locale.countryCode != null && locale.countryCode!.isNotEmpty
+        ? '${locale.languageCode}_${locale.countryCode}'
+        : locale.languageCode;
+    final local = publishedAt.toLocal();
+    try {
+      return DateFormat('d MMM yyyy', localeTag).format(local);
+    } catch (_) {
+      return DateFormat('d MMM yyyy').format(local);
+    }
+  }
+
   Map<String, dynamic> get _competitiveAdvantagesConfigFromProject =>
       _asMap(_competitiveAdvantagesOverride) ??
       _asMap(_p.competitiveAdvantages) ??
@@ -603,6 +823,79 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     return out;
   }
 
+  /// Ordre des modules « 100 % vault » pour le corps offre exclusive, aligné sur
+  /// l’ordre des entrées `enabled` dans `vaultData.modules` (Blog à la une, docs,
+  /// visite virtuelle, vidéos, carte).
+  List<String> _orderedExclusiveOfferVaultPositionedKeys() {
+    final out = <String>[];
+    final seen = <String>{};
+    void take(String key) {
+      if (seen.contains(key)) return;
+      seen.add(key);
+      out.add(key);
+    }
+
+    final vaultDocsList = documentsListModuleFromVault(_vaultData);
+    final vaultVirt = virtualVisualizationModuleFromVault(_vaultData);
+    final vaultVid = videoBlockArticleModuleFromVault(
+      _vaultData,
+      defaultModuleTitle: 'Videos',
+    );
+    final vaultLocRaw = localisationModuleFromVault(_vaultData);
+    final showLoc = vaultLocRaw != null &&
+        (LocalisationModule.isAllowedEmbedUrl(vaultLocRaw.embedUrl) ||
+            vaultLocRaw.moduleTitle.isNotEmpty ||
+            vaultLocRaw.description.isNotEmpty);
+
+    final modules = _vaultData?['modules'];
+    if (modules is List) {
+      for (final raw in modules) {
+        if (raw is! Map) continue;
+        final m = Map<String, dynamic>.from(raw);
+        if (m['enabled'] == false) continue;
+        final rawType = (m['type'] ?? m['module'])?.toString().trim().toLowerCase() ?? '';
+        switch (rawType) {
+          case 'blogalaune':
+          case 'blog_a_la_une':
+            if (_vaultRelatedArticles.isNotEmpty) take('vault_related_news');
+            break;
+          case 'documentslistmodule':
+            if (vaultDocsList != null && vaultDocsList.items.isNotEmpty) {
+              take('vault_documents_list');
+            }
+            break;
+          case 'virtualvisualizationmodule':
+            if (vaultVirt != null && vaultVirt.hasRenderableContent) {
+              take('vault_virtual_visualization');
+            }
+            break;
+          case 'videoblockarticlemodule':
+            if (vaultVid != null && vaultVid.items.isNotEmpty) {
+              take('video_block_article');
+            }
+            break;
+          case 'localisationmodule':
+            if (showLoc) take('localisation');
+            break;
+          case 'stepsmodule':
+            final vaultStepsPreview = stepsModuleFromVault(_vaultData, defaultStepsCountLabel: (n) => '$n');
+            if (vaultStepsPreview != null && vaultStepsPreview.steps.isNotEmpty) {
+              take('steps_date');
+            }
+            break;
+          default:
+            break;
+        }
+      }
+    }
+
+    if (_vaultRelatedArticles.isNotEmpty && !seen.contains('vault_related_news')) {
+      take('vault_related_news');
+    }
+
+    return out;
+  }
+
   Map<String, dynamic> get _tableInformationConfigFromLayout =>
       _asMap(_offerBodyConfig['tableInformation']) ?? const {};
 
@@ -631,6 +924,9 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
   Map<String, dynamic> get _projectNewsConfigFromLayout =>
       _asMap(_offerBodyConfig['projectNews']) ?? const {};
 
+  Map<String, dynamic> get _vaultRelatedNewsConfigFromLayout =>
+      _asMap(_offerBodyConfig['vaultRelatedNews']) ?? const {};
+
   Map<String, dynamic> get _videoBlockArticleConfigFromLayout =>
       _asMap(_offerBodyConfig['videoBlockArticle']) ?? const {};
 
@@ -642,6 +938,17 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
       if (parsed != null) return parsed;
     }
     return fallback;
+  }
+
+  /// URL pour ouvrir le site depuis l’app (lien pied de page FAQ, etc.).
+  String _absoluteSiteUrl(String value) {
+    final raw = value.trim();
+    if (raw.isEmpty) return '';
+    final lower = raw.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) return raw;
+    final base = Config.apiBaseUrl.replaceAll(RegExp(r'/$'), '');
+    if (raw.startsWith('/')) return '$base$raw';
+    return _normalizeExternalUrl(raw);
   }
 
   String _normalizeExternalUrl(String value) {
@@ -835,9 +1142,14 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
 
   /// CTA hero : [AppPrimaryButton] medium + bouton rond lecture si vidéo(s) promo.
   Widget? _buildExclusiveOfferHeroBelowTitleActions(AppLocalizations l10n) {
+    /// Démo Stratégie 1 : `common.invest` peut être surchargé via
+    /// `/admin/i18n/ui-strings`, sinon fallback ARB compilé "Invest" / "Investir".
     final primaryLabel = _headerPrimaryButtonLabel.isNotEmpty
         ? _headerPrimaryButtonLabel
-        : l10n.exclusiveOfferInvestCtaDefault;
+        : tr(
+            key: 'common.invest',
+            fallback: l10n.exclusiveOfferInvestCtaDefault,
+          );
     const ctaHorizontalPadding = AppSpacing.s4;
     final children = <Widget>[];
     if (_headerPrimaryButtonEnabled) {
@@ -1036,6 +1348,12 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
       defaultModuleTitle: l10n.exclusiveOfferVideosTitle,
     );
     final vaultLocalisation = localisationModuleFromVault(_vaultData);
+    final vaultDocumentsList = documentsListModuleFromVault(_vaultData);
+    final vaultVirtualViz = virtualVisualizationModuleFromVault(_vaultData);
+    final showVaultLocalisation = vaultLocalisation != null &&
+        (LocalisationModule.isAllowedEmbedUrl(vaultLocalisation.embedUrl) ||
+            vaultLocalisation.moduleTitle.isNotEmpty ||
+            vaultLocalisation.description.isNotEmpty);
     final videoBlockLayoutTitle = (_videoBlockArticleConfigFromLayout['title'] ?? '').toString().trim();
     final videoBlockTitleResolved = videoBlockLayoutTitle.isNotEmpty
         ? videoBlockLayoutTitle
@@ -1048,58 +1366,72 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
     final compactTake = allocationSlices.isEmpty
         ? 0
         : compactMaxItems.clamp(1, allocationSlices.length);
-    final faqTitle = (_faqConfigFromLayout['title'] ?? '').toString().trim();
-    final faqReadMoreLabel =
-        (_faqConfigFromProject['tagRedirectLabel'] ?? _faqConfigFromLayout['readMoreLabel'] ?? '')
-            .toString()
-            .trim();
-    final faqReadMoreUrl = (_faqConfigFromLayout['readMoreUrl'] ?? '').toString().trim();
+    final faqTitle =
+        (_faqConfigFromLayout['title'] ?? _faqConfigFromProject['title'] ?? '').toString().trim();
     final faqProjectArticles = _faqArticlesFromProject();
     final faqItems = faqProjectArticles
         .map((item) => (question: item.question, answer: item.standfirst))
         .toList();
-    final faqTagRedirectEnabled = _faqConfigFromProject['enableTagRedirect'] == true;
+
+    final pf = _faqConfigFromProject;
+    final lf = _faqConfigFromLayout;
+    final vaultFaqFooterLabel = (pf['footerLinkLabel'] ?? '').toString().trim();
+    final legacyFaqFooterLabel = (pf['tagRedirectLabel'] ?? '').toString().trim();
+    final layoutFaqReadMoreLabel = (lf['readMoreLabel'] ?? '').toString().trim();
+
+    final String faqFooterLinkLabel;
+    if (faqItems.isNotEmpty) {
+      faqFooterLinkLabel =
+          vaultFaqFooterLabel.isNotEmpty ? vaultFaqFooterLabel : legacyFaqFooterLabel;
+    } else {
+      faqFooterLinkLabel = layoutFaqReadMoreLabel;
+    }
+
+    String faqFooterLinkUrl = '';
+    if (faqItems.isNotEmpty) {
+      final manual = (pf['footerLinkUrl'] ?? '').toString().trim();
+      if (manual.isNotEmpty) {
+        faqFooterLinkUrl = _absoluteSiteUrl(manual);
+      } else {
+        final coll = (pf['footerCollectionSlug'] ?? '').toString().trim();
+        final cat = (pf['footerCategorySlug'] ?? '').toString().trim();
+        if (coll.isNotEmpty && cat.isNotEmpty) {
+          final loc = LocalePreference.instance.locale;
+          final base = Config.apiBaseUrl.replaceAll(RegExp(r'/$'), '');
+          faqFooterLinkUrl = '$base/$loc/help/$coll/$cat';
+        }
+      }
+      if (faqFooterLinkUrl.isEmpty) {
+        faqFooterLinkUrl = _absoluteSiteUrl((lf['readMoreUrl'] ?? '').toString().trim());
+      }
+    } else {
+      faqFooterLinkUrl = _absoluteSiteUrl((lf['readMoreUrl'] ?? '').toString().trim());
+    }
+
+    final faqTagRedirectEnabled = pf['enableTagRedirect'] == true;
     final tableInfoTitle =
         (_keyInformationConfigFromProject['title'] ?? _tableInformationConfigFromLayout['title'] ?? '')
             .toString()
             .trim();
     final tableInfoRows = _tableInformationRowsFromLayout();
-    var moduleOrder = _moduleOrderFromLayout;
+    var moduleOrder = _mergeExclusiveOfferLayoutWithVaultPositionedOrder(
+      _moduleOrderFromLayout,
+      _orderedExclusiveOfferVaultPositionedKeys(),
+    );
     if (_p.vaultFunding != null && !moduleOrder.contains('collection_progress')) {
       moduleOrder = ['collection_progress', ...moduleOrder];
     }
     moduleOrder = _orderKeyInfoBeforeDescription(moduleOrder);
-    // Si le vault contient [VideoBlockArticleModule] mais que le layout DS n’a pas encore la clé.
-    if (vaultVideoBlock != null &&
-        vaultVideoBlock.items.isNotEmpty &&
-        !moduleOrder.contains('video_block_article')) {
-      final iNews = moduleOrder.indexOf('project_news');
-      if (iNews >= 0) {
-        moduleOrder = [
-          ...moduleOrder.sublist(0, iNews),
-          'video_block_article',
-          ...moduleOrder.sublist(iNews),
-        ];
-      } else {
-        moduleOrder = [...moduleOrder, 'video_block_article'];
-      }
-    }
-    final showVaultLocalisation = vaultLocalisation != null &&
-        (LocalisationModule.isAllowedEmbedUrl(vaultLocalisation.embedUrl) ||
-            vaultLocalisation.moduleTitle.isNotEmpty ||
-            vaultLocalisation.description.isNotEmpty);
-    if (showVaultLocalisation && !moduleOrder.contains('localisation')) {
-      final iNews = moduleOrder.indexOf('project_news');
-      if (iNews >= 0) {
-        moduleOrder = [
-          ...moduleOrder.sublist(0, iNews),
-          'localisation',
-          ...moduleOrder.sublist(iNews),
-        ];
-      } else {
-        moduleOrder = [...moduleOrder, 'localisation'];
-      }
-    }
+    moduleOrder = _ensureExclusiveOfferStepsDateSlot(
+      moduleOrder,
+      vaultHasRenderableSteps:
+          vaultStepsModule != null && vaultStepsModule.steps.isNotEmpty,
+    );
+    moduleOrder = _dedupeExclusiveOfferStepsSlots(moduleOrder);
+    moduleOrder = _ensureExclusiveOfferFaqSlot(
+      moduleOrder,
+      projectHasRenderableFaq: faqProjectArticles.isNotEmpty,
+    );
     final descriptionContent =
         (_descriptionOverride ?? _p.description ?? _descriptionConfigFromLayout['content'] ?? '')
             .toString()
@@ -1140,12 +1472,21 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
         .where((link) => link.url.isNotEmpty)
         .toList();
     final projectNewsTitle = (_projectNewsConfigFromLayout['title'] ?? '').toString().trim();
+    final blogAlaUneCfg = blogAlaUneModuleConfigFromVault(_vaultData);
+    final vaultRelatedNewsLayoutTitle =
+        (_vaultRelatedNewsConfigFromLayout['title'] ?? '').toString().trim();
+    final vaultRelatedCap =
+        blogAlaUneCfg != null ? blogAlaUneCfg.limit.clamp(1, 24) : 3;
+    final vaultRelatedToShow = _vaultRelatedArticles.isEmpty
+        ? const <ArticlePreview>[]
+        : _vaultRelatedArticles.take(vaultRelatedCap).toList(growable: false);
     final competitiveAdvantagesTitle =
         (_competitiveAdvantagesConfigFromProject['title'] ?? '').toString().trim();
     final competitiveAdvantagesRows = CompetitiveAdvantagesModule.rowsFromJson(
       _asList(_competitiveAdvantagesConfigFromProject['rows']),
     );
     final orderedModules = <Widget>[];
+    String stripTitleIfFirst(String t) => orderedModules.isEmpty ? '' : t;
 
     for (final key in moduleOrder) {
       switch (key) {
@@ -1166,13 +1507,14 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           break;
         case 'widget_table_information':
           if (tableInfoRows.isNotEmpty) {
+            final t = stripTitleIfFirst(tableInfoTitle);
             orderedModules.add(
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: DashboardLayoutConstants.moduleHorizontalMargin,
                 ),
                 child: TableInformationModule(
-                  title: tableInfoTitle.isEmpty ? null : tableInfoTitle,
+                  title: t.isEmpty ? null : t,
                   rows: tableInfoRows,
                   titleTextStyle: AppTypography.sectionTitle.copyWith(
                     color: AppColors.textPrimary,
@@ -1185,6 +1527,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           break;
         case 'how_it_works':
           if (howItWorksContent.isNotEmpty || howItWorksLinks.isNotEmpty) {
+            final t = stripTitleIfFirst(howItWorksTitle);
             orderedModules.add(
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -1194,15 +1537,15 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (howItWorksTitle.isNotEmpty)
+                    if (t.isNotEmpty)
                       Text(
-                        howItWorksTitle,
+                        t,
                         style: AppTypography.sectionTitle.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                    if (howItWorksTitle.isNotEmpty) const SizedBox(height: AppSpacing.sm),
+                    if (t.isNotEmpty) const SizedBox(height: AppSpacing.sm),
                     _DescriptionModule(
                       description: howItWorksContent,
                       links: howItWorksLinks,
@@ -1215,8 +1558,10 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           break;
         case 'description':
           if (descriptionContent.isNotEmpty || descriptionLinks.isNotEmpty) {
-            final descTitle = (_p.descriptionModuleTitle ?? '').trim();
+            final descTitle = stripTitleIfFirst((_p.descriptionModuleTitle ?? '').trim());
             final showVaultTitle = descTitle.isNotEmpty;
+            // Description fusionnée (vault / legacy) : même typo de base que les articles — regular,
+            // gras réservé au Markdown **…** ([ArticleParagraphMarkdown] utilise bodyMedium par défaut).
             orderedModules.add(
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -1239,7 +1584,6 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
                     _DescriptionModule(
                       description: descriptionContent,
                       links: descriptionLinks,
-                      paragraphStyle: AppTypography.bodyEmphasized,
                     ),
                   ],
                 ),
@@ -1249,15 +1593,14 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           break;
         case 'competitive_advantages':
           if (competitiveAdvantagesRows.isNotEmpty) {
+            final t = stripTitleIfFirst(competitiveAdvantagesTitle);
             orderedModules.add(
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: DashboardLayoutConstants.moduleHorizontalMargin,
                 ),
                 child: CompetitiveAdvantagesModule(
-                  title: competitiveAdvantagesTitle.isNotEmpty
-                      ? competitiveAdvantagesTitle
-                      : null,
+                  title: t.isNotEmpty ? t : null,
                   rows: competitiveAdvantagesRows,
                 ),
               ),
@@ -1276,6 +1619,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
                   title: vaultStepsModule.title,
                   rightLabel: vaultStepsModule.rightLabel,
                   horizontalMargin: 0,
+                  showSectionTitleAboveCard: true,
                   steps: vaultStepsModule.steps,
                 ),
               ),
@@ -1290,6 +1634,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
                   title: stepsTitle,
                   rightLabel: stepsRightLabel,
                   horizontalMargin: 0,
+                  showSectionTitleAboveCard: true,
                   steps: stepsItems,
                   onStepTap: (index) {
                     if (index < 0 || index >= milestoneArticles.length) return;
@@ -1302,6 +1647,7 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           break;
         case 'allocation':
           if (allocationSlices.isEmpty) break;
+          final allocT = stripTitleIfFirst(allocationTitle);
           orderedModules.add(
             Padding(
               padding: const EdgeInsets.symmetric(
@@ -1311,15 +1657,15 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (allocationTitle.isNotEmpty)
+                  if (allocT.isNotEmpty)
                     Text(
-                      allocationTitle,
+                      allocT,
                       style: AppTypography.sectionTitle.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                  if (allocationTitle.isNotEmpty) const SizedBox(height: AppSpacing.sm),
+                  if (allocT.isNotEmpty) const SizedBox(height: AppSpacing.sm),
                   PortfolioAllocationModule(
                     introText: allocationIntroText,
                     slices: allocationSlices,
@@ -1338,23 +1684,26 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           break;
         case 'faq':
           if (faqItems.isEmpty) break;
+          final faqResolvedTitle = orderedModules.isEmpty
+              ? ''
+              : (faqTitle.isEmpty ? l10n.exclusiveOfferFaqDefaultTitle : faqTitle);
           orderedModules.add(
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: DashboardLayoutConstants.moduleHorizontalMargin,
               ),
               child: _FaqModule(
-                title: faqTitle.isEmpty ? l10n.exclusiveOfferFaqDefaultTitle : faqTitle,
-                readMoreLabel: faqReadMoreLabel,
-                readMoreUrl: faqReadMoreUrl,
-                onReadMoreTap: faqTagRedirectEnabled
+                title: faqResolvedTitle,
+                readMoreLabel: faqFooterLinkLabel,
+                readMoreUrl: faqFooterLinkUrl,
+                onReadMoreTap: faqTagRedirectEnabled && faqFooterLinkUrl.isEmpty
                     ? () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => HelpTaggedArticlesScreen(
                               tagType: 'EXCLUSIVE_OFFER',
                               tagId: _p.id,
-                              title: faqReadMoreLabel,
+                              title: faqFooterLinkLabel,
                             ),
                           ),
                         );
@@ -1372,10 +1721,14 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           );
           break;
         case 'project_news':
-          if (_projectNews.isNotEmpty && projectNewsTitle.isNotEmpty) {
+          if (_projectNews.isNotEmpty &&
+              (orderedModules.isEmpty || projectNewsTitle.isNotEmpty)) {
+            final newsShowTitle =
+                orderedModules.isNotEmpty && projectNewsTitle.isNotEmpty;
             orderedModules.add(
               BlogALaUne(
                 title: projectNewsTitle,
+                showTitle: newsShowTitle,
                 items: _projectNews
                     .map(
                       (a) => BlogALaUneItem(
@@ -1391,13 +1744,42 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
             );
           }
           break;
+        case 'vault_related_news':
+          if (vaultRelatedToShow.isEmpty) break;
+          final vrTitleResolved = vaultRelatedNewsLayoutTitle.isNotEmpty
+              ? vaultRelatedNewsLayoutTitle
+              : (blogAlaUneCfg?.title ?? 'À la une').trim();
+          final vrShowTitle =
+              orderedModules.isNotEmpty && vrTitleResolved.trim().isNotEmpty;
+          orderedModules.add(
+            BlogALaUne(
+              title: vrTitleResolved.trim().isEmpty ? 'À la une' : vrTitleResolved.trim(),
+              showTitle: vrShowTitle,
+              items: vaultRelatedToShow
+                  .map(
+                    (a) => BlogALaUneItem(
+                      title: a.title,
+                      coverUrl: a.coverUrl,
+                      readingTime: 0,
+                      metaText: _publishedAtNewsMeta(context, a.publishedAt),
+                      onTap: () => _openArticle(a),
+                      tag: a.categorySlugs?.isNotEmpty == true ? a.categorySlugs!.first : null,
+                    ),
+                  )
+                  .toList(),
+            ),
+          );
+          break;
         case 'video_block_article':
           if (vaultVideoBlock != null && vaultVideoBlock.items.isNotEmpty) {
+            final videoTitle = videoBlockTitleResolved.isNotEmpty
+                ? videoBlockTitleResolved
+                : vaultVideoBlock.title;
+            final videoShowTitle = orderedModules.isNotEmpty;
             orderedModules.add(
               VideoBlockArticleModule(
-                title: videoBlockTitleResolved.isNotEmpty
-                    ? videoBlockTitleResolved
-                    : vaultVideoBlock.title,
+                title: videoTitle,
+                showTitle: videoShowTitle,
                 items: vaultVideoBlock.items,
               ),
             );
@@ -1407,9 +1789,41 @@ class _ExclusiveOfferDetailScreenState extends State<ExclusiveOfferDetailScreen>
           if (!showVaultLocalisation) break;
           orderedModules.add(
             LocalisationModule(
-              moduleTitle: vaultLocalisation.moduleTitle,
+              moduleTitle: stripTitleIfFirst(vaultLocalisation.moduleTitle),
               description: vaultLocalisation.description,
               embedUrl: vaultLocalisation.embedUrl,
+            ),
+          );
+          break;
+        case 'vault_documents_list':
+          if (vaultDocumentsList == null || vaultDocumentsList.items.isEmpty) break;
+          final docsTitleStrip = stripTitleIfFirst(vaultDocumentsList.moduleTitle);
+          orderedModules.add(
+            VaultDocumentsListModule(
+              data: VaultDocumentsListModuleData(
+                subtitle: vaultDocumentsList.subtitle,
+                moduleTitle: docsTitleStrip,
+                description: vaultDocumentsList.description,
+                items: vaultDocumentsList.items,
+              ),
+              showModuleTitle: docsTitleStrip.isNotEmpty,
+            ),
+          );
+          break;
+        case 'vault_virtual_visualization':
+          if (vaultVirtualViz == null || !vaultVirtualViz.hasRenderableContent) break;
+          final vizTitleStrip = stripTitleIfFirst(vaultVirtualViz.moduleTitle);
+          orderedModules.add(
+            VaultVirtualVisualizationModule(
+              data: VaultVirtualVisualizationModuleData(
+                moduleTitle: vizTitleStrip,
+                description: vaultVirtualViz.description,
+                normalizedUrl: vaultVirtualViz.normalizedUrl,
+                rawUrl: vaultVirtualViz.rawUrl,
+              ),
+              showModuleTitle: vizTitleStrip.isNotEmpty,
+              invalidEmbedMessage: l10n.exclusiveOfferVirtualTourEmbedInvalid,
+              openInBrowserLabel: l10n.exclusiveOfferVirtualTourOpenBrowser,
             ),
           );
           break;
@@ -1801,29 +2215,19 @@ class _DescriptionModule extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            MarkdownBody(
-              data: description,
-              styleSheet: MarkdownStyleSheet(
-                p: (paragraphStyle ?? AppTypography.bodyMedium)
-                    .copyWith(color: AppColors.textPrimary),
-                h1: AppTypography.titleLarge.copyWith(color: AppColors.textPrimary),
-                h2: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary),
-                h3: AppTypography.titleSmall.copyWith(color: AppColors.textPrimary),
-                a: AppTypography.buttonEmphasized.copyWith(
-                  color: AppColors.accent,
-                  decoration: TextDecoration.none,
-                ),
-                listIndent: 24,
+            ArticleParagraphMarkdown(
+              text: description,
+              baseStyle: (paragraphStyle ?? AppTypography.bodyMedium).copyWith(
+                color: AppColors.textPrimary,
               ),
-              onTapLink: (text, href, title) async {
-                if (href == null || href.trim().isEmpty) return;
+              blockSpacing: AppSpacing.sm,
+              onOpenLink: (href) async {
                 final uri = Uri.tryParse(href);
                 if (uri == null) return;
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 }
               },
-              selectable: true,
             ),
             if (links.isNotEmpty) ...[
               const SizedBox(height: _spaceBetweenTextAndButton),
@@ -1874,18 +2278,21 @@ class _FaqModule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasTitle = title.trim().isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          title,
-          style: AppTypography.sectionTitle.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
+        if (hasTitle) ...[
+          Text(
+            title,
+            style: AppTypography.sectionTitle.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         Container(
           width: double.infinity,
           decoration: BoxDecoration(

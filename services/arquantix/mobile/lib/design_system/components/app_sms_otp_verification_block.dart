@@ -12,7 +12,8 @@ import 'app_otp_input.dart';
 class AppSmsOtpVerificationBlock extends StatelessWidget {
   const AppSmsOtpVerificationBlock({
     super.key,
-    required this.descriptionLead,
+    this.description,
+    this.descriptionLead = '',
     this.maskedTarget,
     required this.otpGeneration,
     required this.locked,
@@ -24,6 +25,9 @@ class AppSmsOtpVerificationBlock extends StatelessWidget {
     this.onOtpChanged,
     this.autofocus = true,
   });
+
+  /// Si fourni, remplace la ligne « [descriptionLead] [maskedTarget] » (texte libre, ex. phrase unique avec e-mail en gras).
+  final Widget? description;
 
   final String descriptionLead;
   final String? maskedTarget;
@@ -37,38 +41,51 @@ class AppSmsOtpVerificationBlock extends StatelessWidget {
   final ValueChanged<String>? onOtpChanged;
   final bool autofocus;
 
+  bool get _hasLegacyDescription {
+    final lead = descriptionLead.trim();
+    final target = maskedTarget?.trim() ?? '';
+    return lead.isNotEmpty || target.isNotEmpty;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final descriptionWidget = description ??
+        (_hasLegacyDescription
+            ? Text.rich(
+                TextSpan(
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    height: 22 / 15,
+                    color: AppColors.textSecondary,
+                  ),
+                  children: [
+                    TextSpan(text: descriptionLead),
+                    if (maskedTarget != null && maskedTarget!.isNotEmpty)
+                      TextSpan(
+                        text: ' $maskedTarget',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          height: 22 / 15,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                  ],
+                ),
+              )
+            : null);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text.rich(
-            TextSpan(
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                fontWeight: FontWeight.w400,
-                height: 22 / 15,
-                color: AppColors.textSecondary,
-              ),
-              children: [
-                TextSpan(text: descriptionLead),
-                if (maskedTarget != null && maskedTarget!.isNotEmpty)
-                  TextSpan(
-                    text: ' $maskedTarget',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      height: 22 / 15,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-              ],
-            ),
+        if (descriptionWidget != null) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: descriptionWidget,
           ),
-        ),
-        const SizedBox(height: AppSpacing.pageDescriptionToFirstField),
+          const SizedBox(height: AppSpacing.pageDescriptionToFirstField),
+        ],
         AppOtpInput(
           key: ValueKey(otpGeneration),
           hasError: wrongCode,

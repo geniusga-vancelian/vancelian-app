@@ -36,7 +36,6 @@ class _ArticleListScreenState extends State<ArticleListScreen> {
 
     try {
       final data = await _api.getFeed(
-        locale: 'fr',
         category: _selectedCategory,
         page: page,
       );

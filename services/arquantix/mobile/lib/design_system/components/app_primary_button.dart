@@ -52,6 +52,8 @@ class AppPrimaryButton extends StatelessWidget {
     this.shrinkWrap = false,
     this.horizontalPadding,
     this.leading,
+    this.trailing,
+    this.foregroundColor,
     this.isLoading = false,
   });
 
@@ -64,6 +66,13 @@ class AppPrimaryButton extends StatelessWidget {
   /// Si non null, remplace le padding horizontal implicite de [size] (ex. boutons compacts côte à côte).
   final double? horizontalPadding;
   final Widget? leading;
+
+  /// Icône / widget affiché **après** le libellé (signaler une navigation, etc.).
+  /// Masqué pendant [isLoading] pour ne pas chevaucher le spinner.
+  final Widget? trailing;
+
+  /// Surcharge la couleur du texte (et du contour en variante [ghost]).
+  final Color? foregroundColor;
 
   /// Affiche un indicateur à la place du libellé (même gabarit, pas de saut de layout).
   final bool isLoading;
@@ -117,19 +126,25 @@ class AppPrimaryButton extends StatelessWidget {
         AppPrimaryButtonVariant.disabled => AppColors.buttonDisabledBg,
       };
 
-  Color get _foregroundColor => switch (_effectiveVariant) {
-        AppPrimaryButtonVariant.secondary => AppColors.black,
-        AppPrimaryButtonVariant.ghost => AppColors.indigo,
-        _ => AppColors.white,
-      };
+  Color get _foregroundColor {
+    if (foregroundColor != null) return foregroundColor!;
+    return switch (_effectiveVariant) {
+      AppPrimaryButtonVariant.secondary => AppColors.black,
+      AppPrimaryButtonVariant.ghost => AppColors.indigo,
+      _ => AppColors.white,
+    };
+  }
 
   bool get _isDisabled => _effectiveVariant == AppPrimaryButtonVariant.disabled;
 
-  Color get _spinnerColor => switch (_effectiveVariant) {
-        AppPrimaryButtonVariant.secondary => AppColors.indigo,
-        AppPrimaryButtonVariant.ghost => AppColors.indigo,
-        _ => AppColors.white,
-      };
+  Color get _spinnerColor {
+    if (foregroundColor != null) return foregroundColor!;
+    return switch (_effectiveVariant) {
+      AppPrimaryButtonVariant.secondary => AppColors.indigo,
+      AppPrimaryButtonVariant.ghost => AppColors.indigo,
+      _ => AppColors.white,
+    };
+  }
 
   double get _effectiveHorizontalPadding => horizontalPadding ?? _hPadding;
 
@@ -163,6 +178,10 @@ class AppPrimaryButton extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+        if (trailing != null && !isLoading) ...[
+          const SizedBox(width: 4),
+          trailing!,
+        ],
       ],
     );
 
@@ -213,13 +232,13 @@ class AppPrimaryButton extends StatelessWidget {
         child: OutlinedButton(
           onPressed: (isLoading || _isDisabled) ? null : onPressed,
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.indigo,
+            foregroundColor: _foregroundColor,
             disabledForegroundColor:
-                isLoading ? AppColors.indigo : AppColors.textMuted,
+                isLoading ? _foregroundColor : AppColors.textMuted,
             side: BorderSide(
               color: _isDisabled && !isLoading
                   ? AppColors.buttonDisabledBg
-                  : AppColors.indigo,
+                  : _foregroundColor,
             ),
             padding: EdgeInsets.symmetric(horizontal: _effectiveHorizontalPadding),
             shape: shape,

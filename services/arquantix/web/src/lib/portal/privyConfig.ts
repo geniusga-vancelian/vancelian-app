@@ -27,7 +27,11 @@ export function getPrivyAppId(): string {
 
 /** Client ID web optionnel — ne jamais réutiliser le client mobile Flutter. */
 export function getPrivyWebClientId(): string {
-  return process.env.NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID?.trim() || ''
+  return (
+    process.env.NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID?.trim() ||
+    process.env.PRIVY_WEB_CLIENT_ID?.trim() ||
+    ''
+  )
 }
 
 /** @deprecated Utiliser getPrivyWebClientId — conservé pour compat interne. */

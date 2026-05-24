@@ -14,7 +14,7 @@ import { PortalOtpInput } from '@/components/portal/PortalOtpInput'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { Button } from '@/components/ui/button'
 import { PORTAL_ROUTES, resolvePortalDepositHref } from '@/lib/portal/portalRouting'
-import { fetchPortalPersonCryptoWallets } from '@/lib/portal/privyWalletClient'
+import { fetchPortalPersonCryptoWallets, findEvmPersonWallet } from '@/lib/portal/privyWalletClient'
 import { runPortalPrivyWalletCompletion } from '@/lib/portal/runPortalPrivyWalletCompletion'
 import { usePortalEmailOtpSend } from '@/lib/portal/usePortalEmailOtpSend'
 import { formatPortalPrivyAuthError } from '@/lib/portal/privyConfigErrors'
@@ -69,7 +69,7 @@ export function PortalCreateWalletScreen() {
       try {
         const rows = await fetchPortalPersonCryptoWallets()
         if (cancelled) return
-        if (rows.length > 0) {
+        if (findEvmPersonWallet(rows)) {
           router.replace(resolvePortalDepositHref(true))
         }
       } catch {

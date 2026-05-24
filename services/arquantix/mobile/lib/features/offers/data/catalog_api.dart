@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config.dart';
+import '../../../core/locale_preference.dart';
 import '../../../core/session_bearer_http.dart';
 import '../domain/models/catalog_product.dart';
 
@@ -30,15 +31,16 @@ class CatalogApi {
   /// [commercialStatus] / [visibility] : si non nulls et non vides, envoyés au BFF
   /// (`/api/mobile/flutter/catalog/products`). Sinon le serveur applique published + public.
   Future<List<CatalogListItem>> getProducts({
-    String locale = 'fr',
+    String? locale,
     int limit = 50,
     bool includeEngineData = true,
     String? commercialStatus,
     String? visibility,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final params = <String, String>{
       'type': 'exclusive_offer',
-      'locale': locale,
+      'locale': effectiveLocale,
       'limit': limit.toString(),
       'include_engine_data': includeEngineData ? 'true' : 'false',
     };
@@ -76,12 +78,13 @@ class CatalogApi {
   /// Détail par slug packagé (registry).
   Future<CatalogProductDetail> getProductBySlug(
     String slug, {
-    String locale = 'fr',
+    String? locale,
     bool includeEngineData = true,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.catalogProductDetailUrl(slug)).replace(
       queryParameters: {
-        'locale': locale,
+        'locale': effectiveLocale,
         'include_engine_data': includeEngineData ? '1' : '0',
       },
     );

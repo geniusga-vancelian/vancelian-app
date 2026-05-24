@@ -175,11 +175,16 @@ class VideoBlockArticleModule extends StatefulWidget {
     this.title = 'Vidéos',
     required this.items,
     this.onTitleTap,
+    this.showTitle = true,
   });
 
   final String title;
   final List<VideoBlockArticleItemData> items;
   final VoidCallback? onTitleTap;
+
+  /// Affiche le titre + son gap. Permet aux écrans qui placent le module
+  /// **en première position** de masquer le titre (cf. exclusive offer detail).
+  final bool showTitle;
 
   @override
   State<VideoBlockArticleModule> createState() => _VideoBlockArticleModuleState();
@@ -237,44 +242,46 @@ class _VideoBlockArticleModuleState extends State<VideoBlockArticleModule> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: kModuleHorizontalMargin),
-          child: widget.onTitleTap != null
-              ? Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: widget.onTitleTap,
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            widget.title,
-                            style: AppTypography.sectionTitle.copyWith(
-                              fontWeight: FontWeight.w700,
+        if (widget.showTitle) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: kModuleHorizontalMargin),
+            child: widget.onTitleTap != null
+                ? Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: widget.onTitleTap,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.title,
+                              style: AppTypography.sectionTitle.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          const KalaiIcon(
-                            KalaiIcons.chevronRight,
-                            size: 22,
-                            color: AppColors.textPrimary,
-                          ),
-                        ],
+                            const SizedBox(width: AppSpacing.xs),
+                            const KalaiIcon(
+                              KalaiIcons.chevronRight,
+                              size: 22,
+                              color: AppColors.textPrimary,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
+                  )
+                : Text(
+                    widget.title,
+                    style: AppTypography.sectionTitle.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                )
-              : Text(
-                  widget.title,
-                  style: AppTypography.sectionTitle.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-        ),
-        SizedBox(height: _titleToCarouselGap),
+          ),
+          SizedBox(height: _titleToCarouselGap),
+        ],
         if (height != null && height > 0)
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

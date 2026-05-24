@@ -23,6 +23,9 @@ class CryptoWalletDetail {
     this.totalGainUsd,
     this.totalGains,
     this.totalGainsPct,
+    this.portfolioScope,
+    this.privyBalance,
+    this.platformBalance,
   });
 
   final String asset;
@@ -48,6 +51,14 @@ class CryptoWalletDetail {
   final double? totalGainUsd;
   final double? totalGains;
   final double? totalGainsPct;
+  final String? portfolioScope;
+  final double? privyBalance;
+  final double? platformBalance;
+
+  bool get isPrivyOnly => portfolioScope == 'privy';
+
+  bool get includesPrivy =>
+      portfolioScope == 'privy' || portfolioScope == 'merged';
 
   factory CryptoWalletDetail.fromJson(Map<String, dynamic> json) {
     return CryptoWalletDetail(
@@ -74,6 +85,9 @@ class CryptoWalletDetail {
       totalGainUsd: _parseDouble(json['total_gain_usd']),
       totalGains: _parseDouble(json['total_gains']),
       totalGainsPct: _parseDouble(json['total_gains_pct']),
+      portfolioScope: json['portfolio_scope'] as String?,
+      privyBalance: _parseDouble(json['privy_balance']),
+      platformBalance: _parseDouble(json['platform_balance']),
     );
   }
 

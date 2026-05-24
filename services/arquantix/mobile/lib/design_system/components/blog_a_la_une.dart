@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../atoms/app_colors.dart';
@@ -14,11 +12,14 @@ class BlogALaUneItem {
   final String title;
   final String coverUrl;
   final int readingTime;
+
   /// Texte meta personnalisé (ex. date). Si renseigné, remplace "X Minutes".
   final String? metaText;
+
   /// Nom de l'auteur affiché a droite de la date dans la ligne meta.
   final String? authorName;
   final VoidCallback? onTap;
+
   /// Tag affiché sur l'image (ex. "Real Estate", "Crypto"), optionnel.
   final String? tag;
 
@@ -37,7 +38,11 @@ class BlogALaUneItem {
   });
 }
 
-/// Marge horizontale (même que Marketing Cards / page normale).
+/// Nombre de cartes visibles (1,05 = 1 pleine + léger peek 2e),
+/// comme [ExclusiveOffersCarousel].
+const double _visibleCardsCount = 1.05;
+
+/// Marge horizontale (même que Marketing Cards / offres exclusives).
 const double _horizontalMargin = AppSpacing.xl;
 
 /// Padding vertical pour ne pas couper les ombres des cartes (top/bottom).
@@ -46,8 +51,10 @@ const double _shadowPaddingVertical = AppSpacing.sm;
 /// Espace titre → carousel (réduit de _shadowPaddingVertical pour garder le même ordre de grandeur).
 const double _titleToCarouselGap = AppSpacing.md - _shadowPaddingVertical;
 
-/// Module "Blog A la une" : titre, carrousel une carte par swipe (comme les news).
-/// Utilise [NewsCard] comme carte interne (Figma design system).
+/// Module « Blog à la une » : scroll horizontal continu + peek carte suivante,
+/// même logique que [ExclusiveOffersCarousel] (page Invest).
+///
+/// Carte interne : [NewsCard] (Figma design system).
 class BlogALaUne extends StatefulWidget {
   /// Titre du module (défaut "A la une").
   final String title;
@@ -58,10 +65,15 @@ class BlogALaUne extends StatefulWidget {
   /// Si fourni, le titre devient cliquable avec un caret et appelle ce callback.
   final VoidCallback? onTitleTap;
 
+  /// Affiche le titre + son gap. Permet aux écrans qui placent le module
+  /// **en première position** de masquer le titre (cf. exclusive offer detail).
+  final bool showTitle;
+
   const BlogALaUne({
     this.title = 'A la une',
     required this.items,
     this.onTitleTap,
+    this.showTitle = true,
     super.key,
   });
 
@@ -73,15 +85,6 @@ class _BlogALaUneState extends State<BlogALaUne> {
   double? _measuredHeight;
   bool _measureScheduled = false;
   final GlobalKey _measureKey = GlobalKey();
-
-  /// Une carte par swipe — pas de défilement horizontal continu.
-  late final PageController _pageController = PageController(viewportFraction: 1);
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
 
   void _measureCardHeight() {
     final box = _measureKey.currentContext?.findRenderObject() as RenderBox?;
@@ -110,84 +113,79 @@ class _BlogALaUneState extends State<BlogALaUne> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     const gap = AppSpacing.md;
     final availableWidth = screenWidth - _horizontalMargin * 2;
-
-    final bool singleCard = widget.items.length == 1;
-    /// Largeur de la carte pour [Offstage] (alignée sur la 1re page du carrousel).
-    final cardWidth = singleCard
-        ? availableWidth
-        : screenWidth - _horizontalMargin - gap / 2;
-
-    final last = widget.items.length - 1;
+    final cardWidth = (availableWidth - gap) / _visibleCardsCount;
 
     if (_measuredHeight == null && !_measureScheduled) {
       _measureScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _measureCardHeight());
     }
 
+    final firstItem = widget.items.first;
     final height = _measuredHeight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
-          child: widget.onTitleTap != null
-              ? Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: widget.onTitleTap,
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            widget.title,
-                            style: AppTypography.sectionTitle.copyWith(
-                              fontWeight: FontWeight.w700,
+        if (widget.showTitle) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _horizontalMargin),
+            child: widget.onTitleTap != null
+                ? Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: widget.onTitleTap,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.title,
+                              style: AppTypography.sectionTitle.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          const KalaiIcon(
-                            KalaiIcons.chevronRight,
-                            size: 22,
-                            color: AppColors.textPrimary,
-                          ),
-                        ],
+                            const SizedBox(width: AppSpacing.xs),
+                            const KalaiIcon(
+                              KalaiIcons.chevronRight,
+                              size: 22,
+                              color: AppColors.textPrimary,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
+                  )
+                : Text(
+                    widget.title,
+                    style: AppTypography.sectionTitle.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                )
-              : Text(
-                  widget.title,
-                  style: AppTypography.sectionTitle.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-        ),
-        SizedBox(height: _titleToCarouselGap),
+          ),
+          const SizedBox(height: _titleToCarouselGap),
+        ],
         if (height != null && height > 0)
           SizedBox(
-            height: math.max(height, _minCardHeight) +
-                _shadowPaddingVertical,
-            child: PageView.builder(
-              controller: _pageController,
-              padEnds: false,
+            height: height + _shadowPaddingVertical,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(
+                left: _horizontalMargin,
+                right: _horizontalMargin,
+                top: _shadowPaddingVertical,
+              ),
               itemCount: widget.items.length,
+              separatorBuilder: (_, __) => const SizedBox(width: gap),
               itemBuilder: (context, index) {
-                final left =
-                    index == 0 ? _horizontalMargin : gap / 2;
-                final right =
-                    index == last ? _horizontalMargin : gap / 2;
-                return Padding(
-                  padding: EdgeInsets.only(
-                    left: left,
-                    right: right,
-                    top: _shadowPaddingVertical,
-                  ),
-                  child: _buildNewsCard(widget.items[index]),
+                final item = widget.items[index];
+                return SizedBox(
+                  key: ValueKey<String>(
+                      item.coverUrl.isNotEmpty ? item.coverUrl : 'blog-featured-$index'),
+                  width: cardWidth,
+                  child: _buildNewsCard(item),
                 );
               },
             ),
@@ -197,19 +195,10 @@ class _BlogALaUneState extends State<BlogALaUne> {
             child: SizedBox(
               key: _measureKey,
               width: cardWidth,
-              child: _buildNewsCard(widget.items.first),
+              child: _buildNewsCard(firstItem),
             ),
           ),
       ],
     );
   }
-
-  /// Hauteur minimale basée sur la structure fixe de [NewsCard] (image 167 + espacement + texte).
-  static const double _minCardHeight =
-      167 + // image section (Figma)
-      8 + // padding haut contenu (image → titre)
-      66 + // title (3 lines × 22px)
-      8 + // gap title → meta
-      18 + // meta (temps de lecture)
-      16; // padding bas contenu
 }

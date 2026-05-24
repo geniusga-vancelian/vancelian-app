@@ -100,5 +100,19 @@
 	<string>Vancelian utilise votre micro pour vous permettre de dicter vos questions à l’assistant.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Vancelian utilise la reconnaissance vocale pour transcrire vos questions à l’assistant.</string>
+	<!-- OAuth Privy (retour après Google / Apple) — doit matcher PrivyDartDefines.oauthRedirectScheme (défaut vancelian) et le dashboard Privy. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>privy.oauth.callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vancelian</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

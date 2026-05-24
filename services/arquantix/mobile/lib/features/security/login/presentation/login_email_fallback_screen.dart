@@ -8,6 +8,7 @@ import '../../../../design_system/components/app_page_title.dart';
 import '../../../../design_system/components/app_primary_button.dart';
 import '../../../../design_system/components/app_text_input.dart';
 import '../../../../design_system/components/app_top_nav_bar.dart';
+import '../../../wallet/privy/privy_dart_defines.dart';
 import '../../passcode/data/device_id_service.dart';
 import '../../passcode/data/session_service.dart';
 import '../../passkeys/application/passkey_service.dart';
@@ -17,6 +18,7 @@ import '../../../app_entry/application/post_login_local_security_flow.dart';
 import '../application/auth_flow_lifecycle_guard.dart';
 import '../../passkeys/presentation/passkey_login_coordinator.dart';
 import 'login_email_otp_screen.dart';
+import 'login_phone_screen.dart';
 
 String _maskPhoneBanner(String e164) {
   final t = e164.trim();
@@ -26,18 +28,24 @@ String _maskPhoneBanner(String e164) {
   return '$head •• •• •• $tail';
 }
 
-/// Fallback : e-mail + OTP e-mail ou passkey (hors flux SMS principal).
-///
-/// L’e-mail n’est **pas** pré-rempli depuis le stockage local (privacy / device partagé).
+/// Connexion / récupération par e-mail (OTP Privy) ou passkey seule ([passkeyOnly]).
 class LoginEmailFallbackScreen extends StatefulWidget {
   const LoginEmailFallbackScreen({
     super.key,
     this.phoneE164,
     this.recoveryMode = false,
+    this.passkeyOnly = false,
+    this.signUpMode = false,
   });
 
   final String? phoneE164;
   final bool recoveryMode;
+
+  /// `true` depuis la feuille « Continuer avec une passkey » (sans bouton OTP e-mail).
+  final bool passkeyOnly;
+
+  /// Inscription (création de compte) plutôt que connexion.
+  final bool signUpMode;
 
   @override
   State<LoginEmailFallbackScreen> createState() =>
@@ -92,7 +100,9 @@ class _LoginEmailFallbackScreenState extends State<LoginEmailFallbackScreen> {
   void _onAuthFlowStaleAfterBackground({required DateTime pausedAt}) {
     if (!mounted) return;
     final bgSec = DateTime.now().difference(pausedAt).inSeconds.clamp(0, 86400);
-    PostAuthFlowSecurityEvents.passkeyFlowInvalidatedOnResume(backgroundSeconds: bgSec);
+    PostAuthFlowSecurityEvents.passkeyFlowInvalidatedOnResume(
+      backgroundSeconds: bgSec,
+    );
     setState(() => _busy = false);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -122,9 +132,7 @@ class _LoginEmailFallbackScreenState extends State<LoginEmailFallbackScreen> {
           setState(() => _busy = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                'Passkey indisponible. Utilisez le code reçu par e-mail.',
-              ),
+              content: Text('Passkey indisponible. Réessayez ou utilisez l’e-mail.'),
             ),
           );
         }
@@ -152,6 +160,13 @@ class _LoginEmailFallbackScreenState extends State<LoginEmailFallbackScreen> {
       setState(() => _inline = 'Saisissez une adresse e-mail valide.');
       return;
     }
+    if (!PrivyDartDefines.isConfigured) {
+      setState(() {
+        _inline =
+            'Connexion par e-mail indisponible (Privy non configuré dans cette build).';
+      });
+      return;
+    }
     await SessionService.instance.rememberLoginIdentifiers(email: _email);
     if (!mounted) return;
     final ok = await Navigator.of(context).push<bool>(
@@ -159,6 +174,7 @@ class _LoginEmailFallbackScreenState extends State<LoginEmailFallbackScreen> {
         builder: (_) => LoginEmailOtpScreen(
           email: _email,
           phoneE164: widget.phoneE164,
+          signUpMode: widget.signUpMode,
         ),
       ),
     );
@@ -171,17 +187,32 @@ class _LoginEmailFallbackScreenState extends State<LoginEmailFallbackScreen> {
   Widget build(BuildContext context) {
     final last = _emailCtrl.text.trim();
     final returning = last.isNotEmpty && _emailOk;
+    final passkeyOnly = widget.passkeyOnly;
+
+    final signUp = widget.signUpMode;
     final title = widget.recoveryMode
         ? 'Récupération du compte'
-        : (returning ? 'Heureux de vous revoir' : 'Continuer avec l’e-mail');
+        : passkeyOnly
+            ? 'Continuer avec une passkey'
+            : signUp
+                ? 'Créer votre compte'
+                : (returning ? 'Heureux de vous revoir' : 'Continuer avec l’e-mail');
+
     final subtitle = widget.recoveryMode
-        ? 'Utilisez l’e-mail associé à votre compte. Nous vous enverrons un code de vérification.'
-        : (returning
-            ? 'Recevez un code par e-mail ou utilisez votre passkey.'
-            : 'Indiquez l’e-mail de votre compte pour recevoir un code ou activer la passkey.');
+        ? 'Indiquez l’e-mail associé à votre compte. Nous vous enverrons un code de vérification à six chiffres.'
+        : passkeyOnly
+            ? 'Indiquez l’e-mail de votre compte, puis validez avec votre passkey.'
+            : signUp
+                ? 'Indiquez votre e-mail. Un code à six chiffres vous sera envoyé pour créer votre compte.'
+                : (returning
+                    ? 'Recevez un code à six chiffres par e-mail pour vous connecter.'
+                    : 'Indiquez l’e-mail de votre compte. Un code à six chiffres vous sera envoyé pour vous connecter.');
+
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
+      resizeToAvoidBottomInset: true,
       appBar: AppTopNavBar(
         leadingType: AppTopNavBarLeading.back,
         onBackTap: () => Navigator.of(context).maybePop(),
@@ -220,7 +251,10 @@ class _LoginEmailFallbackScreenState extends State<LoginEmailFallbackScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.smartphone_outlined, color: AppColors.indigo),
+                      const Icon(
+                        Icons.smartphone_outlined,
+                        color: AppColors.indigo,
+                      ),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
@@ -253,21 +287,38 @@ class _LoginEmailFallbackScreenState extends State<LoginEmailFallbackScreen> {
                   ),
                 ),
               ),
-              AppPrimaryButton(
-                label: 'Recevoir un code par e-mail',
-                size: AppPrimaryButtonSize.large,
-                isLoading: false,
-                onPressed: _busy || !_emailOk ? null : _openEmailOtp,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppPrimaryButton(
-                label: 'Utiliser une passkey',
-                variant: AppPrimaryButtonVariant.secondary,
-                size: AppPrimaryButtonSize.large,
-                isLoading: _busy,
-                onPressed: _busy || !_emailOk ? null : _passkeyLogin,
-              ),
-              SizedBox(height: MediaQuery.paddingOf(context).bottom),
+              if (passkeyOnly)
+                AppPrimaryButton(
+                  label: 'Utiliser une passkey',
+                  size: AppPrimaryButtonSize.large,
+                  isLoading: _busy,
+                  onPressed: _busy || !_emailOk ? null : _passkeyLogin,
+                )
+              else
+                AppPrimaryButton(
+                  label: 'Recevoir un code par e-mail',
+                  size: AppPrimaryButtonSize.large,
+                  isLoading: _busy,
+                  onPressed: _busy || !_emailOk ? null : _openEmailOtp,
+                ),
+              if (!signUp && !passkeyOnly && !widget.recoveryMode) ...[
+                const SizedBox(height: AppSpacing.md),
+                AppPrimaryButton(
+                  label: 'Utiliser mon numéro de mobile',
+                  variant: AppPrimaryButtonVariant.secondary,
+                  size: AppPrimaryButtonSize.large,
+                  onPressed: _busy
+                      ? null
+                      : () {
+                          Navigator.of(context).push<void>(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const LoginPhoneScreen(),
+                            ),
+                          );
+                        },
+                ),
+              ],
+              SizedBox(height: bottomSafe > 0 ? bottomSafe : AppSpacing.md),
             ],
           ),
         ),

@@ -274,7 +274,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
       case LoginMethodSheetChoice.passkey:
         final ok = await Navigator.of(context).push<bool>(
           MaterialPageRoute<bool>(
-            builder: (_) => const LoginEmailFallbackScreen(),
+            builder: (_) => const LoginEmailFallbackScreen(passkeyOnly: true),
           ),
         );
         if (ok == true && mounted) await _finishServerLoginSuccess();

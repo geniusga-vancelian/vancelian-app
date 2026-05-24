@@ -236,6 +236,18 @@ abstract class AppLocalizations {
   /// **'{count} steps'**
   String exclusiveOfferStepsCountLabel(int count);
 
+  /// No description provided for @exclusiveOfferVirtualTourEmbedInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to display the virtual tour: invalid or unsupported URL.'**
+  String get exclusiveOfferVirtualTourEmbedInvalid;
+
+  /// No description provided for @exclusiveOfferVirtualTourOpenBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in browser'**
+  String get exclusiveOfferVirtualTourOpenBrowser;
+
   /// Reading time of an article (e.g. "5 min read")
   ///
   /// In en, this message translates to:

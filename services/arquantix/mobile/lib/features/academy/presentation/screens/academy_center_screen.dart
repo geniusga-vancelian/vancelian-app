@@ -44,7 +44,7 @@ class _AcademyCenterScreenState extends State<AcademyCenterScreen> {
       _error = null;
     });
     try {
-      final collections = await _api.getCollections(locale: 'fr');
+      final collections = await _api.getCollections();
       if (!mounted) return;
       setState(() {
         _collections = collections;

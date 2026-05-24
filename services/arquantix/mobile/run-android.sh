@@ -12,6 +12,9 @@ export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# shellcheck source=scripts/flutter_local_env.sh
+source "$SCRIPT_DIR/scripts/flutter_local_env.sh"
+
 API_URL="${API_BASE_URL:-http://10.0.2.2:3000}"
 if [ -n "${AUTH_API_BASE_URL:-}" ]; then
   AUTH_URL="$AUTH_API_BASE_URL"
@@ -41,7 +44,13 @@ echo "→ Lancement de l'app sur Android..."
 # Flutter n'associe pas toujours "android" à l'émulateur ; utiliser l'ID explicite
 ANDROID_DEVICE=$(flutter devices 2>/dev/null | grep "emulator-" | awk -F' • ' '{print $2}' | awk '{print $1}')
 if [ -n "$ANDROID_DEVICE" ]; then
-  flutter run -d "$ANDROID_DEVICE" --dart-define=API_BASE_URL="$API_URL" --dart-define=AUTH_API_BASE_URL="$AUTH_URL" "$@"
+  flutter run -d "$ANDROID_DEVICE" \
+    --dart-define=API_BASE_URL="$API_URL" \
+    --dart-define=AUTH_API_BASE_URL="$AUTH_URL" \
+    "${FLUTTER_EXTRA_DART_DEFINES[@]}" "$@"
 else
-  flutter run -d android --dart-define=API_BASE_URL="$API_URL" --dart-define=AUTH_API_BASE_URL="$AUTH_URL" "$@"
+  flutter run -d android \
+    --dart-define=API_BASE_URL="$API_URL" \
+    --dart-define=AUTH_API_BASE_URL="$AUTH_URL" \
+    "${FLUTTER_EXTRA_DART_DEFINES[@]}" "$@"
 fi

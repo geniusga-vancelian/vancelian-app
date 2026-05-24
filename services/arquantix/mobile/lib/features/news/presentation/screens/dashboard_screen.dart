@@ -43,7 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      final data = await _api.getFeed(locale: 'fr', pageSize: 20);
+      final data = await _api.getFeed(pageSize: 20);
       final list = <ArticlePreview>[];
       if (data.featured != null) list.add(data.featured!);
       list.addAll(data.highlighted);

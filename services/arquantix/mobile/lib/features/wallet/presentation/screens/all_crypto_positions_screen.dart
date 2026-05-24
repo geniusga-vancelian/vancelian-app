@@ -13,6 +13,7 @@ import '../../domain/models/crypto_positions_data.dart';
 import 'buy_flow/buy_flow_controller.dart';
 import 'crypto_wallet_detail_screen.dart';
 import 'portfolio_statistics_screen.dart';
+import 'lifi_swap_flow/lifi_swap_controller.dart';
 import 'sell_all_flow/sell_all_confirmation_screen.dart';
 
 class AllCryptoPositionsScreen extends StatefulWidget {
@@ -39,6 +40,14 @@ class _AllCryptoPositionsScreenState extends State<AllCryptoPositionsScreen> {
     super.initState();
     _load();
     _loadHeroSparkline();
+  }
+
+  void _openLifiSwap() async {
+    final didSwap = await LifiSwapController.start(context);
+    if (didSwap == true && mounted) {
+      _load(forceRefresh: true);
+      _loadHeroSparkline();
+    }
   }
 
   void _openBuyFlow() async {
@@ -245,7 +254,7 @@ class _AllCryptoPositionsScreenState extends State<AllCryptoPositionsScreen> {
           CircleButtonItem(
             icon: Icons.swap_horiz_rounded,
             label: 'Echanger',
-            onTap: _openBuyFlow,
+            onTap: _openLifiSwap,
             isPrimary: true,
           ),
           CircleButtonItem(
@@ -343,6 +352,11 @@ class _AllCryptoPositionsScreenState extends State<AllCryptoPositionsScreen> {
     final valueLabel = value != null ? _activeFormatter.format(value) : '—';
 
     final volumeStr = _formatVolume(pos.balance, pos.asset);
+    final privyHint = pos.isPrivyOnly
+        ? 'Wallet Privy · $volumeStr'
+        : pos.portfolioScope == 'merged'
+            ? '$volumeStr · incl. Privy'
+            : volumeStr;
 
     String? perfLabel;
     Color? perfColor;
@@ -366,7 +380,7 @@ class _AllCryptoPositionsScreenState extends State<AllCryptoPositionsScreen> {
         fallbackIcon: _iconForAsset(pos.asset),
       ),
       title: pos.name,
-      subtitle: volumeStr,
+      subtitle: privyHint,
       amount: valueLabel,
       secondaryAmount: perfLabel,
       secondaryAmountColor: perfColor,

@@ -13,6 +13,9 @@ export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# shellcheck source=scripts/flutter_local_env.sh
+source "$SCRIPT_DIR/scripts/flutter_local_env.sh"
+
 # URL API (Next.js sur port 3000)
 # - iOS Simulator : localhost fonctionne
 # - Android émulateur : utiliser API_BASE_URL=http://10.0.2.2:3000 ./run.sh
@@ -38,4 +41,5 @@ flutter pub get
 
 echo ""
 echo "→ Lancement de l'app..."
-flutter run --dart-define=API_BASE_URL="$API_URL" --dart-define=AUTH_API_BASE_URL="$AUTH_URL" "$@"
+flutter run --dart-define=API_BASE_URL="$API_URL" --dart-define=AUTH_API_BASE_URL="$AUTH_URL" \
+  "${FLUTTER_EXTRA_DART_DEFINES[@]}" "$@"

@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import {
   ArrowDown,
   ArrowLeft,
+  ArrowLeftRight,
   ArrowUp,
   BarChart3,
   Bell,
@@ -37,7 +38,9 @@ import {
   PORTAL_ROUTES,
   portalCryptoInstrumentRoute,
   portalDedicatedDepositRoute,
+  portalSwapRoute,
 } from '@/lib/portal/portalRouting'
+import { isSwapV1Token } from '@/lib/portal/swapFlowTypes'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { cn } from '@/lib/utils'
 
@@ -110,6 +113,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
     selectMoneyValue(currency, detail.realizedGainEur, detail.realizedGainUsd) ?? detail.realizedGains
   const totalGain =
     selectMoneyValue(currency, detail.totalGainEur, detail.totalGainUsd) ?? detail.totalGains
+  const swapHref = isSwapV1Token(ticker) ? portalSwapRoute({ to: ticker }) : PORTAL_ROUTES.walletSwap
 
   return (
     <PortalPageContainer>
@@ -181,6 +185,12 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
                   </Button>
                 </>
               )}
+              <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
+                <PortalNavLink href={swapHref}>
+                  <ArrowLeftRight className="h-4 w-4" />
+                  Échanger
+                </PortalNavLink>
+              </Button>
               <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
                 <ListOrdered className="h-4 w-4" />
                 Ordres

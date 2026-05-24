@@ -16,6 +16,7 @@ import {
   PORTAL_MAIN_NAV_TABS,
   PORTAL_SEARCH_NAV,
 } from '@/lib/portal/portalNavModel'
+import { Wallet } from 'lucide-react'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
 import { useNavPending } from '@/components/site/NavPendingContext'
@@ -188,6 +189,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
 
   const avatarLabel = resolveAvatarLabel(profileAvatar.initials)
   const profileActive = isNavActive(effectivePath, PORTAL_ROUTES.profile)
+  const myWalletsActive = isNavActive(effectivePath, PORTAL_ROUTES.myWallets)
 
   const navBarStyle: React.CSSProperties = {
     background: palette.background,
@@ -244,6 +246,21 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
               style={{ color: palette.linkColor }}
             >
               <PORTAL_SEARCH_NAV.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            </PortalNavLink>
+
+            <PortalNavLink
+              href={PORTAL_ROUTES.myWallets}
+              aria-label="My wallets"
+              aria-current={myWalletsActive ? 'page' : undefined}
+              className={cn(
+                'hidden h-9 items-center gap-1.5 rounded-v-pill px-3 font-ui text-[13px] font-medium no-underline sm:inline-flex',
+                'transition-colors duration-v-fast hover:bg-v-fg-05',
+                myWalletsActive && 'bg-v-fg-05',
+              )}
+              style={{ color: palette.linkColor }}
+            >
+              <Wallet className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+              My wallets
             </PortalNavLink>
 
             {!profileAvatar.loaded ? (
@@ -340,6 +357,19 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                   >
                     <PORTAL_SEARCH_NAV.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
                     {PORTAL_SEARCH_NAV.label}
+                  </PortalNavLink>
+                </li>
+                <li>
+                  <PortalNavLink
+                    href={PORTAL_ROUTES.myWallets}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-v-input px-3 py-3 font-ui text-[16px] font-medium no-underline',
+                      myWalletsActive ? 'bg-v-fg-05 text-v-fg' : 'text-v-fg-body',
+                    )}
+                  >
+                    <Wallet className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                    My wallets
                   </PortalNavLink>
                 </li>
               </ul>

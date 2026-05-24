@@ -145,6 +145,10 @@ class CryptoTransactionItem {
     required this.direction,
     this.fromAsset,
     this.toAsset,
+    this.transactionKind,
+    this.sourceSystem,
+    this.txHash,
+    this.custodyProvider,
   });
 
   final String id;
@@ -164,11 +168,23 @@ class CryptoTransactionItem {
   final String direction;
   final String? fromAsset;
   final String? toAsset;
+  final String? transactionKind;
+  final String? sourceSystem;
+  final String? txHash;
+  final String? custodyProvider;
 
   bool get isSwap =>
       fromAsset != null &&
       toAsset != null &&
       fromAsset!.toUpperCase() != currency.toUpperCase();
+
+  bool get isPrivyLedger =>
+      sourceSystem == 'privy' ||
+      transactionKind == 'privy_deposit_in' ||
+      custodyProvider == 'privy' && side == 'deposit';
+
+  bool get isPrivyDeposit =>
+      sourceSystem == 'privy' && side == 'deposit';
 
   factory CryptoTransactionItem.fromJson(Map<String, dynamic> json) {
     return CryptoTransactionItem(
@@ -189,6 +205,10 @@ class CryptoTransactionItem {
       direction: json['direction'] as String? ?? '',
       fromAsset: json['from_asset'] as String?,
       toAsset: json['to_asset'] as String?,
+      transactionKind: json['transaction_kind'] as String?,
+      sourceSystem: json['source_system'] as String?,
+      txHash: json['tx_hash'] as String?,
+      custodyProvider: json['custody_provider'] as String?,
     );
   }
 }

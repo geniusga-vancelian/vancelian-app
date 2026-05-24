@@ -18,23 +18,28 @@ import '../../../../design_system/components/modale.dart';
 import '../../../app_entry/application/post_login_local_security_flow.dart';
 import '../application/auth_flow_lifecycle_guard.dart'
     show AuthFlowLifecycleObserver;
+import '../../../../core/privy_identity_bridge_service.dart';
+import '../../../wallet/privy/privy_auth_provider.dart';
+import '../../../wallet/privy/privy_dart_defines.dart';
 import '../../passcode/data/device_id_service.dart';
 import '../../passcode/data/session_service.dart';
 import '../../passkeys/data/passkey_api.dart';
 import '../../passkeys/domain/passkey_exceptions.dart';
 import '../widgets/login_confirmation_code_page_template.dart';
 
-/// OTP connexion par **e-mail** (admin email OTP) — fallback hors flux SMS principal.
+/// OTP connexion par **e-mail** : Privy (code 6 chiffres) + échange session Vancelian.
 /// Gabarit titre / espacements alignés sur [LoginOtpScreen] ([LoginConfirmationCodePageHeader]).
 class LoginEmailOtpScreen extends StatefulWidget {
   const LoginEmailOtpScreen({
     super.key,
     required this.email,
     this.phoneE164,
+    this.signUpMode = false,
   });
 
   final String email;
   final String? phoneE164;
+  final bool signUpMode;
 
   @override
   State<LoginEmailOtpScreen> createState() => _LoginEmailOtpScreenState();
@@ -42,6 +47,8 @@ class LoginEmailOtpScreen extends StatefulWidget {
 
 class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
   final _api = PasskeyApi();
+  late final PrivyAuthProvider _privy = createPrivyAuthProvider();
+  bool get _usePrivy => PrivyDartDefines.isConfigured;
   late final AuthFlowLifecycleObserver _lifecycleObserver =
       AuthFlowLifecycleObserver(
     onStaleAfterBackground: ({required DateTime pausedAt}) {
@@ -96,7 +103,7 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
       await Modale.show<void>(
         context,
         ModaleParams(
-          title: 'Connexion',
+          title: _flowLabel(),
           content: DsValidationResultBody(
             status: DsStepperAvatarStatus.warning,
             progress: 100,
@@ -125,7 +132,7 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
     await Modale.show<void>(
       context,
       ModaleParams(
-        title: 'Connexion',
+        title: _flowLabel(),
         content: DsValidationResultBody(
           status: DsStepperAvatarStatus.warning,
           progress: 100,
@@ -142,7 +149,7 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
     await Modale.show<void>(
       context,
       ModaleParams(
-        title: 'Connexion',
+        title: _flowLabel(),
         content: DsValidationResultBody(
           status: DsStepperAvatarStatus.error,
           progress: 100,
@@ -179,6 +186,17 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
       _wrongCode = false;
     });
     try {
+      if (_usePrivy) {
+        await _privy.sendPrivyEmailCode(widget.email);
+        if (!mounted) return;
+        setState(() {
+          _sending = false;
+          _sendSucceeded = true;
+          _devExposedCode = null;
+        });
+        _startCountdown();
+        return;
+      }
       final body = await _api.adminEmailOtpStart(email: widget.email);
       if (!mounted) return;
       final dc = body['dev_code'];
@@ -188,12 +206,40 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
         _devExposedCode = dc is String && dc.length == 6 ? dc : null;
       });
       _startCountdown();
+    } on PrivyAuthProviderException catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      FocusScope.of(context).unfocus();
+      await _showSendWarningModal(e.message);
     } on PasskeyApiException catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
       FocusScope.of(context).unfocus();
       final msg = loginEmailOtpStartFailureUserMessage(e);
       await _showSendWarningModal(msg);
+    }
+  }
+
+  String _flowLabel() => widget.signUpMode ? 'Inscription' : 'Connexion';
+
+  String _privyExchangeFailureMessage(PrivyExchangeException e) {
+    switch (e.code) {
+      case 'privy.exchange.person_not_found':
+        return 'Aucun compte trouvé pour cet e-mail. Vérifiez l’adresse ou contactez le support.';
+      case 'privy.signup.email_required':
+        return 'E-mail requis pour créer le compte.';
+      case 'signup_email_use_login':
+        return 'Cet e-mail est déjà associé à un compte. Utilisez « Me connecter ».';
+      case 'signup_email_unavailable':
+        return 'Impossible de créer un compte avec cet e-mail. Utilisez « Me connecter ».';
+      case 'MOBILE_APP_NOT_ALLOWED':
+        return 'Ce compte n’est pas autorisé sur l’application mobile.';
+      default:
+        return e.message.trim().isNotEmpty
+            ? e.message
+            : (widget.signUpMode
+                ? 'Inscription impossible. Réessayez.'
+                : 'Connexion impossible. Réessayez.');
     }
   }
 
@@ -205,6 +251,38 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
       _wrongCode = false;
     });
     try {
+      if (_usePrivy) {
+        await _privy.completePrivyEmailLogin(
+          email: widget.email,
+          code: code,
+        );
+        final privyToken = await _privy.getAccessToken();
+        if (privyToken == null || privyToken.trim().isEmpty) {
+          throw PrivyAuthProviderException(
+            'Jeton Privy indisponible après validation du code.',
+          );
+        }
+        if (widget.signUpMode) {
+          await PrivyIdentityBridgeService.instance.exchangeSignupPrivyToken(
+            privyAccessToken: privyToken,
+            emailForStubDev: widget.email,
+          );
+          await SessionService.instance.setPendingEuRegistrationAfterPasscode(true);
+        } else {
+          await PrivyIdentityBridgeService.instance.exchangePrivyToken(
+            privyAccessToken: privyToken,
+          );
+          await PostLoginLocalSecurityFlow.flagRegistrationResumeIfAccountNotActive();
+        }
+        await SessionService.instance.rememberLoginIdentifiers(
+          email: widget.email,
+          phoneE164: widget.phoneE164,
+        );
+        if (!mounted) return;
+        developer.log('privy_email_otp_success', name: 'LoginFlow');
+        await PostLoginLocalSecurityFlow.navigateReplacingLoginStack(context);
+        return;
+      }
       final deviceId = await DeviceIdService.instance.getOrCreate();
       final fp = await DeviceIdService.instance.buildFingerprintHeaderJson();
       final tokens = await _api.adminEmailOtpVerify(
@@ -240,6 +318,37 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
       if (!mounted) return;
       developer.log('otp_success', name: 'RegistrationFlow');
       await PostLoginLocalSecurityFlow.navigateReplacingLoginStack(context);
+    } on PrivyAuthProviderException catch (e) {
+      if (!mounted) return;
+      final wrongCode = isPrivyWrongCodeError(e);
+      setState(() {
+        _verifying = false;
+        _wrongCode = true;
+      });
+      _unfocusOtpAfterError();
+      await _showVerifyErrorModal(
+        wrongCode
+            ? 'Le code saisi ne correspond pas. Vérifiez le code reçu par e-mail.'
+            : e.message,
+      );
+      if (!mounted) return;
+      setState(() {
+        _wrongCode = false;
+        _otpGen++;
+      });
+    } on PrivyExchangeException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _verifying = false;
+        _wrongCode = true;
+      });
+      _unfocusOtpAfterError();
+      await _showVerifyErrorModal(_privyExchangeFailureMessage(e));
+      if (!mounted) return;
+      setState(() {
+        _wrongCode = false;
+        _otpGen++;
+      });
     } on PasskeyApiException catch (e) {
       if (!mounted) return;
       final msg = loginEmailOtpVerifyFailureUserMessage(e);
@@ -285,7 +394,11 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const LoginConfirmationCodePageHeader(title: 'Code par e-mail'),
+              LoginConfirmationCodePageHeader(
+                title: widget.signUpMode
+                    ? 'Code d’inscription par e-mail'
+                    : 'Code par e-mail',
+              ),
               if (_devExposedCode != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.sm),

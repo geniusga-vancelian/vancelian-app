@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/config.dart';
+import '../../../../core/i18n/tr.dart';
 import '../../../../design_system/design_system.dart';
 import '../../data/all_transactions_layout_api.dart';
 import '../../widgets/transaction_template.dart';
@@ -184,7 +185,9 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     if (fromCenter.isNotEmpty) return fromCenter;
     final fromHeader = (_headerConfig?['title'] ?? '').toString().trim();
     if (fromHeader.isNotEmpty) return fromHeader;
-    return 'All transactions';
+    /// Démo Stratégie 1 : `screen.transactions.title` overridable depuis
+    /// `/admin/i18n/ui-strings`, sinon fallback EN compilé.
+    return tr(key: 'screen.transactions.title', fallback: 'All transactions');
   }
 
   bool get _showMonthTabs {

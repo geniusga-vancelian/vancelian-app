@@ -70,6 +70,13 @@ export function resolvePrimaryPersonCryptoWallet(
   return wallets.find((w) => w.is_primary) ?? wallets[0] ?? null
 }
 
+export function findEvmPersonWallet(
+  wallets: PortalPersonCryptoWallet[],
+): PortalPersonCryptoWallet | null {
+  const evmWallets = wallets.filter((w) => w.chain_type.trim().toLowerCase() === 'evm')
+  return resolvePrimaryPersonCryptoWallet(evmWallets)
+}
+
 const PERSON_WALLETS_CACHE_KEY = 'portal:privy-person-wallets'
 
 /** Bootstrap synchrone depuis le cache warmup (navigation deposit). */

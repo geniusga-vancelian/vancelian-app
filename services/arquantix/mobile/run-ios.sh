@@ -18,6 +18,9 @@ export PATH="/opt/homebrew/bin:$PATH"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# shellcheck source=scripts/flutter_local_env.sh
+source "$SCRIPT_DIR/scripts/flutter_local_env.sh"
+
 # Simulateur : toujours 127.0.0.1:3000 / :8000 par défaut (pas d’IP LAN imposée).
 export ARQUANTIX_IOS_USE_LAN_DEFAULT=0
 
@@ -106,4 +109,7 @@ fi
 echo "   (cible: $UDID)"
 # Désinstaller l'app du simulateur pour éviter "No such process" (install propre)
 xcrun simctl uninstall "$UDID" com.example.arquantixNews 2>/dev/null || true
-flutter run -d "$UDID" --dart-define=API_BASE_URL="$API_URL" --dart-define=AUTH_API_BASE_URL="$AUTH_URL" "$@"
+flutter run -d "$UDID" \
+  --dart-define=API_BASE_URL="$API_URL" \
+  --dart-define=AUTH_API_BASE_URL="$AUTH_URL" \
+  "${FLUTTER_EXTRA_DART_DEFINES[@]}" "$@"

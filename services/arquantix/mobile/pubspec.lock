@@ -749,6 +749,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.5.0"
+  privy_flutter:
+    dependency: "direct main"
+    description:
+      name: privy_flutter
+      sha256: "875236fb577ba26be6ff4c737133d7a0bcf6828c8f3126b48648dc0f37ee2c3f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
   pub_semver:
     dependency: transitive
     description:

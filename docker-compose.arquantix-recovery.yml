@@ -88,6 +88,8 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
+        NEXT_PUBLIC_PRIVY_APP_ID: ${NEXT_PUBLIC_PRIVY_APP_ID:-${PRIVY_APP_ID:-}}
+        NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID: ${NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID:-${PRIVY_WEB_CLIENT_ID:-}}
         NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO: ${NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -108,6 +110,9 @@ services:
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
       ADMIN_LOGIN0_BG_VIDEO: ${ADMIN_LOGIN0_BG_VIDEO:-}
       NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO: ${NEXT_PUBLIC_ADMIN_LOGIN0_BG_VIDEO:-}
+      # 0 en local si `migrate deploy` échoue (P3005 : schéma déjà présent sans _prisma_migrations) — évite crash-loop.
+      # Migrations manuelles : RUN_PRISMA_MIGRATE_ON_START=1 docker compose … up (une fois la baseline OK).
+      RUN_PRISMA_MIGRATE_ON_START: ${RUN_PRISMA_MIGRATE_ON_START:-0}
     ports:
       - "${WEB_PORT:-3000}:3000"
     # Pas de bind mount sur /app : monter le dépôt hôte écrase le filesystem de l'image (dont .next du

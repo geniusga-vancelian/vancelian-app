@@ -43,7 +43,10 @@ export type ArticleStepsContent = {
 
 type StepStatus = 'completed' | 'active' | 'upcoming'
 
-function resolveStatuses(steps: ArticleStepsItemData[]): StepStatus[] {
+function resolveStatuses(steps: ArticleStepsItemData[], suppressActiveStep = false): StepStatus[] {
+  if (suppressActiveStep) {
+    return steps.map((s) => (s.isCompleted ? 'completed' : 'upcoming'))
+  }
   const firstPending = steps.findIndex((s) => !s.isCompleted)
   return steps.map((s, i) => {
     if (s.isCompleted) return 'completed' as const
@@ -153,6 +156,10 @@ type Props = {
   content: Record<string, unknown>
   className?: string
   activeLabel?: string
+  /** Timeline embarquée (fond transparent, sans carte grise DS). */
+  embedded?: boolean
+  /** Aucune étape « en cours » — toutes les étapes non terminées restent à venir. */
+  suppressActiveStep?: boolean
 }
 
 /**
@@ -160,7 +167,13 @@ type Props = {
  * zone grise = timeline. Rangée titre + pastille : `items-center` (pastille centrée sur la hauteur de ligne du titre, 18px / lh 1,6).
  * Masque sous dernière pastille : `top` = bas du disque centré (`LAST_STEP_LINE_MASK_TOP`).
  */
-export function ArticleStepsModule({ content, className, activeLabel = 'EN COURS' }: Props) {
+export function ArticleStepsModule({
+  content,
+  className,
+  activeLabel = 'EN COURS',
+  embedded = false,
+  suppressActiveStep = false,
+}: Props) {
   const c = content || {}
   const title = typeof c.title === 'string' ? c.title.trim() : ''
   const subtitle = typeof c.subtitle === 'string' ? c.subtitle.trim() : ''
@@ -170,7 +183,14 @@ export function ArticleStepsModule({ content, className, activeLabel = 'EN COURS
   const items = parseItems(itemsRaw)
   if (items.length === 0) return null
 
-  const statuses = resolveStatuses(items)
+  const statuses = resolveStatuses(items, suppressActiveStep)
+
+  const surfaceClassName = embedded
+    ? 'overflow-visible rounded-none bg-transparent p-0 shadow-none'
+    : 'overflow-visible rounded-2xl bg-[#f0f0f0] p-10 shadow-[0_8px_24px_rgba(0,0,0,0.04)]'
+
+  const dotColumnBgClassName = embedded ? 'bg-v-card' : 'bg-[#f0f0f0]'
+  const lineMaskBgClassName = embedded ? 'bg-v-card' : 'bg-[#f0f0f0]'
 
   const hasModuleHeader = Boolean(subtitle || title || intro)
 
@@ -196,11 +216,7 @@ export function ArticleStepsModule({ content, className, activeLabel = 'EN COURS
         </p>
       ) : null}
 
-      <div
-        className={cn(
-          'overflow-visible rounded-2xl bg-[#f0f0f0] p-10 shadow-[0_8px_24px_rgba(0,0,0,0.04)]',
-        )}
-      >
+      <div className={cn(surfaceClassName)}>
         <div className="relative min-h-0 overflow-visible">
         {/* Ligne : un seul segment top→bottom, dans les 32px entre étapes sans discontinuité. */}
         <div
@@ -220,7 +236,10 @@ export function ArticleStepsModule({ content, className, activeLabel = 'EN COURS
                 <div className="relative overflow-visible">
                   <div className="flex items-center gap-[16px] overflow-visible">
                     <div
-                      className="relative z-30 box-border flex h-5 w-5 min-w-[20px] max-w-[20px] shrink-0 flex-col items-center justify-center overflow-visible bg-[#f0f0f0]"
+                      className={cn(
+                        'relative z-30 box-border flex h-5 w-5 min-w-[20px] max-w-[20px] shrink-0 flex-col items-center justify-center overflow-visible',
+                        dotColumnBgClassName,
+                      )}
                       aria-hidden
                     >
                       <StepDot status={status} />
@@ -245,7 +264,10 @@ export function ArticleStepsModule({ content, className, activeLabel = 'EN COURS
                   </div>
                   {isLast ? (
                     <div
-                      className="pointer-events-none absolute bottom-0 left-0 z-10 w-5 bg-[#f0f0f0]"
+                      className={cn(
+                        'pointer-events-none absolute bottom-0 left-0 z-10 w-5',
+                        lineMaskBgClassName,
+                      )}
                       style={{ top: LAST_STEP_LINE_MASK_TOP }}
                       aria-hidden
                     />

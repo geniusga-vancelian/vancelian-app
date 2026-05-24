@@ -3,19 +3,44 @@ const fs = require('fs')
 
 const privyAuthCjs = path.join(__dirname, 'node_modules/@privy-io/react-auth/dist/cjs')
 
+const repoRoot = path.join(__dirname, '..', '..', '..')
+
+function bridgeEnv(target, ...sources) {
+  if (process.env[target]?.trim()) return
+  for (const source of sources) {
+    const value = process.env[source]?.trim()
+    if (value) {
+      process.env[target] = value
+      return
+    }
+  }
+}
+
 /**
- * Monorepo : `next dev` s’exécute dans `services/arquantix/web` — Next ne charge pas le `.env` à la racine du dépôt.
- * On charge ../../.env si présent pour que R2 / DATABASE_URL partagés avec Docker soient visibles en local.
- * En conteneur, ce fichier n’existe généralement pas ; l’env est injecté par Compose.
+ * Monorepo : `next dev` s’exécute dans `services/arquantix/web` — Next ne charge pas les `.env` racine par défaut.
+ * On charge `.env` et `.env.arquantix` (source unique Privy / ports / R2) sans écraser `.env.local`.
+ * En conteneur Docker, l’env est injecté par Compose.
  */
 ;(function loadRepoRootEnv() {
-  const rootEnv = path.join(__dirname, '..', '..', '.env')
-  if (!fs.existsSync(rootEnv)) return
   try {
-    require('dotenv').config({ path: rootEnv })
+    require('dotenv')
   } catch {
-    /* module dotenv absent (ex. image minimale) ou erreur de lecture */
+    return
   }
+
+  for (const fileName of ['.env', '.env.arquantix']) {
+    const envPath = path.join(repoRoot, fileName)
+    if (!fs.existsSync(envPath)) continue
+    try {
+      require('dotenv').config({ path: envPath })
+    } catch {
+      /* erreur de lecture */
+    }
+  }
+
+  bridgeEnv('NEXT_PUBLIC_PRIVY_APP_ID', 'PRIVY_APP_ID', 'NEXT_PUBLIC_PRIVY_APP_ID')
+  bridgeEnv('PRIVY_APP_ID', 'NEXT_PUBLIC_PRIVY_APP_ID')
+  bridgeEnv('NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID', 'PRIVY_WEB_CLIENT_ID', 'NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID')
 })()
 
 /** @type {import('next').NextConfig} */

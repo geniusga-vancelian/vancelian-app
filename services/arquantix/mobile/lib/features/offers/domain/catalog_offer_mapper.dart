@@ -243,7 +243,6 @@ _CmsFromVault _parseVaultModules(Map<String, dynamic>? vaultData) {
   final modules = vaultData['modules'];
   if (modules is! List) return const _CmsFromVault();
 
-  String? description;
   List<Map<String, dynamic>>? descriptionLinks;
   String? descriptionModuleTitle;
   Map<String, dynamic>? howItWorks;
@@ -251,6 +250,17 @@ _CmsFromVault _parseVaultModules(Map<String, dynamic>? vaultData) {
   Map<String, dynamic>? competitiveAdvantages;
   Map<String, dynamic>? faq;
   final bottomParts = <String>[];
+  final orderedBody = StringBuffer();
+
+  void appendBodyMarkdown(String piece) {
+    final t = piece.trim();
+    if (t.isEmpty) return;
+    if (orderedBody.isNotEmpty) {
+      orderedBody.writeln();
+      orderedBody.writeln();
+    }
+    orderedBody.write(t);
+  }
 
   for (final raw in modules) {
     if (raw is! Map) continue;
@@ -297,13 +307,72 @@ _CmsFromVault _parseVaultModules(Map<String, dynamic>? vaultData) {
           'links': hiLinks,
         };
       } else {
-        description = markdown.isNotEmpty ? markdown : description;
         descriptionLinks = links.isNotEmpty ? links : descriptionLinks;
         final t = moduleTitle.trim();
         if (t.isNotEmpty) {
           descriptionModuleTitle = t;
         }
+        if (markdown.trim().isNotEmpty) {
+          appendBodyMarkdown(markdown);
+        }
       }
+      continue;
+    }
+
+    if (type == 'HEADING') {
+      final content = m['content'];
+      if (content is! Map) continue;
+      final c = Map<String, dynamic>.from(content);
+      final ht = (c['text'] ?? '').toString().trim();
+      if (ht.isNotEmpty) appendBodyMarkdown('## $ht');
+      continue;
+    }
+
+    if (type == 'PARAGRAPH') {
+      final content = m['content'];
+      if (content is! Map) continue;
+      final c = Map<String, dynamic>.from(content);
+      final pt = (c['text'] ?? c['markdown'] ?? '').toString();
+      if (pt.trim().isNotEmpty) appendBodyMarkdown(pt);
+      continue;
+    }
+
+    if (type == 'QUOTE') {
+      final content = m['content'];
+      if (content is! Map) continue;
+      final c = Map<String, dynamic>.from(content);
+      final qt = (c['text'] ?? '').toString().trim();
+      if (qt.isEmpty) continue;
+      final author = (c['author'] ?? '').toString().trim();
+      final buf = StringBuffer();
+      for (final line in qt.split('\n')) {
+        final ln = line.trim();
+        if (ln.isNotEmpty) buf.writeln('> $ln');
+      }
+      if (author.isNotEmpty) buf.writeln('\n> — $author');
+      appendBodyMarkdown(buf.toString().trim());
+      continue;
+    }
+
+    if (type == 'BULLET_LIST' || type == 'NUMBERED_LIST') {
+      final content = m['content'];
+      if (content is! Map) continue;
+      final c = Map<String, dynamic>.from(content);
+      final rawItems = c['items'];
+      if (rawItems is! List) continue;
+      final lines = <String>[];
+      var n = 1;
+      for (final it in rawItems) {
+        final s = it?.toString().trim() ?? '';
+        if (s.isEmpty) continue;
+        if (type == 'BULLET_LIST') {
+          lines.add('- $s');
+        } else {
+          lines.add('$n. $s');
+          n++;
+        }
+      }
+      if (lines.isNotEmpty) appendBodyMarkdown(lines.join('\n'));
       continue;
     }
 
@@ -372,17 +441,29 @@ _CmsFromVault _parseVaultModules(Map<String, dynamic>? vaultData) {
         }
       }
       if (itemsOut.isNotEmpty) {
+        final titleVault = (c['title'] ?? '').toString().trim();
+        final footerLinkLabel = (c['footerLinkLabel'] ?? '').toString().trim();
+        final footerLinkUrl = (c['footerLinkUrl'] ?? '').toString().trim();
+        final footerCollectionSlug = (c['footerCollectionSlug'] ?? '').toString().trim();
+        final footerCategorySlug = (c['footerCategorySlug'] ?? '').toString().trim();
         faq = {
           'items': itemsOut,
+          if (titleVault.isNotEmpty) 'title': titleVault,
+          if (footerLinkLabel.isNotEmpty) 'footerLinkLabel': footerLinkLabel,
+          if (footerLinkUrl.isNotEmpty) 'footerLinkUrl': footerLinkUrl,
+          if (footerCollectionSlug.isNotEmpty) 'footerCollectionSlug': footerCollectionSlug,
+          if (footerCategorySlug.isNotEmpty) 'footerCategorySlug': footerCategorySlug,
           if (c['enableTagRedirect'] == true) 'enableTagRedirect': true,
-          'tagRedirectLabel': (c['tagRedirectLabel'] ?? c['footerLinkLabel'] ?? '').toString(),
+          'tagRedirectLabel': (c['tagRedirectLabel'] ?? footerLinkLabel).toString(),
         };
       }
     }
   }
 
+  final bodyMerged = orderedBody.toString().trim();
+
   return _CmsFromVault(
-    description: description,
+    description: bodyMerged.isNotEmpty ? bodyMerged : null,
     descriptionLinks: descriptionLinks,
     descriptionModuleTitle: descriptionModuleTitle,
     howItWorks: howItWorks,

@@ -5,6 +5,7 @@ import { ArrowLeftRight, ArrowUpRight, Plus } from 'lucide-react'
 import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { Button } from '@/components/ui/button'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -76,9 +77,11 @@ export function PortalDashboardHeader({
           <ArrowUpRight className="h-4 w-4" />
           Send
         </Button>
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
-          <ArrowLeftRight className="h-4 w-4" />
-          Exchange
+        <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
+          <PortalNavLink href={PORTAL_ROUTES.walletSwap}>
+            <ArrowLeftRight className="h-4 w-4" />
+            Exchange
+          </PortalNavLink>
         </Button>
       </div>
     </section>

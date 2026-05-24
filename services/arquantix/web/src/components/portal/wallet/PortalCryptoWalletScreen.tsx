@@ -96,9 +96,11 @@ export function PortalCryptoWalletScreen() {
             </section>
 
             <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" className="gap-1.5" disabled title="Bientôt disponible">
-                <ArrowLeftRight className="h-4 w-4" />
-                Échanger
+              <Button type="button" size="sm" className="gap-1.5" asChild>
+                <PortalNavLink href={PORTAL_ROUTES.walletSwap}>
+                  <ArrowLeftRight className="h-4 w-4" />
+                  Échanger
+                </PortalNavLink>
               </Button>
               <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
                 <PortalNavLink href={PORTAL_ROUTES.walletDeposit}>

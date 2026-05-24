@@ -43,7 +43,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       _error = null;
     });
     try {
-      final collections = await _api.getCollections(locale: 'fr');
+      final collections = await _api.getCollections();
       if (!mounted) return;
       setState(() {
         _collections = collections;

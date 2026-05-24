@@ -13,11 +13,18 @@ class DsMessageCard extends StatelessWidget {
     this.title,
     this.description,
     this.caption,
+    this.descriptionStyle,
+    this.captionStyle,
   });
 
   final String? title;
   final String? description;
   final String? caption;
+
+  /// Par défaut : [AppTypography.bodySmRegular] (13px). Passer [AppTypography.paragraph]
+  /// pour un corps « regular » (16px).
+  final TextStyle? descriptionStyle;
+  final TextStyle? captionStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -41,8 +48,14 @@ class DsMessageCard extends StatelessWidget {
       AppTypography.itemPrimary.copyWith(color: AppColors.black),
     );
     final muted = AppTypography.bodySmRegular.copyWith(color: AppColors.textMuted);
-    addLine(description, muted);
-    addLine(caption, muted);
+    addLine(
+      description,
+      descriptionStyle ?? muted,
+    );
+    addLine(
+      caption,
+      captionStyle ?? muted,
+    );
 
     if (lines.isEmpty) return const SizedBox.shrink();
 

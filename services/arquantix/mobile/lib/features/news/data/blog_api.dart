@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/config.dart';
 import '../../../core/http_error_display.dart';
+import '../../../core/locale_preference.dart';
 import '../../../core/session_bearer_http.dart';
 import '../domain/models/article.dart';
 import '../domain/models/article_detail.dart';
@@ -33,7 +34,7 @@ class BlogApi {
 
   /// Récupère le feed blog (featured, highlighted, articles, categories)
   Future<BlogFeedResponse> getFeed({
-    String locale = 'fr',
+    String? locale,
     String? category,
     String? articleType,
     /// API : `market` | `company` | `analysis`
@@ -42,9 +43,10 @@ class BlogApi {
     int page = 1,
     int pageSize = 10,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.blogFeedUrl).replace(
       queryParameters: {
-        'locale': locale,
+        'locale': effectiveLocale,
         if (category != null) 'category': category,
         if (articleType != null && articleType.isNotEmpty)
           'articleType': articleType,
@@ -72,12 +74,13 @@ class BlogApi {
   /// Endpoint : GET /api/projects/[id]/articles. Pas de filtrage par catégorie.
   Future<List<ArticlePreview>> getProjectArticles(
     String projectId, {
-    String locale = 'fr',
+    String? locale,
     int limit = 20,
   }) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.projectArticlesUrl(projectId)).replace(
       queryParameters: {
-        'locale': locale,
+        'locale': effectiveLocale,
         'limit': limit.toString(),
       },
     );
@@ -104,9 +107,10 @@ class BlogApi {
   }
 
   /// Récupère un article par son slug
-  Future<ArticleDetail?> getArticle(String slug, {String locale = 'fr'}) async {
+  Future<ArticleDetail?> getArticle(String slug, {String? locale}) async {
+    final effectiveLocale = LocalePreference.instance.resolve(locale);
     final uri = Uri.parse(Config.blogArticleUrl(slug)).replace(
-      queryParameters: {'locale': locale},
+      queryParameters: {'locale': effectiveLocale},
     );
 
     final response = await http.get(uri);

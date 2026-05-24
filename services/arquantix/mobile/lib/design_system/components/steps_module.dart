@@ -25,6 +25,10 @@ class StepsModuleWidget extends StatelessWidget {
     this.rightLabel,
     this.onStepTap,
     this.horizontalMargin,
+    /// Quand true (offre exclusive), affiche [title] comme titre de section **au‑dessus**
+    /// de la carte blanche ([AppTypography.sectionTitle]), comme [CompetitiveAdvantagesModule].
+    /// Défaut false : flux article où le titre est rendu **au‑dessus** du widget (évite doublon).
+    this.showSectionTitleAboveCard = false,
   });
 
   final String title;
@@ -33,6 +37,7 @@ class StepsModuleWidget extends StatelessWidget {
   final List<StepItem> steps;
   final void Function(int index)? onStepTap;
   final double? horizontalMargin;
+  final bool showSectionTitleAboveCard;
 
   static const double _defaultHorizontalMargin = 16;
 
@@ -55,22 +60,20 @@ class StepsModuleWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final margin = horizontalMargin ?? _defaultHorizontalMargin;
+    final moduleTitleTrim = title.trim();
+    final hasSectionHeading =
+        showSectionTitleAboveCard && moduleTitleTrim.isNotEmpty && steps.isNotEmpty;
+
+    Widget bodyChild;
     if (steps.isEmpty) {
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: margin),
-        child: Text(
-          'No steps yet',
-          style:
-              AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
-        ),
+      bodyChild = Text(
+        'No steps yet',
+        style:
+            AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
       );
-    }
-
-    final statuses = _resolveStatuses(steps);
-
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: margin),
-      child: Container(
+    } else {
+      final statuses = _resolveStatuses(steps);
+      bodyChild = Container(
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(AppRadius.xxl),
@@ -96,6 +99,26 @@ class StepsModuleWidget extends StatelessWidget {
             );
           }),
         ),
+      );
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: margin),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hasSectionHeading) ...[
+            Text(
+              moduleTitleTrim,
+              style: AppTypography.sectionTitle.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          bodyChild,
+        ],
       ),
     );
   }
