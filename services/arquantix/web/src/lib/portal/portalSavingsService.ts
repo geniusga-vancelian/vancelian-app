@@ -1,3 +1,15 @@
+import type { PortalMorphoVaultConfig } from '@prisma/client'
+
+import { fetchLedgityVaultCatalog, fetchLedgityVaultPosition } from '@/lib/portal/ledgity/ledgityVaultAdapter'
+import { getLedgityBetaPortalFlags } from '@/lib/portal/ledgity/ledgityBetaAccess'
+import { LEDGITY_CHAIN_ID, normalizeVaultAddress as normalizeLedgityVaultAddress } from '@/lib/portal/ledgity/ledgityConstants'
+import { isLedgityLocalSandboxEnabled } from '@/lib/portal/ledgity/ledgityLocalSandboxConfig'
+import { resolvePortalLedgityVaultConfigs } from '@/lib/portal/ledgity/ledgityVaultConfigStore'
+import {
+  mapLedgityVaultPosition,
+  mergeLedgityVaultConfigWithCatalog,
+} from '@/lib/portal/ledgity/ledgityVaultFormat'
+import { fetchSandboxLedgityVaultPosition } from '@/lib/portal/ledgity/mocks/ledgityLocalSandbox'
 import { prisma } from '@/lib/prisma'
 import { fetchMorphoVaultPosition, fetchMorphoVaultsByAddresses } from '@/lib/portal/morphoGraphql'
 import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
@@ -11,14 +23,15 @@ import {
 } from '@/lib/portal/morphoVaultFormat'
 import type { MorphoVaultPositionRow } from '@/lib/portal/morphoGraphql'
 import { loadPrincipalNetRaw } from '@/lib/portal/morphoVaultLedger'
+import { getMorphoBetaPortalFlags } from '@/lib/portal/morphoUsdcBetaAccess'
 import type {
+  PortalDefiIntegrationMode,
+  PortalDefiVaultDetails,
   PortalSavingsPosition,
   PortalSavingsSummary,
   PortalSavingsVaultDetailPayload,
   PortalSavingsVaultTransaction,
 } from '@/lib/portal/portalSavingsTypes'
-import type { PortalMorphoVaultDetails } from '@/lib/portal/morphoVaultTypes'
-import { getMorphoBetaPortalFlags } from '@/lib/portal/morphoUsdcBetaAccess'
 import { isExternalWalletVerified } from '@/lib/wallet/externalWalletVerification'
 
 const STABLECOIN_USD_TO_EUR = 0.92
@@ -27,6 +40,7 @@ type VaultAggregate = {
   vaultAddress: string
   vaultName: string
   provider: string
+  integrationMode: PortalDefiIntegrationMode
   userApyBps: number | null
   assetSymbol: string
   assetDecimals: number
@@ -36,7 +50,25 @@ type VaultAggregate = {
   yieldSyncPending: boolean
 }
 
-function resolvePositionUsd(row: MorphoVaultPositionRow): number {
+type PositionFetchRow = {
+  assets: string
+  asset: { address?: string; symbol: string; decimals: number }
+  assetsUsd?: number | null
+}
+
+export async function resolveAllPublishedDefiVaultConfigs(): Promise<PortalMorphoVaultConfig[]> {
+  const [morpho, ledgity] = await Promise.all([
+    resolvePortalMorphoVaultConfigs({ publishedOnly: true }),
+    resolvePortalLedgityVaultConfigs({ publishedOnly: true }),
+  ])
+  return [...morpho, ...ledgity].sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime())
+}
+
+function isLedgityConfig(config: PortalMorphoVaultConfig): boolean {
+  return (config.integrationMode as string) === 'ledgity_vault'
+}
+
+function resolvePositionUsd(row: PositionFetchRow): number {
   if (row.assetsUsd != null && Number.isFinite(row.assetsUsd)) return row.assetsUsd
   const human = Number(formatEarnTokenAmount(row.assets, row.asset.decimals))
   return Number.isFinite(human) ? human : 0
@@ -91,11 +123,106 @@ function buildPositionRow(aggregate: VaultAggregate): PortalSavingsPosition {
     yieldSyncStatus: aggregate.yieldSyncPending ? 'pending' : 'synced',
     userApyBps: aggregate.userApyBps,
     provider: aggregate.provider,
+    integrationMode: aggregate.integrationMode,
   }
 }
 
+async function fetchDefiVaultPosition(args: {
+  personId: string
+  config: PortalMorphoVaultConfig
+  vaultAddress: string
+  walletAddress: string
+}): Promise<PositionFetchRow | null> {
+  if (isLedgityConfig(args.config)) {
+    const row = isLedgityLocalSandboxEnabled()
+      ? await fetchSandboxLedgityVaultPosition({
+          personId: args.personId,
+          vaultAddress: args.vaultAddress,
+          walletAddress: args.walletAddress,
+        })
+      : await fetchLedgityVaultPosition({
+          vaultAddress: args.vaultAddress,
+          walletAddress: args.walletAddress,
+          chainId: args.config.chainId ?? LEDGITY_CHAIN_ID,
+        })
+    return row
+  }
+
+  const row: MorphoVaultPositionRow | null = isMorphoLocalSandboxEnabled()
+    ? await fetchSandboxMorphoVaultPosition({
+        personId: args.personId,
+        vaultAddress: args.vaultAddress,
+        walletAddress: args.walletAddress,
+      })
+    : await fetchMorphoVaultPosition({
+        vaultAddress: args.vaultAddress,
+        walletAddress: args.walletAddress,
+        chainId: args.config.chainId ?? MORPHO_CHAIN_ID,
+      })
+  return row
+}
+
+function mapDefiVaultPosition(args: {
+  config: PortalMorphoVaultConfig
+  row: PositionFetchRow
+  vaultAddress: string
+  principalNetRaw: string | null
+}): { earnedYieldDisplay: string; yieldSyncStatus?: 'synced' | 'pending' } {
+  if (isLedgityConfig(args.config)) {
+    const mapped = mapLedgityVaultPosition(
+      {
+        assets: args.row.assets,
+        shares: '0',
+        assetsUsd: args.row.assetsUsd ?? null,
+        asset: {
+          address: args.row.asset.address ?? '',
+          symbol: args.row.asset.symbol,
+          decimals: args.row.asset.decimals,
+        },
+      },
+      args.vaultAddress,
+      {
+        principalNetRaw: args.principalNetRaw,
+        costBasisUnknown: args.principalNetRaw == null,
+      },
+    )
+    return {
+      earnedYieldDisplay: mapped.earnedYieldDisplay,
+      yieldSyncStatus: mapped.yieldSyncStatus,
+    }
+  }
+
+  const mapped = mapMorphoVaultPosition(
+    args.row as MorphoVaultPositionRow,
+    args.vaultAddress,
+    {
+      principalNetRaw: args.principalNetRaw,
+      costBasisUnknown: args.principalNetRaw == null,
+    },
+  )
+  return {
+    earnedYieldDisplay: mapped.earnedYieldDisplay,
+    yieldSyncStatus: mapped.yieldSyncStatus,
+  }
+}
+
+async function mergeVaultDetails(
+  config: PortalMorphoVaultConfig,
+  vaultAddress: string,
+  morphoCatalogByVault: Map<string, Awaited<ReturnType<typeof fetchMorphoVaultsByAddresses>>[number]>,
+  ledgityCatalogByVault: Map<string, Awaited<ReturnType<typeof fetchLedgityVaultCatalog>>[number]>,
+): Promise<PortalDefiVaultDetails> {
+  if (isLedgityConfig(config)) {
+    return mergeLedgityVaultConfigWithCatalog(
+      config,
+      ledgityCatalogByVault.get(vaultAddress) ?? null,
+    )
+  }
+  return mergeMorphoVaultConfigWithGraphql(config, morphoCatalogByVault.get(vaultAddress) ?? null)
+}
+
 async function loadLedgerBackedRows(personId: string): Promise<PortalSavingsSummary> {
-  const configs = await resolvePortalMorphoVaultConfigs({ publishedOnly: true })
+  const configs = await resolveAllPublishedDefiVaultConfigs()
   if (configs.length === 0) return emptySummary()
 
   const vaultAddresses = configs.map((config) => normalizeVaultAddress(config.vaultAddress))
@@ -127,7 +254,7 @@ async function loadLedgerBackedRows(personId: string): Promise<PortalSavingsSumm
     if (!config) continue
 
     const usd = Number(formatEarnTokenAmount(row.lastAssetsRaw ?? '0', row.assetDecimals))
-    const vaultName = config.label?.trim() || 'Vault Morpho'
+    const vaultName = config.label?.trim() || (isLedgityConfig(config) ? 'Vault Ledgity' : 'Vault Morpho')
     const existing = aggregates.get(vaultAddress)
 
     if (existing) {
@@ -139,7 +266,8 @@ async function loadLedgerBackedRows(personId: string): Promise<PortalSavingsSumm
     aggregates.set(vaultAddress, {
       vaultAddress,
       vaultName,
-      provider: 'morpho',
+      provider: isLedgityConfig(config) ? 'ledgity' : 'morpho',
+      integrationMode: isLedgityConfig(config) ? 'ledgity_vault' : 'direct_morpho',
       userApyBps: null,
       assetSymbol: row.assetSymbol,
       assetDecimals: row.assetDecimals,
@@ -150,15 +278,25 @@ async function loadLedgerBackedRows(personId: string): Promise<PortalSavingsSumm
     })
   }
 
-  const gqlCatalog = await fetchMorphoVaultsByAddresses({ addresses: vaultAddresses }).catch(() => [])
+  const morphoAddresses = configs.filter((c) => !isLedgityConfig(c)).map((c) => normalizeVaultAddress(c.vaultAddress))
+  const ledgityAddresses = configs.filter(isLedgityConfig).map((c) => normalizeLedgityVaultAddress(c.vaultAddress))
+
+  const [morphoCatalog, ledgityCatalog] = await Promise.all([
+    morphoAddresses.length ? fetchMorphoVaultsByAddresses({ addresses: morphoAddresses }).catch(() => []) : [],
+    ledgityAddresses.length ? fetchLedgityVaultCatalog({ addresses: ledgityAddresses }).catch(() => []) : [],
+  ])
+
+  const morphoByVault = new Map(morphoCatalog.map((item) => [normalizeVaultAddress(item.address), item]))
+  const ledgityByVault = new Map(ledgityCatalog.map((item) => [normalizeLedgityVaultAddress(item.address), item]))
+
   for (const aggregate of aggregates.values()) {
     const config = configByVault.get(aggregate.vaultAddress)
     if (!config) continue
-    const gql = gqlCatalog.find((item) => normalizeVaultAddress(item.address) === aggregate.vaultAddress)
-    const details = mergeMorphoVaultConfigWithGraphql(config, gql ?? null)
+    const details = await mergeVaultDetails(config, aggregate.vaultAddress, morphoByVault, ledgityByVault)
     aggregate.vaultName = details.name
     aggregate.userApyBps = details.userApyBps
     aggregate.provider = details.provider
+    aggregate.integrationMode = isLedgityConfig(config) ? 'ledgity_vault' : 'direct_morpho'
   }
 
   const positions = [...aggregates.values()].map(buildPositionRow)
@@ -172,18 +310,25 @@ async function loadLedgerBackedRows(personId: string): Promise<PortalSavingsSumm
 }
 
 async function loadLiveRows(personId: string): Promise<{ summary: PortalSavingsSummary; partial: boolean }> {
-  const configs = await resolvePortalMorphoVaultConfigs({ publishedOnly: true })
+  const configs = await resolveAllPublishedDefiVaultConfigs()
   if (configs.length === 0) return { summary: emptySummary(), partial: false }
 
   const wallets = await loadPersonEvmWalletAddresses(personId)
   if (wallets.length === 0) return { summary: emptySummary(), partial: false }
 
-  const vaultAddresses = configs.map((config) => normalizeVaultAddress(config.vaultAddress))
-  const gqlCatalog = await fetchMorphoVaultsByAddresses({ addresses: vaultAddresses }).catch(() => [])
-  const gqlByVault = new Map(gqlCatalog.map((item) => [normalizeVaultAddress(item.address), item]))
+  const morphoAddresses = configs.filter((c) => !isLedgityConfig(c)).map((c) => normalizeVaultAddress(c.vaultAddress))
+  const ledgityAddresses = configs.filter(isLedgityConfig).map((c) => normalizeLedgityVaultAddress(c.vaultAddress))
+
+  const [morphoCatalog, ledgityCatalog] = await Promise.all([
+    morphoAddresses.length ? fetchMorphoVaultsByAddresses({ addresses: morphoAddresses }).catch(() => []) : [],
+    ledgityAddresses.length ? fetchLedgityVaultCatalog({ addresses: ledgityAddresses }).catch(() => []) : [],
+  ])
+
+  const morphoByVault = new Map(morphoCatalog.map((item) => [normalizeVaultAddress(item.address), item]))
+  const ledgityByVault = new Map(ledgityCatalog.map((item) => [normalizeLedgityVaultAddress(item.address), item]))
 
   const aggregates = new Map<string, VaultAggregate>()
-  let partial = gqlCatalog.length === 0
+  let partial = morphoCatalog.length === 0 && ledgityCatalog.length === 0 && configs.length > 0
 
   const combos = configs.flatMap((config) =>
     wallets.map((walletAddress) => ({
@@ -196,30 +341,26 @@ async function loadLiveRows(personId: string): Promise<{ summary: PortalSavingsS
   await Promise.all(
     combos.map(async ({ config, vaultAddress, walletAddress }) => {
       try {
-        const row = isMorphoLocalSandboxEnabled()
-          ? await fetchSandboxMorphoVaultPosition({ personId, vaultAddress, walletAddress })
-          : await fetchMorphoVaultPosition({
-              vaultAddress,
-              walletAddress,
-              chainId: config.chainId ?? MORPHO_CHAIN_ID,
-            })
+        const row = await fetchDefiVaultPosition({ personId, config, vaultAddress, walletAddress })
 
         if (!row || BigInt(row.assets || '0') <= BigInt(0)) return
 
+        const chainId = isLedgityConfig(config) ? LEDGITY_CHAIN_ID : (config.chainId ?? MORPHO_CHAIN_ID)
         const principalNetRaw = await loadPrincipalNetRaw({
           personId,
           vaultAddress,
-          chainId: config.chainId ?? MORPHO_CHAIN_ID,
+          chainId,
           walletAddress,
         }).catch(() => null)
 
-        const mapped = mapMorphoVaultPosition(row, vaultAddress, {
+        const mapped = mapDefiVaultPosition({
+          config,
+          row,
+          vaultAddress,
           principalNetRaw,
-          costBasisUnknown: principalNetRaw == null,
         })
 
-        const gql = gqlByVault.get(vaultAddress) ?? null
-        const details = mergeMorphoVaultConfigWithGraphql(config, gql)
+        const details = await mergeVaultDetails(config, vaultAddress, morphoByVault, ledgityByVault)
         const usd = resolvePositionUsd(row)
         const existing = aggregates.get(vaultAddress)
 
@@ -235,6 +376,7 @@ async function loadLiveRows(personId: string): Promise<{ summary: PortalSavingsS
           vaultAddress,
           vaultName: details.name,
           provider: details.provider,
+          integrationMode: isLedgityConfig(config) ? 'ledgity_vault' : 'direct_morpho',
           userApyBps: details.userApyBps,
           assetSymbol: row.asset.symbol,
           assetDecimals: row.asset.decimals,
@@ -320,58 +462,63 @@ async function loadVaultLedgerTransactions(args: {
 async function loadSingleVaultLiveAggregate(args: {
   personId: string
   vaultAddress: string
-}): Promise<{ aggregate: VaultAggregate | null; vaultDetails: PortalMorphoVaultDetails | null; partial: boolean }> {
+}): Promise<{ aggregate: VaultAggregate | null; vaultDetails: PortalDefiVaultDetails | null; partial: boolean }> {
   const normalizedVault = normalizeVaultAddress(args.vaultAddress)
-  const configs = await resolvePortalMorphoVaultConfigs({ publishedOnly: true })
+  const configs = await resolveAllPublishedDefiVaultConfigs()
   const config = configs.find((row) => normalizeVaultAddress(row.vaultAddress) === normalizedVault)
   if (!config) {
     return { aggregate: null, vaultDetails: null, partial: false }
   }
 
+  const morphoAddresses = isLedgityConfig(config) ? [] : [normalizedVault]
+  const ledgityAddresses = isLedgityConfig(config) ? [normalizedVault] : []
+
+  const [morphoCatalog, ledgityCatalog] = await Promise.all([
+    morphoAddresses.length ? fetchMorphoVaultsByAddresses({ addresses: morphoAddresses }).catch(() => []) : [],
+    ledgityAddresses.length ? fetchLedgityVaultCatalog({ addresses: ledgityAddresses }).catch(() => []) : [],
+  ])
+
+  const morphoByVault = new Map(morphoCatalog.map((item) => [normalizeVaultAddress(item.address), item]))
+  const ledgityByVault = new Map(ledgityCatalog.map((item) => [normalizeLedgityVaultAddress(item.address), item]))
+  const vaultDetails = await mergeVaultDetails(config, normalizedVault, morphoByVault, ledgityByVault)
+
   const wallets = await loadPersonEvmWalletAddresses(args.personId)
   if (wallets.length === 0) {
-    const gqlCatalog = await fetchMorphoVaultsByAddresses({ addresses: [normalizedVault] }).catch(() => [])
-    const gql = gqlCatalog[0] ?? null
     return {
       aggregate: null,
-      vaultDetails: mergeMorphoVaultConfigWithGraphql(config, gql),
-      partial: gqlCatalog.length === 0,
+      vaultDetails,
+      partial: morphoCatalog.length === 0 && ledgityCatalog.length === 0,
     }
   }
 
-  const gqlCatalog = await fetchMorphoVaultsByAddresses({ addresses: [normalizedVault] }).catch(() => [])
-  const gql = gqlCatalog[0] ?? null
-  const vaultDetails = mergeMorphoVaultConfigWithGraphql(config, gql)
-  let partial = gqlCatalog.length === 0
+  let partial = morphoCatalog.length === 0 && ledgityCatalog.length === 0
   let aggregate: VaultAggregate | null = null
 
   await Promise.all(
     wallets.map(async (walletAddress) => {
       try {
-        const row = isMorphoLocalSandboxEnabled()
-          ? await fetchSandboxMorphoVaultPosition({
-              personId: args.personId,
-              vaultAddress: normalizedVault,
-              walletAddress,
-            })
-          : await fetchMorphoVaultPosition({
-              vaultAddress: normalizedVault,
-              walletAddress,
-              chainId: config.chainId ?? MORPHO_CHAIN_ID,
-            })
+        const row = await fetchDefiVaultPosition({
+          personId: args.personId,
+          config,
+          vaultAddress: normalizedVault,
+          walletAddress,
+        })
 
         if (!row || BigInt(row.assets || '0') <= BigInt(0)) return
 
+        const chainId = isLedgityConfig(config) ? LEDGITY_CHAIN_ID : (config.chainId ?? MORPHO_CHAIN_ID)
         const principalNetRaw = await loadPrincipalNetRaw({
           personId: args.personId,
           vaultAddress: normalizedVault,
-          chainId: config.chainId ?? MORPHO_CHAIN_ID,
+          chainId,
           walletAddress,
         }).catch(() => null)
 
-        const mapped = mapMorphoVaultPosition(row, normalizedVault, {
+        const mapped = mapDefiVaultPosition({
+          config,
+          row,
+          vaultAddress: normalizedVault,
           principalNetRaw,
-          costBasisUnknown: principalNetRaw == null,
         })
 
         const usd = resolvePositionUsd(row)
@@ -387,6 +534,7 @@ async function loadSingleVaultLiveAggregate(args: {
           vaultAddress: normalizedVault,
           vaultName: vaultDetails.name,
           provider: vaultDetails.provider,
+          integrationMode: isLedgityConfig(config) ? 'ledgity_vault' : 'direct_morpho',
           userApyBps: vaultDetails.userApyBps,
           assetSymbol: row.asset.symbol,
           assetDecimals: row.asset.decimals,
@@ -425,6 +573,9 @@ export async function loadPortalSavingsVaultDetail(args: {
 
   if (!vaultDetails) return null
 
+  const integrationMode: PortalDefiIntegrationMode =
+    vaultDetails.integrationMode === 'ledgity_vault' ? 'ledgity_vault' : 'direct_morpho'
+
   const position = aggregate
     ? buildPositionRow(aggregate)
     : {
@@ -439,6 +590,7 @@ export async function loadPortalSavingsVaultDetail(args: {
         yieldSyncStatus: 'pending' as const,
         userApyBps: vaultDetails.userApyBps,
         provider: vaultDetails.provider,
+        integrationMode,
       }
 
   const ledgerRows = await loadVaultLedgerTransactions({
@@ -450,7 +602,10 @@ export async function loadPortalSavingsVaultDetail(args: {
     position.estimatedValueUsd ?? position.assetsUsd ?? 0,
   )
 
-  const beta = await getMorphoBetaPortalFlags(args.personId)
+  const beta =
+    integrationMode === 'ledgity_vault'
+      ? await getLedgityBetaPortalFlags(args.personId)
+      : await getMorphoBetaPortalFlags(args.personId)
   const averageApyBps = vaultDetails.userApyBps ?? position.userApyBps
 
   return {
@@ -458,6 +613,7 @@ export async function loadPortalSavingsVaultDetail(args: {
     vaultAddress: normalizedVault,
     vaultName: vaultDetails.name,
     assetSymbol: vaultDetails.asset.symbol,
+    integrationMode,
     position,
     averageApyBps,
     averageApyDisplay:

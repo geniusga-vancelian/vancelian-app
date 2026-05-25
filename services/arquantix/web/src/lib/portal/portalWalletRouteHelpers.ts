@@ -7,6 +7,13 @@ import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import { readPortalPersonIdFromToken, PortalAuthError } from '@/lib/portal/portalJwt'
 import { idempotencyKeySchema } from '@/lib/portal/morphoVaultValidation'
 import { MorphoVaultLedgerError } from '@/lib/portal/morphoVaultLedger'
+import { LedgityVaultBetaError } from '@/lib/portal/ledgity/ledgityBetaAccess'
+import { buildLedgityLedgerMetadata } from '@/lib/portal/ledgity/ledgityLedgerMetadata'
+import {
+  assertLedgityWithdrawLiquidity,
+  LedgityVaultLiquidityError,
+  readLedgityVaultLiquidityMetrics,
+} from '@/lib/portal/ledgity/ledgityVaultLiquidity'
 import { MorphoVaultBetaError } from '@/lib/portal/morphoUsdcBetaAccess'
 import { PortalForbiddenError } from '@/lib/portal/portalWalletOwnership'
 import {
@@ -45,9 +52,21 @@ export function morphoRpcErrorResponse(error: unknown, route?: string): NextResp
   )
 }
 
+export function ledgityRpcErrorResponse(error: unknown, route?: string): NextResponse | null {
+  if (!isBaseRpcTransientError(error)) return null
+  logBaseRpcSupportEvent({ error, route })
+  return NextResponse.json(
+    { code: 'ledgity.base_rpc_busy', message: formatBaseRpcUserMessage(error) },
+    { status: 503 },
+  )
+}
+
 export function morphoLedgerErrorResponse(error: unknown): NextResponse {
-  if (error instanceof MorphoVaultBetaError) {
+  if (error instanceof MorphoVaultBetaError || error instanceof LedgityVaultBetaError) {
     return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })
+  }
+  if (error instanceof LedgityVaultLiquidityError) {
+    return NextResponse.json({ code: error.code, message: error.message }, { status: error.status })
   }
   if (error instanceof MorphoVaultLedgerError) {
     return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })

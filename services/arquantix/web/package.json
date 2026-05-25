@@ -36,6 +36,9 @@
     "morpho:reconcile": "tsx scripts/run-morpho-vault-reconciliation.ts",
     "morpho:backfill-positions": "tsx scripts/backfill-morpho-vault-positions.ts",
     "morpho:seed-local": "tsx scripts/seed-morpho-local-sandbox.ts",
+    "ledgity:seed-vaults": "tsx scripts/seed-ledgity-vaults.ts",
+    "ledgity:reconcile": "tsx scripts/run-ledgity-vault-reconciliation.ts",
+    "test:ledgity-vault": "node --import tsx --test src/lib/portal/ledgity/ledgityVaultFormat.test.ts src/lib/portal/ledgity/ledgityLocalSandbox.test.ts src/lib/portal/ledgity/ledgityVaultMonitoring.test.ts src/lib/portal/ledgity/ledgityLedgerMetadata.test.ts src/lib/portal/ledgity/ledgityBetaLimits.test.ts",
     "test:mobile-json-contract": "node --import tsx --test src/lib/api/mobile-json-error.contract.test.ts",
     "test:dashboard-builder": "node --import tsx --test src/lib/health/dashboard-builder-products.test.ts prisma/seed-dashboard-builder.integration.test.ts",
     "test:packaged-registry": "node --import tsx --test src/lib/admin/packagedProductSchemas.test.ts src/lib/admin/packagedEngineSchemas.test.ts",
@@ -157,6 +160,9 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "qr": "0.5.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

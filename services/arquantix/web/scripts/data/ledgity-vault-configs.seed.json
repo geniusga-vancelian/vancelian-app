@@ -1,0 +1,24 @@
+[
+  {
+    "vaultAddress": "0x916f179D5D9B7d8Ad815AC2f8570aabF0C6a6e38",
+    "chainId": 8453,
+    "integrationMode": "ledgity_vault",
+    "privyVaultId": null,
+    "label": "Ledgity lyUSDC",
+    "description": "Vault Ledgity lyUSDC sur Base — dépôt/retrait ERC4626 direct on-chain (RWA).",
+    "curator": "Ledgity",
+    "sortOrder": 10,
+    "isPublished": true
+  },
+  {
+    "vaultAddress": "0xFaA1e3720e6Ef8cC76A800DB7B3dF8944833b134",
+    "chainId": 8453,
+    "integrationMode": "ledgity_vault",
+    "privyVaultId": null,
+    "label": "Ledgity lyEURC",
+    "description": "Vault Ledgity lyEURC sur Base — dépôt/retrait ERC4626 direct on-chain (RWA).",
+    "curator": "Ledgity",
+    "sortOrder": 11,
+    "isPublished": true
+  }
+]

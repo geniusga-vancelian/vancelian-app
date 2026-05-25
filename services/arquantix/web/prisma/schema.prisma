@@ -3115,6 +3115,8 @@ enum PortalMorphoIntegrationMode {
   direct_morpho
   /// Legacy — read-only historical ledger rows only; new execution uses direct_morpho.
   privy_earn
+  /// Vaults Ledgity.finance (L-Tokens lyUSDC / lyEURC sur Base).
+  ledgity_vault
 }
 
 model PortalMorphoVaultConfig {
@@ -3154,6 +3156,15 @@ enum MorphoReconciliationStatus {
   mismatch
   missing_onchain
   missing_ledger
+}
+
+enum LedgityReconciliationStatus {
+  matched
+  mismatch
+  missing_onchain
+  missing_ledger
+  pps_unavailable
+  liquidity_warning
 }
 
 model DefiVaultRegistry {
@@ -3292,6 +3303,52 @@ model MorphoVaultReconciliationItem {
   @@index([status], map: "morpho_reconciliation_items_status_idx")
   @@index([personId], map: "morpho_reconciliation_items_person_id_idx")
   @@map("morpho_vault_reconciliation_items")
+}
+
+model LedgityVaultReconciliationRun {
+  id                    String   @id @default(cuid())
+  startedAt             DateTime @default(now()) @map("started_at")
+  finishedAt            DateTime? @map("finished_at")
+  itemsChecked          Int      @default(0) @map("items_checked")
+  matchedCount          Int      @default(0) @map("matched_count")
+  mismatchCount         Int      @default(0) @map("mismatch_count")
+  missingOnchainCount   Int      @default(0) @map("missing_onchain_count")
+  missingLedgerCount    Int      @default(0) @map("missing_ledger_count")
+  ppsUnavailableCount   Int      @default(0) @map("pps_unavailable_count")
+  liquidityWarningCount Int      @default(0) @map("liquidity_warning_count")
+  logJson               Json?    @map("log_json")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  items LedgityVaultReconciliationItem[]
+
+  @@map("ledgity_vault_reconciliation_runs")
+}
+
+model LedgityVaultReconciliationItem {
+  id               String                     @id @default(cuid())
+  runId            String                     @map("run_id")
+  personId         String                     @map("person_id") @db.Uuid
+  vaultAddress     String                     @map("vault_address")
+  walletAddress    String                     @map("wallet_address")
+  privyWalletId    String?                    @map("privy_wallet_id")
+  integrationMode  String                     @default("ledgity_vault") @map("integration_mode")
+  status           LedgityReconciliationStatus
+  ledgerAssetsRaw  String?                    @map("ledger_assets_raw")
+  onchainAssetsRaw String?                    @map("onchain_assets_raw")
+  deltaAssetsRaw   String?                    @map("delta_assets_raw")
+  ledgerSharesRaw  String?                    @map("ledger_shares_raw")
+  onchainSharesRaw String?                    @map("onchain_shares_raw")
+  deltaSharesRaw   String?                    @map("delta_shares_raw")
+  ppsAtReconcile   String?                    @map("pps_at_reconcile")
+  detailsJson      Json?                      @map("details_json")
+  createdAt        DateTime                   @default(now()) @map("created_at")
+
+  run LedgityVaultReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([runId], map: "ledgity_reconciliation_items_run_id_idx")
+  @@index([status], map: "ledgity_reconciliation_items_status_idx")
+  @@index([personId], map: "ledgity_reconciliation_items_person_id_idx")
+  @@map("ledgity_vault_reconciliation_items")
 }
 
 model PresentationDeckVersions {

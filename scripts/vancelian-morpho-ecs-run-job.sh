@@ -6,6 +6,8 @@
 #   ./scripts/vancelian-morpho-ecs-run-job.sh reconcile
 #   ./scripts/vancelian-morpho-ecs-run-job.sh backfill
 #   ./scripts/vancelian-morpho-ecs-run-job.sh migrate
+#   ./scripts/vancelian-morpho-ecs-run-job.sh ledgity-seed
+#   ./scripts/vancelian-morpho-ecs-run-job.sh ledgity-reconcile
 #
 # Le conteneur utilise la task definition courante du service vancelian-next.
 set -euo pipefail
@@ -17,7 +19,7 @@ CONTAINER_NAME="${CONTAINER_NAME:-vancelian-next}"
 
 JOB="${1:-}"
 if [[ -z "$JOB" ]]; then
-  echo "Usage: $0 {sync-registry|reconcile|backfill|migrate|import-configs}" >&2
+  echo "Usage: $0 {sync-registry|reconcile|backfill|migrate|import-configs|ledgity-seed|ledgity-reconcile}" >&2
   exit 1
 fi
 
@@ -36,6 +38,12 @@ case "$JOB" in
     ;;
   import-configs)
     CMD='cd /app && npx tsx scripts/sync-morpho-vault-configs.ts import scripts/data/morpho-vault-configs.seed.json'
+    ;;
+  ledgity-seed)
+    CMD='cd /app && npx tsx scripts/seed-ledgity-vaults.ts'
+    ;;
+  ledgity-reconcile)
+    CMD='cd /app && npx tsx scripts/run-ledgity-vault-reconciliation.ts'
     ;;
   *)
     echo "Job inconnu: $JOB" >&2

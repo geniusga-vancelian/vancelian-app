@@ -23,6 +23,13 @@ export function getPortalMorphoIntegrationLabel(_mode: PortalMorphoIntegrationMo
   return 'Direct vault'
 }
 
+export type PortalDefiIntegrationMode = PortalMorphoIntegrationMode | 'ledgity_vault'
+
+export function getPortalDefiIntegrationLabel(mode: PortalDefiIntegrationMode): string {
+  if (mode === 'ledgity_vault') return 'Ledgity vault'
+  return getPortalMorphoIntegrationLabel(mode)
+}
+
 export function isValidEvmAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value.trim())
 }

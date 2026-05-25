@@ -127,6 +127,7 @@ const navItems: NavItem[] = [
   { label: 'Vault Builder', href: '/admin/vault-builder', icon: Archive },
   { label: 'Morpho Vaults', href: '/admin/morpho-vaults', icon: Coins },
   { label: 'Morpho Monitoring', href: '/admin/morpho-vaults/monitoring', icon: Activity },
+  { label: 'Ledgity Monitoring', href: '/admin/ledgity-vaults/monitoring', icon: Activity },
   {
     label: 'Exclusive Offers (Vault Builder)',
     href: '/admin/vault-builder/exclusive-offers',

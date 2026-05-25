@@ -1,4 +1,9 @@
+import type { PortalLedgityBetaPortalFlags, PortalLedgityVaultDetails } from '@/lib/portal/ledgity/ledgityVaultTypes'
 import type { PortalMorphoBetaPortalFlags, PortalMorphoVaultDetails } from '@/lib/portal/morphoVaultTypes'
+
+export type PortalDefiVaultDetails = PortalMorphoVaultDetails | PortalLedgityVaultDetails
+export type PortalDefiBetaPortalFlags = PortalMorphoBetaPortalFlags | PortalLedgityBetaPortalFlags
+export type PortalDefiIntegrationMode = 'direct_morpho' | 'ledgity_vault'
 
 export type PortalSavingsPosition = {
   vaultAddress: string
@@ -12,6 +17,7 @@ export type PortalSavingsPosition = {
   yieldSyncStatus?: 'synced' | 'pending'
   userApyBps: number | null
   provider: string
+  integrationMode?: PortalDefiIntegrationMode
 }
 
 export type PortalSavingsSummary = {
@@ -47,12 +53,13 @@ export type PortalSavingsVaultDetailPayload = {
   vaultAddress: string
   vaultName: string
   assetSymbol: string
+  integrationMode: PortalDefiIntegrationMode
   position: PortalSavingsPosition
   averageApyBps: number | null
   averageApyDisplay: string
   historyPoints: number[]
   transactions: PortalSavingsVaultTransaction[]
-  vault: PortalMorphoVaultDetails
-  beta?: PortalMorphoBetaPortalFlags
+  vault: PortalDefiVaultDetails
+  beta?: PortalDefiBetaPortalFlags
   partial?: boolean
 }

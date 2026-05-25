@@ -7,6 +7,7 @@ import { PortalInvestSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalPageIntro, PortalSectionHeading } from '@/components/portal/PortalPageIntro'
 import { PortalExclusiveOffersSection } from '@/components/portal/invest/PortalExclusiveOffersSection'
 import { PortalEarnVaultSection } from '@/components/portal/invest/PortalEarnVaultSection'
+import { PortalLedgityVaultSection } from '@/components/portal/invest/PortalLedgityVaultSection'
 import { PortalInvestProductAccess } from '@/components/portal/invest/PortalInvestProductAccess'
 import { Container } from '@/components/ui/Container'
 import type { PortalInvestPayload } from '@/lib/portal/investTypes'
@@ -73,6 +74,10 @@ export function PortalInvestScreen() {
         </PortalReveal>
 
         <PortalReveal index={3}>
+          <PortalLedgityVaultSection />
+        </PortalReveal>
+
+        <PortalReveal index={4}>
           <PortalExclusiveOffersSection offers={data.offers} />
         </PortalReveal>
 

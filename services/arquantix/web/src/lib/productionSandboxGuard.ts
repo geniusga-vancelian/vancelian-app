@@ -2,6 +2,7 @@
 
 const SANDBOX_FLAGS: Array<{ name: string; forbiddenValue?: string }> = [
   { name: 'MORPHO_LOCAL_SANDBOX_ENABLED', forbiddenValue: 'true' },
+  { name: 'LEDGITY_LOCAL_SANDBOX_ENABLED', forbiddenValue: 'true' },
   { name: 'EXTERNAL_WALLET_LOCAL_MOCK_ENABLED', forbiddenValue: 'true' },
   { name: 'LIFI_LOCAL_SANDBOX_ENABLED', forbiddenValue: 'true' },
   { name: 'LIFI_SWAPS_MOCK', forbiddenValue: 'true' },

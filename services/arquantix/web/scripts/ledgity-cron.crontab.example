@@ -1,0 +1,12 @@
+# Exemple crontab Ledgity vaults
+# Copier vers crontab ops après adaptation des chemins.
+#
+# APP_ROOT=/opt/vancelian-app/services/arquantix/web
+# ENV_FILE=/opt/vancelian-app/services/arquantix/web/.env.production
+# LOG_DIR=/var/log/vancelian
+
+# Réconciliation — quotidien 06:15 UTC
+15 6 * * * cd /opt/vancelian-app/services/arquantix/web && set -a && source .env.production && set +a && pnpm ledgity:reconcile >> /var/log/vancelian/ledgity-reconcile.log 2>&1
+
+# Post-batch tests live — MANUEL (après chaque campagne beta)
+# cd /opt/vancelian-app/services/arquantix/web && set -a && source .env.production && set +a && pnpm ledgity:reconcile
