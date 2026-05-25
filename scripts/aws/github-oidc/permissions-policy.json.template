@@ -8,7 +8,7 @@
       "Resource": "*"
     },
     {
-      "Sid": "ECRPushPullArquantixRepos",
+      "Sid": "ECRPushPullDeployRepos",
       "Effect": "Allow",
       "Action": [
         "ecr:BatchCheckLayerAvailability",
@@ -22,7 +22,8 @@
         "ecr:UploadLayerPart"
       ],
       "Resource": [
-        "arn:aws:ecr:__AWS_REGION__:__AWS_ACCOUNT_ID__:repository/arquantix-*"
+        "arn:aws:ecr:__AWS_REGION__:__AWS_ACCOUNT_ID__:repository/arquantix-*",
+        "arn:aws:ecr:__AWS_REGION__:__AWS_ACCOUNT_ID__:repository/vancelian-next"
       ]
     },
     {
@@ -63,7 +64,22 @@
         "logs:DescribeLogGroups",
         "logs:DescribeLogStreams"
       ],
-      "Resource": "arn:aws:logs:__AWS_REGION__:__AWS_ACCOUNT_ID__:log-group:/ecs/arquantix-*"
+      "Resource": [
+        "arn:aws:logs:__AWS_REGION__:__AWS_ACCOUNT_ID__:log-group:/ecs/arquantix-*",
+        "arn:aws:logs:__AWS_REGION__:__AWS_ACCOUNT_ID__:log-group:/ecs/vancelian-next"
+      ]
+    },
+    {
+      "Sid": "ReadBuildSecretsForVancelianNext",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:__AWS_REGION__:__AWS_ACCOUNT_ID__:secret:arquantix/prod/base-rpc-url-primary-*",
+        "arn:aws:secretsmanager:__AWS_REGION__:__AWS_ACCOUNT_ID__:secret:arquantix/prod/walletconnect-project-id-*"
+      ]
     },
     {
       "Sid": "KMSForECRDefaultEncryption",
@@ -76,8 +92,8 @@
       ],
       "Resource": "*",
       "Condition": {
-        "StringEquals": {
-          "kms:ViaService": "ecr.__AWS_REGION__.amazonaws.com"
+        "StringLike": {
+          "kms:ViaService": "ecr.*.amazonaws.com"
         }
       }
     }

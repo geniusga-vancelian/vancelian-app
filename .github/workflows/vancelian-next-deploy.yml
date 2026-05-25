@@ -72,8 +72,16 @@ jobs:
           set -euo pipefail
           WC="${{ secrets.VANCELIAN_WALLETCONNECT_PROJECT_ID }}"
           if [ -z "${WC:-}" ]; then
-            echo "::error::VANCELIAN_WALLETCONNECT_PROJECT_ID absent — MetaMask/WalletConnect ne fonctionnera pas en prod."
-            exit 1
+            if WC=$(aws secretsmanager get-secret-value \
+              --secret-id arquantix/prod/walletconnect-project-id \
+              --query SecretString --output text 2>/dev/null); then
+              echo "WalletConnect Project ID résolu depuis Secrets Manager (arquantix/prod/walletconnect-project-id)"
+            else
+              echo "::error::VANCELIAN_WALLETCONNECT_PROJECT_ID absent et secret SM introuvable — build client WalletConnect impossible."
+              exit 1
+            fi
+          else
+            echo "WalletConnect Project ID résolu depuis GitHub secret VANCELIAN_WALLETCONNECT_PROJECT_ID"
           fi
           echo "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=$WC" >> "$GITHUB_ENV"
 
