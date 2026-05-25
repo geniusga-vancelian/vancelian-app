@@ -43,7 +43,7 @@ export function PortalDashboardView({
   const derived = useMemo(() => {
     const currency = resolveReferenceCurrency(data)
     const rows = applyWalletRowAccess(
-      buildWalletRows(data.cash, data.crypto, data.placements, currency),
+      buildWalletRows(data.cash, data.crypto, data.placements, data.savings, currency),
       data.profile,
       data.cash,
     )

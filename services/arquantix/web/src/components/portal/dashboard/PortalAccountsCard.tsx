@@ -14,7 +14,7 @@ type Props = {
   portfolioPending?: boolean
 }
 
-const PORTFOLIO_ROW_IDS = new Set(['crypto', 'offers'])
+const PORTFOLIO_ROW_IDS = new Set(['crypto', 'offers', 'savings'])
 
 export function PortalAccountsCard({ rows, title = 'My accounts', portfolioPending = false }: Props) {
   return (

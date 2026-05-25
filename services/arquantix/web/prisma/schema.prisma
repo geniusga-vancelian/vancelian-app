@@ -3113,6 +3113,7 @@ model PortfolioProductConfig {
 
 enum PortalMorphoIntegrationMode {
   direct_morpho
+  /// Legacy — read-only historical ledger rows only; new execution uses direct_morpho.
   privy_earn
 }
 
@@ -3234,6 +3235,20 @@ model OnchainVaultTransaction {
   @@index([groupKey], map: "onchain_vault_tx_group_key_idx")
   @@index([privyWalletId], map: "onchain_vault_tx_privy_wallet_id_idx")
   @@map("onchain_vault_transactions")
+}
+
+model PortalExternalWalletNonce {
+  id        String    @id @default(cuid())
+  personId  String    @map("person_id") @db.Uuid
+  nonce     String
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@unique([personId, nonce], map: "portal_ext_wallet_nonce_person_nonce")
+  @@index([personId], map: "portal_ext_wallet_nonce_person_idx")
+  @@index([expiresAt], map: "portal_ext_wallet_nonce_expires_idx")
+  @@map("portal_external_wallet_nonces")
 }
 
 model MorphoVaultReconciliationRun {

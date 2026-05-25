@@ -3,6 +3,8 @@ import type { PortalMorphoVaultConfig, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { MORPHO_CHAIN_ID, normalizeVaultAddress } from '@/lib/portal/morphoConstants'
 import { fetchMorphoVaultPosition } from '@/lib/portal/morphoGraphql'
+import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
+import { fetchSandboxOnchainPositionForReconciliation } from '@/lib/portal/mocks/morphoLocalSandbox'
 import { computePrincipalNetFromLedgerRows } from '@/lib/portal/morphoVaultLedger'
 import { listPublishedPortalMorphoVaultConfigs } from '@/lib/portal/morphoVaultConfigStore'
 import {
@@ -13,7 +15,6 @@ import {
   isSignificantMismatchDelta,
 } from '@/lib/portal/morphoVaultMonitoring'
 import { getMorphoPendingAlertMinutes } from '@/lib/portal/morphoReconciliationConfig'
-import { fetchPrivyEarnVaultPosition } from '@/lib/portal/privyServerClient'
 import { getMorphoBetaDashboardStats } from '@/lib/portal/morphoBetaDashboard'
 import {
   emitMorphoReconciliationMismatchLog,
@@ -84,17 +85,14 @@ async function fetchOnchainPosition(args: {
   config: PortalMorphoVaultConfig
   walletAddress: string
   privyWalletId: string | null
+  personId?: string
 }): Promise<{ assetsRaw: string; sharesRaw: string } | null> {
-  if (args.config.integrationMode === 'privy_earn' && args.privyWalletId && args.config.privyVaultId) {
-    try {
-      const row = await fetchPrivyEarnVaultPosition(args.privyWalletId, args.config.privyVaultId)
-      return {
-        assetsRaw: String(row.assets_in_vault ?? row.assetsInVault ?? '0'),
-        sharesRaw: String(row.shares_in_vault ?? row.sharesInVault ?? '0'),
-      }
-    } catch {
-      return null
-    }
+  if (isMorphoLocalSandboxEnabled() && args.personId) {
+    return fetchSandboxOnchainPositionForReconciliation({
+      personId: args.personId,
+      config: args.config,
+      walletAddress: args.walletAddress,
+    })
   }
 
   const row = await fetchMorphoVaultPosition({
@@ -109,7 +107,7 @@ async function fetchOnchainPosition(args: {
   }
 }
 
-/** Job de réconciliation ledger ↔ on-chain (Morpho GraphQL / Privy Earn). */
+/** Job de réconciliation ledger ↔ on-chain (Morpho GraphQL, mode direct_morpho). */
 export async function runMorphoVaultReconciliation(): Promise<MorphoReconciliationRunSummary> {
   const startedAt = new Date()
   const configs = await listPublishedPortalMorphoVaultConfigs()
@@ -154,6 +152,7 @@ export async function runMorphoVaultReconciliation(): Promise<MorphoReconciliati
       config,
       walletAddress: pair.walletAddress,
       privyWalletId: pair.privyWalletId,
+      personId: pair.personId,
     })
 
     const ledgerAssetsRaw = position?.lastAssetsRaw

@@ -1,6 +1,15 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     try {
+      const { assertProductionSandboxDisabled } = await import('@/lib/productionSandboxGuard')
+      assertProductionSandboxDisabled()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[STARTUP FATAL]', msg)
+      process.exit(1)
+    }
+
+    try {
       const { validateBffStartupConfig } = await import('@/lib/bff-startup-validation')
       await validateBffStartupConfig()
     } catch (e) {

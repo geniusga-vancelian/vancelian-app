@@ -5,9 +5,12 @@ import { Loader2, X } from 'lucide-react'
 
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { Button } from '@/components/ui/button'
+import { ExecutionWalletSelector } from '@/components/wallet/ExecutionWalletSelector'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { fetchPortalMorphoPosition } from '@/lib/portal/morphoVaultClient'
 import { getPortalMorphoIntegrationLabel } from '@/lib/portal/morphoConstants'
 import { formatEarnApyFromBps, formatEarnTokenAmount } from '@/lib/portal/morphoVaultFormat'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import type {
   PortalMorphoVaultDetails,
   PortalMorphoVaultPosition,
@@ -17,9 +20,7 @@ import {
   type PortalMorphoExecutionPhase,
   usePortalMorphoVaultExecution,
 } from '@/lib/portal/usePortalMorphoVaultExecution'
-import { usePortalPrivyEarnWallet } from '@/lib/portal/usePortalPrivyEarn'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 import { cn } from '@/lib/utils'
 
 type Tab = 'deposit' | 'withdraw'
@@ -72,20 +73,17 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
   const [success, setSuccess] = useState<string | null>(null)
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false)
   const idempotencyKeyRef = useRef<string | null>(null)
+  const positionRef = useRef<PortalMorphoVaultPosition | null>(null)
+  positionRef.current = position
 
-  const isDirectMorpho = vault.integrationMode === 'direct_morpho'
   const disclaimerStorageKey = `portal_morpho_disclaimer_${vault.vaultAddress.toLowerCase()}`
-
+  const { execute: executeMorpho } = usePortalMorphoVaultExecution()
   const {
-    ready,
-    authenticated,
-    privyWalletId,
-    walletAddress,
-    loadPosition: loadPrivyPosition,
-    deposit,
-    withdraw,
-  } = usePortalPrivyEarnWallet()
-  const { execute: executeDirectMorpho } = usePortalMorphoVaultExecution()
+    mode: executionMode,
+    privyEmbeddedAddress,
+    externalWallets,
+    selectedExternalWalletId,
+  } = useExecutionWallet()
 
   useEffect(() => {
     try {
@@ -104,62 +102,49 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
     }
   }, [disclaimerStorageKey])
 
-  const refreshPosition = useCallback(async () => {
-    if (!walletAddress) {
-      setPosition(null)
-      setPositionLoading(false)
-      return
+  const displayWalletAddress = useMemo(() => {
+    if (executionMode === 'external_evm') {
+      const selected =
+        externalWallets.find((row) => row.id === selectedExternalWalletId) ?? externalWallets[0]
+      return selected?.address ?? privyEmbeddedAddress
     }
+    return privyEmbeddedAddress
+  }, [executionMode, externalWallets, privyEmbeddedAddress, selectedExternalWalletId])
 
-    setPositionLoading(true)
-    try {
-      if (isDirectMorpho) {
+  const loadPosition = useCallback(
+    async (walletAddress: string, options?: { background?: boolean }) => {
+      if (!options?.background && positionRef.current === null) {
+        setPositionLoading(true)
+      }
+
+      try {
         const next = await fetchPortalMorphoPosition({
           vaultAddress: vault.vaultAddress,
           walletAddress,
         })
         setPosition(next)
-        return
+      } catch {
+        if (!options?.background) {
+          setPosition(null)
+        }
+      } finally {
+        setPositionLoading(false)
       }
-
-      if (!privyWalletId) {
-        setPosition(null)
-        return
-      }
-      const privyVaultId = vault.privyVaultId ?? vault.id
-      const privyPosition = await loadPrivyPosition(privyVaultId)
-      if (!privyPosition) {
-        setPosition(null)
-        return
-      }
-      setPosition({
-        vaultAddress: vault.vaultAddress,
-        asset: privyPosition.asset,
-        assetsInVault: privyPosition.assetsInVault,
-        assetsInVaultDisplay: privyPosition.assetsInVaultDisplay,
-        sharesInVault: privyPosition.sharesInVault,
-        assetsUsd: null,
-        earnedYieldDisplay: privyPosition.earnedYieldDisplay,
-        yieldSyncStatus: 'synced',
-      })
-    } catch {
-      setPosition(null)
-    } finally {
-      setPositionLoading(false)
-    }
-  }, [
-    isDirectMorpho,
-    loadPrivyPosition,
-    privyWalletId,
-    vault.id,
-    vault.privyVaultId,
-    vault.vaultAddress,
-    walletAddress,
-  ])
+    },
+    [vault.vaultAddress],
+  )
 
   useEffect(() => {
-    void refreshPosition()
-  }, [refreshPosition])
+    if (!displayWalletAddress) {
+      setPosition(null)
+      setPositionLoading(false)
+      return
+    }
+
+    setPosition(null)
+    setPositionLoading(true)
+    void loadPosition(displayWalletAddress)
+  }, [displayWalletAddress, loadPosition])
 
   const maxWithdraw = useMemo(() => {
     if (!position) return ''
@@ -204,50 +189,23 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
     setExecuting(true)
     setExecutionPhase('preparing')
     try {
-      if (isDirectMorpho) {
-        const txHash = await executeDirectMorpho({
-          vaultAddress: vault.vaultAddress,
-          operation: tab,
-          amount: normalized,
-          idempotencyKey,
-          onPhaseChange: setExecutionPhase,
-        })
-        setSuccess(
-          tab === 'deposit'
-            ? `Dépôt de ${normalized} ${vault.asset.symbol} confirmé.${txHash ? ` Tx: ${txHash}` : ''}`
-            : `Retrait de ${normalized} ${vault.asset.symbol} confirmé.${txHash ? ` Tx: ${txHash}` : ''}`,
-        )
-        setAmount('')
-        resetOperationState()
-        await refreshPosition()
-        return
-      }
-
-      const privyVaultId = vault.privyVaultId ?? vault.id
-      setExecutionPhase(tab === 'deposit' ? 'deposit_pending' : 'withdraw_pending')
-      const action =
+      const txHash = await executeMorpho({
+        vaultAddress: vault.vaultAddress,
+        operation: tab,
+        amount: normalized,
+        idempotencyKey,
+        onPhaseChange: setExecutionPhase,
+      })
+      setSuccess(
         tab === 'deposit'
-          ? await deposit(privyVaultId, normalized, idempotencyKey)
-          : await withdraw(privyVaultId, normalized, idempotencyKey)
-
-      if (action.status === 'succeeded') {
-        setExecutionPhase('confirmed')
-        setSuccess(
-          tab === 'deposit'
-            ? `Dépôt de ${normalized} ${vault.asset.symbol} confirmé.`
-            : `Retrait de ${normalized} ${vault.asset.symbol} confirmé.`,
-        )
-        setAmount('')
-        resetOperationState()
-        await refreshPosition()
-        return
-      }
-
-      setExecutionPhase('failed')
-      setError(
-        action.failureMessage ||
-          `Opération ${action.status}. ${action.transactionHash ? `Tx: ${action.transactionHash}` : ''}`.trim(),
+          ? `Dépôt de ${normalized} ${vault.asset.symbol} confirmé.${txHash ? ` Tx: ${txHash}` : ''}`
+          : `Retrait de ${normalized} ${vault.asset.symbol} confirmé.${txHash ? ` Tx: ${txHash}` : ''}`,
       )
+      setAmount('')
+      resetOperationState()
+      if (displayWalletAddress) {
+        await loadPosition(displayWalletAddress, { background: true })
+      }
     } catch (e) {
       setExecutionPhase('failed')
       setError(e instanceof Error ? e.message : 'Opération impossible.')
@@ -256,22 +214,27 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
     }
   }, [
     amount,
-    deposit,
     disclaimerAccepted,
-    executeDirectMorpho,
+    displayWalletAddress,
+    executeMorpho,
     executing,
-    isDirectMorpho,
-    refreshPosition,
+    loadPosition,
     resetOperationState,
     tab,
     vault.asset.symbol,
-    vault.id,
-    vault.privyVaultId,
     vault.vaultAddress,
-    withdraw,
   ])
 
-  const walletReady = isDirectMorpho ? Boolean(walletAddress) : Boolean(privyWalletId)
+  const walletReady =
+    executionMode === 'external_evm'
+      ? externalWallets.length > 0
+      : Boolean(privyEmbeddedAddress)
+
+  const positionDisplay =
+    positionLoading && position === null
+      ? '…'
+      : position?.assetsInVaultDisplay ?? `0 ${vault.asset.symbol}`
+
   const showDisclaimer = tab === 'deposit' && !disclaimerAccepted
   const depositsDisabled = Boolean(beta?.depositsDisabled)
   const withdrawsDisabled = Boolean(beta?.withdrawsDisabled)
@@ -313,19 +276,22 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {!ready ? (
-            <p className="m-0 font-ui text-[14px] text-v-fg-muted">Initialisation Privy…</p>
-          ) : !authenticated || !walletReady ? (
+          {!walletReady ? (
             <div className="flex flex-col gap-3">
               <p className="m-0 font-ui text-[14px] text-v-fg-body">
-                Un wallet Privy embedded est requis pour déposer ou retirer dans ce vault.
+                Choisissez un wallet Vancelian embedded ou liez MetaMask depuis Mon wallet pour déposer ou retirer.
               </p>
               <Button type="button" asChild className="rounded-full">
                 <PortalNavLink href={PORTAL_ROUTES.walletCreate}>Créer mon wallet crypto</PortalNavLink>
               </Button>
+              <Button type="button" asChild variant="outline" className="rounded-full">
+                <PortalNavLink href={PORTAL_ROUTES.myWallets}>Lier MetaMask</PortalNavLink>
+              </Button>
             </div>
           ) : (
             <>
+              <ExecutionWalletSelector className="mb-4" />
+
               {showDisclaimer ? (
                 <div className="mb-4 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-950">
                   <p className="m-0 font-semibold">Avertissement — premier dépôt</p>
@@ -364,11 +330,9 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
 
               <div className="mb-4 rounded-v-card border border-v-border bg-v-card px-4 py-3 font-ui text-[13px]">
                 <p className="m-0 text-v-fg-muted">Wallet</p>
-                <p className="m-0 mt-1 font-medium text-v-fg">{walletAddress}</p>
+                <p className="m-0 mt-1 font-medium text-v-fg">{displayWalletAddress}</p>
                 <p className="m-0 mt-3 text-v-fg-muted">Position dans le vault</p>
-                <p className="m-0 mt-1 font-semibold text-v-fg">
-                  {positionLoading ? '…' : position?.assetsInVaultDisplay ?? `0 ${vault.asset.symbol}`}
-                </p>
+                <p className="m-0 mt-1 font-semibold text-v-fg">{positionDisplay}</p>
                 {position && position.yieldSyncStatus !== 'pending' && position.earnedYieldDisplay ? (
                   <p className="m-0 mt-1 text-v-green">+{position.earnedYieldDisplay} de rendement</p>
                 ) : position?.yieldSyncStatus === 'pending' ? (
@@ -448,7 +412,7 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
           )}
         </div>
 
-        {authenticated && walletReady ? (
+        {walletReady ? (
           <footer className="border-t border-v-border/70 px-5 py-4">
             <Button
               type="button"

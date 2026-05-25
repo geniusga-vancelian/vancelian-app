@@ -12,6 +12,7 @@ import type {
   PortalPlacementsSummary,
   PortalPrivyPersonWallets,
 } from '@/lib/portal/dashboardTypes'
+import { loadPortalSavingsSummary } from '@/lib/portal/portalSavingsService'
 import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 
@@ -68,15 +69,17 @@ export async function loadPortalDashboardCorePayload(): Promise<PortalDashboardC
   }
 }
 
-/** Positions crypto + placements — chargé après le core (aligné mobile). */
+/** Positions crypto + placements + épargne DeFi — chargé après le core (aligné mobile). */
 export async function loadPortalDashboardPortfolioPayload(
+  personId: string,
   currencyHint?: string,
 ): Promise<PortalDashboardPortfolioPayload> {
-  const [bootstrap, cryptoPositions, privyBalances, placements] = await Promise.all([
+  const [bootstrap, cryptoPositions, privyBalances, placements, savingsResult] = await Promise.all([
     currencyHint ? Promise.resolve({ ok: true, data: null }) : fetchPortalUpstreamJson('/api/app/bootstrap'),
     fetchPortalUpstreamJson('/api/app/crypto-positions'),
     fetchPortalUpstreamJson('/api/app/privy-wallet/balances'),
     fetchPortalUpstreamJson('/api/app/lending/earn/positions'),
+    loadPortalSavingsSummary({ personId, live: false }),
   ])
 
   const currency =
@@ -106,11 +109,12 @@ export async function loadPortalDashboardPortfolioPayload(
     currency,
   )
 
-  const partial = !cryptoPositions.ok || !privyBalances.ok || !placements.ok
+  const partial = !cryptoPositions.ok || !privyBalances.ok || !placements.ok || savingsResult.partial
 
   return {
     crypto,
     placements: (placements.ok ? placements.data : null) as PortalPlacementsSummary,
+    savings: savingsResult.savings,
     partial,
   }
 }

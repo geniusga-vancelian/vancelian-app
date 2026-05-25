@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { prisma } from '@/lib/prisma'
 import { fetchMorphoVaultPosition } from '@/lib/portal/morphoGraphql'
+import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
+import { fetchSandboxMorphoVaultPosition } from '@/lib/portal/mocks/morphoLocalSandbox'
 import { mapMorphoVaultPosition } from '@/lib/portal/morphoVaultFormat'
 import {
   morphoLedgerErrorResponse,
   requirePortalPersonId,
-} from '@/lib/portal/privyEarnRouteHelpers'
+} from '@/lib/portal/portalWalletRouteHelpers'
 import { isValidEvmAddress, MORPHO_CHAIN_ID } from '@/lib/portal/morphoConstants'
 import { loadPrincipalNetRaw, syncUserVaultPositionFromLedger } from '@/lib/portal/morphoVaultLedger'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
@@ -33,7 +35,9 @@ export async function GET(request: NextRequest) {
 
     await assertPortalWalletAddressOwnership({ personId, walletAddress })
 
-    const row = await fetchMorphoVaultPosition({ vaultAddress, walletAddress })
+    const row = isMorphoLocalSandboxEnabled()
+      ? await fetchSandboxMorphoVaultPosition({ personId, vaultAddress, walletAddress })
+      : await fetchMorphoVaultPosition({ vaultAddress, walletAddress })
     if (!row) {
       return NextResponse.json({ position: null })
     }

@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
+import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
 import { normalizeVaultAddress } from '@/lib/portal/morphoConstants'
+import { isExternalWalletVerified } from '@/lib/wallet/externalWalletVerification'
 
 export class PortalForbiddenError extends Error {
   readonly httpStatus = 403
@@ -168,10 +170,34 @@ export async function assertPortalWalletAddressOwnership(args: {
   const target = normalizeAddress(args.walletAddress)
   const wallets = await prisma.personCryptoWallet.findMany({
     where: { personId: args.personId, revokedAt: null },
-    select: { address: true },
+    select: { address: true, provider: true, metadataJson: true },
   })
 
-  if (wallets.some((row) => normalizeAddress(row.address) === target)) {
+  const matched = wallets.find((row) => normalizeAddress(row.address) === target)
+  if (matched) {
+    if (matched.provider === 'external' && !isExternalWalletVerified(matched.metadataJson)) {
+      throw new PortalForbiddenError('Wallet externe non vérifié pour cette session.')
+    }
+    return
+  }
+
+  if (isMorphoLocalSandboxEnabled()) {
+    await prisma.personCryptoWallet.create({
+      data: {
+        id: randomUUID(),
+        personId: args.personId,
+        provider: 'privy',
+        walletType: 'embedded',
+        chainType: 'evm',
+        chainId: 8453,
+        address: target,
+        isPrimary: wallets.length === 0,
+        metadataJson: {
+          privy_wallet_id: 'local_sandbox_auto_link',
+          sync_source: 'morpho_local_sandbox',
+        },
+      },
+    })
     return
   }
 

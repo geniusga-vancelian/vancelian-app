@@ -7,7 +7,6 @@ import {
 } from './morphoVaultFormat'
 import {
   computePrincipalNetFromLedgerRows,
-  mapPrivyActionStatusToLedgerStatus,
 } from './morphoVaultLedger'
 import { idempotencyKeySchema } from './morphoVaultValidation'
 
@@ -41,14 +40,6 @@ describe('computePrincipalNetFromLedgerRows', () => {
       { operation: 'deposit', amountRaw: '500000', status: 'pending' },
     ])
     assert.equal(principal, BigInt(800000))
-  })
-})
-
-describe('mapPrivyActionStatusToLedgerStatus', () => {
-  it('mappe les statuts Privy vers le ledger', () => {
-    assert.equal(mapPrivyActionStatusToLedgerStatus('succeeded'), 'success')
-    assert.equal(mapPrivyActionStatusToLedgerStatus('failed'), 'failed')
-    assert.equal(mapPrivyActionStatusToLedgerStatus('processing'), 'pending')
   })
 })
 

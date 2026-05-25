@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback } from 'react'
-import { useCreateWallet, usePrivy, useSendTransaction, useWallets } from '@privy-io/react-auth'
 
 import { createBasePublicClient } from '@/lib/blockchain/baseRpcProvider'
 import { formatBaseRpcUserMessage, isBaseRpcTransientError } from '@/lib/blockchain/baseRpcErrors'
@@ -10,8 +9,8 @@ import {
   confirmPortalMorphoTransactions,
   preparePortalMorphoTransactions,
 } from '@/lib/portal/morphoVaultClient'
-import { resolvePortalSwapSigningWallet } from '@/lib/portal/resolvePortalSwapSigningWallet'
-import { normalizeSwapTxValue, normalizeTxHash } from '@/lib/portal/swapTxFormat'
+import { buildWalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
+import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
 const RECEIPT_TIMEOUT_MS = 180_000
 
@@ -30,10 +29,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function usePortalMorphoVaultExecution() {
-  const { ready, authenticated, user } = usePrivy()
-  const { sendTransaction } = useSendTransaction()
-  const { wallets } = useWallets()
-  const { createWallet } = useCreateWallet()
+  const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
 
   const execute = useCallback(
     async (args: {
@@ -45,24 +41,8 @@ export function usePortalMorphoVaultExecution() {
     }) => {
       args.onPhaseChange?.('preparing')
 
-      const wallet = await resolvePortalSwapSigningWallet({
-        ready,
-        authenticated,
-        user,
-        wallets,
-        createWallet: async () => {
-          const created = await createWallet()
-          return { address: created.address }
-        },
-      })
-
-      if (wallet.switchChain) {
-        try {
-          await wallet.switchChain(MORPHO_CHAIN_ID)
-        } catch {
-          /* déjà sur Base ou switch géré par Privy */
-        }
-      }
+      const wallet = await resolveWallet()
+      const walletMetadata = buildWalletSourceMetadata(wallet)
 
       const prepared = await preparePortalMorphoTransactions({
         vaultAddress: args.vaultAddress,
@@ -70,7 +50,15 @@ export function usePortalMorphoVaultExecution() {
         operation: args.operation,
         amount: args.amount,
         idempotencyKey: args.idempotencyKey,
+        walletSource: walletMetadata,
+        externalWalletId: wallet.type === 'external_evm' ? wallet.externalWalletId : null,
+        privyWalletId: wallet.type === 'privy_embedded' ? wallet.privyWalletId ?? null : null,
       })
+
+      if (prepared.serverCompleted) {
+        args.onPhaseChange?.('confirmed')
+        return prepared.ledgerEntries[0]?.id ?? null
+      }
 
       const client = createBasePublicClient({ side: 'client' })
 
@@ -92,20 +80,16 @@ export function usePortalMorphoVaultExecution() {
           args.onPhaseChange?.('withdraw_pending')
         }
 
-        const { hash } = await sendTransaction(
+        const { hash } = await sendPortalTransaction(
           {
             chainId: tx.chainId,
             to: tx.to as `0x${string}`,
             data: tx.data as `0x${string}`,
-            value: normalizeSwapTxValue(tx.value),
+            value: tx.value,
           },
-          {
-            address: wallet.address,
-            sponsor: true,
-            uiOptions: { showWalletUIs: false },
-          },
+          wallet,
         )
-        lastHash = normalizeTxHash(hash)
+        lastHash = hash
 
         const started = Date.now()
         let receipt = null as Awaited<ReturnType<typeof client.getTransactionReceipt>> | null
@@ -155,7 +139,7 @@ export function usePortalMorphoVaultExecution() {
       args.onPhaseChange?.('confirmed')
       return lastHash
     },
-    [authenticated, createWallet, ready, sendTransaction, user, wallets],
+    [resolveWallet, sendPortalTransaction],
   )
 
   const executeWithFriendlyErrors = useCallback(

@@ -80,8 +80,10 @@ sudo systemctl enable --now vancelian-morpho-reconcile.timer
 |----------|-------|
 | `DATABASE_URL` | Obligatoire |
 | `MORPHO_RECONCILIATION_TOLERANCE_RAW` | Tolérance match (défaut 10) |
-| `PRIVY_APP_SECRET` | Requis pour réconciliation vaults `privy_earn` |
-| `NEXT_PUBLIC_BASE_RPC_URL` | RPC Base pour health checks indirects |
+| `BASE_RPC_URL_PRIMARY` / `NEXT_PUBLIC_BASE_RPC_URL` | RPC Base pour réconciliation on-chain (`direct_morpho`) |
+| `BASE_RPC_URL_FALLBACK` | Fallback RPC (`https://mainnet.base.org`) |
+
+**Note :** les lignes ledger legacy `integration_mode = privy_earn` ne sont plus réconciliées activement ; elles restent en lecture seule. Toute exécution Morpho prod utilise `direct_morpho`.
 
 ---
 

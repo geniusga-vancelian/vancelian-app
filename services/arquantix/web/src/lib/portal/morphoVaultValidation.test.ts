@@ -12,7 +12,7 @@ describe('createMorphoVaultSchema', () => {
     assert.equal(parsed.integrationMode, 'direct_morpho')
   })
 
-  it('exige privyVaultId en mode privy_earn', () => {
+  it('rejette privy_earn (mode retiré)', () => {
     assert.throws(() =>
       createMorphoVaultSchema.parse({
         vaultAddress: '0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2',

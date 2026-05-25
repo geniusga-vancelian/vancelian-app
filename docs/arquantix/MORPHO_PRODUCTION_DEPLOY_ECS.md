@@ -43,9 +43,34 @@ Le code utilise les suffixes `*_USDC` (pas `*_RAW` seuls) pour les plafonds beta
 | `MORPHO_USDC_MAX_USER_EXPOSURE_RAW=500000000` | `MORPHO_USDC_BETA_MAX_USER_EXPOSURE_USDC=500` |
 | `MORPHO_USDC_MAX_GLOBAL_EXPOSURE_RAW=5000000000` | `MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_USDC=5000` |
 
-RPC Base (runtime) :
-- Secret : `BASE_RPC_URL` + `NEXT_PUBLIC_BASE_RPC_URL` (même ARN Secrets Manager)
-- Fallback code si absent : `https://mainnet.base.org` (**non recommandé prod**)
+### GitHub Secrets (CI build client)
+
+| Secret | Usage |
+|--------|--------|
+| `VANCELIAN_PRIVY_APP_ID` | `NEXT_PUBLIC_PRIVY_APP_ID` (build) |
+| `VANCELIAN_BASE_RPC_URL` | `NEXT_PUBLIC_BASE_RPC_URL` (Alchemy primary — **pas** mainnet.base.org) |
+| `VANCELIAN_WALLETCONNECT_PROJECT_ID` | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (MetaMask / Reown — **obligatoire**) |
+| `AWS_ROLE_ARN` | OIDC deploy ECS |
+
+**Important** : `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` est figé au **build Docker**. Le brancher uniquement dans la task definition ECS runtime **ne suffit pas**.
+
+### Sandbox interdit en production
+
+Le runtime Next.js refuse de démarrer si l’un de ces flags est actif (`src/lib/productionSandboxGuard.ts`) :
+
+```env
+MORPHO_LOCAL_SANDBOX_ENABLED=false
+EXTERNAL_WALLET_LOCAL_MOCK_ENABLED=false
+LIFI_LOCAL_SANDBOX_ENABLED=false
+LIFI_SWAPS_MOCK=false
+```
+
+`vancelian-sync-morpho-prod.sh` force ces valeurs à `false` sur `vancelian-next`.
+
+### Reown / WalletConnect (ops dashboard)
+
+- Vérifier le domaine `app.vancelian.finance` dans [Reown Cloud](https://cloud.reown.com)
+- Project ID → secret GitHub `VANCELIAN_WALLETCONNECT_PROJECT_ID` (ne pas committer)
 
 ---
 
@@ -213,18 +238,29 @@ Vérifier dépôts bloqués, retraits OK. Puis remettre `MORPHO_USDC_DEPOSITS_DI
 
 ---
 
-## I. État audit (session ops)
+## I. État audit (2026-05-25)
 
-Task definition courante au moment de l’audit : `vancelian-next:29`.
+Task definition courante : **`vancelian-next:38`** (service ACTIVE 1/1).
 
-**Manquant avant go-live Morpho** :
-- `PRIVY_APP_SECRET` non injecté sur vancelian-next (présent sur arquantix-api)
-- `BASE_RPC_URL` / secret dédié absent
-- Variables Morpho beta / réconciliation absentes
-- Code Phase 4 à merger + deploy image
-- Cron EventBridge non installé
+**Déjà OK sur ECS** :
+- RPC Alchemy primary + fallback (`BASE_RPC_URL_PRIMARY`, secrets SM)
+- Morpho beta ouverte (`MORPHO_USDC_BETA_ALLOW_ALL_USERS=true`)
+- Kill switch vars présentes
+- `PRIVY_APP_SECRET` branché sur vancelian-next
+- Plafonds RAW + réconciliation configurés
 
-**Déjà OK** :
-- Service ACTIVE (1/1)
-- Health 200 app + console
-- `DATABASE_URL`, `PRIVY_APP_ID`, JWT, storage branchés
+**Manquant avant MetaMask / WalletConnect live** :
+- **`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` dans l’image Docker** → merge code + secret GitHub `VANCELIAN_WALLETCONNECT_PROJECT_ID` + push `main`
+- Reown domain verify `app.vancelian.finance` (dashboard)
+- Migration `20260525120000_add_portal_external_wallet_nonces` si pas encore appliquée
+- Cron EventBridge (script prêt)
+
+**Après merge code Morpho direct + wallet externe** :
+1. Push `main` → `vancelian-next-deploy.yml`
+2. `./scripts/vancelian-sync-morpho-prod.sh` (sandbox false + URLs)
+3. `./scripts/vancelian-morpho-ecs-run-job.sh migrate`
+4. `./scripts/vancelian-morpho-ecs-run-job.sh sync-registry`
+5. `./scripts/vancelian-morpho-ecs-run-job.sh reconcile`
+6. Smoke MetaMask + LI.FI (§F étendu ci-dessous)
+
+---

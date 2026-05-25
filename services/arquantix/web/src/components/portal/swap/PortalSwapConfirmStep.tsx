@@ -9,6 +9,7 @@ import {
   type SwapStepState,
 } from '@/components/portal/swap/PortalSwapTransactionSteps'
 import { Button } from '@/components/ui/button'
+import { ExecutionWalletSelector } from '@/components/wallet/ExecutionWalletSelector'
 import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
 import { buildConfirmSteps, formatSwapFeeLine, processingPhaseLabel } from '@/lib/portal/swapFlowSteps'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
@@ -97,6 +98,8 @@ export function PortalSwapConfirmStep({
             <span className="font-medium text-v-fg">{formatSwapFeeLine(quote)}</span>
           </div>
         </article>
+
+        <ExecutionWalletSelector />
 
         <label className="flex cursor-pointer items-start gap-3 rounded-v-card border border-v-border bg-v-card px-4 py-3.5 shadow-v-subtle">
           <input

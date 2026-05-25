@@ -6,6 +6,8 @@ import {
   getMorphoReconciliationToleranceRaw,
 } from '@/lib/portal/morphoReconciliationConfig'
 import { MORPHO_GRAPHQL_URL } from '@/lib/portal/morphoConstants'
+import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
+import { getSandboxDependencyHealth } from '@/lib/portal/mocks/morphoLocalSandbox'
 
 function absBigInt(value: bigint): bigint {
   return value < BigInt(0) ? -value : value
@@ -40,6 +42,10 @@ export type MorphoDependencyHealth = {
 
 /** Ping Morpho GraphQL + RPC Base. */
 export async function checkMorphoDependencyHealth(): Promise<MorphoDependencyHealth> {
+  if (isMorphoLocalSandboxEnabled()) {
+    return getSandboxDependencyHealth()
+  }
+
   const startedGraphql = Date.now()
   let morphoGraphql: MorphoDependencyHealth['morphoGraphql']
   try {

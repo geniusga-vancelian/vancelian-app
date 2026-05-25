@@ -4,7 +4,7 @@ import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
 import {
   morphoLedgerErrorResponse,
   requirePortalPersonId,
-} from '@/lib/portal/privyEarnRouteHelpers'
+} from '@/lib/portal/portalWalletRouteHelpers'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
 import { assertMorphoUsdcBetaAccess } from '@/lib/portal/morphoUsdcBetaAccess'
 import { prisma } from '@/lib/prisma'

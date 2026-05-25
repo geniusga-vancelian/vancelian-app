@@ -6,6 +6,7 @@ import {
   hasEuroCashAccount,
   isRegistrationComplete,
   resolveCryptoPortfolioTotal,
+  resolveSavingsPortfolioTotal,
   shouldShowRegistrationResume,
   shouldShowUnlockEuroBanner,
 } from './dashboardFormat'
@@ -68,7 +69,44 @@ describe('resolveCryptoPortfolioTotal', () => {
   })
 })
 
+describe('resolveSavingsPortfolioTotal', () => {
+  it('sums vault position values in reference currency', () => {
+    const total = resolveSavingsPortfolioTotal(
+      {
+        positions_count: 2,
+        positions: [
+          { estimatedValueEur: 100, estimatedValueUsd: 110 } as never,
+          { estimatedValueEur: 50, estimatedValueUsd: 55 } as never,
+        ],
+      },
+      'EUR',
+    )
+    assert.equal(total, 150)
+  })
+})
+
 describe('buildWalletRows', () => {
+  it('formats savings balance from vault positions', () => {
+    const rows = buildWalletRows(
+      null,
+      null,
+      null,
+      {
+        positions_count: 1,
+        positions: [
+          {
+            estimatedValueEur: 920,
+            estimatedValueUsd: 1000,
+          } as never,
+        ],
+      },
+      'EUR',
+    )
+    const savings = rows.find((r) => r.id === 'savings')
+    assert.equal(savings?.numericBalance, 920)
+    assert.match(savings?.subtitle ?? '', /1 vault/)
+  })
+
   it('formats crypto balance in reference currency', () => {
     const rows = buildWalletRows(
       null,
@@ -76,6 +114,7 @@ describe('buildWalletRows', () => {
         summary: { total_value_usd: 110, positions_count: 1 },
         positions: [{ estimated_value_usd: 110, portfolio_scope: 'privy' }],
       },
+      null,
       null,
       'USD',
     )
@@ -86,7 +125,7 @@ describe('buildWalletRows', () => {
 })
 
 describe('applyWalletRowAccess', () => {
-  const baseRows = buildWalletRows(null, { summary: { total_value_eur: 120, positions_count: 1 } }, null, 'EUR')
+  const baseRows = buildWalletRows(null, { summary: { total_value_eur: 120, positions_count: 1 } }, null, null, 'EUR')
 
   it('keeps crypto and other rows visible for fresh signup', () => {
     const rows = applyWalletRowAccess(baseRows, freshCryptoUser, null)
@@ -122,6 +161,7 @@ describe('applyWalletRowAccess', () => {
     const rowsWithCash = buildWalletRows(
       cash,
       { summary: { total_value_eur: 120, positions_count: 1 } },
+      null,
       null,
       'EUR',
     )

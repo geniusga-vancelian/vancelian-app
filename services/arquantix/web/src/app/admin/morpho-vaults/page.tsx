@@ -184,8 +184,8 @@ export default function AdminMorphoVaultsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Morpho Vaults (Base)</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            Sélectionnez les vaults Morpho affichés dans le portail Invest. Chaque vault peut être
-            exécuté en mode direct (wallet Privy + contrats ERC-4626) ou via Privy Earn.
+            Sélectionnez les vaults Morpho affichés dans le portail Invest. Exécution on-chain
+            directe (`direct_morpho`) via wallet embedded Privy ou wallet externe MetaMask.
           </p>
         </div>
         <Button type="button" variant="outline" onClick={() => void loadAll()} disabled={loading}>
@@ -301,7 +301,6 @@ export default function AdminMorphoVaultsPage() {
                         }
                       >
                         <option value="direct_morpho">direct_morpho</option>
-                        <option value="privy_earn">privy_earn</option>
                       </select>
                     </label>
                     <label className="text-sm text-gray-700 md:col-span-2">
@@ -318,21 +317,6 @@ export default function AdminMorphoVaultsPage() {
                         }
                       />
                     </label>
-                    {draft.integrationMode === 'privy_earn' ? (
-                      <label className="text-sm text-gray-700 md:col-span-2">
-                        Privy vault ID
-                        <input
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-xs"
-                          value={draft.privyVaultId}
-                          onChange={(e) =>
-                            setDrafts((prev) => ({
-                              ...prev,
-                              [row.id]: { ...draft, privyVaultId: e.target.value },
-                            }))
-                          }
-                        />
-                      </label>
-                    ) : null}
                     <label className="text-sm text-gray-700">
                       Ordre
                       <input

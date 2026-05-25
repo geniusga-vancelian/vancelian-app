@@ -15,7 +15,7 @@ export type PortalMorphoVaultDetails = {
   integrationMode: PortalMorphoIntegrationMode
   /** Version Morpho on-chain (MetaMorpho V1 ou Vault V2). */
   morphoVaultVersion?: MorphoVaultVersion | null
-  /** Requis en mode privy_earn. */
+  /** Legacy — conservé en lecture seule pour les lignes CMS historiques. */
   privyVaultId?: string | null
   name: string
   provider: string
@@ -79,6 +79,8 @@ export type PortalMorphoPreparePayload = {
   ledgerEntries: PortalMorphoLedgerEntryRef[]
   groupKey: string
   idempotencyKey: string
+  /** Présent uniquement quand l’opération est finalisée côté serveur (sandbox local). */
+  serverCompleted?: boolean
 }
 
 export type PortalMorphoConfirmResult = {

@@ -1,3 +1,9 @@
+/**
+ * Ledger Morpho vault (Prisma) — prepare / confirm / positions.
+ *
+ * Legacy `integration_mode = privy_earn` ledger rows are read-only historical data.
+ * New Morpho execution uses `direct_morpho` only (`wallet_source`: privy_embedded | external_evm).
+ */
 import type {
   OnchainVaultOperation,
   OnchainVaultTransaction,
@@ -7,6 +13,8 @@ import { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { MORPHO_CHAIN_ID, normalizeVaultAddress } from '@/lib/portal/morphoConstants'
+import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
+import { sandboxUpdateLedgerSuccess } from '@/lib/portal/mocks/morphoLocalSandbox'
 import { verifyMorphoTransactionReceipt } from '@/lib/portal/morphoReceiptVerification'
 import { emitMorphoLedgerTerminalSupportLog } from '@/lib/portal/morphoBetaSupportEmit'
 
@@ -95,6 +103,7 @@ type CreateLedgerEntryInput = {
   txIndex: number
   groupKey: string
   privyActionId?: string | null
+  metadataJson?: Prisma.InputJsonValue | null
 }
 
 export async function findIdempotentLedgerGroup(args: {
@@ -161,6 +170,7 @@ export async function createMorphoLedgerEntries(
           txIndex: entry.txIndex,
           groupKey: entry.groupKey,
           privyActionId: entry.privyActionId ?? null,
+          metadataJson: entry.metadataJson ?? undefined,
           status: 'pending',
         },
       })
@@ -202,6 +212,14 @@ export async function updateLedgerAfterReceipt(args: {
 
   if (entry.status === 'success') {
     return entry
+  }
+
+  if (isMorphoLocalSandboxEnabled()) {
+    return sandboxUpdateLedgerSuccess({
+      ledgerEntryId: entry.id,
+      personId: args.personId,
+      txHash: args.txHash,
+    })
   }
 
   let verified
@@ -312,60 +330,3 @@ export async function syncUserVaultPositionFromLedger(args: {
   })
 }
 
-export async function updatePrivyEarnLedgerFromAction(args: {
-  ledgerEntryId: string
-  personId: string
-  privyActionId: string
-  status: 'pending' | 'success' | 'failed' | 'reverted'
-  txHash?: string | null
-  blockNumber?: bigint | null
-  errorMessage?: string | null
-}): Promise<OnchainVaultTransaction> {
-  const entry = await prisma.onchainVaultTransaction.findFirst({
-    where: { id: args.ledgerEntryId, personId: args.personId },
-  })
-  if (!entry) {
-    throw new MorphoVaultLedgerError('morpho.ledger_not_found', 'Entrée ledger introuvable.', 404)
-  }
-
-  const statusMap: Record<string, OnchainVaultTransactionStatus> = {
-    pending: 'pending',
-    success: 'success',
-    failed: 'failed',
-    reverted: 'reverted',
-  }
-
-  const updated = await prisma.onchainVaultTransaction.update({
-    where: { id: entry.id },
-    data: {
-      privyActionId: args.privyActionId,
-      status: statusMap[args.status] ?? 'failed',
-      txHash: args.txHash ?? undefined,
-      blockNumber: args.blockNumber ?? undefined,
-      errorMessage: args.errorMessage ?? undefined,
-    },
-  })
-
-  if (updated.status === 'success') {
-    await syncUserVaultPositionFromLedger({
-      personId: updated.personId,
-      vaultAddress: updated.vaultAddress,
-      chainId: updated.chainId,
-      walletAddress: updated.walletAddress,
-      assetSymbol: updated.assetSymbol,
-      assetDecimals: updated.assetDecimals,
-    })
-  }
-
-  return updated
-}
-
-export function mapPrivyActionStatusToLedgerStatus(
-  status: string,
-): 'pending' | 'success' | 'failed' | 'reverted' {
-  const normalized = status.trim().toLowerCase()
-  if (normalized === 'succeeded' || normalized === 'success') return 'success'
-  if (normalized === 'failed' || normalized === 'rejected') return 'failed'
-  if (normalized === 'reverted') return 'reverted'
-  return 'pending'
-}

@@ -1,16 +1,5 @@
 [
   {
-    "vaultAddress": "0xbeefe94c8ad530842bfe7d8b397938ffc1cb83b2",
-    "chainId": 8453,
-    "integrationMode": "privy_earn",
-    "privyVaultId": "svbeyhtpw8317205byhv04ns",
-    "label": "Steakhouse Prime USDC",
-    "description": "Vault Morpho USDC — rendement on-chain via Privy Earn.",
-    "curator": null,
-    "sortOrder": 0,
-    "isPublished": true
-  },
-  {
     "vaultAddress": "0xbeef0e0834849aCC03f0089F01f4F1Eeb06873C9",
     "chainId": 8453,
     "integrationMode": "direct_morpho",
@@ -18,7 +7,7 @@
     "label": "Steakhouse Prime USDC",
     "description": "Steakhouse Prime Instant — vault Morpho V2 USDC sur Base (dépôt/retrait direct).",
     "curator": "Steakhouse Financial",
-    "sortOrder": 1,
+    "sortOrder": 0,
     "isPublished": true
   },
   {
@@ -29,7 +18,7 @@
     "label": "Gauntlet USDC Prime",
     "description": "Vault Morpho V2 USDC Gauntlet Prime sur Base — dépôt/retrait direct.",
     "curator": "Gauntlet",
-    "sortOrder": 2,
+    "sortOrder": 1,
     "isPublished": true
   },
   {
@@ -40,7 +29,7 @@
     "label": "Gauntlet USDC Frontier",
     "description": "Vault Morpho V2 USDC Gauntlet Frontier sur Base — rendement plus agressif, dépôt/retrait direct.",
     "curator": "Gauntlet",
-    "sortOrder": 3,
+    "sortOrder": 2,
     "isPublished": true
   }
 ]

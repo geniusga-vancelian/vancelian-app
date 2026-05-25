@@ -8,6 +8,7 @@ export const PORTAL_ROUTES = {
   registration: `${PORTAL_PATH_PREFIX}/registration`,
   dashboard: `${PORTAL_PATH_PREFIX}/dashboard`,
   cryptoWallet: `${PORTAL_PATH_PREFIX}/wallet/crypto`,
+  savingsWallet: `${PORTAL_PATH_PREFIX}/wallet/savings`,
   walletDeposit: `${PORTAL_PATH_PREFIX}/wallet/deposit`,
   walletDepositSol: `${PORTAL_PATH_PREFIX}/wallet/deposit/sol`,
   walletSwap: `${PORTAL_PATH_PREFIX}/wallet/swap`,
@@ -35,6 +36,7 @@ export function portalSwapRoute(options?: { to?: string; toChain?: string }): st
 export function resolveAccountsRowHref(rowId: string, locked?: boolean): string | undefined {
   if (locked) return PORTAL_ROUTES.registration
   if (rowId === 'crypto') return PORTAL_ROUTES.cryptoWallet
+  if (rowId === 'savings') return PORTAL_ROUTES.savingsWallet
   return undefined
 }
 
@@ -42,6 +44,12 @@ export function resolveAccountsRowHref(rowId: string, locked?: boolean): string 
 export function portalCryptoWalletAssetRoute(asset: string): string {
   const ticker = asset.trim().toLowerCase()
   return `${PORTAL_ROUTES.cryptoWallet}/${encodeURIComponent(ticker || 'btc')}`
+}
+
+/** Détail vault épargne — `/app/wallet/savings/0x…`. */
+export function portalSavingsVaultRoute(vaultAddress: string): string {
+  const normalized = vaultAddress.trim().toLowerCase()
+  return `${PORTAL_ROUTES.savingsWallet}/${encodeURIComponent(normalized)}`
 }
 
 /** Deposit — adresse EVM si wallet lié, sinon création wallet. */

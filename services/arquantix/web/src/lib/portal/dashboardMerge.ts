@@ -31,6 +31,7 @@ export function mergePortalDashboardPayload(
     privyPersonWallets: core?.privyPersonWallets ?? null,
     crypto: portfolio?.crypto ?? null,
     placements: portfolio?.placements ?? null,
+    savings: portfolio?.savings ?? null,
     newsWidget,
     partial: Boolean(core?.partial || portfolio?.partial),
   }

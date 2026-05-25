@@ -48,12 +48,9 @@ describe('mergeMorphoVaultConfigWithGraphql', () => {
     assert.equal(merged.asset.symbol, 'USDC')
   })
 
-  it('utilise privyVaultId comme id en mode privy_earn', () => {
-    const merged = mergeMorphoVaultConfigWithGraphql(
-      { ...baseConfig, integrationMode: 'privy_earn', privyVaultId: 'svbeyhtpw8317205byhv04ns' },
-      gqlVault,
-    )
-    assert.equal(merged.id, 'svbeyhtpw8317205byhv04ns')
+  it('utilise l’adresse vault comme identifiant', () => {
+    const merged = mergeMorphoVaultConfigWithGraphql(baseConfig, gqlVault)
+    assert.equal(merged.id, baseConfig.vaultAddress.toLowerCase())
   })
 })
 

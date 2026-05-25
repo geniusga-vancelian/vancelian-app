@@ -12,17 +12,15 @@ export function getMorphoDefaultBaseRpcUrl(): string {
   return primary || 'https://mainnet.base.org'
 }
 
-/** Steakhouse Prime USDC — vault par défaut (Privy Earn). */
+/** Steakhouse Prime USDC — vault Morpho par défaut (direct on-chain). */
 export const MORPHO_DEFAULT_VAULT_ADDRESS = '0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2'
 
-export const MORPHO_DEFAULT_PRIVY_VAULT_ID = 'svbeyhtpw8317205byhv04ns'
-
-export type PortalMorphoIntegrationMode = 'direct_morpho' | 'privy_earn'
+export type PortalMorphoIntegrationMode = 'direct_morpho'
 
 export type MorphoVaultVersion = 'v1' | 'v2'
 
-export function getPortalMorphoIntegrationLabel(mode: PortalMorphoIntegrationMode): string {
-  return mode === 'direct_morpho' ? 'Direct vault' : 'Privy Earn'
+export function getPortalMorphoIntegrationLabel(_mode: PortalMorphoIntegrationMode): string {
+  return 'Direct vault'
 }
 
 export function isValidEvmAddress(value: string): value is `0x${string}` {

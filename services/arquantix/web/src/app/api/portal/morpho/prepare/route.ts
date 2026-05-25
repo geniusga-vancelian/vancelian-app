@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import type { Prisma } from '@prisma/client'
 
 import { isValidEvmAddress, MORPHO_CHAIN_ID } from '@/lib/portal/morphoConstants'
 import {
   morphoLedgerErrorResponse,
   morphoRpcErrorResponse,
   requirePortalPersonId,
-} from '@/lib/portal/privyEarnRouteHelpers'
+} from '@/lib/portal/portalWalletRouteHelpers'
 import { fetchMorphoVaultPosition, fetchMorphoVaultsByAddresses } from '@/lib/portal/morphoGraphql'
+import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
+import {
+  executeSandboxDirectMorphoOperation,
+  getSandboxMockVaultCatalog,
+} from '@/lib/portal/mocks/morphoLocalSandbox'
 import { parseHumanAmountToRaw } from '@/lib/portal/morphoVaultFormat'
 import {
   assertNoConcurrentPendingGroup,
@@ -25,6 +31,48 @@ import {
   assertMorphoUsdcWithdrawsEnabled,
 } from '@/lib/portal/morphoUsdcBetaAccess'
 import { assertMorphoBetaDepositLimits } from '@/lib/portal/morphoUsdcBetaLimits'
+import type { ExecutionWalletSource, WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
+
+function parseWalletSourceMetadata(body: unknown): WalletSourceMetadata {
+  if (!body || typeof body !== 'object') {
+    return { wallet_source: 'privy_embedded' }
+  }
+  const row = body as Record<string, unknown>
+  const source = row.wallet_source ?? row.walletSource
+  const walletSource: ExecutionWalletSource =
+    source === 'external_evm' ? 'external_evm' : 'privy_embedded'
+  const externalWalletId =
+    typeof row.external_wallet_id === 'string'
+      ? row.external_wallet_id
+      : typeof row.externalWalletId === 'string'
+        ? row.externalWalletId
+        : null
+  const walletProvider =
+    row.wallet_provider === 'metamask' ||
+    row.wallet_provider === 'walletconnect' ||
+    row.wallet_provider === 'injected' ||
+    row.wallet_provider === 'local_mock'
+      ? row.wallet_provider
+      : row.walletProvider === 'metamask' ||
+          row.walletProvider === 'walletconnect' ||
+          row.walletProvider === 'injected' ||
+          row.walletProvider === 'local_mock'
+        ? row.walletProvider
+        : null
+
+  return {
+    wallet_source: walletSource,
+    external_wallet_id: externalWalletId,
+    wallet_provider: walletProvider,
+  }
+}
+
+function parsePrivyWalletIdFromBody(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null
+  const row = body as Record<string, unknown>
+  const value = row.privy_wallet_id ?? row.privyWalletId
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
 
 function parsePrepareBody(body: unknown) {
   if (!body || typeof body !== 'object') {
@@ -58,7 +106,10 @@ export async function POST(request: NextRequest) {
 
     await assertMorphoUsdcBetaAccess(personId)
 
-    const parsed = parsePrepareBody(await request.json())
+    const body = await request.json()
+    const parsed = parsePrepareBody(body)
+    const walletSource = parseWalletSourceMetadata(body)
+    const privyWalletIdFromBody = parsePrivyWalletIdFromBody(body)
     const vaultAddress = parsed.vaultAddress.trim()
     const walletAddress = parsed.walletAddress.trim()
     const idempotencyKey = parsed.idempotencyKey
@@ -78,7 +129,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Ce vault n’est pas en mode direct_morpho.' }, { status: 400 })
     }
 
-    const gqlRows = await fetchMorphoVaultsByAddresses({ addresses: [vaultAddress] })
+    const gqlRows = isMorphoLocalSandboxEnabled()
+      ? (() => {
+          const catalog = getSandboxMockVaultCatalog(vaultAddress)
+          return catalog ? [catalog] : []
+        })()
+      : await fetchMorphoVaultsByAddresses({ addresses: [vaultAddress] })
     const gqlVault = gqlRows[0]
     const assetDecimals = gqlVault?.asset.decimals ?? 6
     const assetSymbol = gqlVault?.asset.symbol ?? 'USDC'
@@ -95,6 +151,22 @@ export async function POST(request: NextRequest) {
     }
 
     const amountRaw = parseHumanAmountToRaw(parsed.amount, assetDecimals).toString()
+
+    if (isMorphoLocalSandboxEnabled()) {
+      return NextResponse.json(
+        await executeSandboxDirectMorphoOperation({
+          personId,
+          vaultAddress,
+          walletAddress,
+          operation: parsed.operation,
+          amountRaw,
+          assetSymbol,
+          assetDecimals,
+          idempotencyKey,
+          walletSource,
+        }),
+      )
+    }
 
     if (parsed.operation === 'withdraw') {
       const position = await fetchMorphoVaultPosition({ vaultAddress, walletAddress })
@@ -148,6 +220,7 @@ export async function POST(request: NextRequest) {
             chainId: MORPHO_CHAIN_ID,
             chainType: 'evm',
             walletAddress,
+            privyWalletId: privyWalletIdFromBody,
             operation,
             amountRaw: operation === 'approve' ? '0' : amountRaw,
             assetSymbol,
@@ -156,6 +229,7 @@ export async function POST(request: NextRequest) {
             integrationMode: 'direct_morpho',
             txIndex: Math.max(0, txIndex),
             groupKey,
+            metadataJson: walletSource as Prisma.InputJsonValue,
           }
         }),
       )

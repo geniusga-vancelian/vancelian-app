@@ -1,23 +1,15 @@
--- Sync portal_morpho_vault_configs (local → prod seed)
+-- Sync portal_morpho_vault_configs (local → prod seed) — direct_morpho uniquement
 INSERT INTO "portal_morpho_vault_configs" (
   "id", "vault_address", "chain_id", "integration_mode", "privy_vault_id",
   "label", "description", "curator", "sort_order", "is_published", "updated_at"
 ) VALUES
-  (
-    'seed-steakhouse-prime-usdc',
-    '0xbeefe94c8ad530842bfe7d8b397938ffc1cb83b2',
-    8453, 'privy_earn', 'svbeyhtpw8317205byhv04ns',
-    'Steakhouse Prime USDC',
-    'Vault Morpho USDC — rendement on-chain via Privy Earn.',
-    NULL, 0, true, CURRENT_TIMESTAMP
-  ),
   (
     'seed-steakhouse-prime-usdc-v2',
     '0xbeef0e0834849acc03f0089f01f4f1eeb06873c9',
     8453, 'direct_morpho', NULL,
     'Steakhouse Prime USDC',
     'Steakhouse Prime Instant — vault Morpho V2 USDC sur Base (dépôt/retrait direct).',
-    'Steakhouse Financial', 1, true, CURRENT_TIMESTAMP
+    'Steakhouse Financial', 0, true, CURRENT_TIMESTAMP
   ),
   (
     'seed-gauntlet-usdc-prime',
@@ -25,7 +17,7 @@ INSERT INTO "portal_morpho_vault_configs" (
     8453, 'direct_morpho', NULL,
     'Gauntlet USDC Prime',
     'Vault Morpho V2 USDC Gauntlet Prime sur Base — dépôt/retrait direct.',
-    'Gauntlet', 2, true, CURRENT_TIMESTAMP
+    'Gauntlet', 1, true, CURRENT_TIMESTAMP
   ),
   (
     'seed-gauntlet-usdc-frontier',
@@ -33,7 +25,7 @@ INSERT INTO "portal_morpho_vault_configs" (
     8453, 'direct_morpho', NULL,
     'Gauntlet USDC Frontier',
     'Vault Morpho V2 USDC Gauntlet Frontier sur Base — rendement plus agressif, dépôt/retrait direct.',
-    'Gauntlet', 3, true, CURRENT_TIMESTAMP
+    'Gauntlet', 2, true, CURRENT_TIMESTAMP
   )
 ON CONFLICT ("vault_address") DO UPDATE SET
   "chain_id" = EXCLUDED."chain_id",

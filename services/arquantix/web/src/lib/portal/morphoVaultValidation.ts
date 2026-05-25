@@ -7,56 +7,37 @@ import {
   type PortalMorphoIntegrationMode,
 } from '@/lib/portal/morphoConstants'
 
-export const integrationModeSchema = z.enum(['direct_morpho', 'privy_earn'])
+export const integrationModeSchema = z.literal('direct_morpho')
 
-export const createMorphoVaultSchema = z
-  .object({
-    vaultAddress: z.string().trim().refine(isValidEvmAddress, 'Adresse vault Base invalide.'),
-    chainId: z.number().int().positive().default(MORPHO_CHAIN_ID),
-    integrationMode: integrationModeSchema,
-    privyVaultId: z.string().trim().optional().nullable(),
-    label: z.string().trim().max(120).optional().nullable(),
-    description: z.string().trim().max(2000).optional().nullable(),
-    curator: z.string().trim().max(120).optional().nullable(),
-    sortOrder: z.number().int().min(0).optional(),
-    isPublished: z.boolean().optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.chainId !== MORPHO_CHAIN_ID) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Seule la chaîne Base (8453) est supportée en v1.',
-        path: ['chainId'],
-      })
-    }
-    if (value.integrationMode === 'privy_earn' && !value.privyVaultId?.trim()) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'privyVaultId requis en mode privy_earn.',
-        path: ['privyVaultId'],
-      })
-    }
-  })
+export const createMorphoVaultSchema = z.object({
+  vaultAddress: z.string().trim().refine(isValidEvmAddress, 'Adresse vault Base invalide.'),
+  chainId: z.number().int().positive().default(MORPHO_CHAIN_ID),
+  integrationMode: integrationModeSchema.default('direct_morpho'),
+  privyVaultId: z.string().trim().optional().nullable(),
+  label: z.string().trim().max(120).optional().nullable(),
+  description: z.string().trim().max(2000).optional().nullable(),
+  curator: z.string().trim().max(120).optional().nullable(),
+  sortOrder: z.number().int().min(0).optional(),
+  isPublished: z.boolean().optional(),
+}).superRefine((value, ctx) => {
+  if (value.chainId !== MORPHO_CHAIN_ID) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Seule la chaîne Base (8453) est supportée en v1.',
+      path: ['chainId'],
+    })
+  }
+})
 
-export const updateMorphoVaultSchema = z
-  .object({
-    integrationMode: integrationModeSchema.optional(),
-    privyVaultId: z.string().trim().optional().nullable(),
-    label: z.string().trim().max(120).optional().nullable(),
-    description: z.string().trim().max(2000).optional().nullable(),
-    curator: z.string().trim().max(120).optional().nullable(),
-    sortOrder: z.number().int().min(0).optional(),
-    isPublished: z.boolean().optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.integrationMode === 'privy_earn' && value.privyVaultId === '') {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'privyVaultId requis en mode privy_earn.',
-        path: ['privyVaultId'],
-      })
-    }
-  })
+export const updateMorphoVaultSchema = z.object({
+  integrationMode: integrationModeSchema.optional(),
+  privyVaultId: z.string().trim().optional().nullable(),
+  label: z.string().trim().max(120).optional().nullable(),
+  description: z.string().trim().max(2000).optional().nullable(),
+  curator: z.string().trim().max(120).optional().nullable(),
+  sortOrder: z.number().int().min(0).optional(),
+  isPublished: z.boolean().optional(),
+})
 
 export const prepareMorphoTxSchema = z.object({
   vaultAddress: z.string().trim().refine(isValidEvmAddress, 'Adresse vault invalide.'),

@@ -75,6 +75,10 @@ export type PortalPlacementsSummary = {
   positions_count?: number
 } | null
 
+import type { PortalSavingsSummary } from '@/lib/portal/portalSavingsTypes'
+
+export type { PortalSavingsSummary } from '@/lib/portal/portalSavingsTypes'
+
 export type PortalPrivyPersonWallets = {
   wallets?: Array<{
     id?: string
@@ -95,6 +99,7 @@ export type PortalDashboardPayload = {
   globalHistory: { points?: PortalGlobalHistoryPoint[] } | null
   crypto: PortalCryptoSummary | null
   placements: PortalPlacementsSummary | null
+  savings: PortalSavingsSummary
   notifications: { count?: number } | null
   newsWidget: PortalNewsWidgetData | null
   privyPersonWallets?: PortalPrivyPersonWallets
@@ -113,10 +118,11 @@ export type PortalDashboardCorePayload = {
   partial?: boolean
 }
 
-/** Section portfolio — crypto + placements (plus lourd). */
+/** Section portfolio — crypto + placements + épargne DeFi (plus lourd). */
 export type PortalDashboardPortfolioPayload = {
   crypto: PortalCryptoSummary | null
   placements: PortalPlacementsSummary
+  savings: PortalSavingsSummary
   partial?: boolean
 }
 

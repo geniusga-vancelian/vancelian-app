@@ -5,7 +5,7 @@ import { Loader2, Wallet } from 'lucide-react'
 
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
-import { PortalSettingsCard, PortalSettingsRow } from '@/components/portal/profile/PortalProfileUi'
+import { PortalSettingsCard, PortalSettingsRow, PortalSectionTitle } from '@/components/portal/profile/PortalProfileUi'
 import { Button } from '@/components/ui/button'
 import { formatEvmNetworkShort } from '@/lib/portal/evmNetworkLabel'
 import {
@@ -21,6 +21,7 @@ import {
   fetchPortalSolanaWalletStatus,
   type SolanaWalletStatusPayload,
 } from '@/lib/portal/solanaWalletClient'
+import { ConnectExternalWalletButton } from '@/components/wallet/ConnectExternalWalletButton'
 
 function formatWalletAddress(address: string): string {
   const trimmed = address.trim()
@@ -42,6 +43,7 @@ type WalletRowProps = {
   created: boolean
   address?: string
   networkLabel?: string
+  providerLabel?: string
   depositHref?: string
   createChain: 'evm' | 'solana'
   emptyHint: string
@@ -53,6 +55,7 @@ function WalletRow({
   created,
   address,
   networkLabel,
+  providerLabel,
   depositHref,
   createChain,
   emptyHint,
@@ -88,7 +91,7 @@ function WalletRow({
     )
   }
 
-  const subtitle = [networkLabel, address ? formatWalletAddress(address) : null]
+  const subtitle = [providerLabel, networkLabel, address ? formatWalletAddress(address) : null]
     .filter(Boolean)
     .join(' · ')
 
@@ -162,34 +165,59 @@ export function PortalMyWalletsScreen() {
     <PortalPageContainer className="py-8 sm:py-10">
       <div className="mx-auto w-full max-w-lg">
         <h1 className="m-0 font-ui text-[28px] font-semibold tracking-v-tight text-v-fg">My wallets</h1>
-        <p className="mt-2 mb-6 font-ui text-[15px] leading-relaxed text-v-fg-body">
-          Privy embedded wallets linked to your Vancelian account.
+        <p className="mt-2 mb-8 font-ui text-[15px] leading-relaxed text-v-fg-body">
+          Retrouvez vos wallets embedded Vancelian (Privy) et vos wallets externes (MetaMask) utilisés pour Morpho et
+          LI.FI.
         </p>
 
-        <PortalSettingsCard>
-          <WalletRow
-            title="EVM"
-            loading={loadingEvm}
-            created={Boolean(evmWallet?.address)}
-            address={evmWallet?.address}
-            networkLabel={
-              evmWallet ? formatEvmNetworkShort(evmWallet.chain_id) : 'Ethereum · ERC-20'
-            }
-            depositHref={PORTAL_ROUTES.walletDeposit}
-            createChain="evm"
-            emptyHint="Create an EVM wallet to receive ETH and ERC-20 tokens."
-          />
-          <WalletRow
-            title="Solana"
-            loading={loadingSolana}
-            created={solanaLinked}
-            address={solanaStatus?.address}
-            networkLabel="Solana · SOL"
-            depositHref={PORTAL_ROUTES.walletDepositSol}
-            createChain="solana"
-            emptyHint="Create a Solana wallet to receive SOL on Solana."
-          />
-        </PortalSettingsCard>
+        <section className="mb-8 flex flex-col gap-3">
+          <div>
+            <PortalSectionTitle>Wallets Vancelian (Privy)</PortalSectionTitle>
+            <p className="m-0 mt-2 font-ui text-[14px] leading-relaxed text-v-fg-muted">
+              Wallets créés et gérés par Vancelian — dépôts, soldes crypto, gas sponsorisé si activé.
+            </p>
+          </div>
+          <PortalSettingsCard>
+            <WalletRow
+              title="Wallet EVM"
+              loading={loadingEvm}
+              created={Boolean(evmWallet?.address)}
+              address={evmWallet?.address}
+              providerLabel="Privy embedded"
+              networkLabel={
+                evmWallet ? formatEvmNetworkShort(evmWallet.chain_id) : 'Ethereum · ERC-20'
+              }
+              depositHref={PORTAL_ROUTES.walletDeposit}
+              createChain="evm"
+              emptyHint="Create an EVM wallet to receive ETH and ERC-20 tokens."
+            />
+            <WalletRow
+              title="Wallet Solana"
+              loading={loadingSolana}
+              created={solanaLinked}
+              address={solanaStatus?.address}
+              providerLabel="Privy embedded"
+              networkLabel="Solana · SOL"
+              depositHref={PORTAL_ROUTES.walletDepositSol}
+              createChain="solana"
+              emptyHint="Create a Solana wallet to receive SOL on Solana."
+            />
+          </PortalSettingsCard>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <div>
+            <PortalSectionTitle>Wallets externes (MetaMask)</PortalSectionTitle>
+            <p className="m-0 mt-2 font-ui text-[14px] leading-relaxed text-v-fg-muted">
+              Wallets que vous connectez vous-même — transactions DeFi signées localement, frais réseau à votre charge.
+            </p>
+          </div>
+          <PortalSettingsCard>
+            <div className="px-4 py-4 sm:px-5">
+              <ConnectExternalWalletButton compact />
+            </div>
+          </PortalSettingsCard>
+        </section>
 
         {error ? (
           <div className="mt-4 space-y-3">

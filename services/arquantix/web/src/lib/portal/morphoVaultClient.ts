@@ -6,6 +6,7 @@ import type {
 } from '@/lib/portal/morphoVaultTypes'
 import { formatBaseRpcUserMessage, isBaseRpcTransientError } from '@/lib/blockchain/baseRpcErrors'
 import { parsePortalExchangeError } from '@/lib/portal/parsePortalExchangeError'
+import type { WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 
 async function morphoFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -56,6 +57,9 @@ export async function preparePortalMorphoTransactions(args: {
   operation: 'deposit' | 'withdraw'
   amount: string
   idempotencyKey: string
+  walletSource?: WalletSourceMetadata
+  externalWalletId?: string | null
+  privyWalletId?: string | null
 }): Promise<PortalMorphoPreparePayload> {
   return morphoFetch('/api/portal/morpho/prepare', {
     method: 'POST',
@@ -65,6 +69,10 @@ export async function preparePortalMorphoTransactions(args: {
       operation: args.operation,
       amount: args.amount,
       idempotency_key: args.idempotencyKey,
+      wallet_source: args.walletSource?.wallet_source,
+      external_wallet_id: args.externalWalletId,
+      privy_wallet_id: args.privyWalletId,
+      wallet_provider: args.walletSource?.wallet_provider,
     }),
   })
 }

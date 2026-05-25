@@ -7,15 +7,34 @@ import type {
   PortalMorphoVaultDetails,
   PortalMorphoVaultPosition,
 } from '@/lib/portal/morphoVaultTypes'
-import {
-  formatEarnApyFromBps,
-  formatEarnTokenAmount,
-  formatEarnUsd,
-} from '@/lib/portal/privyEarnFormat'
-
 function apyDecimalToBps(value: number | null | undefined): number | null {
   if (value == null || !Number.isFinite(value)) return null
   return Math.round(value * 10_000)
+}
+
+export function formatEarnTokenAmount(raw: string, decimals: number, maxFraction = 4): string {
+  const value = BigInt(raw || '0')
+  const base = BigInt(10) ** BigInt(Math.max(0, decimals))
+  const whole = value / base
+  const fraction = value % base
+  if (fraction === BigInt(0)) return whole.toString()
+  const fracStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '')
+  const trimmed = fracStr.slice(0, maxFraction).replace(/0+$/, '')
+  return trimmed ? `${whole}.${trimmed}` : whole.toString()
+}
+
+export function formatEarnApyFromBps(bps: number | null): string {
+  if (bps == null || !Number.isFinite(bps)) return '—'
+  return `${(bps / 100).toFixed(2)}%`
+}
+
+export function formatEarnUsd(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
 }
 
 export function mergeMorphoVaultConfigWithGraphql(
@@ -28,10 +47,7 @@ export function mergeMorphoVaultConfigWithGraphql(
   const asset = gql?.asset ?? { address: '', symbol: 'USDC', decimals: 6 }
 
   return {
-    id:
-      config.integrationMode === 'privy_earn' && config.privyVaultId
-        ? config.privyVaultId
-        : normalizeVaultAddress(vaultAddress),
+    id: normalizeVaultAddress(vaultAddress),
     vaultAddress,
     chainId: config.chainId,
     integrationMode: config.integrationMode,
@@ -113,5 +129,3 @@ export function parseHumanAmountToRaw(amount: string, decimals: number): bigint 
 export function formatApyFromDecimal(value: number | null | undefined): string {
   return formatEarnApyFromBps(apyDecimalToBps(value))
 }
-
-export { formatEarnApyFromBps, formatEarnTokenAmount, formatEarnUsd }

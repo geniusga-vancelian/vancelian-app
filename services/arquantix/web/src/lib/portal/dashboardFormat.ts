@@ -8,6 +8,7 @@ import type {
   PortalPlacementsSummary,
   PortalWalletRow,
 } from '@/lib/portal/dashboardTypes'
+import type { PortalSavingsPosition, PortalSavingsSummary } from '@/lib/portal/portalSavingsTypes'
 import {
   buildPrivyWalletPositionsSummary,
   parseCryptoPositionsPayload,
@@ -179,6 +180,34 @@ export function resolveCryptoPortfolioTotal(
   )
 }
 
+/** Somme des valorisations vaults DeFi — aligné hub épargne. */
+export function resolveSavingsPortfolioTotal(
+  savings: PortalSavingsSummary,
+  currency: string,
+): number {
+  if (!savings) return 0
+
+  const positions = savings.positions ?? []
+  if (positions.length > 0) {
+    return positions.reduce(
+      (acc: number, position: PortalSavingsPosition) =>
+        acc +
+        selectReferenceMoneyValue(
+          currency,
+          position.estimatedValueEur,
+          position.estimatedValueUsd ?? position.assetsUsd ?? undefined,
+        ),
+      0,
+    )
+  }
+
+  return selectReferenceMoneyValue(
+    currency,
+    savings.total_value_eur,
+    savings.total_value_usd,
+  )
+}
+
 function toPortalCryptoSummary(parsed: PortalCryptoPositionsSummary): PortalCryptoSummary {
   return {
     summary: {
@@ -233,6 +262,7 @@ export function buildWalletRows(
   cash: PortalDashboardCash,
   crypto: PortalCryptoSummary | null,
   placements: PortalPlacementsSummary | null,
+  savings: PortalSavingsSummary | null,
   currency: string,
 ): PortalWalletRow[] {
   const eurBalance = toNumber(cash?.cash_account?.available_balance)
@@ -244,6 +274,8 @@ export function buildWalletRows(
   const cryptoValue = resolveCryptoPortfolioTotal(crypto, currency)
   const placementsCount = placements?.positions_count ?? 0
   const placementsValue = toNumber(placements?.total_earn_value_eur)
+  const savingsCount = savings?.positions_count ?? savings?.positions?.length ?? 0
+  const savingsValue = resolveSavingsPortfolioTotal(savings, currency)
 
   return [
     {
@@ -257,10 +289,13 @@ export function buildWalletRows(
     },
     {
       id: 'savings',
-      title: 'Savings projects',
-      subtitle: 'Open your first project!',
-      balance: formatPortalMoney(0, 'EUR'),
-      numericBalance: 0,
+      title: 'Épargne',
+      subtitle:
+        savingsCount > 0
+          ? `${savingsCount} vault${savingsCount > 1 ? 's' : ''} DeFi`
+          : 'Ouvrez votre premier vault !',
+      balance: formatPortalMoney(savingsValue, currency),
+      numericBalance: savingsValue,
       iconKey: 'savings',
       iconTone: 'green',
     },

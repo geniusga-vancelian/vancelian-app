@@ -15,7 +15,6 @@ import { cn } from '@/lib/utils'
 
 export function PortalEarnVaultSection() {
   const [vaults, setVaults] = useState<PortalMorphoVaultDetails[]>([])
-  const [configured, setConfigured] = useState(true)
   const [beta, setBeta] = useState<PortalMorphoBetaPortalFlags | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +26,6 @@ export function PortalEarnVaultSection() {
     try {
       const data = await fetchPortalMorphoVaults()
       setVaults(data.vaults)
-      setConfigured(data.configured)
       setBeta(data.beta ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Impossible de charger les vaults.')
@@ -44,15 +42,8 @@ export function PortalEarnVaultSection() {
     <section id="earn-vaults" className="flex flex-col gap-4">
       <PortalSectionHeading title="Vaults DeFi" />
       <p className="m-0 -mt-2 font-ui text-[14px] text-v-fg-muted">
-        Déposez vos stablecoins dans des vaults Morpho on-chain (Base).
+        Déposez vos stablecoins dans des vaults Morpho on-chain (Base). Signez avec votre wallet Vancelian ou MetaMask.
       </p>
-
-      {!configured ? (
-        <p className="m-0 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-900">
-          Un vault en mode Privy Earn nécessite{' '}
-          <code className="rounded bg-white/80 px-1">PRIVY_APP_SECRET</code> côté serveur.
-        </p>
-      ) : null}
 
       {beta?.message ? (
         <p className="m-0 rounded-v-card border border-sky-200 bg-sky-50 px-4 py-3 font-ui text-[13px] text-sky-950">

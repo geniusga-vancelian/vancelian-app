@@ -55,13 +55,27 @@ jobs:
               --query SecretString --output text 2>/dev/null); then
               echo "Base RPC résolu depuis Secrets Manager (arquantix/prod/base-rpc-url-primary)"
             else
-              echo "::warning::VANCELIAN_BASE_RPC_URL absent et secret SM introuvable — fallback RPC public Base côté client."
-              RPC=""
+              echo "::error::VANCELIAN_BASE_RPC_URL absent et secret SM introuvable — build client Base RPC impossible."
+              exit 1
             fi
           else
             echo "Base RPC résolu depuis GitHub secret VANCELIAN_BASE_RPC_URL"
           fi
+          if echo "$RPC" | grep -q 'mainnet.base.org'; then
+            echo "::error::NEXT_PUBLIC_BASE_RPC_URL ne doit pas utiliser mainnet.base.org en primary prod."
+            exit 1
+          fi
           echo "NEXT_PUBLIC_BASE_RPC_URL=$RPC" >> "$GITHUB_ENV"
+
+      - name: Resolve WalletConnect Project ID for client bundle
+        run: |
+          set -euo pipefail
+          WC="${{ secrets.VANCELIAN_WALLETCONNECT_PROJECT_ID }}"
+          if [ -z "${WC:-}" ]; then
+            echo "::error::VANCELIAN_WALLETCONNECT_PROJECT_ID absent — MetaMask/WalletConnect ne fonctionnera pas en prod."
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=$WC" >> "$GITHUB_ENV"
 
       - name: Build & push Docker image
         env:
@@ -72,7 +86,12 @@ jobs:
             echo "::warning::VANCELIAN_PRIVY_APP_ID absent — le runtime ECS PRIVY_APP_ID reste requis."
           fi
           if [ -z "${NEXT_PUBLIC_BASE_RPC_URL:-}" ]; then
-            echo "::warning::NEXT_PUBLIC_BASE_RPC_URL absent — le client utilisera le RPC public Base en fallback."
+            echo "::error::NEXT_PUBLIC_BASE_RPC_URL absent — build impossible."
+            exit 1
+          fi
+          if [ -z "${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}" ]; then
+            echo "::error::NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID absent — build impossible."
+            exit 1
           fi
           docker build \
             --platform linux/amd64 \
@@ -82,6 +101,7 @@ jobs:
             --build-arg NEXT_PUBLIC_GIT_SHA=${{ github.sha }} \
             --build-arg NEXT_PUBLIC_PRIVY_APP_ID="${NEXT_PUBLIC_PRIVY_APP_ID}" \
             --build-arg NEXT_PUBLIC_BASE_RPC_URL="${NEXT_PUBLIC_BASE_RPC_URL}" \
+            --build-arg NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}" \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
             -f services/arquantix/web/Dockerfile \

@@ -4,7 +4,6 @@ import { fetchMorphoVaultPosition } from '@/lib/portal/morphoGraphql'
 import { listPublishedPortalMorphoVaultConfigs } from '@/lib/portal/morphoVaultConfigStore'
 import { loadPrincipalNetRaw } from '@/lib/portal/morphoVaultLedger'
 import { resolvePortalEarnWalletIdentity } from '@/lib/portal/resolvePortalEarnWalletIdentity'
-import { fetchPrivyEarnVaultPosition } from '@/lib/portal/privyServerClient'
 
 export type MorphoVaultBackfillResult = {
   walletsScanned: number
@@ -17,19 +16,7 @@ export type MorphoVaultBackfillResult = {
 async function fetchPositionForConfig(args: {
   config: Awaited<ReturnType<typeof listPublishedPortalMorphoVaultConfigs>>[number]
   walletAddress: string
-  privyWalletId: string | null
 }) {
-  if (args.config.integrationMode === 'privy_earn' && args.privyWalletId && args.config.privyVaultId) {
-    const row = await fetchPrivyEarnVaultPosition(args.privyWalletId, args.config.privyVaultId)
-    const assetRaw = (row.asset ?? {}) as Record<string, unknown>
-    return {
-      assetsRaw: String(row.assets_in_vault ?? row.assetsInVault ?? '0'),
-      sharesRaw: String(row.shares_in_vault ?? row.sharesInVault ?? '0'),
-      assetSymbol: String(assetRaw.symbol ?? 'USDC').toUpperCase(),
-      assetDecimals: Number(assetRaw.decimals ?? 6),
-    }
-  }
-
   const row = await fetchMorphoVaultPosition({
     vaultAddress: args.config.vaultAddress,
     walletAddress: args.walletAddress,
@@ -85,7 +72,6 @@ export async function backfillMorphoVaultPositions(): Promise<MorphoVaultBackfil
         const position = await fetchPositionForConfig({
           config,
           walletAddress: identity.walletAddress,
-          privyWalletId: identity.privyWalletId,
         })
         if (!position || BigInt(position.assetsRaw || '0') === BigInt(0)) {
           result.skipped += 1

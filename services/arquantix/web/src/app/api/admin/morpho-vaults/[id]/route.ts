@@ -29,18 +29,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const nextMode = parsed.integrationMode ?? existing.integrationMode
-    const nextPrivyVaultId =
-      parsed.privyVaultId !== undefined ? parsed.privyVaultId?.trim() || null : existing.privyVaultId
-    if (nextMode === 'privy_earn' && !nextPrivyVaultId) {
-      return NextResponse.json({ error: 'privyVaultId requis en mode privy_earn.' }, { status: 400 })
-    }
-
     const updated = await prisma.portalMorphoVaultConfig.update({
       where: { id },
       data: {
         ...(parsed.integrationMode !== undefined ? { integrationMode: parsed.integrationMode } : {}),
-        ...(parsed.privyVaultId !== undefined ? { privyVaultId: nextPrivyVaultId } : {}),
+        ...(parsed.privyVaultId !== undefined
+          ? { privyVaultId: parsed.privyVaultId?.trim() || null }
+          : {}),
         ...(parsed.label !== undefined ? { label: parsed.label?.trim() || null } : {}),
         ...(parsed.description !== undefined ? { description: parsed.description?.trim() || null } : {}),
         ...(parsed.curator !== undefined ? { curator: parsed.curator?.trim() || null } : {}),

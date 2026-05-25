@@ -4,6 +4,7 @@ import {
   loadPortalDashboardPortfolioPayload,
 } from '@/lib/portal/dashboardUpstream'
 import { mergePortalDashboardPayload } from '@/lib/portal/dashboardMerge'
+import { readPortalPersonIdFromToken, PortalAuthError } from '@/lib/portal/portalJwt'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import { loadPortalTop10NewsWidget } from '@/lib/portal/loadTop10NewsWidget'
 
@@ -14,12 +15,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
+  let personId: string
+  try {
+    personId = readPortalPersonIdFromToken(token)
+  } catch (error) {
+    if (error instanceof PortalAuthError) {
+      return NextResponse.json({ error: 'unauthorized', message: error.message }, { status: 401 })
+    }
+    throw error
+  }
+
   const locale = request.nextUrl.searchParams.get('locale')?.trim() || 'fr'
   const origin = request.nextUrl.origin
 
   const [core, portfolio, newsWidget] = await Promise.all([
     loadPortalDashboardCorePayload(),
-    loadPortalDashboardPortfolioPayload(),
+    loadPortalDashboardPortfolioPayload(personId),
     loadPortalTop10NewsWidget(locale, origin).catch(() => null),
   ])
 

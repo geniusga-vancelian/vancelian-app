@@ -4,7 +4,7 @@ import { z } from 'zod'
 import {
   morphoLedgerErrorResponse,
   requirePortalPersonId,
-} from '@/lib/portal/privyEarnRouteHelpers'
+} from '@/lib/portal/portalWalletRouteHelpers'
 import { updateLedgerAfterReceipt } from '@/lib/portal/morphoVaultLedger'
 import { assertMorphoUsdcBetaAccess } from '@/lib/portal/morphoUsdcBetaAccess'
 import { idempotencyKeySchema } from '@/lib/portal/morphoVaultValidation'
