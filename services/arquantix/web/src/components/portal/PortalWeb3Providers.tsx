@@ -6,12 +6,15 @@ import { ExternalWalletProvider } from '@/lib/wallet/externalWalletProvider'
 
 type Props = {
   children: React.ReactNode
+  wagmiCookieHeader?: string
   wagmiInitialState?: State
 }
 
 /** Wagmi + RainbowKit + sélection wallet d’exécution (portail client). */
-export function PortalWeb3Providers({ children, wagmiInitialState }: Props) {
+export function PortalWeb3Providers({ children, wagmiCookieHeader, wagmiInitialState }: Props) {
   return (
-    <ExternalWalletProvider wagmiInitialState={wagmiInitialState}>{children}</ExternalWalletProvider>
+    <ExternalWalletProvider wagmiCookieHeader={wagmiCookieHeader} wagmiInitialState={wagmiInitialState}>
+      {children}
+    </ExternalWalletProvider>
   )
 }

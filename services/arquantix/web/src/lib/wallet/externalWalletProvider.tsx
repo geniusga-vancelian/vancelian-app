@@ -5,7 +5,7 @@ import '@rainbow-me/rainbowkit/styles.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import * as React from 'react'
-import { WagmiProvider, type State } from 'wagmi'
+import { WagmiProvider, cookieToInitialState, type State } from 'wagmi'
 
 import { getExternalWalletWagmiConfig } from '@/lib/wallet/externalWalletConfig'
 import { ExecutionWalletProvider } from '@/lib/wallet/useExecutionWallet'
@@ -14,15 +14,23 @@ const queryClient = new QueryClient()
 
 type Props = {
   children: React.ReactNode
-  /** Hydratation SSR — persiste la session WalletConnect au retour MetaMask mobile. */
+  /** Cookies HTTP bruts — hydratation WalletConnect côté client uniquement (RainbowKit ne bundle pas en SSR). */
+  wagmiCookieHeader?: string
+  /** Hydratation SSR explicite (tests / overrides). */
   wagmiInitialState?: State
 }
 
-export function ExternalWalletProvider({ children, wagmiInitialState }: Props) {
+export function ExternalWalletProvider({ children, wagmiCookieHeader, wagmiInitialState }: Props) {
+  const resolvedInitialState = React.useMemo(() => {
+    if (wagmiInitialState) return wagmiInitialState
+    if (!wagmiCookieHeader) return undefined
+    return cookieToInitialState(getExternalWalletWagmiConfig(), wagmiCookieHeader)
+  }, [wagmiCookieHeader, wagmiInitialState])
+
   return (
     <WagmiProvider
       config={getExternalWalletWagmiConfig()}
-      initialState={wagmiInitialState}
+      initialState={resolvedInitialState}
       reconnectOnMount
     >
       <QueryClientProvider client={queryClient}>
