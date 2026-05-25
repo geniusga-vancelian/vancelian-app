@@ -91,9 +91,9 @@ export function usePortalPrivyEarnWallet() {
   const loadPosition = useCallback(
     async (vaultId: string) => {
       if (!privyWalletId) return null
-      return fetchPortalEarnPosition({ vaultId, privyWalletId })
+      return fetchPortalEarnPosition({ vaultId, privyWalletId, walletAddress })
     },
-    [privyWalletId],
+    [privyWalletId, walletAddress],
   )
 
   const deposit = useCallback(
@@ -108,12 +108,13 @@ export function usePortalPrivyEarnWallet() {
       return submitPortalEarnDeposit({
         vaultId,
         privyWalletId,
+        walletAddress,
         amount,
         authorizationSignature: auth.signature,
         idempotencyKey: auth.idempotencyKey,
       })
     },
-    [authenticated, privyWalletId, ready, signEarnRequest],
+    [authenticated, privyWalletId, ready, signEarnRequest, walletAddress],
   )
 
   const withdraw = useCallback(
@@ -128,12 +129,13 @@ export function usePortalPrivyEarnWallet() {
       return submitPortalEarnWithdraw({
         vaultId,
         privyWalletId,
+        walletAddress,
         amount,
         authorizationSignature: auth.signature,
         idempotencyKey: auth.idempotencyKey,
       })
     },
-    [authenticated, privyWalletId, ready, signEarnRequest],
+    [authenticated, privyWalletId, ready, signEarnRequest, walletAddress],
   )
 
   return {

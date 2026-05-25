@@ -4,6 +4,7 @@ import { mapPrivyEarnWalletAction } from '@/lib/portal/privyEarnFormat'
 import { fetchPrivyWalletAction } from '@/lib/portal/privyServerClient'
 import {
   privyEarnErrorResponse,
+  parseWalletAddress,
   requirePortalPersonId,
 } from '@/lib/portal/privyEarnRouteHelpers'
 import { assertPortalPrivyWalletOwnership } from '@/lib/portal/portalWalletOwnership'
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const walletId = request.nextUrl.searchParams.get('privy_wallet_id')?.trim()
       || request.nextUrl.searchParams.get('privyWalletId')?.trim()
 
+    const walletAddress = parseWalletAddress(null, request.nextUrl.searchParams)
+
     if (!actionId?.trim() || !walletId) {
       return NextResponse.json(
         { code: 'privy.earn.invalid_request', message: 'actionId et privy_wallet_id requis.' },
@@ -27,7 +30,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       )
     }
 
-    await assertPortalPrivyWalletOwnership({ personId, privyWalletId: walletId })
+    await assertPortalPrivyWalletOwnership({ personId, privyWalletId: walletId, walletAddress })
 
     const row = await fetchPrivyWalletAction(walletId, actionId)
     return NextResponse.json({ action: mapPrivyEarnWalletAction(row) })

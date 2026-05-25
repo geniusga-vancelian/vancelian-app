@@ -32,11 +32,15 @@ export async function fetchPortalEarnVaults(): Promise<PortalEarnVaultsPayload> 
 export async function fetchPortalEarnPosition(args: {
   vaultId: string
   privyWalletId: string
+  walletAddress?: string | null
 }): Promise<PortalEarnVaultPosition | null> {
   const params = new URLSearchParams({
     vault_id: args.vaultId,
     privy_wallet_id: args.privyWalletId,
   })
+  if (args.walletAddress?.trim()) {
+    params.set('wallet_address', args.walletAddress.trim())
+  }
   const data = await earnFetch<{ position?: PortalEarnVaultPosition }>(
     `/api/portal/privy/earn/position?${params.toString()}`,
   )
@@ -46,6 +50,7 @@ export async function fetchPortalEarnPosition(args: {
 export async function submitPortalEarnDeposit(args: {
   vaultId: string
   privyWalletId: string
+  walletAddress?: string | null
   amount: string
   authorizationSignature?: string
   idempotencyKey?: string
@@ -56,6 +61,7 @@ export async function submitPortalEarnDeposit(args: {
     body: JSON.stringify({
       vault_id: args.vaultId,
       privy_wallet_id: args.privyWalletId,
+      wallet_address: args.walletAddress?.trim() || undefined,
       amount: args.amount,
       authorization_signature: args.authorizationSignature,
       idempotency_key: args.idempotencyKey,
@@ -68,6 +74,7 @@ export async function submitPortalEarnDeposit(args: {
 export async function submitPortalEarnWithdraw(args: {
   vaultId: string
   privyWalletId: string
+  walletAddress?: string | null
   amount: string
   authorizationSignature?: string
   idempotencyKey?: string
@@ -78,6 +85,7 @@ export async function submitPortalEarnWithdraw(args: {
     body: JSON.stringify({
       vault_id: args.vaultId,
       privy_wallet_id: args.privyWalletId,
+      wallet_address: args.walletAddress?.trim() || undefined,
       amount: args.amount,
       authorization_signature: args.authorizationSignature,
       idempotency_key: args.idempotencyKey,
@@ -90,8 +98,12 @@ export async function submitPortalEarnWithdraw(args: {
 export async function fetchPortalEarnActionStatus(args: {
   actionId: string
   privyWalletId: string
+  walletAddress?: string | null
 }): Promise<PortalEarnWalletAction> {
   const params = new URLSearchParams({ privy_wallet_id: args.privyWalletId })
+  if (args.walletAddress?.trim()) {
+    params.set('wallet_address', args.walletAddress.trim())
+  }
   const data = await earnFetch<PortalEarnOperationPayload>(
     `/api/portal/privy/earn/actions/${encodeURIComponent(args.actionId)}?${params.toString()}`,
   )
@@ -103,6 +115,7 @@ const TERMINAL = new Set(['succeeded', 'failed', 'rejected'])
 export async function pollPortalEarnAction(args: {
   actionId: string
   privyWalletId: string
+  walletAddress?: string | null
   timeoutMs?: number
   intervalMs?: number
 }): Promise<PortalEarnWalletAction> {

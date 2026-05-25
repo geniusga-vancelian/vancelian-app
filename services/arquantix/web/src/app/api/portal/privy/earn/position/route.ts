@@ -6,6 +6,7 @@ import { fetchPrivyEarnVaultPosition } from '@/lib/portal/privyServerClient'
 import {
   parsePrivyWalletId,
   parseVaultId,
+  parseWalletAddress,
   privyEarnErrorResponse,
   requirePortalPersonId,
 } from '@/lib/portal/privyEarnRouteHelpers'
@@ -15,8 +16,13 @@ async function handlePositionRequest(args: {
   personId: string
   vaultId: string
   walletId: string
+  walletAddress?: string | null
 }) {
-  await assertPortalPrivyWalletOwnership({ personId: args.personId, privyWalletId: args.walletId })
+  await assertPortalPrivyWalletOwnership({
+    personId: args.personId,
+    privyWalletId: args.walletId,
+    walletAddress: args.walletAddress,
+  })
   await resolvePublishedPrivyEarnVault(args.vaultId)
   const row = await fetchPrivyEarnVaultPosition(args.walletId, args.vaultId)
   return NextResponse.json({ position: mapPrivyEarnVaultPosition(row, args.vaultId) })
@@ -32,6 +38,7 @@ export async function GET(request: NextRequest) {
     const walletId = request.nextUrl.searchParams.get('privy_wallet_id')?.trim()
       || request.nextUrl.searchParams.get('privyWalletId')?.trim()
       || null
+    const walletAddress = parseWalletAddress(null, request.nextUrl.searchParams)
 
     if (!vaultId || !walletId) {
       return NextResponse.json(
@@ -40,7 +47,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return handlePositionRequest({ personId, vaultId, walletId })
+    return handlePositionRequest({ personId, vaultId, walletId, walletAddress })
   } catch (error) {
     if (error instanceof PrivyEarnVaultConfigError) {
       return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })
@@ -57,6 +64,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => null)
     const vaultId = parseVaultId(body)
     const walletId = parsePrivyWalletId(body)
+    const walletAddress = parseWalletAddress(body)
     if (!vaultId || !walletId) {
       return NextResponse.json(
         { code: 'privy.earn.invalid_request', message: 'vault_id et privy_wallet_id requis.' },
@@ -64,7 +72,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return handlePositionRequest({ personId, vaultId, walletId })
+    return handlePositionRequest({ personId, vaultId, walletId, walletAddress })
   } catch (error) {
     if (error instanceof PrivyEarnVaultConfigError) {
       return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })

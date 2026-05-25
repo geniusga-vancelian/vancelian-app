@@ -26,6 +26,7 @@ class NormalizedPrivyWalletInput:
     chain_type: str
     chain_id: Optional[int]
     wallet_type: str
+    privy_wallet_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -57,11 +58,14 @@ def normalize_privy_wallet_payload(raw: dict[str, Any]) -> Optional[NormalizedPr
     )
     wallet_type = str(wallet_type).strip().lower() or "embedded"
 
+    privy_wallet_id = str(raw.get("id") or raw.get("wallet_id") or raw.get("walletId") or "").strip() or None
+
     return NormalizedPrivyWalletInput(
         address=address.lower(),
         chain_type=chain_type,
         chain_id=chain_id,
         wallet_type=wallet_type,
+        privy_wallet_id=privy_wallet_id,
     )
 
 
@@ -75,6 +79,9 @@ def upsert_normalized_wallets_for_person(
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for idx, w in enumerate(wallets):
+        metadata: dict[str, Any] = {"sync_source": "privy_reconcile"}
+        if w.privy_wallet_id:
+            metadata["privy_wallet_id"] = w.privy_wallet_id
         row = upsert_person_crypto_wallet(
             db,
             person_id=person_id,
@@ -85,7 +92,7 @@ def upsert_normalized_wallets_for_person(
             address=w.address,
             chain_id=w.chain_id,
             is_primary=(idx == primary_index),
-            metadata_json={"sync_source": "privy_reconcile"},
+            metadata_json=metadata,
         )
         out.append(
             {

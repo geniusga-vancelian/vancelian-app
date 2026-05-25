@@ -13,6 +13,7 @@ type ExchangeWalletIn = {
   chain_type: string
   chain_id?: number
   wallet_type: string
+  privy_wallet_id?: string
 }
 
 type ExchangeBody = {

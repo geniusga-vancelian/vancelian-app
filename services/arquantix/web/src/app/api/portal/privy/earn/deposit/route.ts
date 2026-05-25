@@ -7,6 +7,7 @@ import {
   parsePrivyWalletId,
   parseRequiredIdempotencyKey,
   parseVaultId,
+  parseWalletAddress,
   privyEarnErrorResponse,
   requirePortalPersonId,
 } from '@/lib/portal/privyEarnRouteHelpers'
@@ -33,7 +34,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    await assertPortalPrivyWalletOwnership({ personId, privyWalletId: walletId })
+    const walletAddress = parseWalletAddress(body)
+    await assertPortalPrivyWalletOwnership({ personId, privyWalletId: walletId, walletAddress })
 
     const auth = parseAuthHeaders(body)
     const action = await executePrivyEarnOperation({

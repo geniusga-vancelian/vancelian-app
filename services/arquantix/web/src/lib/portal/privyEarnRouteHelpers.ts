@@ -97,6 +97,22 @@ export function parsePrivyWalletId(body: unknown): string | null {
   return walletId.trim()
 }
 
+export function parseWalletAddress(body: unknown, searchParams?: URLSearchParams): string | null {
+  const fromQuery =
+    searchParams?.get('wallet_address')?.trim() || searchParams?.get('walletAddress')?.trim()
+  if (fromQuery) return fromQuery
+  if (!body || typeof body !== 'object') return null
+  const row = body as Record<string, unknown>
+  const address =
+    typeof row.wallet_address === 'string'
+      ? row.wallet_address
+      : typeof row.walletAddress === 'string'
+        ? row.walletAddress
+        : null
+  if (!address?.trim()) return null
+  return address.trim()
+}
+
 export function parseVaultId(body: unknown, searchParams?: URLSearchParams): string | null {
   const fromQuery = searchParams?.get('vault_id')?.trim() || searchParams?.get('vaultId')?.trim()
   if (fromQuery) return fromQuery

@@ -12,8 +12,8 @@ type RunPortalPrivyWalletCompletionArgs = {
   getPrivyUserId: () => string | null | undefined
   getAccessToken: () => Promise<string | null | undefined>
   getIdentityToken?: () => string | null | undefined
-  createEmbeddedWallet: () => Promise<{ address: string; chainId?: string; walletType?: string }>
-  findExistingEmbeddedWallet?: () => { address: string; chainId?: string; walletType?: string } | null
+  createEmbeddedWallet: () => Promise<{ address: string; chainId?: string; walletType?: string; id?: string }>
+  findExistingEmbeddedWallet?: () => { address: string; chainId?: string; walletType?: string; id?: string } | null
 }
 
 /**

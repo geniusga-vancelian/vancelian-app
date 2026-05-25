@@ -16,6 +16,7 @@ export type PrivyExchangeWalletPayload = {
   chain_type: 'evm'
   chain_id?: number
   wallet_type: string
+  privy_wallet_id?: string
 }
 
 function parsePersonWallets(data: unknown): PortalPersonCryptoWallet[] {
@@ -54,13 +55,19 @@ export function toPrivyExchangeWalletPayload(input: {
   address: string
   chainId?: string
   walletType?: string
+  privyWalletId?: string | null
 }): PrivyExchangeWalletPayload {
-  return {
+  const payload: PrivyExchangeWalletPayload = {
     address: input.address.trim(),
     chain_type: 'evm',
     chain_id: parseCaip2ChainId(input.chainId) ?? 1,
     wallet_type: (input.walletType || 'embedded').trim() || 'embedded',
   }
+  const privyWalletId = input.privyWalletId?.trim()
+  if (privyWalletId) {
+    payload.privy_wallet_id = privyWalletId
+  }
+  return payload
 }
 
 export function resolvePrimaryPersonCryptoWallet(

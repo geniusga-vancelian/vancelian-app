@@ -53,6 +53,7 @@ class PrivyExchangeWalletIn(BaseModel):
     chain_type: str = Field(..., min_length=1, max_length=32)
     chain_id: Optional[int] = None
     wallet_type: str = Field(..., min_length=1, max_length=32)
+    privy_wallet_id: Optional[str] = Field(None, max_length=128)
 
 
 class PrivyExchangeRequest(BaseModel):
@@ -156,6 +157,7 @@ def _wallets_in_from_linked_raw(raw: Optional[List[Dict[str, Any]]]) -> List[Pri
                 chain_type=norm.chain_type,
                 chain_id=norm.chain_id,
                 wallet_type=norm.wallet_type,
+                privy_wallet_id=norm.privy_wallet_id,
             )
         )
     return out
@@ -190,6 +192,10 @@ def _persist_request_wallets(
                 },
             )
         addr = _validate_evm_address(w.address)
+        metadata_json = None
+        privy_wallet_id = (w.privy_wallet_id or "").strip()
+        if privy_wallet_id:
+            metadata_json = {"privy_wallet_id": privy_wallet_id}
         upsert_person_crypto_wallet(
             db,
             person_id=person_id,
@@ -200,7 +206,7 @@ def _persist_request_wallets(
             address=addr.lower(),
             chain_id=w.chain_id,
             is_primary=True,
-            metadata_json=None,
+            metadata_json=metadata_json,
         )
 
 
