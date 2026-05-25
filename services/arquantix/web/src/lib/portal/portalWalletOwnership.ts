@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
+import type { Prisma } from '@prisma/client'
+
 import { prisma } from '@/lib/prisma'
 import { normalizeVaultAddress } from '@/lib/portal/morphoConstants'
 
@@ -71,7 +73,7 @@ async function backfillPrivyWalletIdMetadata(walletId: string, privyWalletId: st
 
   await prisma.personCryptoWallet.update({
     where: { id: walletId },
-    data: { metadataJson: base },
+    data: { metadataJson: base as Prisma.InputJsonValue },
   })
 }
 
@@ -108,7 +110,10 @@ async function ensurePersonPrivyWalletFromAddress(args: {
       chainId: 8453,
       address,
       isPrimary: true,
-      metadataJson: { privy_wallet_id: args.privyWalletId, sync_source: 'portal_earn_heal' },
+      metadataJson: {
+        privy_wallet_id: args.privyWalletId,
+        sync_source: 'portal_earn_heal',
+      } as Prisma.InputJsonValue,
     },
     select: { id: true, address: true, metadataJson: true },
   })
