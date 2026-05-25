@@ -50,7 +50,7 @@ export function mergeMorphoVaultConfigWithGraphql(
     id: normalizeVaultAddress(vaultAddress),
     vaultAddress,
     chainId: config.chainId,
-    integrationMode: config.integrationMode,
+    integrationMode: 'direct_morpho',
     privyVaultId: config.privyVaultId,
     name,
     provider: 'morpho',

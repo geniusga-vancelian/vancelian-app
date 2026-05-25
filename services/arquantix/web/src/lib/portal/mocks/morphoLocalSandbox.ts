@@ -369,6 +369,7 @@ export function getSandboxDependencyHealth(): MorphoDependencyHealth {
       activeProvider: 'local-sandbox',
       usedFallback: false,
       publicRpcAsPrimary: false,
+      providers: [{ label: 'local-sandbox', ok: true, latencyMs: 1, isPublic: false }],
     },
   }
 }
