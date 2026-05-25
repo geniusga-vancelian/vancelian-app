@@ -39,7 +39,7 @@ export function mergeLedgityVaultConfigWithCatalog(
     userApyBps: apyDecimalToBps(catalog?.netApy),
     pricePerShare: catalog?.pricePerShare ?? null,
     tvlUsd: catalog?.tvlUsd ?? null,
-    availableLiquidityUsd: catalog?.liquidityUsd ?? catalog?.tvlUsd ?? null,
+    availableLiquidityUsd: catalog?.liquidityUsd ?? null,
     label: config.label,
     description,
     curator: config.curator ?? catalog?.curator ?? null,

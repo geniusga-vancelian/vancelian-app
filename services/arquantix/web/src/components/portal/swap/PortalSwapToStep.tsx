@@ -5,18 +5,17 @@ import { useMemo, useState } from 'react'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalSwapFlowShell } from '@/components/portal/swap/PortalSwapFlowShell'
 import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
-import { defaultChainForAsset } from '@/lib/portal/swapFlowFormat'
 import type { SwapCatalogAsset } from '@/lib/portal/swapFlowTypes'
-import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
-import { cn } from '@/lib/utils'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 
 type Props = {
   assets: SwapCatalogAsset[]
-  onSelect: (asset: string, chain: string) => void
+  onSelect: (asset: string) => void
   onBack?: () => void
 }
 
 export function PortalSwapToStep({ assets, onSelect, onBack }: Props) {
+  const { chainLabel } = usePortalExecutionScope()
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -37,7 +36,7 @@ export function PortalSwapToStep({ assets, onSelect, onBack }: Props) {
             Vers quelle crypto ?
           </h2>
           <p className="mt-2 mb-0 font-ui text-[15px] text-v-fg-muted">
-            USDC, USDT ou ETH — pilote Ethereum mainnet (same-chain).
+            USDC, USDT ou ETH — swap same-chain sur {chainLabel} (réseau navbar).
           </p>
         </div>
 
@@ -66,16 +65,14 @@ function AssetRow({
   onSelect,
 }: {
   asset: SwapCatalogAsset
-  onSelect: (asset: string, chain: string) => void
+  onSelect: (asset: string) => void
 }) {
-  const [chain, setChain] = useState(defaultChainForAsset(asset.symbol, asset.chains))
-
   return (
     <li className="border-b border-v-border last:border-b-0">
       <button
         type="button"
         className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-v-card-hover"
-        onClick={() => onSelect(asset.symbol, chain)}
+        onClick={() => onSelect(asset.symbol)}
       >
         <PortalCryptoAvatar
           ticker={asset.symbol}
@@ -87,25 +84,6 @@ function AssetRow({
           <span className="mt-0.5 block font-ui text-[13px] text-v-fg-muted">{asset.symbol}</span>
         </span>
       </button>
-      {asset.chains.length > 1 ? (
-        <div className="flex flex-wrap gap-2 px-4 pb-3">
-          {asset.chains.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setChain(c)}
-              className={cn(
-                'rounded-full border px-3 py-1 font-ui text-[12px] font-medium transition-colors',
-                chain === c
-                  ? 'border-v-accent bg-v-accent/10 text-v-accent'
-                  : 'border-v-border bg-white text-v-fg-muted hover:border-v-fg-muted',
-              )}
-            >
-              {SWAP_CHAIN_LABELS[c] ?? c}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </li>
   )
 }

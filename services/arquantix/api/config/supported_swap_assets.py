@@ -203,7 +203,7 @@ def atomic_amount_to_human(amount_atomic: str | int, decimals: int) -> Decimal:
 
 
 def effective_swap_v1_chain_keys() -> frozenset[str]:
-    """Chaînes exposées en V1 (pilote : Ethereum mainnet par défaut)."""
+    """Chaînes exposées en V1 (pilote : Base + Ethereum mainnet par défaut)."""
     pilot = swap_v1_pilot_chains()
     return SWAP_V1_EVM_CHAIN_KEYS & pilot
 

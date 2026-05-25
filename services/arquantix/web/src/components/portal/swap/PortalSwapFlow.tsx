@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
+import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
+import { PortalSwapUnsupportedNotice } from '@/components/portal/swap/PortalSwapUnsupportedNotice'
 import { PortalSwapAmountStep } from '@/components/portal/swap/PortalSwapAmountStep'
 import { PortalSwapConfirmStep } from '@/components/portal/swap/PortalSwapConfirmStep'
 import { PortalSwapFromStep, type SwapFromOption } from '@/components/portal/swap/PortalSwapFromStep'
@@ -15,8 +17,10 @@ import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/button'
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
+import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
-import { defaultChainForAsset } from '@/lib/portal/swapFlowFormat'
+import { buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import {
   executeSwap,
   fetchSupportedSwapAssets,
@@ -25,15 +29,15 @@ import {
 } from '@/lib/portal/swapClient'
 import type { PortalSwapFlowStep, SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import {
-  isSwapV1EvmChain,
   isSwapV1Token,
-  pickSwapCatalogLists,
+  pickSwapCatalogListsForChain,
 } from '@/lib/portal/swapFlowTypes'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
 export function PortalSwapFlow() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { chain, chainLabel, walletScope, walletScopeId, swapChainKey } = usePortalExecutionScope()
 
   const [step, setStep] = useState<PortalSwapFlowStep>('to')
   const [catalog, setCatalog] = useState<SwapSupportedAssetsPayload | null>(null)
@@ -66,16 +70,27 @@ export function PortalSwapFlow() {
     url: '/api/portal/crypto-wallet',
     ttlMs: 45_000,
     errorMessage: 'Impossible de charger les positions crypto.',
+    scopeAware: true,
   })
 
-  const positions = useMemo(
-    () => walletData?.positions.positions ?? [],
-    [walletData],
+  const positions = useMemo(() => {
+    if (!walletData) return []
+    return filterCryptoPositionsSummaryByPortalScope(walletData.positions, chain, walletScope).positions
+  }, [chain, walletData, walletScope])
+
+  const supportedChainKeys = useMemo(
+    () => catalog?.chains.map((row) => row.key) ?? [],
+    [catalog],
   )
 
+  const activeSwapChain = useMemo(() => {
+    if (!swapChainKey) return null
+    return supportedChainKeys.includes(swapChainKey) ? swapChainKey : null
+  }, [supportedChainKeys, swapChainKey])
+
   const { source: sourceAssets, destination: destinationAssets } = useMemo(
-    () => (catalog ? pickSwapCatalogLists(catalog) : { source: [], destination: [] }),
-    [catalog],
+    () => (catalog ? pickSwapCatalogListsForChain(catalog, activeSwapChain) : { source: [], destination: [] }),
+    [activeSwapChain, catalog],
   )
 
   const loadCatalog = useCallback(async () => {
@@ -95,46 +110,62 @@ export function PortalSwapFlow() {
     void loadCatalog()
   }, [loadCatalog])
 
+  const resetExecution = useCallback(() => {
+    setExecutionPhase('idle')
+    setExecutionError(null)
+    setExecuting(false)
+  }, [])
+
   useEffect(() => {
-    if (!catalog || preselectApplied || !searchParams) return
+    setStep('to')
+    setToAsset('')
+    setToChain('')
+    setFromAsset('')
+    setFromChain('')
+    setSourceBalance(0)
+    setAmount('')
+    setQuote(null)
+    setPreselectApplied(false)
+    resetExecution()
+  }, [resetExecution, swapChainKey])
+
+  useEffect(() => {
+    if (!catalog || preselectApplied || !searchParams || !activeSwapChain) return
     const toParam = searchParams.get('to')?.trim().toUpperCase()
     if (!toParam || !isSwapV1Token(toParam)) return
     const dest = destinationAssets.find((a) => a.symbol.toUpperCase() === toParam)
     if (!dest) return
-    const chainParam = searchParams.get('toChain')?.trim().toLowerCase()
-    const chain =
-      chainParam && isSwapV1EvmChain(chainParam) && dest.chains.includes(chainParam)
-        ? chainParam
-        : defaultChainForAsset(dest.symbol, dest.chains)
     setToAsset(dest.symbol)
-    setToChain(chain)
+    setToChain(activeSwapChain)
     setStep('from')
     setPreselectApplied(true)
-  }, [catalog, destinationAssets, preselectApplied, searchParams])
+  }, [activeSwapChain, catalog, destinationAssets, preselectApplied, searchParams])
 
-  const onSelectTo = useCallback((asset: string, chain: string) => {
-    setToAsset(asset)
-    setToChain(chain)
-    setStep('from')
-  }, [])
+  const onSelectTo = useCallback(
+    (asset: string) => {
+      if (!activeSwapChain) return
+      setToAsset(asset)
+      setToChain(activeSwapChain)
+      setStep('from')
+    },
+    [activeSwapChain],
+  )
 
-  const onSelectFrom = useCallback((option: SwapFromOption) => {
-    setFromAsset(option.asset)
-    setFromChain(option.chain)
-    setSourceBalance(option.balance)
-    setStep('amount')
-  }, [])
+  const onSelectFrom = useCallback(
+    (option: SwapFromOption) => {
+      if (!activeSwapChain) return
+      setFromAsset(option.asset)
+      setFromChain(activeSwapChain)
+      setSourceBalance(option.balance)
+      setStep('amount')
+    },
+    [activeSwapChain],
+  )
 
   const onAmountContinue = useCallback((nextAmount: string, nextQuote: SwapQuotePayload) => {
     setAmount(nextAmount)
     setQuote(nextQuote)
     setStep('confirm')
-  }, [])
-
-  const resetExecution = useCallback(() => {
-    setExecutionPhase('idle')
-    setExecutionError(null)
-    setExecuting(false)
   }, [])
 
   const onConfirm = useCallback(async () => {
@@ -174,12 +205,13 @@ export function PortalSwapFlow() {
   const onProcessingDone = useCallback(() => {
     resetExecution()
     const ticker = toAsset.trim().toUpperCase()
-    invalidatePortalCache('portal:crypto-wallet')
-    if (ticker) invalidatePortalCache(`portal:crypto-wallet:${ticker}`)
+    const scopeSuffix = buildPortalScopeCacheSuffix(chain, walletScopeId)
+    invalidatePortalCache(`portal:crypto-wallet:${scopeSuffix}`)
+    if (ticker) invalidatePortalCache(`portal:crypto-wallet:${ticker}:${scopeSuffix}`)
     router.push(
       ticker ? portalCryptoWalletAssetRoute(ticker) : PORTAL_ROUTES.cryptoWallet,
     )
-  }, [resetExecution, router, toAsset])
+  }, [chain, resetExecution, router, toAsset, walletScopeId])
 
   if (catalogLoading || (walletLoading && !walletData)) {
     return (
@@ -204,70 +236,64 @@ export function PortalSwapFlow() {
     )
   }
 
-  if (step === 'to') {
-    return (
-      <PortalSwapToStep
-        assets={destinationAssets}
-        onSelect={onSelectTo}
-        onBack={() => router.push(PORTAL_ROUTES.cryptoWallet)}
-      />
-    )
-  }
-
-  if (step === 'from' && toAsset && toChain) {
-    return (
-      <PortalSwapFromStep
-        toAsset={toAsset}
-        toChain={toChain}
-        catalog={sourceAssets}
-        positions={positions}
-        onSelect={onSelectFrom}
-        onBack={() => setStep('to')}
-      />
-    )
-  }
-
-  if (step === 'amount' && fromAsset && toAsset && fromChain && toChain) {
-    return (
-      <PortalSwapAmountStep
-        fromAsset={fromAsset}
-        toAsset={toAsset}
-        fromChain={fromChain}
-        toChain={toChain}
-        sourceBalance={sourceBalance}
-        onContinue={onAmountContinue}
-        onBack={() => setStep('from')}
-      />
-    )
-  }
-
-  if (step === 'confirm' && quote) {
-    return (
-      <>
-        <PortalSwapConfirmStep
+  return (
+    <PortalExecutionScopeGate requirement="wallet">
+      {!activeSwapChain ? (
+        <PortalSwapUnsupportedNotice
+          chainLabel={chainLabel}
+          supportedChainKeys={supportedChainKeys}
+          onBack={() => router.push(PORTAL_ROUTES.cryptoWallet)}
+        />
+      ) : step === 'to' ? (
+        <PortalSwapToStep
+          assets={destinationAssets}
+          onSelect={onSelectTo}
+          onBack={() => router.push(PORTAL_ROUTES.cryptoWallet)}
+        />
+      ) : step === 'from' && toAsset && toChain ? (
+        <PortalSwapFromStep
+          toAsset={toAsset}
+          toChain={toChain}
+          catalog={sourceAssets}
+          positions={positions}
+          onSelect={onSelectFrom}
+          onBack={() => setStep('to')}
+        />
+      ) : step === 'amount' && fromAsset && toAsset && fromChain && toChain ? (
+        <PortalSwapAmountStep
           fromAsset={fromAsset}
           toAsset={toAsset}
-          amount={amount}
-          quote={quote}
-          executionPhase={executionPhase}
-          executing={executing}
-          error={showResultModal ? null : executionError}
-          onConfirm={() => void onConfirm()}
-          onBack={() => setStep('amount')}
+          fromChain={fromChain}
+          toChain={toChain}
+          sourceBalance={sourceBalance}
+          onContinue={onAmountContinue}
+          onBack={() => setStep('from')}
         />
-        <PortalSwapProcessingOverlay
-          open={showResultModal}
-          fromAsset={fromAsset}
-          toAsset={toAsset}
-          quote={quote}
-          phase={executionPhase}
-          error={executionError}
-          onClose={onProcessingClose}
-          onDone={onProcessingDone}
-        />
-      </>
-    )
-  }
-
-  return null
+      ) : step === 'confirm' && quote ? (
+        <>
+          <PortalSwapConfirmStep
+            fromAsset={fromAsset}
+            toAsset={toAsset}
+            amount={amount}
+            quote={quote}
+            executionPhase={executionPhase}
+            executing={executing}
+            error={showResultModal ? null : executionError}
+            onConfirm={() => void onConfirm()}
+            onBack={() => setStep('amount')}
+          />
+          <PortalSwapProcessingOverlay
+            open={showResultModal}
+            fromAsset={fromAsset}
+            toAsset={toAsset}
+            quote={quote}
+            phase={executionPhase}
+            error={executionError}
+            onClose={onProcessingClose}
+            onDone={onProcessingDone}
+          />
+        </>
+      ) : null}
+    </PortalExecutionScopeGate>
+  )
 }

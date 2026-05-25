@@ -21,6 +21,7 @@ import { PortalProfileWalletsSection } from '@/components/portal/profile/PortalP
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalProfileSkeleton } from '@/components/portal/PortalRouteSkeleton'
+import { PortalSignOutButton } from '@/components/portal/PortalSignOutButton'
 import { Container } from '@/components/ui/Container'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -272,6 +273,12 @@ export function PortalProfileScreen() {
               <PortalSettingsRow title="Politique de confidentialité" />
               <PortalSettingsRow title="Version" subtitle="Web portal" trailing={null} />
             </PortalSettingsCard>
+          </section>
+        </PortalReveal>
+
+        <PortalReveal index={7}>
+          <section className="flex flex-col gap-3 pt-2">
+            <PortalSignOutButton variant="profile" />
           </section>
         </PortalReveal>
       </div>

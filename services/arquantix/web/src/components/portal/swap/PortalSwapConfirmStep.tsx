@@ -15,6 +15,7 @@ import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import { buildConfirmSteps, formatSwapFeeLine, processingPhaseLabel } from '@/lib/portal/swapFlowSteps'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import type { SwapQuotePayload } from '@/lib/portal/swapClient'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 
 type Props = {
   fromAsset: string
@@ -40,6 +41,7 @@ export function PortalSwapConfirmStep({
   onBack,
 }: Props) {
   const [acknowledged, setAcknowledged] = useState(false)
+  const { isExternalWallet } = usePortalExecutionScope()
 
   const steps = useMemo(
     () => buildConfirmSteps(quote, executing ? executionPhase : 'idle'),
@@ -108,6 +110,11 @@ export function PortalSwapConfirmStep({
               {formatSwapSigningWalletShort(quote.signing_wallet_address)} ·{' '}
               {SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain}
             </p>
+            {isExternalWallet || quote.signing_wallet_mode === 'external_evm' ? (
+              <p className="m-0 mt-2 text-amber-900">
+                MetaMask peut demander jusqu’à 3 confirmations : réseau Ethereum, approbation USDT, puis swap.
+              </p>
+            ) : null}
           </article>
         ) : null}
 

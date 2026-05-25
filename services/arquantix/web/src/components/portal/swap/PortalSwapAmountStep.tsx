@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
+import { PortalExecutionScopeBanner } from '@/components/portal/PortalExecutionScopeBanner'
 import { PortalCryptoExchangeDirection } from '@/components/portal/swap/PortalCryptoExchangeDirection'
 import { PortalSwapFlowShell } from '@/components/portal/swap/PortalSwapFlowShell'
-import { ExecutionWalletSelector } from '@/components/wallet/ExecutionWalletSelector'
 import { Button } from '@/components/ui/button'
 import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
 import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
@@ -135,7 +135,7 @@ export function PortalSwapAmountStep({
           Vous êtes sur le point de convertir
         </h2>
 
-        <ExecutionWalletSelector context="swap" fromChain={fromChain} className="w-full text-left" />
+        <PortalExecutionScopeBanner context="swap" className="w-full text-left" />
 
         <label className="w-full">
           <span className="sr-only">Montant</span>

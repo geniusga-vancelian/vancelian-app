@@ -1,4 +1,5 @@
 import type { PortalExclusiveOffer, PortalInvestPayload } from '@/lib/portal/investTypes'
+import { normalizeInvestCategorySlug } from '@/lib/portal/investCategoryFilter'
 
 type CatalogEngineSnapshot = {
   supply_apr?: number | string | null
@@ -63,6 +64,7 @@ function mapOffer(row: CatalogProductRow): PortalExclusiveOffer {
   const status = (snap.status ?? '').toString().toLowerCase()
   const isFunded = progressPct >= 100 || status.includes('funded') || status.includes('closed')
   const slug = row.slug.trim()
+  const categorySlug = normalizeInvestCategorySlug(row.category)
 
   return {
     id: row.id,
@@ -71,6 +73,7 @@ function mapOffer(row: CatalogProductRow): PortalExclusiveOffer {
     subtitle: row.subtitle?.trim() || '',
     coverUrl: row.coverUrl?.trim() || '',
     category: displayCategory(row.category),
+    categorySlug,
     description: row.subtitle?.trim() || '',
     progressPct,
     raisedLabel: formatMoney(raised),
@@ -84,23 +87,7 @@ function mapOffer(row: CatalogProductRow): PortalExclusiveOffer {
 }
 
 export function buildPortalInvestPayload(products: CatalogProductRow[]): PortalInvestPayload {
-  const offers = products.map(mapOffer)
-  const first = offers[0]
-
-  let heroImageUrl: string | null = null
-  for (const offer of offers) {
-    if (offer.coverUrl) {
-      heroImageUrl = offer.coverUrl
-      break
-    }
-  }
-
   return {
-    heroImageUrl,
-    heroTitle: first?.title || 'Invest',
-    heroSubtitle:
-      first?.subtitle ||
-      'Build your portfolio with savings, exclusive real estate offers, and crypto.',
-    offers,
+    offers: products.map(mapOffer),
   }
 }

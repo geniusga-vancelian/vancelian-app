@@ -18,9 +18,9 @@ DEFAULT_SLIPPAGE_BPS = 50
 MAX_SLIPPAGE_BPS = 100
 QUOTE_TTL_SECONDS = 120
 
-# Pilote V1 — swaps same-chain sur Ethereum mainnet uniquement (pas de bridge Base↔ETH).
+# Pilote V1 — swaps same-chain (pas de bridge cross-chain entre réseaux navbar).
 DEFAULT_SWAP_V1_SAME_CHAIN_ONLY = True
-DEFAULT_SWAP_V1_PILOT_CHAINS = "ethereum"
+DEFAULT_SWAP_V1_PILOT_CHAINS = "base,ethereum"
 
 # Mock local — pas d'appel LI.FI ni signature Privy (règlement ledger interne).
 DEFAULT_LIFI_SWAPS_MOCK = False
@@ -37,7 +37,7 @@ def swap_v1_same_chain_only() -> bool:
 def swap_v1_pilot_chains() -> frozenset[str]:
     raw = (os.getenv("SWAP_V1_PILOT_CHAINS") or DEFAULT_SWAP_V1_PILOT_CHAINS).strip()
     keys = frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
-    return keys or frozenset({"ethereum"})
+    return keys or frozenset({"base", "ethereum"})
 
 
 def swaps_mock_mode() -> bool:

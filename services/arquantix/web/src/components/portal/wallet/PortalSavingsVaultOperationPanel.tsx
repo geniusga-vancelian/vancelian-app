@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
-import { ExecutionWalletSelector } from '@/components/wallet/ExecutionWalletSelector'
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import { PortalExecutionScopeBanner } from '@/components/portal/PortalExecutionScopeBanner'
+import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
 import { Button } from '@/components/ui/button'
 import { fetchPortalLedgityPosition } from '@/lib/portal/ledgity/ledgityVaultClient'
 import {
@@ -25,7 +25,6 @@ import type {
   PortalMorphoVaultPosition,
 } from '@/lib/portal/morphoVaultTypes'
 import type { PortalDefiBetaPortalFlags, PortalDefiVaultDetails } from '@/lib/portal/portalSavingsTypes'
-import { PORTAL_ROUTES, portalProfileWalletsRoute } from '@/lib/portal/portalRouting'
 import {
   type PortalMorphoExecutionPhase,
   usePortalMorphoVaultExecution,
@@ -34,7 +33,7 @@ import {
   type PortalLedgityExecutionPhase,
   usePortalLedgityVaultExecution,
 } from '@/lib/portal/usePortalLedgityVaultExecution'
-import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 
 type Tab = 'deposit' | 'withdraw'
 
@@ -111,12 +110,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
 
   const { execute: executeMorpho } = usePortalMorphoVaultExecution()
   const { execute: executeLedgity } = usePortalLedgityVaultExecution()
-  const {
-    mode: executionMode,
-    privyEmbeddedAddress,
-    externalWallets,
-    selectedExternalWalletId,
-  } = useExecutionWallet()
+  const { executionAddress: displayWalletAddress } = usePortalExecutionScope()
 
   useEffect(() => {
     try {
@@ -134,15 +128,6 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
       /* ignore */
     }
   }, [disclaimerStorageKey])
-
-  const displayWalletAddress = useMemo(() => {
-    if (executionMode === 'external_evm') {
-      const selected =
-        externalWallets.find((row) => row.id === selectedExternalWalletId) ?? externalWallets[0]
-      return selected?.address ?? privyEmbeddedAddress
-    }
-    return privyEmbeddedAddress
-  }, [executionMode, externalWallets, privyEmbeddedAddress, selectedExternalWalletId])
 
   const loadPosition = useCallback(
     async (walletAddress: string, options?: { background?: boolean }) => {
@@ -271,11 +256,6 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
     vault.vaultAddress,
   ])
 
-  const walletReady =
-    executionMode === 'external_evm'
-      ? externalWallets.length > 0
-      : Boolean(privyEmbeddedAddress)
-
   const positionDisplay =
     positionLoading && position === null
       ? '…'
@@ -303,21 +283,9 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
       </div>
 
       <div className="px-4 py-4">
-        {!walletReady ? (
-          <div className="flex flex-col gap-3">
-            <p className="m-0 font-ui text-[14px] text-v-fg-body">
-              Choisissez un wallet Vancelian embedded ou liez MetaMask depuis Mon wallet pour déposer ou retirer.
-            </p>
-            <Button type="button" asChild className="rounded-full">
-              <PortalNavLink href={PORTAL_ROUTES.walletCreate}>Créer mon wallet crypto</PortalNavLink>
-            </Button>
-            <Button type="button" asChild variant="outline" className="rounded-full">
-              <PortalNavLink href={portalProfileWalletsRoute()}>Lier MetaMask</PortalNavLink>
-            </Button>
-          </div>
-        ) : (
+        <PortalExecutionScopeGate requirement="defi">
           <>
-            <ExecutionWalletSelector className="mb-4" />
+            <PortalExecutionScopeBanner context="defi" className="mb-4" />
 
             {showDisclaimer ? (
               <div className="mb-4 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-950">
@@ -426,7 +394,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
               )}
             </Button>
           </>
-        )}
+        </PortalExecutionScopeGate>
       </div>
     </article>
   )

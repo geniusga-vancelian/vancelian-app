@@ -48,12 +48,12 @@ export function PortalSwapFromStep({
         <div>
           <p className="m-0 font-ui text-[13px] uppercase tracking-wide text-v-fg-muted">Étape 2</p>
           <h2 className="mt-2 mb-0 font-ui text-[24px] font-bold leading-tight text-v-fg">
-            Depuis quel wallet ?
+            Depuis quel actif ?
           </h2>
           <p className="mt-2 mb-0 font-ui text-[15px] text-v-fg-muted">
             {SWAP_V1_SAME_CHAIN_ONLY
-              ? `Swaps sur ${SWAP_CHAIN_LABELS[toChain] ?? toChain} uniquement — USDC, USDT ou ETH avec solde.`
-              : 'Wallets EVM — USDC, USDT ou ETH avec solde.'}
+              ? `Wallet et réseau définis dans la navbar — swaps sur ${SWAP_CHAIN_LABELS[toChain] ?? toChain} uniquement.`
+              : 'Wallet et réseau définis dans la navbar — USDC, USDT ou ETH éligibles.'}
           </p>
         </div>
 

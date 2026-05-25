@@ -44,7 +44,7 @@ const WARMUP_BY_ROUTE: Record<string, WarmupConfig[]> = {
   [PORTAL_ROUTES.invest]: [
     {
       cacheKey: 'portal:invest:v2',
-      url: '/api/portal/invest?locale=fr',
+      url: '/api/portal/invest?locale=en',
       ttlMs: 120_000,
     },
   ],

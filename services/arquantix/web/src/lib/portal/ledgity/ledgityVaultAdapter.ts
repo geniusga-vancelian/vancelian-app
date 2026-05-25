@@ -86,6 +86,13 @@ export async function readLedgityVaultMetrics(args: {
       functionName: 'totalAssets',
     })) as bigint
 
+    const idleAssetsRaw = (await client.readContract({
+      address: asset.address as Address,
+      abi: LEDGITY_ERC20_METADATA_ABI,
+      functionName: 'balanceOf',
+      args: [vaultAddress],
+    })) as bigint
+
     const oneShare = BigInt(10) ** BigInt(18)
     const assetsForOneShare = (await client.readContract({
       address: vaultAddress,
@@ -94,11 +101,17 @@ export async function readLedgityVaultMetrics(args: {
       args: [oneShare],
     })) as bigint
 
+    const tvlUsd = stablecoinUsdFromRaw(totalAssetsRaw, asset.decimals)
+    const liquidityUsd = stablecoinUsdFromRaw(idleAssetsRaw, asset.decimals)
+
     return {
       totalAssetsRaw,
+      idleAssetsRaw,
       pricePerShare: computePricePerShareFromRaw(assetsForOneShare, oneShare, asset.decimals),
       asset,
-      tvlUsd: stablecoinUsdFromRaw(totalAssetsRaw, asset.decimals),
+      tvlUsd,
+      liquidityUsd:
+        tvlUsd != null && liquidityUsd != null ? Math.min(liquidityUsd, tvlUsd) : liquidityUsd,
     }
   } catch (error) {
     console.error('[ledgityVaultAdapter] readLedgityVaultMetrics failed', {
@@ -162,7 +175,7 @@ export async function fetchLedgityVaultCatalog(args: {
       netApy: sandboxMeta?.netApy ?? null,
       pricePerShare: metrics.pricePerShare,
       tvlUsd: metrics.tvlUsd,
-      liquidityUsd: metrics.tvlUsd,
+      liquidityUsd: metrics.liquidityUsd,
       curator: sandboxMeta?.curator ?? 'Ledgity',
       description: sandboxMeta?.description ?? null,
     })

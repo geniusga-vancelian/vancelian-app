@@ -5,6 +5,7 @@ export type PortalExclusiveOffer = {
   subtitle: string
   coverUrl: string
   category: string
+  categorySlug: string
   description: string
   progressPct: number
   raisedLabel: string
@@ -17,8 +18,5 @@ export type PortalExclusiveOffer = {
 }
 
 export type PortalInvestPayload = {
-  heroImageUrl: string | null
-  heroTitle: string
-  heroSubtitle: string
   offers: PortalExclusiveOffer[]
 }

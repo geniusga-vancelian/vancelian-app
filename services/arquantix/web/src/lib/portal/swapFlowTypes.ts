@@ -43,9 +43,9 @@ export const INITIAL_SWAP_FLOW_STATE: PortalSwapFlowState = {
 
 export const SWAP_V1_EVM_CHAINS = ['ethereum', 'arbitrum', 'base', 'polygon'] as const
 
-/** Pilote produit — swaps same-chain sur Ethereum mainnet uniquement. */
+/** Pilote produit — swaps same-chain (Base + Ethereum par défaut, voir API). */
 export const SWAP_V1_SAME_CHAIN_ONLY = true
-export const SWAP_V1_PILOT_CHAINS = ['ethereum'] as const
+export const SWAP_V1_PILOT_CHAINS = ['base', 'ethereum'] as const
 export type SwapV1PilotChain = (typeof SWAP_V1_PILOT_CHAINS)[number]
 
 export const SWAP_V1_TOKENS = ['USDC', 'USDT', 'ETH'] as const
@@ -65,14 +65,43 @@ export function isSwapV1PilotChain(chain: string): boolean {
 }
 
 export function filterSwapV1Assets(assets: SwapCatalogAsset[]): SwapCatalogAsset[] {
-  const allowedChains = new Set<string>(SWAP_V1_PILOT_CHAINS)
   return assets
     .filter((a) => isSwapV1Token(a.symbol))
     .map((a) => ({
       ...a,
-      chains: a.chains.filter((c) => isSwapV1EvmChain(c) && allowedChains.has(c)),
+      chains: a.chains.filter((c) => isSwapV1EvmChain(c)),
     }))
     .filter((a) => a.chains.length > 0)
+}
+
+export function pickSwapCatalogLists(catalog: SwapSupportedAssetsPayload) {
+  const source = filterSwapV1Assets(catalog.source_assets ?? catalog.assets)
+  const destination = filterSwapV1Assets(catalog.destination_assets ?? catalog.assets)
+  return { source, destination }
+}
+
+/** Filtre le catalogue pour le réseau navbar actif (chaînes déjà restreintes côté API). */
+export function pickSwapCatalogListsForChain(
+  catalog: SwapSupportedAssetsPayload,
+  chainKey: string | null,
+) {
+  const { source, destination } = pickSwapCatalogLists(catalog)
+  if (!chainKey) {
+    return { source: [], destination: [] }
+  }
+
+  const onChain = (assets: SwapCatalogAsset[]) =>
+    assets
+      .map((asset) => ({
+        ...asset,
+        chains: asset.chains.filter((chain) => chain === chainKey),
+      }))
+      .filter((asset) => asset.chains.length > 0)
+
+  return {
+    source: onChain(source),
+    destination: onChain(destination),
+  }
 }
 
 export const SWAP_CHAIN_LABELS: Record<string, string> = {
@@ -80,10 +109,4 @@ export const SWAP_CHAIN_LABELS: Record<string, string> = {
   arbitrum: 'Arbitrum',
   base: 'Base',
   polygon: 'Polygon',
-}
-
-export function pickSwapCatalogLists(catalog: SwapSupportedAssetsPayload) {
-  const source = filterSwapV1Assets(catalog.source_assets ?? catalog.assets)
-  const destination = filterSwapV1Assets(catalog.destination_assets ?? catalog.assets)
-  return { source, destination }
 }

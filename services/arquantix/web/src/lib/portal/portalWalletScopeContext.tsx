@@ -11,11 +11,9 @@ import {
   type ReactNode,
 } from 'react'
 import { buildPortalWalletScopes } from '@/lib/portal/buildPortalWalletScopes'
-import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import { fetchPortalPersonCryptoWallets } from '@/lib/portal/privyWalletClient'
 import { getCurrentPortalWalletScopeId, usePortalWalletScopeId } from '@/lib/portal/portalWalletScope'
 import type { PortalWalletScope, PortalWalletScopeId } from '@/lib/portal/portalWalletScopeTypes'
-import { fetchPortalSolanaWalletStatus } from '@/lib/portal/solanaWalletClient'
 import { fetchVerifiedExternalWallets } from '@/lib/wallet/externalWalletClient'
 import { useOptionalExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 
@@ -31,7 +29,6 @@ type PortalWalletScopeContextValue = {
 const PortalWalletScopeContext = createContext<PortalWalletScopeContextValue | null>(null)
 
 export function PortalWalletScopeProvider({ children }: { children: ReactNode }) {
-  const { chain } = usePortalChainContext()
   const execution = useOptionalExecutionWallet()
   const [walletScopeId, setWalletScopeId] = usePortalWalletScopeId()
   const [scopes, setScopes] = useState<PortalWalletScope[]>([])
@@ -49,42 +46,45 @@ export function PortalWalletScopeProvider({ children }: { children: ReactNode })
     }
 
     try {
-      const [personResult, externalResult, solanaResult] = await Promise.allSettled([
+      const [personResult, externalResult] = await Promise.allSettled([
         fetchPortalPersonCryptoWallets(),
         fetchVerifiedExternalWallets(),
-        fetchPortalSolanaWalletStatus(),
       ])
 
       const personWallets = personResult.status === 'fulfilled' ? personResult.value : []
       const externalWallets = externalResult.status === 'fulfilled' ? externalResult.value : []
-      const solanaStatus = solanaResult.status === 'fulfilled' ? solanaResult.value : null
 
       const built = buildPortalWalletScopes({
-        chain,
         personWallets,
         externalWallets,
-        solanaStatus,
       })
       setScopes(built)
 
       const current = getCurrentPortalWalletScopeId()
-      const nextId = built[0]?.id ?? null
-      if ((!current || !built.some((scope) => scope.id === current)) && nextId !== current) {
-        setWalletScopeId(nextId)
+      if (!current && built[0]) {
+        setWalletScopeId(built[0].id)
+        return
+      }
+
+      if (current && !built.some((scope) => scope.id === current) && current.startsWith('privy:')) {
+        const privyScope = built.find((scope) => scope.kind === 'privy_embedded')
+        if (privyScope) {
+          setWalletScopeId(privyScope.id)
+        }
       }
     } finally {
       hasLoadedRef.current = true
       setLoading(false)
       refreshInFlightRef.current = false
     }
-  }, [chain, setWalletScopeId])
+  }, [setWalletScopeId])
 
   useEffect(() => {
     void refreshScopes()
   }, [refreshScopes])
 
   const walletScope = useMemo(
-    () => scopes.find((scope) => scope.id === walletScopeId) ?? scopes[0] ?? null,
+    () => scopes.find((scope) => scope.id === walletScopeId) ?? null,
     [scopes, walletScopeId],
   )
 
@@ -103,10 +103,6 @@ export function PortalWalletScopeProvider({ children }: { children: ReactNode })
     }
     setExecutionMode('privy_embedded')
   }, [setExecutionMode, setSelectedExternalWalletId, walletScope])
-
-  useEffect(() => {
-    syncedScopeIdRef.current = null
-  }, [chain])
 
   const value = useMemo(
     () => ({

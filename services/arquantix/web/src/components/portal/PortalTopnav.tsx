@@ -10,13 +10,11 @@ import { buildTopnavPalettes } from '@/lib/cms/site-menu-theme'
 import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
 import { PORTAL_PATH_PREFIX, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { readPortalCache } from '@/lib/portal/portalClientCache'
-import { PortalSignOutButton } from '@/components/portal/PortalSignOutButton'
 import { warmPortalRoute } from '@/lib/portal/portalNavWarmup'
 import {
   PORTAL_MAIN_NAV_TABS,
   PORTAL_SEARCH_NAV,
 } from '@/lib/portal/portalNavModel'
-import { Wallet } from 'lucide-react'
 import { PortalChainSwitcher } from '@/components/portal/PortalChainSwitcher'
 import { PortalWalletSwitcher } from '@/components/portal/PortalWalletSwitcher'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
@@ -45,6 +43,19 @@ function resolveInitialProfileState(initialsProp?: string): ProfileAvatarState {
 
 function resolveAvatarLabel(initials: string): string {
   return initials.trim().slice(0, 2).toUpperCase() || '?'
+}
+
+/** Diamètre des pastilles icône navbar (`h-9`). */
+const TOPNAV_ACTION_DISC_CLASS =
+  'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-v-pill'
+
+function profileButtonClass(active: boolean): string {
+  return cn(
+    TOPNAV_ACTION_DISC_CLASS,
+    'bg-v-fg font-ui text-[12px] font-semibold leading-none text-white',
+    'transition-opacity duration-v-fast hover:opacity-90',
+    active && 'ring-2 ring-v-terracotta ring-offset-2 ring-offset-v-bg',
+  )
 }
 
 function normalizePath(path: string): string {
@@ -103,8 +114,8 @@ type PortalTopnavProps = {
 
 /**
  * Topnav portail — même grammaire DS que {@link Navigation} (72px, grid 3 cols,
- * liens underline), avec les tabs mobile (Home / Invest / Markets / Design)
- * + action Search + profil + déconnexion.
+ * liens underline), avec les tabs mobile (My portfolio / Investing / Markets / Design S.)
+ * + action Search + profil.
  */
 export function PortalTopnav({ initials: initialsProp, brand: brandProp, className }: PortalTopnavProps) {
   const pathname = usePathname() ?? ''
@@ -191,7 +202,6 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
 
   const avatarLabel = resolveAvatarLabel(profileAvatar.initials)
   const profileActive = isNavActive(effectivePath, PORTAL_ROUTES.profile)
-  const myWalletsActive = isNavActive(effectivePath, PORTAL_ROUTES.myWallets)
 
   const navBarStyle: React.CSSProperties = {
     background: palette.background,
@@ -238,15 +248,16 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
 
           <div className="flex h-full items-center justify-end gap-3 justify-self-end sm:gap-4">
             <div className="hidden items-center gap-2 sm:flex">
-              <PortalChainSwitcher linkColor={palette.linkColor} />
               <PortalWalletSwitcher linkColor={palette.linkColor} />
+              <PortalChainSwitcher linkColor={palette.linkColor} />
             </div>
 
             <PortalNavLink
               href={PORTAL_SEARCH_NAV.href}
               aria-label={PORTAL_SEARCH_NAV.label}
               className={cn(
-                'hidden h-10 w-10 items-center justify-center rounded-v-pill lg:inline-flex',
+                TOPNAV_ACTION_DISC_CLASS,
+                'hidden lg:inline-flex',
                 'transition-colors duration-v-fast hover:bg-v-fg-05',
                 isNavActive(effectivePath, PORTAL_SEARCH_NAV.href) && 'bg-v-fg-05',
               )}
@@ -255,24 +266,9 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
               <PORTAL_SEARCH_NAV.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
             </PortalNavLink>
 
-            <PortalNavLink
-              href={PORTAL_ROUTES.myWallets}
-              aria-label="My wallets"
-              aria-current={myWalletsActive ? 'page' : undefined}
-              className={cn(
-                'hidden h-9 items-center gap-1.5 rounded-v-pill px-3 font-ui text-[13px] font-medium no-underline sm:inline-flex',
-                'transition-colors duration-v-fast hover:bg-v-fg-05',
-                myWalletsActive && 'bg-v-fg-05',
-              )}
-              style={{ color: palette.linkColor }}
-            >
-              <Wallet className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-              My wallets
-            </PortalNavLink>
-
             {!profileAvatar.loaded ? (
               <div
-                className="portal-shimmer h-9 w-9 shrink-0 rounded-v-pill"
+                className={cn(TOPNAV_ACTION_DISC_CLASS, 'portal-shimmer bg-v-fg')}
                 role="status"
                 aria-live="polite"
                 aria-label="Loading profile"
@@ -282,17 +278,11 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                 href={PORTAL_ROUTES.profile}
                 aria-label="Profile"
                 aria-current={profileActive ? 'page' : undefined}
-                className={cn(
-                  'portal-reveal inline-flex h-9 w-9 items-center justify-center rounded-v-pill font-ui text-[12px] font-semibold text-white transition-opacity duration-v-fast hover:opacity-90',
-                  profileActive ? 'ring-2 ring-v-terracotta ring-offset-2 ring-offset-v-bg' : '',
-                )}
-                style={{ background: 'var(--v-fg)' }}
+                className={cn('portal-reveal', profileButtonClass(profileActive))}
               >
                 {avatarLabel}
               </PortalNavLink>
             )}
-
-            <PortalSignOutButton className="hidden sm:inline-flex" />
 
             <button
               type="button"
@@ -333,8 +323,8 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
           <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-lg flex-1 flex-col pt-[5.5rem]">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
               <div className="mb-2 sm:hidden">
-                <PortalChainSwitcher variant="drawer-row" />
                 <PortalWalletSwitcher variant="drawer-row" />
+                <PortalChainSwitcher variant="drawer-row" />
               </div>
               <ul className="m-0 flex list-none flex-col gap-1 p-0">
                 {PORTAL_MAIN_NAV_TABS.map((tab) => {
@@ -370,23 +360,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                     {PORTAL_SEARCH_NAV.label}
                   </PortalNavLink>
                 </li>
-                <li>
-                  <PortalNavLink
-                    href={PORTAL_ROUTES.myWallets}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-v-input px-3 py-3 font-ui text-[16px] font-medium no-underline',
-                      myWalletsActive ? 'bg-v-fg-05 text-v-fg' : 'text-v-fg-body',
-                    )}
-                  >
-                    <Wallet className="h-5 w-5 shrink-0" strokeWidth={1.75} />
-                    My wallets
-                  </PortalNavLink>
-                </li>
               </ul>
-              <div className="mt-6 border-t border-v-fg-10 pt-4">
-                <PortalSignOutButton className="w-full" />
-              </div>
             </div>
           </div>
         </div>

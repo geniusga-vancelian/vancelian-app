@@ -13,7 +13,12 @@ import { formatEarnApyFromBps, formatEarnUsd } from '@/lib/portal/morphoVaultFor
 import type { PortalMorphoVaultDetails, PortalMorphoBetaPortalFlags } from '@/lib/portal/morphoVaultTypes'
 import { cn } from '@/lib/utils'
 
-export function PortalEarnVaultSection() {
+type Props = {
+  /** Sous-section d’une liste DeFi unifiée (sans titre h2 principal). */
+  embedded?: boolean
+}
+
+export function PortalEarnVaultSection({ embedded = false }: Props) {
   const [vaults, setVaults] = useState<PortalMorphoVaultDetails[]>([])
   const [beta, setBeta] = useState<PortalMorphoBetaPortalFlags | null>(null)
   const [loading, setLoading] = useState(true)
@@ -28,7 +33,7 @@ export function PortalEarnVaultSection() {
       setVaults(data.vaults)
       setBeta(data.beta ?? null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Impossible de charger les vaults.')
+      setError(e instanceof Error ? e.message : 'Unable to load vaults.')
     } finally {
       setLoading(false)
     }
@@ -39,10 +44,14 @@ export function PortalEarnVaultSection() {
   }, [loadVaults])
 
   return (
-    <section id="earn-vaults" className="flex flex-col gap-4">
-      <PortalSectionHeading title="Vaults DeFi" />
+    <section id={embedded ? undefined : 'earn-vaults'} className="flex flex-col gap-4">
+      {embedded ? (
+        <h3 className="m-0 font-ui text-[16px] font-semibold text-v-fg">Morpho</h3>
+      ) : (
+        <PortalSectionHeading title="DeFi vaults" />
+      )}
       <p className="m-0 -mt-2 font-ui text-[14px] text-v-fg-muted">
-        Déposez vos stablecoins dans des vaults Morpho on-chain (Base). Signez avec votre wallet Vancelian ou MetaMask.
+        Deposit stablecoins into Morpho on-chain vaults (Base). Sign with your Vancelian or MetaMask wallet.
       </p>
 
       {beta?.message ? (
@@ -53,14 +62,14 @@ export function PortalEarnVaultSection() {
 
       {beta?.enabled && beta.allowed && beta.depositsDisabled ? (
         <p className="m-0 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-900">
-          Les dépôts Morpho USDC sont temporairement suspendus. Vous pouvez retirer vos fonds existants.
+          Morpho USDC deposits are temporarily paused. You can still withdraw existing funds.
         </p>
       ) : null}
 
       {loading ? (
         <div className="flex items-center gap-2 font-ui text-[14px] text-v-fg-muted">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Chargement des vaults…
+          Loading vaults…
         </div>
       ) : null}
 
@@ -72,13 +81,13 @@ export function PortalEarnVaultSection() {
             onClick={() => void loadVaults()}
             className="v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px]"
           >
-            Réessayer
+            Retry
           </button>
         </div>
       ) : null}
 
       {!loading && !error && vaults.length === 0 && !beta?.enabled ? (
-        <p className="m-0 font-ui text-[14px] text-v-fg-muted">Aucun vault publié pour le moment.</p>
+        <p className="m-0 font-ui text-[14px] text-v-fg-muted">No published vaults yet.</p>
       ) : null}
 
       {!loading && !error && vaults.length > 0 ? (
@@ -110,14 +119,14 @@ export function PortalEarnVaultSection() {
 
               <div className="grid grid-cols-2 gap-3 font-ui text-[13px]">
                 <div>
-                  <p className="m-0 text-v-fg-muted">APY utilisateur</p>
+                  <p className="m-0 text-v-fg-muted">User APY</p>
                   <p className="m-0 mt-0.5 flex items-center gap-1 font-semibold text-v-green">
                     <TrendingUp className="h-3.5 w-3.5" />
                     {formatEarnApyFromBps(vault.userApyBps)}
                   </p>
                 </div>
                 <div>
-                  <p className="m-0 text-v-fg-muted">Actif</p>
+                  <p className="m-0 text-v-fg-muted">Asset</p>
                   <p className="m-0 mt-0.5 font-semibold text-v-fg">{vault.asset.symbol}</p>
                 </div>
                 <div>
@@ -125,7 +134,7 @@ export function PortalEarnVaultSection() {
                   <p className="m-0 mt-0.5 font-semibold text-v-fg">{formatEarnUsd(vault.tvlUsd)}</p>
                 </div>
                 <div>
-                  <p className="m-0 text-v-fg-muted">Liquidité</p>
+                  <p className="m-0 text-v-fg-muted">Liquidity</p>
                   <p className="m-0 mt-0.5 font-semibold text-v-fg">
                     {formatEarnUsd(vault.availableLiquidityUsd)}
                   </p>
@@ -137,7 +146,7 @@ export function PortalEarnVaultSection() {
                 className={cn('w-full rounded-full font-ui text-[15px] font-semibold')}
                 onClick={() => setSelectedVault(vault)}
               >
-                Déposer / Retirer
+                Deposit / Withdraw
               </Button>
             </article>
           ))}

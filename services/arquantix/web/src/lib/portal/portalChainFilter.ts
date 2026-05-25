@@ -123,9 +123,15 @@ export function isPortalChainDeFiEnabled(chain: PortalChain): boolean {
   return chain === 'base'
 }
 
-/** Swap LI.FI pilote — Ethereum mainnet uniquement. */
+/** Réseau LI.FI associé au sélecteur navbar (1:1 pour les EVM portail). */
+export function resolvePortalChainSwapKey(chain: PortalChain): 'base' | 'ethereum' | null {
+  if (chain === 'base' || chain === 'ethereum') return chain
+  return null
+}
+
+/** Swap possible sur cet écosystème navbar (Solana exclu — pas de LI.FI v1). */
 export function isPortalChainSwapEnabled(chain: PortalChain): boolean {
-  return chain === 'ethereum'
+  return resolvePortalChainSwapKey(chain) !== null
 }
 
 /** Wallet Solana dédié. */

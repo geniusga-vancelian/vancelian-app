@@ -121,6 +121,13 @@ export const LEDGITY_ERC4626_ABI = [
 export const LEDGITY_ERC20_METADATA_ABI = [
   {
     type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
     name: 'symbol',
     stateMutability: 'view',
     inputs: [],

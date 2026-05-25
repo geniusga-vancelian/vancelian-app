@@ -45,8 +45,19 @@ describe('mergeLedgityVaultConfigWithCatalog', () => {
     assert.equal(merged.name, 'Ledgity lyUSDC CMS')
     assert.equal(merged.userApyBps, 900)
     assert.equal(merged.pricePerShare, 1.0578)
+    assert.equal(merged.tvlUsd, 12_400_000)
+    assert.equal(merged.availableLiquidityUsd, 3_100_000)
     assert.equal(merged.integrationMode, 'ledgity_vault')
     assert.equal(merged.provider, 'ledgity')
+  })
+
+  it('ne confond pas liquidité et TVL sans liquidityUsd explicite', () => {
+    const merged = mergeLedgityVaultConfigWithCatalog(baseConfig, {
+      ...catalogVault,
+      liquidityUsd: null,
+    })
+    assert.equal(merged.tvlUsd, 12_400_000)
+    assert.equal(merged.availableLiquidityUsd, null)
   })
 })
 

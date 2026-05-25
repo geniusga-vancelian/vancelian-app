@@ -114,7 +114,10 @@ export type LedgityVaultPositionRow = {
 
 export type LedgityVaultMetrics = {
   totalAssetsRaw: bigint
+  /** USDC/EURC idle dans le contrat vault (buffer retrait instantané). */
+  idleAssetsRaw: bigint
   pricePerShare: number | null
   asset: PortalLedgityAsset
   tvlUsd: number | null
+  liquidityUsd: number | null
 }

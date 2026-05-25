@@ -52,7 +52,7 @@ export function processingPhaseLabel(phase: SwapExecutionPhase): string {
     case 'preparing':
       return 'Préparation de la route...'
     case 'approving':
-      return 'Approbation du token (MetaMask / wallet)...'
+      return 'Basculez sur Ethereum si demandé, puis signez l’approbation USDT dans MetaMask…'
     case 'signing':
       return 'Signature du swap dans votre wallet...'
     case 'submitting':

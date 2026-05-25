@@ -32,10 +32,7 @@ import {
   isPortalScopeExternal,
   portalWalletScopeContextLabel,
 } from '@/lib/portal/portalWalletScopeFilter'
-import {
-  isPortalChainSwapEnabled,
-  portalChainContextLabel,
-} from '@/lib/portal/portalChainFilter'
+import { portalChainContextLabel } from '@/lib/portal/portalChainFilter'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
@@ -94,7 +91,6 @@ export function PortalCryptoWalletScreen() {
       : isPortalScopeExternal(walletScope)
         ? `Aucun solde Privy · ${walletLabel} (DeFi on-chain)`
         : `Aucun actif · ${chainLabel} · ${walletLabel}`
-  const swapEnabled = isPortalChainSwapEnabled(chain)
 
   return (
     <PortalPageContainer>
@@ -127,26 +123,12 @@ export function PortalCryptoWalletScreen() {
             </section>
 
             <div className="flex flex-wrap gap-2">
-              {swapEnabled ? (
-                <Button type="button" size="sm" className="gap-1.5" asChild>
-                  <PortalNavLink href={PORTAL_ROUTES.walletSwap}>
-                    <ArrowLeftRight className="h-4 w-4" />
-                    Échanger
-                  </PortalNavLink>
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="gap-1.5"
-                  variant="outline"
-                  disabled
-                  title={`Swap disponible sur Ethereum — réseau actuel : ${chainLabel}`}
-                >
+              <Button type="button" size="sm" className="gap-1.5" asChild>
+                <PortalNavLink href={PORTAL_ROUTES.walletSwap}>
                   <ArrowLeftRight className="h-4 w-4" />
                   Échanger
-                </Button>
-              )}
+                </PortalNavLink>
+              </Button>
               <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
                 <PortalNavLink href={resolveChainDepositHref(chain)}>
                   <Plus className="h-4 w-4" />

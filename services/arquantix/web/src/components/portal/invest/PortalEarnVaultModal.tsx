@@ -4,13 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
+import { PortalExecutionScopeBanner } from '@/components/portal/PortalExecutionScopeBanner'
+import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
 import { Button } from '@/components/ui/button'
-import { ExecutionWalletSelector } from '@/components/wallet/ExecutionWalletSelector'
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { fetchPortalMorphoPosition } from '@/lib/portal/morphoVaultClient'
 import { getPortalMorphoIntegrationLabel } from '@/lib/portal/morphoConstants'
 import { formatEarnApyFromBps, formatEarnTokenAmount } from '@/lib/portal/morphoVaultFormat'
-import { PORTAL_ROUTES, portalProfileWalletsRoute } from '@/lib/portal/portalRouting'
 import type {
   PortalMorphoVaultDetails,
   PortalMorphoVaultPosition,
@@ -20,7 +19,7 @@ import {
   type PortalMorphoExecutionPhase,
   usePortalMorphoVaultExecution,
 } from '@/lib/portal/usePortalMorphoVaultExecution'
-import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { cn } from '@/lib/utils'
 
 type Tab = 'deposit' | 'withdraw'
@@ -32,26 +31,26 @@ type Props = {
 }
 
 const MORPHO_DISCLAIMER =
-  'Ce produit place vos USDC dans un vault Morpho sur Base. Le rendement provient d’un protocole DeFi tiers et n’est pas garanti. L’APY est variable. Vous êtes exposé aux risques de smart contract, de liquidité et de marché.'
+  'This product places your USDC in a Morpho vault on Base. Yield comes from a third-party DeFi protocol and is not guaranteed. APY is variable. You are exposed to smart contract, liquidity, and market risks.'
 
 function executionPhaseLabel(phase: PortalMorphoExecutionPhase): string {
   switch (phase) {
     case 'preparing':
-      return 'Préparation…'
+      return 'Preparing…'
     case 'approval_pending':
-      return 'Approbation en cours…'
+      return 'Approval pending…'
     case 'deposit_pending':
-      return 'Dépôt en cours…'
+      return 'Deposit pending…'
     case 'withdraw_pending':
-      return 'Retrait en cours…'
+      return 'Withdrawal pending…'
     case 'confirming':
-      return 'Confirmation on-chain…'
+      return 'Confirming on-chain…'
     case 'confirmed':
-      return 'Confirmé'
+      return 'Confirmed'
     case 'failed':
-      return 'Échec'
+      return 'Failed'
     default:
-      return 'Traitement…'
+      return 'Processing…'
   }
 }
 
@@ -78,12 +77,7 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
 
   const disclaimerStorageKey = `portal_morpho_disclaimer_${vault.vaultAddress.toLowerCase()}`
   const { execute: executeMorpho } = usePortalMorphoVaultExecution()
-  const {
-    mode: executionMode,
-    privyEmbeddedAddress,
-    externalWallets,
-    selectedExternalWalletId,
-  } = useExecutionWallet()
+  const { executionAddress: displayWalletAddress } = usePortalExecutionScope()
 
   useEffect(() => {
     try {
@@ -101,15 +95,6 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
       /* ignore */
     }
   }, [disclaimerStorageKey])
-
-  const displayWalletAddress = useMemo(() => {
-    if (executionMode === 'external_evm') {
-      const selected =
-        externalWallets.find((row) => row.id === selectedExternalWalletId) ?? externalWallets[0]
-      return selected?.address ?? privyEmbeddedAddress
-    }
-    return privyEmbeddedAddress
-  }, [executionMode, externalWallets, privyEmbeddedAddress, selectedExternalWalletId])
 
   const loadPosition = useCallback(
     async (walletAddress: string, options?: { background?: boolean }) => {
@@ -171,13 +156,13 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
     setSuccess(null)
 
     if (tab === 'deposit' && !disclaimerAccepted) {
-      setError('Veuillez accepter les avertissements avant votre premier dépôt.')
+      setError('Please accept the warnings before your first deposit.')
       return
     }
 
     const normalized = amount.trim().replace(',', '.')
     if (!normalized || Number(normalized) <= 0) {
-      setError('Indiquez un montant valide.')
+      setError('Enter a valid amount.')
       return
     }
 
@@ -198,8 +183,8 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
       })
       setSuccess(
         tab === 'deposit'
-          ? `Dépôt de ${normalized} ${vault.asset.symbol} confirmé.${txHash ? ` Tx: ${txHash}` : ''}`
-          : `Retrait de ${normalized} ${vault.asset.symbol} confirmé.${txHash ? ` Tx: ${txHash}` : ''}`,
+          ? `Deposit of ${normalized} ${vault.asset.symbol} confirmed.${txHash ? ` Tx: ${txHash}` : ''}`
+          : `Withdrawal of ${normalized} ${vault.asset.symbol} confirmed.${txHash ? ` Tx: ${txHash}` : ''}`,
       )
       setAmount('')
       resetOperationState()
@@ -208,7 +193,7 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
       }
     } catch (e) {
       setExecutionPhase('failed')
-      setError(e instanceof Error ? e.message : 'Opération impossible.')
+      setError(e instanceof Error ? e.message : 'Operation failed.')
     } finally {
       setExecuting(false)
     }
@@ -224,11 +209,6 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
     vault.asset.symbol,
     vault.vaultAddress,
   ])
-
-  const walletReady =
-    executionMode === 'external_evm'
-      ? externalWallets.length > 0
-      : Boolean(privyEmbeddedAddress)
 
   const positionDisplay =
     positionLoading && position === null
@@ -269,32 +249,20 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
             onClick={onClose}
             disabled={executing}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-v-border bg-v-card"
-            aria-label="Fermer"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {!walletReady ? (
-            <div className="flex flex-col gap-3">
-              <p className="m-0 font-ui text-[14px] text-v-fg-body">
-                Choisissez un wallet Vancelian embedded ou liez MetaMask depuis Mon wallet pour déposer ou retirer.
-              </p>
-              <Button type="button" asChild className="rounded-full">
-                <PortalNavLink href={PORTAL_ROUTES.walletCreate}>Créer mon wallet crypto</PortalNavLink>
-              </Button>
-              <Button type="button" asChild variant="outline" className="rounded-full">
-                <PortalNavLink href={portalProfileWalletsRoute()}>Lier MetaMask</PortalNavLink>
-              </Button>
-            </div>
-          ) : (
+          <PortalExecutionScopeGate requirement="defi">
             <>
-              <ExecutionWalletSelector className="mb-4" />
+              <PortalExecutionScopeBanner context="defi" className="mb-4" />
 
               {showDisclaimer ? (
                 <div className="mb-4 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-950">
-                  <p className="m-0 font-semibold">Avertissement — premier dépôt</p>
+                  <p className="m-0 font-semibold">Warning — first deposit</p>
                   <p className="m-0 mt-2 leading-relaxed">{MORPHO_DISCLAIMER}</p>
                   <Button
                     type="button"
@@ -302,7 +270,7 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
                     onClick={acceptDisclaimer}
                     disabled={executing}
                   >
-                    J’ai compris et je souhaite continuer
+                    I understand and wish to continue
                   </Button>
                 </div>
               ) : null}
@@ -316,14 +284,14 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
               {operationBlocked ? (
                 <p className="mb-4 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-900">
                   {depositBlocked
-                    ? 'Les dépôts sont temporairement suspendus. Vous pouvez retirer vos fonds.'
-                    : 'Les retraits sont temporairement suspendus.'}
+                    ? 'Deposits are temporarily paused. You can still withdraw your funds.'
+                    : 'Withdrawals are temporarily paused.'}
                 </p>
               ) : null}
 
               {betaLimits && tab === 'deposit' ? (
                 <p className="mb-4 font-ui text-[12px] text-v-fg-muted">
-                  Beta : min {betaLimits.minDepositUsdc} · max {betaLimits.maxDepositUsdc} USDC / tx · exposition max{' '}
+                  Beta: min {betaLimits.minDepositUsdc} · max {betaLimits.maxDepositUsdc} USDC / tx · max exposure{' '}
                   {betaLimits.maxUserExposureUsdc} USDC
                 </p>
               ) : null}
@@ -331,16 +299,16 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
               <div className="mb-4 rounded-v-card border border-v-border bg-v-card px-4 py-3 font-ui text-[13px]">
                 <p className="m-0 text-v-fg-muted">Wallet</p>
                 <p className="m-0 mt-1 font-medium text-v-fg">{displayWalletAddress}</p>
-                <p className="m-0 mt-3 text-v-fg-muted">Position dans le vault</p>
+                <p className="m-0 mt-3 text-v-fg-muted">Vault position</p>
                 <p className="m-0 mt-1 font-semibold text-v-fg">{positionDisplay}</p>
                 {position && position.yieldSyncStatus !== 'pending' && position.earnedYieldDisplay ? (
-                  <p className="m-0 mt-1 text-v-green">+{position.earnedYieldDisplay} de rendement</p>
+                  <p className="m-0 mt-1 text-v-green">+{position.earnedYieldDisplay} yield</p>
                 ) : position?.yieldSyncStatus === 'pending' ? (
                   <p className="m-0 mt-1 text-v-fg-muted">{position.earnedYieldDisplay}</p>
                 ) : null}
                 {position && maxWithdraw !== '0' ? (
                   <p className="m-0 mt-1 text-v-fg-muted">
-                    Max retirable : {formatEarnTokenAmount(position.assetsInVault, position.asset.decimals)}{' '}
+                    Max withdrawable: {formatEarnTokenAmount(position.assetsInVault, position.asset.decimals)}{' '}
                     {vault.asset.symbol}
                   </p>
                 ) : null}
@@ -363,13 +331,13 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
                       tab === value ? 'bg-v-fg text-white' : 'text-v-fg-muted hover:text-v-fg',
                     )}
                   >
-                    {value === 'deposit' ? 'Déposer' : 'Retirer'}
+                    {value === 'deposit' ? 'Deposit' : 'Withdraw'}
                   </button>
                 ))}
               </div>
 
               <label className="flex flex-col gap-2 font-ui text-[13px] text-v-fg-muted">
-                Montant ({vault.asset.symbol})
+                Amount ({vault.asset.symbol})
                 <input
                   type="text"
                   inputMode="decimal"
@@ -388,7 +356,7 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
                   onClick={() => setAmount(maxWithdraw)}
                   className="mt-2 v-text-link border-0 bg-transparent p-0 font-ui text-[13px]"
                 >
-                  Retirer le maximum ({maxWithdraw} {vault.asset.symbol})
+                  Withdraw maximum ({maxWithdraw} {vault.asset.symbol})
                 </button>
               ) : null}
 
@@ -409,10 +377,10 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
                 </p>
               ) : null}
             </>
-          )}
+          </PortalExecutionScopeGate>
         </div>
 
-        {walletReady ? (
+        {displayWalletAddress ? (
           <footer className="border-t border-v-border/70 px-5 py-4">
             <Button
               type="button"
@@ -426,9 +394,9 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
                   {executionPhaseLabel(executionPhase)}
                 </span>
               ) : tab === 'deposit' ? (
-                'Confirmer le dépôt'
+                'Confirm deposit'
               ) : (
-                'Confirmer le retrait'
+                'Confirm withdrawal'
               )}
             </Button>
           </footer>

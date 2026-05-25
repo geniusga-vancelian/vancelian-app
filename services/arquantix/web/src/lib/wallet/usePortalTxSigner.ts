@@ -12,6 +12,14 @@ import {
   generateMockExternalWalletTxHash,
   isLocalMockExternalWallet,
 } from '@/lib/wallet/externalWalletMock'
+import {
+  requireExternalWalletChain,
+  waitForWagmiChainId,
+} from '@/lib/wallet/portalEvmChain'
+import {
+  formatPortalWalletError,
+  isPortalWalletRequestExpiredError,
+} from '@/lib/wallet/portalWalletErrors'
 import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 
 export type PortalTxRequest = {
@@ -83,7 +91,9 @@ export function usePortalTxSigner() {
       }
 
       if (wallet.type === 'external_evm') {
+        requireExternalWalletChain(chainId)
         await switchChainAsync({ chainId })
+        await waitForWagmiChainId(chainId)
         return
       }
 
@@ -101,22 +111,21 @@ export function usePortalTxSigner() {
     [switchChainAsync, wallets],
   )
 
-  const sendPortalTransaction = useCallback(
-    async (tx: PortalTxRequest, overrideWallet?: ExecutionWallet | null) => {
-      const wallet = await resolveWallet(overrideWallet)
-      await switchToChain(wallet, tx.chainId)
+  const sendExternalWalletTransaction = useCallback(
+    async (tx: PortalTxRequest, wallet: ExecutionWallet) => {
+      if (isLocalMockExternalWallet(wallet)) {
+        return { hash: generateMockExternalWalletTxHash(), wallet }
+      }
 
-      if (wallet.type === 'external_evm') {
-        if (isLocalMockExternalWallet(wallet)) {
-          return { hash: generateMockExternalWalletTxHash(), wallet }
-        }
+      if (!wagmiAddress || wagmiAddress.toLowerCase() !== wallet.address.toLowerCase()) {
+        throw new Error(
+          'Le wallet MetaMask connecté ne correspond pas au wallet externe vérifié. Reconnectez le bon wallet.',
+        )
+      }
 
-        if (!wagmiAddress || wagmiAddress.toLowerCase() !== wallet.address.toLowerCase()) {
-          throw new Error(
-            'Le wallet MetaMask connecté ne correspond pas au wallet externe vérifié. Reconnectez le bon wallet.',
-          )
-        }
+      requireExternalWalletChain(tx.chainId)
 
+      const submit = async () => {
         const hash = await sendWagmiTransaction({
           chainId: tx.chainId,
           to: tx.to,
@@ -124,26 +133,53 @@ export function usePortalTxSigner() {
           value: normalizeTxValueBigInt(tx.value),
           ...(tx.gasLimit !== undefined ? { gas: tx.gasLimit } : {}),
         })
-        return { hash: normalizeTxHash(hash), wallet }
+        return normalizeTxHash(hash)
       }
 
-      const { hash } = await sendPrivyTransaction(
-        {
-          chainId: tx.chainId,
-          to: tx.to,
-          data: tx.data,
-          value: normalizeTxValueHex(tx.value),
-          ...(tx.gasLimit !== undefined ? { gasLimit: tx.gasLimit } : {}),
-        },
-        {
-          address: wallet.address,
-          sponsor: true,
-          uiOptions: { showWalletUIs: false },
-        },
-      )
-      return { hash: normalizeTxHash(hash), wallet }
+      try {
+        const hash = await submit()
+        return { hash, wallet }
+      } catch (error) {
+        if (!isPortalWalletRequestExpiredError(error)) {
+          throw error
+        }
+        const hash = await submit()
+        return { hash, wallet }
+      }
     },
-    [resolveWallet, sendPrivyTransaction, sendWagmiTransaction, switchToChain, wagmiAddress],
+    [sendWagmiTransaction, wagmiAddress],
+  )
+
+  const sendPortalTransaction = useCallback(
+    async (tx: PortalTxRequest, overrideWallet?: ExecutionWallet | null) => {
+      try {
+        const wallet = await resolveWallet(overrideWallet)
+        await switchToChain(wallet, tx.chainId)
+
+        if (wallet.type === 'external_evm') {
+          return await sendExternalWalletTransaction(tx, wallet)
+        }
+
+        const { hash } = await sendPrivyTransaction(
+          {
+            chainId: tx.chainId,
+            to: tx.to,
+            data: tx.data,
+            value: normalizeTxValueHex(tx.value),
+            ...(tx.gasLimit !== undefined ? { gasLimit: tx.gasLimit } : {}),
+          },
+          {
+            address: wallet.address,
+            sponsor: true,
+            uiOptions: { showWalletUIs: false },
+          },
+        )
+        return { hash: normalizeTxHash(hash), wallet }
+      } catch (error) {
+        throw new Error(formatPortalWalletError(error))
+      }
+    },
+    [resolveWallet, sendExternalWalletTransaction, sendPrivyTransaction, switchToChain],
   )
 
   return { sendPortalTransaction, resolveWallet, mode }

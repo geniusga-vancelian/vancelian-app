@@ -2,7 +2,6 @@
 
 import { PortalDashboardView } from '@/components/portal/dashboard/PortalDashboardView'
 import { PortalExclusiveOffersSection } from '@/components/portal/invest/PortalExclusiveOffersSection'
-import { PortalInvestProductAccess } from '@/components/portal/invest/PortalInvestProductAccess'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalTopCryptoSection } from '@/components/portal/markets/PortalTopCryptoSection'
 import { PortalCryptoBundlesSection } from '@/components/portal/markets/PortalCryptoBundlesSection'
@@ -135,13 +134,12 @@ export function PortalRouteCachedPreview({ route, className }: Props) {
           <PortalDashboardLayout>
             <PortalReveal index={0}>
               <PortalPageIntro
-                eyebrow="Invest"
-                title={payload.data.heroTitle}
-                description={payload.data.heroSubtitle}
+                eyebrow="Investing"
+                title="Invest"
+                description="Explore DeFi vaults and exclusive offers to build your portfolio."
               />
             </PortalReveal>
-            <PortalExclusiveOffersSection offers={payload.data.offers} />
-            <PortalInvestProductAccess />
+            <PortalExclusiveOffersSection offers={payload.data.offers} title="Exclusive offers" />
           </PortalDashboardLayout>
         </PortalPageContainer>
       ) : null}

@@ -8,13 +8,10 @@ import { PortalPageIntro, PortalSectionHeading } from '@/components/portal/Porta
 import { PortalExclusiveOffersSection } from '@/components/portal/invest/PortalExclusiveOffersSection'
 import { PortalEarnVaultSection } from '@/components/portal/invest/PortalEarnVaultSection'
 import { PortalLedgityVaultSection } from '@/components/portal/invest/PortalLedgityVaultSection'
-import { PortalInvestProductAccess } from '@/components/portal/invest/PortalInvestProductAccess'
 import { Container } from '@/components/ui/Container'
 import type { PortalInvestPayload } from '@/lib/portal/investTypes'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
-import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
-import { isPortalChainDeFiEnabled, portalChainContextLabel } from '@/lib/portal/portalChainFilter'
-import { isPortalScopeExternal, portalWalletScopeContextLabel } from '@/lib/portal/portalWalletScopeFilter'
+import { isPortalChainDeFiEnabled } from '@/lib/portal/portalChainFilter'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { cn } from '@/lib/utils'
 
@@ -22,13 +19,10 @@ const INVEST_CACHE_KEY = 'portal:invest:v2'
 
 export function PortalInvestScreen() {
   const { chain } = usePortalChainContext()
-  const { walletScope } = usePortalWalletScopeContext()
-  const chainLabel = portalChainContextLabel(chain)
-  const walletLabel = portalWalletScopeContextLabel(walletScope)
   const showDeFiVaults = isPortalChainDeFiEnabled(chain)
   const { data, loading, refreshing, error, refresh } = usePortalCachedScreen<PortalInvestPayload>({
     cacheKey: INVEST_CACHE_KEY,
-    url: '/api/portal/invest?locale=fr',
+    url: '/api/portal/invest?locale=en',
     ttlMs: 120_000,
     errorMessage: 'Unable to load invest products.',
   })
@@ -56,48 +50,25 @@ export function PortalInvestScreen() {
     <PortalPageContainer>
       <PortalDashboardLayout>
         <PortalReveal index={0}>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end">
-            <PortalPageIntro
-              eyebrow="Invest"
-              title={data.heroTitle}
-              description={
-                showDeFiVaults
-                  ? `${data.heroSubtitle} Wallet actif : ${walletLabel}.`
-                  : isPortalScopeExternal(walletScope)
-                    ? `${data.heroSubtitle} Vaults DeFi sur Base — wallet actif : ${walletLabel}.`
-                    : `${data.heroSubtitle} Produits DeFi (Morpho, Ledgity) sur Base — réseau actuel : ${chainLabel}.`
-              }
-            />
-            {data.heroImageUrl ? (
-              <div className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={data.heroImageUrl} alt="" className="aspect-[4/3] w-full object-cover" />
-              </div>
-            ) : null}
-          </div>
-        </PortalReveal>
-
-        <PortalReveal index={1}>
-          <section className="flex flex-col gap-4">
-            <PortalSectionHeading title="Explore opportunities" />
-            <PortalInvestProductAccess />
-          </section>
+          <PortalPageIntro
+            eyebrow="Investing"
+            title="Invest"
+            description="Explore DeFi vaults and exclusive offers to build your portfolio."
+          />
         </PortalReveal>
 
         {showDeFiVaults ? (
-          <>
-            <PortalReveal index={2}>
-              <PortalEarnVaultSection />
-            </PortalReveal>
-
-            <PortalReveal index={3}>
-              <PortalLedgityVaultSection />
-            </PortalReveal>
-          </>
+          <PortalReveal index={1}>
+            <section id="defi-vaults" className="flex scroll-mt-24 flex-col gap-8">
+              <PortalSectionHeading title="DeFi vaults" />
+              <PortalEarnVaultSection embedded />
+              <PortalLedgityVaultSection embedded />
+            </section>
+          </PortalReveal>
         ) : null}
 
-        <PortalReveal index={4}>
-          <PortalExclusiveOffersSection offers={data.offers} />
+        <PortalReveal index={2}>
+          <PortalExclusiveOffersSection offers={data.offers} title="Exclusive offers" />
         </PortalReveal>
 
         <button
