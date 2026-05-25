@@ -45,17 +45,34 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Resolve Base RPC URL for client bundle
+        run: |
+          set -euo pipefail
+          RPC="${{ secrets.VANCELIAN_BASE_RPC_URL }}"
+          if [ -z "${RPC:-}" ]; then
+            if RPC=$(aws secretsmanager get-secret-value \
+              --secret-id arquantix/prod/base-rpc-url-primary \
+              --query SecretString --output text 2>/dev/null); then
+              echo "Base RPC résolu depuis Secrets Manager (arquantix/prod/base-rpc-url-primary)"
+            else
+              echo "::warning::VANCELIAN_BASE_RPC_URL absent et secret SM introuvable — fallback RPC public Base côté client."
+              RPC=""
+            fi
+          else
+            echo "Base RPC résolu depuis GitHub secret VANCELIAN_BASE_RPC_URL"
+          fi
+          echo "NEXT_PUBLIC_BASE_RPC_URL=$RPC" >> "$GITHUB_ENV"
+
       - name: Build & push Docker image
         env:
           NEXT_PUBLIC_PRIVY_APP_ID: ${{ secrets.VANCELIAN_PRIVY_APP_ID }}
-          NEXT_PUBLIC_BASE_RPC_URL: ${{ secrets.VANCELIAN_BASE_RPC_URL }}
         run: |
           set -euo pipefail
           if [ -z "${NEXT_PUBLIC_PRIVY_APP_ID:-}" ]; then
             echo "::warning::VANCELIAN_PRIVY_APP_ID absent — le runtime ECS PRIVY_APP_ID reste requis."
           fi
           if [ -z "${NEXT_PUBLIC_BASE_RPC_URL:-}" ]; then
-            echo "::warning::VANCELIAN_BASE_RPC_URL absent — le client utilisera le RPC public Base en fallback."
+            echo "::warning::NEXT_PUBLIC_BASE_RPC_URL absent — le client utilisera le RPC public Base en fallback."
           fi
           docker build \
             --platform linux/amd64 \
