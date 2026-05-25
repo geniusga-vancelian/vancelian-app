@@ -18,9 +18,9 @@ export function defaultChainForAsset(
   chains: string[],
 ): string {
   if (chains.length === 0) return ''
-  if (SWAP_V1_SAME_CHAIN_ONLY && SWAP_V1_PILOT_CHAINS.length === 1) {
-    const pilot = SWAP_V1_PILOT_CHAINS[0]!
-    if (chains.includes(pilot)) return pilot
+  if (SWAP_V1_SAME_CHAIN_ONLY) {
+    const pilot = SWAP_V1_PILOT_CHAINS.find((chain) => chains.includes(chain))
+    if (pilot) return pilot
   }
   const sym = asset.toUpperCase()
   const preferred: Record<string, string> = {
