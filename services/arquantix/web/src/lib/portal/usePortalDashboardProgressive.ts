@@ -19,6 +19,10 @@ import {
   syncPortalDashboardCompositeCache,
 } from '@/lib/portal/dashboardCache'
 import { mergePortalDashboardPayload } from '@/lib/portal/dashboardMerge'
+import { usePortalChainContext } from '@/lib/portal/portalChainContext'
+import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
+import { appendPortalScopeQuery, buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
+import { usePortalScopeRevision } from '@/lib/portal/portalScopeReload'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { PortalFetchError, revalidatePortalCache } from '@/lib/portal/portalClientCache'
 
@@ -41,7 +45,15 @@ function scheduleIdleRevalidate(run: () => void): void {
 
 export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveResult {
   const router = useRouter()
+  const { chain } = usePortalChainContext()
+  const { walletScope, walletScopeId } = usePortalWalletScopeContext()
+  const scopeRevision = usePortalScopeRevision()
+
+  const scopeSuffix = buildPortalScopeCacheSuffix(chain, walletScopeId)
+  const portfolioCacheKey = `${DASHBOARD_PORTFOLIO_CACHE_KEY}:${scopeSuffix}`
+
   const bootstrapRef = useRef(getPortalDashboardBootstrapFromCache())
+  const prevScopeKeyRef = useRef(`${scopeSuffix}:${scopeRevision}`)
 
   const [core, setCore] = useState<PortalDashboardCorePayload | null>(() => bootstrapRef.current.core.data)
   const [portfolio, setPortfolio] = useState<PortalDashboardPortfolioPayload | null>(
@@ -100,14 +112,17 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
   )
 
   const loadPortfolio = useCallback(
-    async (currencyHint?: string) => {
+    async (currencyHint?: string, isManualRefresh = false) => {
       const hasDisplayed = portfolioRef.current !== null
-      if (!hasDisplayed) setPortfolioLoading(true)
+      if (!hasDisplayed && !isManualRefresh) setPortfolioLoading(true)
       try {
-        const query = currencyHint ? `?currency=${encodeURIComponent(currencyHint)}` : ''
+        const baseUrl = currencyHint
+          ? `${DASHBOARD_PORTFOLIO_API_URL}?currency=${encodeURIComponent(currencyHint)}`
+          : DASHBOARD_PORTFOLIO_API_URL
+        const scopedUrl = appendPortalScopeQuery(baseUrl, chain, walletScope)
         const json = await revalidatePortalCache<PortalDashboardPortfolioPayload>(
-          DASHBOARD_PORTFOLIO_CACHE_KEY,
-          `${DASHBOARD_PORTFOLIO_API_URL}${query}`,
+          portfolioCacheKey,
+          scopedUrl,
           DASHBOARD_PORTFOLIO_TTL_MS,
         )
         setPortfolio(json)
@@ -120,10 +135,22 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
         setPortfolioLoading(false)
       }
     },
-    [router, syncComposite],
+    [chain, portfolioCacheKey, router, syncComposite, walletScope],
   )
 
   useEffect(() => {
+    const scopeKey = `${scopeSuffix}:${scopeRevision}`
+    const scopeChanged = prevScopeKeyRef.current !== scopeKey
+    prevScopeKeyRef.current = scopeKey
+
+    if (scopeChanged) {
+      setPortfolio(null)
+      setPortfolioLoading(true)
+      const currency = resolvePortfolioCurrencyFromCore(coreRef.current)
+      void loadPortfolio(currency || undefined, true)
+      return
+    }
+
     const bootstrap = bootstrapRef.current
     let cancelled = false
 
@@ -134,7 +161,7 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
     const runPortfolio = () => {
       if (cancelled) return
       const currency = resolvePortfolioCurrencyFromCore(coreRef.current)
-      void loadPortfolio(currency || undefined)
+      void loadPortfolio(currency || undefined, false)
     }
 
     if (bootstrap.core.isFresh && bootstrap.core.data) {
@@ -152,7 +179,7 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
     return () => {
       cancelled = true
     }
-  }, [loadCore, loadPortfolio])
+  }, [loadCore, loadPortfolio, scopeRevision, scopeSuffix])
 
   const data = useMemo(
     () => mergePortalDashboardPayload(core, portfolio),
@@ -163,7 +190,7 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
     setRefreshing(true)
     try {
       const nextCore = await loadCore(true)
-      await loadPortfolio(resolvePortfolioCurrencyFromCore(nextCore))
+      await loadPortfolio(resolvePortfolioCurrencyFromCore(nextCore), true)
     } finally {
       setRefreshing(false)
     }

@@ -17,6 +17,8 @@ import {
   PORTAL_SEARCH_NAV,
 } from '@/lib/portal/portalNavModel'
 import { Wallet } from 'lucide-react'
+import { PortalChainSwitcher } from '@/components/portal/PortalChainSwitcher'
+import { PortalWalletSwitcher } from '@/components/portal/PortalWalletSwitcher'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
 import { useNavPending } from '@/components/site/NavPendingContext'
@@ -235,6 +237,11 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
           </nav>
 
           <div className="flex h-full items-center justify-end gap-3 justify-self-end sm:gap-4">
+            <div className="hidden items-center gap-2 sm:flex">
+              <PortalChainSwitcher linkColor={palette.linkColor} />
+              <PortalWalletSwitcher linkColor={palette.linkColor} />
+            </div>
+
             <PortalNavLink
               href={PORTAL_SEARCH_NAV.href}
               aria-label={PORTAL_SEARCH_NAV.label}
@@ -325,6 +332,10 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
         <div className="fixed inset-x-0 top-0 z-[60] flex h-[100dvh] flex-col overflow-hidden bg-v-bg lg:hidden">
           <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-lg flex-1 flex-col pt-[5.5rem]">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
+              <div className="mb-2 sm:hidden">
+                <PortalChainSwitcher variant="drawer-row" />
+                <PortalWalletSwitcher variant="drawer-row" />
+              </div>
               <ul className="m-0 flex list-none flex-col gap-1 p-0">
                 {PORTAL_MAIN_NAV_TABS.map((tab) => {
                   const active = isNavActive(effectivePath, tab.href)

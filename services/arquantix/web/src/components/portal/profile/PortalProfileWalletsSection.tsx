@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Wallet } from 'lucide-react'
 
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
-import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalSettingsCard, PortalSettingsRow, PortalSectionTitle } from '@/components/portal/profile/PortalProfileUi'
 import { Button } from '@/components/ui/button'
 import { formatEvmNetworkShort } from '@/lib/portal/evmNetworkLabel'
@@ -32,7 +31,7 @@ function formatWalletAddress(address: string): string {
 function WalletCreateAction({ chain }: { chain: 'evm' | 'solana' }) {
   return (
     <Button type="button" size="sm" className="shrink-0" asChild>
-      <PortalNavLink href={portalWalletCreateRoute(chain)}>Create wallet</PortalNavLink>
+      <PortalNavLink href={portalWalletCreateRoute(chain)}>Créer</PortalNavLink>
     </Button>
   )
 }
@@ -68,7 +67,7 @@ function WalletRow({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-ui text-[16px] font-medium text-v-fg">{title}</span>
-          <span className="mt-0.5 block font-ui text-[13px] text-v-fg-muted">Loading…</span>
+          <span className="mt-0.5 block font-ui text-[13px] text-v-fg-muted">Chargement…</span>
         </span>
       </div>
     )
@@ -82,9 +81,7 @@ function WalletRow({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-ui text-[16px] font-medium text-v-fg">{title}</span>
-          <span className="mt-0.5 block font-ui text-[13px] leading-snug text-v-fg-muted">
-            {emptyHint}
-          </span>
+          <span className="mt-0.5 block font-ui text-[13px] leading-snug text-v-fg-muted">{emptyHint}</span>
         </span>
         <WalletCreateAction chain={createChain} />
       </div>
@@ -109,7 +106,8 @@ function WalletRow({
   )
 }
 
-export function PortalMyWalletsScreen() {
+/** Wallets Privy + externes — affichés directement dans le profil. */
+export function PortalProfileWalletsSection() {
   const [evmWallet, setEvmWallet] = useState<PortalPersonCryptoWallet | null>(null)
   const [solanaStatus, setSolanaStatus] = useState<SolanaWalletStatusPayload | null>(null)
   const [loadingEvm, setLoadingEvm] = useState(true)
@@ -133,7 +131,7 @@ export function PortalMyWalletsScreen() {
     } else {
       setEvmWallet(null)
       errors.push(
-        evmResult.reason instanceof Error ? evmResult.reason.message : 'Unable to load EVM wallet.',
+        evmResult.reason instanceof Error ? evmResult.reason.message : 'Impossible de charger le wallet EVM.',
       )
     }
     setLoadingEvm(false)
@@ -145,7 +143,7 @@ export function PortalMyWalletsScreen() {
       errors.push(
         solanaResult.reason instanceof Error
           ? solanaResult.reason.message
-          : 'Unable to load Solana wallet.',
+          : 'Impossible de charger le wallet Solana.',
       )
     }
     setLoadingSolana(false)
@@ -162,72 +160,63 @@ export function PortalMyWalletsScreen() {
   const solanaLinked = solanaStatus?.status === 'linked' && Boolean(solanaStatus.address?.trim())
 
   return (
-    <PortalPageContainer className="py-8 sm:py-10">
-      <div className="mx-auto w-full max-w-lg">
-        <h1 className="m-0 font-ui text-[28px] font-semibold tracking-v-tight text-v-fg">My wallets</h1>
-        <p className="mt-2 mb-8 font-ui text-[15px] leading-relaxed text-v-fg-body">
-          Retrouvez vos wallets embedded Vancelian (Privy) et vos wallets externes (MetaMask) utilisés pour Morpho et
-          LI.FI.
+    <section id="wallets" className="flex scroll-mt-24 flex-col gap-6">
+      <div>
+        <PortalSectionTitle>Mes wallets</PortalSectionTitle>
+        <p className="m-0 mt-2 font-ui text-[14px] leading-relaxed text-v-fg-muted">
+          Wallets Vancelian (Privy) et wallets externes (MetaMask) utilisés pour la DeFi et les swaps.
         </p>
-
-        <section className="mb-8 flex flex-col gap-3">
-          <div>
-            <PortalSectionTitle>Wallets Vancelian (Privy)</PortalSectionTitle>
-            <p className="m-0 mt-2 font-ui text-[14px] leading-relaxed text-v-fg-muted">
-              Wallets créés et gérés par Vancelian — dépôts, soldes crypto, gas sponsorisé si activé.
-            </p>
-          </div>
-          <PortalSettingsCard>
-            <WalletRow
-              title="Wallet EVM"
-              loading={loadingEvm}
-              created={Boolean(evmWallet?.address)}
-              address={evmWallet?.address}
-              providerLabel="Privy embedded"
-              networkLabel={
-                evmWallet ? formatEvmNetworkShort(evmWallet.chain_id) : 'Ethereum · ERC-20'
-              }
-              depositHref={PORTAL_ROUTES.walletDeposit}
-              createChain="evm"
-              emptyHint="Create an EVM wallet to receive ETH and ERC-20 tokens."
-            />
-            <WalletRow
-              title="Wallet Solana"
-              loading={loadingSolana}
-              created={solanaLinked}
-              address={solanaStatus?.address}
-              providerLabel="Privy embedded"
-              networkLabel="Solana · SOL"
-              depositHref={PORTAL_ROUTES.walletDepositSol}
-              createChain="solana"
-              emptyHint="Create a Solana wallet to receive SOL on Solana."
-            />
-          </PortalSettingsCard>
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <div>
-            <PortalSectionTitle>Wallets externes (MetaMask)</PortalSectionTitle>
-            <p className="m-0 mt-2 font-ui text-[14px] leading-relaxed text-v-fg-muted">
-              Wallets que vous connectez vous-même — transactions DeFi signées localement, frais réseau à votre charge.
-            </p>
-          </div>
-          <PortalSettingsCard>
-            <div className="px-4 py-4 sm:px-5">
-              <ConnectExternalWalletButton compact />
-            </div>
-          </PortalSettingsCard>
-        </section>
-
-        {error ? (
-          <div className="mt-4 space-y-3">
-            <p className="m-0 font-ui text-[14px] text-v-error">{error}</p>
-            <Button type="button" variant="outline" onClick={() => void loadWallets()}>
-              Retry
-            </Button>
-          </div>
-        ) : null}
       </div>
-    </PortalPageContainer>
+
+      <div className="flex flex-col gap-3">
+        <p className="m-0 font-ui text-[13px] font-semibold uppercase tracking-wide text-v-fg-muted">
+          Vancelian (Privy)
+        </p>
+        <PortalSettingsCard>
+          <WalletRow
+            title="Wallet EVM"
+            loading={loadingEvm}
+            created={Boolean(evmWallet?.address)}
+            address={evmWallet?.address}
+            providerLabel="Privy embedded"
+            networkLabel={evmWallet ? formatEvmNetworkShort(evmWallet.chain_id) : 'Ethereum · ERC-20'}
+            depositHref={PORTAL_ROUTES.walletDeposit}
+            createChain="evm"
+            emptyHint="Créez un wallet EVM pour recevoir ETH et tokens ERC-20."
+          />
+          <WalletRow
+            title="Wallet Solana"
+            loading={loadingSolana}
+            created={solanaLinked}
+            address={solanaStatus?.address}
+            providerLabel="Privy embedded"
+            networkLabel="Solana · SOL"
+            depositHref={PORTAL_ROUTES.walletDepositSol}
+            createChain="solana"
+            emptyHint="Créez un wallet Solana pour recevoir du SOL."
+          />
+        </PortalSettingsCard>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <p className="m-0 font-ui text-[13px] font-semibold uppercase tracking-wide text-v-fg-muted">
+          Externes (MetaMask)
+        </p>
+        <PortalSettingsCard>
+          <div className="px-4 py-4 sm:px-5">
+            <ConnectExternalWalletButton compact />
+          </div>
+        </PortalSettingsCard>
+      </div>
+
+      {error ? (
+        <div className="space-y-3">
+          <p className="m-0 font-ui text-[14px] text-v-error">{error}</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void loadWallets()}>
+            Réessayer
+          </Button>
+        </div>
+      ) : null}
+    </section>
   )
 }

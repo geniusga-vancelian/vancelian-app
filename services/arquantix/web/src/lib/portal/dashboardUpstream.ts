@@ -72,14 +72,17 @@ export async function loadPortalDashboardCorePayload(): Promise<PortalDashboardC
 /** Positions crypto + placements + épargne DeFi — chargé après le core (aligné mobile). */
 export async function loadPortalDashboardPortfolioPayload(
   personId: string,
-  currencyHint?: string,
+  options?: { currencyHint?: string; walletAddress?: string | null },
 ): Promise<PortalDashboardPortfolioPayload> {
+  const currencyHint = options?.currencyHint
+  const walletAddress = options?.walletAddress?.trim() || undefined
+
   const [bootstrap, cryptoPositions, privyBalances, placements, savingsResult] = await Promise.all([
     currencyHint ? Promise.resolve({ ok: true, data: null }) : fetchPortalUpstreamJson('/api/app/bootstrap'),
     fetchPortalUpstreamJson('/api/app/crypto-positions'),
     fetchPortalUpstreamJson('/api/app/privy-wallet/balances'),
     fetchPortalUpstreamJson('/api/app/lending/earn/positions'),
-    loadPortalSavingsSummary({ personId, live: false }),
+    loadPortalSavingsSummary({ personId, live: false, walletAddress }),
   ])
 
   const currency =

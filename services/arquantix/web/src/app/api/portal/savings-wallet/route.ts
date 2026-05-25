@@ -6,13 +6,15 @@ import { loadPortalSavingsSummary } from '@/lib/portal/portalSavingsService'
 import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
 
 /** Hub épargne DeFi — positions vault Morpho agrégées (aligné hub crypto). */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   const personId = await requirePortalPersonId()
   if (personId instanceof NextResponse) return personId
 
+  const walletAddress = request.nextUrl.searchParams.get('wallet_address')?.trim() || undefined
+
   const [bootstrap, savingsResult] = await Promise.all([
     fetchPortalUpstreamJson('/api/app/bootstrap'),
-    loadPortalSavingsSummary({ personId, live: true }),
+    loadPortalSavingsSummary({ personId, live: true, walletAddress }),
   ])
 
   const currency = resolveDashboardReferenceCurrency(bootstrap.ok ? bootstrap.data : null)

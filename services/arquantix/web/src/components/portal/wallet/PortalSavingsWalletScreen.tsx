@@ -19,16 +19,27 @@ import {
 import type { PortalSavingsWalletHubPayload } from '@/lib/portal/portalSavingsTypes'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
+import { usePortalChainContext } from '@/lib/portal/portalChainContext'
+import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
+import { isPortalChainDeFiEnabled, portalChainContextLabel } from '@/lib/portal/portalChainFilter'
+import { portalWalletScopeContextLabel } from '@/lib/portal/portalWalletScopeFilter'
 
 const CACHE_KEY = 'portal:savings-wallet'
 
 export function PortalSavingsWalletScreen() {
+  const { chain } = usePortalChainContext()
+  const { walletScope } = usePortalWalletScopeContext()
+  const chainLabel = portalChainContextLabel(chain)
+  const walletLabel = portalWalletScopeContextLabel(walletScope)
+  const deFiEnabled = isPortalChainDeFiEnabled(chain)
+
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalSavingsWalletHubPayload>({
       cacheKey: CACHE_KEY,
       url: '/api/portal/savings-wallet',
       ttlMs: 45_000,
       errorMessage: 'Impossible de charger vos positions épargne.',
+      scopeAware: true,
     })
 
   if (loading && !data) {
@@ -48,12 +59,27 @@ export function PortalSavingsWalletScreen() {
 
   if (!data) return null
 
+  if (!deFiEnabled) {
+    return (
+      <PortalPageContainer>
+        <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-3 py-10 text-center">
+          <p className="m-0 font-ui text-[15px] text-v-fg">
+            L&apos;épargne DeFi est disponible sur Base uniquement.
+          </p>
+          <p className="m-0 font-ui text-[14px] text-v-fg-muted">
+            Réseau actuel : {chainLabel}. Basculez sur Base dans la navbar.
+          </p>
+        </Container>
+      </PortalPageContainer>
+    )
+  }
+
   const positions = data.savings?.positions ?? []
   const totalLabel = formatSavingsMoney(
     resolveSavingsHubTotalValue(data.savings, data.currency),
     data.currency,
   )
-  const countLabel = resolveSavingsCountLabel(data.savings)
+  const countLabel = `${resolveSavingsCountLabel(data.savings)} · ${walletLabel}`
 
   return (
     <PortalPageContainer>

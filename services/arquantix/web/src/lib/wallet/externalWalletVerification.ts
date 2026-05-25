@@ -6,7 +6,7 @@ import { getAddress, verifyMessage } from 'viem'
 import { prisma } from '@/lib/prisma'
 import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
 import type { ExternalWalletConnector } from '@/lib/wallet/executionWalletTypes'
-import { isAllowedExternalWalletChainId } from '@/lib/wallet/externalWalletConfig'
+import { isAllowedExternalWalletChainId } from '@/lib/wallet/externalWalletConstants'
 
 const NONCE_TTL_MS = 10 * 60 * 1000
 const MAX_NONCES_PER_PERSON = 5

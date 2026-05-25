@@ -17,7 +17,7 @@ import {
   PortalSettingsCard,
   PortalSettingsRow,
 } from '@/components/portal/profile/PortalProfileUi'
-import { PortalPrivyWalletSection } from '@/components/portal/profile/PortalPrivyWalletSection'
+import { PortalProfileWalletsSection } from '@/components/portal/profile/PortalProfileWalletsSection'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalProfileSkeleton } from '@/components/portal/PortalRouteSkeleton'
@@ -92,6 +92,15 @@ export function PortalProfileScreen() {
     const ref = data.profile.reference_currency?.trim().toUpperCase()
     if (ref === 'USD' || ref === 'EUR') setCurrency(ref)
   }, [data])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.location.hash !== '#wallets') return
+    const scrollToWallets = () => {
+      document.getElementById('wallets')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    const frame = window.requestAnimationFrame(scrollToWallets)
+    return () => window.cancelAnimationFrame(frame)
+  }, [loading, data])
 
   const initials = useMemo(() => resolveInitials(data?.profile ?? null), [data])
 
@@ -174,7 +183,7 @@ export function PortalProfileScreen() {
         </PortalReveal>
 
         <PortalReveal index={3}>
-          <PortalPrivyWalletSection />
+          <PortalProfileWalletsSection />
         </PortalReveal>
 
         <PortalReveal index={4}>

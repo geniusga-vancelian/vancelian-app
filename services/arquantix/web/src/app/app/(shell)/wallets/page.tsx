@@ -1,7 +1,16 @@
 'use client'
 
-import { PortalMyWalletsScreen } from '@/components/portal/wallet/PortalMyWalletsScreen'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { portalProfileWalletsRoute } from '@/lib/portal/portalRouting'
 
+/** Redirige vers la section wallets du profil. */
 export default function PortalMyWalletsPage() {
-  return <PortalMyWalletsScreen />
+  const router = useRouter()
+
+  useEffect(() => {
+    router.replace(portalProfileWalletsRoute())
+  }, [router])
+
+  return null
 }

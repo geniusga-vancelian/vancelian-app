@@ -21,22 +21,41 @@ import { Container } from '@/components/ui/Container'
 import {
   buildUnifiedWalletRows,
   formatCryptoMoney,
-  resolveHubCountLabel,
   resolvePrivyHubTotalValue,
 } from '@/lib/portal/cryptoWalletFormat'
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
+import type { PortalChain } from '@/config/portalChains'
+import { usePortalChainContext } from '@/lib/portal/portalChainContext'
+import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
+import {
+  filterCryptoPositionsSummaryByPortalScope,
+  isPortalScopeExternal,
+  portalWalletScopeContextLabel,
+} from '@/lib/portal/portalWalletScopeFilter'
+import {
+  isPortalChainSwapEnabled,
+  portalChainContextLabel,
+} from '@/lib/portal/portalChainFilter'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
+
+function resolveChainDepositHref(chain: PortalChain): string {
+  if (chain === 'solana') return PORTAL_ROUTES.walletDepositSol
+  return PORTAL_ROUTES.walletDeposit
+}
 
 const CACHE_KEY = 'portal:crypto-wallet'
 
 export function PortalCryptoWalletScreen() {
+  const { chain } = usePortalChainContext()
+  const { walletScope } = usePortalWalletScopeContext()
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletHubPayload>({
       cacheKey: CACHE_KEY,
       url: '/api/portal/crypto-wallet',
       ttlMs: 45_000,
       errorMessage: 'Impossible de charger les positions crypto.',
+      scopeAware: true,
     })
 
   if (loading && !data) {
@@ -56,14 +75,26 @@ export function PortalCryptoWalletScreen() {
 
   if (!data) return null
 
-  const rows = buildUnifiedWalletRows(data.positions.positions, data.bundles, data.currency)
+  const chainLabel = portalChainContextLabel(chain)
+  const walletLabel = portalWalletScopeContextLabel(walletScope)
+  const filteredPositions = filterCryptoPositionsSummaryByPortalScope(
+    data.positions,
+    chain,
+    walletScope,
+  )
+
+  const rows = buildUnifiedWalletRows(filteredPositions.positions, data.bundles, data.currency)
   const totalLabel = formatCryptoMoney(
-    resolvePrivyHubTotalValue(data.positions, data.currency),
+    resolvePrivyHubTotalValue(filteredPositions, data.currency),
     data.currency,
   )
-  const countLabel = resolveHubCountLabel(data.positions, data.bundles, {
-    privyOnly: data.source === 'privy',
-  })
+  const countLabel =
+    filteredPositions.positionsCount > 0
+      ? `${filteredPositions.positionsCount} actif${filteredPositions.positionsCount === 1 ? '' : 's'} · ${chainLabel} · ${walletLabel}`
+      : isPortalScopeExternal(walletScope)
+        ? `Aucun solde Privy · ${walletLabel} (DeFi on-chain)`
+        : `Aucun actif · ${chainLabel} · ${walletLabel}`
+  const swapEnabled = isPortalChainSwapEnabled(chain)
 
   return (
     <PortalPageContainer>
@@ -96,14 +127,28 @@ export function PortalCryptoWalletScreen() {
             </section>
 
             <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" className="gap-1.5" asChild>
-                <PortalNavLink href={PORTAL_ROUTES.walletSwap}>
+              {swapEnabled ? (
+                <Button type="button" size="sm" className="gap-1.5" asChild>
+                  <PortalNavLink href={PORTAL_ROUTES.walletSwap}>
+                    <ArrowLeftRight className="h-4 w-4" />
+                    Échanger
+                  </PortalNavLink>
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="gap-1.5"
+                  variant="outline"
+                  disabled
+                  title={`Swap disponible sur Ethereum — réseau actuel : ${chainLabel}`}
+                >
                   <ArrowLeftRight className="h-4 w-4" />
                   Échanger
-                </PortalNavLink>
-              </Button>
+                </Button>
+              )}
               <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
-                <PortalNavLink href={PORTAL_ROUTES.walletDeposit}>
+                <PortalNavLink href={resolveChainDepositHref(chain)}>
                   <Plus className="h-4 w-4" />
                   Déposer
                 </PortalNavLink>
@@ -132,7 +177,15 @@ export function PortalCryptoWalletScreen() {
         </PortalReveal>
 
         <PortalReveal index={1}>
-          <PortalCryptoWalletPositionsCard rows={rows} currency={data.currency} />
+          <PortalCryptoWalletPositionsCard
+            rows={rows}
+            currency={data.currency}
+            emptyMessage={
+              isPortalScopeExternal(walletScope)
+                ? `Les soldes ledger Privy ne s’appliquent pas à ${walletLabel}. Utilisez Invest pour vos positions DeFi on-chain.`
+                : `Aucune position sur ${chainLabel} · ${walletLabel}`
+            }
+          />
         </PortalReveal>
 
         {data.partial ? (

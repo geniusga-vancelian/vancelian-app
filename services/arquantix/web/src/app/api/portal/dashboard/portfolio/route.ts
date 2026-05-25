@@ -21,6 +21,10 @@ export async function GET(request: NextRequest) {
   }
 
   const currencyHint = request.nextUrl.searchParams.get('currency')?.trim() || undefined
-  const payload = await loadPortalDashboardPortfolioPayload(personId, currencyHint)
+  const walletAddress = request.nextUrl.searchParams.get('wallet_address')?.trim() || undefined
+  const payload = await loadPortalDashboardPortfolioPayload(personId, {
+    currencyHint,
+    walletAddress,
+  })
   return NextResponse.json(payload)
 }

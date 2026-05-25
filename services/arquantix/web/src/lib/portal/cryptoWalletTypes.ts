@@ -16,6 +16,7 @@ export type PortalCryptoPosition = {
   privyBalance?: number
   platformBalance?: number
   chainType?: string
+  chainId?: number | null
   dedicatedWallet?: boolean
   walletAddress?: string
 }

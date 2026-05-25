@@ -20,6 +20,16 @@ import {
   shouldShowUnlockEuroBanner,
 } from '@/lib/portal/dashboardFormat'
 import type { PortalDashboardPayload } from '@/lib/portal/dashboardTypes'
+import { usePortalChainContext } from '@/lib/portal/portalChainContext'
+import {
+  isPortalChainDeFiEnabled,
+  portalChainContextLabel,
+} from '@/lib/portal/portalChainFilter'
+import {
+  filterCryptoSummaryByPortalScope,
+  portalWalletScopeShortLabel,
+} from '@/lib/portal/portalWalletScopeFilter'
+import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
 import { resolvePortalDepositHref } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
@@ -40,14 +50,46 @@ export function PortalDashboardView({
   showRefreshLink = true,
   className,
 }: Props) {
+  const { chain } = usePortalChainContext()
+  const { walletScope } = usePortalWalletScopeContext()
+
   const derived = useMemo(() => {
     const currency = resolveReferenceCurrency(data)
+    const chainLabel = portalChainContextLabel(chain)
+    const walletLabel = portalWalletScopeShortLabel(walletScope)
+    const filteredCrypto = filterCryptoSummaryByPortalScope(data.crypto, chain, walletScope)
+    const savings = isPortalChainDeFiEnabled(chain) ? data.savings : null
+
     const rows = applyWalletRowAccess(
-      buildWalletRows(data.cash, data.crypto, data.placements, data.savings, currency),
+      buildWalletRows(data.cash, filteredCrypto, data.placements, savings, currency).map((row) => {
+        if (row.id === 'crypto') {
+          const count = filteredCrypto?.summary?.positions_count ?? 0
+          return {
+            ...row,
+            subtitle:
+              count > 0
+                ? `${count} actif${count === 1 ? '' : 's'} · ${chainLabel} · ${walletLabel}`
+                : `Aucun actif · ${chainLabel} · ${walletLabel}`,
+          }
+        }
+        if (row.id === 'savings' && savings) {
+          const count = savings.positions_count ?? savings.positions?.length ?? 0
+          return {
+            ...row,
+            subtitle:
+              count > 0
+                ? `${count} vault${count === 1 ? '' : 's'} · ${chainLabel} · ${walletLabel}`
+                : `Aucun vault · ${chainLabel} · ${walletLabel}`,
+          }
+        }
+        return row
+      }),
       data.profile,
       data.cash,
     )
-    const balanceLabel = resolveHeaderBalance(data.globalStatistics, rows, currency)
+    const balanceLabel = resolveHeaderBalance(data.globalStatistics, rows, currency, {
+      scopedView: true,
+    })
     const performancePct = resolvePerformancePct(data.globalStatistics)
     const chartValues = normalizeChartSeries(data.globalHistory?.points ?? [])
     const displayName = resolveDisplayName(data)
@@ -65,8 +107,10 @@ export function PortalDashboardView({
       showUnlockEuroBanner,
       depositHref,
       registrationProgress: data.profile?.registration_derived_progress_percent,
+      chainLabel,
+      walletLabel,
     }
-  }, [data])
+  }, [data, chain, walletScope])
 
   return (
     <PortalPageContainer className={className}>
@@ -89,7 +133,7 @@ export function PortalDashboardView({
         ) : null}
 
         <PortalReveal index={2}>
-          <PortalAccountsCard rows={derived.rows} portfolioPending={portfolioLoading} />
+          <PortalAccountsCard rows={derived.rows} portfolioPending={portfolioLoading || refreshing} />
         </PortalReveal>
 
         <PortalReveal index={3}>

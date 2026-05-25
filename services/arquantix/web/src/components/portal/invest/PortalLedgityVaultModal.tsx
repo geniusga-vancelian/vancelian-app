@@ -19,7 +19,7 @@ import type {
   PortalLedgityVaultPosition,
 } from '@/lib/portal/ledgity/ledgityVaultTypes'
 import { getPortalDefiIntegrationLabel } from '@/lib/portal/morphoConstants'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { PORTAL_ROUTES, portalProfileWalletsRoute } from '@/lib/portal/portalRouting'
 import {
   type PortalLedgityExecutionPhase,
   usePortalLedgityVaultExecution,
@@ -289,7 +289,7 @@ export function PortalLedgityVaultModal({ vault, beta, onClose }: Props) {
                 <PortalNavLink href={PORTAL_ROUTES.walletCreate}>Créer mon wallet crypto</PortalNavLink>
               </Button>
               <Button type="button" asChild variant="outline" className="rounded-full">
-                <PortalNavLink href={PORTAL_ROUTES.myWallets}>Lier MetaMask</PortalNavLink>
+                <PortalNavLink href={portalProfileWalletsRoute()}>Lier MetaMask</PortalNavLink>
               </Button>
             </div>
           ) : (

@@ -221,7 +221,10 @@ async function mergeVaultDetails(
   return mergeMorphoVaultConfigWithGraphql(config, morphoCatalogByVault.get(vaultAddress) ?? null)
 }
 
-async function loadLedgerBackedRows(personId: string): Promise<PortalSavingsSummary> {
+async function loadLedgerBackedRows(
+  personId: string,
+  walletAddress?: string,
+): Promise<PortalSavingsSummary> {
   const configs = await resolveAllPublishedDefiVaultConfigs()
   if (configs.length === 0) return emptySummary()
 
@@ -234,6 +237,7 @@ async function loadLedgerBackedRows(personId: string): Promise<PortalSavingsSumm
     where: {
       personId,
       vaultAddress: { in: vaultAddresses },
+      ...(walletAddress ? { walletAddress: walletAddress.toLowerCase() } : {}),
     },
     select: {
       vaultAddress: true,
@@ -309,11 +313,16 @@ async function loadLedgerBackedRows(personId: string): Promise<PortalSavingsSumm
   }
 }
 
-async function loadLiveRows(personId: string): Promise<{ summary: PortalSavingsSummary; partial: boolean }> {
+async function loadLiveRows(
+  personId: string,
+  walletAddress?: string,
+): Promise<{ summary: PortalSavingsSummary; partial: boolean }> {
   const configs = await resolveAllPublishedDefiVaultConfigs()
   if (configs.length === 0) return { summary: emptySummary(), partial: false }
 
-  const wallets = await loadPersonEvmWalletAddresses(personId)
+  const wallets = walletAddress
+    ? [walletAddress.toLowerCase()]
+    : await loadPersonEvmWalletAddresses(personId)
   if (wallets.length === 0) return { summary: emptySummary(), partial: false }
 
   const morphoAddresses = configs.filter((c) => !isLedgityConfig(c)).map((c) => normalizeVaultAddress(c.vaultAddress))
@@ -408,13 +417,16 @@ async function loadLiveRows(personId: string): Promise<{ summary: PortalSavingsS
 export async function loadPortalSavingsSummary(args: {
   personId: string
   live?: boolean
+  walletAddress?: string | null
 }): Promise<{ savings: PortalSavingsSummary; partial: boolean }> {
+  const walletAddress = args.walletAddress?.trim().toLowerCase() || undefined
+
   if (args.live) {
-    const live = await loadLiveRows(args.personId)
+    const live = await loadLiveRows(args.personId, walletAddress)
     return { savings: live.summary, partial: live.partial }
   }
 
-  const savings = await loadLedgerBackedRows(args.personId)
+  const savings = await loadLedgerBackedRows(args.personId, walletAddress)
   return { savings, partial: false }
 }
 

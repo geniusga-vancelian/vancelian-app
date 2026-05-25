@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { usePortalChainContext } from '@/lib/portal/portalChainContext'
+import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import {
+  appendPortalScopeQuery,
+  buildPortalScopeCacheSuffix,
+} from '@/lib/portal/portalScopeQuery'
+import { usePortalScopeRevision } from '@/lib/portal/portalScopeReload'
 import {
   getPortalCacheBootstrap,
   PortalFetchError,
@@ -22,16 +29,29 @@ export type UsePortalCachedScreenResult<T> = {
  * Charge un écran portail avec :
  * - init synchrone depuis le cache mémoire (pas de flash skeleton)
  * - revalidation réseau en arrière-plan au montage (stale-while-revalidate)
+ * - `scopeAware` : cache + URL scoping par réseau / wallet navbar, reload au changement
  */
 export function usePortalCachedScreen<T>(options: {
   cacheKey: string
   url: string
   ttlMs: number
   errorMessage: string
+  scopeAware?: boolean
 }): UsePortalCachedScreenResult<T> {
-  const { cacheKey, url, ttlMs, errorMessage } = options
+  const { cacheKey, url, ttlMs, errorMessage, scopeAware = false } = options
   const router = useRouter()
-  const bootstrapRef = useRef(getPortalCacheBootstrap<T>(cacheKey))
+  const { chain } = usePortalChainContext()
+  const { walletScope, walletScopeId } = usePortalWalletScopeContext()
+  const scopeRevision = usePortalScopeRevision()
+
+  const scopeSuffix = scopeAware
+    ? buildPortalScopeCacheSuffix(chain, walletScopeId)
+    : null
+  const resolvedCacheKey = scopeSuffix ? `${cacheKey}:${scopeSuffix}` : cacheKey
+  const resolvedUrl = scopeAware ? appendPortalScopeQuery(url, chain, walletScope) : url
+
+  const bootstrapRef = useRef(getPortalCacheBootstrap<T>(resolvedCacheKey))
+  const prevScopeKeyRef = useRef(`${scopeSuffix ?? ''}:${scopeRevision}`)
 
   const [data, setData] = useState<T | null>(() => bootstrapRef.current.data)
   const [loading, setLoading] = useState(() => !bootstrapRef.current.hasInitialData)
@@ -52,7 +72,7 @@ export function usePortalCachedScreen<T>(options: {
 
       setError('')
       try {
-        const json = await revalidatePortalCache<T>(cacheKey, url, ttlMs)
+        const json = await revalidatePortalCache<T>(resolvedCacheKey, resolvedUrl, ttlMs)
         setData(json)
       } catch (err) {
         if (err instanceof PortalFetchError && err.status === 401) {
@@ -67,10 +87,22 @@ export function usePortalCachedScreen<T>(options: {
         setRefreshing(false)
       }
     },
-    [cacheKey, url, ttlMs, errorMessage, router],
+    [errorMessage, resolvedCacheKey, resolvedUrl, router, ttlMs],
   )
 
   useEffect(() => {
+    bootstrapRef.current = getPortalCacheBootstrap<T>(resolvedCacheKey)
+    const scopeKey = `${scopeSuffix ?? ''}:${scopeRevision}`
+    const scopeChanged = prevScopeKeyRef.current !== scopeKey
+    prevScopeKeyRef.current = scopeKey
+
+    if (scopeChanged && scopeAware) {
+      setData(bootstrapRef.current.data)
+      setLoading(!bootstrapRef.current.hasInitialData)
+      void revalidate(true)
+      return
+    }
+
     const bootstrap = bootstrapRef.current
     if (bootstrap.isFresh) {
       const schedule =
@@ -81,7 +113,7 @@ export function usePortalCachedScreen<T>(options: {
       return
     }
     void revalidate(false)
-  }, [revalidate])
+  }, [revalidate, resolvedCacheKey, scopeAware, scopeRevision, scopeSuffix])
 
   const refresh = useCallback(async () => {
     await revalidate(true)

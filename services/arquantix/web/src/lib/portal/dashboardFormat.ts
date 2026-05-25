@@ -222,6 +222,9 @@ function toPortalCryptoSummary(parsed: PortalCryptoPositionsSummary): PortalCryp
       estimated_value_usd: position.estimatedValueUsd,
       privy_balance: position.privyBalance,
       platform_balance: position.platformBalance,
+      chain_type: position.chainType,
+      chain_id: position.chainId,
+      wallet_address: position.walletAddress,
     })),
   }
 }
@@ -339,13 +342,17 @@ export function resolveHeaderBalance(
   stats: PortalGlobalStatistics,
   rows: PortalWalletRow[],
   currency: string,
+  options?: { scopedView?: boolean },
 ): string {
-  const fromStats = toNumber(stats?.performance?.current_value, NaN)
-  if (!Number.isNaN(fromStats)) {
-    return formatPortalMoney(fromStats, stats?.currency?.toUpperCase() || currency)
+  if (!options?.scopedView) {
+    const fromStats = toNumber(stats?.performance?.current_value, NaN)
+    if (!Number.isNaN(fromStats)) {
+      return formatPortalMoney(fromStats, stats?.currency?.toUpperCase() || currency)
+    }
   }
+
   const sum = rows
-    .filter((r) => !r.locked && (r.id === 'euro' || r.id === 'crypto'))
+    .filter((r) => !r.locked && (r.id === 'euro' || r.id === 'crypto' || r.id === 'savings'))
     .reduce((acc, r) => acc + r.numericBalance, 0)
   return formatPortalMoney(sum, currency)
 }

@@ -11,12 +11,21 @@ import { PortalLedgityVaultSection } from '@/components/portal/invest/PortalLedg
 import { PortalInvestProductAccess } from '@/components/portal/invest/PortalInvestProductAccess'
 import { Container } from '@/components/ui/Container'
 import type { PortalInvestPayload } from '@/lib/portal/investTypes'
+import { usePortalChainContext } from '@/lib/portal/portalChainContext'
+import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
+import { isPortalChainDeFiEnabled, portalChainContextLabel } from '@/lib/portal/portalChainFilter'
+import { isPortalScopeExternal, portalWalletScopeContextLabel } from '@/lib/portal/portalWalletScopeFilter'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { cn } from '@/lib/utils'
 
 const INVEST_CACHE_KEY = 'portal:invest:v2'
 
 export function PortalInvestScreen() {
+  const { chain } = usePortalChainContext()
+  const { walletScope } = usePortalWalletScopeContext()
+  const chainLabel = portalChainContextLabel(chain)
+  const walletLabel = portalWalletScopeContextLabel(walletScope)
+  const showDeFiVaults = isPortalChainDeFiEnabled(chain)
   const { data, loading, refreshing, error, refresh } = usePortalCachedScreen<PortalInvestPayload>({
     cacheKey: INVEST_CACHE_KEY,
     url: '/api/portal/invest?locale=fr',
@@ -51,7 +60,13 @@ export function PortalInvestScreen() {
             <PortalPageIntro
               eyebrow="Invest"
               title={data.heroTitle}
-              description={data.heroSubtitle}
+              description={
+                showDeFiVaults
+                  ? `${data.heroSubtitle} Wallet actif : ${walletLabel}.`
+                  : isPortalScopeExternal(walletScope)
+                    ? `${data.heroSubtitle} Vaults DeFi sur Base — wallet actif : ${walletLabel}.`
+                    : `${data.heroSubtitle} Produits DeFi (Morpho, Ledgity) sur Base — réseau actuel : ${chainLabel}.`
+              }
             />
             {data.heroImageUrl ? (
               <div className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
@@ -69,13 +84,17 @@ export function PortalInvestScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={2}>
-          <PortalEarnVaultSection />
-        </PortalReveal>
+        {showDeFiVaults ? (
+          <>
+            <PortalReveal index={2}>
+              <PortalEarnVaultSection />
+            </PortalReveal>
 
-        <PortalReveal index={3}>
-          <PortalLedgityVaultSection />
-        </PortalReveal>
+            <PortalReveal index={3}>
+              <PortalLedgityVaultSection />
+            </PortalReveal>
+          </>
+        ) : null}
 
         <PortalReveal index={4}>
           <PortalExclusiveOffersSection offers={data.offers} />

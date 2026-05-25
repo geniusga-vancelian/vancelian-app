@@ -3,7 +3,7 @@
 import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 import { isLocalMockVerifiedExternalWallet } from '@/lib/wallet/externalWalletMock'
 import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
-import { getExternalWalletBaseChainId } from '@/lib/wallet/externalWalletConfig'
+import { getExternalWalletBaseChainId } from '@/lib/wallet/externalWalletConstants'
 import { formatEvmNetworkShort } from '@/lib/portal/evmNetworkLabel'
 import { cn } from '@/lib/utils'
 

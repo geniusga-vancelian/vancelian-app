@@ -14,7 +14,7 @@ import {
   verifyExternalWalletLink,
 } from '@/lib/wallet/externalWalletClient'
 import { LOCAL_MOCK_EXTERNAL_WALLET_ADDRESS } from '@/lib/wallet/externalWalletMock'
-import { getExternalWalletBaseChainId, isWalletConnectConfigured } from '@/lib/wallet/externalWalletConfig'
+import { getExternalWalletBaseChainId, isWalletConnectConfigured } from '@/lib/wallet/externalWalletConstants'
 import type { ExternalWalletConnector } from '@/lib/wallet/executionWalletTypes'
 import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 import { cn } from '@/lib/utils'

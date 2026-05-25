@@ -21,6 +21,11 @@ export const PORTAL_ROUTES = {
   profile: `${PORTAL_PATH_PREFIX}/profile`,
 } as const
 
+/** Ancienne route wallets — ancre profil. */
+export function portalProfileWalletsRoute(): string {
+  return `${PORTAL_ROUTES.profile}#wallets`
+}
+
 /** Flow swap LI.FI — destination optionnelle via query (`?to=ETH&toChain=ethereum`). */
 export function portalSwapRoute(options?: { to?: string; toChain?: string }): string {
   const base = PORTAL_ROUTES.walletSwap

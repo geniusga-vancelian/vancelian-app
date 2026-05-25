@@ -2,6 +2,7 @@ const path = require('path')
 const fs = require('fs')
 
 const privyAuthCjs = path.join(__dirname, 'node_modules/@privy-io/react-auth/dist/cjs')
+const metamaskAsyncStorageStub = path.join(__dirname, 'src/lib/wallet/metamaskAsyncStorageStub.js')
 
 const repoRoot = path.join(__dirname, '..', '..', '..')
 
@@ -49,7 +50,14 @@ const nextConfig = {
    * Force la transpilation de ces dépendances (petites libs ESM/CJS) pour éviter
    * des chunks RSC où `__webpack_require__(id)` tombe sur `undefined` en dev.
    */
-  transpilePackages: ['clsx', 'tailwind-merge', '@privy-io/react-auth'],
+  transpilePackages: [
+    'clsx',
+    'tailwind-merge',
+    '@privy-io/react-auth',
+    '@rainbow-me/rainbowkit',
+    '@wagmi/connectors',
+    '@metamask/sdk',
+  ],
   eslint: {
     // Violations ESLint héritées : ne pas bloquer `next build` (lint séparé si besoin).
     ignoreDuringBuilds: true,
@@ -74,6 +82,12 @@ const nextConfig = {
   },
   // Timeouts de watch : utiles sur stockage cloud lent (OneDrive, iCloud) ou gros monorepos
   webpack: (config, { dev, isServer }) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      // MetaMask SDK (via @wagmi/connectors) — dépendance React Native optionnelle.
+      '@react-native-async-storage/async-storage': metamaskAsyncStorageStub,
+    }
+
     if (!isServer) {
       config.resolve.alias = {
         ...config.resolve.alias,

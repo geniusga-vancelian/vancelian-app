@@ -25,7 +25,7 @@ import type {
   PortalMorphoVaultPosition,
 } from '@/lib/portal/morphoVaultTypes'
 import type { PortalDefiBetaPortalFlags, PortalDefiVaultDetails } from '@/lib/portal/portalSavingsTypes'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { PORTAL_ROUTES, portalProfileWalletsRoute } from '@/lib/portal/portalRouting'
 import {
   type PortalMorphoExecutionPhase,
   usePortalMorphoVaultExecution,
@@ -312,7 +312,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
               <PortalNavLink href={PORTAL_ROUTES.walletCreate}>Créer mon wallet crypto</PortalNavLink>
             </Button>
             <Button type="button" asChild variant="outline" className="rounded-full">
-              <PortalNavLink href={PORTAL_ROUTES.myWallets}>Lier MetaMask</PortalNavLink>
+              <PortalNavLink href={portalProfileWalletsRoute()}>Lier MetaMask</PortalNavLink>
             </Button>
           </div>
         ) : (

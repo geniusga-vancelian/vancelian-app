@@ -41,11 +41,6 @@ export function PortalSwapFlow() {
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [preselectApplied, setPreselectApplied] = useState(false)
 
-  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
-    Boolean(catalog?.mock_mode),
-    setExecutionPhase,
-  )
-
   const [toAsset, setToAsset] = useState('')
   const [toChain, setToChain] = useState('')
   const [fromAsset, setFromAsset] = useState('')
@@ -57,6 +52,11 @@ export function PortalSwapFlow() {
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [executionError, setExecutionError] = useState<string | null>(null)
   const [executing, setExecuting] = useState(false)
+
+  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
+    Boolean(catalog?.mock_mode),
+    setExecutionPhase,
+  )
 
   const showResultModal =
     executionPhase === 'completed' || (executionPhase === 'failed' && Boolean(executionError))

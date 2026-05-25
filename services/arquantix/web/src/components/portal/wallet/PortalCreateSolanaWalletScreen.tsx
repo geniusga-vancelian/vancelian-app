@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { Button } from '@/components/ui/button'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { portalProfileWalletsRoute } from '@/lib/portal/portalRouting'
 import {
   createPortalSolanaWallet,
   fetchPortalSolanaWalletStatus,
@@ -40,7 +40,7 @@ export function PortalCreateSolanaWalletScreen() {
       const row = await fetchPortalSolanaWalletStatus()
       setWalletStatus(row)
       if (row.status === 'linked') {
-        router.replace(PORTAL_ROUTES.myWallets)
+        router.replace(portalProfileWalletsRoute())
       }
     } catch (err) {
       setWalletStatus(null)
@@ -66,7 +66,7 @@ export function PortalCreateSolanaWalletScreen() {
     try {
       const created = await createPortalSolanaWallet()
       setWalletStatus(toLinkedStatus(created))
-      router.replace(PORTAL_ROUTES.myWallets)
+      router.replace(portalProfileWalletsRoute())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create Solana wallet.')
     } finally {

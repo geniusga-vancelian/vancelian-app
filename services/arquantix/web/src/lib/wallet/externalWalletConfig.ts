@@ -2,50 +2,15 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { cookieStorage, createStorage, http, type Config } from 'wagmi'
 import { arbitrum, base, mainnet, optimism, polygon } from 'wagmi/chains'
 
-import { MORPHO_CHAIN_ID } from '@/lib/portal/morphoConstants'
+import {
+  getWalletConnectProjectId,
+  resolveBaseRpcUrl,
+  resolveMainnetRpcUrl,
+  resolvePortalAppUrl,
+} from '@/lib/wallet/externalWalletConstants'
 
-/** Chaînes autorisées pour wallet externe (Morpho Base + LI.FI). */
+/** Chaînes wagmi autorisées pour wallet externe (Morpho Base + LI.FI). */
 export const EXTERNAL_WALLET_CHAINS = [base, mainnet, polygon, arbitrum, optimism] as const
-
-export const EXTERNAL_WALLET_CHAIN_IDS = EXTERNAL_WALLET_CHAINS.map((chain) => chain.id)
-
-export function isAllowedExternalWalletChainId(chainId: number): boolean {
-  return (EXTERNAL_WALLET_CHAIN_IDS as readonly number[]).includes(chainId)
-}
-
-function readPublicEnv(value: string | undefined): string | undefined {
-  const trimmed = value?.trim()
-  return trimmed || undefined
-}
-
-/** Accès statique requis : Next.js n’inline pas process.env[name] dans le bundle client. */
-export function getWalletConnectProjectId(): string {
-  return (
-    readPublicEnv(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID) ??
-    '00000000000000000000000000000000'
-  )
-}
-
-export function isWalletConnectConfigured(): boolean {
-  const id = readPublicEnv(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID)
-  return Boolean(id && id !== '00000000000000000000000000000000')
-}
-
-function resolvePortalAppUrl(): string {
-  return readPublicEnv(process.env.NEXT_PUBLIC_PORTAL_APP_URL) ?? 'https://app.vancelian.finance'
-}
-
-function resolveBaseRpcUrl(): string {
-  return (
-    readPublicEnv(process.env.NEXT_PUBLIC_BASE_RPC_URL) ??
-    readPublicEnv(process.env.NEXT_PUBLIC_BASE_RPC_URL_FALLBACK) ??
-    'https://mainnet.base.org'
-  )
-}
-
-function resolveMainnetRpcUrl(): string {
-  return readPublicEnv(process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL) ?? 'https://ethereum.publicnode.com'
-}
 
 function buildExternalWalletWagmiConfig(): Config {
   const baseRpc = resolveBaseRpcUrl()
@@ -58,7 +23,7 @@ function buildExternalWalletWagmiConfig(): Config {
     appUrl: portalAppUrl,
     projectId: getWalletConnectProjectId(),
     chains: [...EXTERNAL_WALLET_CHAINS],
-    ssr: true,
+    ssr: false,
     storage: createStorage({
       storage: cookieStorage,
     }),
@@ -90,6 +55,10 @@ export function getExternalWalletWagmiConfig(): Config {
   return externalWalletWagmiConfigSingleton
 }
 
-export function getExternalWalletBaseChainId(): number {
-  return MORPHO_CHAIN_ID
-}
+export {
+  EXTERNAL_WALLET_CHAIN_IDS,
+  getExternalWalletBaseChainId,
+  getWalletConnectProjectId,
+  isAllowedExternalWalletChainId,
+  isWalletConnectConfigured,
+} from '@/lib/wallet/externalWalletConstants'

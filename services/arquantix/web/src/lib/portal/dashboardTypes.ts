@@ -67,6 +67,9 @@ export type PortalCryptoSummary = {
     estimated_value_usd?: number | string
     privy_balance?: number | string
     platform_balance?: number | string
+    chain_type?: string
+    chain_id?: number | null
+    wallet_address?: string
   }>
 } | null
 

@@ -13,6 +13,8 @@ import type { SiteFooterData } from '@/lib/cms/site-footer'
 import type { PortalSupportContent } from '@/lib/cms/portal-support'
 import { getDefaultPortalSupportContent } from '@/lib/cms/portal-support'
 import { PortalSupportContentProvider } from '@/components/portal/PortalSupportContentProvider'
+import { PortalChainProvider } from '@/lib/portal/portalChainContext'
+import { PortalWalletScopeProvider } from '@/lib/portal/portalWalletScopeContext'
 import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { preloadPrivyPortalProvider } from '@/lib/portal/preloadPrivyPortalProvider'
@@ -55,16 +57,20 @@ export function PortalShell({
       content={initialSupportContent ?? getDefaultPortalSupportContent()}
     >
       <NavPendingProvider>
-        <div className="flex min-h-screen flex-col bg-v-bg">
-          <PortalTopnav initials={initials} brand={brand} />
-          <main
-            className={cn('flex w-full flex-1 flex-col', className)}
-            style={{ paddingTop: TOPNAV_HEIGHT_PX }}
-          >
-            <PortalShellMain className="flex flex-1 flex-col">{children}</PortalShellMain>
-          </main>
-          <PersistentSiteFooter initialData={initialFooterData} />
-        </div>
+        <PortalChainProvider>
+          <PortalWalletScopeProvider>
+            <div className="flex min-h-screen flex-col bg-v-bg">
+              <PortalTopnav initials={initials} brand={brand} />
+              <main
+                className={cn('flex w-full flex-1 flex-col', className)}
+                style={{ paddingTop: TOPNAV_HEIGHT_PX }}
+              >
+                <PortalShellMain className="flex flex-1 flex-col">{children}</PortalShellMain>
+              </main>
+              <PersistentSiteFooter initialData={initialFooterData} />
+            </div>
+          </PortalWalletScopeProvider>
+        </PortalChainProvider>
       </NavPendingProvider>
     </PortalSupportContentProvider>
   )

@@ -10,7 +10,7 @@ import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { fetchPortalMorphoPosition } from '@/lib/portal/morphoVaultClient'
 import { getPortalMorphoIntegrationLabel } from '@/lib/portal/morphoConstants'
 import { formatEarnApyFromBps, formatEarnTokenAmount } from '@/lib/portal/morphoVaultFormat'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { PORTAL_ROUTES, portalProfileWalletsRoute } from '@/lib/portal/portalRouting'
 import type {
   PortalMorphoVaultDetails,
   PortalMorphoVaultPosition,
@@ -285,7 +285,7 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
                 <PortalNavLink href={PORTAL_ROUTES.walletCreate}>Créer mon wallet crypto</PortalNavLink>
               </Button>
               <Button type="button" asChild variant="outline" className="rounded-full">
-                <PortalNavLink href={PORTAL_ROUTES.myWallets}>Lier MetaMask</PortalNavLink>
+                <PortalNavLink href={portalProfileWalletsRoute()}>Lier MetaMask</PortalNavLink>
               </Button>
             </div>
           ) : (

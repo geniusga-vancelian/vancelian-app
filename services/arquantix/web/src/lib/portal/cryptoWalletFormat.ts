@@ -1,4 +1,6 @@
 import { formatPortalMoney, normalizeChartSeries } from '@/lib/portal/dashboardFormat'
+import { resolvePositionPortalChain } from '@/lib/portal/portalChainFilter'
+import { PORTAL_CHAIN_LABELS } from '@/config/portalChains'
 import type {
   PortalCryptoPosition,
   PortalCryptoPositionsSummary,
@@ -60,6 +62,7 @@ export function parseCryptoPositionsPayload(raw: unknown): PortalCryptoPositions
       privyBalance: toOptionalNumber(item.privy_balance),
       platformBalance: toOptionalNumber(item.platform_balance),
       chainType: typeof item.chain_type === 'string' ? item.chain_type : undefined,
+      chainId: typeof item.chain_id === 'number' ? item.chain_id : null,
       dedicatedWallet: item.dedicated_wallet === true,
       walletAddress:
         typeof item.wallet_address === 'string' ? item.wallet_address : undefined,
@@ -213,6 +216,7 @@ export function buildPrivyWalletPositionsSummary(
         privyBalance: balance,
         platformBalance: 0,
         chainType: typeof item.chain_type === 'string' ? item.chain_type : undefined,
+        chainId: typeof item.chain_id === 'number' ? item.chain_id : null,
         dedicatedWallet: item.dedicated_wallet === true,
         walletAddress:
           typeof item.wallet_address === 'string' ? item.wallet_address : undefined,
@@ -404,13 +408,21 @@ export function formatCryptoVolume(balance: number, asset: string): string {
   return `${balance.toFixed(precision)} ${asset.toUpperCase()}`
 }
 
+function resolvePositionChainLabel(position: PortalCryptoPosition): string {
+  const portalChain = resolvePositionPortalChain(position)
+  if (portalChain) return PORTAL_CHAIN_LABELS[portalChain]
+  const chainType = (position.chainType ?? '').trim().toLowerCase()
+  if (chainType === 'solana') return 'Solana'
+  if (chainType === 'evm' || chainType === 'ethereum') return 'Ethereum'
+  return position.chainType
+    ? position.chainType.charAt(0).toUpperCase() + position.chainType.slice(1)
+    : 'EVM'
+}
+
 export function resolvePositionSubtitle(position: PortalCryptoPosition): string {
   const volumeStr = formatCryptoVolume(position.balance, position.asset)
   if (position.dedicatedWallet && position.chainType) {
-    const chainLabel =
-      position.chainType.toLowerCase() === 'solana'
-        ? 'Solana'
-        : position.chainType.charAt(0).toUpperCase() + position.chainType.slice(1)
+    const chainLabel = resolvePositionChainLabel(position)
     return `Wallet ${chainLabel} · ${volumeStr}`
   }
   if (position.portfolioScope === 'privy') return `Wallet Privy · ${volumeStr}`
