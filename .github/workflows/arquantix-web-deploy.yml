@@ -1,13 +1,9 @@
 # Production ECS + ECR: us-east-1 (Arquantix cluster).
+# Console admin (console.vancelian.finance) — déploiement manuel ; le portail app utilise vancelian-next-deploy.
+# Voir docs/arquantix/CI_DEPLOY_MATRIX.md
 name: Arquantix Web - Deploy to ECS
 
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - "services/arquantix/web/**"
-      - "services/arquantix/mobile/assets/crypto_svgs/**"
-      - ".github/workflows/arquantix-web-deploy.yml"
   workflow_dispatch:
     inputs:
       tag:

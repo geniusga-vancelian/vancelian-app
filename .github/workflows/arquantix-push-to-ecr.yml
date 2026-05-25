@@ -1,11 +1,7 @@
+# Legacy ECR push (coming-soon). Déploiement manuel uniquement — voir docs/arquantix/CI_DEPLOY_MATRIX.md
 name: Arquantix - Push to ECR
 
 on:
-  push:
-    branches: [ "main", "arquantix/coming-soon" ]
-    paths:
-      - "services/arquantix/**"
-      - ".github/workflows/arquantix-push-to-ecr.yml"
   workflow_dispatch:
     inputs:
       tag:

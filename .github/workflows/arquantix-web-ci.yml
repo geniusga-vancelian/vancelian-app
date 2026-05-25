@@ -1,12 +1,9 @@
+# CI sur PR uniquement — le deploy prod portail passe par vancelian-next-deploy (merge main).
+# Voir docs/arquantix/CI_DEPLOY_MATRIX.md
 name: Arquantix Web CI
 
 on:
   pull_request:
-    paths:
-      - "services/arquantix/web/**"
-      - ".github/workflows/arquantix-web-ci.yml"
-  push:
-    branches: [main]
     paths:
       - "services/arquantix/web/**"
       - ".github/workflows/arquantix-web-ci.yml"

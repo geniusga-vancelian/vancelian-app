@@ -1,12 +1,8 @@
+# Legacy coming-soon (me-central-1). Déploiement manuel uniquement — ne pas auto-déclencher
+# sur push main (même codebase que vancelian-next). Voir docs/arquantix/CI_DEPLOY_MATRIX.md
 name: Arquantix Coming Soon - Deploy to ECR & ECS
 
 on:
-  push:
-    branches: [ "main", "arquantix-coming-soon" ]
-    paths:
-      - "services/arquantix/web/**"
-      - "services/arquantix/mobile/assets/crypto_svgs/**"
-      - ".github/workflows/arquantix-coming-soon-deploy.yml"
   workflow_dispatch:
     inputs:
       tag:
