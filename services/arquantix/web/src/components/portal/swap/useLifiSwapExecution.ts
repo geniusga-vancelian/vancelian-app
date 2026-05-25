@@ -41,6 +41,15 @@ export function useLifiSwapExecution(swapMockMode = false) {
       const chainId = parseSwapChainId(tx.chain_id)
       const wallet = await resolveWallet()
 
+      if (
+        exec.signing_wallet_address &&
+        wallet.address.toLowerCase() !== exec.signing_wallet_address.toLowerCase()
+      ) {
+        throw new Error(
+          'Le wallet connecté ne correspond pas au quote LI.FI. Revenez à l’étape montant et refaites une estimation.',
+        )
+      }
+
       if (isLocalMockExternalWallet(wallet)) {
         const hash = generateMockExternalWalletTxHash()
         await submitSwapTx(exec.swap_id, hash)

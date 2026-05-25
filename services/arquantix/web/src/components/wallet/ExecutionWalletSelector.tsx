@@ -2,6 +2,9 @@
 
 import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 import { isLocalMockVerifiedExternalWallet } from '@/lib/wallet/externalWalletMock'
+import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
+import { getExternalWalletBaseChainId } from '@/lib/wallet/externalWalletConfig'
+import { formatEvmNetworkShort } from '@/lib/portal/evmNetworkLabel'
 import { cn } from '@/lib/utils'
 
 function formatAddress(address: string): string {
@@ -13,9 +16,27 @@ function formatAddress(address: string): string {
 type Props = {
   className?: string
   showGasHint?: boolean
+  /** swap : libellé réseau LI.FI ; morpho : Base ; défaut : Morpho */
+  context?: 'swap' | 'morpho' | 'default'
+  fromChain?: string
 }
 
-export function ExecutionWalletSelector({ className, showGasHint = true }: Props) {
+function externalWalletNetworkHint(context: Props['context'], fromChain?: string): string {
+  if (context === 'swap' && fromChain) {
+    return ` · réseau ${SWAP_CHAIN_LABELS[fromChain] ?? fromChain}`
+  }
+  if (context === 'morpho' || context === 'default') {
+    return ` · réseau ${formatEvmNetworkShort(getExternalWalletBaseChainId())} pour Morpho`
+  }
+  return ''
+}
+
+export function ExecutionWalletSelector({
+  className,
+  showGasHint = true,
+  context = 'default',
+  fromChain,
+}: Props) {
   const {
     mode,
     setMode,
@@ -93,7 +114,9 @@ export function ExecutionWalletSelector({ className, showGasHint = true }: Props
           ) : (
             <p className="m-0 text-v-fg-muted">
               Adresse : {formatAddress(selectedExternal.address)}
-              {selectedIsMock ? ' · wallet mock sandbox' : ' · réseau Base pour Morpho'}
+              {selectedIsMock
+                ? ' · wallet mock sandbox'
+                : externalWalletNetworkHint(context, fromChain)}
             </p>
           )}
           {showGasHint ? (

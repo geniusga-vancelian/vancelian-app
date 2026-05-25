@@ -122,6 +122,8 @@ def post_swap_quote(
             from_chain=body.from_chain,
             to_chain=body.to_chain,
             slippage_bps=body.slippage_bps,
+            signing_wallet_mode=body.signing_wallet_mode,
+            signing_wallet_address=body.signing_wallet_address,
         )
     except SwapValidationError as exc:
         raise _validation_error(exc) from exc

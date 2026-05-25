@@ -37,6 +37,8 @@ export type SwapQuotePayload = {
   route_steps: Array<{ label: string; kind: string; chain: string }>
   expires_at: string
   slippage_bps: number
+  signing_wallet_mode?: 'privy_embedded' | 'external_evm' | null
+  signing_wallet_address?: string | null
 }
 
 export type SwapExecutePayload = {
@@ -52,6 +54,8 @@ export type SwapExecutePayload = {
     gas_price?: string | null
   } | null
   lifi_tool?: string | null
+  signing_wallet_mode?: 'privy_embedded' | 'external_evm' | null
+  signing_wallet_address?: string | null
 }
 
 export type SwapStatusPayload = {
@@ -95,6 +99,8 @@ export async function requestSwapQuote(body: {
   from_chain: string
   to_chain: string
   slippage_bps?: number
+  signing_wallet_mode?: 'privy_embedded' | 'external_evm'
+  signing_wallet_address?: string
 }): Promise<SwapQuotePayload> {
   const res = await fetch('/api/portal/swaps/quote', {
     method: 'POST',

@@ -14,6 +14,7 @@ from services.lifi.lifi_client import LifiClient, LifiClientError
 from services.lifi.lifi_mock_settlement import apply_mock_swap_settlement
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.schemas import SwapExecuteResponse, SwapStatusResponse, SwapTransactionPayload
+from services.lifi.signing_wallet_service import read_signing_wallet_from_audit
 from services.lifi.swap_repository import PersonWalletSwapRepository
 
 logger = logging.getLogger(__name__)
@@ -52,12 +53,15 @@ class LifiExecuteService:
         db.refresh(swap)
 
         transaction = _map_transaction_request(tx_req, swap.from_chain)
+        signing_mode, signing_address = read_signing_wallet_from_audit(swap.audit_log)
         return SwapExecuteResponse(
             swap_id=swap.id,
             status=swap.status,
             lifecycle_message=LIFECYCLE_MESSAGES[swap.status],
             transaction=transaction,
             lifi_tool=swap.lifi_tool,
+            signing_wallet_mode=signing_mode,
+            signing_wallet_address=signing_address,
         )
 
     def submit_signed_tx(

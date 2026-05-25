@@ -14,12 +14,12 @@ from config.supported_swap_assets import (
     human_amount_to_atomic,
     resolve_swap_token,
 )
-from database import PersonCryptoWallet
 from services.lifi.config import QUOTE_TTL_SECONDS, swap_fee_bps
 from services.lifi.enums import SwapSessionStatus
 from services.lifi.lifi_client import LifiClient, LifiClientError
-from services.lifi.lifi_validation_service import SwapValidationError, validate_quote_request, wallet_chain_type_for_chain
+from services.lifi.lifi_validation_service import SwapValidationError, validate_quote_request
 from services.lifi.schemas import SwapQuoteResponse, SwapRouteStep
+from services.lifi.signing_wallet_service import resolve_swap_signing_wallet
 from services.lifi.swap_repository import PersonWalletSwapRepository
 from services.privy_wallet.repository import PersonCryptoWalletRepository
 
@@ -43,6 +43,8 @@ class LifiQuoteService:
         from_chain: str,
         to_chain: str,
         slippage_bps: int | None = None,
+        signing_wallet_mode: str | None = None,
+        signing_wallet_address: str | None = None,
     ) -> SwapQuoteResponse:
         parsed_amount, slippage = validate_quote_request(
             from_asset=from_asset,
@@ -54,8 +56,20 @@ class LifiQuoteService:
         )
         from_token = resolve_swap_token(from_asset, from_chain)
         to_token = resolve_swap_token(to_asset, to_chain)
-        from_address = self._resolve_wallet_address(db, person_id, from_chain)
-        to_address = self._resolve_wallet_address(db, person_id, to_chain)
+        resolved_mode, from_address = resolve_swap_signing_wallet(
+            db,
+            person_id=person_id,
+            chain_key=from_token.chain_key,
+            signing_wallet_mode=signing_wallet_mode,
+            signing_wallet_address=signing_wallet_address,
+        )
+        _, to_address = resolve_swap_signing_wallet(
+            db,
+            person_id=person_id,
+            chain_key=to_token.chain_key,
+            signing_wallet_mode=signing_wallet_mode,
+            signing_wallet_address=signing_wallet_address if resolved_mode == "external_evm" else None,
+        )
 
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=QUOTE_TTL_SECONDS)
         swap_row = self._swap_repo.create(
@@ -69,7 +83,14 @@ class LifiQuoteService:
             slippage_bps=slippage,
             expires_at=expires_at,
         )
-        self._swap_repo.append_audit(swap_row, {"event": "quote_requested"})
+        self._swap_repo.append_audit(
+            swap_row,
+            {
+                "event": "quote_requested",
+                "signing_wallet_mode": resolved_mode,
+                "signing_wallet_address": from_address,
+            },
+        )
 
         atomic_amount = human_amount_to_atomic(parsed_amount, from_token.decimals)
         slippage_ratio = slippage / 10_000
@@ -137,17 +158,8 @@ class LifiQuoteService:
             route_steps=simplified["route_steps"],
             expires_at=expires_at.isoformat(),
             slippage_bps=slippage,
-        )
-
-    def _resolve_wallet_address(self, db: Session, person_id: UUID, chain_key: str) -> str:
-        expected_type = wallet_chain_type_for_chain(chain_key)
-        wallets = self._wallet_repo.list_active_for_person(db, person_id)
-        for wallet in wallets:
-            if _wallet_chain_type_matches(wallet.chain_type, expected_type):
-                return wallet.address
-        raise SwapValidationError(
-            "swap.wallet_missing",
-            f"Aucun wallet {expected_type} lié pour cette opération",
+            signing_wallet_mode=resolved_mode,
+            signing_wallet_address=from_address,
         )
 
     def _simplify_quote(

@@ -15,6 +15,15 @@ class SwapQuoteRequest(BaseModel):
     from_chain: str = Field(..., min_length=1, max_length=32)
     to_chain: str = Field(..., min_length=1, max_length=32)
     slippage_bps: Optional[int] = Field(None, ge=1, le=100)
+    signing_wallet_mode: str = Field(
+        default="privy_embedded",
+        description="privy_embedded | external_evm",
+    )
+    signing_wallet_address: Optional[str] = Field(
+        None,
+        max_length=80,
+        description="Adresse EVM requise si signing_wallet_mode=external_evm",
+    )
 
 
 class SwapRouteStep(BaseModel):
@@ -43,6 +52,8 @@ class SwapQuoteResponse(BaseModel):
     route_steps: list[SwapRouteStep] = Field(default_factory=list)
     expires_at: str
     slippage_bps: int
+    signing_wallet_mode: Optional[str] = None
+    signing_wallet_address: Optional[str] = None
 
 
 class SwapExecuteRequest(BaseModel):
@@ -64,6 +75,8 @@ class SwapExecuteResponse(BaseModel):
     lifecycle_message: str
     transaction: Optional[SwapTransactionPayload] = None
     lifi_tool: Optional[str] = None
+    signing_wallet_mode: Optional[str] = None
+    signing_wallet_address: Optional[str] = None
 
 
 class SwapSubmitRequest(BaseModel):

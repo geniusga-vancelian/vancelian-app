@@ -9,8 +9,9 @@ import {
   type SwapStepState,
 } from '@/components/portal/swap/PortalSwapTransactionSteps'
 import { Button } from '@/components/ui/button'
-import { ExecutionWalletSelector } from '@/components/wallet/ExecutionWalletSelector'
 import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
+import { formatSwapSigningWalletShort } from '@/lib/portal/swapSigningWallet'
+import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import { buildConfirmSteps, formatSwapFeeLine, processingPhaseLabel } from '@/lib/portal/swapFlowSteps'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import type { SwapQuotePayload } from '@/lib/portal/swapClient'
@@ -99,7 +100,16 @@ export function PortalSwapConfirmStep({
           </div>
         </article>
 
-        <ExecutionWalletSelector />
+        {quote.signing_wallet_address ? (
+          <article className="rounded-v-card border border-v-border bg-v-card px-4 py-3.5 font-ui text-[13px] shadow-v-subtle">
+            <p className="m-0 font-medium text-v-fg">Wallet signataire LI.FI</p>
+            <p className="m-0 mt-2 text-v-fg-muted">
+              {quote.signing_wallet_mode === 'external_evm' ? 'MetaMask / externe' : 'Wallet Vancelian'} ·{' '}
+              {formatSwapSigningWalletShort(quote.signing_wallet_address)} ·{' '}
+              {SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain}
+            </p>
+          </article>
+        ) : null}
 
         <label className="flex cursor-pointer items-start gap-3 rounded-v-card border border-v-border bg-v-card px-4 py-3.5 shadow-v-subtle">
           <input

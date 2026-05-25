@@ -1,13 +1,20 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
 import { PortalCryptoExchangeDirection } from '@/components/portal/swap/PortalCryptoExchangeDirection'
 import { PortalSwapFlowShell } from '@/components/portal/swap/PortalSwapFlowShell'
+import { ExecutionWalletSelector } from '@/components/wallet/ExecutionWalletSelector'
 import { Button } from '@/components/ui/button'
 import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
+import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import { requestSwapQuote, type SwapQuotePayload } from '@/lib/portal/swapClient'
+import {
+  buildSwapSigningWalletQuoteParams,
+  formatSwapSigningWalletShort,
+} from '@/lib/portal/swapSigningWallet'
+import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 
 type Props = {
   fromAsset: string
@@ -28,14 +35,30 @@ export function PortalSwapAmountStep({
   onContinue,
   onBack,
 }: Props) {
+  const {
+    mode,
+    selectedExternalWalletId,
+    externalWallets,
+    privyEmbeddedAddress,
+    loading: walletLoading,
+  } = useExecutionWallet()
+
   const [amount, setAmount] = useState('')
   const [quote, setQuote] = useState<SwapQuotePayload | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const selectedExternal = useMemo(
+    () => externalWallets.find((row) => row.id === selectedExternalWalletId) ?? externalWallets[0] ?? null,
+    [externalWallets, selectedExternalWalletId],
+  )
+
+  const signingWalletAddress = mode === 'external_evm' ? selectedExternal?.address ?? null : privyEmbeddedAddress
+
   const parsed = Number(amount.replace(',', '.'))
-  const overBalance = parsed > sourceBalance && sourceBalance > 0
-  const canContinue = parsed > 0 && !overBalance && quote !== null && !loading
+  const usesPrivyBalance = mode === 'privy_embedded'
+  const overBalance = usesPrivyBalance && parsed > sourceBalance && sourceBalance > 0
+  const canContinue = parsed > 0 && !overBalance && quote !== null && !loading && !walletLoading
 
   const fetchQuote = useCallback(async () => {
     if (parsed <= 0) {
@@ -43,15 +66,24 @@ export function PortalSwapAmountStep({
       setError(null)
       return
     }
+
+    if (walletLoading) return
+
     setLoading(true)
     setError(null)
     try {
+      const signing = buildSwapSigningWalletQuoteParams({
+        mode,
+        privyEmbeddedAddress,
+        externalWalletAddress: selectedExternal?.address ?? null,
+      })
       const result = await requestSwapQuote({
         from_asset: fromAsset,
         to_asset: toAsset,
         amount: String(parsed),
         from_chain: fromChain,
         to_chain: toChain,
+        ...signing,
       })
       setQuote(result)
     } catch (e) {
@@ -60,7 +92,17 @@ export function PortalSwapAmountStep({
     } finally {
       setLoading(false)
     }
-  }, [fromAsset, fromChain, parsed, toAsset, toChain])
+  }, [
+    fromAsset,
+    fromChain,
+    mode,
+    parsed,
+    privyEmbeddedAddress,
+    selectedExternal?.address,
+    toAsset,
+    toChain,
+    walletLoading,
+  ])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -68,6 +110,8 @@ export function PortalSwapAmountStep({
     }, 500)
     return () => window.clearTimeout(timer)
   }, [fetchQuote])
+
+  const chainLabel = SWAP_CHAIN_LABELS[fromChain] ?? fromChain
 
   return (
     <PortalSwapFlowShell
@@ -85,11 +129,13 @@ export function PortalSwapAmountStep({
         </Button>
       }
     >
-      <div className="flex flex-col items-center gap-5 text-center">
+      <div className="flex w-full max-w-md flex-col items-center gap-5 text-center">
         <PortalCryptoExchangeDirection fromAsset={fromAsset} toAsset={toAsset} />
         <h2 className="m-0 max-w-sm font-ui text-[22px] font-bold leading-snug text-v-fg">
           Vous êtes sur le point de convertir
         </h2>
+
+        <ExecutionWalletSelector context="swap" fromChain={fromChain} className="w-full text-left" />
 
         <label className="w-full">
           <span className="sr-only">Montant</span>
@@ -118,9 +164,17 @@ export function PortalSwapAmountStep({
           )}
         </div>
 
-        {sourceBalance > 0 ? (
+        {usesPrivyBalance && sourceBalance > 0 ? (
           <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-            Solde disponible : {formatSwapCryptoAmount(sourceBalance)} {fromAsset}
+            Solde wallet Vancelian : {formatSwapCryptoAmount(sourceBalance)} {fromAsset}
+          </p>
+        ) : null}
+
+        {mode === 'external_evm' && signingWalletAddress ? (
+          <p className="m-0 font-ui text-[13px] leading-relaxed text-v-fg-muted">
+            Route LI.FI pour{' '}
+            <span className="font-medium text-v-fg">{formatSwapSigningWalletShort(signingWalletAddress)}</span>{' '}
+            sur {chainLabel}. Vérifiez le solde {fromAsset} et l&apos;ETH gas sur cette adresse MetaMask.
           </p>
         ) : null}
 

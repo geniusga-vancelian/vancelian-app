@@ -15,11 +15,6 @@ from services.lifi.lifi_client import LifiClient
 from services.lifi.routes import _quote_svc
 from tests.conftest import ensure_admin_for_linked_client, make_linked_client
 
-pytestmark = pytest.mark.skipif(
-    not _migration_159_applied(),
-    reason="Appliquer `alembic upgrade head` (159) pour les tests swap LI.FI.",
-)
-
 
 def _migration_159_applied() -> bool:
     try:
@@ -32,7 +27,14 @@ def _migration_159_applied() -> bool:
         return False
 
 
+pytestmark = pytest.mark.skipif(
+    not _migration_159_applied(),
+    reason="Appliquer `alembic upgrade head` (159) pour les tests swap LI.FI.",
+)
+
+
 EVM_ADDR = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
+EXTERNAL_ADDR = "0x1234567890123456789012345678901234567890"
 PRIVY_USER = "did:privy:testswaplifi001"
 
 
@@ -63,11 +65,25 @@ def _seed_wallet(db: Session, pe):
     db.commit()
 
 
+def _seed_external_wallet(db: Session, pe, address: str = EXTERNAL_ADDR):
+    upsert_person_crypto_wallet(
+        db,
+        person_id=pe.person_id,
+        pe_client_id=pe.id,
+        provider="external",
+        wallet_type="external",
+        chain_type="evm",
+        address=address,
+        metadata_json={"is_verified": True, "wallet_provider": "metamask"},
+    )
+    db.commit()
+
+
 def _mock_lifi_quote():
     return {
         "id": "quote-test-1",
         "tool": "stargateV2",
-        "action": {"fromChainId": 8453, "toChainId": 1},
+        "action": {"fromChainId": 1, "toChainId": 1},
         "estimate": {
             "toAmount": "450000000000000000",
             "toAmountMin": "445000000000000000",
@@ -78,7 +94,7 @@ def _mock_lifi_quote():
             "to": "0x1234567890123456789012345678901234567890",
             "data": "0xdeadbeef",
             "value": "0",
-            "chainId": 8453,
+            "chainId": 1,
         },
     }
 
@@ -133,6 +149,40 @@ def test_quote_success(client: TestClient, db: Session, monkeypatch):
     assert body["to_asset"] == "ETH"
     assert Decimal(body["estimated_receive"]) > 0
     assert body["route_steps"]
+
+
+def test_quote_external_wallet_uses_metamask_address(client: TestClient, db: Session, monkeypatch):
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    _seed_external_wallet(db, pe)
+
+    mock_client = MagicMock(spec=LifiClient)
+    mock_client.get_quote.return_value = _mock_lifi_quote()
+    _quote_svc._lifi = mock_client
+    monkeypatch.setenv("LIFI_API_KEY", "test-key")
+
+    res = client.post(
+        "/api/swaps/quote",
+        headers=_auth_headers(db, pe),
+        json={
+            "from_asset": "USDT",
+            "to_asset": "ETH",
+            "amount": "100",
+            "from_chain": "ethereum",
+            "to_chain": "ethereum",
+            "signing_wallet_mode": "external_evm",
+            "signing_wallet_address": EXTERNAL_ADDR,
+        },
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["signing_wallet_mode"] == "external_evm"
+    assert body["signing_wallet_address"].lower() == EXTERNAL_ADDR.lower()
+
+    mock_client.get_quote.assert_called_once()
+    call_kwargs = mock_client.get_quote.call_args.kwargs
+    assert call_kwargs["from_address"].lower() == EXTERNAL_ADDR.lower()
+    assert call_kwargs["to_address"].lower() == EXTERNAL_ADDR.lower()
 
 
 def test_execute_after_quote(client: TestClient, db: Session, monkeypatch):
