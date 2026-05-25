@@ -5,9 +5,10 @@ import '@rainbow-me/rainbowkit/styles.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import * as React from 'react'
-import { WagmiProvider, cookieToInitialState, type State } from 'wagmi'
+import { WagmiProvider, type State } from 'wagmi'
 
 import { getExternalWalletWagmiConfig } from '@/lib/wallet/externalWalletConfig'
+import { resolveWagmiInitialState } from '@/lib/wallet/wagmiCookieState'
 import { ExecutionWalletProvider } from '@/lib/wallet/useExecutionWallet'
 
 const queryClient = new QueryClient()
@@ -21,11 +22,14 @@ type Props = {
 }
 
 export function ExternalWalletProvider({ children, wagmiCookieHeader, wagmiInitialState }: Props) {
-  const resolvedInitialState = React.useMemo(() => {
-    if (wagmiInitialState) return wagmiInitialState
-    if (!wagmiCookieHeader) return undefined
-    return cookieToInitialState(getExternalWalletWagmiConfig(), wagmiCookieHeader)
-  }, [wagmiCookieHeader, wagmiInitialState])
+  const resolvedInitialState = React.useMemo(
+    () =>
+      resolveWagmiInitialState(getExternalWalletWagmiConfig(), {
+        cookieHeader: wagmiCookieHeader,
+        initialState: wagmiInitialState,
+      }),
+    [wagmiCookieHeader, wagmiInitialState],
+  )
 
   return (
     <WagmiProvider
