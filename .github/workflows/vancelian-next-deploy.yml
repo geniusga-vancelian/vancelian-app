@@ -52,7 +52,7 @@ jobs:
           if [ -z "${RPC:-}" ]; then
             if RPC=$(aws secretsmanager get-secret-value \
               --secret-id arquantix/prod/base-rpc-url-primary \
-              --query SecretString --output text 2>/dev/null); then
+              --query SecretString --output text 2>/dev/null | tr -d '\n\r'); then
               echo "Base RPC résolu depuis Secrets Manager (arquantix/prod/base-rpc-url-primary)"
             else
               echo "::error::VANCELIAN_BASE_RPC_URL absent et secret SM introuvable — build client Base RPC impossible."
@@ -74,7 +74,7 @@ jobs:
           if [ -z "${WC:-}" ]; then
             if WC=$(aws secretsmanager get-secret-value \
               --secret-id arquantix/prod/walletconnect-project-id \
-              --query SecretString --output text 2>/dev/null); then
+              --query SecretString --output text 2>/dev/null | tr -d '\n\r'); then
               echo "WalletConnect Project ID résolu depuis Secrets Manager (arquantix/prod/walletconnect-project-id)"
             else
               echo "::error::VANCELIAN_WALLETCONNECT_PROJECT_ID absent et secret SM introuvable — build client WalletConnect impossible."

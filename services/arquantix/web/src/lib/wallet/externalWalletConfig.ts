@@ -13,30 +13,36 @@ export function isAllowedExternalWalletChainId(chainId: number): boolean {
   return (EXTERNAL_WALLET_CHAIN_IDS as readonly number[]).includes(chainId)
 }
 
-function readEnv(name: string): string | undefined {
-  const value = process.env[name]?.trim()
-  return value || undefined
+function readPublicEnv(
+  value: string | undefined,
+): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed || undefined
 }
 
+/** Accès statique requis : Next.js n’inline pas process.env[name] dans le bundle client. */
 export function getWalletConnectProjectId(): string {
-  return readEnv('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID') ?? '00000000000000000000000000000000'
+  return (
+    readPublicEnv(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID) ??
+    '00000000000000000000000000000000'
+  )
 }
 
 export function isWalletConnectConfigured(): boolean {
-  const id = readEnv('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID')
+  const id = readPublicEnv(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID)
   return Boolean(id && id !== '00000000000000000000000000000000')
 }
 
 function resolveBaseRpcUrl(): string {
   return (
-    readEnv('NEXT_PUBLIC_BASE_RPC_URL') ??
-    readEnv('NEXT_PUBLIC_BASE_RPC_URL_FALLBACK') ??
+    readPublicEnv(process.env.NEXT_PUBLIC_BASE_RPC_URL) ??
+    readPublicEnv(process.env.NEXT_PUBLIC_BASE_RPC_URL_FALLBACK) ??
     'https://mainnet.base.org'
   )
 }
 
 function resolveMainnetRpcUrl(): string {
-  return readEnv('NEXT_PUBLIC_ETHEREUM_RPC_URL') ?? 'https://ethereum.publicnode.com'
+  return readPublicEnv(process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL) ?? 'https://ethereum.publicnode.com'
 }
 
 /** Config wagmi + RainbowKit (client-only). */
