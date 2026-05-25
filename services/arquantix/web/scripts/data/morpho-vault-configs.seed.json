@@ -1,6 +1,6 @@
 [
   {
-    "vaultAddress": "0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2",
+    "vaultAddress": "0xbeefe94c8ad530842bfe7d8b397938ffc1cb83b2",
     "chainId": 8453,
     "integrationMode": "privy_earn",
     "privyVaultId": "svbeyhtpw8317205byhv04ns",
