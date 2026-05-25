@@ -32,6 +32,7 @@
     "test:morpho-vault": "node --import tsx --test src/lib/blockchain/baseRpcProvider.test.ts src/lib/portal/morphoVaultFormat.test.ts src/lib/portal/morphoVaultValidation.test.ts src/lib/portal/morphoVaultPhase1.test.ts src/lib/portal/portalJwt.test.ts src/lib/portal/morphoVaultLedger.integration.test.ts src/lib/portal/morphoVaultMonitoring.test.ts src/lib/portal/morphoUsdcBeta.test.ts src/lib/portal/morphoVaultHttp.integration.test.ts",
     "test:morpho-vault:db": "ARQUANTIX_MORPHO_INTEGRATION=1 node --import tsx --test src/lib/portal/morphoVaultHttp.integration.test.ts",
     "morpho:sync-vault-registry": "tsx scripts/sync-morpho-vault-registry.ts",
+    "morpho:sync-vault-configs": "tsx scripts/sync-morpho-vault-configs.ts",
     "morpho:reconcile": "tsx scripts/run-morpho-vault-reconciliation.ts",
     "morpho:backfill-positions": "tsx scripts/backfill-morpho-vault-positions.ts",
     "test:mobile-json-contract": "node --import tsx --test src/lib/api/mobile-json-error.contract.test.ts",

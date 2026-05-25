@@ -17,7 +17,7 @@ CONTAINER_NAME="${CONTAINER_NAME:-vancelian-next}"
 
 JOB="${1:-}"
 if [[ -z "$JOB" ]]; then
-  echo "Usage: $0 {sync-registry|reconcile|backfill|migrate}" >&2
+  echo "Usage: $0 {sync-registry|reconcile|backfill|migrate|import-configs}" >&2
   exit 1
 fi
 
@@ -33,6 +33,9 @@ case "$JOB" in
     ;;
   migrate)
     CMD='cd /app && npx prisma migrate deploy'
+    ;;
+  import-configs)
+    CMD='cd /app && npx tsx scripts/sync-morpho-vault-configs.ts import scripts/data/morpho-vault-configs.seed.json'
     ;;
   *)
     echo "Job inconnu: $JOB" >&2
