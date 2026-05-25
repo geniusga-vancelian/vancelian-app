@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
 from uuid import UUID
 
@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session
 
 from services.lifi.config import swaps_mock_mode
 from services.lifi.enums import SwapSessionStatus
+from services.lifi.lifi_approval_service import (
+    build_token_approval_payload,
+    read_chain_ids_from_lifi_quote,
+    resolve_lifi_status_bridge,
+)
 from services.lifi.lifi_client import LifiClient, LifiClientError
 from services.lifi.lifi_mock_settlement import apply_mock_swap_settlement
 from services.lifi.lifi_validation_service import SwapValidationError
@@ -18,6 +23,8 @@ from services.lifi.signing_wallet_service import read_signing_wallet_from_audit
 from services.lifi.swap_repository import PersonWalletSwapRepository
 
 logger = logging.getLogger(__name__)
+
+EXECUTE_GRACE_SECONDS = 600
 
 LIFECYCLE_MESSAGES: dict[str, str] = {
     SwapSessionStatus.PENDING.value: "Preparing route...",
@@ -48,12 +55,14 @@ class LifiExecuteService:
             raise SwapValidationError("swap.missing_transaction", "Transaction LI.FI indisponible")
 
         swap.status = SwapSessionStatus.AWAITING_SIGNATURE.value
+        swap.expires_at = datetime.now(timezone.utc) + timedelta(seconds=EXECUTE_GRACE_SECONDS)
         self._swap_repo.append_audit(swap, {"event": "awaiting_signature"})
         db.commit()
         db.refresh(swap)
 
         transaction = _map_transaction_request(tx_req, swap.from_chain)
         signing_mode, signing_address = read_signing_wallet_from_audit(swap.audit_log)
+        token_approval = build_token_approval_payload(swap.lifi_quote_raw)
         return SwapExecuteResponse(
             swap_id=swap.id,
             status=swap.status,
@@ -62,6 +71,7 @@ class LifiExecuteService:
             lifi_tool=swap.lifi_tool,
             signing_wallet_mode=signing_mode,
             signing_wallet_address=signing_address,
+            token_approval=token_approval,
         )
 
     def submit_signed_tx(
@@ -129,15 +139,30 @@ class LifiExecuteService:
         if swap.status != SwapSessionStatus.SUBMITTED.value or not swap.tx_hash:
             return
 
+        from_chain_id, to_chain_id = read_chain_ids_from_lifi_quote(swap.lifi_quote_raw)
+        bridge = resolve_lifi_status_bridge(
+            lifi_tool=swap.lifi_tool,
+            from_chain_id=from_chain_id,
+            to_chain_id=to_chain_id,
+        )
+
         try:
             payload = self._lifi.get_status(
                 tx_hash=swap.tx_hash,
-                bridge=swap.lifi_tool,
+                bridge=bridge,
+                from_chain=from_chain_id,
+                to_chain=to_chain_id,
             )
         except LifiClientError as exc:
             logger.warning(
                 "swap.lifi_status.error",
-                extra={"swap_id": str(swap.id), "code": exc.code},
+                extra={
+                    "swap_id": str(swap.id),
+                    "code": exc.code,
+                    "bridge": bridge,
+                    "from_chain": from_chain_id,
+                    "to_chain": to_chain_id,
+                },
             )
             return
 

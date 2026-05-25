@@ -27,6 +27,9 @@ def submitted_swap():
         amount_in=Decimal("1000"),
         tx_hash="0xabc123",
         lifi_tool="stargateV2",
+        lifi_quote_raw={
+            "action": {"fromChainId": 8453, "toChainId": 1},
+        },
         audit_log=[],
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -47,6 +50,12 @@ def test_refresh_lifi_status_confirmed(submitted_swap):
 
     assert submitted_swap.status == SwapSessionStatus.CONFIRMED.value
     assert submitted_swap.confirmed_at is not None
+    mock_client.get_status.assert_called_once_with(
+        tx_hash="0xabc123",
+        bridge="stargateV2",
+        from_chain=8453,
+        to_chain=1,
+    )
     db.commit.assert_called()
 
 

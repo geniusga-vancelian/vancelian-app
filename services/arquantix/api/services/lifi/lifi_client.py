@@ -82,8 +82,19 @@ class LifiClient:
         )
         return payload
 
-    def get_status(self, *, tx_hash: str, bridge: str | None = None) -> dict[str, Any]:
+    def get_status(
+        self,
+        *,
+        tx_hash: str,
+        bridge: str | None = None,
+        from_chain: Union[int, str, None] = None,
+        to_chain: Union[int, str, None] = None,
+    ) -> dict[str, Any]:
         params: dict[str, Any] = {"txHash": tx_hash}
+        if from_chain is not None:
+            params["fromChain"] = from_chain
+        if to_chain is not None:
+            params["toChain"] = to_chain
         if bridge:
             params["bridge"] = bridge
         url = f"{lifi_base_url()}/status"

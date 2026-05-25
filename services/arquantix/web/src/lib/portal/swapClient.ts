@@ -56,6 +56,12 @@ export type SwapExecutePayload = {
   lifi_tool?: string | null
   signing_wallet_mode?: 'privy_embedded' | 'external_evm' | null
   signing_wallet_address?: string | null
+  token_approval?: {
+    required: boolean
+    token_address?: string | null
+    spender_address?: string | null
+    amount_atomic?: string | null
+  } | null
 }
 
 export type SwapStatusPayload = {

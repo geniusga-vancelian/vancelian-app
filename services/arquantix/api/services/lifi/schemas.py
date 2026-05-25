@@ -69,6 +69,13 @@ class SwapTransactionPayload(BaseModel):
     gas_price: Optional[str] = None
 
 
+class SwapTokenApprovalPayload(BaseModel):
+    required: bool = False
+    token_address: Optional[str] = None
+    spender_address: Optional[str] = None
+    amount_atomic: Optional[str] = None
+
+
 class SwapExecuteResponse(BaseModel):
     swap_id: UUID
     status: str
@@ -77,6 +84,7 @@ class SwapExecuteResponse(BaseModel):
     lifi_tool: Optional[str] = None
     signing_wallet_mode: Optional[str] = None
     signing_wallet_address: Optional[str] = None
+    token_approval: Optional[SwapTokenApprovalPayload] = None
 
 
 class SwapSubmitRequest(BaseModel):

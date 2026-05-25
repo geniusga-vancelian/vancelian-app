@@ -36,13 +36,13 @@ export function buildConfirmSteps(
 
 function routeStepState(phase: SwapExecutionPhase): SwapStepState {
   if (phase === 'idle' || phase === 'failed') return 'pending'
-  if (phase === 'preparing' || phase === 'signing') return 'processing'
+  if (phase === 'preparing' || phase === 'approving' || phase === 'signing') return 'processing'
   return 'completed'
 }
 
 function conversionStepState(phase: SwapExecutionPhase): SwapStepState {
   if (phase === 'idle' || phase === 'failed') return 'pending'
-  if (phase === 'preparing' || phase === 'signing') return 'pending'
+  if (phase === 'preparing' || phase === 'approving' || phase === 'signing') return 'pending'
   if (phase === 'submitting' || phase === 'bridging') return 'processing'
   return 'completed'
 }
@@ -51,8 +51,10 @@ export function processingPhaseLabel(phase: SwapExecutionPhase): string {
   switch (phase) {
     case 'preparing':
       return 'Préparation de la route...'
+    case 'approving':
+      return 'Approbation du token (MetaMask / wallet)...'
     case 'signing':
-      return 'Signature dans votre wallet...'
+      return 'Signature du swap dans votre wallet...'
     case 'submitting':
       return 'Envoi de la transaction...'
     case 'bridging':

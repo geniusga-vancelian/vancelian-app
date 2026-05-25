@@ -7,10 +7,12 @@ import {
   submitSwapTx,
   type SwapExecutePayload,
 } from '@/lib/portal/swapClient'
+import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import {
   parseSwapChainId,
   parseSwapGasLimit,
 } from '@/lib/portal/swapTxFormat'
+import { ensureSwapTokenApproval } from '@/lib/portal/swapTokenApproval'
 import { generateMockExternalWalletTxHash, isLocalMockExternalWallet } from '@/lib/wallet/externalWalletMock'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
@@ -22,7 +24,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export function useLifiSwapExecution(swapMockMode = false) {
+function swapStatusErrorMessage(status: { status: string; error_message?: string | null }): string {
+  if (status.status === 'EXPIRED') {
+    return 'Quote expirée — revenez à l’étape montant et refaites une estimation.'
+  }
+  if (status.status === 'FAILED') {
+    return status.error_message ?? 'Swap échoué'
+  }
+  return status.error_message ?? 'Exécution impossible'
+}
+
+export function useLifiSwapExecution(
+  swapMockMode = false,
+  onPhaseChange?: (phase: SwapExecutionPhase) => void,
+) {
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
 
   const signAndSubmit = useCallback(
@@ -55,6 +70,18 @@ export function useLifiSwapExecution(swapMockMode = false) {
         await submitSwapTx(exec.swap_id, hash)
         return hash
       }
+
+      if (exec.token_approval?.required) {
+        onPhaseChange?.('approving')
+        await ensureSwapTokenApproval({
+          chainId,
+          walletAddress: wallet.address as `0x${string}`,
+          approval: exec.token_approval,
+          sendTransaction: (approveTx) => sendPortalTransaction(approveTx, wallet),
+        })
+      }
+
+      onPhaseChange?.('signing')
       const gasLimit = parseSwapGasLimit(tx.gas_limit)
 
       const { hash } = await sendPortalTransaction(
@@ -68,10 +95,11 @@ export function useLifiSwapExecution(swapMockMode = false) {
         wallet,
       )
 
+      onPhaseChange?.('submitting')
       await submitSwapTx(exec.swap_id, hash)
       return hash
     },
-    [resolveWallet, sendPortalTransaction, swapMockMode],
+    [onPhaseChange, resolveWallet, sendPortalTransaction, swapMockMode],
   )
 
   const pollUntilTerminal = useCallback(async (swapId: string) => {
@@ -79,11 +107,21 @@ export function useLifiSwapExecution(swapMockMode = false) {
     while (Date.now() - started < POLL_TIMEOUT_MS) {
       const status = await fetchSwapStatus(swapId)
       if (TERMINAL_STATUSES.has(status.status)) {
-        return status
+        if (status.status === 'CONFIRMED') {
+          return status
+        }
+        throw new Error(swapStatusErrorMessage(status))
       }
       await sleep(POLL_INTERVAL_MS)
     }
-    return fetchSwapStatus(swapId)
+    const last = await fetchSwapStatus(swapId)
+    if (last.status === 'CONFIRMED') {
+      return last
+    }
+    if (TERMINAL_STATUSES.has(last.status)) {
+      throw new Error(swapStatusErrorMessage(last))
+    }
+    return last
   }, [])
 
   return { signAndSubmit, pollUntilTerminal }

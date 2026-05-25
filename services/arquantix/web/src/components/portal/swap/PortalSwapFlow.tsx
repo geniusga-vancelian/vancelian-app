@@ -41,7 +41,10 @@ export function PortalSwapFlow() {
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [preselectApplied, setPreselectApplied] = useState(false)
 
-  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(Boolean(catalog?.mock_mode))
+  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
+    Boolean(catalog?.mock_mode),
+    setExecutionPhase,
+  )
 
   const [toAsset, setToAsset] = useState('')
   const [toChain, setToChain] = useState('')
@@ -146,14 +149,13 @@ export function PortalSwapFlow() {
         throw new Error('Payload transaction manquant')
       }
 
-      setExecutionPhase('signing')
       await signAndSubmit(exec)
 
       setExecutionPhase('bridging')
       const status = await pollUntilTerminal(quote.swap_id)
 
-      if (status.status === 'FAILED' || status.status === 'EXPIRED') {
-        throw new Error(status.error_message ?? 'Swap échoué')
+      if (status.status !== 'CONFIRMED') {
+        throw new Error('Swap non confirmé')
       }
 
       setExecutionPhase('completed')

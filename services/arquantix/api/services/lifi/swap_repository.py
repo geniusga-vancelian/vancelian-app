@@ -66,6 +66,7 @@ class PersonWalletSwapRepository:
             SwapSessionStatus.CONFIRMED.value,
             SwapSessionStatus.FAILED.value,
             SwapSessionStatus.EXPIRED.value,
+            SwapSessionStatus.SUBMITTED.value,
         }:
             return False
         if row.expires_at and row.expires_at <= datetime.now(timezone.utc):
