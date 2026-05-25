@@ -1,9 +1,14 @@
+import { cookies } from 'next/headers'
+import { cookieToInitialState } from 'wagmi'
+
 import { getSiteFooterData } from '@/lib/cms/site-footer'
 import { getPortalSupportContent } from '@/lib/cms/portal-support'
 import { PortalShell } from '@/components/portal/PortalShell'
 import { PortalWeb3Providers } from '@/components/portal/PortalWeb3Providers'
+import { externalWalletWagmiConfig } from '@/lib/wallet/externalWalletConfig'
 
 export default async function PortalShellLayout({ children }: { children: React.ReactNode }) {
+  const wagmiInitialState = cookieToInitialState(externalWalletWagmiConfig, (await cookies()).toString())
   let initialFooterData: Awaited<ReturnType<typeof getSiteFooterData>> | undefined
   let initialSupportContent: Awaited<ReturnType<typeof getPortalSupportContent>> | undefined
   try {
@@ -18,7 +23,7 @@ export default async function PortalShellLayout({ children }: { children: React.
   }
 
   return (
-    <PortalWeb3Providers>
+    <PortalWeb3Providers wagmiInitialState={wagmiInitialState}>
       <PortalShell initialFooterData={initialFooterData} initialSupportContent={initialSupportContent}>
         {children}
       </PortalShell>

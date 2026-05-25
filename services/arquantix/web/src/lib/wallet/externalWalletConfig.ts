@@ -1,5 +1,5 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
-import { http } from 'viem'
+import { cookieStorage, createStorage, http, type Config } from 'wagmi'
 import { arbitrum, base, mainnet, optimism, polygon } from 'wagmi/chains'
 
 import { MORPHO_CHAIN_ID } from '@/lib/portal/morphoConstants'
@@ -13,9 +13,7 @@ export function isAllowedExternalWalletChainId(chainId: number): boolean {
   return (EXTERNAL_WALLET_CHAIN_IDS as readonly number[]).includes(chainId)
 }
 
-function readPublicEnv(
-  value: string | undefined,
-): string | undefined {
+function readPublicEnv(value: string | undefined): string | undefined {
   const trimmed = value?.trim()
   return trimmed || undefined
 }
@@ -33,6 +31,10 @@ export function isWalletConnectConfigured(): boolean {
   return Boolean(id && id !== '00000000000000000000000000000000')
 }
 
+function resolvePortalAppUrl(): string {
+  return readPublicEnv(process.env.NEXT_PUBLIC_PORTAL_APP_URL) ?? 'https://app.vancelian.finance'
+}
+
 function resolveBaseRpcUrl(): string {
   return (
     readPublicEnv(process.env.NEXT_PUBLIC_BASE_RPC_URL) ??
@@ -45,16 +47,29 @@ function resolveMainnetRpcUrl(): string {
   return readPublicEnv(process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL) ?? 'https://ethereum.publicnode.com'
 }
 
-/** Config wagmi + RainbowKit (client-only). */
-export function createExternalWalletWagmiConfig() {
+function buildExternalWalletWagmiConfig(): Config {
   const baseRpc = resolveBaseRpcUrl()
   const mainnetRpc = resolveMainnetRpcUrl()
+  const portalAppUrl = resolvePortalAppUrl()
 
   return getDefaultConfig({
     appName: 'Vancelian',
+    appDescription: 'Portail Vancelian — wallets externes MetaMask / WalletConnect',
+    appUrl: portalAppUrl,
     projectId: getWalletConnectProjectId(),
     chains: [...EXTERNAL_WALLET_CHAINS],
     ssr: true,
+    storage: createStorage({
+      storage: cookieStorage,
+    }),
+    walletConnectParameters: {
+      metadata: {
+        name: 'Vancelian',
+        description: 'Portail Vancelian',
+        url: portalAppUrl,
+        icons: [`${portalAppUrl}/favicon.ico`],
+      },
+    },
     transports: {
       [base.id]: http(baseRpc),
       [mainnet.id]: http(mainnetRpc),
@@ -63,6 +78,14 @@ export function createExternalWalletWagmiConfig() {
       [optimism.id]: http('https://mainnet.optimism.io'),
     },
   })
+}
+
+/** Singleton wagmi — requis pour cookieToInitialState côté serveur et client. */
+export const externalWalletWagmiConfig = buildExternalWalletWagmiConfig()
+
+/** Config wagmi + RainbowKit (portail client). */
+export function getExternalWalletWagmiConfig(): Config {
+  return externalWalletWagmiConfig
 }
 
 export function getExternalWalletBaseChainId(): number {

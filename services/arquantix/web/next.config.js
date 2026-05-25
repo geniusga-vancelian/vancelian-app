@@ -109,6 +109,8 @@ const nextConfig = {
     ) {
       config.cache = { type: 'memory', maxGenerations: 1 }
     }
+    // WalletConnect / RainbowKit — dépendances optionnelles non bundlables en App Router SSR.
+    config.externals = [...(config.externals ?? []), 'pino-pretty', 'lokijs', 'encoding']
     return config
   },
 }
