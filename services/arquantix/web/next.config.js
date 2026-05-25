@@ -109,17 +109,19 @@ const nextConfig = {
     ) {
       config.cache = { type: 'memory', maxGenerations: 1 }
     }
-    // WalletConnect / RainbowKit — dépendances optionnelles non bundlables en App Router SSR.
-    const walletConnectExternals = ['pino-pretty', 'lokijs', 'encoding']
-    if (typeof config.externals === 'function') {
-      const originalExternals = config.externals
-      config.externals = async (ctx) => {
-        const resolved = await originalExternals(ctx)
-        if (Array.isArray(resolved)) return [...resolved, ...walletConnectExternals]
-        return resolved
+    // WalletConnect / RainbowKit — dépendances optionnelles non bundlables côté serveur SSR uniquement.
+    if (isServer) {
+      const walletConnectExternals = ['pino-pretty', 'lokijs', 'encoding']
+      if (typeof config.externals === 'function') {
+        const originalExternals = config.externals
+        config.externals = async (ctx) => {
+          const resolved = await originalExternals(ctx)
+          if (Array.isArray(resolved)) return [...resolved, ...walletConnectExternals]
+          return resolved
+        }
+      } else {
+        config.externals = [...(config.externals ?? []), ...walletConnectExternals]
       }
-    } else {
-      config.externals = [...(config.externals ?? []), ...walletConnectExternals]
     }
     return config
   },

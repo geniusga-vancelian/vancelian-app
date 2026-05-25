@@ -80,12 +80,14 @@ function buildExternalWalletWagmiConfig(): Config {
   })
 }
 
-/** Singleton wagmi — requis pour cookieToInitialState côté serveur et client. */
-export const externalWalletWagmiConfig = buildExternalWalletWagmiConfig()
+/** Singleton wagmi — lazy init pour éviter getDefaultConfig() au collect page data des routes API. */
+let externalWalletWagmiConfigSingleton: Config | undefined
 
-/** Config wagmi + RainbowKit (portail client). */
 export function getExternalWalletWagmiConfig(): Config {
-  return externalWalletWagmiConfig
+  if (!externalWalletWagmiConfigSingleton) {
+    externalWalletWagmiConfigSingleton = buildExternalWalletWagmiConfig()
+  }
+  return externalWalletWagmiConfigSingleton
 }
 
 export function getExternalWalletBaseChainId(): number {

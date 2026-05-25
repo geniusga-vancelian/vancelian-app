@@ -7,7 +7,7 @@ import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import * as React from 'react'
 import { WagmiProvider, type State } from 'wagmi'
 
-import { externalWalletWagmiConfig } from '@/lib/wallet/externalWalletConfig'
+import { getExternalWalletWagmiConfig } from '@/lib/wallet/externalWalletConfig'
 import { ExecutionWalletProvider } from '@/lib/wallet/useExecutionWallet'
 
 const queryClient = new QueryClient()
@@ -21,7 +21,7 @@ type Props = {
 export function ExternalWalletProvider({ children, wagmiInitialState }: Props) {
   return (
     <WagmiProvider
-      config={externalWalletWagmiConfig}
+      config={getExternalWalletWagmiConfig()}
       initialState={wagmiInitialState}
       reconnectOnMount
     >
