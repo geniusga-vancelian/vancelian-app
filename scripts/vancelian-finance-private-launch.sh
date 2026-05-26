@@ -18,7 +18,7 @@ ECR_REPO="vancelian-next"
 ECR_URI="${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
 ECS_SERVICE="vancelian-next"
 TASK_FAMILY="vancelian-next"
-WAF_ALLOW_CIDRS="${VANCELIAN_WAF_ALLOW_CIDRS:-91.73.77.140/32,89.247.164.87/32}"
+WAF_ALLOW_CIDRS="${VANCELIAN_WAF_ALLOW_CIDRS:-91.73.77.140/32,89.247.164.87/32,90.14.87.113/32}"
 
 echo "==> ECR repository ${ECR_REPO}"
 if ! aws ecr describe-repositories --repository-names "$ECR_REPO" --region "$AWS_REGION" >/dev/null 2>&1; then
