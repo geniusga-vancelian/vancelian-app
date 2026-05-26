@@ -1,6 +1,7 @@
-import { encodeFunctionData, erc20Abi, type Address } from 'viem'
+import { encodeFunctionData, erc20Abi, maxUint256, type Address } from 'viem'
 
 import { createSwapPublicClient } from '@/lib/portal/swapEvmRpc'
+import { portalEvmChainLabel } from '@/lib/wallet/portalEvmChain'
 import type { PortalTxRequest } from '@/lib/wallet/usePortalTxSigner'
 
 export type SwapTokenApprovalPayload = {
@@ -32,6 +33,16 @@ export function isSwapTokenApprovalRequired(
   return true
 }
 
+export function assertSwapTokenApprovalPayload(
+  approval: SwapTokenApprovalPayload | null | undefined,
+): void {
+  if (!approval?.required) return
+  if (isSwapTokenApprovalRequired(approval)) return
+  throw new Error(
+    'Approbation ERC-20 requise mais incomplète côté serveur — refaites une estimation depuis l’étape montant.',
+  )
+}
+
 export async function readSwapTokenAllowance(args: {
   chainId: number
   owner: Address
@@ -51,12 +62,11 @@ export function buildSwapApproveTransaction(args: {
   chainId: number
   tokenAddress: Address
   spenderAddress: Address
-  amountAtomic: bigint
 }): PortalTxRequest {
   const data = encodeFunctionData({
     abi: erc20Abi,
     functionName: 'approve',
-    args: [args.spenderAddress, args.amountAtomic],
+    args: [args.spenderAddress, maxUint256],
   })
 
   return {
@@ -71,8 +81,13 @@ export async function ensureSwapTokenApproval(args: {
   chainId: number
   walletAddress: Address
   approval: SwapTokenApprovalPayload
-  sendTransaction: (tx: PortalTxRequest) => Promise<{ hash: string }>
+  assetSymbol?: string
+  sendTransaction: (
+    tx: PortalTxRequest,
+    errorContext?: { phase?: 'approve' | 'swap'; assetSymbol?: string },
+  ) => Promise<{ hash: string }>
 }): Promise<boolean> {
+  assertSwapTokenApprovalPayload(args.approval)
   if (!isSwapTokenApprovalRequired(args.approval)) {
     return false
   }
@@ -80,6 +95,7 @@ export async function ensureSwapTokenApproval(args: {
   const tokenAddress = args.approval.token_address as Address
   const spenderAddress = args.approval.spender_address as Address
   const requiredAmount = BigInt(args.approval.amount_atomic)
+  const chainLabel = portalEvmChainLabel(args.chainId)
 
   const allowance = await readSwapTokenAllowance({
     chainId: args.chainId,
@@ -97,8 +113,8 @@ export async function ensureSwapTokenApproval(args: {
       chainId: args.chainId,
       tokenAddress,
       spenderAddress,
-      amountAtomic: requiredAmount,
     }),
+    { phase: 'approve', assetSymbol: args.assetSymbol },
   )
 
   const client = createSwapPublicClient(args.chainId)
@@ -107,12 +123,16 @@ export async function ensureSwapTokenApproval(args: {
     const receipt = await client.getTransactionReceipt({ hash: hash as `0x${string}` }).catch(() => null)
     if (receipt) {
       if (receipt.status !== 'success') {
-        throw new Error('Approbation USDT/ERC-20 échouée on-chain — réessayez.')
+        throw new Error(
+          `Approbation ${args.assetSymbol ?? 'ERC-20'} échouée on-chain sur ${chainLabel} — réessayez.`,
+        )
       }
       return true
     }
     await sleep(3_000)
   }
 
-  throw new Error('Approbation en attente trop longue — vérifiez MetaMask puis réessayez.')
+  throw new Error(
+    `Approbation ${args.assetSymbol ?? 'ERC-20'} en attente trop longue sur ${chainLabel} — vérifiez votre wallet puis réessayez.`,
+  )
 }

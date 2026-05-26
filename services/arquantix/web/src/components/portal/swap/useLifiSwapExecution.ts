@@ -12,7 +12,7 @@ import {
   parseSwapChainId,
   parseSwapGasLimit,
 } from '@/lib/portal/swapTxFormat'
-import { ensureSwapTokenApproval } from '@/lib/portal/swapTokenApproval'
+import { ensureSwapTokenApproval, assertSwapTokenApprovalPayload } from '@/lib/portal/swapTokenApproval'
 import { generateMockExternalWalletTxHash, isLocalMockExternalWallet } from '@/lib/wallet/externalWalletMock'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
@@ -37,6 +37,7 @@ function swapStatusErrorMessage(status: { status: string; error_message?: string
 export function useLifiSwapExecution(
   swapMockMode = false,
   onPhaseChange?: (phase: SwapExecutionPhase) => void,
+  fromAsset?: string,
 ) {
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
 
@@ -72,12 +73,15 @@ export function useLifiSwapExecution(
       }
 
       if (exec.token_approval?.required) {
+        assertSwapTokenApprovalPayload(exec.token_approval)
         onPhaseChange?.('approving')
         await ensureSwapTokenApproval({
           chainId,
           walletAddress: wallet.address as `0x${string}`,
           approval: exec.token_approval,
-          sendTransaction: (approveTx) => sendPortalTransaction(approveTx, wallet),
+          assetSymbol: fromAsset,
+          sendTransaction: (approveTx, errorContext) =>
+            sendPortalTransaction(approveTx, wallet, errorContext),
         })
       }
 
@@ -93,13 +97,14 @@ export function useLifiSwapExecution(
           ...(gasLimit !== undefined ? { gasLimit } : {}),
         },
         wallet,
+        { phase: 'swap', assetSymbol: fromAsset },
       )
 
       onPhaseChange?.('submitting')
       await submitSwapTx(exec.swap_id, hash)
       return hash
     },
-    [onPhaseChange, resolveWallet, sendPortalTransaction, swapMockMode],
+    [fromAsset, onPhaseChange, resolveWallet, sendPortalTransaction, swapMockMode],
   )
 
   const pollUntilTerminal = useCallback(async (swapId: string) => {

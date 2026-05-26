@@ -15,10 +15,12 @@ import {
 import {
   requireExternalWalletChain,
   waitForWagmiChainId,
+  portalEvmChainLabel,
 } from '@/lib/wallet/portalEvmChain'
 import {
   formatPortalWalletError,
   isPortalWalletRequestExpiredError,
+  type PortalWalletErrorContext,
 } from '@/lib/wallet/portalWalletErrors'
 import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 
@@ -42,6 +44,15 @@ function normalizeTxValueBigInt(value?: bigint | string | number): bigint {
 
 function normalizeTxValueHex(value?: bigint | string | number): `0x${string}` {
   return normalizeSwapTxValue(normalizeTxValueBigInt(value).toString())
+}
+
+function isAlreadyOnTargetChainError(error: unknown): boolean {
+  const haystack = `${error instanceof Error ? error.message : String(error)}`.toLowerCase()
+  return (
+    haystack.includes('same network') ||
+    haystack.includes('already on') ||
+    (haystack.includes('already') && haystack.includes('chain'))
+  )
 }
 
 export function usePortalTxSigner() {
@@ -103,8 +114,12 @@ export function usePortalTxSigner() {
       if (connected?.switchChain) {
         try {
           await connected.switchChain(chainId)
-        } catch {
-          /* déjà sur la bonne chaîne */
+        } catch (error) {
+          if (!isAlreadyOnTargetChainError(error)) {
+            throw new Error(
+              `Impossible de basculer le wallet Vancelian sur ${portalEvmChainLabel(chainId)}. Changez de réseau dans la navbar puis réessayez.`,
+            )
+          }
         }
       }
     },
@@ -151,9 +166,14 @@ export function usePortalTxSigner() {
   )
 
   const sendPortalTransaction = useCallback(
-    async (tx: PortalTxRequest, overrideWallet?: ExecutionWallet | null) => {
+    async (
+      tx: PortalTxRequest,
+      overrideWallet?: ExecutionWallet | null,
+      errorContext?: Omit<PortalWalletErrorContext, 'walletMode' | 'chainId'>,
+    ) => {
+      let wallet: ExecutionWallet | null = null
       try {
-        const wallet = await resolveWallet(overrideWallet)
+        wallet = await resolveWallet(overrideWallet)
         await switchToChain(wallet, tx.chainId)
 
         if (wallet.type === 'external_evm') {
@@ -176,7 +196,13 @@ export function usePortalTxSigner() {
         )
         return { hash: normalizeTxHash(hash), wallet }
       } catch (error) {
-        throw new Error(formatPortalWalletError(error))
+        throw new Error(
+          formatPortalWalletError(error, {
+            walletMode: wallet?.type,
+            chainId: tx.chainId,
+            ...errorContext,
+          }),
+        )
       }
     },
     [resolveWallet, sendExternalWalletTransaction, sendPrivyTransaction, switchToChain],

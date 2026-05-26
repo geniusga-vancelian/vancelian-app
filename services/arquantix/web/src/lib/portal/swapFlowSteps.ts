@@ -47,14 +47,25 @@ function conversionStepState(phase: SwapExecutionPhase): SwapStepState {
   return 'completed'
 }
 
-export function processingPhaseLabel(phase: SwapExecutionPhase): string {
+export function processingPhaseLabel(
+  phase: SwapExecutionPhase,
+  quote?: Pick<SwapQuotePayload, 'from_chain' | 'from_asset' | 'signing_wallet_mode'> | null,
+): string {
+  const chainLabel = quote ? (SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain) : 'le réseau sélectionné'
+  const asset = quote?.from_asset ?? 'jeton'
+  const isExternal = quote?.signing_wallet_mode === 'external_evm'
+
   switch (phase) {
     case 'preparing':
       return 'Préparation de la route...'
     case 'approving':
-      return 'Basculez sur Ethereum si demandé, puis signez l’approbation USDT dans MetaMask…'
+      return isExternal
+        ? `Approbation ${asset} sur ${chainLabel} dans MetaMask…`
+        : `Approbation ${asset} sur ${chainLabel} via wallet Vancelian (gas sponsorisé si activé Privy)…`
     case 'signing':
-      return 'Signature du swap dans votre wallet...'
+      return isExternal
+        ? `Signature du swap LI.FI dans MetaMask (${chainLabel})…`
+        : `Signature du swap LI.FI via wallet Vancelian (${chainLabel})…`
     case 'submitting':
       return 'Envoi de la transaction...'
     case 'bridging':

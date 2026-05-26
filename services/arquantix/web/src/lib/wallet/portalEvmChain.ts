@@ -4,6 +4,17 @@ import type { Chain } from 'viem'
 import { EXTERNAL_WALLET_CHAINS } from '@/lib/wallet/externalWalletConfig'
 import { getExternalWalletWagmiConfig } from '@/lib/wallet/externalWalletConfig'
 
+export const PORTAL_EVM_CHAIN_LABELS: Record<number, string> = {
+  1: 'Ethereum',
+  8453: 'Base',
+  137: 'Polygon',
+  42161: 'Arbitrum',
+}
+
+export function portalEvmChainLabel(chainId: number): string {
+  return PORTAL_EVM_CHAIN_LABELS[chainId] ?? `réseau ${chainId}`
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -36,6 +47,6 @@ export async function waitForWagmiChainId(
   }
 
   throw new Error(
-    `MetaMask n’est pas sur le réseau attendu (${expectedChainId}). Basculez sur Ethereum mainnet puis réessayez.`,
+    `MetaMask n’est pas sur le réseau attendu (${portalEvmChainLabel(expectedChainId)}). Basculez sur ce réseau puis réessayez.`,
   )
 }

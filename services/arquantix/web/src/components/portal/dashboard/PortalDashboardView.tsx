@@ -113,6 +113,7 @@ export function PortalDashboardView({
             displayName={derived.displayName}
             balanceLabel={derived.balanceLabel}
             performanceLabel=""
+            chartValues={[]}
             showPerformance={false}
             depositHref={derived.depositHref}
             className="pt-0"

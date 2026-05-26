@@ -91,7 +91,7 @@ export function PortalSwapConfirmStep({
 
         {showProcessingHint ? (
           <p className="m-0 text-center font-ui text-[14px] text-v-fg-muted">
-            {processingPhaseLabel(executionPhase)}
+            {processingPhaseLabel(executionPhase, quote)}
           </p>
         ) : null}
 
@@ -112,9 +112,16 @@ export function PortalSwapConfirmStep({
             </p>
             {isExternalWallet || quote.signing_wallet_mode === 'external_evm' ? (
               <p className="m-0 mt-2 text-amber-900">
-                MetaMask peut demander jusqu’à 3 confirmations : réseau Ethereum, approbation USDT, puis swap.
+                MetaMask peut demander plusieurs confirmations sur{' '}
+                {SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain} : approbation{' '}
+                {quote.from_asset}, puis swap.
               </p>
-            ) : null}
+            ) : (
+              <p className="m-0 mt-2 text-v-fg-muted">
+                Gas réseau sponsorisé via Privy sur {SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain}{' '}
+                (si activé dans le dashboard Privy).
+              </p>
+            )}
           </article>
         ) : null}
 

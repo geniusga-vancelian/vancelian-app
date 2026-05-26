@@ -60,6 +60,7 @@ export function PortalSwapFlow() {
   const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
     Boolean(catalog?.mock_mode),
     setExecutionPhase,
+    fromAsset,
   )
 
   const showResultModal =
