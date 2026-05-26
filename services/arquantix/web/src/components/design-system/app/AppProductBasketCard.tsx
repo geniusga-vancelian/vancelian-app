@@ -118,12 +118,12 @@ export function buildProductBasketStackFromTickers(
 ): { assets: AppProductBasketStackAsset[]; moreCount?: number } {
   const unique = [...new Set(tickers.map((t) => normalizeCryptoBaseTicker(t)).filter(Boolean))]
   const visible = unique.slice(0, maxVisible)
-  const assets = visible
+  const assets: AppProductBasketStackAsset[] = visible
     .map((ticker) => {
       const src = appDsCryptoSvgPath(ticker)
       return src ? { src, alt: ticker } : null
     })
-    .filter((item): item is AppProductBasketStackAsset => item != null)
+    .filter((item): item is { src: string; alt: string } => item != null)
   const moreCount = unique.length > maxVisible ? unique.length - maxVisible : undefined
   return { assets, moreCount }
 }

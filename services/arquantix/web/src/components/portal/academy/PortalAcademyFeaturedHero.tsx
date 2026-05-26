@@ -31,7 +31,7 @@ function FeaturedCover({ article }: { article: PortalAcademyArticle }) {
   }
   return (
     <div className="academy-hero__cover-placeholder">
-      <KalaiIcon name="photo" size={40} className="opacity-50" aria-hidden />
+      <KalaiIcon name="photo" size={32} className="opacity-50" aria-hidden />
     </div>
   )
 }
