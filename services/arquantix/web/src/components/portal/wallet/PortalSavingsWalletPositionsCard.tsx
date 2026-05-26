@@ -5,6 +5,7 @@ import { TrendingUp } from 'lucide-react'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import { AppDataList } from '@/components/design-system/app/AppDataList'
 import {
+  formatSavingsApyLabel,
   formatSavingsMoney,
   resolveSavingsPositionSubtitle,
   resolveSavingsPositionValue,
@@ -31,6 +32,10 @@ export function PortalSavingsWalletPositionsCard({
       {positions.map((position) => {
         const valueLabel = formatSavingsMoney(resolveSavingsPositionValue(position, currency), currency)
         const pendingYield = position.yieldSyncStatus === 'pending'
+        const apyLabel =
+          position.userApyBps != null && Number.isFinite(position.userApyBps)
+            ? formatSavingsApyLabel(position.userApyBps)
+            : null
 
         return (
           <PortalNavLink
@@ -51,8 +56,8 @@ export function PortalSavingsWalletPositionsCard({
               ) : (
                 <span className="list__amt">{valueLabel}</span>
               )}
-              {position.apyLabel ? (
-                <span className={cn('list__indic list__indic--up')}>{position.apyLabel}</span>
+              {apyLabel ? (
+                <span className={cn('list__indic list__indic--up')}>{apyLabel}</span>
               ) : null}
               <KalaiIcon name="chevron-right" size={20} className="list__chv shrink-0" />
             </div>
