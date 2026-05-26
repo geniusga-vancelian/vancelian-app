@@ -10,14 +10,14 @@ from services.privy_wallet.asset_mapping import (
 
 def test_base_usdc_contract_mapping():
     contract = contract_for_asset(8453, "USDC")
-    assert contract == "0x833589fCD6eDb6E08Ab4aB98b4690795417555"
+    assert contract == "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 
 
 def test_resolve_base_usdc_from_contract():
     asset = resolve_asset_symbol(
         chain_id=8453,
         asset_payload={"type": "erc20", "symbol": "USDC"},
-        contract_address="0x833589fCD6eDb6E08Ab4aB98b4690795417555",
+        contract_address="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     )
     assert asset == "USDC"
 

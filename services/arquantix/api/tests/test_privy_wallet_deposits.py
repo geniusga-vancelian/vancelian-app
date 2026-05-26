@@ -307,7 +307,7 @@ def test_webhook_base_usdc_deposit(client: TestClient, db: Session):
             "transaction_hash": f"0x{uuid.uuid4().hex}{uuid.uuid4().hex[:32]}",
             "chain_id": "eip155:8453",
             "asset": {"type": "erc20", "symbol": "USDC"},
-            "contract_address": "0x833589fCD6eDb6E08Ab4aB98b4690795417555",
+            "contract_address": "0x833589fCD6eDb6E08Ab4c7C32D4f71b54bdA02913",
             "amount": "15000000",
             "log_index": 0,
             "block_number": 12345678,
