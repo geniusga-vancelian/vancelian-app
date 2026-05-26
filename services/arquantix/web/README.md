@@ -122,5 +122,5 @@ npm run dev -- -p 3001
 
 ---
 
-**Dernière mise à jour:** 2026-01-01
+**Dernière mise à jour:** 2026-05-26 (deploy DS portal + dashboard)
 
