@@ -1,0 +1,91 @@
+/* Card account summary — preview/67-card-account */
+
+@scope ([data-v-ds='app']) {
+  .acct-summary {
+    background: var(--v-white);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: var(--v-elev-subtle);
+    border: 1px solid var(--v-fg-10);
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .acct-summary__item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 120ms var(--v-ease-out);
+  }
+
+  .acct-summary__item:hover {
+    background: var(--v-fg-05);
+  }
+
+  .acct-summary__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .acct-summary__title {
+    font-weight: 700;
+    font-size: 17px;
+    line-height: 1.25;
+    color: var(--v-fg);
+  }
+
+  .acct-summary__sub {
+    font-size: 14px;
+    color: var(--v-fg-light);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .acct-summary__right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    min-width: max-content;
+    flex-shrink: 0;
+  }
+
+  .acct-summary__amt {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--v-fg);
+    font-feature-settings: 'tnum' on, 'lnum' on;
+    white-space: nowrap;
+    line-height: 1.1;
+  }
+
+  .acct-summary__indic {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    font-feature-settings: 'tnum' on, 'lnum' on;
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  .acct-summary__indic--up,
+  .acct-summary__indic--plus {
+    color: var(--v-green);
+  }
+
+  .acct-summary__indic--dn {
+    color: var(--v-error);
+  }
+
+  .acct-summary__chv {
+    color: var(--v-fg-20);
+    flex-shrink: 0;
+  }
+}

@@ -11,8 +11,10 @@ import { PortalNewsWidgetSection } from '@/components/portal/dashboard/PortalNew
 import {
   applyWalletRowAccess,
   buildWalletRows,
-  resolveDisplayName,
+  normalizeChartSeries,
+  resolveBalanceCardIdentity,
   resolveHeaderBalance,
+  resolvePerformanceChangeLabels,
   resolveReferenceCurrency,
   shouldShowUnlockEuroBanner,
 } from '@/lib/portal/dashboardFormat'
@@ -87,18 +89,24 @@ export function PortalDashboardView({
     const balanceLabel = resolveHeaderBalance(data.globalStatistics, rows, currency, {
       scopedView: true,
     })
-    const displayName = resolveDisplayName(data)
+    const identity = resolveBalanceCardIdentity(data)
     const showUnlockEuroBanner = shouldShowUnlockEuroBanner(data.profile)
     const hasPrivyWallet = (data.privyPersonWallets?.wallets?.length ?? 0) > 0
     const depositHref = resolvePortalDepositHref(hasPrivyWallet)
+    const chartValues = normalizeChartSeries(data.globalHistory?.points ?? [])
+    const performance = resolvePerformanceChangeLabels(data.globalStatistics, currency)
+    const showChart = true
 
     return {
       currency,
       rows,
       balanceLabel,
-      displayName,
+      identity,
       showUnlockEuroBanner,
       depositHref,
+      chartValues,
+      performance,
+      showChart,
       registrationProgress: data.profile?.registration_derived_progress_percent,
       chainLabel,
       walletLabel,
@@ -110,12 +118,17 @@ export function PortalDashboardView({
       <PortalDashboardLayout>
         <PortalReveal index={0}>
           <PortalDashboardHeader
-            displayName={derived.displayName}
+            welcomeName={derived.identity.displayName}
+            showAvatar={derived.identity.showAvatar}
+            avatarInitials={derived.identity.avatarInitials}
+            avatarImageUrl={derived.identity.avatarImageUrl}
             balanceLabel={derived.balanceLabel}
             balancePending={portfolioLoading || refreshing}
-            performanceLabel=""
-            chartValues={[]}
-            showPerformance={false}
+            changeAmountLabel={derived.performance.amountLabel}
+            changePercentLabel={derived.performance.percentLabel}
+            changePositive={derived.performance.positive}
+            chartValues={derived.chartValues}
+            showChart={derived.showChart}
             depositHref={derived.depositHref}
             className="pt-0"
           />

@@ -1,7 +1,10 @@
 'use client'
 
+import { AppActuCard } from '@/components/design-system/app/AppActuCard'
+import { AppFlashCard } from '@/components/design-system/app/AppFlashCard'
+import { AppNewsDeck } from '@/components/design-system/app/AppNewsDeck'
+import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
-import { PortalModuleTitleLink } from '@/components/portal/PortalModuleTitleLink'
 import type { PortalNewsItem, PortalNewsWidgetData } from '@/lib/portal/parseTop10NewsWidget'
 
 type Props = {
@@ -9,64 +12,47 @@ type Props = {
   minReadLabel?: string
 }
 
-function NewsCard({ item, minReadLabel }: { item: PortalNewsItem; minReadLabel: string }) {
-  const meta = item.publishedDate?.trim() || `${item.readingTime} ${minReadLabel}`
-
-  return (
-    <PortalNavLink
-      href={item.href}
-      className="group block h-full card-simple overflow-hidden !w-full transition-shadow duration-v-fast hover:shadow-v-medium"
-    >
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-v-fg-05">
-        {item.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.coverUrl}
-            alt=""
-            className="h-full w-full object-cover transition-transform duration-v-slow group-hover:scale-[1.02]"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center font-ui text-[13px] text-v-fg-muted">
-            Vancelian
-          </div>
-        )}
-        {item.tag ? (
-          <span className="absolute left-3 top-3 rounded-v-tag bg-white/95 px-2 py-0.5 font-ui text-[11px] font-medium uppercase tracking-v-wide text-v-fg">
-            {item.tag}
-          </span>
-        ) : null}
-      </div>
-      <div className="p-4">
-        <h3 className="m-0 line-clamp-3 font-ui text-[16px] font-semibold leading-snug text-v-fg">
-          {item.title}
-        </h3>
-        <p className="mt-2 mb-0 font-ui text-[12px] text-v-fg-muted">{meta}</p>
-      </div>
-    </PortalNavLink>
-  )
+function resolveItemMeta(item: PortalNewsItem, minReadLabel: string): string {
+  if (item.publishedDate?.trim()) return item.publishedDate.trim()
+  return `${item.readingTime} ${minReadLabel}`
 }
 
-/** Module « Vancelian News » — grille responsive 1 / 2 colonnes (équivalent Flutter `BlogALaUne`). */
-export function PortalNewsWidget({ data, minReadLabel = 'min read' }: Props) {
+function NewsItemCard({
+  item,
+  minReadLabel,
+}: {
+  item: PortalNewsItem
+  minReadLabel: string
+}) {
+  const meta = resolveItemMeta(item, minReadLabel)
+  const linkProps = {
+    href: item.href,
+    title: item.title,
+    meta,
+    LinkComponent: PortalNavLink,
+  }
+
+  if (item.coverUrl?.trim()) {
+    return <AppActuCard {...linkProps} imageUrl={item.coverUrl.trim()} />
+  }
+
+  return <AppFlashCard {...linkProps} />
+}
+
+/** Blog à la une — deck horizontal DS preview/26 (Flash & Actu). */
+export function PortalNewsWidget({ data, minReadLabel = 'min' }: Props) {
   if (data.items.length === 0) return null
 
   const headerHref = data.headerHref ?? '/blog'
 
   return (
-    <section className="flex flex-col gap-3">
-      {headerHref ? (
-        <PortalModuleTitleLink href={headerHref} title={data.title} />
-      ) : (
-        <h2 className="m-0 font-ui text-[18px] font-semibold text-v-fg">{data.title}</h2>
-      )}
-
-      <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2">
+    <section className="flex w-full flex-col gap-3">
+      <AppSectionHeader title={data.title} moreHref={headerHref} moreLabel="Voir tout" />
+      <AppNewsDeck>
         {data.items.map((item) => (
-          <li key={item.id} className="min-w-0">
-            <NewsCard item={item} minReadLabel={minReadLabel} />
-          </li>
+          <NewsItemCard key={item.id} item={item} minReadLabel={minReadLabel} />
         ))}
-      </ul>
+      </AppNewsDeck>
     </section>
   )
 }

@@ -8,7 +8,10 @@ function NewsSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <div className="h-6 w-40 animate-pulse rounded-v-input bg-v-fg-05" />
-      <div className="h-56 animate-pulse rounded-v-card bg-v-card" />
+      <div className="news-deck">
+        <div className="h-[180px] w-[min(320px,calc(100%-24px))] shrink-0 animate-pulse rounded-[16px] bg-v-card" />
+        <div className="h-[180px] w-[min(320px,calc(100%-24px))] shrink-0 animate-pulse rounded-[16px] bg-v-card" />
+      </div>
     </div>
   )
 }

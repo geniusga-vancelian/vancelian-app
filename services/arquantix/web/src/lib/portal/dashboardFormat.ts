@@ -372,6 +372,92 @@ export function resolveDisplayName(payload: PortalDashboardPayload): string {
   return p?.email ?? 'Investor'
 }
 
+export type BalanceCardIdentity = {
+  /** Ligne sous « Welcome back » : prénom + nom, prénom seul, ou email. */
+  displayName: string
+  showAvatar: boolean
+  avatarInitials: string | null
+  avatarImageUrl: string | null
+}
+
+function resolveProfileEmail(payload: PortalDashboardPayload): string {
+  return payload.profile?.email?.trim() || payload.cash?.client?.email?.trim() || ''
+}
+
+/** Nom complet pour la Balance Card (Welcome back, Jean Dupont). */
+export function resolveWelcomeName(payload: PortalDashboardPayload): string {
+  return resolveBalanceCardIdentity(payload).displayName
+}
+
+/**
+ * En-tête Balance Card : avatar seulement si prénom + nom (ou photo profil).
+ * Initiales = 1ʳᵉ lettre prénom + 1ʳᵉ lettre nom ; sinon pas de pastille, email affiché.
+ */
+export function resolveBalanceCardIdentity(payload: PortalDashboardPayload): BalanceCardIdentity {
+  const p = payload.profile
+  const first = p?.personal?.first_name?.trim() ?? ''
+  const last = p?.personal?.last_name?.trim() ?? ''
+  const email = resolveProfileEmail(payload)
+  const avatarImageUrl =
+    (p as { profile_photo_url?: string } | null)?.profile_photo_url?.trim() ||
+    (p as { avatar_url?: string } | null)?.avatar_url?.trim() ||
+    null
+
+  const hasFullName = Boolean(first && last)
+
+  let displayName: string
+  if (first && last) displayName = `${first} ${last}`
+  else if (first) displayName = first
+  else displayName = email || resolveDisplayName(payload)
+
+  if (!hasFullName && !avatarImageUrl) {
+    return {
+      displayName,
+      showAvatar: false,
+      avatarInitials: null,
+      avatarImageUrl: null,
+    }
+  }
+
+  const avatarInitials = hasFullName
+    ? `${first.charAt(0)}${last.charAt(0)}`.toUpperCase()
+    : null
+
+  return {
+    displayName,
+    showAvatar: true,
+    avatarInitials,
+    avatarImageUrl,
+  }
+}
+
+export function resolvePerformanceChangeLabels(
+  stats: PortalGlobalStatistics | null | undefined,
+  currency: string,
+  periodLabel = 'YTD',
+): { amountLabel: string; percentLabel: string; positive: boolean } {
+  const resolvedCurrency = stats?.currency?.trim().toUpperCase() || currency
+  const pctRaw = stats?.performance?.performance_pct
+  const pnlRaw = stats?.performance?.total_pnl
+  const hasPct = pctRaw != null && String(pctRaw).trim() !== ''
+  const hasPnl = pnlRaw != null && String(pnlRaw).trim() !== ''
+
+  const pct = hasPct ? toNumber(pctRaw) : 0
+  const pnl = hasPnl ? toNumber(pnlRaw) : 0
+
+  const positive = hasPct ? pct >= 0 : pnl >= 0
+  const amountSign = pnl > 0 ? '+ ' : pnl < 0 ? '− ' : '+ '
+  const pctSign = pct > 0 ? '+ ' : pct < 0 ? '− ' : '+ '
+
+  const amountLabel = `${amountSign}${formatPortalMoney(Math.abs(pnl), resolvedCurrency)}`
+  const percentLabel = `${pctSign}${Math.abs(pct).toLocaleString('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} % ${periodLabel}`
+
+  return { amountLabel, percentLabel, positive }
+}
+
 export function resolveInitials(payload: PortalDashboardPayload, displayName: string): string {
   const fromBootstrap = payload.bootstrap?.client?.initials?.trim()
   const fromProfile = payload.profile?.initials?.trim()

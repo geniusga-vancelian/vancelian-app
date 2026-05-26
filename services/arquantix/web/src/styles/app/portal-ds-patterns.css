@@ -85,6 +85,27 @@
     line-height: 1;
   }
 
+  .tx-item__indic {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--v-font-ui);
+    font-weight: 600;
+    font-size: 13px;
+    font-feature-settings: 'tnum' on, 'lnum' on;
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  .tx-item__indic--up,
+  .tx-item__indic--plus {
+    color: var(--v-green);
+  }
+
+  .tx-item__indic--dn {
+    color: var(--v-error);
+  }
+
   .tx-item__chv {
     color: var(--v-fg-20);
     flex-shrink: 0;
