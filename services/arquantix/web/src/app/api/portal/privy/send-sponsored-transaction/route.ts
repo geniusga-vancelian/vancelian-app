@@ -14,6 +14,7 @@ const requestSchema = z.object({
   gas_limit: z.union([z.string(), z.number()]).optional(),
   wallet_address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
   privy_wallet_id: z.string().trim().min(1).optional(),
+  authorization_signature: z.string().trim().min(1),
 })
 
 function mapRouteError(error: unknown): NextResponse {
@@ -21,6 +22,11 @@ function mapRouteError(error: unknown): NextResponse {
     return NextResponse.json({ code: 'portal.forbidden_wallet', message: error.message }, { status: 403 })
   }
   if (error instanceof PrivyServerApiError) {
+    console.warn('[api/portal/privy/send-sponsored-transaction]', {
+      code: error.code,
+      status: error.httpStatus ?? 502,
+      message: error.message,
+    })
     return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus ?? 502 })
   }
   if (error instanceof z.ZodError) {
@@ -58,6 +64,7 @@ export async function POST(request: NextRequest) {
 
     const result = await sendPrivySponsoredEthereumTransaction({
       privyWalletId,
+      authorizationSignature: body.authorization_signature,
       chainId: body.chain_id,
       to: body.to,
       data: body.data,

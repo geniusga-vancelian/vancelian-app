@@ -8,6 +8,7 @@ export async function sendPortalPrivySponsoredTransaction(args: {
   gasLimit?: string | number | bigint
   walletAddress: `0x${string}`
   privyWalletId?: string | null
+  authorizationSignature: string
 }): Promise<{ hash: string }> {
   const res = await fetch('/api/portal/privy/send-sponsored-transaction', {
     method: 'POST',
@@ -21,6 +22,7 @@ export async function sendPortalPrivySponsoredTransaction(args: {
       gas_limit: args.gasLimit !== undefined ? String(args.gasLimit) : undefined,
       wallet_address: args.walletAddress,
       privy_wallet_id: args.privyWalletId ?? undefined,
+      authorization_signature: args.authorizationSignature,
     }),
     cache: 'no-store',
   })

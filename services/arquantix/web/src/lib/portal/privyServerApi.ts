@@ -1,5 +1,9 @@
 import { getPrivyAppIdServer } from '@/lib/portal/privyConfig'
-import { normalizeSwapTxValue, normalizeTxHash } from '@/lib/portal/swapTxFormat'
+import {
+  buildPrivyEthSendTransactionRpcBody,
+  buildPrivyWalletRpcUrl,
+} from '@/lib/portal/privySponsoredRpcRequest'
+import { normalizeTxHash } from '@/lib/portal/swapTxFormat'
 
 export class PrivyServerApiError extends Error {
   readonly code: string
@@ -11,12 +15,6 @@ export class PrivyServerApiError extends Error {
     this.code = code
     this.httpStatus = httpStatus
   }
-}
-
-function normalizeTxValueHex(value?: string | number | bigint): `0x${string}` {
-  if (value === undefined) return '0x0'
-  if (typeof value === 'bigint') return `0x${value.toString(16)}` as `0x${string}`
-  return normalizeSwapTxValue(String(value))
 }
 
 function readPrivyAppSecret(): string {
@@ -135,6 +133,7 @@ async function waitForPrivyTransactionHash(transactionId: string): Promise<strin
 
 export async function sendPrivySponsoredEthereumTransaction(args: {
   privyWalletId: string
+  authorizationSignature: string
   chainId: number
   to: string
   data: string
@@ -146,27 +145,31 @@ export async function sendPrivySponsoredEthereumTransaction(args: {
     throw new PrivyServerApiError('privy.wallet_id_required', 'Wallet Privy introuvable pour cette session.')
   }
 
-  const transaction: Record<string, string> = {
+  const authorizationSignature = args.authorizationSignature.trim()
+  if (!authorizationSignature) {
+    throw new PrivyServerApiError(
+      'privy.authorization_signature_required',
+      'Signature d’autorisation Privy manquante.',
+      400,
+    )
+  }
+
+  const rpcBody = buildPrivyEthSendTransactionRpcBody({
+    chainId: args.chainId,
     to: args.to,
     data: args.data,
-    value: normalizeTxValueHex(args.value),
-  }
+    value: args.value,
+    gasLimit: args.gasLimit,
+  })
 
-  if (args.gasLimit !== undefined && `${args.gasLimit}`.trim()) {
-    transaction.gas = normalizeTxValueHex(args.gasLimit)
+  const headers = {
+    ...buildPrivyAuthHeaders(),
+    'privy-authorization-signature': authorizationSignature,
   }
-
-  const headers = buildPrivyAuthHeaders()
-  const res = await fetch(`https://api.privy.io/v1/wallets/${encodeURIComponent(walletId)}/rpc`, {
+  const res = await fetch(buildPrivyWalletRpcUrl(walletId), {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      method: 'eth_sendTransaction',
-      caip2: `eip155:${args.chainId}`,
-      chain_type: 'ethereum',
-      sponsor: true,
-      params: { transaction },
-    }),
+    body: JSON.stringify(rpcBody),
     cache: 'no-store',
     signal: AbortSignal.timeout(60_000),
   })

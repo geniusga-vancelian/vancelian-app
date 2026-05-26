@@ -2,9 +2,14 @@
 
 import { useCallback } from 'react'
 import type { ConnectedWallet, User } from '@privy-io/react-auth'
-import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useAuthorizationSignature, useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useAccount, useSendTransaction as useWagmiSendTransaction, useSwitchChain } from 'wagmi'
 
+import { getPrivyAppId } from '@/lib/portal/privyConfig'
+import {
+  buildPrivyAuthorizationSignatureInput,
+  buildPrivyEthSendTransactionRpcBody,
+} from '@/lib/portal/privySponsoredRpcRequest'
 import { resolvePortalSwapSigningWallet } from '@/lib/portal/resolvePortalSwapSigningWallet'
 import { resolvePrivyEmbeddedWalletId } from '@/lib/portal/resolvePrivyEmbeddedWalletId'
 import { sendPortalPrivySponsoredTransaction } from '@/lib/portal/privySponsoredTxClient'
@@ -55,6 +60,7 @@ function isAlreadyOnTargetChainError(error: unknown): boolean {
 
 export function usePortalTxSigner() {
   const { ready, authenticated, user } = usePrivy()
+  const { generateAuthorizationSignature } = useAuthorizationSignature()
   const { wallets } = useWallets()
   const { createWallet } = useCreateWallet()
   const { sendTransactionAsync: sendWagmiTransaction } = useWagmiSendTransaction()
@@ -182,6 +188,28 @@ export function usePortalTxSigner() {
           return await sendExternalWalletTransaction(tx, wallet)
         }
 
+        const privyWalletId = wallet.privyWalletId?.trim()
+        if (!privyWalletId) {
+          throw new Error(
+            'Wallet Vancelian introuvable pour cette session. Déconnectez-vous puis reconnectez-vous.',
+          )
+        }
+
+        const rpcBody = buildPrivyEthSendTransactionRpcBody({
+          chainId: tx.chainId,
+          to: tx.to,
+          data: tx.data,
+          value: tx.value,
+          gasLimit: tx.gasLimit,
+        })
+        const { signature } = await generateAuthorizationSignature(
+          buildPrivyAuthorizationSignatureInput({
+            appId: getPrivyAppId(),
+            privyWalletId,
+            rpcBody,
+          }),
+        )
+
         const { hash } = await sendPortalPrivySponsoredTransaction({
           chainId: tx.chainId,
           to: tx.to,
@@ -189,7 +217,8 @@ export function usePortalTxSigner() {
           value: tx.value,
           gasLimit: tx.gasLimit,
           walletAddress: wallet.address,
-          privyWalletId: wallet.privyWalletId,
+          privyWalletId,
+          authorizationSignature: signature,
         })
         return { hash: normalizeTxHash(hash), wallet }
       } catch (error) {
@@ -202,7 +231,7 @@ export function usePortalTxSigner() {
         )
       }
     },
-    [resolveWallet, sendExternalWalletTransaction, switchToChain],
+    [generateAuthorizationSignature, resolveWallet, sendExternalWalletTransaction, switchToChain],
   )
 
   return { sendPortalTransaction, resolveWallet, mode }
