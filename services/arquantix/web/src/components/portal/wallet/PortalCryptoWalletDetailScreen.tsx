@@ -67,6 +67,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
       url: `/api/portal/crypto-wallet/${encodeURIComponent(ticker)}`,
       ttlMs: 45_000,
       errorMessage: 'Impossible de charger les détails.',
+      scopeAware: true,
     })
 
   const detail = data?.detail

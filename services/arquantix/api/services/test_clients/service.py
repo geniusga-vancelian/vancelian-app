@@ -394,7 +394,12 @@ class TestClientService:
         }
 
     def get_crypto_wallet_detail(
-        self, db: Session, asset: str, *, client: Client
+        self,
+        db: Session,
+        asset: str,
+        *,
+        client: Client,
+        chain_id: int | None = None,
     ) -> dict:
         """Return detailed wallet info for a single crypto asset including PRU and gains.
 
@@ -418,7 +423,18 @@ class TestClientService:
 
         from services.privy_wallet.patrimony_merge import find_merged_position
 
-        merged = find_merged_position(db, person_id=getattr(client, "person_id", None), asset=asset)
+        merged = find_merged_position(
+            db,
+            person_id=getattr(client, "person_id", None),
+            asset=asset,
+            chain_id=chain_id,
+        )
+
+        if chain_id is not None:
+            if merged is None:
+                return {"client": client, "detail": None}
+            return self._build_privy_only_wallet_detail(db, client=client, merged=merged, asset=asset)
+
         if pos is None and merged is None:
             return {"client": client, "detail": None}
 

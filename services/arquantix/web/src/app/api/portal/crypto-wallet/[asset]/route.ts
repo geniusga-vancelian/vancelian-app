@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { DEFAULT_PORTAL_CHAIN, isValidPortalChain, type PortalChain } from '@/config/portalChains'
 import { buildBackendUrl } from '@/lib/backend'
 import {
+  alignCryptoWalletDetailWithScopedPosition,
+  buildPrivyWalletPositionsSummary,
   extractUpstreamDetailPayload,
   mergeCryptoWalletTransactions,
   parseCryptoWalletDetail,
   parseWalletHistoryPoints,
+  resolveScopedPrivyPositionForAsset,
 } from '@/lib/portal/cryptoWalletFormat'
 import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+import { appendPortalScopeQuery } from '@/lib/portal/portalScopeQuery'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
+import type { PortalWalletScope } from '@/lib/portal/portalWalletScopeTypes'
 
 async function fetchUpstreamJson(path: string) {
   const res = await portalUpstreamFetch(path, { signal: AbortSignal.timeout(15000) })
@@ -25,9 +31,27 @@ async function fetchBackendJson(path: string) {
   return { ok: res.ok, data }
 }
 
-/** Détail position crypto — aligné mobile CryptoWalletDetailScreen. */
+function resolvePortalChain(request: NextRequest): PortalChain {
+  const raw = request.nextUrl.searchParams.get('portal_chain')?.trim().toLowerCase() ?? ''
+  return isValidPortalChain(raw) ? raw : DEFAULT_PORTAL_CHAIN
+}
+
+function resolveWalletScope(request: NextRequest, chain: PortalChain): PortalWalletScope | null {
+  const walletAddress = request.nextUrl.searchParams.get('wallet_address')?.trim()
+  if (!walletAddress) return null
+  return {
+    id: `scope:${walletAddress}`,
+    kind: 'privy_embedded',
+    label: 'Privy',
+    shortLabel: 'Privy',
+    address: walletAddress,
+    chainType: chain === 'solana' ? 'solana' : 'evm',
+  }
+}
+
+/** Détail position crypto — aligné hub wallet (Privy + scope navbar). */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { asset: string } },
 ) {
   const token = await readPortalAccessToken()
@@ -40,37 +64,44 @@ export async function GET(
     return NextResponse.json({ error: 'invalid_asset' }, { status: 400 })
   }
 
+  const portalChain = resolvePortalChain(request)
+  const walletScope = resolveWalletScope(request, portalChain)
   const providerSymbol = tickerToProviderSymbol(asset)
-
-  const detailRes = await fetchUpstreamJson(
+  const scopedDetailUrl = appendPortalScopeQuery(
     `/api/app/crypto-positions/${encodeURIComponent(asset)}`,
+    portalChain,
+    walletScope,
   )
+
+  const detailRes = await fetchUpstreamJson(scopedDetailUrl)
 
   if (!detailRes.ok || !detailRes.data) {
     return NextResponse.json({ error: 'detail_unavailable' }, { status: 502 })
   }
 
   const detailRaw = extractUpstreamDetailPayload(detailRes.data)
-  const detail = parseCryptoWalletDetail(detailRaw)
+  let detail = parseCryptoWalletDetail(detailRaw)
   if (!detail) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 })
   }
 
-  const [txRes, privyDepRes, historyRes, bootstrapRes, marketRes] = await Promise.all([
-    fetchUpstreamJson(
-      `/api/app/crypto-positions/${encodeURIComponent(asset)}/transactions`,
-    ),
-    fetchUpstreamJson(
-      `/api/app/privy-wallet/deposits?asset=${encodeURIComponent(asset)}&limit=50`,
-    ),
-    fetchUpstreamJson(
-      `/api/app/wallet/history?period=ALL&asset=${encodeURIComponent(asset)}&mode=performance_value`,
-    ),
-    fetchUpstreamJson('/api/app/bootstrap'),
-    fetchBackendJson(
-      `/api/market-data/market-summary?symbols=${encodeURIComponent(providerSymbol)}`,
-    ),
-  ])
+  const [txRes, privyDepRes, historyRes, bootstrapRes, marketRes, privyBalancesRes] =
+    await Promise.all([
+      fetchUpstreamJson(
+        `/api/app/crypto-positions/${encodeURIComponent(asset)}/transactions`,
+      ),
+      fetchUpstreamJson(
+        `/api/app/privy-wallet/deposits?asset=${encodeURIComponent(asset)}&limit=50`,
+      ),
+      fetchUpstreamJson(
+        `/api/app/wallet/history?period=ALL&asset=${encodeURIComponent(asset)}&mode=performance_value`,
+      ),
+      fetchUpstreamJson('/api/app/bootstrap'),
+      fetchBackendJson(
+        `/api/market-data/market-summary?symbols=${encodeURIComponent(providerSymbol)}`,
+      ),
+      fetchUpstreamJson('/api/app/privy-wallet/balances'),
+    ])
 
   const currency =
     bootstrapRes.ok && bootstrapRes.data && typeof bootstrapRes.data === 'object'
@@ -84,6 +115,21 @@ export async function GET(
           .trim()
           .toUpperCase()
       : 'EUR'
+
+  if (privyBalancesRes.ok && privyBalancesRes.data) {
+    const privySummary = buildPrivyWalletPositionsSummary(
+      privyBalancesRes.data,
+      marketRes.ok ? marketRes.data : null,
+      currency,
+    )
+    const scopedPosition = resolveScopedPrivyPositionForAsset(
+      privySummary,
+      asset,
+      portalChain,
+      walletScope,
+    )
+    detail = alignCryptoWalletDetailWithScopedPosition(detail, scopedPosition)
+  }
 
   let change24hPct: number | undefined
   let logoUrl: string | null = null
@@ -116,6 +162,6 @@ export async function GET(
     change24hPct,
     providerSymbol,
     logoUrl,
-    partial: !txRes.ok || !privyDepRes.ok || !historyRes.ok,
+    partial: !txRes.ok || !privyDepRes.ok || !historyRes.ok || !privyBalancesRes.ok,
   })
 }

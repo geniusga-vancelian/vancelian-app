@@ -188,10 +188,24 @@ def find_merged_position(
     person_id: UUID | None,
     asset: str,
     platform_positions: list[dict[str, Any]] | None = None,
+    chain_id: int | None = None,
 ) -> dict[str, Any] | None:
+    """Retourne la position fusionnée pour un actif, optionnellement filtrée par ``chain_id`` (ex. 8453 = Base)."""
     asset_u = asset.strip().upper()
     merged = merge_app_crypto_positions(platform_positions or [], db, person_id=person_id)
-    return next((p for p in merged if str(p.get("asset") or "").upper() == asset_u), None)
+    candidates = [p for p in merged if str(p.get("asset") or "").upper() == asset_u]
+    if not candidates:
+        return None
+    if chain_id is not None:
+        scoped = [
+            p
+            for p in candidates
+            if p.get("chain_id") is not None and int(p.get("chain_id")) == int(chain_id)
+        ]
+        if scoped:
+            return scoped[0]
+        return None
+    return candidates[0]
 
 
 def _price_asset(

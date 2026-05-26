@@ -1,12 +1,15 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  alignCryptoWalletDetailWithScopedPosition,
   buildPrivyWalletPositionsSummary,
   formatCryptoTransactionAmount,
+  formatDetailVolumeAmount,
   isIncomingCryptoTransaction,
   mergeCryptoWalletTransactions,
   parsePrivyWalletDeposits,
   resolvePositionSubtitle,
+  resolveScopedPrivyPositionForAsset,
 } from './cryptoWalletFormat'
 
 describe('buildPrivyWalletPositionsSummary', () => {
@@ -119,5 +122,68 @@ describe('formatCryptoTransactionAmount', () => {
       direction: 'credit',
     })
     assert.equal(label, '100 USDC')
+  })
+})
+
+describe('alignCryptoWalletDetailWithScopedPosition', () => {
+  it('remplace un volume agrégé par le solde Privy scopé Base', () => {
+    const summary = buildPrivyWalletPositionsSummary(
+      {
+        balances: [
+          {
+            asset: 'ETH',
+            name: 'Ethereum',
+            balance: '0.00857064',
+            available_balance: '0.00857064',
+            icon_key: 'eth',
+            chain_type: 'ethereum',
+            chain_id: 8453,
+            wallet_address: '0x7ae683c429ec2bc66bf1eb93713b5644dd265a44',
+          },
+        ],
+      },
+      {
+        summaries: [
+          {
+            symbol: 'ETHUSDT',
+            price: '2131.29',
+            price_eur: '1960.00',
+          },
+        ],
+      },
+      'USD',
+    )
+
+    const scoped = resolveScopedPrivyPositionForAsset(
+      summary,
+      'ETH',
+      'base',
+      {
+        id: 'privy:test',
+        kind: 'privy_embedded',
+        label: 'Privy',
+        shortLabel: 'Privy',
+        address: '0x7ae683c429ec2bc66bf1eb93713b5644dd265a44',
+        chainType: 'evm',
+      },
+    )
+
+    const aligned = alignCryptoWalletDetailWithScopedPosition(
+      {
+        asset: 'ETH',
+        name: 'Ethereum',
+        iconKey: 'eth',
+        volume: '0.030000000000000000',
+        totalValueEur: 55.81,
+        totalValueUsd: 63.94,
+        realizedGainEur: 0,
+        realizedGains: 0,
+        portfolioScope: 'privy',
+      },
+      scoped,
+    )
+
+    assert.equal(aligned.volume, formatDetailVolumeAmount(0.00857064, 'ETH'))
+    assert.ok((aligned.totalValueUsd ?? 0) < 20)
   })
 })

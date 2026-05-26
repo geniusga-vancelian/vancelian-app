@@ -1,6 +1,8 @@
 import { formatPortalMoney, normalizeChartSeries } from '@/lib/portal/dashboardFormat'
 import { resolvePositionPortalChain } from '@/lib/portal/portalChainFilter'
-import { PORTAL_CHAIN_LABELS } from '@/config/portalChains'
+import { PORTAL_CHAIN_LABELS, type PortalChain } from '@/config/portalChains'
+import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
+import type { PortalWalletScope } from '@/lib/portal/portalWalletScopeTypes'
 import type {
   PortalCryptoPosition,
   PortalCryptoPositionsSummary,
@@ -406,6 +408,54 @@ export function assetPrecisionDisplay(asset: string): number {
 export function formatCryptoVolume(balance: number, asset: string): string {
   const precision = assetPrecisionDisplay(asset)
   return `${balance.toFixed(precision)} ${asset.toUpperCase()}`
+}
+
+/** Volume affiché sur l'écran détail (sans suffixe ticker). */
+export function formatDetailVolumeAmount(balance: number, asset: string): string {
+  const precision = assetPrecisionDisplay(asset)
+  let text = balance.toFixed(precision)
+  if (text.includes('.')) {
+    text = text.replace(/0+$/, '').replace(/\.$/, '')
+  }
+  return text || '0'
+}
+
+export function resolveScopedPrivyPositionForAsset(
+  summary: PortalCryptoPositionsSummary,
+  asset: string,
+  chain: PortalChain,
+  scope: PortalWalletScope | null,
+): PortalCryptoPosition | undefined {
+  const scoped = filterCryptoPositionsSummaryByPortalScope(summary, chain, scope)
+  const assetU = asset.trim().toUpperCase()
+  return scoped.positions.find((row) => row.asset.toUpperCase() === assetU)
+}
+
+/** Aligne volume / valorisation détail crypto sur le hub wallet (Privy + scope navbar). */
+export function alignCryptoWalletDetailWithScopedPosition(
+  detail: PortalCryptoWalletDetail,
+  position: PortalCryptoPosition | undefined,
+): PortalCryptoWalletDetail {
+  if (!position || position.balance <= 0) return detail
+
+  const totalValueEur =
+    position.estimatedValueEur ??
+    (position.priceEur != null ? position.balance * position.priceEur : detail.totalValueEur)
+  const totalValueUsd =
+    position.estimatedValueUsd ??
+    (position.priceUsd != null ? position.balance * position.priceUsd : detail.totalValueUsd)
+
+  return {
+    ...detail,
+    volume: formatDetailVolumeAmount(position.balance, position.asset),
+    privyBalance: position.privyBalance ?? position.balance,
+    platformBalance: position.platformBalance ?? 0,
+    portfolioScope: position.portfolioScope ?? detail.portfolioScope ?? 'privy',
+    totalValueEur,
+    totalValueUsd,
+    currentPriceEur: position.priceEur ?? detail.currentPriceEur,
+    currentPriceUsd: position.priceUsd ?? detail.currentPriceUsd,
+  }
 }
 
 function resolvePositionChainLabel(position: PortalCryptoPosition): string {

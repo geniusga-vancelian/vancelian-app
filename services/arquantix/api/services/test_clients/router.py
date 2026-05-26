@@ -654,10 +654,17 @@ def get_direct_crypto_positions(
 @bootstrap_router.get("/crypto-positions/{asset}", response_model=CryptoWalletDetailResponse)
 def get_crypto_wallet_detail(
     asset: str,
+    portal_chain: Optional[str] = Query(
+        None,
+        description="Écosystème portail (base, ethereum, solana) — filtre le solde Privy par chain_id.",
+    ),
     db: Session = Depends(get_db),
     client: PeClient = Depends(mobile_app_client),
 ):
-    data = _svc.get_crypto_wallet_detail(db, asset, client=client)
+    chain_id = None
+    if portal_chain:
+        chain_id = {"base": 8453, "ethereum": 1, "solana": 0}.get(portal_chain.strip().lower())
+    data = _svc.get_crypto_wallet_detail(db, asset, client=client, chain_id=chain_id)
     client_payload = _bootstrap_client_payload(db, data["client"])
     detail = CryptoWalletDetailPayload(**data["detail"]) if data["detail"] else None
     return CryptoWalletDetailResponse(client=client_payload, detail=detail)
