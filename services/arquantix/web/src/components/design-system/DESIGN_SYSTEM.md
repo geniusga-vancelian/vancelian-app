@@ -2,7 +2,9 @@
 
 > *Là où l'argent travaille.*
 
-Le site web Arquantix utilise désormais le **Design System Vancelian** (handoff officiel Claude Design, v1.0 — mai 2026).
+> **Séparation webapp / website** — le portail `/app/*` a son propre DS : voir [`APP_DESIGN_SYSTEM.md`](./APP_DESIGN_SYSTEM.md). Ce fichier documente **uniquement le site marketing**.
+
+Le site web Arquantix utilise le **Design System Vancelian Website** (handoff site / home.zip — figé).
 
 Source de vérité :
 - **CSS** : `src/styles/vancelian-tokens.css` (tokens `--v-*` + `@font-face` Inter / Newsreader + classes utilitaires sémantiques).

@@ -1,0 +1,50 @@
+/**
+ * Thème shadcn/Tailwind — surface **webapp** (`data-v-ds="app"`).
+ * Le site marketing conserve `design-system-theme.css` sur `:root`.
+ *
+ * Différences clés vs website :
+ * - Cartes produit = blanc pur (#FFF), pas `--v-card` papier.
+ * - Warning = safran (`--v-yellow`), pas terracotta.
+ */
+
+[data-v-ds='app'] {
+  --font-size: 14px;
+
+  --background: var(--v-bg);
+  --foreground: var(--v-fg);
+  --card: var(--v-white);
+  --card-foreground: var(--v-fg);
+  --popover: var(--v-white);
+  --popover-foreground: var(--v-fg);
+
+  --primary: var(--v-fg);
+  --primary-foreground: #ffffff;
+  --secondary: var(--v-fg-05);
+  --secondary-foreground: var(--v-fg);
+
+  --muted: var(--v-fg-05);
+  --muted-foreground: var(--v-fg-muted);
+  --accent: var(--v-card-warm);
+  --accent-foreground: var(--v-fg);
+
+  --destructive: var(--v-error);
+  --destructive-foreground: #ffffff;
+
+  --border: var(--v-input-border);
+  --input: transparent;
+  --input-background: var(--v-white);
+  --switch-background: var(--v-fg-20);
+  --ring: var(--v-fg);
+
+  --radius: var(--v-radius-card);
+
+  --chart-1: var(--v-terracotta);
+  --chart-2: var(--v-green);
+  --chart-3: var(--v-blue);
+  --chart-4: var(--v-fg-muted);
+  --chart-5: var(--v-fg-light);
+
+  --color-black: var(--v-fg);
+  --color-bronze: var(--v-terracotta);
+  --color-neutral: var(--v-fg-10);
+}

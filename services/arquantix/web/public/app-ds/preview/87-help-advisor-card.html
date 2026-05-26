@@ -1,0 +1,166 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Help / advisor card — recurrent block in premium banking
+     Three variants :
+       A · advisor portrait + CTA   — "Votre advisor dédié"
+       B · multi-channel            — chat · phone · email rows
+       C · banner inline            — slim CTA bar (need help?)
+     ============================================================ */
+  .frame { width: 420px; max-width: 100%; }
+
+  /* A · advisor portrait */
+  .adv {
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    padding: 20px; display: flex; gap: 16px; align-items: flex-start;
+  }
+  .adv__head { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .adv__role { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+               font-weight: 600; color: var(--v-fg-light); }
+  .adv__name { font-size: 18px; font-weight: 700; color: var(--v-fg); }
+  .adv__pitch { font-size: 13px; line-height: 1.45; color: var(--v-fg-body);
+                margin: 6px 0 12px; text-wrap: pretty; }
+  .adv__actions { display: flex; gap: 8px; }
+
+  /* B · multi-channel */
+  .ch-card {
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    padding: 20px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .ch-card__head { display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px; }
+  .ch-card__title { font-size: 17px; font-weight: 700; color: var(--v-fg); }
+  .ch-card__sub   { font-size: 13px; color: var(--v-fg-body); line-height: 1.4; }
+
+  .ch-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 0;
+    border-top: 1px solid var(--v-fg-10);
+    cursor: pointer;
+  }
+  .ch-row__lead {
+    width: 40px; height: 40px; border-radius: 999px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .ch-row__lead .ic {
+    width: 18px; height: 18px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic--chat  { -webkit-mask-image: url("/icons/kalai/message.svg");  mask-image: url("/icons/kalai/message.svg"); }
+  .ic--phone { -webkit-mask-image: url("/icons/kalai/phone.svg");     mask-image: url("/icons/kalai/phone.svg"); }
+  .ic--mail  { -webkit-mask-image: url("/icons/kalai/email.svg");     mask-image: url("/icons/kalai/email.svg"); }
+
+  .ch-row__body { flex: 1; min-width: 0;
+                  display: flex; flex-direction: column; gap: 2px; }
+  .ch-row__title { font-size: 15px; font-weight: 600; color: var(--v-fg); }
+  .ch-row__sub   { font-size: 12px; color: var(--v-fg-light); }
+  .ch-row__chev { color: var(--v-fg-20); flex-shrink: 0; }
+  .ch-row__chev svg { width: 18px; height: 18px; display: block; }
+  .ch-row__status {
+    width: 8px; height: 8px; border-radius: 999px;
+    background: var(--v-green); flex-shrink: 0;
+  }
+
+  /* C · slim banner */
+  .help-banner {
+    background: var(--v-fg); color: var(--v-white);
+    border-radius: 12px;
+    padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+  }
+  .help-banner__icon {
+    width: 36px; height: 36px; border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .help-banner__icon .ic { width: 16px; height: 16px;
+                           background: var(--v-white);
+                           -webkit-mask-position: center; mask-position: center;
+                           -webkit-mask-size: contain; mask-size: contain;
+                           -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+  .help-banner__body { flex: 1; min-width: 0; }
+  .help-banner__title { font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .help-banner__sub   { font-size: 12px; color: rgba(255,255,255,0.7); }
+  .help-banner .btn   { background: var(--v-white); color: var(--v-fg); }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">A · advisor portrait + dual CTAs</p>
+  <div class="frame">
+    <div class="adv">
+      <span class="avt avt--64"><img src="https://i.pravatar.cc/128?img=32" alt=""/></span>
+      <div class="adv__head">
+        <span class="adv__role">Votre advisor</span>
+        <span class="adv__name">Hélène Marchand</span>
+        <p class="adv__pitch">Dédiée à votre patrimoine depuis 3 ans. Disponible du lundi au vendredi, 9 h – 19 h.</p>
+        <div class="adv__actions">
+          <button class="btn btn--primary">Prendre rendez-vous</button>
+          <button class="btn btn--secondary">Message</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">B · multi-channel · 3 options + statut</p>
+  <div class="frame">
+    <div class="ch-card">
+      <div class="ch-card__head">
+        <span class="ch-card__title">Besoin d'aide ?</span>
+        <span class="ch-card__sub">Notre équipe vous répond généralement sous 1 heure ouvrée.</span>
+      </div>
+
+      <div class="ch-row">
+        <span class="ch-row__lead"><span class="ic ic--chat"></span></span>
+        <div class="ch-row__body">
+          <span class="ch-row__title">Discuter en ligne</span>
+          <span class="ch-row__sub">Réponse immédiate</span>
+        </div>
+        <span class="ch-row__status" aria-label="En ligne"></span>
+        <span class="ch-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+
+      <div class="ch-row">
+        <span class="ch-row__lead"><span class="ic ic--phone"></span></span>
+        <div class="ch-row__body">
+          <span class="ch-row__title">Appeler</span>
+          <span class="ch-row__sub">+33 1 86 95 47 91 · gratuit</span>
+        </div>
+        <span class="ch-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+
+      <div class="ch-row">
+        <span class="ch-row__lead"><span class="ic ic--mail"></span></span>
+        <div class="ch-row__body">
+          <span class="ch-row__title">Envoyer un mail</span>
+          <span class="ch-row__sub">advisor@vancelian.com</span>
+        </div>
+        <span class="ch-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">C · slim banner inline</p>
+  <div class="frame">
+    <div class="help-banner">
+      <span class="help-banner__icon"><span class="ic" style="-webkit-mask-image:url(/icons/kalai/help.svg);mask-image:url(/icons/kalai/help.svg)"></span></span>
+      <div class="help-banner__body">
+        <div class="help-banner__title">Une question sur ce produit ?</div>
+        <div class="help-banner__sub">Votre advisor peut vous aider en 1 minute.</div>
+      </div>
+      <button class="btn btn--sm">Contacter</button>
+    </div>
+  </div>
+
+</body></html>

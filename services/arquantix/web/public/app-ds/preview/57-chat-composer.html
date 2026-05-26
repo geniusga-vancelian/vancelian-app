@@ -1,0 +1,132 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 18px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Chat composer — sits at the bottom of conversation screens.
+     Leading icons (attach, photo, camera) + message input pill +
+     trailing voice/listen actions.
+     ============================================================ */
+  .composer {
+    display: flex; align-items: center; gap: 14px;
+    width: 480px; max-width: 100%;
+    padding: 8px 12px;
+  }
+
+  .composer__ic {
+    width: 28px; height: 28px; flex-shrink: 0;
+    color: var(--v-fg); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .composer__ic::before {
+    content: ""; width: 100%; height: 100%;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .composer__ic--folder::before  { -webkit-mask-image: url("/icons/kalai/folder.svg");       mask-image: url("/icons/kalai/folder.svg"); }
+  .composer__ic--image::before   { -webkit-mask-image: url("/icons/kalai/photo.svg");        mask-image: url("/icons/kalai/photo.svg"); }
+  .composer__ic--camera::before  { -webkit-mask-image: url("/icons/kalai/photo-camera.svg"); mask-image: url("/icons/kalai/photo-camera.svg"); }
+
+  /* Pill input that takes the remaining space */
+  .composer__input {
+    flex: 1; min-width: 0;
+    height: 44px;
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: 999px;
+    padding: 0 16px 0 18px;
+    display: flex; align-items: center; gap: 12px;
+    transition: border-color 120ms var(--v-ease-out);
+  }
+  .composer__input:focus-within { border-color: var(--v-fg); }
+
+  .composer__field {
+    flex: 1; min-width: 0;
+    border: 0; outline: 0; background: transparent;
+    font-family: var(--v-font-ui); font-size: 16px; color: var(--v-fg);
+    height: 100%;
+  }
+  .composer__field::placeholder { color: var(--v-fg-light); }
+
+  /* Mic inside the pill */
+  .composer__mic {
+    width: 22px; height: 22px; flex-shrink: 0;
+    background: var(--v-fg);
+    -webkit-mask: url("/icons/kalai/mic.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/mic.svg") center/contain no-repeat;
+    cursor: pointer;
+  }
+
+  /* Trailing standalone icon (headphones for listen mode) */
+  .composer__listen {
+    width: 28px; height: 28px; flex-shrink: 0;
+    background: var(--v-fg);
+    -webkit-mask: url("/icons/kalai/headset.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/headset.svg") center/contain no-repeat;
+    cursor: pointer;
+  }
+
+  /* Filled / sending state — send icon replaces mic */
+  .composer__send {
+    width: 36px; height: 36px; flex-shrink: 0;
+    background: var(--v-fg); color: var(--v-white);
+    border-radius: 999px; border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .composer__send::before {
+    content: ""; width: 18px; height: 18px; background: var(--v-white);
+    -webkit-mask: url("/icons/kalai/send-1.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/send-1.svg") center/contain no-repeat;
+  }
+
+  /* Tonal background variant — composer floats on warm/grey bg in real screens */
+  .composer-host {
+    background: var(--v-card-warm); border-radius: 16px;
+    padding: 6px;
+  }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin: 6px 0 -8px; }
+</style></head>
+<body>
+
+  <p class="lbl">Default · empty · mic in pill, headphones trailing</p>
+  <div class="composer">
+    <span class="composer__ic composer__ic--folder" aria-label="Pièce jointe"></span>
+    <span class="composer__ic composer__ic--image" aria-label="Image"></span>
+    <span class="composer__ic composer__ic--camera" aria-label="Caméra"></span>
+    <div class="composer__input">
+      <input class="composer__field" placeholder="Message" />
+      <span class="composer__mic" aria-label="Dictée"></span>
+    </div>
+    <span class="composer__listen" aria-label="Écouter"></span>
+  </div>
+
+  <p class="lbl">Typing · send button replaces trailing icon</p>
+  <div class="composer">
+    <span class="composer__ic composer__ic--folder"></span>
+    <span class="composer__ic composer__ic--image"></span>
+    <span class="composer__ic composer__ic--camera"></span>
+    <div class="composer__input">
+      <input class="composer__field" value="Je veux investir dans l'immobilier japonais." />
+    </div>
+    <button class="composer__send" aria-label="Envoyer"></button>
+  </div>
+
+  <p class="lbl">Compact · just text field + voice (no attachments)</p>
+  <div class="composer" style="gap:8px">
+    <div class="composer__input">
+      <input class="composer__field" placeholder="Demandez à votre IA…" />
+      <span class="composer__mic"></span>
+    </div>
+  </div>
+
+</body></html>

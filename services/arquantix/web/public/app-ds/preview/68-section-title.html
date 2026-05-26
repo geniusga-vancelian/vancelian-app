@@ -1,0 +1,302 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 40px 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  .rail { width: 560px; max-width: 100%; display: flex; flex-direction: column; gap: 28px; }
+  .group { display: flex; flex-direction: column; gap: 10px; }
+  .grp-lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+             font-weight: 500; color: var(--v-fg-light); margin: 0; }
+  .frame { background: var(--v-white); border: 1px solid var(--v-fg-10);
+           border-radius: var(--v-radius-card); padding: 20px 20px 22px; }
+  .frame--warm { background: var(--v-card-warm); border-color: transparent; }
+  .frame--plain { background: transparent; border: 0; padding: 4px 0 0; }
+
+  /* =====================================================
+     Section title — Apple-inspired
+     -----------------------------------------------------
+     .sec
+       .sec__head            ← title row (icon + title + actions/chevron)
+         .sec__lead          ← optional outline glyph (no pastille bg)
+         .sec__title         ← H2 by default (.sec--sm → H4)
+         .sec__chev          ← trailing chevron when whole row is tappable
+         .sec__actions       ← right cluster: link · CTA · chart
+       .sec__desc            ← optional primary description
+       .sec__sub             ← optional secondary description (muted)
+     ===================================================== */
+  .sec { display: flex; flex-direction: column; gap: 10px; }
+  .sec__head { display: flex; align-items: center; gap: 10px; }
+  .sec__head--top { align-items: flex-start; }
+
+  /* Lead glyph — Kalai "info" filled icon, no pastille background.
+     Color stays --v-fg-light to remain discreet next to the title. */
+  .sec__lead {
+    flex-shrink: 0; color: var(--v-fg-light);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .sec__lead .icon {
+    display: block; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain;    mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .sec--lg .sec__lead .icon { width: 22px; height: 22px; }
+  .sec--sm .sec__lead .icon { width: 18px; height: 18px; }
+  .sec--lg .sec__lead { margin-top: 4px; }
+  .ic-info { -webkit-mask-image: url("/icons/kalai/info.svg"); mask-image: url("/icons/kalai/info.svg"); }
+
+  .sec__title {
+    flex: 1; min-width: 0; margin: 0;
+    font-family: var(--v-font-ui); color: var(--v-fg);
+    text-wrap: pretty;
+  }
+  .sec--lg .sec__title { font-weight: 700; font-size: 28px; line-height: 1.15;
+                         letter-spacing: -0.01em; }
+  .sec--sm .sec__title { font-weight: 700; font-size: 17px; line-height: 1.3; }
+
+  /* Drillable chevron — placed right of title, tied to the title itself */
+  .sec__chev { color: var(--v-fg-muted); display: inline-flex; flex-shrink: 0; }
+  .sec--lg .sec__chev svg { width: 22px; height: 22px; }
+  .sec--sm .sec__chev svg { width: 18px; height: 18px; }
+
+  /* Count indicator (Apple "Recently Played · 12") — sits in the title or sub */
+  .sec__count {
+    font-weight: 500; color: var(--v-fg-light);
+    font-feature-settings: "tnum" on;
+  }
+
+  /* Right-side actions */
+  .sec__actions { display: inline-flex; align-items: center; gap: 12px;
+                  flex-shrink: 0; }
+
+  /* =====================================================
+     See more — 3 variants
+     ===================================================== */
+  /* A · Muted neutral — Apple iOS native "See All" in default tint, but here
+        we want LESS terracotta so we use anthracite + chevron. */
+  .sec__more {
+    display: inline-flex; align-items: center; gap: 2px;
+    background: none; border: 0; padding: 0; cursor: pointer;
+    font-family: var(--v-font-ui); font-weight: 500; font-size: 14px;
+    color: var(--v-fg-muted); white-space: nowrap;
+  }
+  .sec__more svg { width: 16px; height: 16px; display: block; }
+  .sec__more:hover { color: var(--v-fg); }
+
+  /* B · Terracotta link — same as before, kept for hero/marketing CTAs */
+  .sec__more--accent { color: var(--v-terracotta); }
+  .sec__more--accent:hover { color: var(--v-terracotta-pressed); }
+
+  /* C · Pill chip — softer, fits a busy header without competing visually */
+  .sec__more--chip {
+    height: 28px; padding: 0 12px; border-radius: 999px;
+    background: var(--v-fg-05); color: var(--v-fg-body); gap: 4px;
+  }
+  .sec__more--chip:hover { background: var(--v-fg-10); color: var(--v-fg); }
+
+  /* CTA pill — primary, sm */
+  .sec__cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 32px; padding: 0 16px; border-radius: 999px;
+    background: var(--v-fg); color: var(--v-white);
+    font-family: var(--v-font-ui); font-weight: 500; font-size: 13px;
+    border: 0; cursor: pointer; white-space: nowrap;
+  }
+  .sec__cta:hover { background: var(--v-fg-body); }
+
+  /* Allocation chart — small donut + X% label */
+  .sec__alloc { display: inline-flex; align-items: center; gap: 6px; }
+  .sec__alloc-pct {
+    font-weight: 700; font-size: 14px; color: var(--v-fg);
+    font-feature-settings: "tnum" on; line-height: 1;
+  }
+  .sec__donut {
+    --pct: 38; --size: 22px; --thickness: 32%;
+    width: var(--size); height: var(--size); border-radius: 999px;
+    background: conic-gradient(
+      var(--v-fg) calc(var(--pct) * 1%),
+      var(--v-fg-10) 0
+    );
+    position: relative; flex-shrink: 0;
+  }
+  .sec__donut::after {
+    content: ""; position: absolute; inset: var(--thickness);
+    background: var(--v-white); border-radius: 999px;
+  }
+  .frame--warm  .sec__donut::after  { background: var(--v-card-warm); }
+  .frame--plain .sec__donut::after  { background: var(--v-bg); }
+
+  /* Bodies */
+  .sec__desc { margin: 0; color: var(--v-fg);
+               font-family: var(--v-font-ui); font-weight: 400;
+               font-size: 17px; line-height: 1.4; text-wrap: pretty; }
+  .sec__sub  { margin: 0; color: var(--v-fg-light);
+               font-family: var(--v-font-ui); font-weight: 400;
+               font-size: 14px; line-height: 1.5; text-wrap: pretty; }
+
+</style></head>
+<body>
+<div class="rail">
+
+  <!-- =================================================
+       1 · LARGE · Apple-style "See All ›" muted neutral
+       ================================================= -->
+  <div class="group">
+    <p class="grp-lbl">Large · "See all ›" neutre · 2 descriptions</p>
+    <div class="frame">
+      <section class="sec sec--lg">
+        <header class="sec__head sec__head--top">
+          <span class="sec__lead" aria-hidden="true"><span class="icon ic-info"></span></span>
+          <h2 class="sec__title">Title Section</h2>
+          <div class="sec__actions">
+            <button class="sec__more">See all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></button>
+          </div>
+        </header>
+        <p class="sec__desc">Sed fruatur sane hoc solacio atque hanc insignem ignominiam, quoniam uni praeter se inusta sit, putet esse leviorem, dum modo, cuius exemplo.</p>
+        <p class="sec__sub">Sed fruatur sane hoc solacio atque hanc insignem ignominiam, quoniam uni praeter se inusta sit, putet esse leviorem, dum modo.</p>
+      </section>
+    </div>
+  </div>
+
+  <!-- =================================================
+       2 · LARGE · drillable (trailing chevron on title)
+       ================================================= -->
+  <div class="group">
+    <p class="grp-lbl">Large · titre drillable (chevron derrière le titre) · pas de "see all"</p>
+    <div class="frame">
+      <section class="sec sec--lg">
+        <header class="sec__head">
+          <h2 class="sec__title">Mes investissements</h2>
+          <span class="sec__chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
+          </span>
+        </header>
+        <p class="sec__desc">Une vue agrégée de votre allocation, mise à jour à la clôture des marchés.</p>
+      </section>
+    </div>
+  </div>
+
+  <!-- =================================================
+       3 · LARGE · with allocation donut + drillable title
+       ================================================= -->
+  <div class="group">
+    <p class="grp-lbl">Large · donut allocation + chevron drillable</p>
+    <div class="frame">
+      <section class="sec sec--lg">
+        <header class="sec__head sec__head--top">
+          <h2 class="sec__title">Patrimoine immobilier</h2>
+          <span class="sec__chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
+          </span>
+          <div class="sec__actions">
+            <span class="sec__alloc">
+              <span class="sec__alloc-pct">62&nbsp;%</span>
+              <span class="sec__donut" style="--pct:62" aria-hidden="true"></span>
+            </span>
+          </div>
+        </header>
+        <p class="sec__sub">Trois actifs en direct, deux SCPI, une OE Provence XII en cours.</p>
+      </section>
+    </div>
+  </div>
+
+  <!-- =================================================
+       4 · SMALL · neutral "See all ›" + count
+       ================================================= -->
+  <div class="group">
+    <p class="grp-lbl">Small · count inline · "See all ›" neutre</p>
+    <div class="frame">
+      <section class="sec sec--sm">
+        <header class="sec__head">
+          <h3 class="sec__title">Transactions récentes <span class="sec__count">· 12</span></h3>
+          <div class="sec__actions">
+            <button class="sec__more">See all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></button>
+          </div>
+        </header>
+      </section>
+    </div>
+  </div>
+
+  <!-- =================================================
+       5 · SMALL · chip variant (softest) + lead glyph
+       ================================================= -->
+  <div class="group">
+    <p class="grp-lbl">Small · lead glyph (sans cercle) · "See all" en chip</p>
+    <div class="frame">
+      <section class="sec sec--sm">
+        <header class="sec__head">
+          <span class="sec__lead" aria-hidden="true"><span class="icon ic-info"></span></span>
+          <h3 class="sec__title">Frais &amp; commissions</h3>
+          <div class="sec__actions">
+            <button class="sec__more sec__more--chip">Détails<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></button>
+          </div>
+        </header>
+        <p class="sec__sub">Détail des frais appliqués sur vos opérations du mois écoulé.</p>
+      </section>
+    </div>
+  </div>
+
+  <!-- =================================================
+       6 · SMALL · CTA pill + allocation donut
+       ================================================= -->
+  <div class="group">
+    <p class="grp-lbl">Small · CTA + allocation</p>
+    <div class="frame">
+      <section class="sec sec--sm">
+        <header class="sec__head">
+          <h3 class="sec__title">Crypto · portefeuille</h3>
+          <div class="sec__actions">
+            <span class="sec__alloc">
+              <span class="sec__alloc-pct">12&nbsp;%</span>
+              <span class="sec__donut" style="--pct:12" aria-hidden="true"></span>
+            </span>
+            <button class="sec__cta">Investir</button>
+          </div>
+        </header>
+        <p class="sec__desc">Allocation actuelle en actifs numériques.</p>
+      </section>
+    </div>
+  </div>
+
+  <!-- =================================================
+       7 · LARGE · terracotta link réservé aux CTAs forts
+       ================================================= -->
+  <div class="group">
+    <p class="grp-lbl">Large · terracotta réservé à un appel marketing fort</p>
+    <div class="frame frame--warm">
+      <section class="sec sec--lg">
+        <header class="sec__head sec__head--top">
+          <h2 class="sec__title">Offre exclusive</h2>
+          <div class="sec__actions">
+            <button class="sec__more sec__more--accent">Découvrir<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></button>
+          </div>
+        </header>
+        <p class="sec__desc">Trois opérations privées ouvertes ce mois-ci, sélectionnées par votre advisor.</p>
+        <p class="sec__sub">Ticket d'entrée à partir de 50 000 €. Souscription jusqu'au 30 juin.</p>
+      </section>
+    </div>
+  </div>
+
+  <!-- =================================================
+       8 · LARGE · titre nu (Apple "in-page" section header)
+       ================================================= -->
+  <div class="group">
+    <p class="grp-lbl">Plain · sans frame · style header de section in-page</p>
+    <div class="frame frame--plain">
+      <section class="sec sec--lg">
+        <header class="sec__head">
+          <h2 class="sec__title">Activité récente</h2>
+          <div class="sec__actions">
+            <button class="sec__more">See all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></button>
+          </div>
+        </header>
+      </section>
+    </div>
+  </div>
+
+</div>
+</body></html>

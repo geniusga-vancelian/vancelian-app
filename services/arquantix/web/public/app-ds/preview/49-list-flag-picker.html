@@ -1,0 +1,154 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 14px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Selectable list row — used in questionnaires / pickers.
+     Built on action-row shell, with three trailing slots:
+       - chevron (navigation)
+       - radio (single-choice)
+       - checkbox (multi-choice)
+     Avatar = circular flag / coin / icon.
+     ============================================================ */
+  .row {
+    width: 480px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch;
+    cursor: pointer;
+    transition: background 120ms var(--v-ease-out), border-color 120ms var(--v-ease-out);
+    min-height: 56px;
+  }
+  .row:hover { background: var(--v-fg-05); }
+  .row.is-selected { border-color: var(--v-fg); }
+
+  /* Flag avatar — perfectly round, sits in the 2px padding */
+  .row__flag {
+    width: 28px; height: 28px; border-radius: 999px; flex-shrink: 0;
+    align-self: center; margin-left: 14px;
+    overflow: hidden; position: relative;
+    box-shadow: 0 0 0 1px var(--v-fg-10);
+  }
+  .row__flag::before { content: ""; position: absolute; inset: 0; }
+  /* USA — 13 horizontal stripes + blue canton */
+  .row__flag--us::before {
+    background:
+      linear-gradient(#B22234 0 7.7%, var(--v-white) 7.7% 15.4%, #B22234 15.4% 23.1%, var(--v-white) 23.1% 30.8%,
+                      #B22234 30.8% 38.5%, var(--v-white) 38.5% 46.2%, #B22234 46.2% 53.9%, var(--v-white) 53.9% 61.6%,
+                      #B22234 61.6% 69.3%, var(--v-white) 69.3% 77%,   #B22234 77% 84.7%, var(--v-white) 84.7% 92.4%,
+                      #B22234 92.4% 100%);
+  }
+  .row__flag--us::after {
+    content: ""; position: absolute; left: 0; top: 0; width: 40%; height: 53.9%;
+    background: #3C3B6E;
+  }
+  /* UK — simplified Union Jack */
+  .row__flag--uk::before {
+    background:
+      linear-gradient(to bottom right, transparent 45%, var(--v-white) 45% 55%, transparent 55%),
+      linear-gradient(to bottom left,  transparent 45%, var(--v-white) 45% 55%, transparent 55%),
+      linear-gradient(var(--v-white) 0 45%, #C8102E 45% 55%, var(--v-white) 55% 100%),
+      linear-gradient(to right, var(--v-white) 0 45%, #C8102E 45% 55%, var(--v-white) 55% 100%),
+      #012169;
+  }
+  /* France — vertical tricolour */
+  .row__flag--fr::before {
+    background: linear-gradient(to right, #0055A4 0 33.3%, var(--v-white) 33.3% 66.6%, #EF4135 66.6% 100%);
+  }
+
+  .row__body {
+    flex: 1; min-width: 0;
+    padding: 12px 0 12px 14px;
+    display: flex; align-items: center;
+  }
+  .row__title { font-weight: 600; font-size: 16px; color: var(--v-fg); margin: 0; }
+
+  .row__trailing {
+    align-self: center; margin-right: 16px;
+    display: inline-flex; align-items: center; flex-shrink: 0;
+  }
+
+  .row__chv {
+    width: 20px; height: 20px;
+    background: var(--v-fg-light);
+    -webkit-mask: url("/icons/kalai/chevron-right.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/chevron-right.svg") center/contain no-repeat;
+  }
+
+  /* Radio */
+  .rad { width: 22px; height: 22px; border-radius: 999px;
+         border: 1.5px solid var(--v-fg-muted); background: var(--v-white);
+         display: inline-flex; align-items: center; justify-content: center; }
+  .rad.on { border-color: var(--v-fg); }
+  .rad.on::after { content: ""; width: 11px; height: 11px; border-radius: 999px; background: var(--v-fg); }
+
+  /* Checkbox */
+  .cbx { width: 22px; height: 22px; border-radius: 4px;
+         border: 1.5px solid var(--v-fg-muted); background: var(--v-white);
+         display: inline-flex; align-items: center; justify-content: center; color: var(--v-white); }
+  .cbx.on { background: var(--v-fg); border-color: var(--v-fg); }
+  .cbx svg { width: 14px; height: 14px; }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin: 6px 0 -4px; }
+</style></head>
+<body>
+
+  <p class="lbl">Flag + chevron — navigation picker</p>
+  <div class="row">
+    <span class="row__flag row__flag--us"></span>
+    <div class="row__body"><h3 class="row__title">English (US)</h3></div>
+    <div class="row__trailing"><span class="row__chv"></span></div>
+  </div>
+  <div class="row">
+    <span class="row__flag row__flag--uk"></span>
+    <div class="row__body"><h3 class="row__title">English (UK)</h3></div>
+    <div class="row__trailing"><span class="row__chv"></span></div>
+  </div>
+  <div class="row">
+    <span class="row__flag row__flag--fr"></span>
+    <div class="row__body"><h3 class="row__title">Français</h3></div>
+    <div class="row__trailing"><span class="row__chv"></span></div>
+  </div>
+
+  <p class="lbl">Flag + radio — single-choice (FR selected)</p>
+  <div class="row">
+    <span class="row__flag row__flag--us"></span>
+    <div class="row__body"><h3 class="row__title">English (US)</h3></div>
+    <div class="row__trailing"><span class="rad"></span></div>
+  </div>
+  <div class="row">
+    <span class="row__flag row__flag--uk"></span>
+    <div class="row__body"><h3 class="row__title">English (UK)</h3></div>
+    <div class="row__trailing"><span class="rad"></span></div>
+  </div>
+  <div class="row is-selected">
+    <span class="row__flag row__flag--fr"></span>
+    <div class="row__body"><h3 class="row__title">Français</h3></div>
+    <div class="row__trailing"><span class="rad on"></span></div>
+  </div>
+
+  <p class="lbl">Flag + checkbox — multi-choice (FR + US selected)</p>
+  <div class="row is-selected">
+    <span class="row__flag row__flag--us"></span>
+    <div class="row__body"><h3 class="row__title">English (US)</h3></div>
+    <div class="row__trailing"><span class="cbx on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span></div>
+  </div>
+  <div class="row">
+    <span class="row__flag row__flag--uk"></span>
+    <div class="row__body"><h3 class="row__title">English (UK)</h3></div>
+    <div class="row__trailing"><span class="cbx"></span></div>
+  </div>
+  <div class="row is-selected">
+    <span class="row__flag row__flag--fr"></span>
+    <div class="row__body"><h3 class="row__title">Français</h3></div>
+    <div class="row__trailing"><span class="cbx on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span></div>
+  </div>
+
+</body></html>

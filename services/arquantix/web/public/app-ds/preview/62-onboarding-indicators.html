@@ -1,0 +1,86 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 24px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Onboarding / progress indicators — reuses our pagination dot
+     pattern (see preview/20-segmented-dots):
+       - inactive dot : 6×6 circle, var(--v-input-border)
+       - active dot   : 24×6 pill, fg
+       - gap          : 6px
+     ============================================================ */
+  .dots { display: inline-flex; align-items: center; gap: 6px; }
+  .dots span {
+    width: 6px; height: 6px; border-radius: 999px;
+    background: var(--v-input-border);
+    transition: width 200ms var(--v-ease-out), background 200ms var(--v-ease-out);
+  }
+  .dots span.is-on { width: 24px; background: var(--v-fg); }
+
+  /* Brand splash — Vancelian wordmark + tagline (used on Start) */
+  .splash { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .splash__logo { height: 28px; width: auto; display: block; }
+  .splash__tagline {
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 24px;
+    color: var(--v-fg); margin: 0;
+  }
+
+  /* Typing indicator — three small dots that pulse */
+  .typing {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 40px; padding: 0 16px;
+    background: var(--v-white); border-radius: 16px;
+    border-bottom-left-radius: 6px;
+  }
+  .typing__dot {
+    width: 8px; height: 8px; border-radius: 999px;
+    background: var(--v-fg-light);
+    animation: typing 1.2s infinite ease-in-out;
+  }
+  .typing__dot:nth-child(2) { animation-delay: 0.15s; }
+  .typing__dot:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30%           { transform: translateY(-3px); opacity: 1; }
+  }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 6px 0 -10px;
+         align-self: center; }
+</style></head>
+<body>
+
+  <p class="lbl">Onboarding progress · step 1 / 5</p>
+  <div class="dots">
+    <span class="is-on"></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <p class="lbl">Step 2 / 5</p>
+  <div class="dots">
+    <span></span><span class="is-on"></span><span></span><span></span><span></span>
+  </div>
+
+  <p class="lbl">Step 4 / 5</p>
+  <div class="dots">
+    <span></span><span></span><span></span><span class="is-on"></span><span></span>
+  </div>
+
+  <p class="lbl">Brand splash · wordmark + tagline</p>
+  <div class="splash">
+    <img class="splash__logo" src="/brand/vancelian/logo-black-h.svg" alt="Vancelian"/>
+    <h1 class="splash__tagline">Se connecter à Vancelian</h1>
+  </div>
+
+  <p class="lbl">Typing indicator · AI is thinking…</p>
+  <div class="typing">
+    <span class="typing__dot"></span>
+    <span class="typing__dot"></span>
+    <span class="typing__dot"></span>
+  </div>
+
+</body></html>

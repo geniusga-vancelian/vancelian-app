@@ -1,0 +1,179 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 14px; align-items: center;
+         justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Document (PDF) card — built on the action-row shell.
+     ============================================================
+     Same chrome as preview/39 :
+       - .row : border 1px, radius 16, padding 2, gap 2, min-height 72
+       - .row__avatar : 68×68 box, radius 13 (= 16 − 1 − 2, concentric)
+       - .row__body / .row__trailing : same slots
+     Only the avatar icon and the trailing action change.
+     -------------------------------------------------------------- */
+  .row {
+    width: 480px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch;
+    transition: background 120ms var(--v-ease-out), border-color 120ms var(--v-ease-out);
+    min-height: 72px;
+  }
+
+  .row__avatar {
+    width: 68px; flex-shrink: 0; align-self: stretch;
+    border-radius: 13px;
+    background: var(--v-card-warm); color: var(--v-fg-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .row__avatar::before {
+    content: ""; width: 28px; height: 28px;
+    background: currentColor;
+    -webkit-mask: url("/icons/kalai/file.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/file.svg") center/contain no-repeat;
+  }
+  /* Type variants — swap the icon */
+  .row__avatar--pdf::before  { -webkit-mask-image: url("/icons/kalai/file.svg");          mask-image: url("/icons/kalai/file.svg"); }
+  .row__avatar--lock::before { -webkit-mask-image: url("/icons/kalai/lock-1.svg");        mask-image: url("/icons/kalai/lock-1.svg"); }
+  .row__avatar--code::before { -webkit-mask-image: url("/icons/kalai/code-file.svg");     mask-image: url("/icons/kalai/code-file.svg"); }
+
+  .row__body {
+    flex: 1; min-width: 0;
+    padding: 12px 0 12px 16px;
+    display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  }
+  .row__title { font-weight: 700; font-size: 17px; line-height: 1.25; color: var(--v-fg); margin: 0; }
+  .row__sub   { font-size: 14px; color: var(--v-fg-light); line-height: 1.4; margin: 0;
+                font-feature-settings: "tnum" on; }
+
+  .row__trailing { align-self: center; margin-right: 16px; display: inline-flex; align-items: center; flex-shrink: 0; }
+
+  /* Trailing icon button — anthracite background, white glyph, 36×36 pill */
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 999px;
+    background: var(--v-fg); color: var(--v-white);
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 0; cursor: pointer;
+    transition: background 120ms var(--v-ease-out);
+  }
+  .icon-btn:hover { background: var(--v-fg-hover); }
+  .icon-btn::before {
+    content: ""; width: 18px; height: 18px;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .icon-btn--download::before { -webkit-mask-image: url("/icons/kalai/download-1.svg"); mask-image: url("/icons/kalai/download-1.svg"); }
+  .icon-btn--share::before    { -webkit-mask-image: url("/icons/kalai/share-1.svg");    mask-image: url("/icons/kalai/share-1.svg"); }
+  .icon-btn--external::before { -webkit-mask-image: url("/icons/kalai/link-1.svg");     mask-image: url("/icons/kalai/link-1.svg"); }
+
+  /* Same outlined CTA variant, but with icon */
+  .icon-btn--outline {
+    background: transparent; color: var(--v-fg);
+    border: 1px solid var(--v-fg-10);
+  }
+  .icon-btn--outline:hover { background: var(--v-fg-05); }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin: 6px 0 -4px; }
+</style></head>
+<body>
+
+  <p class="lbl">Default · download (filled CTA)</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--pdf"></div>
+    <div class="row__body">
+      <h3 class="row__title">Notice d'information</h3>
+      <p class="row__sub">PDF · 3,4 Mo</p>
+    </div>
+    <div class="row__trailing">
+      <button class="icon-btn icon-btn--download" aria-label="Télécharger"></button>
+    </div>
+  </div>
+
+  <p class="lbl">Multiple files — same shell</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--pdf"></div>
+    <div class="row__body">
+      <h3 class="row__title">Rapport de gestion 2025</h3>
+      <p class="row__sub">PDF · 1,8 Mo</p>
+    </div>
+    <div class="row__trailing">
+      <button class="icon-btn icon-btn--download" aria-label="Télécharger"></button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="row__avatar row__avatar--pdf"></div>
+    <div class="row__body">
+      <h3 class="row__title">Statuts juridiques</h3>
+      <p class="row__sub">PDF · 412 Ko</p>
+    </div>
+    <div class="row__trailing">
+      <button class="icon-btn icon-btn--download" aria-label="Télécharger"></button>
+    </div>
+  </div>
+
+  <p class="lbl">Outline action variant</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--pdf"></div>
+    <div class="row__body">
+      <h3 class="row__title">Conditions générales</h3>
+      <p class="row__sub">PDF · 220 Ko</p>
+    </div>
+    <div class="row__trailing">
+      <button class="icon-btn icon-btn--outline icon-btn--download" aria-label="Télécharger"></button>
+    </div>
+  </div>
+
+  <p class="lbl">Other actions · share · open external</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--pdf"></div>
+    <div class="row__body">
+      <h3 class="row__title">Pacte d'associés</h3>
+      <p class="row__sub">PDF · 980 Ko</p>
+    </div>
+    <div class="row__trailing">
+      <button class="icon-btn icon-btn--share" aria-label="Partager"></button>
+    </div>
+  </div>
+  <div class="row">
+    <div class="row__avatar row__avatar--pdf"></div>
+    <div class="row__body">
+      <h3 class="row__title">Annexe technique</h3>
+      <p class="row__sub">PDF · 5,1 Mo</p>
+    </div>
+    <div class="row__trailing">
+      <button class="icon-btn icon-btn--external" aria-label="Ouvrir"></button>
+    </div>
+  </div>
+
+  <p class="lbl">Other file types · same anatomy</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--lock"></div>
+    <div class="row__body">
+      <h3 class="row__title">Clé KYC chiffrée</h3>
+      <p class="row__sub">PEM · 4 Ko</p>
+    </div>
+    <div class="row__trailing">
+      <button class="icon-btn icon-btn--download" aria-label="Télécharger"></button>
+    </div>
+  </div>
+  <div class="row">
+    <div class="row__avatar row__avatar--code"></div>
+    <div class="row__body">
+      <h3 class="row__title">Smart contract — v2.1</h3>
+      <p class="row__sub">SOL · 18 Ko</p>
+    </div>
+    <div class="row__trailing">
+      <button class="icon-btn icon-btn--external" aria-label="Ouvrir sur explorer"></button>
+    </div>
+  </div>
+
+</body></html>

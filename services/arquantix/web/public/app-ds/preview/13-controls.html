@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg); display:flex; align-items:center; justify-content:center; min-height: 100vh; gap: 40px; }
+  .col { display:flex; flex-direction:column; gap:14px; align-items:flex-start; }
+  .row { display:flex; align-items:center; gap:12px; font-size:13px; }
+  .lbl { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--v-fg-muted); }
+  .tgl{position:relative;width:44px;height:26px;background:var(--v-input-border);border-radius:999px;display:inline-block;flex-shrink:0}
+  .tgl::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;background:var(--v-white);border-radius:999px}
+  .tgl.on{background:#1A1815}.tgl.on::after{transform:translateX(18px)}
+  .rad{width:20px;height:20px;border-radius:999px;border:1.5px solid #6E665C;display:inline-flex;align-items:center;justify-content:center}
+  .rad.on{border-color:#1A1815}.rad.on::after{content:"";width:10px;height:10px;border-radius:999px;background:#1A1815}
+  .cbx{width:20px;height:20px;border-radius:4px;border:1.5px solid #6E665C;display:inline-flex;align-items:center;justify-content:center}
+  .cbx.on{background:#1A1815;border-color:#1A1815;color:var(--v-white)}
+  .cbx.indet{background:#1A1815;border-color:#1A1815}.cbx.indet::after{content:"";width:10px;height:2px;background:var(--v-white)}
+</style></head>
+<body>
+<div class="col">
+  <div class="lbl">Toggle</div>
+  <div class="row"><span class="tgl"></span><span>Off</span></div>
+  <div class="row"><span class="tgl on"></span><span>On</span></div>
+</div>
+<div class="col">
+  <div class="lbl">Radio</div>
+  <div class="row"><span class="rad"></span><span>Off</span></div>
+  <div class="row"><span class="rad on"></span><span>On</span></div>
+</div>
+<div class="col">
+  <div class="lbl">Checkbox</div>
+  <div class="row"><span class="cbx"></span><span>Empty</span></div>
+  <div class="row"><span class="cbx on"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span><span>Checked</span></div>
+  <div class="row"><span class="cbx indet"></span><span>Indeterminate</span></div>
+</div>
+</body></html>

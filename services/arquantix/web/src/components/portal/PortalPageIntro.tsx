@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
 import { PortalModuleTitleLink } from '@/components/portal/PortalModuleTitleLink'
 import { cn } from '@/lib/utils'
 
@@ -16,10 +16,8 @@ type Props = {
 export function PortalPageIntro({ eyebrow, title, description, className, children }: Props) {
   return (
     <header className={cn('flex flex-col gap-3', className)}>
-      <VEyebrow>{eyebrow}</VEyebrow>
-      <h1 className="m-0 font-ui text-[28px] font-semibold tracking-v-tight text-v-fg sm:text-[32px]">
-        {title}
-      </h1>
+      <AppEyebrow>{eyebrow}</AppEyebrow>
+      <h1 className="v-h3 m-0 sm:text-[32px]">{title}</h1>
       {description ? (
         <p className="m-0 max-w-2xl font-ui text-[16px] leading-relaxed text-v-fg-body">{description}</p>
       ) : null}
@@ -47,7 +45,7 @@ export function PortalSectionHeading({
   if (action) {
     return (
       <div className={cn('flex items-end justify-between gap-4', className)}>
-        <h2 className="m-0 font-ui text-[20px] font-semibold tracking-v-tight text-v-fg">{title}</h2>
+        <h2 className="v-h4 m-0 font-semibold">{title}</h2>
         {action}
       </div>
     )

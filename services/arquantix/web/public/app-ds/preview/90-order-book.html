@@ -1,0 +1,142 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Order book / price ladder — crypto trading
+     -----------------------------------------------------------
+     Display bid (buyers, green) on the left and ask (sellers, red)
+     on the right around the current spread.
+     Each row is a price level: size + price.
+     Bar fill = depth indicator (proportional to size).
+     ============================================================ */
+  .ob {
+    width: 460px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    overflow: hidden;
+  }
+  .ob__head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px; border-bottom: 1px solid var(--v-fg-10);
+  }
+  .ob__head__title { font-size: 15px; font-weight: 700; color: var(--v-fg); }
+  .ob__head__pair  { font-size: 12px; color: var(--v-fg-light); }
+
+  /* Column headers */
+  .ob__colhead {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+    padding: 8px 18px;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-weight: 600; color: var(--v-fg-light);
+    background: var(--v-fg-05);
+  }
+  .ob__colhead .a { text-align: left; }
+  .ob__colhead .b { text-align: right; }
+  .ob__colhead .c { text-align: left; padding-left: 16px; }
+  .ob__colhead .d { text-align: right; }
+
+  /* Body grid — bids left, asks right, single row */
+  .ob__body {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .ob__col { display: flex; flex-direction: column; }
+  .ob__row {
+    position: relative;
+    display: grid; grid-template-columns: 1fr 1fr;
+    padding: 6px 18px;
+    font-size: 13px; font-feature-settings: "tnum" on, "lnum" on;
+    font-weight: 500;
+  }
+  .ob__row .price { font-weight: 700; }
+  .ob__row .size  { color: var(--v-fg-body); }
+
+  /* Depth bar fill — absolute, behind text */
+  .ob__row::before {
+    content: ""; position: absolute; top: 0; bottom: 0;
+    width: var(--depth, 0%);
+    z-index: 0; opacity: 0.20;
+  }
+  .ob__col--bid .ob__row::before { right: 0; background: var(--v-green); }
+  .ob__col--ask .ob__row::before { left: 0;  background: var(--v-error); }
+
+  .ob__col--bid .ob__row .price { color: var(--v-green); text-align: left; }
+  .ob__col--bid .ob__row .size  { text-align: right; }
+  .ob__col--ask .ob__row .price { color: var(--v-error); text-align: left; padding-left: 16px; }
+  .ob__col--ask .ob__row .size  { text-align: right; }
+
+  .ob__col--bid { border-right: 1px solid var(--v-fg-10); }
+  .ob__row > * { position: relative; z-index: 1; }
+
+  /* Spread row */
+  .ob__spread {
+    grid-column: 1 / -1;
+    padding: 10px 18px;
+    background: var(--v-fg-05);
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px;
+  }
+  .ob__spread__last {
+    font-weight: 700; font-size: 18px; color: var(--v-fg);
+    font-feature-settings: "tnum" on, "lnum" on;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ob__spread__last svg { width: 14px; height: 14px; color: var(--v-green); }
+  .ob__spread__delta {
+    font-size: 12px; color: var(--v-fg-light);
+    font-feature-settings: "tnum" on;
+  }
+</style></head>
+<body>
+
+  <div class="ob">
+    <div class="ob__head">
+      <span class="ob__head__title">Carnet d'ordres</span>
+      <span class="ob__head__pair">BTC/EUR</span>
+    </div>
+    <div class="ob__colhead">
+      <span class="a">Taille (BTC)</span>
+      <span class="b">Prix</span>
+      <span class="c">Prix</span>
+      <span class="d">Taille (BTC)</span>
+    </div>
+    <div class="ob__body">
+      <!-- Bids (buyers) -->
+      <div class="ob__col ob__col--bid">
+        <div class="ob__row" style="--depth:42%"><span class="price">62 480,12</span><span class="size">0,8421</span></div>
+        <div class="ob__row" style="--depth:78%"><span class="price">62 478,90</span><span class="size">1,4250</span></div>
+        <div class="ob__row" style="--depth:35%"><span class="price">62 475,05</span><span class="size">0,6840</span></div>
+        <div class="ob__row" style="--depth:62%"><span class="price">62 472,33</span><span class="size">1,1908</span></div>
+        <div class="ob__row" style="--depth:24%"><span class="price">62 470,00</span><span class="size">0,4521</span></div>
+        <div class="ob__row" style="--depth:55%"><span class="price">62 467,18</span><span class="size">1,0532</span></div>
+        <div class="ob__row" style="--depth:18%"><span class="price">62 465,00</span><span class="size">0,3210</span></div>
+        <div class="ob__row" style="--depth:88%"><span class="price">62 462,40</span><span class="size">1,8804</span></div>
+      </div>
+      <!-- Asks (sellers) -->
+      <div class="ob__col ob__col--ask">
+        <div class="ob__row" style="--depth:48%"><span class="price">62 482,55</span><span class="size">0,9105</span></div>
+        <div class="ob__row" style="--depth:31%"><span class="price">62 484,77</span><span class="size">0,6022</span></div>
+        <div class="ob__row" style="--depth:72%"><span class="price">62 487,40</span><span class="size">1,3625</span></div>
+        <div class="ob__row" style="--depth:22%"><span class="price">62 490,18</span><span class="size">0,4180</span></div>
+        <div class="ob__row" style="--depth:65%"><span class="price">62 493,02</span><span class="size">1,2410</span></div>
+        <div class="ob__row" style="--depth:40%"><span class="price">62 495,55</span><span class="size">0,7891</span></div>
+        <div class="ob__row" style="--depth:90%"><span class="price">62 498,00</span><span class="size">1,9214</span></div>
+        <div class="ob__row" style="--depth:28%"><span class="price">62 500,77</span><span class="size">0,5503</span></div>
+      </div>
+    </div>
+    <div class="ob__spread">
+      <span class="ob__spread__last">
+        62 481,30&nbsp;€
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </span>
+      <span class="ob__spread__delta">Spread 2,43&nbsp;€&nbsp;·&nbsp;0,004 %</span>
+    </div>
+  </div>
+
+</body></html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 16px; align-items: center; min-height: 100vh; }
+
+  .faq { width: 480px; max-width: 100%; }
+
+  /* Collapsed item — warm card, single title row */
+  .faq__row {
+    display: flex; align-items: flex-start; gap: 16px;
+    background: var(--v-card-warm); border: 1px solid transparent; border-radius: 16px;
+    padding: 20px 24px; cursor: pointer;
+    transition: background 120ms var(--v-ease-out);
+  }
+  .faq__title { flex: 1; font-weight: 700; font-size: 16px; line-height: 1.35;
+                color: var(--v-fg); margin: 0; }
+  .faq__toggle { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+                 color: var(--v-fg-light); flex-shrink: 0; margin-top: 2px; }
+  .faq__toggle svg { width: 18px; height: 18px; }
+
+  /* Expanded state — white surface with border, body + link */
+  .faq__row.is-open { background: var(--v-white); border-color: var(--v-fg-10);
+                      flex-direction: column; align-items: stretch; gap: 16px; }
+  .faq__head { display: flex; align-items: flex-start; gap: 16px; }
+  .faq__head .faq__title { margin: 0; }
+  .faq__body { font-size: 15px; color: var(--v-fg-light); line-height: 1.55; margin: 0; }
+  .faq__link { display: inline-flex; align-items: center; gap: 4px;
+               font-size: 16px; font-weight: 700; color: var(--v-terracotta);
+               cursor: pointer; align-self: flex-start; line-height: 1; }
+  svg { display: block; }
+</style></head>
+<body>
+  <div class="faq">
+    <div class="faq__row" style="margin-bottom: 12px;">
+      <h3 class="faq__title">Unde Rufinus ea tempestate praefectus praetorio ad discrimen trusus est ultimum.</h3>
+      <span class="faq__toggle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      </span>
+    </div>
+
+    <div class="faq__row is-open">
+      <div class="faq__head">
+        <h3 class="faq__title">Unde Rufinus ea tempestate praefectus praetorio ad discrimen trusus est ultimum.</h3>
+        <span class="faq__toggle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+        </span>
+      </div>
+      <p class="faq__body">Brittanniam missus ut militares quosdam perduceret ausos conspirasse Magnentio, cum reniti non possent, iussa licentius supergressus fluminis modo fortunis conplurium sese repentinus infudit et ferebatur per&nbsp; strages multiplices ac ruinas, vinculis membra ingenuorum adfligens et&nbsp; quosdam obterens manicis, crimina scilicet multa consarcinando a veritate longe discreta. unde admissum est facinus impium, quod&nbsp; Constanti tempus nota inusserat sempiterna.</p>
+      <span class="faq__link">En savoir +</span>
+    </div>
+  </div>
+</body></html>

@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; gap: 32px; }
+  .col { display: flex; flex-direction: column; gap: 16px; align-items: center; }
+  .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--v-fg-muted); }
+  .fab { width: 56px; height: 56px; border-radius: 999px; display:inline-flex; align-items:center; justify-content:center; color: var(--v-white); }
+  .dark { background: #1A1815; }
+  .white { background: var(--v-white); color: #1A1815; box-shadow: 0 1px 2px rgba(26,24,21,0.06); }
+  .terra { background: #C0512E; }
+  svg { width: 24px; height: 24px; }
+</style></head>
+<body>
+  <div class="col"><div class="fab dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg></div><div class="lbl">Dark</div></div>
+  <div class="col"><div class="fab white"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 17L17 7M9 7h8v8"/></svg></div><div class="lbl">White</div></div>
+  <div class="col"><div class="fab terra"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></div><div class="lbl">Terracotta</div></div>
+</body></html>

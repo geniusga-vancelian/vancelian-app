@@ -1,0 +1,201 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 0 0 -10px;
+         align-self: flex-start; width: 560px; }
+
+  /* =====================================================
+     Card container
+     ===================================================== */
+  .list { background: var(--v-white); border-radius: 12px; padding: 8px;
+          box-shadow: var(--v-elev-subtle); border: 1px solid var(--v-fg-10);
+          width: 560px; }
+  .list--divided { padding: 0; }
+  .list--divided .item { padding: 14px 16px; }
+  .list--divided .item + .item { border-top: 1px solid var(--v-fg-10); }
+
+  .item { display: flex; align-items: center; gap: 16px; padding: 12px 16px; }
+
+  /* Kalai mask glyphs used by .avt__ic in this list (DS-defined .avt). */
+  .avt__ic--basket { -webkit-mask-image: url("/icons/kalai/shopping-bag.svg"); mask-image: url("/icons/kalai/shopping-bag.svg"); }
+  .avt__ic--user   { -webkit-mask-image: url("/icons/kalai/user.svg");          mask-image: url("/icons/kalai/user.svg"); }
+  .avt__ic--video  { -webkit-mask-image: url("/icons/kalai/video.svg");         mask-image: url("/icons/kalai/video.svg"); }
+  .avt__ic--dollar { -webkit-mask-image: url("/icons/kalai/dollar-coin.svg");   mask-image: url("/icons/kalai/dollar-coin.svg"); }
+
+  /* =====================================================
+     Row body / right-side amount
+     ===================================================== */
+  .body { flex: 1; min-width: 0; }
+  .title { font-weight: 700; font-size: 17px; line-height: 1.25; color: var(--v-fg); }
+  .sub { font-size: 14px; color: var(--v-fg-light); margin-top: 2px;
+         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+           min-width: max-content; flex-shrink: 0; }
+  .amt { font-weight: 700; font-size: 16px; color: var(--v-fg);
+         font-feature-settings: "tnum" on; white-space: nowrap; line-height: 1.1; }
+  .amt.in  { color: var(--v-green); }
+  .amt.out { color: var(--v-error); }
+
+  .meta { font-size: 12px; color: var(--v-fg-light);
+          font-feature-settings: "tnum" on; white-space: nowrap; line-height: 1; }
+
+  .chv { color: var(--v-fg-20); flex-shrink: 0; }
+  svg { display: block; }
+</style></head>
+<body>
+
+  <p class="lbl">Variant A · sans séparateurs</p>
+  <div class="list">
+
+    <div class="item">
+      <span class="avt avt--52 avt--warm"><img class="avt__ic" src="/icons/kalai/shopping-bag.svg" alt=""/></span>
+      <div class="body">
+        <div class="title">Starbucks</div>
+        <div class="sub">Café · Paris 9e</div>
+      </div>
+      <div class="right">
+        <div class="amt out">− 4,80&nbsp;€</div>
+        <div class="meta">Aujourd'hui · 08:42</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+    <div class="item">
+      <span class="avt avt--52"><img src="https://i.pravatar.cc/104?img=49" alt=""/></span>
+      <div class="body">
+        <div class="title">Maman</div>
+        <div class="sub">Virement reçu</div>
+      </div>
+      <div class="right">
+        <div class="amt in">+ 150,00&nbsp;€</div>
+        <div class="meta">Hier · 19:08</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+    <div class="item">
+      <span class="avt-x">
+        <span class="avt-x__result"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+        <span class="avt-x__source"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+      </span>
+      <div class="body">
+        <div class="title">Achat de Bitcoin</div>
+        <div class="sub">− 0,2645&nbsp;ETH</div>
+      </div>
+      <div class="right">
+        <div class="amt in">+ 0,012&nbsp;BTC</div>
+        <div class="meta">≈ 820,00&nbsp;€ · 22 mai</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+    <div class="item">
+      <span class="avt avt--52 avt--warm"><img class="avt__ic" src="/icons/kalai/video.svg" alt=""/></span>
+      <div class="body">
+        <div class="title">Netflix</div>
+        <div class="sub">Prélèvement mensuel</div>
+      </div>
+      <div class="right">
+        <div class="amt out">− 13,49&nbsp;€</div>
+        <div class="meta">20 mai · 06:00</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+    <div class="item">
+      <span class="avt avt--52 avt--green"><img class="avt__ic" src="/icons/kalai/dollar.svg" alt=""/></span>
+      <div class="body">
+        <div class="title">Salaire</div>
+        <div class="sub">Vancelian SAS · virement</div>
+      </div>
+      <div class="right">
+        <div class="amt in">+ 3 200,00&nbsp;€</div>
+        <div class="meta">18 mai · 09:00</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+  </div>
+
+  <p class="lbl">Variant B · avec séparateurs entre lignes</p>
+  <div class="list list--divided">
+
+    <div class="item">
+      <span class="avt avt--52 avt--warm"><img class="avt__ic" src="/icons/kalai/shopping-bag.svg" alt=""/></span>
+      <div class="body">
+        <div class="title">Starbucks</div>
+        <div class="sub">Café · Paris 9e</div>
+      </div>
+      <div class="right">
+        <div class="amt out">− 4,80&nbsp;€</div>
+        <div class="meta">Aujourd'hui · 08:42</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+    <div class="item">
+      <span class="avt avt--52"><img src="https://i.pravatar.cc/104?img=49" alt=""/></span>
+      <div class="body">
+        <div class="title">Maman</div>
+        <div class="sub">Virement reçu</div>
+      </div>
+      <div class="right">
+        <div class="amt in">+ 150,00&nbsp;€</div>
+        <div class="meta">Hier · 19:08</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+    <div class="item">
+      <span class="avt-x">
+        <span class="avt-x__result"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+        <span class="avt-x__source"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+      </span>
+      <div class="body">
+        <div class="title">Achat de Bitcoin</div>
+        <div class="sub">− 0,2645&nbsp;ETH</div>
+      </div>
+      <div class="right">
+        <div class="amt in">+ 0,012&nbsp;BTC</div>
+        <div class="meta">≈ 820,00&nbsp;€ · 22 mai</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+    <div class="item">
+      <span class="avt avt--52 avt--warm"><img class="avt__ic" src="/icons/kalai/video.svg" alt=""/></span>
+      <div class="body">
+        <div class="title">Netflix</div>
+        <div class="sub">Prélèvement mensuel</div>
+      </div>
+      <div class="right">
+        <div class="amt out">− 13,49&nbsp;€</div>
+        <div class="meta">20 mai · 06:00</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+    <div class="item">
+      <span class="avt avt--52 avt--green"><img class="avt__ic" src="/icons/kalai/dollar.svg" alt=""/></span>
+      <div class="body">
+        <div class="title">Salaire</div>
+        <div class="sub">Vancelian SAS · virement</div>
+      </div>
+      <div class="right">
+        <div class="amt in">+ 3 200,00&nbsp;€</div>
+        <div class="meta">18 mai · 09:00</div>
+      </div>
+      <span class="chv"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg></span>
+    </div>
+
+  </div>
+
+</body></html>

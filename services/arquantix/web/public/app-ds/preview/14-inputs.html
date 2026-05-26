@@ -1,0 +1,208 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 40px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg); }
+
+  .frame { max-width: 1120px; margin: 0 auto;
+           background: var(--v-white); border: 1px solid var(--v-fg-10);
+           border-radius: 16px; padding: 40px; }
+
+  .title { font-weight: 700; font-size: 18px; color: var(--v-fg); margin: 0 0 28px; }
+
+  /* Column headers */
+  .heads { display: grid; grid-template-columns: 150px repeat(5, 1fr); column-gap: 20px;
+           padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--v-fg-10); }
+  .heads .ch { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+               color: var(--v-fg-muted); font-weight: 600; }
+
+  /* Row */
+  .row { display: grid; grid-template-columns: 150px repeat(5, 1fr); column-gap: 20px;
+         align-items: start; padding: 14px 0; border-bottom: 1px solid var(--v-fg-10); }
+  .row:last-child { border-bottom: 0; }
+
+  /* ----- Responsive ----------------------------------------
+     Below 900 px the 5-col grid won't fit. We stack into a
+     2-col layout (label / single state), labelling each cell
+     with the state name above the input. Below 600 px the cell
+     layout becomes a single column (label on top, then states). */
+  @media (max-width: 900px) {
+    body { padding: 24px; }
+    .frame { padding: 24px; }
+    .heads { display: none; }
+    .row { grid-template-columns: 130px 1fr; align-items: start; row-gap: 14px; }
+    .cell { display: flex; flex-direction: column; gap: 4px; }
+    .cell::before {
+      content: attr(data-state); font-size: 10px; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--v-fg-muted); font-weight: 600;
+    }
+    .row > .cell:first-of-type::before { content: "Default"; }
+    .row > .cell:nth-of-type(2)::before { content: "Filled"; }
+    .row > .cell:nth-of-type(3)::before { content: "Focus"; }
+    .row > .cell:nth-of-type(4)::before { content: "Disabled"; }
+    .row > .cell:nth-of-type(5)::before { content: "Error"; }
+  }
+  @media (max-width: 600px) {
+    .row { grid-template-columns: 1fr; }
+    .row--phone .cell--phone { grid-column: auto; grid-template-columns: 96px 1fr; }
+    .row--search .cell--search-default,
+    .row--search .cell--search-focus { grid-column: auto; }
+  }
+  .label { padding-top: 4px; }
+  .label__name { font-weight: 700; font-size: 15px; color: var(--v-fg); line-height: 1.2; }
+  .label__hint { display: inline-block; margin-top: 8px; padding: 3px 8px;
+                 background: var(--v-card-warm); border-radius: 4px;
+                 font-size: 10px; font-weight: 500; color: var(--v-fg-muted); }
+
+  /* Input cell — anatomy of a field */
+  .cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fld { position: relative; height: 48px; display: flex; align-items: center; gap: 8px;
+         background: var(--v-white); border: 1px solid var(--v-input-border); border-radius: 8px; padding: 0 14px;
+         font-size: 14px; color: var(--v-fg); }
+  .fld input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+               font: inherit; color: inherit; height: 100%; padding: 0; }
+  .fld input::placeholder { color: var(--v-fg-light); }
+  .ic { display: inline-flex; color: var(--v-fg-muted); flex-shrink: 0; }
+
+  /* Floating label — sits on the border */
+  .lblf {
+    position: absolute; left: 10px; top: 0;
+    transform: translateY(-50%);
+    background: var(--v-white); padding: 0 4px;
+    font-size: 11px; color: var(--v-fg-muted);
+  }
+
+  /* States */
+  .fld.focus  { border-color: var(--v-fg); border-width: 1.5px; padding: 0 13.5px; }
+  .fld.disabled { background: var(--v-input-disabled-bg); border-color: var(--v-input-disabled-border); }
+  .fld.disabled input { color: var(--v-fg-light); }
+  .fld.disabled .ic { color: var(--v-fg-light); }
+  .fld.disabled .lblf { background: var(--v-input-disabled-bg); color: var(--v-fg-light); }
+  .fld.error  { border-color: var(--v-error); }
+  .fld.error .lblf { color: var(--v-fg); }
+
+  /* Clear (x) — appears in Focus state to clear the field */
+  .clear { width: 18px; height: 18px; border-radius: 999px; background: var(--v-fg-20); color: var(--v-white);
+           display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+  .clear svg { width: 10px; height: 10px; }
+
+  .helper-desc { font-size: 11px; color: var(--v-fg-muted); }
+  .helper-err  { font-size: 11px; color: var(--v-error); }
+
+  /* Phone + Search rows are special — different column layout */
+  .row--phone .cell--phone {
+    grid-column: 2 / span 5;
+    display: grid; grid-template-columns: 108px 1fr; gap: 12px;
+  }
+  .row--search .cell--search-default { grid-column: 2 / span 2; }
+  .row--search .cell--search-focus   { grid-column: 4 / span 2; }
+
+  /* Phone flag pill */
+  .phone-flag {
+    display: inline-flex; align-items: center; gap: 8px; height: 48px;
+    background: var(--v-white); border: 1px solid var(--v-input-border); border-radius: 8px;
+    padding: 0 12px; font-weight: 600; font-size: 14px; color: var(--v-fg);
+  }
+  .phone-flag .flag {
+    width: 18px; height: 18px; border-radius: 999px; overflow: hidden;
+    background: linear-gradient(to right, #0055A4 33%, var(--v-white) 33% 66%, #EF4135 66%);
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+
+  svg { display: block; }
+</style></head>
+<body>
+  <div class="frame">
+    <h2 class="title">Inputs anatomy</h2>
+
+    <div class="heads">
+      <span class="ch"></span>
+      <span class="ch">Default</span>
+      <span class="ch">Filled</span>
+      <span class="ch">Focus</span>
+      <span class="ch">Disabled</span>
+      <span class="ch">Error</span>
+    </div>
+
+    <!-- Texte -->
+    <div class="row">
+      <div class="label"><div class="label__name">Texte</div><span class="label__hint">Defaut</span></div>
+      <div class="cell"><div class="fld"><input placeholder="Label" /></div></div>
+      <div class="cell"><div class="fld"><label class="lblf">Label</label><input value="Text" /></div></div>
+      <div class="cell"><div class="fld focus"><label class="lblf">Label</label><input value="" /><span class="clear"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg></span></div></div>
+      <div class="cell"><div class="fld disabled"><input placeholder="Label" disabled /></div></div>
+      <div class="cell"><div class="fld error"><input placeholder="Label" /></div></div>
+    </div>
+
+    <!-- Label with description / error helper -->
+    <div class="row">
+      <div class="label"><div class="label__name">Label</div><span class="label__hint">Defaut</span></div>
+      <div class="cell"><div class="fld"><input placeholder="Label" /></div></div>
+      <div class="cell"><div class="fld"><input placeholder="Label" /></div><span class="helper-desc">Description</span></div>
+      <div></div>
+      <div></div>
+      <div class="cell"><div class="fld error"><input placeholder="Label" /></div><span class="helper-err">Error</span></div>
+    </div>
+
+    <!-- Email -->
+    <div class="row">
+      <div class="label"><div class="label__name">Email</div><span class="label__hint">Prefix</span></div>
+      <div class="cell"><div class="fld"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><input placeholder="Label" /></div></div>
+      <div class="cell"><div class="fld"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><label class="lblf">Label</label><input value="Text" /></div></div>
+      <div class="cell"><div class="fld focus"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><label class="lblf">Label</label><input value="" /><span class="clear"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg></span></div></div>
+      <div class="cell"><div class="fld disabled"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><input placeholder="Label" disabled /></div></div>
+      <div class="cell"><div class="fld error"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><input placeholder="Label" /></div></div>
+    </div>
+
+    <!-- Password -->
+    <div class="row">
+      <div class="label"><div class="label__name">Password</div><span class="label__hint">Suffix</span></div>
+      <div class="cell"><div class="fld"><input placeholder="Password" /><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></div></div>
+      <div class="cell"><div class="fld"><label class="lblf">Password</label><input value="••••••••••••••" /><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></div></div>
+      <div class="cell"><div class="fld focus"><input placeholder="Password" /><span class="clear"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg></span><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></div></div>
+      <div class="cell"><div class="fld disabled"><input placeholder="Password" disabled /><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></div></div>
+      <div class="cell"><div class="fld error"><input placeholder="Password" /><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span></div></div>
+    </div>
+
+    <!-- Date -->
+    <div class="row">
+      <div class="label"><div class="label__name">Date</div><span class="label__hint">Suffix</span></div>
+      <div class="cell"><div class="fld"><input placeholder="Label" /><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></span></div></div>
+      <div class="cell"><div class="fld"><label class="lblf">Label</label><input value="Text" /><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></span></div></div>
+      <div class="cell"><div class="fld focus"><label class="lblf">Label</label><input value="" /><span class="clear"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg></span><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></span></div></div>
+      <div class="cell"><div class="fld disabled"><input placeholder="Label" disabled /><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></span></div></div>
+      <div class="cell"><div class="fld error"><input placeholder="Label" /><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></span></div></div>
+    </div>
+
+    <!-- Dropdown -->
+    <div class="row">
+      <div class="label"><div class="label__name">Dropdown</div><span class="label__hint">Chevron</span></div>
+      <div class="cell"><div class="fld"><input placeholder="Label" /><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 12 15 18 9"/></svg></span></div></div>
+      <div class="cell"><div class="fld"><label class="lblf">Label</label><input value="Text" /><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 12 15 18 9"/></svg></span></div></div>
+      <div class="cell"><div class="fld focus"><label class="lblf">Label</label><input value="" /><span class="clear"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg></span><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 12 15 18 9"/></svg></span></div></div>
+      <div class="cell"><div class="fld disabled"><input placeholder="Label" disabled /><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 12 15 18 9"/></svg></span></div></div>
+      <div class="cell"><div class="fld error"><input placeholder="Label" /><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 12 15 18 9"/></svg></span></div></div>
+    </div>
+
+    <!-- Phone (special: +33 indicator pill, then full-width label input) -->
+    <div class="row row--phone">
+      <div class="label"><div class="label__name">Phone indicatif</div><span class="label__hint">+33</span></div>
+      <div class="cell--phone">
+        <div class="phone-flag"><span class="flag"></span>+33</div>
+        <div class="fld"><input placeholder="Label" /></div>
+      </div>
+    </div>
+
+    <!-- Search (special: default + focus, share row) -->
+    <div class="row row--search">
+      <div class="label"><div class="label__name">Search</div><span class="label__hint">Prefix</span></div>
+      <div class="cell cell--search-default">
+        <div class="fld"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input placeholder="Rechercher" /></div>
+      </div>
+      <div class="cell cell--search-focus">
+        <div class="fld focus"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><label class="lblf">Rechercher</label><input value="Text" /><span class="clear"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg></span></div>
+      </div>
+    </div>
+  </div>
+</body></html>

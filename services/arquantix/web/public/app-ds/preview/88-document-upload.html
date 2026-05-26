@@ -1,0 +1,206 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Document upload — KYC steps
+     -----------------------------------------------------------
+     A · Upload slot (empty)  — dashed drop zone, CTA
+     B · Upload slot (filled) — thumbnail + meta + replace/remove
+     C · Upload slot (uploading) — progress bar
+     D · KYC list             — list of required docs with status
+                                (pending / uploaded / validated / rejected)
+     ============================================================ */
+  .frame { width: 420px; max-width: 100%; }
+
+  /* A · dashed empty */
+  .up {
+    border: 1.5px dashed var(--v-fg-20);
+    background: var(--v-card-warm);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px; text-align: center; cursor: pointer;
+    transition: background 120ms, border-color 120ms;
+  }
+  .up:hover { background: var(--v-fg-05); border-color: var(--v-fg-muted); }
+  .up__icon {
+    width: 48px; height: 48px; border-radius: 999px;
+    background: var(--v-white); color: var(--v-fg-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-bottom: 4px;
+  }
+  .up__icon .ic {
+    width: 22px; height: 22px; background: currentColor;
+    -webkit-mask-image: url("/icons/kalai/upload-1.svg"); mask-image: url("/icons/kalai/upload-1.svg");
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .up__title { font-size: 14px; font-weight: 600; color: var(--v-fg); }
+  .up__sub   { font-size: 12px; color: var(--v-fg-light); line-height: 1.4; max-width: 260px; }
+
+  /* B · filled card */
+  .up-card {
+    background: var(--v-white); border: 1px solid var(--v-fg-10);
+    border-radius: 12px; padding: 14px;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .up-card__thumb {
+    width: 56px; height: 56px; border-radius: 8px;
+    background:
+      linear-gradient(135deg, var(--v-card-warm), var(--v-card-hover));
+    border: 1px solid var(--v-fg-10);
+    position: relative; flex-shrink: 0; overflow: hidden;
+  }
+  .up-card__thumb::after {
+    content: ""; position: absolute; inset: 12px;
+    background: var(--v-fg-light);
+    -webkit-mask-image: url("/icons/kalai/document.svg"); mask-image: url("/icons/kalai/document.svg");
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .up-card__body { flex: 1; min-width: 0;
+                   display: flex; flex-direction: column; gap: 4px; }
+  .up-card__title { font-size: 14px; font-weight: 600; color: var(--v-fg);
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .up-card__meta  { font-size: 12px; color: var(--v-fg-light); font-feature-settings: "tnum" on; }
+  .up-card__actions { display: inline-flex; gap: 4px; flex-shrink: 0; }
+  .up-card__btn {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--v-fg-05); color: var(--v-fg);
+    border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .up-card__btn:hover { background: var(--v-fg-10); }
+  .up-card__btn svg { width: 14px; height: 14px; }
+
+  /* C · uploading progress */
+  .up-card__progress {
+    width: 100%; height: 4px; border-radius: 999px;
+    background: var(--v-fg-10); overflow: hidden;
+    margin-top: 2px;
+  }
+  .up-card__progress__fill {
+    height: 100%; background: var(--v-fg);
+  }
+
+  /* D · KYC list with statuses */
+  .kyc {
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    overflow: hidden;
+  }
+  .kyc__row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 18px;
+    border-top: 1px solid var(--v-fg-10);
+  }
+  .kyc__row:first-child { border-top: 0; }
+  .kyc__icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--v-card-warm); color: var(--v-fg-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .kyc__icon .ic {
+    width: 18px; height: 18px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic--id    { -webkit-mask-image: url("/icons/kalai/card.svg");          mask-image: url("/icons/kalai/card.svg"); }
+  .ic--home  { -webkit-mask-image: url("/icons/kalai/home-1.svg");        mask-image: url("/icons/kalai/home-1.svg"); }
+  .ic--bank  { -webkit-mask-image: url("/icons/kalai/payment-card.svg"); mask-image: url("/icons/kalai/payment-card.svg"); }
+  .ic--tax   { -webkit-mask-image: url("/icons/kalai/document.svg");      mask-image: url("/icons/kalai/document.svg"); }
+
+  .kyc__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .kyc__title { font-size: 15px; font-weight: 600; color: var(--v-fg); }
+  .kyc__sub   { font-size: 12px; color: var(--v-fg-light); }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">A · empty drop zone</p>
+  <div class="frame">
+    <div class="up">
+      <span class="up__icon"><span class="ic"></span></span>
+      <span class="up__title">Glisser un fichier ou cliquer pour parcourir</span>
+      <span class="up__sub">PDF, JPG, PNG — 10 Mo max. Photo nette, recto + verso.</span>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">B · filled (success) + remove</p>
+  <div class="frame">
+    <div class="up-card">
+      <div class="up-card__thumb"></div>
+      <div class="up-card__body">
+        <span class="up-card__title">passeport-recto-verso.pdf</span>
+        <span class="up-card__meta">2,4 Mo · ajouté il y a 3 min</span>
+      </div>
+      <div class="up-card__actions">
+        <button class="up-card__btn" aria-label="Aperçu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="up-card__btn" aria-label="Supprimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M21 3L3 21"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">C · uploading 64 %</p>
+  <div class="frame">
+    <div class="up-card">
+      <div class="up-card__thumb"></div>
+      <div class="up-card__body">
+        <span class="up-card__title">justificatif-domicile.pdf</span>
+        <span class="up-card__meta">Téléversement · 64 %</span>
+        <div class="up-card__progress"><div class="up-card__progress__fill" style="width:64%"></div></div>
+      </div>
+      <div class="up-card__actions">
+        <button class="up-card__btn" aria-label="Annuler"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M21 3L3 21"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">D · KYC list · 4 documents avec statut</p>
+  <div class="frame">
+    <div class="kyc">
+      <div class="kyc__row">
+        <span class="kyc__icon"><span class="ic ic--id"></span></span>
+        <div class="kyc__body">
+          <span class="kyc__title">Pièce d'identité</span>
+          <span class="kyc__sub">passeport-recto-verso.pdf</span>
+        </div>
+        <span class="tag tag--green"><span class="tag__dot"></span>Validé</span>
+      </div>
+      <div class="kyc__row">
+        <span class="kyc__icon"><span class="ic ic--home"></span></span>
+        <div class="kyc__body">
+          <span class="kyc__title">Justificatif de domicile</span>
+          <span class="kyc__sub">Téléversé il y a 2 jours</span>
+        </div>
+        <span class="tag tag--yellow"><span class="tag__dot"></span>En cours</span>
+      </div>
+      <div class="kyc__row">
+        <span class="kyc__icon"><span class="ic ic--bank"></span></span>
+        <div class="kyc__body">
+          <span class="kyc__title">RIB</span>
+          <span class="kyc__sub">rib-vancelian.pdf · à corriger</span>
+        </div>
+        <span class="tag tag--terra"><span class="tag__dot"></span>Refusé</span>
+      </div>
+      <div class="kyc__row">
+        <span class="kyc__icon"><span class="ic ic--tax"></span></span>
+        <div class="kyc__body">
+          <span class="kyc__title">Avis d'imposition</span>
+          <span class="kyc__sub">Optionnel · accélère votre validation</span>
+        </div>
+        <span class="tag tag--neutral">À ajouter</span>
+      </div>
+    </div>
+  </div>
+
+</body></html>

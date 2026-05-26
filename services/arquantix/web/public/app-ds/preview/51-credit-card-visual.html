@@ -1,0 +1,265 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-wrap: wrap; gap: 32px;
+         align-items: flex-start; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Credit card visual — Vancelian-branded preview card.
+     Aspect ratio 1:1.57 (real ISO/IEC 7810 ID-1 is 1.586) shown
+     vertical here to match the "Pick your card" hero pattern.
+     ============================================================
+     Anatomy:
+       .cc          — outer card shell (radius 18, aspect 0.63)
+       .cc__visa    — VISA wordmark, top-left, vertical
+       .cc__chip    — EMV chip, top-right
+       .cc__brand   — Vancelian wordmark, bottom-left rotated 90°
+       .cc__logo    — Vancelian icon, bottom-center
+     -------------------------------------------------------------- */
+
+  .cc {
+    --cc-w: 240px;
+    width: var(--cc-w); aspect-ratio: 0.63 / 1;
+    border-radius: 18px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(26,24,21,0.18),
+                0 2px 6px rgba(26,24,21,0.08);
+    color: rgba(255,255,255,0.92);
+  }
+
+  /* Brand variants — sober, anthracite-led palette per Aman/Hermès tone */
+  .cc--dark {
+    background:
+      radial-gradient(120% 80% at 30% 25%, #2A2725 0%, #1A1815 55%, #0B0A09 100%);
+  }
+  .cc--cream {
+    background:
+      radial-gradient(120% 80% at 25% 20%, var(--v-white) 0%, #F3EDE6 60%, #E2DAC8 100%);
+    color: #1A1815;
+  }
+  .cc--terracotta {
+    background:
+      radial-gradient(120% 80% at 25% 20%, #D9603E 0%, #C0512E 55%, #7A3018 100%);
+  }
+  .cc--prusse {
+    background:
+      radial-gradient(120% 80% at 25% 20%, #2A4A6D 0%, #0F2A47 55%, #07182C 100%);
+  }
+  .cc--virtual {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.02)),
+      #1A1815;
+    border: 1px solid rgba(255,255,255,0.10);
+  }
+  .cc--virtual::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(135deg,
+      transparent 0%,
+      rgba(255,255,255,0.12) 30%,
+      rgba(255,255,255,0.04) 50%,
+      transparent 70%);
+    pointer-events: none;
+  }
+
+  /* VISA logo — top-left, smaller to match reference. */
+  .cc__visa {
+    position: absolute; top: 18px; left: 18px;
+    width: 36px; height: auto;
+    display: block;
+  }
+  .cc--cream .cc__visa { filter: invert(1) brightness(0.1); }
+
+  /* EMV chip — top-center, silvery, sized like a real card.
+     Matches the reference: ~10% from top, centered, square-ish. */
+  .cc__chip {
+    position: absolute;
+    left: 50%; top: 8%;
+    transform: translateX(-50%);
+    width: 46px; height: 36px;
+    border-radius: 6px;
+    background:
+      linear-gradient(135deg, #f5f5f4 0%, #c8c8c5 45%, #888887 100%);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18),
+                inset 1px 1px 0 rgba(255,255,255,0.5);
+  }
+  /* contact pattern */
+  .cc__chip::before {
+    content: ""; position: absolute; inset: 6px;
+    background:
+      linear-gradient(rgba(0,0,0,0.25) 0 1px, transparent 1px) 0 0 / 100% 25%,
+      linear-gradient(90deg, rgba(0,0,0,0.25) 0 1px, transparent 1px) 0 0 / 33.3% 100%;
+    background-repeat: repeat;
+    border-radius: 3px;
+  }
+  /* central metallic pad */
+  .cc__chip::after {
+    content: ""; position: absolute; inset: 32% 28%;
+    border-radius: 3px;
+    background: linear-gradient(135deg, #e8e8e6, #9a9a98);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
+  }
+
+  /* Vertical wordmark — "VANCELIAN" rotated along left edge, near bottom */
+  .cc__brand {
+    position: absolute;
+    left: 14px; bottom: 64px;
+    transform: rotate(-90deg);
+    transform-origin: left bottom;
+    font-family: var(--v-font-ui); font-weight: 600;
+    font-size: 11px; letter-spacing: 0.35em; text-transform: uppercase;
+    line-height: 1; white-space: nowrap;
+    color: currentColor; opacity: 0.95;
+  }
+
+  /* Vancelian icon — small, bottom-left corner (matches reference) */
+  .cc__logo {
+    position: absolute;
+    left: 18px; bottom: 18px;
+    width: 18px; height: 18px;
+    background: currentColor;
+    -webkit-mask: url("/brand/vancelian/logo-black-icon.svg") center/contain no-repeat;
+            mask: url("/brand/vancelian/logo-black-icon.svg") center/contain no-repeat;
+    opacity: 0.95;
+  }
+  .cc--cream .cc__logo { background: #1A1815; }
+
+  /* Number / last 4 digits — bottom right, subtle */
+  .cc__num {
+    position: absolute; right: 16px; bottom: 16px;
+    font-family: var(--v-font-ui); font-weight: 500; font-size: 13px;
+    letter-spacing: 0.18em; font-feature-settings: "tnum" on;
+    opacity: 0.85;
+  }
+
+  /* Big "peak" motif — stylized "/\" mountain that dominates the card.
+     Built from a single clip-path silhouette filled with a soft gradient. */
+  .cc__peak {
+    position: absolute;
+    inset: 18% 8% 16% 8%;
+    background:
+      linear-gradient(135deg,
+        rgba(255,255,255,0.18) 0%,
+        rgba(255,255,255,0.08) 35%,
+        rgba(255,255,255,0.02) 65%,
+        rgba(0,0,0,0.10) 100%);
+    /* outlined chevron: outer peak with an inner cut-out forms the /\ shape */
+    clip-path: polygon(
+      50% 0%,
+      100% 100%, 78% 100%,
+      50% 40%, 22% 100%, 0% 100%
+    );
+    pointer-events: none;
+  }
+  /* cream variant: invert the peak's contrast */
+  .cc--cream .cc__peak {
+    background:
+      linear-gradient(135deg,
+        rgba(0,0,0,0.10) 0%,
+        rgba(0,0,0,0.05) 35%,
+        rgba(0,0,0,0.02) 65%,
+        rgba(255,255,255,0.30) 100%);
+  }
+  /* second peak overlay — slightly offset and smaller, creates depth */
+  .cc__peak--inner {
+    inset: 26% 18% 16% 18%;
+    background:
+      linear-gradient(135deg,
+        rgba(255,255,255,0.12) 0%,
+        rgba(255,255,255,0.04) 50%,
+        rgba(0,0,0,0.14) 100%);
+    opacity: 0.7;
+  }
+  .cc--cream .cc__peak--inner {
+    background:
+      linear-gradient(135deg,
+        rgba(0,0,0,0.06) 0%,
+        rgba(0,0,0,0.02) 50%,
+        rgba(255,255,255,0.20) 100%);
+  }
+
+  /* Size variants */
+  .cc--sm { --cc-w: 160px; }
+  .cc--md { --cc-w: 240px; }
+  .cc--lg { --cc-w: 320px; }
+
+  .group { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); }
+</style></head>
+<body>
+
+  <div class="group">
+    <div class="cc cc--dark cc--lg">
+      <img class="cc__visa" src="/app-ds/brands/visa-white.png" alt="VISA"/>
+      <div class="cc__chip"></div>
+      <div class="cc__peak"></div>
+      <div class="cc__peak cc__peak--inner"></div>
+      <div class="cc__brand">Vancelian</div>
+      <div class="cc__logo"></div>
+    </div>
+    <div class="lbl">Physical · Dark</div>
+  </div>
+
+  <div class="group">
+    <div class="cc cc--cream cc--lg">
+      <img class="cc__visa" src="/app-ds/brands/visa-white.png" alt="VISA"/>
+      <div class="cc__chip"></div>
+      <div class="cc__peak"></div>
+      <div class="cc__peak cc__peak--inner"></div>
+      <div class="cc__brand">Vancelian</div>
+      <div class="cc__logo"></div>
+    </div>
+    <div class="lbl">Physical · Cream</div>
+  </div>
+
+  <div class="group">
+    <div class="cc cc--virtual cc--lg">
+      <img class="cc__visa" src="/app-ds/brands/visa-white.png" alt="VISA"/>
+      <div class="cc__chip"></div>
+      <div class="cc__brand">Vancelian</div>
+      <div class="cc__logo"></div>
+    </div>
+    <div class="lbl">Virtual · Translucent</div>
+  </div>
+
+  <div class="group">
+    <div class="cc cc--terracotta cc--md">
+      <img class="cc__visa" src="/app-ds/brands/visa-white.png" alt="VISA"/>
+      <div class="cc__chip"></div>
+      <div class="cc__peak"></div>
+      <div class="cc__peak cc__peak--inner"></div>
+      <div class="cc__brand">Vancelian</div>
+      <div class="cc__logo"></div>
+    </div>
+    <div class="lbl">Terracotta · MD</div>
+  </div>
+
+  <div class="group">
+    <div class="cc cc--prusse cc--md">
+      <img class="cc__visa" src="/app-ds/brands/visa-white.png" alt="VISA"/>
+      <div class="cc__chip"></div>
+      <div class="cc__peak"></div>
+      <div class="cc__peak cc__peak--inner"></div>
+      <div class="cc__brand">Vancelian</div>
+      <div class="cc__logo"></div>
+    </div>
+    <div class="lbl">Bleu de Prusse · MD</div>
+  </div>
+
+  <div class="group">
+    <div class="cc cc--dark cc--sm">
+      <img class="cc__visa" src="/app-ds/brands/visa-white.png" alt="VISA"/>
+      <div class="cc__chip"></div>
+      <div class="cc__peak"></div>
+      <div class="cc__peak cc__peak--inner"></div>
+      <div class="cc__brand">Vancelian</div>
+      <div class="cc__logo"></div>
+    </div>
+    <div class="lbl">Dark · SM (overview)</div>
+  </div>
+
+</body></html>

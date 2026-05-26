@@ -1,0 +1,153 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px; align-items: flex-start;
+         justify-content: center; min-height: 100vh; max-width: 720px; margin: 0 auto; }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 0; }
+
+  .row { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+
+  /* .avt-x — défini globalement dans colors_and_type.css
+     (cf. section COMPONENT PRIMITIVES). Ici on garde uniquement
+     les surcharges spécifiques à la démo de cette page. */
+
+  .meta { font-size: 13px; color: var(--v-fg-light); margin-left: 8px; }
+  .meta b { color: var(--v-fg); font-weight: 600; }
+  .arrow { color: var(--v-fg-muted); margin: 0 4px; }
+
+  /* Tile demos — the DS « .avt-x » already exposes --ring */
+  .tile-warm { display: inline-flex; padding: 16px; background: var(--v-card-warm); border-radius: 12px; }
+  .tile-warm .avt-x { --ring: var(--v-card-warm); }
+  .tile-white { display: inline-flex; padding: 16px; background: var(--v-white); border-radius: 12px;
+                border: 1px solid var(--v-fg-10); }
+  .tile-white .avt-x { --ring: var(--v-white); }
+
+  /* Transaction row demo */
+  .tx-row {
+    width: 480px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 14px;
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .tx-row .avt-x { --ring: var(--v-white); }
+  .tx-row__body { flex: 1; min-width: 0; }
+  .tx-row__title { font-weight: 700; font-size: 15px; color: var(--v-fg); line-height: 1.2; }
+  .tx-row__sub { font-size: 13px; color: var(--v-fg-light); margin-top: 2px; }
+  .tx-row__amt { font-weight: 700; font-size: 15px; color: var(--v-fg);
+                 font-feature-settings: "tnum" on; text-align: right; white-space: nowrap; }
+  .tx-row__amt-sub { font-size: 12px; color: var(--v-fg-light); text-align: right; margin-top: 2px;
+                     font-feature-settings: "tnum" on; }
+</style></head>
+<body>
+
+  <p class="lbl">Anatomy · result = grande (top-left), source = petite (bottom-right)</p>
+  <div class="row">
+    <span class="avt-x avt-x--sm">
+      <span class="avt-x__result"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+    </span>
+    <span class="meta"><b>BTC</b> <span class="arrow">→</span> <b>ETH</b> · 40&nbsp;px</span>
+  </div>
+  <div class="row">
+    <span class="avt-x">
+      <span class="avt-x__result"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+    </span>
+    <span class="meta"><b>BTC</b> <span class="arrow">→</span> <b>ETH</b> · 48&nbsp;px (default)</span>
+  </div>
+  <div class="row">
+    <span class="avt-x avt-x--md">
+      <span class="avt-x__result"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+    </span>
+    <span class="meta"><b>BTC</b> <span class="arrow">→</span> <b>ETH</b> · 56&nbsp;px</span>
+  </div>
+  <div class="row">
+    <span class="avt-x avt-x--lg">
+      <span class="avt-x__result"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+    </span>
+    <span class="meta"><b>BTC</b> <span class="arrow">→</span> <b>ETH</b> · 72&nbsp;px</span>
+  </div>
+
+  <p class="lbl">Pairs — la deuxième crypto est le résultat (la grande)</p>
+  <div class="row">
+    <span class="avt-x">
+      <span class="avt-x__result"><img src="/app-ds/crypto/usdc.svg" alt="USDC"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+    </span>
+    <span class="meta"><b>BTC</b> <span class="arrow">→</span> <b>USDC</b></span>
+  </div>
+  <div class="row">
+    <span class="avt-x">
+      <span class="avt-x__result"><img src="/app-ds/crypto/eur.svg" alt="EUR"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+    </span>
+    <span class="meta"><b>BTC</b> <span class="arrow">→</span> <b>EUR</b></span>
+  </div>
+  <div class="row">
+    <span class="avt-x">
+      <span class="avt-x__result"><img src="/app-ds/crypto/sol.svg" alt="SOL"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/usdc.svg" alt="USDC"/></span>
+    </span>
+    <span class="meta"><b>USDC</b> <span class="arrow">→</span> <b>SOL</b></span>
+  </div>
+  <div class="row">
+    <span class="avt-x">
+      <span class="avt-x__result"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+    </span>
+    <span class="meta"><b>ETH</b> <span class="arrow">→</span> <b>BTC</b></span>
+  </div>
+
+  <p class="lbl">Ring adapts to host surface</p>
+  <div class="row">
+    <div class="tile-warm">
+      <span class="avt-x avt-x--md">
+        <span class="avt-x__result"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+        <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+      </span>
+    </div>
+    <div class="tile-white">
+      <span class="avt-x avt-x--md">
+        <span class="avt-x__result"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+        <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+      </span>
+    </div>
+  </div>
+
+  <p class="lbl">In a transaction row</p>
+  <div class="tx-row">
+    <span class="avt-x avt-x--md">
+      <span class="avt-x__result"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+    </span>
+    <div class="tx-row__body">
+      <div class="tx-row__title">Échange · BTC → ETH</div>
+      <div class="tx-row__sub">Conversion · à l'instant</div>
+    </div>
+    <div>
+      <div class="tx-row__amt">+ 1,420 ETH</div>
+      <div class="tx-row__amt-sub">− 0,032 BTC</div>
+    </div>
+  </div>
+  <div class="tx-row">
+    <span class="avt-x avt-x--md">
+      <span class="avt-x__result"><img src="/app-ds/crypto/eur.svg" alt="EUR"/></span>
+      <span class="avt-x__source"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></span>
+    </span>
+    <div class="tx-row__body">
+      <div class="tx-row__title">Vente · BTC → EUR</div>
+      <div class="tx-row__sub">Cash-out · 14 mars</div>
+    </div>
+    <div>
+      <div class="tx-row__amt">+ 4 320,00 €</div>
+      <div class="tx-row__amt-sub">− 0,068 BTC</div>
+    </div>
+  </div>
+
+</body></html>

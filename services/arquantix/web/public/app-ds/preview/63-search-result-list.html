@@ -1,0 +1,136 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 18px;
+         align-items: stretch; max-width: 480px; margin: 0 auto; min-height: 100vh; }
+
+  /* ============================================================
+     Search field — uses our standard input shell (preview/14).
+     48 px tall, white bg, border var(--v-input-border), radius 8, floating label.
+     Search icon leading + clear button trailing.
+     ============================================================ */
+  .fld {
+    position: relative; height: 48px; padding: 0 14px;
+    background: var(--v-white); border: 1px solid var(--v-input-border); border-radius: 8px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--v-fg);
+  }
+  .fld input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+    font: inherit; font-size: 15px; color: inherit;
+    height: 100%; padding: 6px 0 0;  /* leave room for floating label */
+  }
+  .fld input::placeholder { color: var(--v-fg-light); }
+  .fld__ic {
+    width: 20px; height: 20px; flex-shrink: 0;
+    background: var(--v-fg-muted);
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .fld__ic--search { -webkit-mask-image: url("/icons/kalai/search.svg"); mask-image: url("/icons/kalai/search.svg"); }
+  .fld__lbl {
+    position: absolute; left: 10px; top: 0;
+    transform: translateY(-50%);
+    background: var(--v-white); padding: 0 4px;
+    font-size: 11px; color: var(--v-fg-muted);
+    pointer-events: none;
+  }
+  /* Leading-icon variants need to offset the floating label past the icon */
+  .fld--icon-left .fld__lbl { left: 38px; }
+
+  .fld__clear {
+    width: 20px; height: 20px; flex-shrink: 0;
+    border: 0; cursor: pointer;
+    background: var(--v-fg-20);
+    border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .fld__clear::before {
+    content: ""; width: 12px; height: 12px; background: var(--v-white);
+    -webkit-mask: url("/icons/kalai/remove.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/remove.svg") center/contain no-repeat;
+  }
+
+  /* ============================================================
+     Result list — sits inside a white card with subtle border /
+     shadow, like our standard card surface.
+     ============================================================ */
+  .sl {
+    background: var(--v-white); border: 1px solid var(--v-fg-10);
+    border-radius: 16px;
+    padding: 4px 16px;
+    box-shadow: 0 2px 6px rgba(26,24,21,0.05);
+  }
+  .sl__head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--v-fg-10);
+  }
+  .sl__head__title { flex: 1; font-weight: 700; font-size: 17px; color: var(--v-fg); }
+  .sl__head__cta {
+    flex-shrink: 0;
+  }
+  .sl__row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--v-fg-10);
+    cursor: pointer;
+  }
+  .sl__row:last-child { border-bottom: 0; }
+  .sl__row__body { flex: 1; min-width: 0; }
+  .sl__row__title { font-weight: 700; font-size: 17px; color: var(--v-fg); line-height: 1.2; }
+  .sl__row__sub   { font-size: 14px; color: var(--v-fg-light); margin-top: 2px; }
+  .sl__row__chv {
+    width: 20px; height: 20px; flex-shrink: 0;
+    background: var(--v-fg-light);
+    -webkit-mask: url("/icons/kalai/chevron-right.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/chevron-right.svg") center/contain no-repeat;
+  }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 6px 0 -4px; }
+</style></head>
+<body>
+
+  <p class="lbl">Search field · standard input (white, fg-10 border, radius 8)</p>
+  <div class="fld fld--icon-left">
+    <span class="fld__ic fld__ic--search"></span>
+    <label class="fld__lbl">Rechercher</label>
+    <input value="1" />
+    <button class="fld__clear" aria-label="Effacer"></button>
+  </div>
+
+  <p class="lbl">Result list · white card surface</p>
+  <div class="sl">
+    <div class="sl__head">
+      <span class="sl__head__title">My address is not here</span>
+      <button class="btn btn--primary sl__head__cta">Manual input</button>
+    </div>
+    <div class="sl__row">
+      <div class="sl__row__body">
+        <div class="sl__row__title">123 Avenue de la Paix</div>
+        <div class="sl__row__sub">12345, Paris, France</div>
+      </div>
+      <span class="sl__row__chv"></span>
+    </div>
+    <div class="sl__row">
+      <div class="sl__row__body">
+        <div class="sl__row__title">123 Avenue de la Paix</div>
+        <div class="sl__row__sub">12345, Paris, France</div>
+      </div>
+      <span class="sl__row__chv"></span>
+    </div>
+    <div class="sl__row">
+      <div class="sl__row__body">
+        <div class="sl__row__title">123 Avenue de la Paix</div>
+        <div class="sl__row__sub">12345, Paris, France</div>
+      </div>
+      <span class="sl__row__chv"></span>
+    </div>
+  </div>
+
+</body></html>

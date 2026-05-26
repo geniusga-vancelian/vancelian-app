@@ -1,0 +1,190 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Beneficiary list — bénéficiaires enregistrés pour virements
+     Row anatomy :
+       .ben-row__lead    — avatar (photo / initials / icon)
+       .ben-row__body    — name + IBAN masked
+       .ben-row__tag     — frequent / verified / new
+       .ben-row__trail   — chevron OR star (favorite)
+     ============================================================ */
+  .ben {
+    width: 420px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    overflow: hidden;
+  }
+
+  /* Search bar + add CTA */
+  .ben__top {
+    display: flex; gap: 10px; padding: 16px 18px 12px;
+  }
+  /* Search input = DS .fld pattern (cf. /14-inputs · search row) */
+  .ben__search {
+    flex: 1;
+    display: flex; align-items: center; gap: 8px;
+    height: 48px; padding: 0 14px;
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-20);
+    border-radius: 8px;
+    font-size: 14px; color: var(--v-fg);
+  }
+  .ben__search .ic { display: inline-flex; color: var(--v-fg-muted); flex-shrink: 0; }
+  .ben__search .ic svg { width: 16px; height: 16px; display: block; }
+  .ben__search input {
+    flex: 1; min-width: 0;
+    border: 0; outline: 0; background: transparent;
+    font: inherit; color: inherit; height: 100%; padding: 0;
+  }
+  .ben__search input::placeholder { color: var(--v-fg-light); }
+
+  .ben__add {
+    width: 48px; height: 48px; border-radius: 999px;
+    background: var(--v-white); color: var(--v-fg);
+    border: 1px solid rgba(26,24,21,0.04);
+    box-shadow: 0 1px 2px rgba(26,24,21,0.04),
+                0 4px 14px rgba(26,24,21,0.06);
+    cursor: pointer; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .ben__add svg { width: 16px; height: 16px; }
+
+  /* List rows */
+  .ben-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--v-fg-10);
+    cursor: pointer;
+  }
+  .ben-row:hover { background: var(--v-fg-05); }
+  .ben-row__body { flex: 1; min-width: 0;
+                   display: flex; flex-direction: column; gap: 2px; }
+  .ben-row__name { font-size: 15px; font-weight: 600; color: var(--v-fg);
+                   display: inline-flex; align-items: center; gap: 6px; }
+  .ben-row__iban {
+    font-size: 12px; color: var(--v-fg-light);
+    font-feature-settings: "tnum" on;
+  }
+  .ben-row__trail { display: inline-flex; align-items: center; gap: 8px;
+                    flex-shrink: 0; }
+  .ben-row__star {
+    width: 18px; height: 18px;
+    color: var(--v-fg-20);
+    display: inline-flex;
+  }
+  .ben-row__star svg { width: 100%; height: 100%; display: block; }
+  .ben-row__star.is-on { color: var(--v-yellow); }
+  .ben-row__chev { color: var(--v-fg-20); }
+  .ben-row__chev svg { width: 18px; height: 18px; display: block; }
+
+  /* Section divider with letter (alphabetical grouping) */
+  .ben-letter {
+    padding: 14px 18px 4px;
+    font-size: 12px; font-weight: 700; color: var(--v-fg-light);
+    background: var(--v-fg-05);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+</style></head>
+<body>
+
+  <div class="ben">
+    <div class="ben__top">
+      <div class="ben__search">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <input type="text" placeholder="Rechercher un bénéficiaire…"/>
+      </div>
+      <button class="ben__add" aria-label="Ajouter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+
+    <div class="ben-letter">Favoris</div>
+
+    <div class="ben-row">
+      <span class="avt avt--40"><img src="https://i.pravatar.cc/80?img=49" alt=""/></span>
+      <div class="ben-row__body">
+        <span class="ben-row__name">Maman</span>
+        <span class="ben-row__iban">FR76 •••• 1283</span>
+      </div>
+      <div class="ben-row__trail">
+        <span class="ben-row__star is-on" aria-label="Favori"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg></span>
+        <span class="ben-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="ben-row">
+      <span class="avt avt--40 avt--terra">MD</span>
+      <div class="ben-row__body">
+        <span class="ben-row__name">Marie Dupont <span class="tag tag--green" style="height:18px;font-size:10px;padding:0 6px">Vérifié</span></span>
+        <span class="ben-row__iban">FR76 •••• 4827</span>
+      </div>
+      <div class="ben-row__trail">
+        <span class="ben-row__star is-on" aria-label="Favori"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg></span>
+        <span class="ben-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="ben-letter">A</div>
+
+    <div class="ben-row">
+      <span class="avt avt--40 avt--green">AR</span>
+      <div class="ben-row__body">
+        <span class="ben-row__name">Antoine Rouen</span>
+        <span class="ben-row__iban">FR76 •••• 9102</span>
+      </div>
+      <div class="ben-row__trail">
+        <span class="ben-row__star" aria-label="Ajouter aux favoris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg></span>
+        <span class="ben-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="ben-letter">B</div>
+
+    <div class="ben-row">
+      <span class="avt avt--40 avt--blue">BC</span>
+      <div class="ben-row__body">
+        <span class="ben-row__name">Bouygues Construction</span>
+        <span class="ben-row__iban">FR76 •••• 2204</span>
+      </div>
+      <div class="ben-row__trail">
+        <span class="ben-row__star" aria-label="Ajouter aux favoris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg></span>
+        <span class="ben-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="ben-letter">C</div>
+
+    <div class="ben-row">
+      <span class="avt avt--40"><img src="https://i.pravatar.cc/80?img=11" alt=""/></span>
+      <div class="ben-row__body">
+        <span class="ben-row__name">Camille Leroy</span>
+        <span class="ben-row__iban">FR76 •••• 5710</span>
+      </div>
+      <div class="ben-row__trail">
+        <span class="ben-row__star" aria-label="Ajouter aux favoris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg></span>
+        <span class="ben-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="ben-row">
+      <span class="avt avt--40 avt--dark">CN</span>
+      <div class="ben-row__body">
+        <span class="ben-row__name">Clinique Notre-Dame <span class="tag tag--terra" style="height:18px;font-size:10px;padding:0 6px">Nouveau</span></span>
+        <span class="ben-row__iban">FR76 •••• 8033</span>
+      </div>
+      <div class="ben-row__trail">
+        <span class="ben-row__star" aria-label="Ajouter aux favoris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg></span>
+        <span class="ben-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+  </div>
+
+</body></html>

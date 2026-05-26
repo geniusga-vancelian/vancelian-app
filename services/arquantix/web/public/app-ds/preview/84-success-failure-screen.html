@@ -1,0 +1,157 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-wrap: wrap; gap: 24px;
+         align-items: flex-start; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Full-screen confirmation — large status moment.
+     Différent du toast (transient) et du dialog/sheet (small) :
+     occupe tout l'écran après une action longue (versement,
+     KYC, paiement).
+     Anatomy :
+       .conf            — full-frame stage (full mobile screen)
+       .conf__icon      — 96 px status ring + glyph
+       .conf__title     — display-ish heading
+       .conf__body      — explanation
+       .conf__recap     — k/v block (montant, ref, date)
+       .conf__cta-stack — vertical CTAs at bottom
+     Surfaces :
+       .conf--success / .conf--error : bg accent halo + tint title
+     ============================================================ */
+  .conf {
+    width: 390px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    min-height: 620px;
+    padding: 40px 24px 24px;
+    display: flex; flex-direction: column; gap: 24px;
+    align-items: center; text-align: center;
+  }
+
+  .conf__icon {
+    width: 96px; height: 96px; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--v-white);
+    box-shadow: 0 8px 24px rgba(26,24,21,0.10);
+  }
+  .conf__icon .ic {
+    width: 44px; height: 44px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .conf--success .conf__icon { background: var(--v-green); }
+  .conf--error   .conf__icon { background: var(--v-error); }
+  .conf--pending .conf__icon { background: var(--v-yellow); }
+
+  .ic--check { -webkit-mask-image: url("/icons/kalai/check.svg");  mask-image: url("/icons/kalai/check.svg"); }
+  .ic--cross { -webkit-mask-image: url("/icons/kalai/remove.svg"); mask-image: url("/icons/kalai/remove.svg"); }
+  .ic--clock { -webkit-mask-image: url("/icons/kalai/clock.svg");  mask-image: url("/icons/kalai/clock.svg"); }
+
+  .conf__title { margin: 0; font-size: 26px; font-weight: 700; line-height: 1.15;
+                 color: var(--v-fg); letter-spacing: -0.01em; text-wrap: pretty;
+                 max-width: 300px; }
+  .conf--success .conf__title { color: var(--v-green); }
+  .conf--error   .conf__title { color: var(--v-error); }
+  .conf--pending .conf__title { color: var(--v-yellow); }
+
+  .conf__body { margin: 0; font-size: 14px; line-height: 1.55;
+                color: var(--v-fg-body); max-width: 320px; text-wrap: pretty; }
+
+  /* Recap block (amount, ref, etc.) */
+  .conf__recap {
+    width: 100%; background: var(--v-fg-05);
+    border-radius: 12px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .conf__recap__row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 12px;
+  }
+  .conf__recap__lbl { font-size: 12px; color: var(--v-fg-light); }
+  .conf__recap__val { font-size: 14px; color: var(--v-fg); font-weight: 600;
+                      font-feature-settings: "tnum" on; text-align: right; }
+  .conf__recap__val.is-amt { font-size: 18px; }
+
+  .conf__cta-stack { margin-top: auto; display: flex; flex-direction: column;
+                     gap: 8px; width: 100%; }
+</style></head>
+<body>
+
+  <div>
+    <p class="v-eyebrow--sm" style="text-align:center;margin:0 0 8px">Success</p>
+    <div class="conf conf--success">
+      <div class="conf__icon"><span class="ic ic--check"></span></div>
+      <h1 class="conf__title">Versement envoyé</h1>
+      <p class="conf__body">Votre virement vers Marie Dupont arrivera sous 24 heures ouvrées.</p>
+      <div class="conf__recap">
+        <div class="conf__recap__row">
+          <span class="conf__recap__lbl">Montant</span>
+          <span class="conf__recap__val is-amt">1 250,00&nbsp;€</span>
+        </div>
+        <div class="conf__recap__row">
+          <span class="conf__recap__lbl">Référence</span>
+          <span class="conf__recap__val">TRF-2026-051922</span>
+        </div>
+        <div class="conf__recap__row">
+          <span class="conf__recap__lbl">Estimation</span>
+          <span class="conf__recap__val">24 mai 2026</span>
+        </div>
+      </div>
+      <div class="conf__cta-stack">
+        <button class="btn btn--lg btn--primary">Voir l'opération</button>
+        <button class="btn btn--lg btn--ghost">Retour au compte</button>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="v-eyebrow--sm" style="text-align:center;margin:0 0 8px">Error</p>
+    <div class="conf conf--error">
+      <div class="conf__icon"><span class="ic ic--cross"></span></div>
+      <h1 class="conf__title">Transaction refusée</h1>
+      <p class="conf__body">Votre banque a refusé l'opération. Le montant n'a pas été débité — vérifiez votre plafond ou utilisez un autre moyen de paiement.</p>
+      <div class="conf__recap">
+        <div class="conf__recap__row">
+          <span class="conf__recap__lbl">Code erreur</span>
+          <span class="conf__recap__val">ERR-3DS-405</span>
+        </div>
+        <div class="conf__recap__row">
+          <span class="conf__recap__lbl">Carte</span>
+          <span class="conf__recap__val">•• 4827</span>
+        </div>
+      </div>
+      <div class="conf__cta-stack">
+        <button class="btn btn--lg btn--primary">Réessayer</button>
+        <button class="btn btn--lg btn--ghost">Contacter advisor</button>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="v-eyebrow--sm" style="text-align:center;margin:0 0 8px">Pending</p>
+    <div class="conf conf--pending">
+      <div class="conf__icon"><span class="ic ic--clock"></span></div>
+      <h1 class="conf__title">En cours de traitement</h1>
+      <p class="conf__body">Votre demande de souscription est en cours de validation par notre équipe — vous recevrez une notification sous 24 heures.</p>
+      <div class="conf__recap">
+        <div class="conf__recap__row">
+          <span class="conf__recap__lbl">Produit</span>
+          <span class="conf__recap__val">Provence XII</span>
+        </div>
+        <div class="conf__recap__row">
+          <span class="conf__recap__lbl">Montant souscrit</span>
+          <span class="conf__recap__val is-amt">50 000,00&nbsp;€</span>
+        </div>
+      </div>
+      <div class="conf__cta-stack">
+        <button class="btn btn--lg btn--primary">Suivre la souscription</button>
+      </div>
+    </div>
+  </div>
+
+</body></html>

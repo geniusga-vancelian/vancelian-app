@@ -12,7 +12,8 @@ import {
   ListOrdered,
   Plus,
 } from 'lucide-react'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
+import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
@@ -133,7 +134,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
               className="overflow-hidden rounded-v-card border border-black/10 p-4 text-white shadow-v-subtle sm:p-5"
               style={{ backgroundColor: heroColor }}
             >
-              <VEyebrow className="text-white/70">Position</VEyebrow>
+              <AppEyebrow tone="inverse">Position</AppEyebrow>
               <div className="mt-1 flex items-center gap-3">
                 <PortalCryptoAvatar
                   ticker={ticker}
@@ -209,7 +210,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
         </PortalReveal>
 
         <PortalReveal index={1}>
-          <article className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
+          <article className="card-simple overflow-hidden !w-full">
             <div className="border-b border-v-fg-10 px-4 py-3">
               <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">Instrument</h2>
             </div>
@@ -245,7 +246,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
         </PortalReveal>
 
         <PortalReveal index={2}>
-          <article className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
+          <article className="card-simple overflow-hidden !w-full">
             <div className="border-b border-v-fg-10 px-4 py-3">
               <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">My position</h2>
             </div>
@@ -287,49 +288,23 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
         </PortalReveal>
 
         <PortalReveal index={3}>
-          <article className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
-            <div className="flex items-center justify-between gap-3 border-b border-v-fg-10 px-4 py-3">
-              <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">Transactions history</h2>
-              <span className="font-ui text-[13px] text-v-fg-muted">Voir l&apos;historique complet</span>
-            </div>
-            {data.transactions.length === 0 ? (
-              <p className="m-0 px-4 py-6 font-ui text-[14px] text-v-fg-muted">
-                Aucune transaction pour le moment.
-              </p>
-            ) : (
-              <ul className="m-0 list-none p-0">
-                {data.transactions.slice(0, 12).map((tx) => {
-                  const incoming = isIncomingCryptoTransaction(tx)
-                  return (
-                  <li
-                    key={tx.id}
-                    className="flex items-center gap-3 border-t border-v-fg-05 px-4 py-3.5 first:border-t-0"
-                  >
-                    <span
-                      className={cn(
-                        'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold',
-                        incoming ? 'bg-v-green-bg text-v-green' : 'bg-v-error-bg text-v-error',
-                      )}
-                    >
-                      {incoming ? '↓' : '↑'}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-ui text-[14px] font-medium text-v-fg">
-                        {tx.title || tx.side}
-                      </span>
-                      <span className="mt-0.5 block truncate font-ui text-[12px] text-v-fg-muted">
-                        {tx.subtitle}
-                      </span>
-                    </span>
-                    <span className="text-right font-ui text-[14px] font-semibold tabular-nums text-v-fg">
-                      {formatCryptoTransactionAmount(tx)}
-                    </span>
-                  </li>
-                  )
-                })}
-              </ul>
-            )}
-          </article>
+          <PortalTransactionHistory
+            title="Transactions history"
+            action={
+              <span className="module-head__action cursor-default">Voir l&apos;historique complet</span>
+            }
+            items={data.transactions.slice(0, 12).map((tx) => {
+              const incoming = isIncomingCryptoTransaction(tx)
+              return {
+                id: tx.id,
+                title: tx.title || tx.side,
+                subtitle: tx.subtitle,
+                amount: formatCryptoTransactionAmount(tx),
+                incoming,
+                amountTone: incoming ? 'in' : 'out',
+              }
+            })}
+          />
         </PortalReveal>
 
         <button

@@ -13,7 +13,7 @@ function ResearchCard({ item }: { item: PortalResearchItem }) {
   return (
     <PortalNavLink
       href={item.href}
-      className="group block h-full overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle no-underline transition-shadow duration-v-fast hover:shadow-v-medium"
+      className="group block h-full card-simple overflow-hidden !w-full no-underline transition-shadow duration-v-fast hover:shadow-v-medium"
     >
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-v-fg-05">
         {item.coverUrl ? (

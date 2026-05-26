@@ -1,0 +1,245 @@
+/* Vancelian App DS — tokens (handoff colors_and_type.css v1.2) */
+/* Scope : portail `/app/*` — le site public garde `vancelian-tokens.css` sur :root. */
+[data-v-ds="app"] {
+/* ============================================================
+     COLORS — Light theme (default)
+     ============================================================ */
+
+  /* Backgrounds — papier off-white, jamais blanc pur */
+  --v-bg:           #F7F7F4;   /* fond produit principal */
+  --v-bg-photo:     #F5F1EA;   /* fond planches photo (légèrement plus chaud) */
+  --v-card:         #F2F1ED;   /* carte niveau 1 */
+  --v-card-warm:    #F3EDE6;   /* carte warm — testimonials, marketing */
+  --v-card-hover:   #EBEAE5;
+  --v-dark-bg:      #141208;   /* dark mode bg / footer */
+
+  /* Foregrounds — anthracite, jamais noir pur */
+  --v-fg:        #1A1815;     /* anthracite principal */
+  --v-fg-body:   #3A352F;
+  --v-fg-muted:  #6E665C;
+  --v-fg-light:  #8E867A;
+  --v-fg-20:     #C9C3B5;     /* disabled, muted borders */
+  --v-fg-10:     #E2DED4;     /* dividers, disabled bg */
+  --v-fg-05:     #EFEDE6;     /* subtle backgrounds */
+  --v-dark-fg:   #EDECEC;
+  --v-white:     #FFFFFF;     /* pur — élévation au-dessus de --v-bg/card, texte sur fond solide */
+
+  /* Input-specific neutrals (inputs / dropdowns / search field) */
+  --v-input-border:          #D9D4CC;   /* border default */
+  --v-input-disabled-bg:     #E8E4DD;
+  --v-input-disabled-border: #DAD5CB;
+
+  /* Foreground hover — used by primary buttons (.btn--primary:hover) */
+  --v-fg-hover: #3B3633;
+
+  /* Triade chromatique identitaire (jamais simultanée en aplat) */
+  --v-terracotta:         #C0512E;     /* PRIMAIRE — accent unique de marque */
+  --v-terracotta-pressed: #A0431C;
+  --v-terracotta-bg:      #C0512E26;   /* 15% — fonds doux */
+  --v-terracotta-bg-strong:#C0512E40;  /* 25% — hover sur fond accent */
+
+  --v-green:     #33614D;   /* vert anglais — success / patrimoine */
+  --v-green-bg:  #33614D26;
+  --v-blue:      #0F2A47;   /* bleu de Prusse — info / institutionnel (SEUL bleu autorisé) */
+  --v-blue-bg:   #0F2A4726;
+  --v-yellow:         #C99A2E;   /* safran — WARNING (ajouté v1.1) */
+  --v-yellow-pressed: #A37D1F;
+  --v-yellow-bg:      #C99A2E26;
+  --v-yellow-bg-strong:#C99A2E40;
+
+  /* Sémantiques — la triade EST le système d'état */
+  --v-success:    var(--v-green);
+  --v-success-bg: var(--v-green-bg);
+  --v-warning:    var(--v-yellow);
+  --v-warning-bg: var(--v-yellow-bg);
+  --v-info:       var(--v-blue);
+  --v-info-bg:    var(--v-blue-bg);
+  --v-error:      #B83A3A;     /* seul rouge, hors triade */
+  --v-error-bg:   #B83A3A26;
+
+  /* ---------------------------------------------------------------
+     On-dark semantic colors — for use on anthracite / media surfaces
+     ---------------------------------------------------------------
+     Les couleurs de la triade (terracotta / green / blue / yellow /
+     error) sont calibrées pour les surfaces claires. Sur un fond
+     anthracite ou photo, elles n'ont pas assez de contraste —
+     ces variantes sont les équivalents éclaircis / désaturés.
+     ---------------------------------------------------------------- */
+  --v-terracotta-on-dark: #E5896E;   /* terracotta éclairci, lisible sur anthracite */
+  --v-green-on-dark:      #8FC9A8;   /* vert anglais éclairci */
+  --v-blue-on-dark:       #8FB4D8;   /* bleu de Prusse éclairci */
+  --v-yellow-on-dark:     #E8C778;   /* safran éclairci */
+  --v-error-on-dark:      #E89090;   /* error éclairci (corail) */
+
+  /* Backgrounds doux on dark (≈ 18 % opacity de la couleur on-dark) */
+  --v-terracotta-bg-on-dark: rgba(229, 137, 110, 0.18);
+  --v-green-bg-on-dark:      rgba(143, 201, 168, 0.18);
+  --v-blue-bg-on-dark:       rgba(143, 180, 216, 0.18);
+  --v-yellow-bg-on-dark:     rgba(232, 199, 120, 0.18);
+  --v-error-bg-on-dark:      rgba(232, 144, 144, 0.18);
+
+  /* Échelle de gris technique (Tailwind v4 inspired) — usages neutres */
+  --v-gray-50:  #F9FAFB;
+  --v-gray-200: #E5E7EB;
+  --v-gray-300: #D1D5DC;
+  --v-gray-500: #6A7282;
+  --v-gray-700: #364153;
+  --v-gray-900: #101828;
+
+  /* ============================================================
+     TYPOGRAPHY — base tokens
+     ============================================================ */
+  --v-font-ui:        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --v-font-editorial: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --v-font-display:   "Newsreader Display", "Newsreader", Georgia, serif;
+  /* Mono = Inter + tabular-nums (DS rule, no monospace face) */
+  --v-font-mono:      "Inter", system-ui, sans-serif;
+
+  --v-fw-light:    300;
+  --v-fw-regular:  400;
+  --v-fw-medium:   500;
+  --v-fw-semibold: 600;
+  --v-fw-bold:     700;
+
+  /* Line heights */
+  --v-lh-tight:    1.0;
+  --v-lh-snug:     1.05;
+  --v-lh-headline: 1.1;
+  --v-lh-headline-relaxed: 1.15;
+  --v-lh-compact:  1.2;
+  --v-lh-normal:   1.3;
+  --v-lh-relaxed:  1.4;
+  --v-lh-body:     1.45;
+  --v-lh-loose:    1.5;
+  --v-lh-editorial:1.55;
+
+  /* Letter spacing */
+  --v-ls-tight:     -0.03em;
+  --v-ls-normal:    0;
+  --v-ls-wide:      0.05em;     /* legacy eyebrow / caption */
+  --v-ls-eyebrow:   0.08em;     /* v1.1 — official eyebrow tracking */
+  --v-ls-extrawide: 0.4em;       /* wordmark */
+
+  /* ============================================================
+     SPACING — base 4px, 8 paliers stricts
+     ============================================================ */
+  --v-space-0:   0;
+  --v-space-xs:  4px;
+  --v-space-sm:  8px;
+  --v-space-md:  12px;
+  --v-space-lg:  16px;
+  --v-space-xl:  24px;
+  --v-space-2xl: 32px;
+  --v-space-3xl: 48px;
+  --v-space-4xl: 64px;
+
+  /* ============================================================
+     RADIUS — 5 paliers stricts
+     ============================================================ */
+  --v-radius-none:  0;
+  --v-radius-tag:   4px;     /* tags, badges, chips */
+  --v-radius-input: 6px;     /* inputs, dropdowns */
+  --v-radius-card:  8px;     /* cards UI standard, list items, banners */
+  --v-radius-modal: 12px;    /* modals, drawers */
+  --v-radius-sheet: 24px;    /* bottom sheets — v1.2 OFFICIAL */
+  --v-radius-lg:    16px;    /* v1.1 OFFICIAL — large card marketing */
+  --v-radius-xl:    20px;    /* v1.1 OFFICIAL — feature card */
+  --v-radius-2xl:   24px;    /* v1.1 OFFICIAL — editorial fullbleed, photo containers */
+  --v-radius-pill:  9999px;  /* buttons, toggles, tabs */
+
+  /* ============================================================
+     ELEVATION — 3 niveaux
+     ============================================================ */
+  --v-elev-flat:   none;
+  --v-elev-subtle: 0 2px 6px 0 rgba(26, 24, 21, 0.07);
+  --v-elev-medium: 0 8px 24px 0 rgba(26, 24, 21, 0.10);
+
+  /* ============================================================
+     MOTION — discret, court, naturel
+     ============================================================ */
+  --v-motion-fast:  120ms;
+  --v-motion-base:  200ms;
+  --v-motion-slow:  320ms;
+  --v-ease-out:     cubic-bezier(0.22, 1, 0.36, 1);
+  --v-ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ============================================================
+     CONTAINER — 12-col desktop, 8-col tablet, 4-col mobile
+     ============================================================ */
+  --v-container-mobile:  100%;
+  --v-container-tablet:  720px;
+  --v-container-desktop: 1280px;
+  --v-pad-mobile:  16px;
+  --v-pad-tablet:  24px;
+  --v-pad-desktop: 48px;
+}
+
+[data-v-ds="app"][data-theme="dark"],
+[data-v-ds="app"] .dark {
+  --v-bg:         #141208;
+  --v-bg-photo:   #1a180e;
+  --v-card:       #1f1c14;
+  --v-card-warm:  #221e15;
+  --v-card-hover: #2a2519;
+
+  --v-fg:        #EDECEC;
+  --v-fg-body:   #D6D3CE;
+  --v-fg-muted:  #9B948A;
+  --v-fg-light:  #6E665C;
+  --v-fg-20:     #3A352F;
+  --v-fg-10:     #2A251D;
+  --v-fg-05:     #1F1C14;
+}
+
+@scope ([data-v-ds="app"]) {
+/* UI scale (Inter) */
+.v-display    { font-family: var(--v-font-ui); font-weight: 700; font-size: 64px; line-height: 1.0;  letter-spacing: -0.03em; }
+.v-h1         { font-family: var(--v-font-ui); font-weight: 600; font-size: 44px; line-height: 1.1;  letter-spacing: 0; }
+.v-h2         { font-family: var(--v-font-ui); font-weight: 600; font-size: 30px; line-height: 1.2;  letter-spacing: 0; }
+.v-h3         { font-family: var(--v-font-ui); font-weight: 500; font-size: 22px; line-height: 1.3;  letter-spacing: 0; }
+.v-h4         { font-family: var(--v-font-ui); font-weight: 500; font-size: 17px; line-height: 1.4;  letter-spacing: 0; }
+.v-body-lg    { font-family: var(--v-font-ui); font-weight: 400; font-size: 16px; line-height: 1.5; }
+.v-body       { font-family: var(--v-font-ui); font-weight: 400; font-size: 14px; line-height: 1.5; }
+.v-body-sm    { font-family: var(--v-font-ui); font-weight: 400; font-size: 13px; line-height: 1.45; }
+
+/* Emphasis variants — same metrics, SemiBold (600) for in-line emphasis on
+   amounts, key labels inside a sentence, or callouts within a list row. */
+.v-body-strong    { font-family: var(--v-font-ui); font-weight: 600; font-size: 16px; line-height: 1.5; }
+.v-body-sm-strong { font-family: var(--v-font-ui); font-weight: 600; font-size: 13px; line-height: 1.45; }
+.v-caption-strong { font-family: var(--v-font-ui); font-weight: 600; font-size: 12px; line-height: 1.4; }
+.v-caption    {
+  /* legacy — conserver pour usages UI (table headers, breadcrumb, etc.) */
+  font-family: var(--v-font-ui); font-weight: 500; font-size: 11px;
+  line-height: 1.4; letter-spacing: 0.05em; text-transform: uppercase;
+}
+
+/* Eyebrow — v1.1 official, weight bumped to 600 (v1.2).
+   Règle d'usage : conservé UNIQUEMENT quand il apporte une info contextuelle
+   (statut « OUVERTE / FUNDED 30 % », label de champ « MIN. INVESTI »,
+   catégorie produit « OFFRES EXCLUSIVES »). Ne JAMAIS décorer un titre éditorial. */
+.v-eyebrow {
+  font-family: var(--v-font-ui); font-weight: 600; font-size: 13px;
+  line-height: 1.4; letter-spacing: var(--v-ls-eyebrow); text-transform: uppercase;
+  color: var(--v-fg-muted);
+}
+/* Variante taggée — fond card-warm, rare et signant.
+   Réservée aux eyebrows ouvrant une section (ex : « CADRE RÉGLEMENTAIRE »). */
+.v-eyebrow--tagged {
+  display: inline-block;
+  background: var(--v-card-warm);
+  padding: 4px 8px;
+  border-radius: var(--v-radius-tag);
+  color: var(--v-fg);
+}
+.v-mono       {
+  font-family: var(--v-font-mono); font-weight: 500; font-size: 13px;
+  line-height: 1.45; font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-eyebrow--sm {
+  font-family: var(--v-font-ui);
+  font-weight: 500; font-size: 10px;
+  line-height: 1.4; letter-spacing: var(--v-ls-eyebrow);
+  text-transform: uppercase;
+  color: var(--v-fg-light);}
+
+}

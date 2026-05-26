@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); display: flex; flex-direction: column; gap: 16px; align-items: flex-start; justify-content: center; min-height: 100vh; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border-radius: 999px; border: 0; cursor: pointer; white-space: nowrap; }
+  .sm { height: 32px; padding: 0 16px; font-size: 13px; }
+  .md { height: 40px; padding: 0 20px; font-size: 14px; }
+  .lg { height: 52px; padding: 0 28px; font-size: 15px; }
+  .pri { background: #1A1815; color: var(--v-white); }
+  .row { display: flex; gap: 12px; align-items: center; }
+  .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--v-fg-muted); width: 60px; }
+</style></head>
+<body>
+  <div class="row"><span class="lbl">32 sm</span><button class="btn pri sm">Continuer</button></div>
+  <div class="row"><span class="lbl">40 md</span><button class="btn pri md">Continuer</button></div>
+  <div class="row"><span class="lbl">52 lg</span><button class="btn pri lg">Continuer</button></div>
+</body></html>

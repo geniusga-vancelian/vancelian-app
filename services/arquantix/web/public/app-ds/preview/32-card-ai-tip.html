@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* AI Tip — warm card with a small dark-square icon and body text */
+  .ai-tip {
+    width: 480px; max-width: 100%;
+    background: var(--v-card-warm); border-radius: 16px;
+    padding: 20px 24px;
+    display: flex; gap: 14px;
+  }
+  .ai-tip__icon {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    background: var(--v-fg); position: relative; margin-top: 2px;
+  }
+  .ai-tip__icon::before {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 18px; height: 18px;
+    background: var(--v-white);
+    -webkit-mask: url("/icons/kalai/dashboard-1.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/dashboard-1.svg") center/contain no-repeat;
+  }
+  .ai-tip__body { flex: 1; min-width: 0; }
+  .ai-tip__title { font-weight: 700; font-size: 18px; line-height: 1.3; color: var(--v-fg); margin: 0 0 6px; }
+  .ai-tip__text  { font-size: 16px; color: var(--v-fg-light); line-height: 1.5; margin: 0; }
+</style></head>
+<body>
+  <div class="ai-tip">
+    <div class="ai-tip__icon"></div>
+    <div class="ai-tip__body">
+      <h3 class="ai-tip__title">Conseil de l'IAssistant</h3>
+      <p class="ai-tip__text">Incenderat autem audaces usque ad insaniam homines ad haec, quae nefariis egere conatibus, Luscus quidam curator urbis subito</p>
+    </div>
+  </div>
+</body></html>

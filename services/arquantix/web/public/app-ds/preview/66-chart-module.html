@@ -1,0 +1,242 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 32px;
+         align-items: center; min-height: 100vh; max-width: 460px; margin: 0 auto; }
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start; margin: 0; }
+
+  /* ============================================================
+     Chart module — wrapped in a white card per DS surfaces.
+     ============================================================ */
+  .ch-card {
+    width: 100%;
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+
+  /* Asset meta row — action-row shell, no trailing action */
+  .ch-meta {
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: 14px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch;
+    min-height: 68px;
+  }
+  .ch-meta__avt {
+    width: 64px; flex-shrink: 0; align-self: stretch;
+    border-radius: 12px;
+    background: var(--v-card-warm); color: var(--v-fg-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .ch-meta__avt::before {
+    content: ""; width: 28px; height: 28px; background: currentColor;
+    -webkit-mask: url("/icons/kalai/trending-up.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/trending-up.svg") center/contain no-repeat;
+  }
+  .ch-meta__body {
+    flex: 1; min-width: 0; padding: 10px 0 10px 14px;
+    display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  }
+  .ch-meta__price {
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 22px;
+    line-height: 1.1; color: var(--v-fg);
+    font-feature-settings: "tnum" on, "lnum" on;
+  }
+  .ch-meta__var {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 14px;
+    font-feature-settings: "tnum" on;
+  }
+  .ch-meta__var--up { color: var(--v-green); }
+  .ch-meta__var--dn { color: var(--v-error); }
+  .ch-meta__sep { width: 1px; height: 14px; background: var(--v-fg-10); }
+
+  /* Chart canvas */
+  .ch-canvas { position: relative; width: 100%; aspect-ratio: 320 / 160; }
+  .ch-canvas svg { display: block; width: 100%; height: 100%; }
+  .ch-grid { stroke: var(--v-fg-10); stroke-width: 1; }
+  .ch-line {
+    fill: none; stroke: var(--v-fg); stroke-width: 1.75;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* Tooltip — pill anchored on a curve point.
+     We place the dot at the precise y of the curve, then sit the pill
+     above the dot via translate(-50%, -120%). */
+  .ch-tooltip {
+    position: absolute; transform: translate(-50%, calc(-100% - 10px));
+    background: var(--v-card-warm); color: var(--v-fg);
+    height: 26px; padding: 0 12px; border-radius: 999px;
+    display: inline-flex; align-items: center;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 11px;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(26,24,21,0.05);
+  }
+  .ch-tooltip__dot {
+    position: absolute; width: 10px; height: 10px; border-radius: 999px;
+    background: var(--v-fg); transform: translate(-50%, -50%);
+  }
+  /* Endpoint dot */
+  .ch-end {
+    position: absolute; width: 14px; height: 14px; border-radius: 999px;
+    background: var(--v-fg);
+    box-shadow: 0 0 0 4px rgba(26,24,21,0.08);
+    transform: translate(-50%, -50%);
+  }
+
+  /* Period selector + chart-type toggle */
+  .ch-period { display: flex; align-items: center; gap: 8px; }
+  .seg {
+    flex: 1; display: inline-flex; padding: 4px; gap: 2px;
+    background: var(--v-card-warm); border-radius: 999px; height: 36px;
+  }
+  .seg__item {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 13px;
+    color: var(--v-fg-muted); border-radius: 999px; cursor: pointer;
+  }
+  .seg__item.on { background: var(--v-white); color: var(--v-fg);
+                  box-shadow: 0 1px 2px rgba(26,24,21,0.06); }
+  .ch-type-btn {
+    width: 36px; height: 36px; border-radius: 999px; flex-shrink: 0;
+    background: var(--v-card-warm); color: var(--v-fg);
+    border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .ch-type-btn.on { background: var(--v-fg); color: var(--v-white); }
+  .ch-type-btn svg { width: 18px; height: 18px; }
+
+  /* Stat tiles (white) */
+  .ch-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ch-stat {
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .ch-stat-lbl { font-weight: 700; font-size: 13px; color: var(--v-fg); }
+  .ch-stat-val { font-weight: 700; font-size: 22px; color: var(--v-fg);
+                 font-feature-settings: "tnum" on, "lnum" on;
+                 line-height: 1.1; letter-spacing: -0.01em; }
+  .ch-stat-var { font-weight: 600; font-size: 13px;
+                 font-feature-settings: "tnum" on; }
+  .ch-stat-var--up { color: var(--v-green); }
+
+  /* Key/value rows */
+  .ch-kv { display: flex; flex-direction: column; gap: 16px; padding-top: 4px; }
+  .ch-kv-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .ch-kv-lbl { display: inline-flex; align-items: center; gap: 8px;
+               font-family: var(--v-font-ui); font-weight: 700; font-size: 15px;
+               color: var(--v-fg); }
+  .ch-kv-dot {
+    width: 10px; height: 10px; background: var(--v-fg-muted);
+    transform: rotate(45deg); flex-shrink: 0;
+  }
+  .ch-kv-val { font-family: var(--v-font-ui); font-size: 15px; color: var(--v-fg-light);
+               font-feature-settings: "tnum" on; }
+  .ch-desc { font-family: var(--v-font-ui); font-size: 14px; line-height: 1.5;
+             color: var(--v-fg-light); margin: 0; }
+
+  /* Candle chart variant — body colours */
+  .ch-canvas--candles .g { stroke: var(--v-green); fill: var(--v-green); }
+  .ch-canvas--candles .r { stroke: var(--v-error); fill: var(--v-error); }
+</style></head>
+<body>
+
+  <!-- Line chart variant -->
+  <p class="lbl">Line chart · white module · curve fills full height · dot ON curve</p>
+  <div class="ch-card">
+
+    <!-- Action-row meta · no trailing -->
+    <div class="ch-meta">
+      <span class="ch-meta__avt"></span>
+      <div class="ch-meta__body">
+        <div class="ch-meta__price">56 890,30&nbsp;€</div>
+        <div class="ch-meta__var ch-meta__var--up">
+          +3 290,30&nbsp;€
+          <span class="ch-meta__sep"></span>
+          +1,22 %
+        </div>
+      </div>
+    </div>
+
+    <div class="ch-canvas">
+      <svg viewBox="0 0 320 160" preserveAspectRatio="none" aria-hidden="true">
+        <line class="ch-grid" x1="0" y1="50"  x2="320" y2="50"/>
+        <line class="ch-grid" x1="0" y1="110" x2="320" y2="110"/>
+        <path class="ch-line" d="M0,141.61 L1.46,138.75 L2.92,141.3 L4.38,139 L5.84,143.26 L7.31,139.72 L8.77,139.97 L10.23,140.51 L11.69,142.45 L13.15,140.86 L14.61,141.31 L16.07,141.21 L17.53,138.32 L19,137.67 L20.46,137.76 L21.92,134.21 L23.38,136.37 L24.84,134.16 L26.3,130.71 L27.76,130.01 L29.22,132.9 L30.68,128.71 L32.15,128.51 L33.61,128.97 L35.07,127.5 L36.53,126.65 L37.99,126.66 L39.45,125.99 L40.91,125.04 L42.37,123.5 L43.84,125.71 L45.3,125.14 L46.76,125.74 L48.22,123.29 L49.68,123.55 L51.14,125.14 L52.6,124.91 L54.06,126.46 L55.53,123.11 L56.99,127.16 L58.45,125.7 L59.91,125.89 L61.37,126.72 L62.83,122.74 L64.29,125.37 L65.75,125.08 L67.21,123.87 L68.68,123.05 L70.14,123.74 L71.6,125.83 L73.06,125.27 L74.52,124.26 L75.98,125.35 L77.44,123.97 L78.9,123.62 L80.37,123.35 L81.83,123.34 L83.29,123.52 L84.75,123.95 L86.21,121.85 L87.67,123.32 L89.13,119.88 L90.59,121.02 L92.05,117.9 L93.52,117.53 L94.98,117.63 L96.44,118.47 L97.9,118.49 L99.36,118.1 L100.82,117.03 L102.28,114.78 L103.74,114.45 L105.21,115.21 L106.67,112.84 L108.13,113.11 L109.59,109.84 L111.05,109.51 L112.51,106.12 L113.97,107.38 L115.43,106.43 L116.89,104.73 L118.36,104.68 L119.82,100.45 L121.28,101.01 L122.74,98.59 L124.2,98.05 L125.66,96.61 L127.12,95.58 L128.58,95.63 L130.05,95.49 L131.51,93.89 L132.97,88.08 L134.43,87.44 L135.89,86.86 L137.35,87.54 L138.81,84.36 L140.27,86.47 L141.74,82.55 L143.2,81.36 L144.66,83.5 L146.12,80.32 L147.58,80.05 L149.04,79.57 L150.5,77.67 L151.96,77.28 L153.42,76.31 L154.89,76.24 L156.35,74.64 L157.81,70.52 L159.27,72.81 L160.73,68.95 L162.19,68.61 L163.65,68.99 L165.11,66.59 L166.58,67.35 L168.04,66.35 L169.5,64.35 L170.96,63.54 L172.42,61.68 L173.88,63.79 L175.34,63.54 L176.8,61.33 L178.26,61.68 L179.73,59.31 L181.19,57.29 L182.65,59.6 L184.11,57.23 L185.57,55.91 L187.03,52.12 L188.49,57 L189.95,55 L191.42,55.13 L192.88,52.82 L194.34,51.33 L195.8,51.07 L197.26,51.75 L198.72,48.1 L200.18,47.98 L201.64,50.58 L203.11,46.89 L204.57,47.45 L206.03,44.39 L207.49,45.01 L208.95,44.06 L210.41,43.63 L211.87,43.96 L213.33,43.51 L214.79,42.7 L216.26,41.22 L217.72,38.6 L219.18,37.94 L220.64,38.39 L222.1,35.76 L223.56,35.79 L225.02,37.12 L226.48,36.62 L227.95,33.09 L229.41,34.25 L230.87,33.22 L232.33,32.87 L233.79,30.5 L235.25,29.42 L236.71,30.43 L238.17,27 L239.63,27.92 L241.1,28.97 L242.56,22.61 L244.02,26.34 L245.48,25.87 L246.94,25.01 L248.4,21.5 L249.86,28.77 L251.32,21.78 L252.79,21.43 L254.25,24.3 L255.71,22.63 L257.17,21.3 L258.63,22.31 L260.09,22.16 L261.55,21.99 L263.01,21.68 L264.47,21.99 L265.94,20.32 L267.4,19.22 L268.86,18.92 L270.32,17.88 L271.78,21.32 L273.24,19.34 L274.7,21.07 L276.16,19.98 L277.63,20.04 L279.09,21.85 L280.55,21.55 L282.01,22.58 L283.47,21.79 L284.93,22.8 L286.39,23.71 L287.85,22.45 L289.32,20.49 L290.78,25 L292.24,25.37 L293.7,25.74 L295.16,23.16 L296.62,22.48 L298.08,25.72 L299.54,24.56 L301,24.95 L302.47,26.72 L303.93,25.98 L305.39,29.2 L306.85,25.87 L308.31,28.62 L309.77,28.11 L311.23,28.57 L312.69,29.66 L314.16,30.96 L315.62,28.41 L317.08,30.52 L318.54,31.59 L320,29.85"/>
+      </svg>
+      <span class="ch-tooltip" style="left:18.266%;top:78.563%">ITEM XX€</span>
+      <span class="ch-tooltip__dot" style="left:18.266%;top:78.563%"></span>
+      <span class="ch-end" style="left:100%;top:18.656%"></span>
+    </div>
+
+    <div class="ch-period">
+      <div class="seg">
+        <div class="seg__item on">1 s</div>
+        <div class="seg__item">1 w</div>
+        <div class="seg__item">1 m</div>
+        <div class="seg__item">3 m</div>
+        <div class="seg__item">6 m</div>
+        <div class="seg__item">1 y</div>
+      </div>
+      <button class="ch-type-btn" aria-label="Candlestick">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="8" y1="3"  x2="8" y2="21"/><rect x="6" y="7"  width="4" height="10" fill="currentColor" stroke="none"/>
+          <line x1="16" y1="2" x2="16" y2="22"/><rect x="14" y="8" width="4" height="8" fill="currentColor" stroke="none"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Candle chart variant -->
+  <p class="lbl">Candle variant · same shell, candlestick body, type toggle ON</p>
+  <div class="ch-card">
+    <div class="ch-meta">
+      <span class="ch-meta__avt"></span>
+      <div class="ch-meta__body">
+        <div class="ch-meta__price">56 890,30&nbsp;€</div>
+        <div class="ch-meta__var ch-meta__var--up">
+          +3 290,30&nbsp;€
+          <span class="ch-meta__sep"></span>
+          +1,22 %
+        </div>
+      </div>
+    </div>
+
+    <div class="ch-canvas ch-canvas--candles">
+      <svg viewBox="0 0 320 160" preserveAspectRatio="none" aria-hidden="true">
+        <line class="ch-grid" x1="0" y1="50"  x2="320" y2="50"/>
+        <line class="ch-grid" x1="0" y1="110" x2="320" y2="110"/>
+        <line class="r" x1="2.86" x2="2.86" y1="125.39" y2="138.29" stroke-width="1"/><rect class="r" x="1.06" y="130" width="3.6" height="1.18"/><line class="g" x1="8.57" x2="8.57" y1="127.87" y2="138.27" stroke-width="1"/><rect class="g" x="6.77" y="128.83" width="3.6" height="2.35"/><line class="g" x1="14.29" x2="14.29" y1="122.9" y2="132.1" stroke-width="1"/><rect class="g" x="12.49" y="123.31" width="3.6" height="5.52"/><line class="g" x1="20" x2="20" y1="114.36" y2="130.31" stroke-width="1"/><rect class="g" x="18.2" y="120.65" width="3.6" height="2.66"/><line class="g" x1="25.71" x2="25.71" y1="110.07" y2="126.23" stroke-width="1"/><rect class="g" x="23.91" y="115.99" width="3.6" height="4.66"/><line class="g" x1="31.43" x2="31.43" y1="109.84" y2="118.36" stroke-width="1"/><rect class="g" x="29.63" y="112.49" width="3.6" height="3.50"/><line class="r" x1="37.14" x2="37.14" y1="104.69" y2="118.42" stroke-width="1"/><rect class="r" x="35.34" y="112.49" width="3.6" height="5.22"/><line class="g" x1="42.86" x2="42.86" y1="112.95" y2="121.62" stroke-width="1"/><rect class="g" x="41.06" y="113.66" width="3.6" height="4.05"/><line class="g" x1="48.57" x2="48.57" y1="109.54" y2="120.97" stroke-width="1"/><rect class="g" x="46.77" y="110.25" width="3.6" height="3.41"/><line class="r" x1="54.29" x2="54.29" y1="107.11" y2="125.04" stroke-width="1"/><rect class="r" x="52.49" y="110.25" width="3.6" height="8.53"/><line class="r" x1="60" x2="60" y1="115.45" y2="127.35" stroke-width="1"/><rect class="r" x="58.2" y="118.78" width="3.6" height="4.50"/><line class="g" x1="65.71" x2="65.71" y1="116.2" y2="127.37" stroke-width="1"/><rect class="g" x="63.91" y="120.81" width="3.6" height="2.47"/><line class="g" x1="71.43" x2="71.43" y1="113.26" y2="122.45" stroke-width="1"/><rect class="g" x="69.63" y="115.58" width="3.6" height="5.23"/><line class="r" x1="77.14" x2="77.14" y1="107.79" y2="115.79" stroke-width="1"/><rect class="r" x="75.34" y="115.58" width="3.6" height="1.00"/><line class="r" x1="82.86" x2="82.86" y1="115.39" y2="120.27" stroke-width="1"/><rect class="r" x="81.06" y="115.73" width="3.6" height="1.86"/><line class="g" x1="88.57" x2="88.57" y1="103.61" y2="122.44" stroke-width="1"/><rect class="g" x="86.77" y="110.95" width="3.6" height="6.64"/><line class="g" x1="94.29" x2="94.29" y1="109.96" y2="112.83" stroke-width="1"/><rect class="g" x="92.49" y="110.04" width="3.6" height="1.00"/><line class="g" x1="100" x2="100" y1="94.62" y2="115.17" stroke-width="1"/><rect class="g" x="98.2" y="100.54" width="3.6" height="9.50"/><line class="g" x1="105.71" x2="105.71" y1="90.21" y2="102.44" stroke-width="1"/><rect class="g" x="103.91" y="94.38" width="3.6" height="6.16"/><line class="g" x1="111.43" x2="111.43" y1="83.79" y2="97.93" stroke-width="1"/><rect class="g" x="109.63" y="89.99" width="3.6" height="4.39"/><line class="r" x1="117.14" x2="117.14" y1="82.68" y2="97.73" stroke-width="1"/><rect class="r" x="115.34" y="89.99" width="3.6" height="2.35"/><line class="r" x1="122.86" x2="122.86" y1="89.48" y2="98.77" stroke-width="1"/><rect class="r" x="121.06" y="92.34" width="3.6" height="3.65"/><line class="g" x1="128.57" x2="128.57" y1="85.65" y2="103.03" stroke-width="1"/><rect class="g" x="126.77" y="89.8" width="3.6" height="6.19"/><line class="g" x1="134.29" x2="134.29" y1="80.95" y2="95.3" stroke-width="1"/><rect class="g" x="132.49" y="87.5" width="3.6" height="2.30"/><line class="r" x1="140" x2="140" y1="82.13" y2="89.96" stroke-width="1"/><rect class="r" x="138.2" y="87.5" width="3.6" height="1.00"/><line class="g" x1="145.71" x2="145.71" y1="80.25" y2="94.83" stroke-width="1"/><rect class="g" x="143.91" y="84.2" width="3.6" height="4.26"/><line class="g" x1="151.43" x2="151.43" y1="70.26" y2="91.63" stroke-width="1"/><rect class="g" x="149.63" y="75.88" width="3.6" height="8.32"/><line class="g" x1="157.14" x2="157.14" y1="64.28" y2="75.92" stroke-width="1"/><rect class="g" x="155.34" y="70" width="3.6" height="5.88"/><line class="r" x1="162.86" x2="162.86" y1="62.43" y2="79.48" stroke-width="1"/><rect class="r" x="161.06" y="70" width="3.6" height="5.95"/><line class="r" x1="168.57" x2="168.57" y1="69.44" y2="81.98" stroke-width="1"/><rect class="r" x="166.77" y="75.95" width="3.6" height="1.00"/><line class="g" x1="174.29" x2="174.29" y1="63.06" y2="77.2" stroke-width="1"/><rect class="g" x="172.49" y="68.95" width="3.6" height="7.82"/><line class="r" x1="180" x2="180" y1="67.93" y2="70.92" stroke-width="1"/><rect class="r" x="178.2" y="68.95" width="3.6" height="1.45"/><line class="g" x1="185.71" x2="185.71" y1="65.56" y2="71.21" stroke-width="1"/><rect class="g" x="183.91" y="68.81" width="3.6" height="1.59"/><line class="g" x1="191.43" x2="191.43" y1="55.33" y2="73.45" stroke-width="1"/><rect class="g" x="189.63" y="63.24" width="3.6" height="5.57"/><line class="g" x1="197.14" x2="197.14" y1="56.7" y2="70.58" stroke-width="1"/><rect class="g" x="195.34" y="59.01" width="3.6" height="4.23"/><line class="g" x1="202.86" x2="202.86" y1="45.07" y2="63.26" stroke-width="1"/><rect class="g" x="201.06" y="50.89" width="3.6" height="8.12"/><line class="r" x1="208.57" x2="208.57" y1="45.14" y2="62.51" stroke-width="1"/><rect class="r" x="206.77" y="50.89" width="3.6" height="4.93"/><line class="r" x1="214.29" x2="214.29" y1="50.38" y2="62.96" stroke-width="1"/><rect class="r" x="212.49" y="55.82" width="3.6" height="5.14"/><line class="g" x1="220" x2="220" y1="50.85" y2="62.48" stroke-width="1"/><rect class="g" x="218.2" y="51.07" width="3.6" height="9.89"/><line class="r" x1="225.71" x2="225.71" y1="49.64" y2="52.17" stroke-width="1"/><rect class="r" x="223.91" y="51.07" width="3.6" height="1.00"/><line class="r" x1="231.43" x2="231.43" y1="47.21" y2="56.88" stroke-width="1"/><rect class="r" x="229.63" y="51.6" width="3.6" height="2.79"/><line class="g" x1="237.14" x2="237.14" y1="42.31" y2="57.01" stroke-width="1"/><rect class="g" x="235.34" y="46.76" width="3.6" height="7.63"/><line class="g" x1="242.86" x2="242.86" y1="36.65" y2="51.05" stroke-width="1"/><rect class="g" x="241.06" y="41.59" width="3.6" height="5.17"/><line class="g" x1="248.57" x2="248.57" y1="36.59" y2="44.41" stroke-width="1"/><rect class="g" x="246.77" y="37.77" width="3.6" height="3.82"/><line class="r" x1="254.29" x2="254.29" y1="33.26" y2="42.11" stroke-width="1"/><rect class="r" x="252.49" y="37.77" width="3.6" height="2.78"/><line class="r" x1="260" x2="260" y1="38.26" y2="48.44" stroke-width="1"/><rect class="r" x="258.2" y="40.55" width="3.6" height="4.06"/><line class="g" x1="265.71" x2="265.71" y1="33.08" y2="49.59" stroke-width="1"/><rect class="g" x="263.91" y="38.88" width="3.6" height="5.73"/><line class="g" x1="271.43" x2="271.43" y1="34.68" y2="39.21" stroke-width="1"/><rect class="g" x="269.63" y="37.1" width="3.6" height="1.78"/><line class="r" x1="277.14" x2="277.14" y1="33.64" y2="39.87" stroke-width="1"/><rect class="r" x="275.34" y="37.1" width="3.6" height="1.55"/><line class="g" x1="282.86" x2="282.86" y1="30.76" y2="41.62" stroke-width="1"/><rect class="g" x="281.06" y="35.02" width="3.6" height="3.63"/><line class="r" x1="288.57" x2="288.57" y1="34.87" y2="42.3" stroke-width="1"/><rect class="r" x="286.77" y="35.02" width="3.6" height="6.34"/><line class="r" x1="294.29" x2="294.29" y1="38.89" y2="50.28" stroke-width="1"/><rect class="r" x="292.49" y="41.36" width="3.6" height="2.49"/><line class="g" x1="300" x2="300" y1="34.14" y2="50.65" stroke-width="1"/><rect class="g" x="298.2" y="40.69" width="3.6" height="3.16"/><line class="g" x1="305.71" x2="305.71" y1="29.03" y2="46.06" stroke-width="1"/><rect class="g" x="303.91" y="36.75" width="3.6" height="3.94"/><line class="r" x1="311.43" x2="311.43" y1="35.43" y2="46" stroke-width="1"/><rect class="r" x="309.63" y="36.75" width="3.6" height="3.77"/><line class="g" x1="317.14" x2="317.14" y1="27.85" y2="42.98" stroke-width="1"/><rect class="g" x="315.34" y="34.52" width="3.6" height="6.00"/>
+      </svg>
+    </div>
+
+    <div class="ch-period">
+      <div class="seg">
+        <div class="seg__item">1 s</div>
+        <div class="seg__item">1 w</div>
+        <div class="seg__item on">1 m</div>
+        <div class="seg__item">3 m</div>
+        <div class="seg__item">6 m</div>
+        <div class="seg__item">1 y</div>
+      </div>
+      <button class="ch-type-btn on" aria-label="Candlestick activé">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="8" y1="3"  x2="8" y2="21"/><rect x="6" y="7"  width="4" height="10" fill="currentColor" stroke="none"/>
+          <line x1="16" y1="2" x2="16" y2="22"/><rect x="14" y="8" width="4" height="8" fill="currentColor" stroke="none"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+</body></html>

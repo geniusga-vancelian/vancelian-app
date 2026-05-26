@@ -1,0 +1,215 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 40px 24px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px; align-items: center;
+         min-height: 100vh; }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin-left: calc(50% - 195px - 1px); margin-bottom: -16px; }
+
+  /* Frame = a 390-px-wide slice that hosts an iPhone-style status bar + the topbar */
+  .frame { width: 390px; max-width: 100%;
+           border-radius: 16px; overflow: hidden;
+           border: 1px solid var(--v-fg-10); background: var(--v-white); }
+  .frame--warm   { background: var(--v-card-warm); }
+
+  /* iOS status bar */
+  .sb { display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 24px 0; font-size: 15px; font-weight: 600; color: var(--v-fg);
+        font-feature-settings: "tnum" on; }
+  .sb__icons { display: inline-flex; align-items: center; gap: 6px; color: var(--v-fg); }
+  .sb__icons svg { display: block; }
+
+  /* Drag handle */
+  .handle { width: 36px; height: 4px; border-radius: 999px;
+            background: var(--v-fg-20); margin: 10px auto 4px; }
+
+  /* Base topbar — pill icons + centered title */
+  .bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px 16px; }
+
+  .ic-btn {
+    width: 40px; height: 40px; border-radius: 999px;
+    background: var(--v-white); flex-shrink: 0;
+    border: 1px solid rgba(26,24,21,0.04);
+    box-shadow: 0 1px 2px rgba(26,24,21,0.04),
+                0 4px 14px rgba(26,24,21,0.06);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--v-fg); cursor: pointer;
+  }
+  .ic-btn--ghost { /* legacy alias, now identical to .ic-btn */ }
+  .ic-btn svg { width: 18px; height: 18px; }
+
+  .title-block { flex: 1; min-width: 0; display: flex; flex-direction: column;
+                 align-items: center; gap: 4px; text-align: center; }
+  .title { font-weight: 700; font-size: 18px; color: var(--v-fg); margin: 0; line-height: 1.2; }
+  .title-sub { font-size: 13px; color: var(--v-fg-light); margin: 0; }
+
+  /* Stepper dots row */
+  .dots { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; }
+  .dots span { width: 22px; height: 3px; border-radius: 999px; background: var(--v-fg-10); }
+  .dots span.on { background: var(--v-fg); width: 32px; }
+
+  /* Asset (Bitcoin) — avatar + name + ticker */
+  .asset { display: inline-flex; align-items: center; gap: 10px; }
+  .asset__avt { width: 32px; height: 32px; border-radius: 999px;
+                background: #F7931A; color: var(--v-white);
+                display: inline-flex; align-items: center; justify-content: center;
+                font-weight: 700; font-size: 18px; line-height: 1; }
+  .asset__name { font-weight: 700; font-size: 18px; color: var(--v-fg); line-height: 1.1; }
+  .asset__tick { font-size: 13px; color: var(--v-fg-light); margin-top: 2px;
+                 letter-spacing: 0.02em; }
+
+  /* Welcome / user variant */
+  .welcome { display: inline-flex; align-items: center; gap: 12px; }
+  .welcome__text { display: flex; flex-direction: column; gap: 2px; }
+  .welcome__hi { font-size: 15px; color: var(--v-fg); font-weight: 600; }
+  .welcome__name { font-size: 13px; color: var(--v-fg-light); }
+
+  /* Large hero variant — left-aligned title + 2 lines of descriptive text */
+  .hero { padding: 16px 24px 32px; }
+  .hero__row { display: flex; align-items: center; justify-content: space-between; padding-bottom: 24px; }
+  .hero__right { display: inline-flex; gap: 8px; }
+  .hero__title { font-weight: 800; font-size: 34px; line-height: 1.05; color: var(--v-fg);
+                 letter-spacing: -0.01em; margin: 0 0 12px; }
+  .hero__body { font-size: 17px; line-height: 1.4; color: var(--v-fg-body); margin: 0 0 10px; }
+  .hero__sub  { font-size: 15px; line-height: 1.4; color: var(--v-fg-light); margin: 0; }
+
+  svg { display: block; }
+</style></head>
+<body>
+
+  <!-- 1. Basic — icon + centered title + icon, warm bg -->
+  <p class="lbl">Basic · warm bg · centered title</p>
+  <div class="frame frame--warm">
+    <div class="sb">
+      <span>9:41</span>
+      <span class="sb__icons">
+        <svg width="18" height="12" viewBox="0 0 18 12"><rect x="1" y="8" width="2" height="3" fill="currentColor"/><rect x="5" y="6" width="2" height="5" fill="currentColor"/><rect x="9" y="4" width="2" height="7" fill="currentColor"/><rect x="13" y="2" width="2" height="9" fill="currentColor"/></svg>
+        <svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 11l1.5-1.5a2 2 0 0 0-3 0L8 11zm0-4l3.5-3.5a7 7 0 0 0-7 0L8 7zm0-4l5.5-5.5a11 11 0 0 0-11 0L8 3z" fill="currentColor" opacity="0.9"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12"><rect x="0.5" y="0.5" width="20" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-opacity="0.4"/><rect x="21.5" y="3.5" width="1.5" height="5" rx="0.5" fill="currentColor" fill-opacity="0.4"/><rect x="2" y="2" width="17" height="8" rx="1.5" fill="currentColor"/></svg>
+      </span>
+    </div>
+    <div class="bar">
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+      <div class="title-block"><h3 class="title">Confirmation</h3></div>
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+  </div>
+
+  <!-- 2. Basic — white bg -->
+  <p class="lbl">Basic · white bg</p>
+  <div class="frame">
+    <div class="sb">
+      <span>9:41</span>
+      <span class="sb__icons">
+        <svg width="18" height="12" viewBox="0 0 18 12"><rect x="1" y="8" width="2" height="3" fill="currentColor"/><rect x="5" y="6" width="2" height="5" fill="currentColor"/><rect x="9" y="4" width="2" height="7" fill="currentColor"/><rect x="13" y="2" width="2" height="9" fill="currentColor"/></svg>
+        <svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 11l1.5-1.5a2 2 0 0 0-3 0L8 11z" fill="currentColor"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12"><rect x="0.5" y="0.5" width="20" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-opacity="0.4"/><rect x="2" y="2" width="17" height="8" rx="1.5" fill="currentColor"/></svg>
+      </span>
+    </div>
+    <div class="bar">
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+      <div class="title-block"><h3 class="title">Titre de la page</h3></div>
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+  </div>
+
+  <!-- 3. Sheet (drag handle) -->
+  <p class="lbl">Sheet · drag handle</p>
+  <div class="frame">
+    <div class="handle"></div>
+    <div class="bar">
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+      <div class="title-block"><h3 class="title">Titre de la page</h3></div>
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+  </div>
+
+  <!-- 4. With descriptive subtitle -->
+  <p class="lbl">Centered title + sous-titre descriptif</p>
+  <div class="frame">
+    <div class="bar">
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="title-block">
+        <h3 class="title">Versement SEPA</h3>
+        <p class="title-sub">Étape 2 sur 4</p>
+      </div>
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>
+    </div>
+  </div>
+
+  <!-- 5. With stepper dots -->
+  <p class="lbl">Centered title + stepper</p>
+  <div class="frame">
+    <div class="bar">
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="title-block">
+        <h3 class="title">Confirmation</h3>
+        <div class="dots"><span></span><span class="on"></span><span></span><span></span></div>
+      </div>
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+  </div>
+
+  <!-- 6. Welcome / user avatar -->
+  <p class="lbl">Welcome · user avatar + tier + actions</p>
+  <div class="frame">
+    <div class="bar" style="justify-content:space-between">
+      <div class="welcome">
+        <span class="avt avt--40"><img src="https://i.pravatar.cc/80?img=68" alt="Jean Dupont"/></span>
+        <div class="welcome__text">
+          <span class="welcome__hi">Welcome back</span>
+          <span class="welcome__name">Jean Dupont</span>
+        </div>
+      </div>
+      <div style="display:inline-flex;gap:8px;flex-shrink:0">
+        <button class="ic-btn ic-btn--ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+        <button class="ic-btn ic-btn--ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Asset / Bitcoin -->
+  <p class="lbl">Asset · avatar + name + ticker</p>
+  <div class="frame">
+    <div class="bar">
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="title-block" style="flex-direction:row;gap:10px;justify-content:center">
+        <div class="asset__avt">₿</div>
+        <div style="text-align:left">
+          <div class="asset__name">Bitcoin</div>
+          <div class="asset__tick">BTC</div>
+        </div>
+      </div>
+      <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 1-.1 1.2l2.1 1.6-2 3.4-2.4-1a7 7 0 0 1-2.1 1.2L14 21h-4l-.5-2.6a7 7 0 0 1-2.1-1.2l-2.4 1-2-3.4 2.1-1.6A7 7 0 0 1 5 12c0-.4 0-.8.1-1.2L3 9.2l2-3.4 2.4 1A7 7 0 0 1 9.5 5.6L10 3h4l.5 2.6a7 7 0 0 1 2.1 1.2l2.4-1 2 3.4-2.1 1.6c.1.4.1.8.1 1.2z"/></svg></button>
+    </div>
+  </div>
+
+  <!-- 8. Hero · large left-aligned + 2 levels of descriptive text -->
+  <p class="lbl">Hero · titre large à gauche + 2 niveaux de descriptif</p>
+  <div class="frame">
+    <div class="sb">
+      <span>9:41</span>
+      <span class="sb__icons">
+        <svg width="18" height="12" viewBox="0 0 18 12"><rect x="1" y="8" width="2" height="3" fill="currentColor"/><rect x="5" y="6" width="2" height="5" fill="currentColor"/><rect x="9" y="4" width="2" height="7" fill="currentColor"/><rect x="13" y="2" width="2" height="9" fill="currentColor"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12"><rect x="0.5" y="0.5" width="20" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-opacity="0.4"/><rect x="2" y="2" width="17" height="8" rx="1.5" fill="currentColor"/></svg>
+      </span>
+    </div>
+    <div class="hero">
+      <div class="hero__row">
+        <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="hero__right">
+          <button class="ic-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+      </div>
+      <h2 class="hero__title">Page name</h2>
+      <p class="hero__body">Sed fruatur sane hoc solacio atque hanc insignem ignominiam, quoniam uni praeter se inusta sit, putet esse leviorem, dum modo, cuius exemplo</p>
+      <p class="hero__sub">Sed fruatur sane hoc solacio atque hanc insignem ignominiam, quoniam uni praeter se inusta sit, putet esse leviorem, dum modo</p>
+    </div>
+  </div>
+
+</body></html>

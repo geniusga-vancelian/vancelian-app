@@ -1,0 +1,149 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 14px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Account picker — action-row variant.
+     Avatar (colored with currency / crypto glyph) + title + trailing
+     balance + chevron-down indicating it opens a sheet.
+     ============================================================ */
+  .row {
+    width: 480px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch; cursor: pointer;
+    transition: background 120ms var(--v-ease-out);
+    min-height: 72px;
+  }
+  .row:hover { background: var(--v-fg-05); }
+
+  .row__avatar {
+    width: 68px; flex-shrink: 0; align-self: stretch;
+    border-radius: 13px;
+    background: var(--v-card-warm); color: var(--v-fg-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  /* Currency / crypto glyph variants */
+  .row__avatar--eur  { background: var(--v-blue);       color: var(--v-white); }
+  .row__avatar--btc  { background: #F7931A;             color: var(--v-white); }
+  .row__avatar--usdc { background: #2775CA;             color: var(--v-white); }
+  .row__avatar--dark { background: var(--v-fg);         color: var(--v-white); }
+  .row__avatar--terra{ background: var(--v-terracotta); color: var(--v-white); }
+
+  /* Currency glyph (€ / $) — typographic, no SVG */
+  .row__avatar .glyph {
+    font-family: var(--v-font-ui); font-weight: 700;
+    font-size: 28px; line-height: 1;
+  }
+  /* Mask icon for crypto/wallet glyphs */
+  .row__avatar .ic {
+    width: 32px; height: 32px;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .row__avatar .ic--btc    { -webkit-mask-image: url("/icons/kalai/bitcoin.svg");      mask-image: url("/icons/kalai/bitcoin.svg"); }
+  .row__avatar .ic--card   { -webkit-mask-image: url("/icons/kalai/payment-card.svg"); mask-image: url("/icons/kalai/payment-card.svg"); }
+  .row__avatar .ic--wallet { -webkit-mask-image: url("/icons/kalai/wallet.svg");       mask-image: url("/icons/kalai/wallet.svg"); }
+
+  /* Real crypto SVG (full-color) — fills the avatar */
+  .row__avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  .row__body {
+    flex: 1; min-width: 0;
+    padding: 12px 0 12px 16px;
+    display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  }
+  .row__title { font-weight: 700; font-size: 17px; line-height: 1.25; color: var(--v-fg); margin: 0; }
+  .row__sub   { font-size: 14px; color: var(--v-fg-light); line-height: 1.4; margin: 0; }
+
+  .row__trailing { align-self: center; margin-right: 16px;
+                   display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+  .row__balance {
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 15px;
+    color: var(--v-fg); font-feature-settings: "tnum" on;
+    white-space: nowrap;
+  }
+  .row__chv {
+    width: 20px; height: 20px;
+    background: var(--v-fg-light);
+    -webkit-mask: url("/icons/kalai/chevron-down.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/chevron-down.svg") center/contain no-repeat;
+  }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin: 6px 0 -4px; }
+</style></head>
+<body>
+
+  <p class="lbl">From / source account — currency glyph</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--eur"><span class="glyph">€</span></div>
+    <div class="row__body">
+      <h3 class="row__title">From Euro Account</h3>
+    </div>
+    <div class="row__trailing">
+      <span class="row__balance">3 129,21&nbsp;€</span>
+      <span class="row__chv"></span>
+    </div>
+  </div>
+
+  <p class="lbl">With sub line · IBAN / type</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--eur"><span class="glyph">€</span></div>
+    <div class="row__body">
+      <h3 class="row__title">Euro Account</h3>
+      <p class="row__sub">FR76 **** **** **** 4892</p>
+    </div>
+    <div class="row__trailing">
+      <span class="row__balance">3 129,21&nbsp;€</span>
+      <span class="row__chv"></span>
+    </div>
+  </div>
+
+  <p class="lbl">Crypto source — real coin logo</p>
+  <div class="row">
+    <div class="row__avatar"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></div>
+    <div class="row__body">
+      <h3 class="row__title">Bitcoin · BTC</h3>
+      <p class="row__sub">0,21834 BTC</p>
+    </div>
+    <div class="row__trailing">
+      <span class="row__balance">12 480,00&nbsp;€</span>
+      <span class="row__chv"></span>
+    </div>
+  </div>
+
+  <p class="lbl">Bank card / payment method</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--dark"><span class="ic ic--card"></span></div>
+    <div class="row__body">
+      <h3 class="row__title">Visa ••4892</h3>
+      <p class="row__sub">Expire 03/28</p>
+    </div>
+    <div class="row__trailing">
+      <span class="row__chv"></span>
+    </div>
+  </div>
+
+  <p class="lbl">Compact · no trailing balance</p>
+  <div class="row">
+    <div class="row__avatar row__avatar--eur"><span class="glyph">$</span></div>
+    <div class="row__body">
+      <h3 class="row__title">USD Account</h3>
+    </div>
+    <div class="row__trailing">
+      <span class="row__chv"></span>
+    </div>
+  </div>
+
+</body></html>

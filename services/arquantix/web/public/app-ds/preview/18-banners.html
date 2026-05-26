@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; min-height: 100vh; }
+  .bnr { display:flex; align-items:flex-end; gap:16px; padding:16px; border-radius:8px; color:var(--v-white); width: 480px; }
+  .body { flex:1; min-width:0; }
+  .title { font-weight:600; font-size:15px; }
+  .msg { font-size:13px; opacity:0.85; margin-top:4px; line-height:1.45; }
+  .cta { display:inline-flex; align-items:center; height:32px; padding:0 14px; border-radius:999px;
+         background:var(--v-white); font-weight:500; font-size:13px; flex-shrink:0; }
+  .succ { background: #33614D; } .succ .cta { color: #33614D; }
+  .warn { background: #C99A2E; } .warn .cta { color: #C99A2E; }
+  .info { background: #0F2A47; } .info .cta { color: #0F2A47; }
+  .err  { background: #B83A3A; } .err  .cta { color: #B83A3A; }
+  .neut { background: #1A1815; } .neut .cta { color: #1A1815; }
+</style></head>
+<body>
+  <div class="bnr err"><div class="body"><div class="title">Document requis</div><div class="msg">Un justificatif d'identité manque pour clôturer votre KYC.</div></div><span class="cta">Reprendre</span></div>
+  <div class="bnr succ"><div class="body"><div class="title">Investissement confirmé</div><div class="msg">Votre engagement sur la résidence Niseko est validé.</div></div><span class="cta">Voir le détail</span></div>
+  <div class="bnr info"><div class="body"><div class="title">Cadre réglementaire</div><div class="msg">Vancelian opère sous l'agrément ACPR n° 17008.</div></div><span class="cta">En savoir plus</span></div>
+  <div class="bnr warn"><div class="body"><div class="title">Clôture imminente</div><div class="msg">Encore 36 h pour rejoindre l'offre Provence&nbsp;XII.</div></div><span class="cta">Investir</span></div>
+  <div class="bnr neut"><div class="body"><div class="title">Mode hors ligne</div><div class="msg">Les transactions reprendront dès reconnexion.</div></div><span class="cta">Réessayer</span></div>
+</body></html>

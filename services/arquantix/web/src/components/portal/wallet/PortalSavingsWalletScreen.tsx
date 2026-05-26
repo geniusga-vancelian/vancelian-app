@@ -2,7 +2,7 @@
 
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { ArrowLeft, ArrowUpRight, Plus, TrendingUp } from 'lucide-react'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
@@ -95,7 +95,7 @@ export function PortalSavingsWalletScreen() {
             </PortalNavLink>
 
             <section className="overflow-hidden rounded-v-card border border-[#14532D]/20 bg-[#14532D] p-4 text-white shadow-v-subtle sm:p-5">
-              <VEyebrow className="text-white/70">Wallet</VEyebrow>
+              <AppEyebrow className="text-white/70">Wallet</AppEyebrow>
               <h1 className="m-0 font-ui text-[22px] font-semibold leading-tight">Épargne</h1>
               <p className="mt-2 mb-0 font-ui text-[28px] font-bold leading-none sm:text-[32px]">
                 {totalLabel}

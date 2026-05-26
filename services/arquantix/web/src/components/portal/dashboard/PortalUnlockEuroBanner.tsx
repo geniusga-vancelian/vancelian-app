@@ -1,8 +1,6 @@
 'use client'
 
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
-import { Button } from '@/components/ui/button'
+import { AppBanner } from '@/components/design-system/app/AppBanner'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 
 type Props = {
@@ -14,19 +12,16 @@ export function PortalUnlockEuroBanner({ progressPercent }: Props) {
     progressPercent != null ? `${Math.max(0, Math.min(100, progressPercent))}% complete` : null
 
   return (
-    <article className="rounded-v-card border border-v-fg-10 bg-v-card p-4 shadow-v-subtle sm:p-5">
-      <VEyebrow className="mb-2">Euro account</VEyebrow>
-      <h2 className="m-0 font-ui text-[18px] font-semibold text-v-fg">Unlock Euro account</h2>
-      <p className="m-0 mt-2 font-ui text-[15px] leading-relaxed text-v-fg-body">
-        Your crypto wallet is ready. Complete registration to add a Euro account and access all
-        investment categories from your crypto balance.
-      </p>
-      {progress ? (
-        <p className="m-0 mt-2 font-ui text-[13px] text-v-fg-muted">Registration · {progress}</p>
-      ) : null}
-      <Button type="button" asChild className="mt-4 w-full sm:w-auto">
-        <PortalNavLink href={PORTAL_ROUTES.registration}>Complete registration</PortalNavLink>
-      </Button>
-    </article>
+    <AppBanner
+      variant="info"
+      title="Unlock Euro account"
+      message={
+        progress
+          ? `Your crypto wallet is ready. Complete registration to add a Euro account (${progress}).`
+          : 'Your crypto wallet is ready. Complete registration to add a Euro account and access all investment categories from your crypto balance.'
+      }
+      ctaLabel="Complete registration"
+      ctaHref={PORTAL_ROUTES.registration}
+    />
   )
 }

@@ -11,7 +11,7 @@ import {
   School,
   Shield,
 } from 'lucide-react'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
 import {
   PortalSectionTitle,
   PortalSettingsCard,
@@ -138,7 +138,7 @@ export function PortalProfileScreen() {
       <div className="mx-auto flex max-w-2xl flex-col gap-8">
         <PortalReveal index={0}>
           <header className="flex flex-col gap-1">
-            <VEyebrow>Account</VEyebrow>
+            <AppEyebrow>Account</AppEyebrow>
             <h1 className="m-0 font-ui text-[28px] font-semibold tracking-v-tight text-v-fg">Profil</h1>
           </header>
         </PortalReveal>

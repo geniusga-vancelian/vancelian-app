@@ -1,0 +1,121 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 18px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Selection chip group — multi-select pills.
+     Reuses our base .tag (terracotta-bg / fg-body / pill) but
+     adds clear selected + unselected states with subtle leading
+     dot to telegraph "selectable" affordance.
+     ============================================================ */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; width: 480px; max-width: 100%; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 32px; padding: 0 12px; border-radius: 999px;
+    background: var(--v-white); color: var(--v-fg);
+    border: 1px solid var(--v-fg-10);
+    font-family: var(--v-font-ui); font-weight: 500; font-size: 13px;
+    cursor: pointer;
+    transition: background 120ms var(--v-ease-out),
+                border-color 120ms var(--v-ease-out);
+  }
+  .chip:hover { background: var(--v-fg-05); }
+
+  /* Leading dot (semantic colour) */
+  .chip__dot { width: 6px; height: 6px; border-radius: 999px;
+               background: var(--v-fg-muted); flex-shrink: 0; }
+  .chip--terra .chip__dot { background: var(--v-terracotta); }
+  .chip--green .chip__dot { background: var(--v-green); }
+  .chip--blue  .chip__dot { background: var(--v-blue); }
+  .chip--yellow .chip__dot { background: var(--v-warning); }
+
+  /* Trailing close (X) for removable filter chips */
+  .chip__close {
+    width: 14px; height: 14px; flex-shrink: 0;
+    background: currentColor; opacity: 0.7;
+    -webkit-mask: url("/icons/kalai/remove.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/remove.svg") center/contain no-repeat;
+  }
+
+  /* Selected state — solid anthracite fill */
+  .chip.is-selected {
+    background: var(--v-fg); color: var(--v-white);
+    border-color: var(--v-fg);
+  }
+  .chip.is-selected .chip__dot { background: var(--v-white); }
+
+  /* Trailing check (when selected, replaces leading dot in some layouts) */
+  .chip__check {
+    width: 12px; height: 12px; flex-shrink: 0;
+    background: currentColor;
+    -webkit-mask: url("/icons/kalai/check.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/check.svg") center/contain no-repeat;
+  }
+
+  /* Emoji variant — slightly taller chip to host the emoji + label */
+  .chip--emoji { height: 36px; padding: 0 14px 0 10px; gap: 8px; }
+  .chip__emoji {
+    font-size: 18px; line-height: 1; flex-shrink: 0;
+    /* On macOS / iOS the system family already renders Apple Color Emoji.
+       Stack a system fallback so non-Apple platforms still show colour emoji. */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin: 6px 0 -8px; }
+</style></head>
+<body>
+
+  <p class="lbl">Multi-select chip group · default + selected</p>
+  <div class="chips">
+    <span class="chip chip--terra"><span class="chip__dot"></span>Immobilier</span>
+    <span class="chip chip--green is-selected"><span class="chip__dot"></span>Patrimoine<span class="chip__check"></span></span>
+    <span class="chip chip--blue"><span class="chip__dot"></span>Institutionnel</span>
+    <span class="chip chip--yellow is-selected"><span class="chip__dot"></span>Crypto<span class="chip__check"></span></span>
+    <span class="chip"><span class="chip__dot"></span>Tokenisé</span>
+    <span class="chip chip--terra"><span class="chip__dot"></span>Premium</span>
+  </div>
+
+  <p class="lbl">Filter chips · with trailing × to remove</p>
+  <div class="chips">
+    <span class="chip is-selected">Niseko<span class="chip__close"></span></span>
+    <span class="chip is-selected">ROI &gt; 6%<span class="chip__close"></span></span>
+    <span class="chip is-selected">36 mois<span class="chip__close"></span></span>
+    <span class="chip">+ Ajouter un filtre</span>
+  </div>
+
+  <p class="lbl">Emoji chips · iOS color emoji as leading glyph</p>
+  <div class="chips">
+    <span class="chip chip--emoji"><span class="chip__emoji">🏠</span>Immobilier</span>
+    <span class="chip chip--emoji is-selected"><span class="chip__emoji">💎</span>Patrimoine<span class="chip__check"></span></span>
+    <span class="chip chip--emoji"><span class="chip__emoji">🏦</span>Institutionnel</span>
+    <span class="chip chip--emoji is-selected"><span class="chip__emoji">🪙</span>Crypto<span class="chip__check"></span></span>
+    <span class="chip chip--emoji"><span class="chip__emoji">🌱</span>Éco</span>
+    <span class="chip chip--emoji"><span class="chip__emoji">📈</span>Croissance</span>
+  </div>
+
+  <p class="lbl">Mood / objectif chips · plus expressifs</p>
+  <div class="chips">
+    <span class="chip chip--emoji is-selected"><span class="chip__emoji">🎯</span>Objectif retraite<span class="chip__check"></span></span>
+    <span class="chip chip--emoji"><span class="chip__emoji">🌍</span>International</span>
+    <span class="chip chip--emoji"><span class="chip__emoji">⚡</span>Instant</span>
+    <span class="chip chip--emoji"><span class="chip__emoji">🔒</span>Sécurité</span>
+    <span class="chip chip--emoji is-selected"><span class="chip__emoji">💼</span>Pro<span class="chip__check"></span></span>
+  </div>
+
+  <p class="lbl">Long labels · keep them flexible</p>
+  <div class="chips">
+    <span class="chip"><span class="chip__dot"></span>Item</span>
+    <span class="chip"><span class="chip__dot"></span>Item long</span>
+    <span class="chip"><span class="chip__dot"></span>Item très très très long</span>
+    <span class="chip is-selected"><span class="chip__dot"></span>Sélectionné<span class="chip__check"></span></span>
+  </div>
+
+</body></html>

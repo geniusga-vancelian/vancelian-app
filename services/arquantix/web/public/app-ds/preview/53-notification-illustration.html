@@ -1,0 +1,140 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Notification illustration — onboarding hero visual.
+     A faux iOS notification card sitting on a stack of two ghost
+     cards behind it. Used on permission-grant gates (notifications,
+     location, contacts).
+     ============================================================ */
+  .notif-stack {
+    width: 320px; height: 220px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Ghost cards behind the main one — fade and shrink with depth */
+  .notif-stack__ghost {
+    position: absolute;
+    background: var(--v-white);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(192,81,46,0.10),
+                0 2px 6px rgba(26,24,21,0.04);
+  }
+  .notif-stack__ghost--mid {
+    width: 86%; height: 26px;
+    top: 60%;
+    z-index: 1;
+    opacity: 0.80;
+  }
+  .notif-stack__ghost--back {
+    width: 72%; height: 22px;
+    top: 70%;
+    z-index: 0;
+    opacity: 0.50;
+  }
+
+  /* Main notification card */
+  .notif-card {
+    position: relative;
+    width: 100%;
+    background: var(--v-white);
+    border-radius: 18px;
+    padding: 16px 20px;
+    display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 12px 32px rgba(192,81,46,0.12),
+                0 2px 8px rgba(26,24,21,0.06);
+    z-index: 2;
+  }
+
+  .notif-card__icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: var(--v-terracotta);
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(192,81,46,0.30);
+  }
+  .notif-card__icon::before {
+    content: ""; width: 24px; height: 24px;
+    background: var(--v-white);
+    -webkit-mask: url("/brand/vancelian/logo-black-icon.svg") center/contain no-repeat;
+            mask: url("/brand/vancelian/logo-black-icon.svg") center/contain no-repeat;
+  }
+
+  .notif-card__bars { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .notif-card__bar {
+    height: 8px; border-radius: 999px;
+    background: var(--v-terracotta);
+  }
+  .notif-card__bar--short {
+    width: 60%;
+    background: var(--v-terracotta);
+    opacity: 0.55;
+  }
+
+  /* Variant — neutral / dark icon (for non-Vancelian notifications) */
+  .notif-card--dark .notif-card__icon { background: var(--v-fg); box-shadow: 0 2px 6px rgba(26,24,21,0.20); }
+  .notif-card--dark .notif-card__bar { background: var(--v-fg); }
+  .notif-card--dark .notif-card__bar--short { background: var(--v-fg); opacity: 0.45; }
+  .notif-stack--dark .notif-stack__ghost { box-shadow: 0 8px 24px rgba(26,24,21,0.10),
+                                                      0 2px 6px rgba(26,24,21,0.04); }
+
+  /* Variant — green (success / success notif) */
+  .notif-card--green .notif-card__icon { background: var(--v-green); box-shadow: 0 2px 6px rgba(51,97,77,0.25); }
+  .notif-card--green .notif-card__bar { background: var(--v-green); }
+  .notif-card--green .notif-card__bar--short { background: var(--v-green); opacity: 0.5; }
+  .notif-stack--green .notif-stack__ghost { box-shadow: 0 8px 24px rgba(51,97,77,0.10),
+                                                       0 2px 6px rgba(26,24,21,0.04); }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 16px 0 -6px; text-align: center; }
+
+  .wrap { display: flex; flex-direction: column; gap: 32px; align-items: center; }
+</style></head>
+<body>
+  <div class="wrap">
+    <p class="lbl">Default · terracotta accent</p>
+    <div class="notif-stack">
+      <div class="notif-stack__ghost notif-stack__ghost--back"></div>
+      <div class="notif-stack__ghost notif-stack__ghost--mid"></div>
+      <div class="notif-card">
+        <div class="notif-card__icon"></div>
+        <div class="notif-card__bars">
+          <span class="notif-card__bar"></span>
+          <span class="notif-card__bar notif-card__bar--short"></span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lbl">Dark · anthracite accent</p>
+    <div class="notif-stack notif-stack--dark">
+      <div class="notif-stack__ghost notif-stack__ghost--back"></div>
+      <div class="notif-stack__ghost notif-stack__ghost--mid"></div>
+      <div class="notif-card notif-card--dark">
+        <div class="notif-card__icon"></div>
+        <div class="notif-card__bars">
+          <span class="notif-card__bar"></span>
+          <span class="notif-card__bar notif-card__bar--short"></span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lbl">Success · vert anglais accent</p>
+    <div class="notif-stack notif-stack--green">
+      <div class="notif-stack__ghost notif-stack__ghost--back"></div>
+      <div class="notif-stack__ghost notif-stack__ghost--mid"></div>
+      <div class="notif-card notif-card--green">
+        <div class="notif-card__icon"></div>
+        <div class="notif-card__bars">
+          <span class="notif-card__bar"></span>
+          <span class="notif-card__bar notif-card__bar--short"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body></html>

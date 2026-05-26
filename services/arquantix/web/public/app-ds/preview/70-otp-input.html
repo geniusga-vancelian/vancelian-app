@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     OTP / PIN input
+       .otp                — flex row of cells, gap 10
+       .otp__cell          — 52×60 white pill, large digit
+       .otp__cell.is-on    — filled state (anthracite digit)
+       .otp__cell.is-focus — focused (anthracite border)
+       .otp__cell.is-error — error (red border)
+       .otp__cell .dot     — masked digit (●) for PIN privacy
+     Sizes: --otp--lg (60×72) for first auth, default for inline
+     ============================================================ */
+  .otp { display: inline-flex; gap: 10px; }
+  .otp__cell {
+    width: 52px; height: 60px;
+    background: var(--v-white);
+    border: 1.5px solid var(--v-fg-10);
+    border-radius: 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--v-font-ui); font-weight: 600;
+    font-size: 24px; color: var(--v-fg);
+    font-feature-settings: "tnum" on, "lnum" on;
+    transition: border-color 120ms, background 120ms;
+  }
+  .otp__cell.is-on    { color: var(--v-fg); border-color: var(--v-fg-20); }
+  .otp__cell.is-focus { border-color: var(--v-fg); border-width: 2px; }
+  .otp__cell.is-error { border-color: var(--v-error); }
+  .otp__cell.is-success { border-color: var(--v-green); background: var(--v-green-bg); color: var(--v-green); }
+  .otp__cell .dot { width: 12px; height: 12px; border-radius: 999px; background: var(--v-fg); }
+
+  .otp--lg .otp__cell { width: 56px; height: 68px; font-size: 28px; }
+  .otp--sm .otp__cell { width: 44px; height: 52px; font-size: 20px; }
+
+  .panel { width: 390px; max-width: 100%;
+           background: var(--v-white); border-radius: 16px; padding: 24px;
+           box-shadow: var(--v-elev-subtle); border: 1px solid var(--v-fg-10);
+           display: flex; flex-direction: column; gap: 14px; align-items: center;
+           text-align: center; }
+  .panel h3 { font-size: 18px; font-weight: 700; margin: 0; color: var(--v-fg); }
+  .panel p  { font-size: 13px; line-height: 1.5; color: var(--v-fg-body); margin: 0; }
+  .resend { font-size: 13px; color: var(--v-fg-light); margin-top: 4px; }
+  .resend a { color: var(--v-fg); font-weight: 600; text-decoration: none; }
+  .err { font-size: 12px; color: var(--v-error); margin: 0; }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">6-digit OTP · default</p>
+  <div class="panel">
+    <h3>Code de vérification</h3>
+    <p>Entrez le code à 6 chiffres reçu sur <strong>+33 6 •• •• 47 91</strong>.</p>
+    <div class="otp">
+      <span class="otp__cell is-on">4</span>
+      <span class="otp__cell is-on">2</span>
+      <span class="otp__cell is-on">8</span>
+      <span class="otp__cell is-focus">|</span>
+      <span class="otp__cell"></span>
+      <span class="otp__cell"></span>
+    </div>
+    <div class="resend">Pas reçu ? <a href="#">Renvoyer le code</a> dans 0:42</div>
+  </div>
+
+  <p class="v-eyebrow--sm">6-digit OTP · error state</p>
+  <div class="panel">
+    <h3>Code incorrect</h3>
+    <p>Vérifiez et réessayez. Il vous reste 2 tentatives.</p>
+    <div class="otp">
+      <span class="otp__cell is-error is-on">9</span>
+      <span class="otp__cell is-error is-on">1</span>
+      <span class="otp__cell is-error is-on">3</span>
+      <span class="otp__cell is-error is-on">7</span>
+      <span class="otp__cell is-error is-on">0</span>
+      <span class="otp__cell is-error is-on">5</span>
+    </div>
+    <p class="err">Le code ne correspond pas. Réessayez ou renvoyez-en un nouveau.</p>
+  </div>
+
+  <p class="v-eyebrow--sm">4-digit PIN · masked dots</p>
+  <div class="panel">
+    <h3>Code Vancelian</h3>
+    <p>Saisissez votre code à 4 chiffres pour valider.</p>
+    <div class="otp">
+      <span class="otp__cell is-on"><span class="dot"></span></span>
+      <span class="otp__cell is-on"><span class="dot"></span></span>
+      <span class="otp__cell is-focus">|</span>
+      <span class="otp__cell"></span>
+    </div>
+    <div class="resend">Code oublié ? <a href="#">Réinitialiser</a></div>
+  </div>
+
+  <p class="v-eyebrow--sm">6-digit OTP · success state</p>
+  <div class="panel">
+    <h3>Vérification réussie</h3>
+    <p>Redirection en cours…</p>
+    <div class="otp">
+      <span class="otp__cell is-success">4</span>
+      <span class="otp__cell is-success">2</span>
+      <span class="otp__cell is-success">8</span>
+      <span class="otp__cell is-success">7</span>
+      <span class="otp__cell is-success">3</span>
+      <span class="otp__cell is-success">9</span>
+    </div>
+  </div>
+
+</body></html>

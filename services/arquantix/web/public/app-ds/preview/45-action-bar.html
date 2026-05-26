@@ -1,0 +1,115 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 18px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Action bar — bottom of screen.
+     Optional leading icon button (filters / settings / scan) + a
+     primary pill CTA that takes the remaining width.
+     ============================================================ */
+  .actionbar {
+    width: 480px; max-width: 100%;
+    display: flex; align-items: center; gap: 12px;
+  }
+  /* Leading round button — white, soft shadow (echoes top-bar icons) */
+  .ab-btn {
+    width: 52px; height: 52px; border-radius: 999px; flex-shrink: 0;
+    background: var(--v-white); color: var(--v-fg);
+    border: 1px solid rgba(26,24,21,0.04);
+    box-shadow: 0 1px 2px rgba(26,24,21,0.04),
+                0 4px 14px rgba(26,24,21,0.06);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .ab-btn::before {
+    content: ""; width: 22px; height: 22px;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ab-btn--sliders::before { -webkit-mask-image: url("/icons/kalai/sliders.svg"); mask-image: url("/icons/kalai/sliders.svg"); }
+  .ab-btn--filter::before  { -webkit-mask-image: url("/icons/kalai/filter.svg");  mask-image: url("/icons/kalai/filter.svg"); }
+  .ab-btn--scan::before    { -webkit-mask-image: url("/icons/kalai/qr-code.svg"); mask-image: url("/icons/kalai/qr-code.svg"); }
+  .ab-btn--info::before    { -webkit-mask-image: url("/icons/kalai/info.svg");    mask-image: url("/icons/kalai/info.svg"); }
+
+  /* Primary CTA — fills remaining space */
+  .ab-cta {
+    flex: 1;
+    height: 52px;
+    border-radius: 999px;
+    background: var(--v-fg); color: var(--v-white);
+    border: 0; cursor: pointer;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 15px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background 120ms var(--v-ease-out);
+  }
+  .ab-cta:hover { background: var(--v-fg-hover); }
+
+  .ab-cta--terra { background: var(--v-terracotta); }
+  .ab-cta--terra:hover { background: var(--v-terracotta-pressed); }
+  .ab-cta--outline {
+    background: transparent; color: var(--v-fg);
+    border: 1px solid var(--v-fg);
+  }
+  .ab-cta--outline:hover { background: var(--v-fg-05); }
+  .ab-cta[disabled] { opacity: 0.4; pointer-events: none; }
+
+  .ab-cta .ic {
+    width: 18px; height: 18px;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ab-cta .ic--arrow { -webkit-mask-image: url("/icons/kalai/arrow-right.svg"); mask-image: url("/icons/kalai/arrow-right.svg"); }
+  .ab-cta .ic--send  { -webkit-mask-image: url("/icons/kalai/send-1.svg");      mask-image: url("/icons/kalai/send-1.svg"); }
+  .ab-cta .ic--lock  { -webkit-mask-image: url("/icons/kalai/lock-1.svg");      mask-image: url("/icons/kalai/lock-1.svg"); }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin: 6px 0 -8px; }
+</style></head>
+<body>
+
+  <p class="lbl">Leading icon + primary CTA (default)</p>
+  <div class="actionbar">
+    <button class="ab-btn ab-btn--sliders" aria-label="Réglages"></button>
+    <button class="ab-cta">Continuer</button>
+  </div>
+
+  <p class="lbl">CTA with trailing icon</p>
+  <div class="actionbar">
+    <button class="ab-btn ab-btn--filter" aria-label="Filtres"></button>
+    <button class="ab-cta">Acheter du Bitcoin<span class="ic ic--arrow"></span></button>
+  </div>
+
+  <p class="lbl">Terracotta CTA · brand accent</p>
+  <div class="actionbar">
+    <button class="ab-btn ab-btn--info" aria-label="Détails"></button>
+    <button class="ab-cta ab-cta--terra">Investir<span class="ic ic--arrow"></span></button>
+  </div>
+
+  <p class="lbl">Outline CTA · secondary intent</p>
+  <div class="actionbar">
+    <button class="ab-btn ab-btn--sliders" aria-label="Réglages"></button>
+    <button class="ab-cta ab-cta--outline">Plus tard</button>
+  </div>
+
+  <p class="lbl">Disabled CTA</p>
+  <div class="actionbar">
+    <button class="ab-btn ab-btn--sliders" aria-label="Réglages"></button>
+    <button class="ab-cta" disabled>Saisissez un montant</button>
+  </div>
+
+  <p class="lbl">CTA only · no leading button</p>
+  <div class="actionbar">
+    <button class="ab-cta"><span class="ic ic--lock"></span>Confirmer la transaction</button>
+  </div>
+
+</body></html>

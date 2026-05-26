@@ -1,0 +1,324 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 32px; align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Balance card base — shared structure, theme via .bal--* modifiers
+     ============================================================ */
+  .bal { border-radius: 16px; padding: 20px 20px 24px;
+         display: flex; flex-direction: column; gap: 24px;
+         width: 390px; max-width: 100%;
+         position: relative; overflow: hidden; }
+
+  .bal--dark  { background: var(--v-dark-bg); color: #EDECEC; }
+  .bal--light { background: var(--v-card-warm); color: var(--v-fg);
+                border: 1px solid var(--v-fg-10); }
+  .bal--media { color: var(--v-white); background: #1A1815; }
+
+  /* Media background (image OR video) */
+  .bal__media { position: absolute; inset: 0; width: 100%; height: 100%;
+                object-fit: cover; z-index: 0; }
+  .bal__overlay {
+    position: absolute; inset: 0; z-index: 1;
+    background: linear-gradient(180deg,
+      rgba(20,18,8,0.18) 0%,
+      rgba(20,18,8,0.42) 60%,
+      rgba(20,18,8,0.78) 100%);
+  }
+  .bal--media > .bal__inner { position: relative; z-index: 2;
+                              display: flex; flex-direction: column; gap: 24px; }
+
+  /* ============================================================
+     Kalai icon utility — mask-image on currentColor
+     ============================================================ */
+  .icon {
+    display: inline-block; flex-shrink: 0;
+    background-color: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain;   mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .icon--18 { width: 18px; height: 18px; }
+  .icon--20 { width: 20px; height: 20px; }
+  .icon--16 { width: 16px; height: 16px; }
+  .icon--12 { width: 12px; height: 12px; }
+
+  .ic-add        { -webkit-mask-image: url("/icons/kalai/add.svg");        mask-image: url("/icons/kalai/add.svg"); }
+  .ic-send       { -webkit-mask-image: url("/icons/kalai/send-1.svg");     mask-image: url("/icons/kalai/send-1.svg"); }
+  .ic-trending   { -webkit-mask-image: url("/icons/kalai/trending-up.svg"); mask-image: url("/icons/kalai/trending-up.svg"); }
+  .ic-arrow-up   { -webkit-mask-image: url("/icons/kalai/arrow-up.svg");    mask-image: url("/icons/kalai/arrow-up.svg"); }
+  .ic-arrow-ur   { -webkit-mask-image: url("/icons/kalai/arrow-up-right.svg"); mask-image: url("/icons/kalai/arrow-up-right.svg"); }
+  .ic-apps       { -webkit-mask-image: url("/icons/kalai/apps.svg");        mask-image: url("/icons/kalai/apps.svg"); }
+  .ic-search     { -webkit-mask-image: url("/icons/kalai/search.svg");      mask-image: url("/icons/kalai/search.svg"); }
+  .ic-bell       { -webkit-mask-image: url("/icons/kalai/bell.svg");        mask-image: url("/icons/kalai/bell.svg"); }
+  .ic-eye        { -webkit-mask-image: url("/icons/kalai/eye.svg");         mask-image: url("/icons/kalai/eye.svg"); }
+
+  /* ============================================================
+     Topappbar — Welcome variant
+     ============================================================ */
+  .tab { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .welcome { display: inline-flex; align-items: center; gap: 12px; min-width: 0; }
+  .welcome__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .welcome__hi   { font-size: 15px; font-weight: 600; line-height: 1.2; }
+  .welcome__name { font-size: 13px; line-height: 1.2; }
+  .tab__actions { display: inline-flex; gap: 8px; flex-shrink: 0; }
+
+  .bal--dark  .welcome__hi   { color: var(--v-white); }
+  .bal--dark  .welcome__name { color: rgba(237,236,236,0.55); }
+  .bal--media .welcome__hi   { color: var(--v-white); }
+  .bal--media .welcome__name { color: rgba(255,255,255,0.7); }
+
+  /* ============================================================
+     ic-btn + fab — base inherited from colors_and_type.css.
+     Only per-surface skins are defined here (dark / light / media).
+     ============================================================ */
+
+  /* =====================================================
+     THEME · button skins per surface
+     -----------------------------------------------------
+     · light card → white buttons (match surface tonality)
+     · dark card  → dark buttons  (match surface tonality)
+     · media card → GLASS buttons (iOS 26 liquid-glass)
+     ===================================================== */
+
+  /* Light card — white-on-warm (matches DS default ic-btn / fab--white) */
+  .bal--light .ic-btn,
+  .bal--light .fab {
+    background: var(--v-white); color: var(--v-fg);
+    border: 1px solid rgba(26,24,21,0.04);
+    box-shadow: 0 1px 2px rgba(26,24,21,0.04),
+                0 4px 14px rgba(26,24,21,0.06);
+  }
+
+  /* Dark card — anthracite-on-anthracite, slight rim light for definition */
+  .bal--dark .ic-btn,
+  .bal--dark .fab {
+    background: var(--v-fg); color: #EDECEC;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  /* Media card — iOS 26 liquid glass */
+  .bal--media .ic-btn,
+  .bal--media .fab {
+    background: rgba(255,255,255,0.14);
+    color: var(--v-white);
+    border: 1px solid rgba(255,255,255,0.22);
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.18),
+      inset 0 1px 0 rgba(255,255,255,0.28);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .bal--media .ic-btn:hover,
+  .bal--media .fab:hover { background: rgba(255,255,255,0.20); }
+
+  /* ============================================================
+     Solde block
+     ============================================================ */
+  .solde { display: flex; flex-direction: column; gap: 12px; }
+  .lbl   { font-size: 13px; display: inline-flex; align-items: center; gap: 8px; }
+  .lbl .icon { opacity: 0.85; }
+  .amt   { font-weight: 600; font-size: 40px; line-height: 1.05; letter-spacing: -0.02em;
+           font-feature-settings: "tnum" on, "lnum" on; }
+  /* Gain band · canonical = E3 two-tone, inline (no pill).
+     Euro = full weight, percent = same color, lighter weight + opacity. */
+  .chg   { display: inline-flex; align-items: center; gap: 6px;
+           font-weight: 600; font-size: 13px;
+           font-feature-settings: "tnum" on; width: max-content; }
+  .chg__pct { font-weight: 500; opacity: 0.65; }
+
+  .bal--dark  .lbl { color: rgba(237,236,236,0.7); }
+  .bal--dark  .amt { color: var(--v-white); }
+  .bal--dark  .chg { color: #BFE0C7; }
+
+  .bal--light .lbl { color: var(--v-fg-muted); }
+  .bal--light .amt { color: var(--v-fg); }
+  .bal--light .chg { color: var(--v-green); }
+
+  .bal--media .lbl { color: rgba(255,255,255,0.78); }
+  .bal--media .amt { color: var(--v-white); }
+  .bal--media .chg { color: var(--v-white); }
+
+  /* ============================================================
+     Chart
+     ============================================================ */
+  .chart { height: 120px; margin: 0 -4px; position: relative; }
+  .chart svg { display: block; width: 100%; height: 100%; }
+  .chart__hi { position: absolute; right: 0; top: 17.57%;
+               width: 10px; height: 10px; border-radius: 999px;
+               transform: translate(50%, -50%); }
+  .bal--dark  .chart__hi { background: var(--v-white); box-shadow: 0 0 0 4px rgba(255,255,255,0.18); }
+  .bal--light .chart__hi { background: var(--v-green); box-shadow: 0 0 0 4px rgba(51,97,77,0.18); }
+  .bal--media .chart__hi { background: var(--v-white); box-shadow: 0 0 0 4px rgba(255,255,255,0.22); }
+  .bal--dark  .chart path  { stroke: var(--v-white); }
+  .bal--light .chart path  { stroke: var(--v-green); }
+  .bal--media .chart path  { stroke: var(--v-white); }
+
+  /* ============================================================
+     Action row — FAB + label stack
+     ============================================================ */
+  .fabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .fb { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .fb__label { font-size: 11px; }
+  .bal--dark  .fb__label { color: rgba(237,236,236,0.85); }
+  .bal--light .fb__label { color: var(--v-fg-body); }
+  .bal--media .fb__label { color: rgba(255,255,255,0.9); }
+
+  .row { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .colhead { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+             font-weight: 500; color: var(--v-fg-light); text-align: center; margin-bottom: 8px; }
+</style></head>
+<body>
+
+<div class="row">
+
+    <!-- =====================================================
+         A · DARK — dark buttons on dark
+         ===================================================== -->
+    <div>
+      <p class="colhead">Variant A · anthracite · boutons fond foncé</p>
+      <div class="bal bal--dark">
+        <div class="tab">
+          <div class="welcome">
+            <span class="avt avt--40"><img src="https://i.pravatar.cc/80?img=68" alt="Jean Dupont"/></span>
+            <div class="welcome__text">
+              <span class="welcome__hi">Welcome back</span>
+              <span class="welcome__name">Jean Dupont</span>
+            </div>
+          </div>
+          <div class="tab__actions">
+            <button class="ic-btn" aria-label="Recherche"><span class="icon icon--18 ic-search"></span></button>
+            <button class="ic-btn" aria-label="Notifications"><span class="icon icon--18 ic-bell"></span></button>
+          </div>
+        </div>
+
+        <div class="solde">
+          <div class="lbl">Solde patrimonial <span class="icon icon--16 ic-eye"></span></div>
+          <div class="amt">48 920,00&nbsp;€</div>
+          <div class="chg">
+            <span class="icon icon--12 ic-arrow-up"></span>
+            + 3 290,30&nbsp;€&nbsp;<span class="chg__pct">·&nbsp;+ 7,2&nbsp;% YTD</span>
+          </div>
+        </div>
+
+        <div class="chart">
+          <svg viewBox="0 0 320 120" preserveAspectRatio="none">
+            <path d="M0,58 L24,42 L48,38 L72,52 L96,55 L120,53 L144,68 L168,75 L192,71 L216,49 L240,32 L264,28 L288,30 L320,21" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="chart__hi"></span>
+        </div>
+
+        <div class="fabs">
+          <div class="fb"><button class="fab fab--md" aria-label="Déposer"><span class="icon icon--20 ic-add"></span></button><span class="fb__label">Déposer</span></div>
+          <div class="fb"><button class="fab fab--md" aria-label="Retirer"><span class="icon icon--20 ic-send"></span></button><span class="fb__label">Retirer</span></div>
+          <div class="fb"><button class="fab fab--md" aria-label="Investir"><span class="icon icon--20 ic-trending"></span></button><span class="fb__label">Investir</span></div>
+          <div class="fb"><button class="fab fab--md" aria-label="Plus"><span class="icon icon--20 ic-apps"></span></button><span class="fb__label">More</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================
+         B · LIGHT — white buttons on warm
+         ===================================================== -->
+    <div>
+      <p class="colhead">Variant B · warm · boutons fond blanc</p>
+      <div class="bal bal--light">
+        <div class="tab">
+          <div class="welcome">
+            <span class="avt avt--40"><img src="https://i.pravatar.cc/80?img=68" alt="Jean Dupont"/></span>
+            <div class="welcome__text">
+              <span class="welcome__hi">Welcome back</span>
+              <span class="welcome__name">Jean Dupont</span>
+            </div>
+          </div>
+          <div class="tab__actions">
+            <button class="ic-btn" aria-label="Recherche"><span class="icon icon--18 ic-search"></span></button>
+            <button class="ic-btn" aria-label="Notifications"><span class="icon icon--18 ic-bell"></span></button>
+          </div>
+        </div>
+
+        <div class="solde">
+          <div class="lbl">Solde patrimonial <span class="icon icon--16 ic-eye"></span></div>
+          <div class="amt">48 920,00&nbsp;€</div>
+          <div class="chg">
+            <span class="icon icon--12 ic-arrow-up"></span>
+            + 3 290,30&nbsp;€&nbsp;<span class="chg__pct">·&nbsp;+ 7,2&nbsp;% YTD</span>
+          </div>
+        </div>
+
+        <div class="chart">
+          <svg viewBox="0 0 320 120" preserveAspectRatio="none">
+            <path d="M0,58 L24,42 L48,38 L72,52 L96,55 L120,53 L144,68 L168,75 L192,71 L216,49 L240,32 L264,28 L288,30 L320,21" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="chart__hi"></span>
+        </div>
+
+        <div class="fabs">
+          <div class="fb"><button class="fab fab--md" aria-label="Déposer"><span class="icon icon--20 ic-add"></span></button><span class="fb__label">Déposer</span></div>
+          <div class="fb"><button class="fab fab--md" aria-label="Retirer"><span class="icon icon--20 ic-send"></span></button><span class="fb__label">Retirer</span></div>
+          <div class="fb"><button class="fab fab--md" aria-label="Investir"><span class="icon icon--20 ic-trending"></span></button><span class="fb__label">Investir</span></div>
+          <div class="fb"><button class="fab fab--md" aria-label="Plus"><span class="icon icon--20 ic-apps"></span></button><span class="fb__label">More</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================
+         C · MEDIA — iOS 26 liquid-glass buttons
+         ===================================================== -->
+    <div>
+      <p class="colhead">Variant C · media · boutons glass (iOS 26)</p>
+      <div class="bal bal--media">
+        <img class="bal__media"
+             src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&amp;fit=crop&amp;w=900&amp;q=80"
+             alt=""/>
+        <div class="bal__overlay"></div>
+        <!-- Replace <img> with <video class="bal__media" autoplay loop muted playsinline src="…"></video> for motion -->
+
+        <div class="bal__inner">
+          <div class="tab">
+            <div class="welcome">
+              <span class="avt avt--40"><img src="https://i.pravatar.cc/80?img=68" alt="Jean Dupont"/></span>
+              <div class="welcome__text">
+                <span class="welcome__hi">Welcome back</span>
+                <span class="welcome__name">Jean Dupont</span>
+              </div>
+            </div>
+            <div class="tab__actions">
+              <button class="ic-btn" aria-label="Recherche"><span class="icon icon--18 ic-search"></span></button>
+              <button class="ic-btn" aria-label="Notifications"><span class="icon icon--18 ic-bell"></span></button>
+            </div>
+          </div>
+
+          <div class="solde">
+            <div class="lbl">Solde patrimonial <span class="icon icon--16 ic-eye"></span></div>
+            <div class="amt">48 920,00&nbsp;€</div>
+            <div class="chg">
+              <span class="icon icon--12 ic-arrow-up"></span>
+              + 3 290,30&nbsp;€&nbsp;<span class="chg__pct">·&nbsp;+ 7,2&nbsp;% YTD</span>
+            </div>
+          </div>
+
+          <div class="chart">
+            <svg viewBox="0 0 320 120" preserveAspectRatio="none">
+              <path d="M0,58 L24,42 L48,38 L72,52 L96,55 L120,53 L144,68 L168,75 L192,71 L216,49 L240,32 L264,28 L288,30 L320,21" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="chart__hi"></span>
+          </div>
+
+          <div class="fabs">
+            <div class="fb"><button class="fab fab--md" aria-label="Déposer"><span class="icon icon--20 ic-add"></span></button><span class="fb__label">Déposer</span></div>
+            <div class="fb"><button class="fab fab--md" aria-label="Retirer"><span class="icon icon--20 ic-send"></span></button><span class="fb__label">Retirer</span></div>
+            <div class="fb"><button class="fab fab--md" aria-label="Investir"><span class="icon icon--20 ic-trending"></span></button><span class="fb__label">Investir</span></div>
+            <div class="fb"><button class="fab fab--md" aria-label="Plus"><span class="icon icon--20 ic-apps"></span></button><span class="fb__label">More</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body></html>

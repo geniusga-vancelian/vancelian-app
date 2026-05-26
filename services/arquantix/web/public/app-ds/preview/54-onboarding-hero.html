@@ -1,0 +1,103 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 48px 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 48px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Onboarding hero — title (mixed Inter + Newsreader italic) +
+     description block. Centred typography for permission gates and
+     value-prop onboarding screens.
+     ============================================================
+     Anatomy:
+       .hero            — column stack, centred, max-width 480
+       .hero__title     — two-line title, mixing Inter + Newsreader
+       .hero__title .ui  — Inter Bold, anthracite
+       .hero__title .ed  — Newsreader Italic, anthracite
+       .hero__body      — muted helper text
+     -------------------------------------------------------------- */
+  .hero {
+    width: 100%; max-width: 480px;
+    display: flex; flex-direction: column; gap: 20px;
+    text-align: center;
+  }
+  .hero__title {
+    margin: 0;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: var(--v-fg);
+  }
+  .hero__title .ui {
+    display: block;
+    font-family: var(--v-font-ui); font-weight: 700;
+    font-size: clamp(40px, 6vw, 48px);
+  }
+  .hero__title .ed {
+    display: block;
+    font-family: var(--v-font-editorial); font-weight: 400; font-style: italic;
+    font-size: clamp(44px, 6.4vw, 52px);
+    line-height: 1.0;
+  }
+  /* Inline variant — single line, Inter "Word " + Newsreader italic "Word" */
+  .hero__title--inline { line-height: 1.1; }
+  .hero__title--inline .ui,
+  .hero__title--inline .ed { display: inline; }
+
+  .hero__body {
+    margin: 0;
+    font-family: var(--v-font-ui); font-weight: 400;
+    font-size: 17px; line-height: 1.45;
+    color: var(--v-fg-light);
+    text-wrap: balance;
+  }
+
+  /* Smaller size */
+  .hero--md .hero__title .ui { font-size: 32px; }
+  .hero--md .hero__title .ed { font-size: 34px; }
+  .hero--md .hero__body { font-size: 15px; }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 0; align-self: flex-start; }
+</style></head>
+<body>
+
+  <p class="lbl">Stacked · Inter Bold over Newsreader Italic</p>
+  <div class="hero">
+    <h1 class="hero__title">
+      <span class="ui">Instant</span>
+      <span class="ed">Notifications</span>
+    </h1>
+    <p class="hero__body">Get instant notification Et prima post Osdroenam quam, ut dictum</p>
+  </div>
+
+  <p class="lbl">Reversed order · Newsreader Italic over Inter Bold</p>
+  <div class="hero">
+    <h1 class="hero__title">
+      <span class="ed">Bâtir</span>
+      <span class="ui">votre patrimoine.</span>
+    </h1>
+    <p class="hero__body">Vancelian vous accompagne dans la sélection d'actifs réels et tokenisés.</p>
+  </div>
+
+  <p class="lbl">Inline · single line ("La beauté du Japon")</p>
+  <div class="hero">
+    <h1 class="hero__title hero__title--inline">
+      <span class="ui">La beauté </span>
+      <span class="ed">du Japon</span>
+    </h1>
+    <p class="hero__body">Découvrez les biens d'exception sélectionnés à Niseko, Tokyo et Kyoto.</p>
+  </div>
+
+  <p class="lbl">MD size · sheet / modal contexts</p>
+  <div class="hero hero--md">
+    <h1 class="hero__title">
+      <span class="ui">Activez</span>
+      <span class="ed">Face ID</span>
+    </h1>
+    <p class="hero__body">Pour sécuriser vos transactions sans saisir votre code à chaque fois.</p>
+  </div>
+
+</body></html>

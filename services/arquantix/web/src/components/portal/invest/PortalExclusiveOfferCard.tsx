@@ -15,7 +15,7 @@ export function PortalExclusiveOfferCard({ offer, className }: Props) {
   return (
     <article
       className={cn(
-        'flex h-full flex-col overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle',
+        'flex h-full flex-col card-simple overflow-hidden !w-full',
         className,
       )}
     >

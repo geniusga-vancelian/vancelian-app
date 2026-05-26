@@ -95,7 +95,7 @@ export function PortalSwapConfirmStep({
           </p>
         ) : null}
 
-        <article className="overflow-hidden rounded-v-card border border-v-border bg-v-card shadow-v-subtle">
+        <article className="overflow-hidden card-simple overflow-hidden !w-full">
           <div className="flex items-center justify-between px-4 py-3.5 font-ui text-[15px]">
             <span className="text-v-fg-muted">Frais</span>
             <span className="font-medium text-v-fg">{formatSwapFeeLine(quote)}</span>

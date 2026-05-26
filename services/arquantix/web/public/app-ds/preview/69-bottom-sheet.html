@@ -1,0 +1,146 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Bottom sheet — derived from validation-sheet (47)
+     Anatomy:
+       .sht                  — shell (24 px top radius, white)
+       .sht__handle          — 36×4 drag handle
+       .sht__head            — title row (icon-btn + title + ic-btn)
+       .sht__body            — scrollable body
+       .sht__footer          — sticky CTA stack
+     Variants:
+       .sht--scrim           — adds backdrop scrim (preview only)
+       .sht--full            — full-height (90vh)
+     ============================================================ */
+  .sht-stage {
+    width: 390px; max-width: 100%;
+    background: linear-gradient(180deg, var(--v-card) 0%, var(--v-card-hover) 60%, var(--v-fg-10) 100%);
+    border-radius: 16px;
+    position: relative; overflow: hidden;
+    min-height: 480px;
+    box-shadow: var(--v-elev-subtle);
+  }
+  .sht-stage--scrim::before {
+    content: ""; position: absolute; inset: 0;
+    background: rgba(20,18,8,0.45); z-index: 1;
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  }
+
+  .sht {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--v-white);
+    border-radius: var(--v-radius-sheet) var(--v-radius-sheet) 0 0;
+    padding: 0 20px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+    z-index: 2; max-height: 80%;
+  }
+  .sht__handle { width: 36px; height: 4px; border-radius: 999px;
+                 background: var(--v-fg-20); margin: 10px auto 4px; }
+  .sht__head { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; }
+  .sht__title { flex: 1; min-width: 0; text-align: center;
+                font-weight: 700; font-size: 17px; color: var(--v-fg); }
+  .sht__body { font-size: 14px; line-height: 1.5; color: var(--v-fg-body);
+               padding: 4px 0 8px; }
+  .sht__row { display: flex; align-items: center; gap: 14px; padding: 12px 0;
+              border-top: 1px solid var(--v-fg-10); }
+  .sht__row:first-child { border-top: 0; }
+  .sht__row__title { flex: 1; font-size: 15px; color: var(--v-fg); font-weight: 500; }
+  .sht__row__meta  { font-size: 13px; color: var(--v-fg-light); }
+  .sht__footer { display: flex; gap: 12px; padding-top: 12px; }
+  .sht__footer .btn { flex: 1; height: 52px; font-size: 15px; }
+
+  .ic-btn .icon {
+    width: 18px; height: 18px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic-close { -webkit-mask-image: url("/icons/kalai/remove.svg"); mask-image: url("/icons/kalai/remove.svg"); }
+  .ic-back  { -webkit-mask-image: url("/icons/kalai/chevron-left.svg"); mask-image: url("/icons/kalai/chevron-left.svg"); }
+  .ic-more  { -webkit-mask-image: url("/icons/kalai/menu-3.svg"); mask-image: url("/icons/kalai/menu-3.svg"); }
+
+  .row { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+</style></head>
+<body>
+<div class="row">
+
+  <!-- A · Compact -->
+  <div>
+    <p class="v-eyebrow--sm" style="text-align:center;margin:0 0 8px">A · compact (3 options)</p>
+    <div class="sht-stage">
+      <div class="sht">
+        <div class="sht__handle"></div>
+        <div class="sht__head">
+          <button class="ic-btn" aria-label="Fermer"><span class="icon ic-close"></span></button>
+          <div class="sht__title">Choisir une devise</div>
+          <span style="width:40px"></span>
+        </div>
+        <div class="sht__row">
+          <span class="avt avt--40 avt--warm">€</span>
+          <div class="sht__row__title">Euro<br><span class="sht__row__meta">12 480,00 €</span></div>
+          <span class="rad is-on"></span>
+        </div>
+        <div class="sht__row">
+          <span class="avt avt--40 avt--warm">$</span>
+          <div class="sht__row__title">US Dollar<br><span class="sht__row__meta">$ 2 410,12</span></div>
+          <span class="rad"></span>
+        </div>
+        <div class="sht__row">
+          <span class="avt avt--40 avt--warm">£</span>
+          <div class="sht__row__title">British Pound<br><span class="sht__row__meta">£ 0,00</span></div>
+          <span class="rad"></span>
+        </div>
+        <div class="sht__footer">
+          <button class="btn btn--primary" style="flex:1">Continuer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B · Full body with scrim -->
+  <div>
+    <p class="v-eyebrow--sm" style="text-align:center;margin:0 0 8px">B · scrim + back + more</p>
+    <div class="sht-stage sht-stage--scrim">
+      <div class="sht">
+        <div class="sht__handle"></div>
+        <div class="sht__head">
+          <button class="ic-btn" aria-label="Retour"><span class="icon ic-back"></span></button>
+          <div class="sht__title">Détails du versement</div>
+          <button class="ic-btn" aria-label="Plus"><span class="icon ic-more"></span></button>
+        </div>
+        <div class="sht__body">
+          <p style="margin:0 0 10px">Récapitulatif de votre virement SEPA avant validation.</p>
+          <div class="sht__row">
+            <div class="sht__row__title">Bénéficiaire</div>
+            <div class="sht__row__meta">Marie Dupont</div>
+          </div>
+          <div class="sht__row">
+            <div class="sht__row__title">IBAN</div>
+            <div class="sht__row__meta">FR76 •••• 4827</div>
+          </div>
+          <div class="sht__row">
+            <div class="sht__row__title">Montant</div>
+            <div class="sht__row__meta" style="color:var(--v-fg);font-weight:700">1 250,00 €</div>
+          </div>
+          <div class="sht__row">
+            <div class="sht__row__title">Motif</div>
+            <div class="sht__row__meta">Loyer juin</div>
+          </div>
+        </div>
+        <div class="sht__footer">
+          <button class="btn btn--secondary" style="flex:1">Annuler</button>
+          <button class="btn btn--primary" style="flex:1">Valider</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body></html>

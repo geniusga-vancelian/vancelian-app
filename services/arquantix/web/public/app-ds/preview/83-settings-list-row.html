@@ -1,0 +1,158 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 24px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Settings list row — patterns for trailing element
+     Variants côté droit :
+       chevron · value · toggle · badge count · danger
+     Anatomy :
+       .stg-list           — card container (dividers)
+       .stg-row            — single row
+         .stg-row__lead    — leading Kalai glyph (32 px chip)
+         .stg-row__body    — title + optional sub
+         .stg-row__trail   — right cluster
+     ============================================================ */
+  .stg-list {
+    width: 420px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    padding: 4px 0; overflow: hidden;
+  }
+  .stg-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--v-fg-10);
+    cursor: pointer;
+    transition: background 120ms;
+  }
+  .stg-list .stg-row:first-of-type { border-top: 0; }
+  .stg-row:hover { background: var(--v-fg-05); }
+  .stg-row.is-static { cursor: default; }
+  .stg-row.is-static:hover { background: transparent; }
+
+  .stg-row__lead {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .stg-row__lead .ic {
+    width: 16px; height: 16px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic--profile { -webkit-mask-image: url("/icons/kalai/user.svg");          mask-image: url("/icons/kalai/user.svg"); }
+  .ic--lock    { -webkit-mask-image: url("/icons/kalai/lock-1.svg");        mask-image: url("/icons/kalai/lock-1.svg"); }
+  .ic--bell    { -webkit-mask-image: url("/icons/kalai/bell.svg");          mask-image: url("/icons/kalai/bell.svg"); }
+  .ic--card    { -webkit-mask-image: url("/icons/kalai/payment-card.svg");  mask-image: url("/icons/kalai/payment-card.svg"); }
+  .ic--key     { -webkit-mask-image: url("/icons/kalai/key-1.svg");         mask-image: url("/icons/kalai/key-1.svg"); }
+  .ic--global  { -webkit-mask-image: url("/icons/kalai/earth.svg");         mask-image: url("/icons/kalai/earth.svg"); }
+  .ic--moon    { -webkit-mask-image: url("/icons/kalai/moon.svg");          mask-image: url("/icons/kalai/moon.svg"); }
+  .ic--logout  { -webkit-mask-image: url("/icons/kalai/logout.svg");        mask-image: url("/icons/kalai/logout.svg"); }
+  .ic--info    { -webkit-mask-image: url("/icons/kalai/info.svg");          mask-image: url("/icons/kalai/info.svg"); }
+
+  /* Danger row */
+  .stg-row.is-danger .stg-row__lead { background: var(--v-error-bg); color: var(--v-error); }
+  .stg-row.is-danger .stg-row__title { color: var(--v-error); }
+
+  .stg-row__body { flex: 1; min-width: 0;
+                   display: flex; flex-direction: column; gap: 2px; }
+  .stg-row__title { font-size: 15px; color: var(--v-fg); font-weight: 500; }
+  .stg-row__sub   { font-size: 12px; color: var(--v-fg-light); line-height: 1.3; }
+
+  .stg-row__trail { display: inline-flex; align-items: center; gap: 8px;
+                    flex-shrink: 0; font-size: 14px; color: var(--v-fg-light); }
+  .stg-row__chev  { width: 18px; height: 18px; color: var(--v-fg-20); }
+  .stg-row__chev svg { width: 100%; height: 100%; display: block; }
+
+  .stg-row__badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 20px; height: 20px; padding: 0 6px;
+    border-radius: 999px;
+    background: var(--v-terracotta); color: var(--v-white);
+    font-size: 11px; font-weight: 700; font-feature-settings: "tnum" on;
+  }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">Trailing patterns · chevron / value / toggle / badge / danger</p>
+  <div class="stg-list">
+
+    <!-- chevron only -->
+    <div class="stg-row">
+      <span class="stg-row__lead"><span class="ic ic--profile"></span></span>
+      <div class="stg-row__body">
+        <span class="stg-row__title">Profil</span>
+        <span class="stg-row__sub">Jean Dupont · jean@vancelian.com</span>
+      </div>
+      <div class="stg-row__trail">
+        <span class="stg-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <!-- badge + chevron -->
+    <div class="stg-row">
+      <span class="stg-row__lead"><span class="ic ic--bell"></span></span>
+      <div class="stg-row__body">
+        <span class="stg-row__title">Notifications</span>
+      </div>
+      <div class="stg-row__trail">
+        <span class="stg-row__badge">3</span>
+        <span class="stg-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <!-- value + chevron -->
+    <div class="stg-row">
+      <span class="stg-row__lead"><span class="ic ic--global"></span></span>
+      <div class="stg-row__body">
+        <span class="stg-row__title">Langue</span>
+      </div>
+      <div class="stg-row__trail">
+        Français
+        <span class="stg-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <!-- toggle -->
+    <div class="stg-row is-static">
+      <span class="stg-row__lead"><span class="ic ic--moon"></span></span>
+      <div class="stg-row__body">
+        <span class="stg-row__title">Apparence</span>
+        <span class="stg-row__sub">Adaptée au système</span>
+      </div>
+      <div class="stg-row__trail">
+        <span class="tgl is-on"></span>
+      </div>
+    </div>
+
+    <!-- value-only meta + chevron -->
+    <div class="stg-row">
+      <span class="stg-row__lead"><span class="ic ic--info"></span></span>
+      <div class="stg-row__body">
+        <span class="stg-row__title">À propos</span>
+      </div>
+      <div class="stg-row__trail">
+        v 4.2.1
+        <span class="stg-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <!-- danger -->
+    <div class="stg-row is-danger">
+      <span class="stg-row__lead"><span class="ic ic--logout"></span></span>
+      <div class="stg-row__body">
+        <span class="stg-row__title">Se déconnecter</span>
+      </div>
+    </div>
+
+  </div>
+
+</body></html>

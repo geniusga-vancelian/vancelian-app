@@ -1,0 +1,127 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Allocation donut + legend
+     -----------------------------------------------------------
+     5 segments séparés par 6° d'écart, terminaisons arrondies
+     (stroke-linecap: round). Rendu SVG, calculs basés sur :
+       r = 70, C = 2πr ≈ 439.82, stroke-width = 18
+       Pour chaque segment de % p :
+         length = p × C − gap   (gap visuel = 4 px d'arc)
+     ============================================================ */
+  .alloc {
+    width: 460px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    padding: 24px; display: flex; flex-direction: column; gap: 20px;
+  }
+  .alloc__head { display: flex; align-items: flex-start; justify-content: space-between; }
+  .alloc__title { font-size: 17px; font-weight: 700; color: var(--v-fg); }
+  .alloc__sub   { font-size: 13px; color: var(--v-fg-light); margin-top: 2px; }
+  .alloc__period { font-size: 12px; color: var(--v-fg-light);
+                   font-feature-settings: "tnum" on; }
+
+  .alloc__body { display: grid; grid-template-columns: 180px 1fr; gap: 24px;
+                 align-items: center; }
+
+  /* Donut SVG */
+  .alloc__donut { position: relative; width: 180px; height: 180px; }
+  .alloc__donut svg { width: 100%; height: 100%; display: block; }
+
+  .alloc__center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px;
+    text-align: center;
+    pointer-events: none;
+  }
+  .alloc__center__val {
+    font-weight: 700; font-size: 22px; color: var(--v-fg);
+    font-feature-settings: "tnum" on, "lnum" on;
+    letter-spacing: -0.01em; line-height: 1;
+  }
+  .alloc__center__lbl {
+    font-size: 11px; color: var(--v-fg-light);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  /* Legend — color · label · % only (no EUR equivalents) */
+  .alloc__legend { display: flex; flex-direction: column; gap: 12px; }
+  .alloc__leg-row {
+    display: grid; grid-template-columns: 14px 1fr auto;
+    align-items: center; gap: 12px;
+  }
+  .alloc__leg-dot {
+    width: 10px; height: 10px; border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .alloc__leg-lbl { font-size: 14px; color: var(--v-fg); font-weight: 500; }
+  .alloc__leg-pct { font-size: 14px; font-weight: 700; color: var(--v-fg);
+                    font-feature-settings: "tnum" on; }
+</style></head>
+<body>
+
+  <div class="alloc">
+    <div class="alloc__head">
+      <div>
+        <div class="alloc__title">Allocation patrimoniale</div>
+        <div class="alloc__sub">Vue agrégée · 5 classes d'actifs</div>
+      </div>
+      <span class="alloc__period">31 mai 2026</span>
+    </div>
+
+    <div class="alloc__body">
+      <div class="alloc__donut">
+        <svg viewBox="0 0 180 180">
+          <!-- Annular sectors with rx=2 rounded corners.
+               Ro=82, Ri=68 (thickness 14), gap 4° between segments. -->
+          <path d="M94.859,8.144 A82 82 0 0 1 133.693,159.39 A2 2 0 0 1 130.963,158.717 L125.843,150.127 A2 2 0 0 1 126.522,147.36 A68 68 0 0 0 94.371,22.141 A2 2 0 0 1 92.443,20.043 L92.792,10.049 A2 2 0 0 1 94.859,8.144 Z" fill="#1A1815"/>
+          <path d="M125.176,164.072 A82 82 0 0 1 26.634,142.045 A2 2 0 0 1 26.959,139.253 L34.839,133.096 A2 2 0 0 1 37.67,133.423 A68 68 0 0 0 118.861,151.571 A2 2 0 0 1 121.561,152.481 L126.07,161.407 A2 2 0 0 1 125.176,164.072 Z" fill="#C0512E"/>
+          <path d="M20.921,134.182 A82 82 0 0 1 10.649,69.327 A2 2 0 0 1 13.099,67.949 L22.712,70.705 A2 2 0 0 1 24.111,73.187 A68 68 0 0 0 32.532,126.351 A2 2 0 0 1 31.967,129.144 L23.677,134.735 A2 2 0 0 1 20.921,134.182 Z" fill="#0F2A47"/>
+          <path d="M13.652,60.083 A82 82 0 0 1 46.307,20.61 A2 2 0 0 1 49.037,21.283 L54.157,29.873 A2 2 0 0 1 53.478,32.64 A68 68 0 0 0 26.812,64.874 A2 2 0 0 1 24.222,66.059 L14.825,62.638 A2 2 0 0 1 13.652,60.083 Z" fill="#33614D"/>
+          <path d="M54.824,15.928 A82 82 0 0 1 85.141,8.144 A2 2 0 0 1 87.208,10.049 L87.557,20.043 A2 2 0 0 1 85.629,22.141 A68 68 0 0 0 61.139,28.429 A2 2 0 0 1 58.439,27.519 L53.93,18.593 A2 2 0 0 1 54.824,15.928 Z" fill="#C99A2E"/>
+        </svg>
+        <div class="alloc__center">
+          <span class="alloc__center__val">487 320 €</span>
+          <span class="alloc__center__lbl">Patrimoine</span>
+        </div>
+      </div>
+
+      <div class="alloc__legend">
+        <div class="alloc__leg-row">
+          <span class="alloc__leg-dot" style="background:#1A1815"></span>
+          <span class="alloc__leg-lbl">Immobilier</span>
+          <span class="alloc__leg-pct">42 %</span>
+        </div>
+        <div class="alloc__leg-row">
+          <span class="alloc__leg-dot" style="background:#C0512E"></span>
+          <span class="alloc__leg-lbl">SCPI</span>
+          <span class="alloc__leg-pct">23 %</span>
+        </div>
+        <div class="alloc__leg-row">
+          <span class="alloc__leg-dot" style="background:#0F2A47"></span>
+          <span class="alloc__leg-lbl">Liquidités</span>
+          <span class="alloc__leg-pct">15 %</span>
+        </div>
+        <div class="alloc__leg-row">
+          <span class="alloc__leg-dot" style="background:#33614D"></span>
+          <span class="alloc__leg-lbl">Crypto</span>
+          <span class="alloc__leg-pct">12 %</span>
+        </div>
+        <div class="alloc__leg-row">
+          <span class="alloc__leg-dot" style="background:#C99A2E"></span>
+          <span class="alloc__leg-lbl">Or</span>
+          <span class="alloc__leg-pct">8 %</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body></html>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 32px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Pagination patterns — 4 variants
+       A · Load more button (mobile-first, infinite-like)
+       B · Numeric pagination (desktop classic)
+       C · Compact "Page X of Y" with prev/next
+       D · Auto-infinite scroll indicator (loading more inline)
+     ============================================================ */
+
+  .pag-frame { width: 420px; max-width: 100%;
+               background: var(--v-white); border-radius: 12px;
+               border: 1px solid var(--v-fg-10);
+               padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .pag-count { font-size: 13px; color: var(--v-fg-light); text-align: center;
+               font-feature-settings: "tnum" on; }
+
+  /* A · Load more — pill, centered */
+  .pag-more {
+    align-self: center;
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 18px;
+    border-radius: 999px;
+    background: var(--v-fg-05); color: var(--v-fg);
+    border: 0; cursor: pointer;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 13px;
+  }
+  .pag-more:hover { background: var(--v-fg-10); }
+  .pag-more svg { width: 14px; height: 14px; }
+
+  /* B · Numeric pagination */
+  .pag-num { display: inline-flex; align-items: center; gap: 4px;
+             align-self: center; }
+  .pag-num__btn {
+    width: 36px; height: 36px;
+    border-radius: 999px;
+    background: transparent; color: var(--v-fg-body);
+    border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 13px;
+    font-feature-settings: "tnum" on;
+  }
+  .pag-num__btn:hover { background: var(--v-fg-05); }
+  .pag-num__btn.is-on {
+    background: var(--v-fg); color: var(--v-white);
+  }
+  .pag-num__btn.is-disabled {
+    color: var(--v-fg-20); cursor: not-allowed;
+  }
+  .pag-num__dots { padding: 0 4px; color: var(--v-fg-light); }
+  .pag-num__btn svg { width: 16px; height: 16px; }
+
+  /* C · Compact "Page X / Y" */
+  .pag-compact { display: inline-flex; align-items: center; gap: 12px;
+                 align-self: center; }
+  .pag-compact__label { font-size: 14px; color: var(--v-fg-body);
+                        font-feature-settings: "tnum" on; }
+  .pag-compact__label b { font-weight: 700; color: var(--v-fg); }
+
+  /* D · Infinite loading inline */
+  .pag-inf { display: inline-flex; align-items: center; gap: 10px;
+             align-self: center; font-size: 13px; color: var(--v-fg-light); }
+  .pag-inf__spin {
+    width: 18px; height: 18px;
+    border: 2px solid var(--v-fg-10);
+    border-top-color: var(--v-fg);
+    border-radius: 999px;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .row-demo { display: flex; align-items: center; gap: 14px;
+              padding: 12px 0; border-top: 1px solid var(--v-fg-10);
+              font-size: 14px; color: var(--v-fg-body); }
+  .row-demo:first-child { border-top: 0; }
+  .row-demo__avt { width: 36px; height: 36px; border-radius: 999px;
+                   background: var(--v-card-warm); flex-shrink: 0; }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">A · Load more (mobile)</p>
+  <div class="pag-frame">
+    <div class="row-demo"><div class="row-demo__avt"></div>Transaction 8 · Café</div>
+    <div class="row-demo"><div class="row-demo__avt"></div>Transaction 9 · Loyer</div>
+    <div class="row-demo"><div class="row-demo__avt"></div>Transaction 10 · Salaire</div>
+    <button class="pag-more">
+      Voir plus
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="pag-count">10 sur 128 transactions affichées</div>
+  </div>
+
+  <p class="v-eyebrow--sm">B · Numeric pagination · page 3 of 12</p>
+  <div class="pag-frame">
+    <div class="pag-count">37–48 sur 128 résultats</div>
+    <div class="pag-num">
+      <button class="pag-num__btn" aria-label="Précédent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 6 9 12 15 18"/></svg>
+      </button>
+      <button class="pag-num__btn">1</button>
+      <button class="pag-num__btn">2</button>
+      <button class="pag-num__btn is-on">3</button>
+      <button class="pag-num__btn">4</button>
+      <button class="pag-num__btn">5</button>
+      <span class="pag-num__dots">…</span>
+      <button class="pag-num__btn">12</button>
+      <button class="pag-num__btn" aria-label="Suivant">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">C · Compact "Page X / Y"</p>
+  <div class="pag-frame">
+    <div class="pag-compact">
+      <button class="pag-num__btn" aria-label="Précédent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 6 9 12 15 18"/></svg>
+      </button>
+      <span class="pag-compact__label">Page <b>3</b> sur <b>12</b></span>
+      <button class="pag-num__btn" aria-label="Suivant">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">D · Infinite scroll · loading inline</p>
+  <div class="pag-frame">
+    <div class="row-demo"><div class="row-demo__avt"></div>Transaction 47 · Virement</div>
+    <div class="row-demo"><div class="row-demo__avt"></div>Transaction 48 · Carte</div>
+    <div class="pag-inf">
+      <span class="pag-inf__spin"></span>
+      Chargement des opérations suivantes…
+    </div>
+  </div>
+
+</body></html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+  .map-card { width: 560px; max-width: 100%;
+              background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+              overflow: hidden; }
+
+  /* Map image area — placeholder simulating a Google-style map look */
+  .map {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background:
+      /* Roads (yellow trunk) */
+      linear-gradient(95deg, transparent 0 12%, #F1C760 12% 18%, transparent 18% 100%),
+      linear-gradient(-72deg, transparent 0 35%, #F1C760 35% 39%, transparent 39% 100%),
+      /* Green parks (radial blobs) */
+      radial-gradient(180px 120px at 22% 78%, #CFE4B6 0 60%, transparent 70%),
+      radial-gradient(150px 90px at 55% 42%, #CFE4B6 0 55%, transparent 70%),
+      radial-gradient(120px 80px at 80% 18%, #CFE4B6 0 55%, transparent 70%),
+      /* Blue water */
+      radial-gradient(140px 60px at 90% 75%, #BCD7EE 0 60%, transparent 70%),
+      /* Base map */
+      #E8E8E8;
+  }
+  /* Faint grid of side streets */
+  .map__grid {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0.45;
+    background-image:
+      linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  .map__cta {
+    position: absolute; top: 16px; left: 16px;
+    display: inline-flex; align-items: center;
+    height: 40px; padding: 0 18px;
+    background: var(--v-white); color: var(--v-fg);
+    border-radius: 999px; font-weight: 700; font-size: 15px;
+    box-shadow: 0 2px 6px rgba(26,24,21,0.12);
+    cursor: pointer;
+  }
+
+  /* Mini-map inset bottom-left */
+  .map__mini {
+    position: absolute; left: 14px; bottom: 14px;
+    width: 84px; height: 64px; border-radius: 6px;
+    border: 2px solid var(--v-white);
+    background:
+      radial-gradient(40px 30px at 30% 70%, #6E9A52 0 60%, transparent 70%),
+      radial-gradient(36px 30px at 70% 30%, #4A7AAB 0 50%, transparent 65%),
+      #6B7A5A;
+    box-shadow: 0 2px 6px rgba(26,24,21,0.18);
+  }
+
+  /* Zoom controls bottom-right */
+  .map__zoom {
+    position: absolute; right: 14px; bottom: 14px;
+    display: flex; flex-direction: column;
+    background: var(--v-white); border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(26,24,21,0.14);
+    overflow: hidden;
+  }
+  .map__zoom button {
+    width: 44px; height: 44px; border: 0; background: transparent;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--v-fg); cursor: pointer;
+  }
+  .map__zoom button + button { border-top: 1px solid var(--v-fg-10); }
+  .map__zoom svg { width: 18px; height: 18px; }
+
+  .map-card__body { padding: 20px 24px 24px; }
+  .map-card__title { font-weight: 700; font-size: 22px; line-height: 1.2;
+                     color: var(--v-fg); margin: 0; }
+  .map-card__sub { font-size: 16px; color: var(--v-fg-light);
+                   margin: 4px 0 0; line-height: 1.4; }
+  svg { display: block; }
+</style></head>
+<body>
+  <div class="map-card">
+    <div class="map">
+      <div class="map__grid"></div>
+      <span class="map__cta">View larger map</span>
+      <div class="map__mini"></div>
+      <div class="map__zoom">
+        <button aria-label="Zoom in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button aria-label="Zoom out">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="map-card__body">
+      <h3 class="map-card__title">Adresse</h3>
+      <p class="map-card__sub">Complement</p>
+    </div>
+  </div>
+</body></html>

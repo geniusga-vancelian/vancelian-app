@@ -1,0 +1,179 @@
+/* Layout showcase — calqué sur ui_kits/vancelian-app/index.html v2.1 */
+
+@scope ([data-v-ds='app']) {
+  .app-ds-page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 0 120px;
+  }
+
+  .app-ds-ph {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 32px;
+    padding-bottom: 32px;
+    margin-bottom: 48px;
+    border-bottom: 1px solid var(--v-fg-10);
+  }
+
+  .app-ds-ph__title {
+    font-family: var(--v-font-display);
+    font-weight: 300;
+    font-size: clamp(40px, 5vw, 64px);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+  }
+
+  .app-ds-ph__sub {
+    color: var(--v-fg-muted);
+    font-size: 15px;
+    margin: 0;
+    max-width: 540px;
+    line-height: 1.55;
+  }
+
+  .app-ds-ph__meta {
+    text-align: right;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--v-fg-muted);
+  }
+
+  .app-ds-ph__meta strong {
+    display: block;
+    color: var(--v-fg);
+    font-size: 13px;
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+
+  .app-ds-ph__logo {
+    display: block;
+    height: 22px;
+    margin-bottom: 16px;
+  }
+
+  .app-ds-toc {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 4px 24px;
+    margin-bottom: 64px;
+    font-size: 12px;
+  }
+
+  .app-ds-toc a {
+    display: block;
+    padding: 6px 0;
+    color: var(--v-fg-body);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+
+  .app-ds-toc a:hover {
+    color: var(--v-terracotta);
+  }
+
+  .app-ds-toc__head {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--v-fg-muted);
+    padding: 6px 0;
+    border-bottom: 1px solid var(--v-fg-10);
+  }
+
+  .app-ds-sec {
+    margin-bottom: 96px;
+    scroll-margin-top: 88px;
+  }
+
+  .app-ds-sec__count {
+    font-size: 12px;
+    color: var(--v-fg-light);
+    font-feature-settings: 'tnum' on, 'lnum' on;
+  }
+
+  .app-ds-grid {
+    display: grid;
+    gap: 24px;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 900px) {
+    .app-ds-grid--2 {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .app-ds-grid--3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .app-ds-item {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid var(--v-fg-10);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .app-ds-item__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--v-fg-10);
+    background: var(--v-bg);
+  }
+
+  .app-ds-item__title {
+    font-family: var(--v-font-ui);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--v-fg);
+    margin: 0;
+  }
+
+  .app-ds-item__open {
+    font-size: 11px;
+    color: var(--v-terracotta);
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .app-ds-item__open:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .app-ds-item__frame {
+    width: 100%;
+    border: 0;
+    display: block;
+    background: var(--v-bg);
+  }
+
+  .app-ds-footer {
+    margin-top: 96px;
+    padding-top: 32px;
+    border-top: 1px solid var(--v-fg-10);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--v-fg-muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}

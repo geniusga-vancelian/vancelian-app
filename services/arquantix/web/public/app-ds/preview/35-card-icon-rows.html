@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+  .pillars {
+    width: 540px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .pillar { display: flex; gap: 16px; align-items: flex-start; }
+  .pillar__icon {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    background: var(--v-fg); position: relative; margin-top: 2px;
+  }
+  .pillar__icon::before {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 18px; height: 18px;
+    background: var(--v-white);
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .pillar__icon--globe::before  { -webkit-mask-image: url("/icons/kalai/earth.svg");           mask-image: url("/icons/kalai/earth.svg"); }
+  .pillar__icon--heart::before  { -webkit-mask-image: url("/icons/kalai/heart.svg");           mask-image: url("/icons/kalai/heart.svg"); }
+  .pillar__icon--star::before   { -webkit-mask-image: url("/icons/kalai/star.svg");            mask-image: url("/icons/kalai/star.svg"); }
+  .pillar__icon--legal::before  { -webkit-mask-image: url("/icons/kalai/list-clipboard.svg"); mask-image: url("/icons/kalai/list-clipboard.svg"); }
+
+  .pillar__text { flex: 1; min-width: 0; font-size: 17px; line-height: 1.45;
+                  color: var(--v-fg-body); margin: 0; }
+</style></head>
+<body>
+  <div class="pillars">
+    <div class="pillar">
+      <div class="pillar__icon pillar__icon--globe"></div>
+      <p class="pillar__text">Bali connaît une croissance explosive portée par une demande internationale premium, propulsant l'île parmi les destinations les plus recherchées au monde.</p>
+    </div>
+    <div class="pillar">
+      <div class="pillar__icon pillar__icon--heart"></div>
+      <p class="pillar__text">Bali attire de plus en plus de voyageurs haut de gamme et d'expatriés fortunés, créant une demande croissante pour des propriétés exclusives.</p>
+    </div>
+    <div class="pillar">
+      <div class="pillar__icon pillar__icon--star"></div>
+      <p class="pillar__text">L'île devient un centre névralgique pour l'élite internationale et les digital nomads, renforçant son positionnement sur le marché du luxe.</p>
+    </div>
+    <div class="pillar">
+      <div class="pillar__icon pillar__icon--legal"></div>
+      <p class="pillar__text">Un environnement légal favorable garantit une sécurité optimale pour les investisseurs étrangers, assurant la pérennité des investissements.</p>
+    </div>
+  </div>
+</body></html>

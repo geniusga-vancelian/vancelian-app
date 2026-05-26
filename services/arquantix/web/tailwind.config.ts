@@ -1,7 +1,8 @@
 import type { Config } from 'tailwindcss'
 
 /**
- * Tailwind aligné sur le Design System Vancelian (`src/styles/vancelian-tokens.css`).
+ * Tailwind — tokens `--v-*` (website `:root`, webapp `[data-v-ds="app"]`).
+ * Website : `src/styles/vancelian-tokens.css` · App : `src/styles/app/`.
  *
  * - Surfaces : papier off-white (`bg-v-bg` = #F7F7F4), cartes #F2F1ED.
  * - Anthracite (`text-v-fg` = #1A1815) pour tout le texte.

@@ -1,0 +1,236 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 18px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Notification list
+     -----------------------------------------------------------
+     Anatomy :
+       .nf-list                — card container
+         .nf-list__head        — date separator (eyebrow style)
+         .nf-row               — single notification
+           .nf-row__avatar     — .avt with type-driven colour
+           .nf-row__body       — title + sub + actions
+           .nf-row__trail      — time + unread dot
+     Types (via avatar variant) :
+       transaction   .avt--warm   (neutral)
+       success       .avt--green
+       security      .avt--blue
+       marketing     .avt--terra
+       warning       .avt--warm + warning ic colour
+     States :
+       .is-unread → terracotta dot trailing + bg subtle warm
+     ============================================================ */
+  .nf-list {
+    width: min(440px, 100%);
+    background: var(--v-white); border: 1px solid var(--v-fg-10);
+    border-radius: 16px; overflow: hidden;
+  }
+  .nf-list__head {
+    display: block; padding: 14px 18px 6px;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-weight: 600; color: var(--v-fg-light);
+    background: var(--v-white);
+  }
+
+  .nf-row {
+    display: flex; gap: 14px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--v-fg-10);
+    cursor: pointer;
+    align-items: flex-start;
+    transition: background 120ms;
+  }
+  .nf-list__head + .nf-row { border-top: 0; }
+  .nf-row:hover { background: var(--v-fg-05); }
+  .nf-row.is-unread { background: var(--v-card-warm); }
+  .nf-row.is-unread:hover { background: var(--v-card-hover); }
+
+  /* Avatar — DS .avt size 40, icon glyph */
+  .nf-row__avatar { margin-top: 2px; }
+
+  .nf-row__body { flex: 1; min-width: 0;
+                  display: flex; flex-direction: column; gap: 2px; }
+  .nf-row__title {
+    font-size: 14px; font-weight: 600; color: var(--v-fg);
+    line-height: 1.35;
+  }
+  .nf-row__title b { font-weight: 700; font-feature-settings: "tnum" on; }
+  .nf-row__sub {
+    font-size: 13px; color: var(--v-fg-light); line-height: 1.4;
+  }
+  /* Inline action buttons inside the row body (Accepter / Refuser, etc.) */
+  .nf-row__actions {
+    display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;
+  }
+
+  /* Trailing — time + unread dot */
+  .nf-row__trail {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    flex-shrink: 0; padding-top: 2px;
+  }
+  .nf-row__time {
+    font-size: 11px; color: var(--v-fg-light);
+    font-feature-settings: "tnum" on; white-space: nowrap;
+  }
+  .nf-row__dot {
+    width: 8px; height: 8px; border-radius: 999px;
+    background: var(--v-terracotta);
+  }
+
+  /* Toolbar header for "Mark all as read" */
+  .nf-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    width: min(440px, 100%); padding: 0 4px;
+  }
+  .nf-toolbar__title {
+    font-weight: 700; font-size: 18px; color: var(--v-fg);
+  }
+  .nf-toolbar__count {
+    color: var(--v-fg-light); font-weight: 500;
+    font-feature-settings: "tnum" on;
+  }
+
+  @media (max-width: 480px) {
+    .nf-row { padding: 14px 16px; gap: 12px; }
+    .nf-row__title { font-size: 13.5px; }
+  }
+</style></head>
+<body>
+
+  <div class="nf-toolbar">
+    <span class="nf-toolbar__title">Notifications <span class="nf-toolbar__count">· 8</span></span>
+    <button class="btn btn--ghost btn--sm">Tout marquer lu</button>
+  </div>
+
+  <div class="nf-list">
+
+    <!-- Today ============================================== -->
+    <span class="nf-list__head">Aujourd'hui</span>
+
+    <!-- Unread · success transaction -->
+    <div class="nf-row is-unread">
+      <span class="avt avt--40 avt--green nf-row__avatar"><img class="avt__ic" src="/icons/kalai/check.svg" alt=""/></span>
+      <div class="nf-row__body">
+        <div class="nf-row__title">Versement reçu de <b>Maman</b></div>
+        <div class="nf-row__sub">+ 150,00 € · Compte Euro</div>
+      </div>
+      <div class="nf-row__trail">
+        <span class="nf-row__time">il y a 12 min</span>
+        <span class="nf-row__dot"></span>
+      </div>
+    </div>
+
+    <!-- Unread · security with inline actions -->
+    <div class="nf-row is-unread">
+      <span class="avt avt--40 avt--blue nf-row__avatar"><img class="avt__ic" src="/icons/kalai/shield-good.svg" alt=""/></span>
+      <div class="nf-row__body">
+        <div class="nf-row__title">Nouvelle connexion détectée</div>
+        <div class="nf-row__sub">iPhone · Paris · 09:14</div>
+        <div class="nf-row__actions">
+          <button class="btn btn--secondary btn--sm">Refuser</button>
+          <button class="btn btn--primary btn--sm">C'est moi</button>
+        </div>
+      </div>
+      <div class="nf-row__trail">
+        <span class="nf-row__time">09:14</span>
+        <span class="nf-row__dot"></span>
+      </div>
+    </div>
+
+    <!-- Unread · marketing offer -->
+    <div class="nf-row is-unread">
+      <span class="avt avt--40 avt--terra nf-row__avatar"><img class="avt__ic" src="/icons/kalai/star.svg" alt=""/></span>
+      <div class="nf-row__body">
+        <div class="nf-row__title">Nouvelle offre exclusive</div>
+        <div class="nf-row__sub">Provence XII · ouvert à la souscription jusqu'au 30 juin</div>
+      </div>
+      <div class="nf-row__trail">
+        <span class="nf-row__time">08:02</span>
+        <span class="nf-row__dot"></span>
+      </div>
+    </div>
+
+    <!-- Yesterday ============================================== -->
+    <span class="nf-list__head">Hier</span>
+
+    <!-- Read · transaction -->
+    <div class="nf-row">
+      <span class="avt avt--40 avt--warm nf-row__avatar"><img class="avt__ic" src="/icons/kalai/payment-card.svg" alt=""/></span>
+      <div class="nf-row__body">
+        <div class="nf-row__title">Paiement <b>Starbucks</b></div>
+        <div class="nf-row__sub">− 4,80 € · Visa Premium •• 4827</div>
+      </div>
+      <div class="nf-row__trail">
+        <span class="nf-row__time">19:08</span>
+      </div>
+    </div>
+
+    <!-- Read · warning -->
+    <div class="nf-row">
+      <span class="avt avt--40 avt--warm nf-row__avatar" style="color:var(--v-yellow)"><img class="avt__ic" src="/icons/kalai/bell.svg" alt=""/></span>
+      <div class="nf-row__body">
+        <div class="nf-row__title">Plafond carte atteint à 80 %</div>
+        <div class="nf-row__sub">2 400 € sur 3 000 € · réinitialisation le 1ᵉʳ juin</div>
+      </div>
+      <div class="nf-row__trail">
+        <span class="nf-row__time">15:42</span>
+      </div>
+    </div>
+
+    <!-- This week ============================================== -->
+    <span class="nf-list__head">Cette semaine</span>
+
+    <!-- Read · KYC validated -->
+    <div class="nf-row">
+      <span class="avt avt--40 avt--green nf-row__avatar"><img class="avt__ic" src="/icons/kalai/check.svg" alt=""/></span>
+      <div class="nf-row__body">
+        <div class="nf-row__title">Pièce d'identité validée</div>
+        <div class="nf-row__sub">Votre compte est maintenant actif</div>
+      </div>
+      <div class="nf-row__trail">
+        <span class="nf-row__time">lun.</span>
+      </div>
+    </div>
+
+    <!-- Read · advisor -->
+    <div class="nf-row">
+      <span class="avt avt--40 nf-row__avatar"><img src="https://i.pravatar.cc/80?img=32" alt=""/></span>
+      <div class="nf-row__body">
+        <div class="nf-row__title"><b>Hélène Marchand</b> vous a envoyé un message</div>
+        <div class="nf-row__sub">« Bonjour Jean, votre relevé est disponible… »</div>
+      </div>
+      <div class="nf-row__trail">
+        <span class="nf-row__time">lun.</span>
+      </div>
+    </div>
+
+    <!-- Read · subscription closed -->
+    <div class="nf-row">
+      <span class="avt avt--40 avt--terra nf-row__avatar"><img class="avt__ic" src="/icons/kalai/star.svg" alt=""/></span>
+      <div class="nf-row__body">
+        <div class="nf-row__title">Souscription Provence XI clôturée</div>
+        <div class="nf-row__sub">Votre allocation finale : 50 000 €</div>
+      </div>
+      <div class="nf-row__trail">
+        <span class="nf-row__time">dim.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       Empty state — when no notifications
+       ============================================================ -->
+  <div class="nf-list" style="padding: 40px 24px; text-align: center;">
+    <span class="avt avt--64 avt--warm" style="margin: 0 auto 14px"><img class="avt__ic" src="/icons/kalai/bell.svg" alt=""/></span>
+    <div style="font-size: 16px; font-weight: 700; color: var(--v-fg); margin-bottom: 4px;">Aucune notification</div>
+    <div style="font-size: 13px; color: var(--v-fg-light); line-height: 1.5;">Vous serez prévenu ici lorsqu'une opération importante a lieu sur votre compte.</div>
+  </div>
+
+</body></html>

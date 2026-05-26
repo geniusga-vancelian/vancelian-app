@@ -1,0 +1,109 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 24px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Variant picker — pill containing 2-5 color swatches.
+     Used to pick a card color, an avatar tone, a theme, etc.
+     ============================================================
+     Anatomy:
+       .vp           — pill container, padding 4
+       .vp__swatch   — circular swatch
+       .is-selected  — bigger, ring of fg
+     -------------------------------------------------------------- */
+  .vp {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px; border-radius: 999px;
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    box-shadow: 0 2px 6px rgba(26,24,21,0.06);
+  }
+
+  .vp__swatch {
+    width: 32px; height: 32px; border-radius: 999px;
+    cursor: pointer; flex-shrink: 0;
+    position: relative;
+    border: 1px solid rgba(0,0,0,0.06);
+    transition: transform 120ms var(--v-ease-out);
+  }
+  .vp__swatch:hover { transform: scale(1.05); }
+  .vp__swatch.is-selected {
+    width: 36px; height: 36px;
+    box-shadow: 0 0 0 2px var(--v-fg);
+  }
+
+  /* Swatch fills — card-related defaults */
+  .sw-dark        { background: #1A1815; }
+  .sw-cream       { background: #F3EDE6; }
+  .sw-terracotta  { background: var(--v-terracotta); }
+  .sw-prusse      { background: var(--v-blue); }
+  .sw-green       { background: var(--v-green); }
+  .sw-white       { background: var(--v-white); }
+
+  /* Larger pill — for picking with labels */
+  .vp--lg .vp__swatch { width: 40px; height: 40px; }
+  .vp--lg .vp__swatch.is-selected { width: 44px; height: 44px; box-shadow: 0 0 0 2.5px var(--v-fg); }
+
+  /* Labeled variant — each swatch shows a tick when selected */
+  .vp__swatch.is-selected.has-tick::after {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 50%; height: 50%;
+    background: var(--v-white);
+    -webkit-mask: url("/icons/kalai/check.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/check.svg") center/contain no-repeat;
+  }
+  /* cream swatch needs dark tick */
+  .sw-cream.is-selected.has-tick::after,
+  .sw-white.is-selected.has-tick::after { background: #1A1815; }
+
+  .group { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); }
+</style></head>
+<body>
+
+  <div class="group">
+    <div class="lbl">2 swatches · card variant (dark selected)</div>
+    <div class="vp">
+      <span class="vp__swatch sw-dark is-selected"></span>
+      <span class="vp__swatch sw-cream"></span>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="lbl">3 swatches · brand triade (terracotta selected)</div>
+    <div class="vp">
+      <span class="vp__swatch sw-terracotta is-selected"></span>
+      <span class="vp__swatch sw-green"></span>
+      <span class="vp__swatch sw-prusse"></span>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="lbl">5 swatches · full palette · LG with tick</div>
+    <div class="vp vp--lg">
+      <span class="vp__swatch sw-dark"></span>
+      <span class="vp__swatch sw-cream is-selected has-tick"></span>
+      <span class="vp__swatch sw-terracotta"></span>
+      <span class="vp__swatch sw-green"></span>
+      <span class="vp__swatch sw-prusse"></span>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="lbl">Inline · part of a row</div>
+    <div style="display:flex;align-items:center;gap:16px;background:var(--v-white);border:1px solid var(--v-fg-10);border-radius:16px;padding:14px 16px">
+      <span style="font-weight:600;font-size:15px">Couleur</span>
+      <div class="vp" style="margin-left:auto">
+        <span class="vp__swatch sw-dark is-selected"></span>
+        <span class="vp__swatch sw-cream"></span>
+      </div>
+    </div>
+  </div>
+
+</body></html>

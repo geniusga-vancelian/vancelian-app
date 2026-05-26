@@ -1,0 +1,167 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Budget / category progress — monthly spending overview
+     -----------------------------------------------------------
+     Anatomy :
+       .bud-card        — wrapper card
+       .bud-row         — single category line
+         .bud-row__lead — Kalai icon chip
+         .bud-row__body — category name + amount spent / budget
+         .bud-row__bar  — progress bar (anthracite / warn / over)
+     States :
+       .bud-row.is-warn  → fill terra (≥ 80 %)
+       .bud-row.is-over  → fill error (> 100 %)
+     ============================================================ */
+  .bud-card {
+    width: 460px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    padding: 22px; display: flex; flex-direction: column; gap: 18px;
+  }
+  .bud-card__head { display: flex; align-items: flex-start; justify-content: space-between; }
+  .bud-card__title { font-size: 17px; font-weight: 700; color: var(--v-fg); }
+  .bud-card__sub   { font-size: 13px; color: var(--v-fg-light); margin-top: 2px; }
+  .bud-card__total { text-align: right;
+                     font-feature-settings: "tnum" on, "lnum" on; }
+  .bud-card__total__val { font-size: 22px; font-weight: 700; color: var(--v-fg);
+                          letter-spacing: -0.01em; }
+  .bud-card__total__sub { font-size: 12px; color: var(--v-fg-light); }
+
+  .bud-list { display: flex; flex-direction: column; gap: 14px; }
+  .bud-row { display: grid; grid-template-columns: 36px 1fr; gap: 12px;
+             align-items: center; }
+
+  .bud-row__lead {
+    width: 36px; height: 36px; border-radius: 999px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .bud-row__lead .ic {
+    width: 16px; height: 16px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic--food    { -webkit-mask-image: url("/icons/kalai/shopping-bag.svg"); mask-image: url("/icons/kalai/shopping-bag.svg"); }
+  .ic--home    { -webkit-mask-image: url("/icons/kalai/home-1.svg");       mask-image: url("/icons/kalai/home-1.svg"); }
+  .ic--car     { -webkit-mask-image: url("/icons/kalai/car.svg");          mask-image: url("/icons/kalai/car.svg"); }
+  .ic--leisure { -webkit-mask-image: url("/icons/kalai/gift.svg");         mask-image: url("/icons/kalai/gift.svg"); }
+  .ic--health  { -webkit-mask-image: url("/icons/kalai/heart-rate.svg");   mask-image: url("/icons/kalai/heart-rate.svg"); }
+  .ic--bill    { -webkit-mask-image: url("/icons/kalai/document.svg");     mask-image: url("/icons/kalai/document.svg"); }
+
+  .bud-row__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .bud-row__top  { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .bud-row__name { font-size: 14px; font-weight: 600; color: var(--v-fg); }
+  .bud-row__nums {
+    font-size: 13px; color: var(--v-fg-light);
+    font-feature-settings: "tnum" on, "lnum" on; white-space: nowrap;
+  }
+  .bud-row__nums b { font-weight: 700; color: var(--v-fg); }
+
+  .bud-row__bar  { height: 6px; border-radius: 999px;
+                   background: var(--v-fg-10); overflow: hidden; }
+  .bud-row__fill { height: 100%; background: var(--v-fg); border-radius: inherit;
+                   transition: width 320ms var(--v-ease-out); }
+
+  .bud-row.is-warn .bud-row__fill { background: var(--v-terracotta); }
+  .bud-row.is-warn .bud-row__nums b { color: var(--v-terracotta); }
+
+  .bud-row.is-over .bud-row__fill { background: var(--v-error); }
+  .bud-row.is-over .bud-row__nums b { color: var(--v-error); }
+  .bud-row.is-over .bud-row__bar  { background: var(--v-error-bg); }
+</style></head>
+<body>
+
+  <div class="bud-card">
+    <div class="bud-card__head">
+      <div>
+        <div class="bud-card__title">Budget mai 2026</div>
+        <div class="bud-card__sub">22 jours sur 31 écoulés</div>
+      </div>
+      <div class="bud-card__total">
+        <div class="bud-card__total__val">2 480 €</div>
+        <div class="bud-card__total__sub">sur 3 200 €</div>
+      </div>
+    </div>
+
+    <div class="bud-list">
+
+      <div class="bud-row is-over">
+        <span class="bud-row__lead"><span class="ic ic--food"></span></span>
+        <div class="bud-row__body">
+          <div class="bud-row__top">
+            <span class="bud-row__name">Alimentation</span>
+            <span class="bud-row__nums"><b>680&nbsp;€</b> sur 600&nbsp;€</span>
+          </div>
+          <div class="bud-row__bar"><div class="bud-row__fill" style="width:100%"></div></div>
+        </div>
+      </div>
+
+      <div class="bud-row">
+        <span class="bud-row__lead"><span class="ic ic--home"></span></span>
+        <div class="bud-row__body">
+          <div class="bud-row__top">
+            <span class="bud-row__name">Logement</span>
+            <span class="bud-row__nums"><b>1 200&nbsp;€</b> sur 1 200&nbsp;€</span>
+          </div>
+          <div class="bud-row__bar"><div class="bud-row__fill" style="width:100%"></div></div>
+        </div>
+      </div>
+
+      <div class="bud-row is-warn">
+        <span class="bud-row__lead"><span class="ic ic--car"></span></span>
+        <div class="bud-row__body">
+          <div class="bud-row__top">
+            <span class="bud-row__name">Transport</span>
+            <span class="bud-row__nums"><b>240&nbsp;€</b> sur 280&nbsp;€</span>
+          </div>
+          <div class="bud-row__bar"><div class="bud-row__fill" style="width:86%"></div></div>
+        </div>
+      </div>
+
+      <div class="bud-row">
+        <span class="bud-row__lead"><span class="ic ic--leisure"></span></span>
+        <div class="bud-row__body">
+          <div class="bud-row__top">
+            <span class="bud-row__name">Loisirs</span>
+            <span class="bud-row__nums"><b>180&nbsp;€</b> sur 400&nbsp;€</span>
+          </div>
+          <div class="bud-row__bar"><div class="bud-row__fill" style="width:45%"></div></div>
+        </div>
+      </div>
+
+      <div class="bud-row">
+        <span class="bud-row__lead"><span class="ic ic--health"></span></span>
+        <div class="bud-row__body">
+          <div class="bud-row__top">
+            <span class="bud-row__name">Santé</span>
+            <span class="bud-row__nums"><b>72&nbsp;€</b> sur 200&nbsp;€</span>
+          </div>
+          <div class="bud-row__bar"><div class="bud-row__fill" style="width:36%"></div></div>
+        </div>
+      </div>
+
+      <div class="bud-row">
+        <span class="bud-row__lead"><span class="ic ic--bill"></span></span>
+        <div class="bud-row__body">
+          <div class="bud-row__top">
+            <span class="bud-row__name">Abonnements</span>
+            <span class="bud-row__nums"><b>108&nbsp;€</b> sur 150&nbsp;€</span>
+          </div>
+          <div class="bud-row__bar"><div class="bud-row__fill" style="width:72%"></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</body></html>

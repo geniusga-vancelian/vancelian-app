@@ -1,0 +1,113 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; min-height: 100vh; }
+
+  .exit { width: 540px; max-width: 100%;
+          border-radius: 16px; padding: 20px 24px;
+          display: grid; grid-template-columns: 48px 1fr auto; gap: 16px;
+          align-items: start; }
+  .exit--closed { background: var(--v-white); border: 1px solid var(--v-fg-10); }
+  .exit--open   { background: var(--v-white); border: 1px solid var(--v-fg-10); }
+
+  .exit__avatar {
+    width: 48px; height: 48px; border-radius: 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .exit__avatar::before {
+    content: ""; width: 24px; height: 24px;
+    -webkit-mask: url("/icons/kalai/user-group.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/user-group.svg") center/contain no-repeat;
+    background: currentColor;
+  }
+  .exit--closed .exit__avatar { background: var(--v-card-warm); color: var(--v-fg-muted); }
+  .exit--open   .exit__avatar { background: var(--v-green);     color: var(--v-white); }
+
+  .exit__body { min-width: 0; }
+  .exit__title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .exit__title { font-weight: 700; font-size: 18px; color: var(--v-fg); margin: 0; line-height: 1.2; }
+  .exit__badge {
+    display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
+    border-radius: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .exit__badge--closed { background: rgba(26,24,21,0.10); color: var(--v-fg-muted); }
+  .exit__badge--open   { background: var(--v-green); color: var(--v-white); }
+
+  .exit__text { font-size: 15px; color: var(--v-fg-light); line-height: 1.5; margin: 0; }
+
+  .exit__info {
+    width: 20px; height: 20px;
+    -webkit-mask: url("/icons/kalai/info.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/info.svg") center/contain no-repeat;
+    background: var(--v-fg-light);
+  }
+
+  .exit__cta {
+    grid-column: 2 / 4;
+    margin-top: 16px;
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 52px; padding: 0 32px; border-radius: 999px;
+    background: var(--v-fg); color: var(--v-white);
+    font-weight: 700; font-size: 16px; border: 0; cursor: pointer;
+    width: max-content;
+  }
+
+  /* "À partir de X mois" — same card model as exit window */
+  .exit__avatar--clock::before {
+    -webkit-mask-image: url("/icons/kalai/clock.svg");
+            mask-image: url("/icons/kalai/clock.svg");
+  }
+  .exit__fee {
+    display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
+    border-radius: 6px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    font-feature-settings: "tnum" on;
+  }
+</style></head>
+<body>
+
+  <!-- Closed state -->
+  <div class="exit exit--closed">
+    <div class="exit__avatar"></div>
+    <div class="exit__body">
+      <div class="exit__title-row">
+        <h3 class="exit__title">Exit window</h3>
+        <span class="exit__badge exit__badge--closed">Closed</span>
+      </div>
+      <p class="exit__text">Exit the property early after X month by selling share in our biannual exit window Illud tamen clausos vehementer angebat quod captis navigiis, quae&nbsp; frumenta vehebant per flumen, Isauri quidem.</p>
+    </div>
+    <span class="exit__info" aria-label="More info"></span>
+  </div>
+
+  <!-- Open state with CTA -->
+  <div class="exit exit--open">
+    <div class="exit__avatar"></div>
+    <div class="exit__body">
+      <div class="exit__title-row">
+        <h3 class="exit__title">Exit window</h3>
+        <span class="exit__badge exit__badge--open">Open</span>
+      </div>
+      <p class="exit__text">Exit the property early after X month by selling share in our biannual exit window Illud tamen clausos vehementer angebat quod captis navigiis, quae&nbsp; frumenta vehebant per flumen, Isauri quidem.</p>
+    </div>
+    <span class="exit__info" aria-label="More info"></span>
+    <button class="exit__cta">Initier une demande</button>
+  </div>
+
+  <!-- À partir de 6 mois — same card model -->
+  <div class="exit exit--closed">
+    <div class="exit__avatar exit__avatar--clock"></div>
+    <div class="exit__body">
+      <div class="exit__title-row">
+        <h3 class="exit__title">À partir de 6 mois</h3>
+        <span class="exit__fee">Frais&nbsp;: 5%</span>
+      </div>
+      <p class="exit__text">Après un engagement initial de 6 mois, vous pourrez bénéficier de conditions de sortie anticipée privilégiées, moyennant des frais de 5 %.</p>
+    </div>
+    <span class="exit__info" aria-label="More info"></span>
+  </div>
+
+</body></html>

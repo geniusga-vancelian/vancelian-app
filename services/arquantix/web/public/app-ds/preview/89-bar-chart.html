@@ -1,0 +1,304 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 32px;
+         align-items: center; min-height: 100vh; max-width: 460px; margin: 0 auto; }
+
+  /* ============================================================
+     Bar chart — daily gains
+     -----------------------------------------------------------
+     Reuses 66-chart-module shell : .ch-card / .ch-meta / .ch-canvas
+                                    .ch-period (seg)
+     -----------------------------------------------------------
+     3 vues partagent le même cadre : semaine (7 barres),
+     mois (31 barres fines), année (12 barres mensuelles).
+     Les gains journaliers étant très réguliers, les hauteurs
+     varient très peu — la base de la barre est légèrement
+     surélevée pour montrer une variation lisible.
+     ============================================================ */
+  .ch-card {
+    width: 100%;
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  /* Meta — same as 66 */
+  .ch-meta {
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: 14px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch;
+    min-height: 68px;
+  }
+  .ch-meta__avt {
+    width: 64px; flex-shrink: 0; align-self: stretch;
+    border-radius: 12px;
+    background: var(--v-green-bg); color: var(--v-green);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .ch-meta__avt::before {
+    content: ""; width: 28px; height: 28px; background: currentColor;
+    -webkit-mask: url("/icons/kalai/trending-up.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/trending-up.svg") center/contain no-repeat;
+  }
+  .ch-meta__body {
+    flex: 1; min-width: 0; padding: 10px 0 10px 14px;
+    display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  }
+  .ch-meta__lbl   { font-size: 12px; color: var(--v-fg-light); }
+  .ch-meta__price {
+    font-weight: 700; font-size: 22px;
+    line-height: 1.1; color: var(--v-fg);
+    font-feature-settings: "tnum" on, "lnum" on;
+  }
+  .ch-meta__var {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 600; font-size: 13px;
+    color: var(--v-green);
+    font-feature-settings: "tnum" on;
+  }
+  .ch-meta__sep { width: 1px; height: 12px; background: var(--v-fg-10); }
+
+  /* Canvas */
+  .ch-canvas { position: relative; width: 100%; aspect-ratio: 320 / 160; }
+  .ch-canvas svg { display: block; width: 100%; height: 100%; }
+  .ch-grid { stroke: var(--v-fg-10); stroke-width: 1; }
+
+  /* Bars — green, rounded top corners */
+  .ch-bar {
+    fill: var(--v-green);
+    opacity: 0.25;
+    transition: opacity 160ms var(--v-ease-out);
+  }
+  .ch-bar.is-active { opacity: 1; }
+
+  /* Selected band — vertical strip behind active bar */
+  .ch-bar-sel { fill: var(--v-fg); opacity: 0.04; }
+
+  /* Active value tooltip (sits on top of selected bar) */
+  .ch-tip {
+    position: absolute; transform: translate(-50%, calc(-100% - 8px));
+    background: var(--v-fg); color: var(--v-white);
+    padding: 6px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; white-space: nowrap;
+    font-feature-settings: "tnum" on;
+    box-shadow: 0 4px 14px rgba(26,24,21,0.18);
+    line-height: 1;
+  }
+  .ch-tip::after {
+    content: ""; position: absolute; left: 50%; top: 100%;
+    transform: translateX(-50%);
+    border: 4px solid transparent; border-top-color: var(--v-fg);
+  }
+
+  /* X-axis labels — grid aligned to bar centres */
+  .ch-x {
+    display: grid;
+    padding: 4px 0 0;
+    font-size: 10px; color: var(--v-fg-light);
+    font-feature-settings: "tnum" on;
+    letter-spacing: 0.02em;
+    text-align: center;
+  }
+  .ch-x--7  { grid-template-columns: repeat(7, 1fr); }
+  .ch-x--12 { grid-template-columns: repeat(12, 1fr); }
+  .ch-x--31 { grid-template-columns: repeat(31, 1fr); }
+  /* Month view : only labels at days 1 / 8 / 15 / 22 / 31 */
+  .ch-x--31 > span:nth-child(1) { grid-column: 1; }
+  .ch-x--31 > span:nth-child(2) { grid-column: 8; }
+  .ch-x--31 > span:nth-child(3) { grid-column: 15; }
+  .ch-x--31 > span:nth-child(4) { grid-column: 22; }
+  .ch-x--31 > span:nth-child(5) { grid-column: 31; }
+
+  /* Period segmented control */
+  .ch-period { display: flex; align-items: center; gap: 8px; }
+  .ch-period .seg { flex: 1; }
+  .ch-period .seg__item { flex: 1; padding: 0; }
+</style></head>
+<body>
+
+  <!-- ====================================================
+       View · WEEK (7 bars · daily)
+       ==================================================== -->
+  <p class="v-eyebrow--sm">Vue semaine · 7 jours · barres larges</p>
+  <div class="ch-card">
+    <div class="ch-meta">
+      <span class="ch-meta__avt"></span>
+      <div class="ch-meta__body">
+        <span class="ch-meta__price">+ 12,47&nbsp;€</span>
+        <span class="ch-meta__var">
+          + 0,09 % vs sem. dernière
+        </span>
+      </div>
+    </div>
+
+    <div class="ch-canvas">
+      <svg viewBox="0 0 320 160" preserveAspectRatio="none">
+        <line class="ch-grid" x1="0" y1="40"  x2="320" y2="40"/>
+        <line class="ch-grid" x1="0" y1="80"  x2="320" y2="80"/>
+        <line class="ch-grid" x1="0" y1="120" x2="320" y2="120"/>
+
+        <!-- Selection band on day 4 (mercredi), center x = 320 * 4.5/7 ≈ 205 -->
+        <rect class="ch-bar-sel" x="183" y="0" width="44" height="160"/>
+
+        <!-- 7 bars · slot 45.7 wide, body 28 wide centered.
+             Heights vary tiny — baseline 50% of canvas, +/- 8px max -->
+        <rect class="ch-bar" x="8.86"   y="48" width="28" height="112" rx="3"/>
+        <rect class="ch-bar" x="54.57"  y="44" width="28" height="116" rx="3"/>
+        <rect class="ch-bar" x="100.29" y="50" width="28" height="110" rx="3"/>
+        <rect class="ch-bar is-active" x="146" y="42" width="28" height="118" rx="3"/>
+        <rect class="ch-bar" x="191.71" y="46" width="28" height="114" rx="3"/>
+        <rect class="ch-bar" x="237.43" y="48" width="28" height="112" rx="3"/>
+        <rect class="ch-bar" x="283.14" y="44" width="28" height="116" rx="3"/>
+      </svg>
+      <span class="ch-tip" style="left:50%;top:26%">+&nbsp;1,82&nbsp;€</span>
+    </div>
+
+    <div class="ch-x ch-x--7">
+      <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
+    </div>
+
+    <div class="ch-period">
+      <div class="seg">
+        <button class="seg__item is-on">Semaine</button>
+        <button class="seg__item">Mois</button>
+        <button class="seg__item">Année</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       View · MONTH (31 bars · daily)
+       ==================================================== -->
+  <p class="v-eyebrow--sm">Vue mois · 31 jours · barres fines</p>
+  <div class="ch-card">
+    <div class="ch-meta">
+      <span class="ch-meta__avt"></span>
+      <div class="ch-meta__body">
+        <span class="ch-meta__price">+ 54,30&nbsp;€</span>
+        <span class="ch-meta__var">
+          + 0,12 % vs mois dernier
+        </span>
+      </div>
+    </div>
+
+    <div class="ch-canvas">
+      <svg viewBox="0 0 320 160" preserveAspectRatio="none">
+        <line class="ch-grid" x1="0" y1="40"  x2="320" y2="40"/>
+        <line class="ch-grid" x1="0" y1="80"  x2="320" y2="80"/>
+        <line class="ch-grid" x1="0" y1="120" x2="320" y2="120"/>
+
+        <!-- Selection on day 22, slot ≈ 10.32 wide, center 22 → x = 21*10.32 + 5.16 ≈ 221.88 → band x=219, w=10 -->
+        <rect class="ch-bar-sel" x="216.61" y="0" width="10.32" height="160"/>
+
+        <!-- 31 bars · slot 10.32 wide, body 6 wide, baseline very flat -->
+        <rect class="ch-bar" x="2.16"   y="50" width="6" height="110" rx="2"/>
+        <rect class="ch-bar" x="12.48"  y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar" x="22.81"  y="48" width="6" height="112" rx="2"/>
+        <rect class="ch-bar" x="33.13"  y="44" width="6" height="116" rx="2"/>
+        <rect class="ch-bar" x="43.45"  y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar" x="53.77"  y="48" width="6" height="112" rx="2"/>
+        <rect class="ch-bar" x="64.10"  y="42" width="6" height="118" rx="2"/>
+        <rect class="ch-bar" x="74.42"  y="50" width="6" height="110" rx="2"/>
+        <rect class="ch-bar" x="84.74"  y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar" x="95.06"  y="44" width="6" height="116" rx="2"/>
+        <rect class="ch-bar" x="105.39" y="48" width="6" height="112" rx="2"/>
+        <rect class="ch-bar" x="115.71" y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar" x="126.03" y="42" width="6" height="118" rx="2"/>
+        <rect class="ch-bar" x="136.35" y="44" width="6" height="116" rx="2"/>
+        <rect class="ch-bar" x="146.68" y="48" width="6" height="112" rx="2"/>
+        <rect class="ch-bar" x="157.00" y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar" x="167.32" y="44" width="6" height="116" rx="2"/>
+        <rect class="ch-bar" x="177.65" y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar" x="187.97" y="42" width="6" height="118" rx="2"/>
+        <rect class="ch-bar" x="198.29" y="48" width="6" height="112" rx="2"/>
+        <rect class="ch-bar" x="208.61" y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar is-active" x="218.94" y="40" width="6" height="120" rx="2"/>
+        <rect class="ch-bar" x="229.26" y="44" width="6" height="116" rx="2"/>
+        <rect class="ch-bar" x="239.58" y="48" width="6" height="112" rx="2"/>
+        <rect class="ch-bar" x="249.90" y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar" x="260.23" y="50" width="6" height="110" rx="2"/>
+        <rect class="ch-bar" x="270.55" y="44" width="6" height="116" rx="2"/>
+        <rect class="ch-bar" x="280.87" y="48" width="6" height="112" rx="2"/>
+        <rect class="ch-bar" x="291.19" y="46" width="6" height="114" rx="2"/>
+        <rect class="ch-bar" x="301.52" y="44" width="6" height="116" rx="2"/>
+        <rect class="ch-bar" x="311.84" y="48" width="6" height="112" rx="2"/>
+      </svg>
+      <span class="ch-tip" style="left:69.36%;top:21%">+&nbsp;1,94&nbsp;€</span>
+    </div>
+
+    <div class="ch-x ch-x--31">
+      <span>1</span><span>8</span><span>15</span><span>22</span><span>31</span>
+    </div>
+
+    <div class="ch-period">
+      <div class="seg">
+        <button class="seg__item">Semaine</button>
+        <button class="seg__item is-on">Mois</button>
+        <button class="seg__item">Année</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       View · YEAR (12 bars · monthly)
+       ==================================================== -->
+  <p class="v-eyebrow--sm">Vue année · 12 mois · barres moyennes</p>
+  <div class="ch-card">
+    <div class="ch-meta">
+      <span class="ch-meta__avt"></span>
+      <div class="ch-meta__body">
+        <span class="ch-meta__price">+ 612,80&nbsp;€</span>
+        <span class="ch-meta__var">
+          + 0,18 % vs année dernière
+        </span>
+      </div>
+    </div>
+
+    <div class="ch-canvas">
+      <svg viewBox="0 0 320 160" preserveAspectRatio="none">
+        <line class="ch-grid" x1="0" y1="40"  x2="320" y2="40"/>
+        <line class="ch-grid" x1="0" y1="80"  x2="320" y2="80"/>
+        <line class="ch-grid" x1="0" y1="120" x2="320" y2="120"/>
+
+        <!-- Selection on May (5th month, idx 4), slot 26.67, band at 5*26.67=133 -->
+        <rect class="ch-bar-sel" x="133.33" y="0" width="26.67" height="160"/>
+
+        <!-- 12 bars · slot 26.67 wide, body 16 wide -->
+        <rect class="ch-bar" x="5.33"   y="48" width="16" height="112" rx="3"/>
+        <rect class="ch-bar" x="32.00"  y="46" width="16" height="114" rx="3"/>
+        <rect class="ch-bar" x="58.67"  y="44" width="16" height="116" rx="3"/>
+        <rect class="ch-bar" x="85.33"  y="46" width="16" height="114" rx="3"/>
+        <rect class="ch-bar" x="112.00" y="42" width="16" height="118" rx="3"/>
+        <rect class="ch-bar is-active" x="138.67" y="40" width="16" height="120" rx="3"/>
+        <rect class="ch-bar" x="165.33" y="44" width="16" height="116" rx="3"/>
+        <rect class="ch-bar" x="192.00" y="42" width="16" height="118" rx="3"/>
+        <rect class="ch-bar" x="218.67" y="46" width="16" height="114" rx="3"/>
+        <rect class="ch-bar" x="245.33" y="44" width="16" height="116" rx="3"/>
+        <rect class="ch-bar" x="272.00" y="46" width="16" height="114" rx="3"/>
+        <rect class="ch-bar" x="298.67" y="48" width="16" height="112" rx="3"/>
+      </svg>
+      <span class="ch-tip" style="left:45.83%;top:21%">+&nbsp;57,40&nbsp;€</span>
+    </div>
+
+    <div class="ch-x ch-x--12">
+      <span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span>
+    </div>
+
+    <div class="ch-period">
+      <div class="seg">
+        <button class="seg__item">Semaine</button>
+        <button class="seg__item">Mois</button>
+        <button class="seg__item is-on">Année</button>
+      </div>
+    </div>
+  </div>
+
+</body></html>

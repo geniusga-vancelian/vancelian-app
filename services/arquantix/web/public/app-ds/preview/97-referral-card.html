@@ -1,0 +1,103 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Referral card — strict DS alignment
+     -----------------------------------------------------------
+     Surfaces : var(--v-white) card + var(--v-card-warm) inner block
+     Typography :
+       eyebrow : .v-eyebrow--sm
+       title   : Newsreader (var(--v-font-editorial)) · cf. 24-card-offre
+       body    : .v-body
+     Buttons  : .btn .btn--lg .btn--primary
+     Tag      : .tag .tag--green (DS)
+     Code     : warm bg block + .ic-btn (copy)
+     ============================================================ */
+  .ref {
+    width: 420px; max-width: 100%;
+    background: var(--v-white);
+    border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    padding: 28px 24px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  /* Editorial title — Newsreader pattern from card-offre */
+  .ref__title {
+    margin: 0;
+    font-family: var(--v-font-editorial);
+    font-weight: 400; font-size: 28px; line-height: 1.2;
+    color: var(--v-fg); text-wrap: pretty;
+  }
+  .ref__title em { font-style: italic; color: var(--v-terracotta); }
+
+  /* Body copy */
+  .ref__body { margin: 0;
+               font-size: 14px; line-height: 1.55;
+               color: var(--v-fg-body); text-wrap: pretty; }
+
+  /* Tag row (DS .tag) */
+  .ref__tag-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* Code block — warm surface + copy ic-btn */
+  .ref__code-row { display: flex; gap: 10px; align-items: stretch; }
+  .ref__code {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: 14px 16px;
+    background: var(--v-card-warm);
+    border-radius: 12px;
+    font-family: var(--v-font-mono); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.18em; color: var(--v-fg);
+    font-feature-settings: "tnum" on;
+  }
+  .ref__copy { align-self: stretch; height: auto; min-width: 48px; width: 48px; }
+  .ref__copy svg { width: 18px; height: 18px; }
+
+  /* Reward strip (no custom invention — uses .v-body-sm and DS tokens) */
+  .ref__reward {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8px;
+    font-size: 13px; color: var(--v-fg-body);
+  }
+  .ref__reward__num {
+    font-weight: 700; color: var(--v-fg);
+    font-feature-settings: "tnum" on; font-size: 15px;
+  }
+
+  /* CTA = .btn .btn--lg .btn--primary, full width */
+  .ref__cta { width: 100%; }
+</style></head>
+<body>
+
+  <div class="ref">
+    <h2 class="ref__title">
+      Parrainez vos proches, recevez <em>50 €</em> chacun.
+    </h2>
+
+    <p class="ref__body">
+      Pour chaque ami qui ouvre un compte avec votre code et effectue un premier versement de 500 €, vous recevez 50 €. Sans plafond.
+    </p>
+
+    <div class="ref__tag-row">
+      <span class="tag tag--green"><span class="tag__dot"></span>7 parrainages validés</span>
+      <span class="tag tag--neutral">+ 350 € gagnés</span>
+    </div>
+
+    <div class="ref__code-row">
+      <div class="ref__code">JEANDUPONT26</div>
+      <button class="ic-btn ref__copy" aria-label="Copier le code">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+    </div>
+
+    <button class="btn btn--lg btn--primary ref__cta">Partager mon code</button>
+  </div>
+
+</body></html>

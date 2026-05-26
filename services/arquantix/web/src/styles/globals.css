@@ -1,5 +1,11 @@
 @import './vancelian-tokens.css';
 @import './design-system-theme.css';
+/* Portail webapp — tokens + composants scoped `data-v-ds="app"` (handoff App Vancelian.zip) */
+@import './app/vancelian-app-tokens.css';
+@import './app/vancelian-app-components.css';
+@import './app/design-system-app-theme.css';
+@import './app/app-ds-showcase.css';
+@import './app/portal-ds-patterns.css';
 
 @tailwind base;
 @tailwind components;

@@ -1,0 +1,345 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 40px;
+         align-items: stretch; max-width: 440px; margin: 0 auto; min-height: 100vh; }
+
+  /* ============================================================
+     Detail-page header — used at the top of asset detail screens
+     (crypto, bundle, coffre, real-estate project, etc.).
+     ============================================================
+     Anatomy (column stack, all elements left-aligned):
+       .dh__eyebrow      — pill with leading dot (category)
+       .dh__title        — XL bold title (optional asset logos stack)
+       .dh__value        — huge tabular price + chevron-down picker
+       .dh__variations   — row of signed-variation pills + period
+       .dh__actions      — Acheter / Vendre / icon-btn row
+     -------------------------------------------------------------- */
+  .dh { display: flex; flex-direction: column; gap: 14px; }
+
+  /* Eyebrow pill — leading dot + label, white surface */
+  .dh__eyebrow {
+    display: inline-flex; align-items: center; gap: 6px;
+    align-self: flex-start;
+    height: 26px; padding: 0 10px;
+    border-radius: 999px;
+    background: var(--v-white); border: 1px solid var(--v-fg-10);
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 12px;
+    color: var(--v-fg);
+  }
+  .dh__eyebrow__dot {
+    width: 6px; height: 6px; border-radius: 999px;
+    background: var(--v-terracotta); flex-shrink: 0;
+  }
+  /* Sémantic colour variants */
+  .dh__eyebrow--green .dh__eyebrow__dot { background: var(--v-green); }
+  .dh__eyebrow--blue  .dh__eyebrow__dot { background: var(--v-blue); }
+  .dh__eyebrow--warm  .dh__eyebrow__dot { background: var(--v-warning); }
+
+  /* Title — large + optional leading logo stack */
+  .dh__title-row {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .dh__title {
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 28px;
+    line-height: 1.15; color: var(--v-fg);
+    letter-spacing: -0.01em; margin: 0;
+  }
+
+  /* Logo stack — used by bundles (Panier top 5) */
+  .dh__stack { display: inline-flex; align-items: center; flex-shrink: 0; }
+  .dh__stack__coin {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--v-white); overflow: hidden;
+    margin-left: -8px;
+    box-shadow: 0 0 0 2px var(--v-bg);
+  }
+  .dh__stack__coin:first-child { margin-left: 0; }
+  .dh__stack__coin img { width: 100%; height: 100%; display: block; }
+  .dh__stack__more {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 11px;
+    margin-left: -8px;
+    box-shadow: 0 0 0 2px var(--v-bg);
+  }
+
+  .dh__sub {
+    font-family: var(--v-font-ui); font-size: 14px; line-height: 1.45;
+    color: var(--v-fg-light); margin: 0;
+  }
+
+  /* Big value — tabular price + chevron picker */
+  .dh__value {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 32px;
+    line-height: 1; letter-spacing: -0.02em;
+    color: var(--v-fg);
+    font-feature-settings: "tnum" on, "lnum" on;
+  }
+  .dh__value__chv {
+    width: 22px; height: 22px;
+    background: var(--v-fg);
+    -webkit-mask: url("/icons/kalai/chevron-down.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/chevron-down.svg") center/contain no-repeat;
+    cursor: pointer;
+  }
+
+  /* Variation chips row */
+  .dh__variations { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dh__var {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 14px;
+    font-feature-settings: "tnum" on;
+  }
+  .dh__var svg { width: 11px; height: 11px; }
+  .dh__var--up   { color: var(--v-green); }
+  .dh__var--dn   { color: var(--v-error); }
+  .dh__var--flat { color: var(--v-fg-light); }
+  .dh__period {
+    font-size: 14px; color: var(--v-fg-light);
+    padding-left: 4px;
+  }
+
+  /* Actions — utilise les boutons DS (.btn / .btn--primary / .btn--secondary)
+     avec ic-btn (40 px) pour l'option "plus". */
+  .dh__actions { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .dh__btn { height: 44px; }
+  .dh__btn .ic {
+    width: 16px; height: 16px;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .dh__btn .ic--add  { -webkit-mask-image: url("/icons/kalai/add.svg");    mask-image: url("/icons/kalai/add.svg"); }
+  .dh__btn .ic--sub  { -webkit-mask-image: url("/icons/kalai/remove.svg"); mask-image: url("/icons/kalai/remove.svg"); }
+  .dh__btn .ic--grid { -webkit-mask-image: url("/icons/kalai/apps.svg");   mask-image: url("/icons/kalai/apps.svg"); }
+
+  /* Hero variant — full-bleed image background */
+  .dh-hero {
+    position: relative; padding: 0;
+    aspect-ratio: 9 / 12;
+    border-radius: 16px; overflow: hidden;
+    color: var(--v-white);
+    background:
+      linear-gradient(180deg, rgba(20,18,8,0.20) 0%, rgba(20,18,8,0.55) 70%, rgba(20,18,8,0.90) 100%),
+      linear-gradient(135deg, #5d6b48 0%, #8a6f30 100%);
+  }
+  .dh-hero__body {
+    position: absolute; left: 24px; right: 24px; bottom: 56px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .dh-hero__eyebrow {
+    display: inline-flex; align-items: center; gap: 6px;
+    align-self: flex-start;
+    height: 26px; padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.92); color: var(--v-fg);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    font-weight: 600; font-size: 12px;
+  }
+  .dh-hero__eyebrow__dot { width: 6px; height: 6px; border-radius: 999px;
+                           background: var(--v-terracotta); }
+  .dh-hero__title {
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 26px;
+    line-height: 1.2; color: var(--v-white);
+    letter-spacing: -0.01em; margin: 0;
+  }
+  .dh-hero__cta {
+    align-self: flex-start;
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 40px; padding: 0 16px; border-radius: 999px;
+    background: var(--v-fg); color: var(--v-white);
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 14px;
+    border: 0; cursor: pointer;
+  }
+  .dh-hero__cta .ic {
+    width: 14px; height: 14px; background: currentColor;
+    -webkit-mask: url("/icons/kalai/add.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/add.svg") center/contain no-repeat;
+  }
+
+  /* Article hero — taller image, multiple category pills, white title */
+  .dh-article {
+    position: relative; padding: 0;
+    aspect-ratio: 3 / 4;
+    border-radius: 16px; overflow: hidden;
+    color: var(--v-white);
+    background:
+      /* darker bottom-left vignette so title reads */
+      linear-gradient(180deg, rgba(20,18,8,0.25) 0%, rgba(20,18,8,0.10) 30%, rgba(20,18,8,0.50) 65%, rgba(20,18,8,0.85) 100%),
+      /* placeholder field/landscape */
+      linear-gradient(180deg, #5a6470 0%, #7a7a5e 35%, #6a6238 70%, #3a3623 100%);
+  }
+  .dh-article__body {
+    position: absolute; left: 24px; right: 24px; bottom: 56px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .dh-article__chips {
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .dh-article__chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 28px; padding: 0 12px;
+    background: rgba(255,255,255,0.95); color: var(--v-fg);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-radius: 999px;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 13px;
+  }
+  .dh-article__chip__dot {
+    width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0;
+  }
+  .dh-article__chip--terra .dh-article__chip__dot { background: var(--v-terracotta); }
+  .dh-article__chip--blue  .dh-article__chip__dot { background: var(--v-blue); }
+  .dh-article__chip--green .dh-article__chip__dot { background: var(--v-green); }
+  .dh-article__chip--brown .dh-article__chip__dot { background: #8a6a3b; }
+  .dh-article__title {
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 28px;
+    line-height: 1.15; letter-spacing: -0.01em;
+    color: var(--v-white); margin: 0;
+    text-wrap: balance;
+  }
+
+  /* Ghost icon button — sits on photo, semi-transparent dark surface */
+  .dh-article__ic {
+    position: absolute; top: 16px; left: 16px;
+    width: 40px; height: 40px; border-radius: 999px;
+    background: rgba(20,18,8,0.35); color: var(--v-white);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .dh-article__ic::before {
+    content: ""; width: 18px; height: 18px;
+    background: currentColor;
+    -webkit-mask: url("/icons/kalai/add.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/add.svg") center/contain no-repeat;
+  }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 12px 0 -4px; }
+</style></head>
+<body>
+
+  <!-- ============================================================
+       1. Crypto detail — Bitcoin
+       ============================================================ -->
+  <p class="lbl">Crypto detail · single asset</p>
+  <div class="dh">
+    <span class="dh__eyebrow"><span class="dh__eyebrow__dot"></span>Crypto</span>
+    <h1 class="dh__title">Bitcoin</h1>
+    <div class="dh__value">
+      51 810,30 €
+      <span class="dh__value__chv" aria-label="Changer la devise"></span>
+    </div>
+    <div class="dh__variations">
+      <span class="dh__var dh__var--up">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        + 341,99 €
+      </span>
+      <span class="dh__var dh__var--up">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        0,56 %
+      </span>
+      <span class="dh__period">1 week</span>
+    </div>
+    <div class="dh__actions">
+      <button class="btn btn--primary dh__btn">Acheter<span class="ic ic--add"></span></button>
+      <button class="btn btn--secondary dh__btn">Vendre<span class="ic ic--sub"></span></button>
+      <button class="btn btn--secondary btn--icon-only dh__btn" aria-label="Plus d'options"><span class="ic ic--grid"></span></button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       2. Bundle detail — Panier top 5 (multi-coin avatars)
+       ============================================================ -->
+  <p class="lbl">Bundle detail · avatar stack + title row</p>
+  <div class="dh">
+    <span class="dh__eyebrow"><span class="dh__eyebrow__dot"></span>Crypto Bundle</span>
+    <div class="dh__title-row">
+      <div class="dh__stack">
+        <div class="dh__stack__coin"><img src="/app-ds/crypto/btc.svg" alt="BTC"/></div>
+        <div class="dh__stack__coin"><img src="/app-ds/crypto/eth.svg" alt="ETH"/></div>
+        <div class="dh__stack__coin"><img src="/app-ds/crypto/sol.svg" alt="SOL"/></div>
+        <div class="dh__stack__more">+2</div>
+      </div>
+      <h1 class="dh__title">Panier top 5</h1>
+    </div>
+    <p class="dh__sub">Incenderat autem audaces usque ad insaniam homines ad haec</p>
+    <div class="dh__variations">
+      <span class="dh__var dh__var--up">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        0,56 %
+      </span>
+      <span class="dh__period">1 week</span>
+    </div>
+    <div class="dh__actions">
+      <button class="btn btn--primary dh__btn">Investir<span class="ic ic--add"></span></button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       4. Euro account detail — single fiat balance + tx actions
+       ============================================================ -->
+  <p class="lbl">Euro account · fiat balance with deposit / withdraw actions</p>
+  <div class="dh">
+    <span class="dh__eyebrow dh__eyebrow--blue"><span class="dh__eyebrow__dot"></span>Compte</span>
+    <div class="dh__title-row">
+      <div class="dh__stack">
+        <div class="dh__stack__coin" style="background:var(--v-blue);color:var(--v-white);display:inline-flex;align-items:center;justify-content:center;font-family:var(--v-font-ui);font-weight:700;font-size:18px;line-height:1">€</div>
+      </div>
+      <h1 class="dh__title">Euro Account</h1>
+    </div>
+    <p class="dh__sub">FR76 **** **** **** 4892</p>
+    <div class="dh__value">
+      3 129,21 €
+      <span class="dh__value__chv" aria-label="Changer la devise"></span>
+    </div>
+    <div class="dh__variations">
+      <span class="dh__var dh__var--up">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        + 124,30 €
+      </span>
+      <span class="dh__period">cette semaine</span>
+    </div>
+    <div class="dh__actions">
+      <button class="btn btn--primary dh__btn">Déposer<span class="ic ic--add"></span></button>
+      <button class="btn btn--secondary dh__btn">Retirer<span class="ic ic--sub"></span></button>
+      <button class="btn btn--secondary btn--icon-only dh__btn" aria-label="Plus d'options"><span class="ic ic--grid"></span></button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       5. Hero image variant — Coffre Avenir
+       ============================================================ -->
+  <p class="lbl">Hero image · pill on photo + CTA</p>
+  <div class="dh-hero">
+    <div class="dh-hero__body">
+      <span class="dh-hero__eyebrow"><span class="dh-hero__eyebrow__dot"></span>Coffre Avenir</span>
+      <h1 class="dh-hero__title">Incenderat autem audaces usque ad insaniam homines ad haec, quae</h1>
+      <button class="dh-hero__cta">Invest<span class="ic"></span></button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       6. Article hero — full-bleed photo + category chips + white title
+       ============================================================ -->
+  <p class="lbl">Article hero · multi-category pills + white title overlay</p>
+  <div class="dh-article">
+    <button class="dh-article__ic" aria-label="Ajouter"></button>
+    <div class="dh-article__body">
+      <div class="dh-article__chips">
+        <span class="dh-article__chip dh-article__chip--terra"><span class="dh-article__chip__dot"></span>Patrimoine</span>
+        <span class="dh-article__chip dh-article__chip--blue"><span class="dh-article__chip__dot"></span>Édito</span>
+        <span class="dh-article__chip dh-article__chip--brown"><span class="dh-article__chip__dot"></span>Energie</span>
+      </div>
+      <h1 class="dh-article__title">Proinde concepta rabie saeviore, quam desperatio incendebat et fames, amplificatis viribus ardore incohibili in excidium urbium</h1>
+    </div>
+  </div>
+
+</body></html>

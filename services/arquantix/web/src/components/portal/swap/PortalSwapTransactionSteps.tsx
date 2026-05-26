@@ -37,7 +37,7 @@ export function PortalSwapTransactionSteps({ title = 'Détail de votre conversio
   const suppressActiveStep = steps.every((step) => step.state === 'pending')
 
   return (
-    <article className="overflow-hidden rounded-v-card border border-v-border bg-v-card shadow-v-subtle">
+    <article className="overflow-hidden card-simple overflow-hidden !w-full">
       <div className="border-b border-v-border px-4 py-3">
         <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">{title}</h2>
       </div>

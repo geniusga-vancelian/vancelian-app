@@ -1,0 +1,172 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 32px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Tooltips & coach marks
+     -----------------------------------------------------------
+     A · Tooltip               — short hint on hover, anchored to element
+     B · Coach mark             — onboarding spotlight + arrow + step
+     C · Inline help tooltip    — info chip next to label
+     -----------------------------------------------------------
+     Anatomy (tooltip) :
+       .tt              — popover (dark or light)
+       .tt__arrow       — directional arrow (top/bottom/left/right)
+     Anatomy (coach) :
+       .cm-stage        — preview frame
+       .cm-spot         — element being highlighted
+       .cm-card         — coach card with step + nav
+     ============================================================ */
+  .stage {
+    width: 420px; max-width: 100%;
+    background: var(--v-white); border-radius: 12px;
+    border: 1px solid var(--v-fg-10);
+    padding: 28px; display: flex; align-items: center; justify-content: center;
+    position: relative; min-height: 120px;
+  }
+
+  /* A · Tooltip dark */
+  .tt {
+    position: relative;
+    background: var(--v-fg); color: var(--v-white);
+    font-size: 12px; font-weight: 500;
+    padding: 8px 12px; border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(26,24,21,0.18);
+    max-width: 240px; line-height: 1.45;
+  }
+  .tt::after {
+    content: ""; position: absolute;
+    border: 6px solid transparent;
+  }
+  .tt--top::after { left: 50%; top: 100%; transform: translateX(-50%);
+                    border-top-color: var(--v-fg); }
+  .tt--bottom::after { left: 50%; bottom: 100%; transform: translateX(-50%);
+                       border-bottom-color: var(--v-fg); }
+  .tt--right::after { right: 100%; top: 50%; transform: translateY(-50%);
+                      border-right-color: var(--v-fg); }
+  .tt--left::after  { left: 100%; top: 50%; transform: translateY(-50%);
+                      border-left-color: var(--v-fg); }
+
+  /* B · Coach mark */
+  .cm-stage {
+    width: 420px; height: 200px;
+    background: linear-gradient(135deg, var(--v-card-warm), var(--v-card));
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cm-stage::before {
+    content: ""; position: absolute; inset: 0;
+    background: rgba(20,18,8,0.55);
+  }
+  .cm-spot {
+    position: absolute; left: 24px; top: 24px;
+    width: 56px; height: 56px; border-radius: 999px;
+    background: var(--v-white); color: var(--v-fg);
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.30),
+                0 0 0 9999px rgba(20,18,8,0.55);
+    display: inline-flex; align-items: center; justify-content: center;
+    z-index: 2;
+  }
+  .cm-spot svg { width: 24px; height: 24px; }
+
+  .cm-card {
+    position: absolute; left: 96px; top: 24px;
+    z-index: 3;
+    width: 260px;
+    background: var(--v-white); border-radius: 12px;
+    padding: 14px 14px 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.30);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .cm-card::before {
+    content: ""; position: absolute; left: -6px; top: 24px;
+    border: 6px solid transparent; border-right-color: var(--v-white);
+  }
+  .cm-card__step {
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-weight: 600; color: var(--v-fg-light);
+  }
+  .cm-card__title { margin: 0; font-size: 15px; font-weight: 700; color: var(--v-fg); }
+  .cm-card__body  { margin: 0; font-size: 13px; line-height: 1.45; color: var(--v-fg-body); }
+  .cm-card__foot {
+    display: flex; align-items: center; gap: 8px; margin-top: 4px;
+  }
+  .cm-card__dots { display: inline-flex; gap: 4px; flex: 1; }
+  .cm-card__dots span { width: 6px; height: 6px; border-radius: 999px;
+                        background: var(--v-fg-10); }
+  .cm-card__dots span.on { background: var(--v-fg); width: 18px; border-radius: 999px; }
+  .cm-card .btn--sm { height: 28px; padding: 0 12px; font-size: 12px; }
+
+  /* C · Inline help chip + tooltip */
+  .help-row { display: inline-flex; align-items: center; gap: 8px;
+              font-size: 14px; color: var(--v-fg); font-weight: 500; }
+  .help-i {
+    width: 18px; height: 18px; border-radius: 999px;
+    background: var(--v-fg-05); color: var(--v-fg-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: help;
+  }
+  .help-i .ic {
+    width: 12px; height: 12px; background: currentColor;
+    -webkit-mask-image: url("/icons/kalai/info.svg"); mask-image: url("/icons/kalai/info.svg");
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">A · tooltip dark · top arrow</p>
+  <div class="stage">
+    <span class="tt tt--top">Le TRI net est calculé après tous frais et fiscalité.</span>
+  </div>
+
+  <p class="v-eyebrow--sm">A · tooltip · right arrow on icon</p>
+  <div class="stage" style="justify-content:flex-start;gap:16px">
+    <span class="ic-btn" aria-label="Aide">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1 1-1.1 1.8"/><circle cx="12" cy="17" r=".8" fill="currentColor"/></svg>
+    </span>
+    <span class="tt tt--left">Cliquez pour modifier votre code Vancelian.</span>
+  </div>
+
+  <p class="v-eyebrow--sm">B · coach mark · onboarding step 2/4</p>
+  <div class="cm-stage">
+    <div class="cm-spot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
+    </div>
+    <div class="cm-card">
+      <span class="cm-card__step">Étape 2 / 4</span>
+      <h4 class="cm-card__title">Effectuez un versement</h4>
+      <p class="cm-card__body">Appuyez sur le bouton « + » pour déposer des fonds depuis un IBAN externe.</p>
+      <div class="cm-card__foot">
+        <div class="cm-card__dots">
+          <span></span><span class="on"></span><span></span><span></span>
+        </div>
+        <button class="btn btn--sm btn--primary">Suivant</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">C · inline help chip · label affordance</p>
+  <div class="stage" style="justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:14px">
+    <div class="help-row">
+      Performance YTD
+      <span class="help-i"><span class="ic"></span></span>
+    </div>
+    <div class="help-row">
+      Frais récurrents
+      <span class="help-i"><span class="ic"></span></span>
+    </div>
+    <div class="help-row">
+      Liquidité estimée
+      <span class="help-i"><span class="ic"></span></span>
+    </div>
+  </div>
+
+</body></html>

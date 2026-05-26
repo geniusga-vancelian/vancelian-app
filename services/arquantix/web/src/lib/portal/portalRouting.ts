@@ -117,7 +117,9 @@ export function isPortalPublicStaticPathname(pathname: string): boolean {
     pathname.startsWith('/crypto_svgs/') ||
     pathname.startsWith('/brand/') ||
     pathname.startsWith('/icons/') ||
-    pathname.startsWith('/images/')
+    pathname.startsWith('/images/') ||
+    pathname.startsWith('/app-ds/') ||
+    pathname.startsWith('/fonts/')
   ) {
     return true
   }

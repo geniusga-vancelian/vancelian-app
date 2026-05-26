@@ -1,0 +1,124 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 48px 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 36px;
+         align-items: center; min-height: 100vh; }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 0; }
+
+  /* ============================================================
+     Amount display — used on Buy / Sell / Send screens.
+     Big tabular number + currency · optional MAX pill · conversion sub.
+     ============================================================ */
+  .amt {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .amt__main {
+    display: inline-flex; align-items: center; gap: 12px;
+  }
+  .amt__value {
+    font-family: var(--v-font-ui); font-weight: 700;
+    font-size: 56px; line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--v-fg);
+    font-feature-settings: "tnum" on, "lnum" on;
+  }
+  .amt__value--muted { color: var(--v-fg-light); }
+  /* Currency follows the value, slightly less heavy */
+  .amt__currency {
+    font-weight: 700; font-size: 40px; color: var(--v-fg);
+    margin-left: 4px;
+  }
+  /* MAX pill — small, terracotta accent */
+  .amt__max {
+    display: inline-flex; align-items: center;
+    height: 22px; padding: 0 10px;
+    border-radius: 999px;
+    background: var(--v-terracotta-bg); color: var(--v-terracotta);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    align-self: center;
+  }
+  .amt__sub {
+    font-family: var(--v-font-ui); font-size: 16px;
+    color: var(--v-fg-light);
+    font-feature-settings: "tnum" on;
+  }
+
+  /* Smaller variant */
+  .amt--md .amt__value    { font-size: 40px; }
+  .amt--md .amt__currency { font-size: 30px; }
+
+  /* Compact variant */
+  .amt--sm .amt__value    { font-size: 28px; }
+  .amt--sm .amt__currency { font-size: 22px; }
+  .amt--sm .amt__sub      { font-size: 14px; }
+
+  /* Container to host them */
+  .stage {
+    width: 360px; max-width: 100%;
+    padding: 40px 24px; background: var(--v-white);
+    border: 1px solid var(--v-fg-10); border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+  }
+</style></head>
+<body>
+
+  <p class="lbl">Default · value + currency + MAX pill + conversion sub</p>
+  <div class="stage">
+    <div class="amt">
+      <div class="amt__main">
+        <span class="amt__value">100</span>
+        <span class="amt__currency">€</span>
+        <span class="amt__max">MAX</span>
+      </div>
+      <div class="amt__sub">0,0016&nbsp;BTC</div>
+    </div>
+  </div>
+
+  <p class="lbl">Muted (empty / placeholder state)</p>
+  <div class="stage">
+    <div class="amt">
+      <div class="amt__main">
+        <span class="amt__value amt__value--muted">0</span>
+        <span class="amt__currency" style="color:var(--v-fg-light)">€</span>
+      </div>
+      <div class="amt__sub">Saisissez le montant</div>
+    </div>
+  </div>
+
+  <p class="lbl">Without MAX, single line</p>
+  <div class="stage">
+    <div class="amt">
+      <div class="amt__main">
+        <span class="amt__value">2 480,00</span>
+        <span class="amt__currency">€</span>
+      </div>
+      <div class="amt__sub">≈ 0,041&nbsp;BTC</div>
+    </div>
+  </div>
+
+  <p class="lbl">Smaller variants · md (40) · sm (28)</p>
+  <div class="stage">
+    <div class="amt amt--md">
+      <div class="amt__main">
+        <span class="amt__value">12 480</span>
+        <span class="amt__currency">€</span>
+      </div>
+      <div class="amt__sub">≈ 0,208&nbsp;BTC</div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="amt amt--sm">
+      <div class="amt__main">
+        <span class="amt__value">42,18</span>
+        <span class="amt__currency">€</span>
+        <span class="amt__max">MAX</span>
+      </div>
+    </div>
+  </div>
+
+</body></html>

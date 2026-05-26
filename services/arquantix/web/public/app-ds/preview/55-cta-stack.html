@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 24px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     CTA stack — primary + secondary buttons stacked vertically,
+     full-width. Used at the bottom of onboarding / permission
+     gates / blocking dialogs.
+     ============================================================ */
+  .cta-stack {
+    width: 360px; max-width: 100%;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  .cta-stack__btn {
+    height: 56px; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 0; cursor: pointer;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 15px;
+    transition: background 120ms var(--v-ease-out);
+  }
+  /* Primary — anthracite */
+  .cta-stack__btn--primary { background: var(--v-fg); color: var(--v-white); }
+  .cta-stack__btn--primary:hover { background: var(--v-fg-hover); }
+  /* Secondary — warm neutral, no border */
+  .cta-stack__btn--secondary { background: var(--v-card-warm); color: var(--v-fg); }
+  .cta-stack__btn--secondary:hover { background: #EBE4DA; }
+  /* Terracotta — brand accent */
+  .cta-stack__btn--terra { background: var(--v-terracotta); color: var(--v-white); }
+  .cta-stack__btn--terra:hover { background: var(--v-terracotta-pressed); }
+  /* Ghost — text only, last-resort */
+  .cta-stack__btn--ghost { background: transparent; color: var(--v-fg-muted); height: 44px; }
+  .cta-stack__btn--ghost:hover { color: var(--v-fg); }
+  /* Outline — same weight as primary but transparent */
+  .cta-stack__btn--outline { background: transparent; color: var(--v-fg); border: 1px solid var(--v-fg); }
+  .cta-stack__btn--outline:hover { background: var(--v-fg-05); }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin: 6px 0 -8px; }
+</style></head>
+<body>
+
+  <p class="lbl">Primary + secondary-warm · permission gate</p>
+  <div class="cta-stack">
+    <button class="cta-stack__btn cta-stack__btn--primary">Enable Push Notifications</button>
+    <button class="cta-stack__btn cta-stack__btn--secondary">Not Now</button>
+  </div>
+
+  <p class="lbl">Primary + ghost · onboarding skip</p>
+  <div class="cta-stack">
+    <button class="cta-stack__btn cta-stack__btn--primary">Continuer</button>
+    <button class="cta-stack__btn cta-stack__btn--ghost">Passer cette étape</button>
+  </div>
+
+  <p class="lbl">Terracotta + outline · marketing screen</p>
+  <div class="cta-stack">
+    <button class="cta-stack__btn cta-stack__btn--terra">Découvrir l'offre</button>
+    <button class="cta-stack__btn cta-stack__btn--outline">En savoir plus</button>
+  </div>
+
+  <p class="lbl">Three-button stack · sheet decisions</p>
+  <div class="cta-stack">
+    <button class="cta-stack__btn cta-stack__btn--primary">Confirmer la transaction</button>
+    <button class="cta-stack__btn cta-stack__btn--secondary">Modifier le montant</button>
+    <button class="cta-stack__btn cta-stack__btn--ghost">Annuler</button>
+  </div>
+
+</body></html>

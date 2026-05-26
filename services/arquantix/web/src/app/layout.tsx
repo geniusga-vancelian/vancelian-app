@@ -125,7 +125,10 @@ export default async function RootLayout({
 
   return (
     <html lang={isPortalApp ? 'en' : locale}>
-      <body className={figmaDsBodyRootClassName}>
+      <body
+        className={figmaDsBodyRootClassName}
+        data-v-ds={isPortalApp ? 'app' : 'website'}
+      >
         <SiteChrome
           menuItems={menuItems}
           menuTheme={menuTheme}

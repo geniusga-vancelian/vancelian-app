@@ -1,0 +1,119 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 16px; align-items: stretch; min-height: 100vh; }
+
+  /* ============================================================
+     Funding row card — image flush at 2px from edges (like news card)
+     States: incoming · live · done
+     ============================================================ */
+  .funding {
+    width: 100%; max-width: 600px; margin: 0 auto;
+    background: var(--v-white); border-radius: 16px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch;
+    border: 1px solid var(--v-fg-10);
+  }
+  .funding__media {
+    width: 88px; flex-shrink: 0; align-self: stretch;
+    /* Inner radius = outer (16) − padding (2) = 14, on all 4 corners */
+    border-radius: 14px;
+    background: linear-gradient(135deg, #B7CFE6 0%, #5e83ad 60%, #1F3C5C 100%);
+  }
+  .funding__body {
+    flex: 1; min-width: 0;
+    padding: 14px 18px 14px 14px;
+    display: flex; flex-direction: column; justify-content: center; gap: 8px;
+  }
+  .funding__row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+  .funding__lead { font-size: 16px; color: var(--v-fg); line-height: 1.25; }
+  .funding__lead b { font-weight: 700; color: var(--v-fg);
+                     font-feature-settings: "tnum" on, "lnum" on; }
+  .funding__lead span.muted { color: var(--v-fg-light); }
+
+  .funding__bar { height: 6px; border-radius: 999px; background: rgba(26,24,21,0.10); overflow: hidden; }
+  .funding__bar span { display: block; height: 100%; background: var(--v-fg); border-radius: 999px; }
+
+  .funding__meta { display: flex; justify-content: space-between; gap: 16px;
+                   font-size: 15px; color: var(--v-fg-light); align-items: center; }
+  .funding__meta b { font-weight: 700; color: var(--v-fg);
+                     font-feature-settings: "tnum" on, "lnum" on; }
+  .funding__meta .invs { display: inline-flex; align-items: center; gap: 6px; }
+  .funding__meta .invs svg { width: 16px; height: 16px; color: var(--v-fg-muted); }
+
+  /* Done badge — replaces the lead row */
+  .funding__done {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 22px; padding: 0 8px; border-radius: 999px;
+    background: var(--v-green-bg); color: var(--v-green);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .funding__done svg { width: 11px; height: 11px; }
+
+  .funding--done .funding__bar span { background: var(--v-green); }
+  .funding--done .funding__media { filter: saturate(0.6) brightness(0.95); }
+
+  .state-lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+               font-weight: 500; color: var(--v-fg-light); margin: 0 16px 4px; }
+
+  svg { display: block; }
+
+  .i-mask { display: inline-block; width: 16px; height: 16px;
+            background: currentColor;
+            -webkit-mask-position: center; mask-position: center;
+            -webkit-mask-size: contain; mask-size: contain;
+            -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+  .i-mask--check { -webkit-mask-image: url("/icons/kalai/check.svg");      mask-image: url("/icons/kalai/check.svg"); }
+  .i-mask--group { -webkit-mask-image: url("/icons/kalai/user-group.svg"); mask-image: url("/icons/kalai/user-group.svg"); }
+  .funding__meta .invs .i-mask--group { color: var(--v-fg-muted); }
+
+</style></head>
+<body>
+
+  <p class="state-lbl">Funding incoming · countdown</p>
+  <div class="funding">
+    <div class="funding__media"></div>
+    <div class="funding__body">
+      <div class="funding__lead">Disponible dans <b>5j&nbsp;:&nbsp;2h&nbsp;:&nbsp;43m</b></div>
+      <div class="funding__bar"><span style="width:0%"></span></div>
+      <div class="funding__meta"><span>Financement total</span><b>11M&nbsp;€</b></div>
+    </div>
+  </div>
+
+  <p class="state-lbl">Funding en cours · montant + investisseurs</p>
+  <div class="funding">
+    <div class="funding__media"></div>
+    <div class="funding__body">
+      <div class="funding__lead"><b>3 612 394&nbsp;€</b><span class="muted">&nbsp;levés sur 11M&nbsp;€</span></div>
+      <div class="funding__bar"><span style="width:33%"></span></div>
+      <div class="funding__meta">
+        <span class="invs">
+          <span class="i-mask i-mask--group"></span>
+          <b>43</b>&nbsp;investisseurs
+        </span>
+        <span>Encore&nbsp;<b>5j&nbsp;2h</b></span>
+      </div>
+    </div>
+  </div>
+
+  <p class="state-lbl">Funding terminé · clôturé</p>
+  <div class="funding funding--done">
+    <div class="funding__media"></div>
+    <div class="funding__body">
+      <div class="funding__lead funding__lead--done">
+        <span class="i-mask i-mask--check" style="color:var(--v-green);margin-right:6px;vertical-align:-3px"></span><b>Financement terminé</b>
+      </div>
+      <div class="funding__bar"><span style="width:100%"></span></div>
+      <div class="funding__meta">
+        <span class="invs">
+          <span class="i-mask i-mask--group"></span>
+          <b>127</b>&nbsp;investisseurs
+        </span>
+        <span>Clôturé le <b>15 mars</b></span>
+      </div>
+    </div>
+  </div>
+
+</body></html>

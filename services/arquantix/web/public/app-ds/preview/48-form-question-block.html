@@ -1,0 +1,86 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 24px;
+         align-items: stretch; justify-content: center; min-height: 100vh;
+         max-width: 480px; margin: 0 auto; }
+
+  /* ============================================================
+     Form question block — page-level eyebrow / title / description.
+     Used at the top of questionnaire, KYC, and onboarding screens.
+     ============================================================
+     Anatomy:
+       .qst         — vertical stack
+       .qst__eyebrow  — pill badge (e.g. "V3", step indicator, category)
+       .qst__title    — bold question / page title
+       .qst__desc     — muted description below
+     -------------------------------------------------------------- */
+  .qst {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 0;
+  }
+  .qst__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .qst__eyebrow {
+    display: inline-flex; align-items: center;
+    height: 22px; padding: 0 8px;
+    background: var(--v-terracotta-bg); color: var(--v-terracotta);
+    border-radius: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-feature-settings: "tnum" on;
+  }
+  .qst__eyebrow--neutral { background: var(--v-card-warm); color: var(--v-fg-muted); }
+  .qst__eyebrow--green   { background: var(--v-green-bg);  color: var(--v-green); }
+  .qst__eyebrow--blue    { background: var(--v-blue-bg);   color: var(--v-blue); }
+  .qst__title {
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 22px;
+    line-height: 1.25; color: var(--v-fg); margin: 0;
+  }
+  .qst__title--lg { font-size: 28px; line-height: 1.15; letter-spacing: -0.01em; }
+  .qst__desc {
+    font-size: 14px; line-height: 1.5; color: var(--v-fg-light);
+    margin: 0;
+  }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 6px 0 -8px; }
+</style></head>
+<body>
+
+  <p class="lbl">Eyebrow pill + title + helper</p>
+  <div class="qst">
+    <div class="qst__row">
+      <span class="qst__eyebrow">V3</span>
+      <h2 class="qst__title">Question 1</h2>
+    </div>
+    <p class="qst__desc">Haec dum animo de pariete sectionari quibusdam</p>
+  </div>
+
+  <p class="lbl">Step indicator · neutral eyebrow</p>
+  <div class="qst">
+    <div class="qst__row">
+      <span class="qst__eyebrow qst__eyebrow--neutral">Étape 2 sur 5</span>
+      <h2 class="qst__title">Quel est votre profil d'investisseur ?</h2>
+    </div>
+    <p class="qst__desc">Vos réponses nous aident à proposer une allocation adaptée à votre situation et à vos objectifs.</p>
+  </div>
+
+  <p class="lbl">Category eyebrow (green) · large title</p>
+  <div class="qst">
+    <div class="qst__row">
+      <span class="qst__eyebrow qst__eyebrow--green">Patrimoine</span>
+    </div>
+    <h2 class="qst__title qst__title--lg">Bâtir votre patrimoine, simplement.</h2>
+    <p class="qst__desc">Vancelian vous accompagne dans la sélection d'actifs réels et tokenisés.</p>
+  </div>
+
+  <p class="lbl">Title only · no eyebrow</p>
+  <div class="qst">
+    <h2 class="qst__title">Documents nécessaires</h2>
+    <p class="qst__desc">Préparez votre pièce d'identité et un justificatif de domicile de moins de 3 mois.</p>
+  </div>
+
+</body></html>

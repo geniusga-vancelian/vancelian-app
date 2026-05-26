@@ -1,0 +1,135 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Confirmation — bottom sheet pattern (≠ centered modal).
+     Reuse 69-bottom-sheet anatomy : .sht-stage + .sht
+     ============================================================ */
+  .sht-stage {
+    width: 390px; max-width: 100%;
+    background: linear-gradient(180deg, var(--v-card) 0%, var(--v-card-hover) 60%, var(--v-fg-10) 100%);
+    border-radius: 16px;
+    position: relative; overflow: hidden;
+    min-height: 480px;
+    box-shadow: var(--v-elev-subtle);
+  }
+  .sht-stage::before {
+    content: ""; position: absolute; inset: 0;
+    background: rgba(20,18,8,0.45);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+    z-index: 1;
+  }
+
+  .sht {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--v-white);
+    border-radius: var(--v-radius-sheet) var(--v-radius-sheet) 0 0;
+    padding: 0 20px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+    z-index: 2;
+  }
+  .sht__handle { width: 36px; height: 4px; border-radius: 999px;
+                 background: var(--v-fg-20); margin: 10px auto 4px; }
+
+  /* Status icon — 64 px coloured circle */
+  .sht__icon {
+    align-self: center;
+    width: 64px; height: 64px; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--v-white);
+    margin-top: 4px;
+  }
+  .sht__icon .ic {
+    width: 30px; height: 30px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic--warn  { -webkit-mask-image: url("/icons/kalai/exclamation-folder.svg"); mask-image: url("/icons/kalai/exclamation-folder.svg"); }
+  .ic--trash { -webkit-mask-image: url("/icons/kalai/delete.svg"); mask-image: url("/icons/kalai/delete.svg"); }
+  .ic--info  { -webkit-mask-image: url("/icons/kalai/info.svg"); mask-image: url("/icons/kalai/info.svg"); }
+  .ic--lock  { -webkit-mask-image: url("/icons/kalai/lock-1.svg"); mask-image: url("/icons/kalai/lock-1.svg"); }
+  .ic--logout{ -webkit-mask-image: url("/icons/kalai/logout.svg"); mask-image: url("/icons/kalai/logout.svg"); }
+
+  .sht__icon--danger  { background: var(--v-error); }
+  .sht__icon--warn    { background: var(--v-yellow); }
+  .sht__icon--neutral { background: var(--v-fg);  }
+  .sht__icon--info    { background: var(--v-blue); }
+
+  .sht__title { text-align: center; margin: 4px 0 0;
+                font-size: 20px; font-weight: 700; color: var(--v-fg);
+                text-wrap: pretty; }
+  .sht__body  { text-align: center; margin: 0;
+                font-size: 14px; line-height: 1.5; color: var(--v-fg-body);
+                text-wrap: pretty; padding: 0 4px; }
+  .sht__ctas  { display: flex; flex-direction: column; gap: 8px;
+                width: 100%; margin-top: 12px; }
+  .sht__ctas .btn { width: 100%; }
+  .sht__ctas--row { flex-direction: row; }
+  .sht__ctas--row .btn { flex: 1; width: auto; }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">Danger · delete · sheet</p>
+  <div class="sht-stage">
+    <div class="sht">
+      <div class="sht__handle"></div>
+      <div class="sht__icon sht__icon--danger"><span class="ic ic--trash"></span></div>
+      <h3 class="sht__title">Supprimer ce bénéficiaire ?</h3>
+      <p class="sht__body">Marie Dupont sera retirée de votre liste. Vous pourrez la rajouter ultérieurement.</p>
+      <div class="sht__ctas">
+        <button class="btn btn--lg btn--destructive">Supprimer</button>
+        <button class="btn btn--lg btn--ghost">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">Warning · session expire · horizontal CTAs</p>
+  <div class="sht-stage">
+    <div class="sht">
+      <div class="sht__handle"></div>
+      <div class="sht__icon sht__icon--warn"><span class="ic ic--warn"></span></div>
+      <h3 class="sht__title">Votre session expire</h3>
+      <p class="sht__body">Voulez-vous prolonger votre session pour 15 minutes supplémentaires ?</p>
+      <div class="sht__ctas sht__ctas--row">
+        <button class="btn btn--lg btn--secondary">Se déconnecter</button>
+        <button class="btn btn--lg btn--primary">Prolonger</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">Neutral · biometrics opt-in</p>
+  <div class="sht-stage">
+    <div class="sht">
+      <div class="sht__handle"></div>
+      <div class="sht__icon sht__icon--neutral"><span class="ic ic--lock"></span></div>
+      <h3 class="sht__title">Activer Face ID ?</h3>
+      <p class="sht__body">Connectez-vous plus rapidement avec votre visage. Vous pourrez modifier ce choix dans les réglages.</p>
+      <div class="sht__ctas">
+        <button class="btn btn--lg btn--primary">Activer</button>
+        <button class="btn btn--lg btn--ghost">Pas maintenant</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">Info · logout confirmation</p>
+  <div class="sht-stage">
+    <div class="sht">
+      <div class="sht__handle"></div>
+      <div class="sht__icon sht__icon--info"><span class="ic ic--logout"></span></div>
+      <h3 class="sht__title">Se déconnecter ?</h3>
+      <p class="sht__body">Vous devrez vous reconnecter avec votre code Vancelian à la prochaine session.</p>
+      <div class="sht__ctas sht__ctas--row">
+        <button class="btn btn--lg btn--secondary">Annuler</button>
+        <button class="btn btn--lg btn--primary">Se déconnecter</button>
+      </div>
+    </div>
+  </div>
+
+</body></html>

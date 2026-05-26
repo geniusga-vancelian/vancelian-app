@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { useRouter } from 'next/navigation'
 import { ArrowDown, ArrowLeft, ArrowUp, Star } from 'lucide-react'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalInstrumentChartModule } from '@/components/portal/markets/PortalInstrumentChartModule'
@@ -241,7 +241,7 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
 
         <section className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-fg-05">
           <div className="flex flex-col gap-5 p-5 sm:p-6">
-            <VEyebrow>Crypto</VEyebrow>
+            <AppEyebrow>Crypto</AppEyebrow>
 
             <div className="flex items-center gap-3">
               <PortalCryptoAvatar

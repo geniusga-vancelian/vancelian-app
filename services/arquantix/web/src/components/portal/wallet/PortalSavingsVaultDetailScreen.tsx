@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowUp, TrendingUp } from 'lucide-react'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
+import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
 import { PortalSavingsVaultOperationPanel } from '@/components/portal/wallet/PortalSavingsVaultOperationPanel'
 import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
@@ -97,7 +98,7 @@ export function PortalSavingsVaultDetailScreen({ vaultAddress }: Props) {
             </PortalNavLink>
 
             <section className="overflow-hidden rounded-v-card border border-[#14532D]/20 bg-[#14532D] p-4 text-white shadow-v-subtle sm:p-5">
-              <VEyebrow className="text-white/70">Vault</VEyebrow>
+              <AppEyebrow className="text-white/70">Vault</AppEyebrow>
               <div className="mt-1 flex items-center gap-3">
                 <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-v-input bg-white/15 text-white">
                   <TrendingUp className="h-6 w-6" strokeWidth={1.75} />
@@ -158,7 +159,7 @@ export function PortalSavingsVaultDetailScreen({ vaultAddress }: Props) {
         ) : null}
 
         <PortalReveal index={operationTab ? 2 : 1}>
-          <article className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
+          <article className="card-simple overflow-hidden !w-full">
             <div className="border-b border-v-fg-10 px-4 py-3">
               <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">Ma position</h2>
             </div>
@@ -181,45 +182,17 @@ export function PortalSavingsVaultDetailScreen({ vaultAddress }: Props) {
         </PortalReveal>
 
         <PortalReveal index={operationTab ? 3 : 2}>
-          <article className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
-            <div className="flex items-center justify-between gap-3 border-b border-v-fg-10 px-4 py-3">
-              <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">Historique des transactions</h2>
-            </div>
-            {data.transactions.length === 0 ? (
-              <p className="m-0 px-4 py-6 font-ui text-[14px] text-v-fg-muted">
-                Aucune transaction pour le moment.
-              </p>
-            ) : (
-              <ul className="m-0 list-none p-0">
-                {data.transactions.map((tx) => (
-                  <li
-                    key={tx.id}
-                    className="flex items-center gap-3 border-t border-v-fg-05 px-4 py-3.5 first:border-t-0"
-                  >
-                    <span
-                      className={cn(
-                        'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold',
-                        tx.incoming ? 'bg-v-green-bg text-v-green' : 'bg-v-error-bg text-v-error',
-                      )}
-                    >
-                      {tx.incoming ? '↓' : '↑'}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-ui text-[14px] font-medium text-v-fg">
-                        {tx.title}
-                      </span>
-                      <span className="mt-0.5 block truncate font-ui text-[12px] text-v-fg-muted">
-                        {tx.subtitle}
-                      </span>
-                    </span>
-                    <span className="text-right font-ui text-[14px] font-semibold tabular-nums text-v-fg">
-                      {formatSavingsTransactionAmount(tx)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </article>
+          <PortalTransactionHistory
+            title="Historique des transactions"
+            items={data.transactions.map((tx) => ({
+              id: tx.id,
+              title: tx.title,
+              subtitle: tx.subtitle,
+              amount: formatSavingsTransactionAmount(tx),
+              incoming: tx.incoming,
+              amountTone: tx.incoming ? 'in' : 'out',
+            }))}
+          />
         </PortalReveal>
 
         {data.partial ? (

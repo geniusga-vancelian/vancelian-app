@@ -15,7 +15,7 @@ function BundleCard({ bundle }: { bundle: PortalCryptoBundle }) {
   const perfLabel = perf == null ? '—' : formatChangePct(perf)
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
+    <article className="flex h-full flex-col card-simple overflow-hidden !w-full">
       <div className="relative aspect-[2/1] w-full overflow-hidden bg-v-fg-05 sm:aspect-[5/2]">
         {bundle.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element

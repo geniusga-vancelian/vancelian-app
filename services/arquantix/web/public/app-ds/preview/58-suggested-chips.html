@@ -1,0 +1,92 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 18px;
+         align-items: stretch; justify-content: center; min-height: 100vh;
+         max-width: 540px; margin: 0 auto; }
+
+  /* ============================================================
+     Suggested chips row — horizontally scrollable list of quick
+     actions an AI assistant or a search experience can propose.
+     ============================================================ */
+  .sg {
+    display: flex; gap: 8px;
+    overflow-x: auto;
+    padding: 4px 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .sg::-webkit-scrollbar { display: none; }
+
+  /* Default suggestion pill — warm bg, fg label */
+  .sg__chip {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 18px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    border-radius: 999px;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 14px;
+    border: 0; cursor: pointer; white-space: nowrap;
+    transition: background 120ms var(--v-ease-out);
+  }
+  .sg__chip:hover { background: #EBE4DA; }
+
+  /* Outlined variant — sits on warm host surfaces */
+  .sg__chip--outline {
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+  }
+  .sg__chip--outline:hover { background: var(--v-fg-05); }
+
+  /* Leading glyph (optional) */
+  .sg__chip__ic {
+    width: 16px; height: 16px; flex-shrink: 0;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .sg__chip__ic--sparkle { -webkit-mask-image: url("/icons/kalai/star.svg");        mask-image: url("/icons/kalai/star.svg"); }
+  .sg__chip__ic--bolt    { -webkit-mask-image: url("/icons/kalai/exchange.svg");    mask-image: url("/icons/kalai/exchange.svg"); }
+  .sg__chip__ic--info    { -webkit-mask-image: url("/icons/kalai/info.svg");        mask-image: url("/icons/kalai/info.svg"); }
+
+  /* Pinned-question pill (terracotta tint) — used for promoted suggestions */
+  .sg__chip--promoted {
+    background: var(--v-terracotta-bg); color: var(--v-terracotta);
+  }
+  .sg__chip--promoted:hover { background: var(--v-terracotta-bg-strong); }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 6px 0 -8px; }
+</style></head>
+<body>
+
+  <p class="lbl">Default · warm fill, horizontal scroll</p>
+  <div class="sg">
+    <button class="sg__chip">Voir le détail</button>
+    <button class="sg__chip">Je veux que des crypto</button>
+    <button class="sg__chip">Plus prudent</button>
+    <button class="sg__chip">Investir plus d'immobilier</button>
+    <button class="sg__chip">Repartir à zéro</button>
+  </div>
+
+  <p class="lbl">Outline · sur surface warm (composer / sheet)</p>
+  <div class="sg" style="background:var(--v-card-warm);border-radius:16px;padding:10px">
+    <button class="sg__chip sg__chip--outline">Voir le détail</button>
+    <button class="sg__chip sg__chip--outline">Je veux que des crypto</button>
+    <button class="sg__chip sg__chip--outline">Plus prudent</button>
+    <button class="sg__chip sg__chip--outline">Repartir à zéro</button>
+  </div>
+
+  <p class="lbl">With leading glyph · promoted (terracotta) + plain</p>
+  <div class="sg">
+    <button class="sg__chip sg__chip--promoted"><span class="sg__chip__ic sg__chip__ic--sparkle"></span>Pour vous</button>
+    <button class="sg__chip"><span class="sg__chip__ic sg__chip__ic--bolt"></span>Investir 50 €</button>
+    <button class="sg__chip"><span class="sg__chip__ic sg__chip__ic--info"></span>Comment ça marche ?</button>
+    <button class="sg__chip">Voir mes objectifs</button>
+  </div>
+
+</body></html>

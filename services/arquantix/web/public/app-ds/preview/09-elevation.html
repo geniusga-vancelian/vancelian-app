@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: center; min-height: 100vh; }
+  .item { display: flex; flex-direction: column; gap: 10px; }
+  .box { height: 96px; background: var(--v-white); border-radius: 8px; border: 1px solid var(--v-fg-10); }
+  .b1 { /* flat — border only */ }
+  .b2 { box-shadow: 0 2px 6px rgba(26,24,21,0.07); }
+  .b3 { box-shadow: 0 8px 24px rgba(26,24,21,0.10); }
+  .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--v-fg-muted); }
+</style></head>
+<body>
+  <div class="item"><div class="box b1"></div><div class="lbl">Flat · border only</div></div>
+  <div class="item"><div class="box b2"></div><div class="lbl">Subtle · border + 0 2px 6px</div></div>
+  <div class="item"><div class="box b3"></div><div class="lbl">Medium · border + 0 8px 24px</div></div>
+</body></html>

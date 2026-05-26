@@ -1,0 +1,188 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 16px;
+         align-items: stretch; justify-content: flex-start; min-height: 100vh;
+         max-width: 480px; margin: 0 auto; }
+
+  /* ============================================================
+     Chat bubbles — IAssistant (left, white) and User (right, fg).
+     ============================================================
+     Anatomy:
+       .msg                  — message group (column)
+       .msg__head            — avatar + name row (assistant only)
+       .msg__bubble          — rounded card containing text or rich
+       .msg__time            — 12px muted timestamp below
+
+     Variants:
+       .msg--user            — right-aligned, anthracite bubble, white text
+       .msg--ai              — left-aligned, white bubble, fg text
+       .msg__bubble--rich    — bubble that hosts an attachment card
+     -------------------------------------------------------------- */
+
+  .msg { display: flex; flex-direction: column; gap: 8px; }
+  .msg--user { align-items: flex-end; }
+  .msg--ai   { align-items: flex-start; }
+
+  .msg__head {
+    display: inline-flex; align-items: center; gap: 12px;
+    color: var(--v-fg);
+  }
+  /* IAssistant avatar — .avt avt--32 du DS, glyph logo Vancelian centré via .avt__ic */
+  .avt__ic--logo {
+    -webkit-mask-image: url("/brand/vancelian/logo-black-icon.svg");
+            mask-image: url("/brand/vancelian/logo-black-icon.svg");
+  }
+  .msg__name { font-weight: 700; font-size: 15px; }
+
+  .msg__bubble {
+    max-width: 80%;
+    padding: 14px 16px;
+    border-radius: 16px;
+    font-family: var(--v-font-ui); font-size: 16px; line-height: 1.4;
+  }
+  .msg--ai .msg__bubble {
+    background: var(--v-white); color: var(--v-fg);
+    border-bottom-left-radius: 6px;  /* tail toward avatar */
+  }
+  .msg--user .msg__bubble {
+    background: var(--v-fg); color: var(--v-white);
+    border-bottom-right-radius: 6px; /* tail toward sender */
+  }
+
+  /* Rich attachment — assistant only, hosted inside a wider bubble */
+  .msg__bubble--rich {
+    width: 100%; max-width: 100%;
+    padding: 0; background: var(--v-white); overflow: hidden;
+  }
+  .attach {
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .attach__visual {
+    background: var(--v-card-warm);
+    padding: 20px 16px 16px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  /* Pie chart placeholder — visible as a clear donut */
+  .attach__chart {
+    width: 96px; height: 96px; border-radius: 999px;
+    flex-shrink: 0;
+    background:
+      conic-gradient(
+        var(--v-terracotta) 0 45%,
+        var(--v-fg) 45% 68%,
+        var(--v-fg-muted) 68% 79%,
+        var(--v-fg-light) 79% 90%,
+        var(--v-fg-20) 90% 100%
+      );
+    position: relative;
+  }
+  .attach__chart::after {
+    content: ""; position: absolute; inset: 22%; border-radius: 999px;
+    background: var(--v-card-warm);
+  }
+  .attach__legend { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .attach__legend-row { display: flex; align-items: center; gap: 10px;
+                        font-size: 14px; color: var(--v-fg); }
+  .attach__dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+  .attach__dot--1 { background: var(--v-terracotta); }
+  .attach__dot--2 { background: var(--v-fg); }
+  .attach__dot--3 { background: var(--v-fg-muted); }
+  .attach__dot--4 { background: var(--v-fg-light); }
+  .attach__pct { font-weight: 700; font-size: 14px;
+                 font-feature-settings: "tnum" on; min-width: 36px; }
+  .attach__lbl { color: var(--v-fg-light); font-size: 14px; }
+
+  .attach__body { padding: 14px 16px 16px; display: flex; align-items: center; gap: 12px; }
+  .attach__text { flex: 1; min-width: 0; }
+  .attach__title { font-weight: 700; font-size: 17px; color: var(--v-fg); line-height: 1.2; }
+  .attach__desc { font-size: 14px; color: var(--v-fg-light); line-height: 1.4; margin-top: 4px; }
+  .attach__cta {
+    flex-shrink: 0;
+  }
+
+  .msg__time {
+    font-size: 12px; color: var(--v-fg-light);
+    font-feature-settings: "tnum" on;
+    padding: 0 4px;
+  }
+  .msg--user .msg__time { padding-right: 4px; }
+  .msg--ai   .msg__time { padding-left: 48px; }  /* aligned past the .avt avt--32 + gap */
+
+  /* "Pensé pour vous" tag chip, used to denote AI provenance */
+  .ai-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 22px; padding: 0 8px;
+    background: var(--v-terracotta-bg); color: var(--v-terracotta);
+    border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); margin: 12px 0 -4px; }
+</style></head>
+<body>
+
+  <p class="lbl">User · anthracite bubble, right-aligned</p>
+  <div class="msg msg--user">
+    <div class="msg__bubble">I want to invest but keep a balanced risk.</div>
+    <div class="msg__time">08:15 AM</div>
+  </div>
+
+  <p class="lbl">AI · white bubble, left-aligned, avatar + name</p>
+  <div class="msg msg--ai">
+    <div class="msg__head">
+      <span class="avt avt--32"><img class="avt__ic" src="/brand/vancelian/logo-black-icon.svg" alt=""/></span>
+      <span class="msg__name">IAssistant</span>
+    </div>
+    <div class="msg__bubble">Got it. I'll build a diversified portfolio based on your profile.</div>
+    <div class="msg__time">08:16 AM</div>
+  </div>
+
+  <p class="lbl">AI · rich attachment (portfolio breakdown + CTA)</p>
+  <div class="msg msg--ai">
+    <div class="msg__head">
+      <span class="avt avt--32"><img class="avt__ic" src="/brand/vancelian/logo-black-icon.svg" alt=""/></span>
+      <span class="msg__name">IAssistant</span>
+    </div>
+    <div class="msg__bubble msg__bubble--rich">
+      <div class="attach">
+        <div class="attach__visual">
+          <div class="attach__chart"></div>
+          <div class="attach__legend">
+            <div class="attach__legend-row"><span class="attach__dot attach__dot--1"></span><span class="attach__pct">45 %</span><span class="attach__lbl">OE Dubai</span></div>
+            <div class="attach__legend-row"><span class="attach__dot attach__dot--2"></span><span class="attach__pct">23 %</span><span class="attach__lbl">Bitcoin</span></div>
+            <div class="attach__legend-row"><span class="attach__dot attach__dot--3"></span><span class="attach__pct">11 %</span><span class="attach__lbl">Provence XII</span></div>
+            <div class="attach__legend-row"><span class="attach__dot attach__dot--4"></span><span class="attach__pct">11 %</span><span class="attach__lbl">Ethereum</span></div>
+          </div>
+        </div>
+        <div class="attach__body">
+          <div class="attach__text">
+            <div class="attach__title">Balanced Folio</div>
+            <div class="attach__desc">Cum saepe multa, tum memini domi in</div>
+          </div>
+          <button class="btn btn--primary attach__cta">Invest</button>
+        </div>
+      </div>
+    </div>
+    <div class="msg__time">08:16 AM</div>
+  </div>
+
+  <p class="lbl">Short reply pair · conversational rhythm</p>
+  <div class="msg msg--user">
+    <div class="msg__bubble">Et pour Niseko ?</div>
+    <div class="msg__time">08:18 AM</div>
+  </div>
+  <div class="msg msg--ai">
+    <div class="msg__head">
+      <span class="avt avt--32"><img class="avt__ic" src="/brand/vancelian/logo-black-icon.svg" alt=""/></span>
+      <span class="msg__name">IAssistant <span class="ai-tag">Pensé pour vous</span></span>
+    </div>
+    <div class="msg__bubble">Niseko offre un rendement net annualisé de 6,4 % sur 36 mois. Veux-tu que je l'ajoute à ta sélection ?</div>
+    <div class="msg__time">08:18 AM</div>
+  </div>
+
+</body></html>

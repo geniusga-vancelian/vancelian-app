@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display:flex; flex-direction:column; gap:14px; align-items:flex-start; justify-content:center; min-height: 100vh; }
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--v-fg-light);
+         font-weight: 500; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items: center; }
+
+  /* Tinted variant — semi-transparent bg + same-color text */
+  .tag { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px;
+         font-weight:500; font-size:12px; }
+  .tag.neutral { background:#F3EDE6; color:#3A352F; }
+  .tag.terra   { background:#C0512E26; color:#C0512E; }
+  .tag.green   { background:#33614D26; color:#33614D; }
+  .tag.blue    { background:#0F2A4726; color:#0F2A47; }
+  .tag.yellow  { background:#C99A2E26; color:#A37D1F; }
+
+  /* Inverted variant — solid color bg + white text */
+  .tag-inv { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px;
+             font-weight:500; font-size:12px; color: var(--v-white); }
+  .tag-inv.neutral { background:#1A1815; color:var(--v-white); }
+  .tag-inv.terra   { background:#C0512E; }
+  .tag-inv.green   { background:#33614D; }
+  .tag-inv.blue    { background:#0F2A47; }
+  .tag-inv.yellow  { background:#C99A2E; }
+
+  .dot { width:6px; height:6px; border-radius:999px; background:currentColor; }
+  .tag-inv .dot { background:var(--v-white); opacity:0.85; }
+  .tag-inv.neutral .dot { background:var(--v-white); }
+
+  /* Category chip — tight padding, dot + neutral white surface */
+  .cchip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 8px;
+           border-radius:4px; font-weight:500; font-size:12px; color:#1A1815;
+           background:var(--v-white); border:1px solid var(--v-fg-10); }
+  .cchip .cdot { width:6px; height:6px; border-radius:999px; flex-shrink:0; }
+  .cdot.c1 { background:#C0512E; }
+  .cdot.c2 { background:#33614D; }
+  .cdot.c3 { background:#0F2A47; }
+  .cdot.c4 { background:#1A1815; }
+
+  /* Numeric badges */
+  .num { min-width:18px; height:18px; padding:0 5px; border-radius:999px; font-weight:700; font-size:10px;
+         display:inline-flex; align-items:center; justify-content:center; font-feature-settings: "tnum" on; }
+  .num--terra   { background:#C0512E; color:var(--v-white); }
+  .num--neutral { background:#F3EDE6; color:#3A352F; }
+</style></head>
+<body>
+
+  <div class="lbl">Tinted · soft fill, same-color text</div>
+  <div class="row">
+    <span class="tag neutral">Neutre</span>
+    <span class="tag terra">Terracotta</span>
+    <span class="tag green">Vert anglais</span>
+    <span class="tag blue">Bleu de Prusse</span>
+    <span class="tag yellow">Safran</span>
+  </div>
+  <div class="row">
+    <span class="tag terra"><span class="dot"></span>En cours</span>
+    <span class="tag green"><span class="dot"></span>Validé</span>
+    <span class="tag blue"><span class="dot"></span>Information</span>
+    <span class="tag yellow"><span class="dot"></span>Attention</span>
+  </div>
+
+  <div class="lbl" style="margin-top: 8px">Inverted · solid color, white text</div>
+  <div class="row">
+    <span class="tag-inv neutral">Neutre</span>
+    <span class="tag-inv terra">Terracotta</span>
+    <span class="tag-inv green">Vert anglais</span>
+    <span class="tag-inv blue">Bleu de Prusse</span>
+    <span class="tag-inv yellow">Safran</span>
+  </div>
+  <div class="row">
+    <span class="tag-inv terra"><span class="dot"></span>En cours</span>
+    <span class="tag-inv green"><span class="dot"></span>Validé</span>
+    <span class="tag-inv blue"><span class="dot"></span>Information</span>
+    <span class="tag-inv yellow"><span class="dot"></span>Attention</span>
+  </div>
+
+  <div class="lbl" style="margin-top: 8px">Category chips · neutral surface + colored dot</div>
+  <div class="row">
+    <span class="cchip"><span class="cdot c1"></span>Immobilier</span>
+    <span class="cchip"><span class="cdot c2"></span>Patrimoine</span>
+    <span class="cchip"><span class="cdot c3"></span>Institutionnel</span>
+    <span class="cchip"><span class="cdot c4"></span>Tokenisé</span>
+    <span class="num num--terra">12</span>
+    <span class="num num--neutral">12</span>
+  </div>
+
+</body></html>

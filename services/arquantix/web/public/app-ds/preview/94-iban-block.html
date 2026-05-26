@@ -1,0 +1,162 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     IBAN / BIC display block — copyable account coordinates
+     -----------------------------------------------------------
+     A · Full block        — IBAN + BIC + account name, dual copy + share
+     B · Compact inline    — single line with masked IBAN + copy
+     C · QR + IBAN combo   — IBAN block with payment QR
+     ============================================================ */
+
+  /* A · Full coordinates card */
+  .iban {
+    width: 420px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    padding: 22px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .iban__head {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .iban__title { font-size: 12px; color: var(--v-fg-light);
+                 letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+  .iban__owner { font-size: 17px; font-weight: 700; color: var(--v-fg);
+                 line-height: 1.2; margin-top: 4px; }
+
+  .iban__row { display: flex; flex-direction: column; gap: 6px; }
+  .iban__row__label { font-size: 11px; color: var(--v-fg-light);
+                      letter-spacing: 0.04em; text-transform: uppercase;
+                      font-weight: 500; }
+  .iban__row__value {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    background: var(--v-fg-05); border-radius: 8px;
+    font-family: var(--v-font-ui);
+    font-feature-settings: "tnum" on, "lnum" on;
+    cursor: pointer;
+  }
+  .iban__row__value:hover { background: var(--v-fg-10); }
+  .iban__row__num {
+    flex: 1; font-size: 14px; font-weight: 600; color: var(--v-fg);
+    letter-spacing: 0.02em;
+  }
+  .iban__copy {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--v-white); border: 1px solid var(--v-fg-10);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--v-fg-body); cursor: pointer; flex-shrink: 0;
+  }
+  .iban__copy svg { width: 14px; height: 14px; display: block; }
+  .iban__copy:hover { background: var(--v-fg-05); }
+
+  .iban__cta-row { display: flex; gap: 8px; }
+  .iban__cta-row .btn { flex: 1; }
+
+  /* B · Compact inline */
+  .iban-compact {
+    width: 420px; max-width: 100%;
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    background: var(--v-card-warm); border-radius: 12px;
+  }
+  .iban-compact__lbl { font-size: 12px; color: var(--v-fg-light);
+                       letter-spacing: 0.06em; text-transform: uppercase; }
+  .iban-compact__val { flex: 1; font-weight: 600; font-size: 14px;
+                       color: var(--v-fg);
+                       font-feature-settings: "tnum" on; letter-spacing: 0.02em; }
+
+  /* C · QR + IBAN */
+  .iban-qr {
+    width: 420px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    padding: 22px; display: flex; gap: 16px; align-items: center;
+  }
+  .iban-qr__code {
+    width: 96px; height: 96px;
+    background: var(--v-white); border: 1px solid var(--v-fg-10);
+    border-radius: 8px; padding: 8px; flex-shrink: 0;
+    position: relative;
+  }
+  /* Programmatic QR — abstract pattern (decorative; not a real scannable code) */
+  .iban-qr__code::before {
+    content: "";
+    position: absolute; inset: 8px;
+    background-image:
+      radial-gradient(circle at 12% 12%, var(--v-fg) 8%, transparent 9%),
+      radial-gradient(circle at 12% 88%, var(--v-fg) 8%, transparent 9%),
+      radial-gradient(circle at 88% 12%, var(--v-fg) 8%, transparent 9%),
+      linear-gradient(0deg,  transparent 50%, var(--v-fg) 50%),
+      linear-gradient(90deg, transparent 50%, var(--v-fg) 50%);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 6px 6px, 6px 6px;
+    -webkit-mask: linear-gradient(#000, #000) padding-box,
+                  linear-gradient(#000, #000);
+  }
+  .iban-qr__col { flex: 1; min-width: 0;
+                  display: flex; flex-direction: column; gap: 4px; }
+  .iban-qr__owner { font-size: 15px; font-weight: 700; color: var(--v-fg); }
+  .iban-qr__num   { font-size: 12px; color: var(--v-fg-body);
+                    font-feature-settings: "tnum" on; word-break: break-all; }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">A · Full IBAN + BIC card · dual copy</p>
+  <div class="iban">
+    <div class="iban__head">
+      <div>
+        <div class="iban__title">Compte Euro</div>
+        <div class="iban__owner">Jean Dupont</div>
+      </div>
+      <button class="ic-btn" aria-label="Partager">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>
+      </button>
+    </div>
+
+    <div class="iban__row">
+      <span class="iban__row__label">IBAN</span>
+      <div class="iban__row__value">
+        <span class="iban__row__num">FR76 1820 6004 5712 4827 9100 184</span>
+        <button class="iban__copy" aria-label="Copier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+      </div>
+    </div>
+
+    <div class="iban__row">
+      <span class="iban__row__label">BIC / SWIFT</span>
+      <div class="iban__row__value">
+        <span class="iban__row__num">VANCFRPP</span>
+        <button class="iban__copy" aria-label="Copier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+      </div>
+    </div>
+
+    <div class="iban__cta-row">
+      <button class="btn btn--secondary">Télécharger RIB</button>
+      <button class="btn btn--primary">Partager</button>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">B · Compact inline · single line masked</p>
+  <div class="iban-compact">
+    <span class="iban-compact__lbl">IBAN</span>
+    <span class="iban-compact__val">FR76 •••• •••• •••• 9100 184</span>
+    <button class="iban__copy" aria-label="Copier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+  </div>
+
+  <p class="v-eyebrow--sm">C · QR + coordonnées (paiement P2P)</p>
+  <div class="iban-qr">
+    <div class="iban-qr__code"></div>
+    <div class="iban-qr__col">
+      <span class="iban-qr__owner">Jean Dupont</span>
+      <span class="iban-qr__num">FR76 1820 6004 5712 4827 9100 184</span>
+      <span style="font-size:12px;color:var(--v-fg-light);margin-top:4px">Scannez pour envoyer un virement</span>
+    </div>
+  </div>
+
+</body></html>

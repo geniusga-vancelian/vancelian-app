@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+  .news { width: 480px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+  /* Card padding shrinks to 2px so the media sits flush with 2px from the edges.
+     Text body keeps its own internal padding for breathing room. */
+  .news__card {
+    width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch;
+    box-shadow: 0 2px 6px rgba(26,24,21,0.05);
+  }
+  .news__body { flex: 1; min-width: 0;
+                padding: 14px 12px 14px 14px;
+                display: flex; flex-direction: column; justify-content: center; }
+  .news__title { font-weight: 700; font-size: 17px; line-height: 1.25; color: var(--v-fg); margin: 0 0 6px; }
+  .news__sub   { font-size: 14px; color: var(--v-fg-light); line-height: 1.45; margin: 0; }
+  .news__media {
+    width: 96px; flex-shrink: 0; align-self: stretch;
+    /* Inner radius = outer (16) − gap (2) = 14, applied on all 4 corners
+       so the image silhouette is parallel to the card's outer corners. */
+    border-radius: 14px;
+    background: linear-gradient(135deg, #B7CFE6 0%, #5e83ad 60%, #1F3C5C 100%);
+  }
+
+  .dots { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .dots span { width: 6px; height: 6px; border-radius: 999px; background: var(--v-fg-10);
+               transition: width 200ms; }
+  .dots span.on { width: 24px; background: var(--v-fg); }
+</style></head>
+<body>
+  <div class="news">
+    <div class="news__card">
+      <div class="news__body">
+        <h3 class="news__title">Post hanc adclinis Liban</h3>
+        <p class="news__sub">Sidon et Berytus isdemque pares Emissa et Damascus saeculis.</p>
+      </div>
+      <div class="news__media"></div>
+    </div>
+    <div class="dots">
+      <span class="on"></span><span></span><span></span><span></span><span></span>
+    </div>
+  </div>
+</body></html>

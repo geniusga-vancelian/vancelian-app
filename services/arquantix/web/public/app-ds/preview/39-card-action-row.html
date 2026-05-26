@@ -1,0 +1,153 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 14px; align-items: center;
+         justify-content: center; min-height: 100vh; }
+
+  .row {
+    width: 480px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch;
+    cursor: pointer;
+    transition: background 120ms var(--v-ease-out), border-color 120ms var(--v-ease-out);
+    min-height: 72px; /* gives the avatar a 68×68 square (72 − 2×2 padding) */
+  }
+  .row:hover { background: var(--v-fg-05); }
+
+  .row__avatar {
+    width: 68px; flex-shrink: 0; align-self: stretch;
+    /* Concentric with the card: outer 16 − border 1 − padding 2 = 13 */
+    border-radius: 13px;
+    background: var(--v-card-warm); color: var(--v-fg-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .row__avatar::before {
+    content: ""; width: 28px; height: 28px;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-image: url("/icons/kalai/user-group.svg");
+            mask-image: url("/icons/kalai/user-group.svg");
+  }
+
+  .row__body {
+    flex: 1; min-width: 0;
+    padding: 12px 0 12px 16px;
+    display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  }
+  .row__title { font-weight: 700; font-size: 17px; line-height: 1.25; color: var(--v-fg); margin: 0; }
+  .row__sub   { font-size: 14px; color: var(--v-fg-light); line-height: 1.4; margin: 0; }
+
+  /* Trailing slot */
+  .row__trailing { align-self: center; margin-right: 16px; display: inline-flex; align-items: center; flex-shrink: 0; }
+
+  .chv {
+    width: 22px; height: 22px;
+    background: var(--v-fg-light);
+    -webkit-mask: url("/icons/kalai/chevron-right.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/chevron-right.svg") center/contain no-repeat;
+  }
+  .trail-text { font-size: 15px; font-weight: 600; color: var(--v-fg);
+                font-feature-settings: "tnum" on; }
+  .trail-btn {
+    display: inline-flex; align-items: center; height: 36px; padding: 0 18px;
+    border-radius: 999px; background: var(--v-fg); color: var(--v-white);
+    font-weight: 600; font-size: 13px; border: 0; cursor: pointer;
+  }
+  .trail-btn--outline { background: transparent; color: var(--v-fg); border: 1px solid var(--v-fg); }
+
+  /* Toggle / Checkbox / Radio : usage DS primitives (.tgl / .cbx / .rad) */
+
+  /* Selected card outlines (two options to choose from) */
+  .row.is-selected-fg    { border-color: var(--v-fg); }
+  .row.is-selected-terra { border-color: var(--v-terracotta); }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start; margin: 6px 0 -4px; }
+</style></head>
+<body>
+
+  <p class="lbl">Default · chevron</p>
+  <div class="row">
+    <div class="row__avatar"></div>
+    <div class="row__body">
+      <h3 class="row__title">Voir l'équipe du projet</h3>
+    </div>
+    <div class="row__trailing"><span class="chv"></span></div>
+  </div>
+
+  <p class="lbl">With descriptive subtitle</p>
+  <div class="row">
+    <div class="row__avatar"></div>
+    <div class="row__body">
+      <h3 class="row__title">Voir l'équipe du projet</h3>
+      <p class="row__sub">12 personnes · porteurs &amp; partenaires</p>
+    </div>
+    <div class="row__trailing"><span class="chv"></span></div>
+  </div>
+
+  <p class="lbl">Trailing text (replaces chevron)</p>
+  <div class="row">
+    <div class="row__avatar"></div>
+    <div class="row__body">
+      <h3 class="row__title">Voir l'équipe du projet</h3>
+      <p class="row__sub">12 personnes</p>
+    </div>
+    <div class="row__trailing"><span class="trail-text">12 membres</span></div>
+  </div>
+
+  <p class="lbl">Trailing button</p>
+  <div class="row">
+    <div class="row__avatar"></div>
+    <div class="row__body">
+      <h3 class="row__title">Voir l'équipe du projet</h3>
+      <p class="row__sub">12 personnes · porteurs &amp; partenaires</p>
+    </div>
+    <div class="row__trailing"><button class="trail-btn">Découvrir</button></div>
+  </div>
+
+  <p class="lbl">Trailing toggle</p>
+  <div class="row">
+    <div class="row__avatar"></div>
+    <div class="row__body">
+      <h3 class="row__title">Notifications de l'équipe</h3>
+      <p class="row__sub">Recevez chaque mise à jour</p>
+    </div>
+    <div class="row__trailing"><span class="tgl is-on"></span></div>
+  </div>
+
+  <p class="lbl">Trailing checkbox · selected = fg border</p>
+  <div class="row is-selected-fg">
+    <div class="row__avatar"></div>
+    <div class="row__body">
+      <h3 class="row__title">Voir l'équipe du projet</h3>
+      <p class="row__sub">Inclure les CV anonymisés</p>
+    </div>
+    <div class="row__trailing"><span class="cbx is-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span></div>
+  </div>
+
+  <p class="lbl">Trailing radio · selected = terracotta border</p>
+  <div class="row is-selected-terra">
+    <div class="row__avatar"></div>
+    <div class="row__body">
+      <h3 class="row__title">Voir l'équipe du projet</h3>
+      <p class="row__sub">Option par défaut</p>
+    </div>
+    <div class="row__trailing"><span class="rad is-on"></span></div>
+  </div>
+
+  <p class="lbl">Trailing radio · not selected</p>
+  <div class="row">
+    <div class="row__avatar"></div>
+    <div class="row__body">
+      <h3 class="row__title">Voir l'équipe du projet</h3>
+      <p class="row__sub">Autre option</p>
+    </div>
+    <div class="row__trailing"><span class="rad"></span></div>
+  </div>
+
+</body></html>

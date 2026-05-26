@@ -1,0 +1,158 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 20px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Toast / snackbar — transient feedback
+     -----------------------------------------------------------
+     Two surfaces:
+       .toast            — DARK (anthracite) · default, high contrast
+                           Uses semantic colors *-on-dark (lisibles
+                           sur fond foncé, voir colors_and_type.css)
+       .toast--light     — LIGHT (white card)  · for inline page
+                           confirmations
+     -----------------------------------------------------------
+     Anatomy:
+       .toast__icon      — leading status glyph
+       .toast__body      — message (single-line, truncate)
+       .toast__action    — text button (.btn--link style, NO underline)
+       .toast__close     — round close (28 px)
+     ============================================================ */
+  .toast {
+    width: 380px; max-width: 100%;
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 12px 14px 12px 16px;
+    background: var(--v-fg); color: var(--v-white);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(26,24,21,0.22);
+    font-family: var(--v-font-ui); font-weight: 500; font-size: 14px;
+    line-height: 1.3;
+  }
+  .toast__icon {
+    width: 20px; height: 20px; flex-shrink: 0;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic-check { -webkit-mask-image: url("/icons/kalai/check-circle.svg"); mask-image: url("/icons/kalai/check-circle.svg"); }
+  .ic-alert { -webkit-mask-image: url("/icons/kalai/exclamation-folder.svg"); mask-image: url("/icons/kalai/exclamation-folder.svg"); }
+  .ic-info  { -webkit-mask-image: url("/icons/kalai/info.svg");        mask-image: url("/icons/kalai/info.svg"); }
+  .ic-link  { -webkit-mask-image: url("/icons/kalai/link-1.svg");      mask-image: url("/icons/kalai/link-1.svg"); }
+
+  .toast__body { flex: 1; min-width: 0;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Action = .btn--link API, no underline (le DS n'autorise pas le souligné).
+     Sur dark surface, on utilise --v-terracotta-on-dark pour lisibilité. */
+  .toast__action {
+    background: none; border: 0; padding: 0;
+    color: var(--v-terracotta-on-dark);
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 14px;
+    cursor: pointer; flex-shrink: 0;
+    transition: opacity 120ms;
+  }
+  .toast__action:hover { opacity: 0.8; }
+
+  .toast__close {
+    width: 28px; height: 28px; border-radius: 999px;
+    background: rgba(255,255,255,0.10); color: var(--v-white);
+    border: 0; cursor: pointer; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .toast__close::before {
+    content: ""; width: 12px; height: 12px; background: currentColor;
+    -webkit-mask-image: url("/icons/kalai/remove.svg"); mask-image: url("/icons/kalai/remove.svg");
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+
+  /* ============================================================
+     Status colors — DARK surface
+     Use --v-*-on-dark tokens (defined in DS for legibility on anthracite)
+     ============================================================ */
+  .toast--success .toast__icon { color: var(--v-green-on-dark); }
+  .toast--error   .toast__icon { color: var(--v-error-on-dark); }
+  .toast--info    .toast__icon { color: var(--v-blue-on-dark); }
+  .toast--warn    .toast__icon { color: var(--v-yellow-on-dark); }
+
+  /* ============================================================
+     LIGHT variant — white surface, inline page feedback
+     ============================================================ */
+  .toast--light {
+    background: var(--v-white); color: var(--v-fg);
+    border: 1px solid var(--v-fg-10);
+    box-shadow: var(--v-elev-subtle);
+  }
+  .toast--light .toast__close { background: var(--v-fg-05); color: var(--v-fg); }
+  .toast--light .toast__action { color: var(--v-terracotta); }
+
+  .toast--light.toast--success .toast__icon { color: var(--v-green); }
+  .toast--light.toast--error   .toast__icon { color: var(--v-error); }
+  .toast--light.toast--info    .toast__icon { color: var(--v-blue); }
+  .toast--light.toast--warn    .toast__icon { color: var(--v-yellow); }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">Dark · success · color = --v-green-on-dark</p>
+  <div class="toast toast--success">
+    <span class="toast__icon ic-check"></span>
+    <span class="toast__body">Virement de 1 250,00 € envoyé.</span>
+    <button class="toast__action">Voir</button>
+  </div>
+
+  <p class="v-eyebrow--sm">Dark · error · color = --v-error-on-dark</p>
+  <div class="toast toast--error">
+    <span class="toast__icon ic-alert"></span>
+    <span class="toast__body">Impossible de joindre la banque.</span>
+    <button class="toast__action">Réessayer</button>
+  </div>
+
+  <p class="v-eyebrow--sm">Dark · info · color = --v-blue-on-dark</p>
+  <div class="toast toast--info">
+    <span class="toast__icon ic-info"></span>
+    <span class="toast__body">Nouvelle version disponible — redémarrez l'app.</span>
+    <button class="toast__close" aria-label="Fermer"></button>
+  </div>
+
+  <p class="v-eyebrow--sm">Dark · warning · color = --v-yellow-on-dark</p>
+  <div class="toast toast--warn">
+    <span class="toast__icon ic-alert"></span>
+    <span class="toast__body">Solde insuffisant pour ce versement.</span>
+    <button class="toast__action">Ajuster</button>
+  </div>
+
+  <p class="v-eyebrow--sm">Dark · neutral (no status accent)</p>
+  <div class="toast">
+    <span class="toast__icon ic-link"></span>
+    <span class="toast__body">IBAN copié dans le presse-papier.</span>
+  </div>
+
+  <p class="v-eyebrow--sm">Dark · with undo</p>
+  <div class="toast toast--success">
+    <span class="toast__icon ic-check"></span>
+    <span class="toast__body">Transaction archivée.</span>
+    <button class="toast__action">Annuler</button>
+  </div>
+
+  <p class="v-eyebrow--sm">Light · inline page confirmation</p>
+  <div class="toast toast--light toast--success">
+    <span class="toast__icon ic-check"></span>
+    <span class="toast__body">Vos préférences ont été enregistrées.</span>
+    <button class="toast__close" aria-label="Fermer"></button>
+  </div>
+
+  <p class="v-eyebrow--sm">Light · error</p>
+  <div class="toast toast--light toast--error">
+    <span class="toast__icon ic-alert"></span>
+    <span class="toast__body">Le code OTP a expiré.</span>
+    <button class="toast__action">Renvoyer</button>
+  </div>
+
+</body></html>

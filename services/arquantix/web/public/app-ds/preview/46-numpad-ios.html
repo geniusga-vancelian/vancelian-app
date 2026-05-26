@@ -1,0 +1,106 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 24px;
+         align-items: center; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Numpad — rectangle keys, iOS-style.
+     3-column grid · 4 rows · row 4 = [empty / 0 / backspace]
+     Keys are white rounded rectangles with a soft shadow,
+     digit centered, optional T9 letter subtitle below.
+     ============================================================ */
+  .numpad {
+    width: 360px; max-width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .key {
+    height: 64px;
+    background: var(--v-white);
+    border: 1px solid rgba(26,24,21,0.04);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(26,24,21,0.04),
+                0 2px 8px rgba(26,24,21,0.06);
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px;
+    transition: background 120ms var(--v-ease-out), transform 80ms var(--v-ease-out);
+  }
+  .key:hover  { background: #F7F5F1; }
+  .key:active { transform: scale(0.97); }
+
+  .key__digit {
+    font-family: var(--v-font-ui); font-weight: 500;
+    font-size: 28px; line-height: 1; color: var(--v-fg);
+    font-feature-settings: "tnum" on, "lnum" on;
+  }
+  .key__t9 {
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 10px;
+    color: var(--v-fg-light); letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  /* Backspace key — ghost variant (no shadow, no border) */
+  .key--ghost {
+    background: transparent;
+    border: 0; box-shadow: none;
+  }
+  .key--ghost:hover { background: rgba(26,24,21,0.04); }
+  .key__icon {
+    width: 28px; height: 28px;
+    background: var(--v-fg);
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .key__icon--backspace { -webkit-mask-image: url("/icons/kalai/backspace.svg"); mask-image: url("/icons/kalai/backspace.svg"); }
+  .key__icon--decimal   { /* decorative dot */ }
+
+  /* Variant — no T9 letters (cleaner / pure numeric) */
+  .numpad--plain .key { height: 56px; }
+  .numpad--plain .key__digit { font-size: 26px; }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start;
+         margin: 6px 0 -8px; }
+</style></head>
+<body>
+
+  <p class="lbl">Default · with T9 letters</p>
+  <div class="numpad">
+    <button class="key"><span class="key__digit">1</span><span class="key__t9">&nbsp;</span></button>
+    <button class="key"><span class="key__digit">2</span><span class="key__t9">ABC</span></button>
+    <button class="key"><span class="key__digit">3</span><span class="key__t9">DEF</span></button>
+    <button class="key"><span class="key__digit">4</span><span class="key__t9">GHI</span></button>
+    <button class="key"><span class="key__digit">5</span><span class="key__t9">JKL</span></button>
+    <button class="key"><span class="key__digit">6</span><span class="key__t9">MNO</span></button>
+    <button class="key"><span class="key__digit">7</span><span class="key__t9">PQRS</span></button>
+    <button class="key"><span class="key__digit">8</span><span class="key__t9">TUV</span></button>
+    <button class="key"><span class="key__digit">9</span><span class="key__t9">WXYZ</span></button>
+    <button class="key key--ghost"><span class="key__digit" style="color:var(--v-fg-light)">.</span></button>
+    <button class="key"><span class="key__digit">0</span></button>
+    <button class="key key--ghost"><span class="key__icon key__icon--backspace"></span></button>
+  </div>
+
+  <p class="lbl">Plain · pure numeric (no T9)</p>
+  <div class="numpad numpad--plain">
+    <button class="key"><span class="key__digit">1</span></button>
+    <button class="key"><span class="key__digit">2</span></button>
+    <button class="key"><span class="key__digit">3</span></button>
+    <button class="key"><span class="key__digit">4</span></button>
+    <button class="key"><span class="key__digit">5</span></button>
+    <button class="key"><span class="key__digit">6</span></button>
+    <button class="key"><span class="key__digit">7</span></button>
+    <button class="key"><span class="key__digit">8</span></button>
+    <button class="key"><span class="key__digit">9</span></button>
+    <button class="key key--ghost"><span class="key__digit" style="color:var(--v-fg-light)">,</span></button>
+    <button class="key"><span class="key__digit">0</span></button>
+    <button class="key key--ghost"><span class="key__icon key__icon--backspace"></span></button>
+  </div>
+
+</body></html>

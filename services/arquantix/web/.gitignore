@@ -1,3 +1,6 @@
+# Handoff DS zip extrait localement (App Vancelian.zip)
+.ds-handoff/
+
 node_modules/
 .next/
 package-lock.json

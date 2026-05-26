@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+  .analysis {
+    width: 520px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  .step { position: relative; display: flex; gap: 16px; align-items: flex-start; }
+
+  /* Solid connector between steps — DS rule: never dotted/dashed */
+  .step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 14px; /* center of the 28-px num circle minus half line width */
+    top: 32px;
+    bottom: -22px;
+    border-left: 1.5px solid var(--v-fg-10);
+    z-index: 0;
+  }
+
+  .step__num {
+    width: 28px; height: 28px; border-radius: 999px; flex-shrink: 0;
+    background: var(--v-card-warm); color: var(--v-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--v-font-ui); font-weight: 600; font-size: 13px;
+    font-feature-settings: "tnum" on;
+    border: 1px solid var(--v-fg-10);
+    position: relative; z-index: 1; /* sits above the connector */
+  }
+
+  .step__body { flex: 1; min-width: 0; padding-top: 2px;
+                display: flex; flex-direction: column; gap: 6px; }
+  .step__title {
+    font-weight: 700; font-size: 17px; line-height: 1.25; color: var(--v-fg);
+  }
+  /* Highlighted info — bleu de Prusse (the only blue in the system, used for info) */
+  .step__highlight {
+    font-weight: 600; font-size: 16px; line-height: 1.35; color: var(--v-blue);
+    font-feature-settings: "tnum" on;
+  }
+  .step__desc {
+    font-size: 14px; line-height: 1.5; color: var(--v-fg-light);
+  }
+</style></head>
+<body>
+  <div class="analysis">
+
+    <div class="step">
+      <span class="step__num">1</span>
+      <div class="step__body">
+        <div class="step__title">Analyse de prix</div>
+        <div class="step__highlight">BTC&nbsp;→&nbsp;EUR&nbsp;|&nbsp;Price:&nbsp;60 000,00&nbsp;€</div>
+        <div class="step__desc">Prix estimé par analyse des meilleures offres du marché</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="step__num">2</span>
+      <div class="step__body">
+        <div class="step__title">Conversion estimée</div>
+        <div class="step__highlight">120&nbsp;€&nbsp;→&nbsp;0,0019458&nbsp;BTC</div>
+        <div class="step__desc">Montant estimé par rapport au prix du marché</div>
+      </div>
+    </div>
+
+  </div>
+</body></html>

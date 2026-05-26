@@ -1,0 +1,199 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Card management — gestion de la carte bancaire
+     -----------------------------------------------------------
+     Anatomy :
+       .cmgr               — full panel
+       .cmgr__visual       — card hero (anthracite gradient)
+       .cmgr__quick        — quick toggles row (lock, contactless, payments)
+       .cmgr__list         — settings rows (limit, code, etc.)
+     Card visual reuses 51-credit-card-visual aesthetics
+     ============================================================ */
+  .cmgr {
+    width: 420px; max-width: 100%;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+
+  /* Visual hero (compact card) */
+  .cmgr__visual {
+    aspect-ratio: 16 / 10;
+    background:
+      radial-gradient(120% 80% at 25% 25%, #2A2725 0%, #1A1815 60%, #0B0A09 100%);
+    border-radius: 16px;
+    padding: 18px;
+    color: var(--v-white);
+    display: flex; flex-direction: column; justify-content: space-between;
+    position: relative; overflow: hidden;
+  }
+  .cmgr__visual__top { display: flex; align-items: flex-start; justify-content: space-between; }
+  .cmgr__visual__brand { font-family: var(--v-font-editorial); font-weight: 400;
+                         font-size: 16px; letter-spacing: 0.4em; }
+  .cmgr__visual__type  { font-size: 11px; opacity: 0.7; letter-spacing: 0.06em;
+                         text-transform: uppercase; font-weight: 600; }
+  .cmgr__visual__num   { font-family: var(--v-font-mono); font-weight: 500;
+                         font-size: 14px; letter-spacing: 0.18em; opacity: 0.85;
+                         font-feature-settings: "tnum" on; }
+  .cmgr__visual__name  { font-size: 13px; font-weight: 600;
+                         text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* Quick toggles row */
+  .cmgr__quick {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .cmgr__quick__btn {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 14px 8px;
+    background: var(--v-white); border-radius: 12px;
+    border: 1px solid var(--v-fg-10); cursor: pointer;
+    transition: background 120ms;
+  }
+  .cmgr__quick__btn:hover { background: var(--v-fg-05); }
+  .cmgr__quick__btn.is-on { background: var(--v-fg); color: var(--v-white); border-color: var(--v-fg); }
+  .cmgr__quick__btn__icon {
+    width: 36px; height: 36px; border-radius: 999px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .cmgr__quick__btn.is-on .cmgr__quick__btn__icon {
+    background: rgba(255,255,255,0.16); color: var(--v-white);
+  }
+  .cmgr__quick__btn__icon .ic {
+    width: 18px; height: 18px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic--lock     { -webkit-mask-image: url("/icons/kalai/lock-1.svg");     mask-image: url("/icons/kalai/lock-1.svg"); }
+  .ic--wifi     { -webkit-mask-image: url("/icons/kalai/wifi.svg");        mask-image: url("/icons/kalai/wifi.svg"); }
+  .ic--shopping { -webkit-mask-image: url("/icons/kalai/shopping-bag.svg"); mask-image: url("/icons/kalai/shopping-bag.svg"); }
+  .ic--euro     { -webkit-mask-image: url("/icons/kalai/dollar.svg");      mask-image: url("/icons/kalai/dollar.svg"); }
+  .ic--key      { -webkit-mask-image: url("/icons/kalai/key-1.svg");       mask-image: url("/icons/kalai/key-1.svg"); }
+  .ic--plus     { -webkit-mask-image: url("/icons/kalai/add.svg");         mask-image: url("/icons/kalai/add.svg"); }
+  .ic--info     { -webkit-mask-image: url("/icons/kalai/info.svg");        mask-image: url("/icons/kalai/info.svg"); }
+  .ic--delete   { -webkit-mask-image: url("/icons/kalai/delete.svg");      mask-image: url("/icons/kalai/delete.svg"); }
+  .cmgr__quick__btn__label { font-size: 11px; font-weight: 600; }
+
+  /* Settings list (reuses .stg pattern, simplified) */
+  .cmgr__list {
+    background: var(--v-white); border-radius: 16px;
+    border: 1px solid var(--v-fg-10);
+    overflow: hidden;
+  }
+  .cmgr__row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--v-fg-10);
+    cursor: pointer;
+  }
+  .cmgr__row:first-child { border-top: 0; }
+  .cmgr__row:hover { background: var(--v-fg-05); }
+  .cmgr__row__lead {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .cmgr__row__lead .ic {
+    width: 16px; height: 16px; background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .cmgr__row__body { flex: 1; min-width: 0;
+                     display: flex; flex-direction: column; gap: 2px; }
+  .cmgr__row__title { font-size: 14px; font-weight: 600; color: var(--v-fg); }
+  .cmgr__row__sub   { font-size: 12px; color: var(--v-fg-light); }
+  .cmgr__row__trail { display: inline-flex; align-items: center; gap: 8px;
+                      flex-shrink: 0; font-size: 14px; color: var(--v-fg-light); }
+  .cmgr__row__chev  { color: var(--v-fg-20); }
+  .cmgr__row__chev svg { width: 18px; height: 18px; display: block; }
+  .cmgr__row.is-danger .cmgr__row__lead { background: var(--v-error-bg); color: var(--v-error); }
+  .cmgr__row.is-danger .cmgr__row__title { color: var(--v-error); }
+</style></head>
+<body>
+
+  <div class="cmgr">
+
+    <!-- Card visual -->
+    <div class="cmgr__visual">
+      <div class="cmgr__visual__top">
+        <span class="cmgr__visual__brand">VANCELIAN</span>
+        <span class="cmgr__visual__type">Premium</span>
+      </div>
+      <div>
+        <div class="cmgr__visual__num">•••• •••• •••• 4827</div>
+        <div class="cmgr__visual__name" style="margin-top:6px">Jean Dupont</div>
+      </div>
+    </div>
+
+    <!-- Quick toggles -->
+    <div class="cmgr__quick">
+      <button class="cmgr__quick__btn">
+        <span class="cmgr__quick__btn__icon"><span class="ic ic--lock"></span></span>
+        <span class="cmgr__quick__btn__label">Bloquer</span>
+      </button>
+      <button class="cmgr__quick__btn is-on">
+        <span class="cmgr__quick__btn__icon"><span class="ic ic--wifi"></span></span>
+        <span class="cmgr__quick__btn__label">Sans contact</span>
+      </button>
+      <button class="cmgr__quick__btn is-on">
+        <span class="cmgr__quick__btn__icon"><span class="ic ic--shopping"></span></span>
+        <span class="cmgr__quick__btn__label">En ligne</span>
+      </button>
+    </div>
+
+    <!-- Settings list -->
+    <div class="cmgr__list">
+      <div class="cmgr__row">
+        <span class="cmgr__row__lead"><span class="ic ic--euro"></span></span>
+        <div class="cmgr__row__body">
+          <span class="cmgr__row__title">Plafond mensuel</span>
+          <span class="cmgr__row__sub">2 480 € sur 5 000 € utilisés</span>
+        </div>
+        <div class="cmgr__row__trail">
+          5 000&nbsp;€
+          <span class="cmgr__row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+        </div>
+      </div>
+      <div class="cmgr__row">
+        <span class="cmgr__row__lead"><span class="ic ic--key"></span></span>
+        <div class="cmgr__row__body">
+          <span class="cmgr__row__title">Code PIN</span>
+          <span class="cmgr__row__sub">Modifié il y a 3 mois</span>
+        </div>
+        <span class="cmgr__row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+      <div class="cmgr__row">
+        <span class="cmgr__row__lead"><span class="ic ic--plus"></span></span>
+        <div class="cmgr__row__body">
+          <span class="cmgr__row__title">Carte virtuelle</span>
+          <span class="cmgr__row__sub">Pour vos achats en ligne</span>
+        </div>
+        <span class="cmgr__row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+      <div class="cmgr__row">
+        <span class="cmgr__row__lead"><span class="ic ic--info"></span></span>
+        <div class="cmgr__row__body">
+          <span class="cmgr__row__title">Détails de la carte</span>
+        </div>
+        <span class="cmgr__row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+      <div class="cmgr__row is-danger">
+        <span class="cmgr__row__lead"><span class="ic ic--delete"></span></span>
+        <div class="cmgr__row__body">
+          <span class="cmgr__row__title">Déclarer perdue / volée</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</body></html>

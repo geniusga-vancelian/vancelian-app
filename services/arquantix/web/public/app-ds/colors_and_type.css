@@ -1,0 +1,767 @@
+/* ======================================================================
+   Vancelian Design System — colors_and_type.css
+   Premium discret · références Aman, Hermès, Cereal Magazine
+   Source: vancelian-brief-claude-design.md, vancelian-tokens-*.json
+   ====================================================================== */
+
+/* -- Webfonts -------------------------------------------------------- */
+/* Inter via Google Fonts (DS rule: 90% of UI). Weights 400/500/600/700.
+   Loaded from CDN to keep the project lean — Inter is the official UI face. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+/* Newsreader self-hosted (10% editorial / brand voice). Subset of weights;
+   we ship 14pt, 24pt, and 60pt optical sizes — the DS demands true optical
+   sizing, not synthetic scaling. */
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 300;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/newsreader/Newsreader_24pt-Light.ttf") format("truetype");
+  size-adjust: 100%;
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: italic;
+  font-weight: 300;
+  src: url("/fonts/newsreader/Newsreader_24pt-LightItalic.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 400;
+  src: url("/fonts/newsreader/Newsreader_24pt-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: italic;
+  font-weight: 400;
+  src: url("/fonts/newsreader/Newsreader_24pt-Italic.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 500;
+  src: url("/fonts/newsreader/Newsreader_24pt-Medium.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 600;
+  src: url("/fonts/newsreader/Newsreader_24pt-SemiBold.ttf") format("truetype");
+  font-display: swap;
+}
+/* Display optical size — for 60–96px hero / editorial display */
+@font-face {
+  font-family: "Newsreader Display";
+  font-style: normal;
+  font-weight: 300;
+  src: url("/fonts/newsreader/Newsreader_60pt-Light.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader Display";
+  font-style: italic;
+  font-weight: 300;
+  src: url("/fonts/newsreader/Newsreader_60pt-LightItalic.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader Display";
+  font-style: normal;
+  font-weight: 400;
+  src: url("/fonts/newsreader/Newsreader_60pt-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  /* ============================================================
+     COLORS — Light theme (default)
+     ============================================================ */
+
+  /* Backgrounds — papier off-white, jamais blanc pur */
+  --v-bg:           #F7F7F4;   /* fond produit principal */
+  --v-bg-photo:     #F5F1EA;   /* fond planches photo (légèrement plus chaud) */
+  --v-card:         #F2F1ED;   /* carte niveau 1 */
+  --v-card-warm:    #F3EDE6;   /* carte warm — testimonials, marketing */
+  --v-card-hover:   #EBEAE5;
+  --v-dark-bg:      #141208;   /* dark mode bg / footer */
+
+  /* Foregrounds — anthracite, jamais noir pur */
+  --v-fg:        #1A1815;     /* anthracite principal */
+  --v-fg-body:   #3A352F;
+  --v-fg-muted:  #6E665C;
+  --v-fg-light:  #8E867A;
+  --v-fg-20:     #C9C3B5;     /* disabled, muted borders */
+  --v-fg-10:     #E2DED4;     /* dividers, disabled bg */
+  --v-fg-05:     #EFEDE6;     /* subtle backgrounds */
+  --v-dark-fg:   #EDECEC;
+  --v-white:     #FFFFFF;     /* pur — élévation au-dessus de --v-bg/card, texte sur fond solide */
+
+  /* Input-specific neutrals (inputs / dropdowns / search field) */
+  --v-input-border:          #D9D4CC;   /* border default */
+  --v-input-disabled-bg:     #E8E4DD;
+  --v-input-disabled-border: #DAD5CB;
+
+  /* Foreground hover — used by primary buttons (.btn--primary:hover) */
+  --v-fg-hover: #3B3633;
+
+  /* Triade chromatique identitaire (jamais simultanée en aplat) */
+  --v-terracotta:         #C0512E;     /* PRIMAIRE — accent unique de marque */
+  --v-terracotta-pressed: #A0431C;
+  --v-terracotta-bg:      #C0512E26;   /* 15% — fonds doux */
+  --v-terracotta-bg-strong:#C0512E40;  /* 25% — hover sur fond accent */
+
+  --v-green:     #33614D;   /* vert anglais — success / patrimoine */
+  --v-green-bg:  #33614D26;
+  --v-blue:      #0F2A47;   /* bleu de Prusse — info / institutionnel (SEUL bleu autorisé) */
+  --v-blue-bg:   #0F2A4726;
+  --v-yellow:         #C99A2E;   /* safran — WARNING (ajouté v1.1) */
+  --v-yellow-pressed: #A37D1F;
+  --v-yellow-bg:      #C99A2E26;
+  --v-yellow-bg-strong:#C99A2E40;
+
+  /* Sémantiques — la triade EST le système d'état */
+  --v-success:    var(--v-green);
+  --v-success-bg: var(--v-green-bg);
+  --v-warning:    var(--v-yellow);
+  --v-warning-bg: var(--v-yellow-bg);
+  --v-info:       var(--v-blue);
+  --v-info-bg:    var(--v-blue-bg);
+  --v-error:      #B83A3A;     /* seul rouge, hors triade */
+  --v-error-bg:   #B83A3A26;
+
+  /* ---------------------------------------------------------------
+     On-dark semantic colors — for use on anthracite / media surfaces
+     ---------------------------------------------------------------
+     Les couleurs de la triade (terracotta / green / blue / yellow /
+     error) sont calibrées pour les surfaces claires. Sur un fond
+     anthracite ou photo, elles n'ont pas assez de contraste —
+     ces variantes sont les équivalents éclaircis / désaturés.
+     ---------------------------------------------------------------- */
+  --v-terracotta-on-dark: #E5896E;   /* terracotta éclairci, lisible sur anthracite */
+  --v-green-on-dark:      #8FC9A8;   /* vert anglais éclairci */
+  --v-blue-on-dark:       #8FB4D8;   /* bleu de Prusse éclairci */
+  --v-yellow-on-dark:     #E8C778;   /* safran éclairci */
+  --v-error-on-dark:      #E89090;   /* error éclairci (corail) */
+
+  /* Backgrounds doux on dark (≈ 18 % opacity de la couleur on-dark) */
+  --v-terracotta-bg-on-dark: rgba(229, 137, 110, 0.18);
+  --v-green-bg-on-dark:      rgba(143, 201, 168, 0.18);
+  --v-blue-bg-on-dark:       rgba(143, 180, 216, 0.18);
+  --v-yellow-bg-on-dark:     rgba(232, 199, 120, 0.18);
+  --v-error-bg-on-dark:      rgba(232, 144, 144, 0.18);
+
+  /* Échelle de gris technique (Tailwind v4 inspired) — usages neutres */
+  --v-gray-50:  #F9FAFB;
+  --v-gray-200: #E5E7EB;
+  --v-gray-300: #D1D5DC;
+  --v-gray-500: #6A7282;
+  --v-gray-700: #364153;
+  --v-gray-900: #101828;
+
+  /* ============================================================
+     TYPOGRAPHY — base tokens
+     ============================================================ */
+  --v-font-ui:        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --v-font-editorial: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --v-font-display:   "Newsreader Display", "Newsreader", Georgia, serif;
+  /* Mono = Inter + tabular-nums (DS rule, no monospace face) */
+  --v-font-mono:      "Inter", system-ui, sans-serif;
+
+  --v-fw-light:    300;
+  --v-fw-regular:  400;
+  --v-fw-medium:   500;
+  --v-fw-semibold: 600;
+  --v-fw-bold:     700;
+
+  /* Line heights */
+  --v-lh-tight:    1.0;
+  --v-lh-snug:     1.05;
+  --v-lh-headline: 1.1;
+  --v-lh-headline-relaxed: 1.15;
+  --v-lh-compact:  1.2;
+  --v-lh-normal:   1.3;
+  --v-lh-relaxed:  1.4;
+  --v-lh-body:     1.45;
+  --v-lh-loose:    1.5;
+  --v-lh-editorial:1.55;
+
+  /* Letter spacing */
+  --v-ls-tight:     -0.03em;
+  --v-ls-normal:    0;
+  --v-ls-wide:      0.05em;     /* legacy eyebrow / caption */
+  --v-ls-eyebrow:   0.08em;     /* v1.1 — official eyebrow tracking */
+  --v-ls-extrawide: 0.4em;       /* wordmark */
+
+  /* ============================================================
+     SPACING — base 4px, 8 paliers stricts
+     ============================================================ */
+  --v-space-0:   0;
+  --v-space-xs:  4px;
+  --v-space-sm:  8px;
+  --v-space-md:  12px;
+  --v-space-lg:  16px;
+  --v-space-xl:  24px;
+  --v-space-2xl: 32px;
+  --v-space-3xl: 48px;
+  --v-space-4xl: 64px;
+
+  /* ============================================================
+     RADIUS — 5 paliers stricts
+     ============================================================ */
+  --v-radius-none:  0;
+  --v-radius-tag:   4px;     /* tags, badges, chips */
+  --v-radius-input: 6px;     /* inputs, dropdowns */
+  --v-radius-card:  8px;     /* cards UI standard, list items, banners */
+  --v-radius-modal: 12px;    /* modals, drawers */
+  --v-radius-sheet: 24px;    /* bottom sheets — v1.2 OFFICIAL */
+  --v-radius-lg:    16px;    /* v1.1 OFFICIAL — large card marketing */
+  --v-radius-xl:    20px;    /* v1.1 OFFICIAL — feature card */
+  --v-radius-2xl:   24px;    /* v1.1 OFFICIAL — editorial fullbleed, photo containers */
+  --v-radius-pill:  9999px;  /* buttons, toggles, tabs */
+
+  /* ============================================================
+     ELEVATION — 3 niveaux
+     ============================================================ */
+  --v-elev-flat:   none;
+  --v-elev-subtle: 0 2px 6px 0 rgba(26, 24, 21, 0.07);
+  --v-elev-medium: 0 8px 24px 0 rgba(26, 24, 21, 0.10);
+
+  /* ============================================================
+     MOTION — discret, court, naturel
+     ============================================================ */
+  --v-motion-fast:  120ms;
+  --v-motion-base:  200ms;
+  --v-motion-slow:  320ms;
+  --v-ease-out:     cubic-bezier(0.22, 1, 0.36, 1);
+  --v-ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ============================================================
+     CONTAINER — 12-col desktop, 8-col tablet, 4-col mobile
+     ============================================================ */
+  --v-container-mobile:  100%;
+  --v-container-tablet:  720px;
+  --v-container-desktop: 1280px;
+  --v-pad-mobile:  16px;
+  --v-pad-tablet:  24px;
+  --v-pad-desktop: 48px;
+}
+
+/* Dark theme — invert bg/fg, keep triade identique */
+[data-theme="dark"] {
+  --v-bg:         #141208;
+  --v-bg-photo:   #1a180e;
+  --v-card:       #1f1c14;
+  --v-card-warm:  #221e15;
+  --v-card-hover: #2a2519;
+
+  --v-fg:        #EDECEC;
+  --v-fg-body:   #D6D3CE;
+  --v-fg-muted:  #9B948A;
+  --v-fg-light:  #6E665C;
+  --v-fg-20:     #3A352F;
+  --v-fg-10:     #2A251D;
+  --v-fg-05:     #1F1C14;
+}
+
+/* ============================================================
+   SEMANTIC TYPE STYLES — composed, ready to apply
+   ============================================================ */
+
+/* UI scale (Inter) */
+.v-display    { font-family: var(--v-font-ui); font-weight: 700; font-size: 64px; line-height: 1.0;  letter-spacing: -0.03em; }
+.v-h1         { font-family: var(--v-font-ui); font-weight: 600; font-size: 44px; line-height: 1.1;  letter-spacing: 0; }
+.v-h2         { font-family: var(--v-font-ui); font-weight: 600; font-size: 30px; line-height: 1.2;  letter-spacing: 0; }
+.v-h3         { font-family: var(--v-font-ui); font-weight: 500; font-size: 22px; line-height: 1.3;  letter-spacing: 0; }
+.v-h4         { font-family: var(--v-font-ui); font-weight: 500; font-size: 17px; line-height: 1.4;  letter-spacing: 0; }
+.v-body-lg    { font-family: var(--v-font-ui); font-weight: 400; font-size: 16px; line-height: 1.5; }
+.v-body       { font-family: var(--v-font-ui); font-weight: 400; font-size: 14px; line-height: 1.5; }
+.v-body-sm    { font-family: var(--v-font-ui); font-weight: 400; font-size: 13px; line-height: 1.45; }
+
+/* Emphasis variants — same metrics, SemiBold (600) for in-line emphasis on
+   amounts, key labels inside a sentence, or callouts within a list row. */
+.v-body-strong    { font-family: var(--v-font-ui); font-weight: 600; font-size: 16px; line-height: 1.5; }
+.v-body-sm-strong { font-family: var(--v-font-ui); font-weight: 600; font-size: 13px; line-height: 1.45; }
+.v-caption-strong { font-family: var(--v-font-ui); font-weight: 600; font-size: 12px; line-height: 1.4; }
+.v-caption    {
+  /* legacy — conserver pour usages UI (table headers, breadcrumb, etc.) */
+  font-family: var(--v-font-ui); font-weight: 500; font-size: 11px;
+  line-height: 1.4; letter-spacing: 0.05em; text-transform: uppercase;
+}
+
+/* Eyebrow — v1.1 official, weight bumped to 600 (v1.2).
+   Règle d'usage : conservé UNIQUEMENT quand il apporte une info contextuelle
+   (statut « OUVERTE / FUNDED 30 % », label de champ « MIN. INVESTI »,
+   catégorie produit « OFFRES EXCLUSIVES »). Ne JAMAIS décorer un titre éditorial. */
+.v-eyebrow {
+  font-family: var(--v-font-ui); font-weight: 600; font-size: 13px;
+  line-height: 1.4; letter-spacing: var(--v-ls-eyebrow); text-transform: uppercase;
+  color: var(--v-fg-muted);
+}
+/* Variante taggée — fond card-warm, rare et signant.
+   Réservée aux eyebrows ouvrant une section (ex : « CADRE RÉGLEMENTAIRE »). */
+.v-eyebrow--tagged {
+  display: inline-block;
+  background: var(--v-card-warm);
+  padding: 4px 8px;
+  border-radius: var(--v-radius-tag);
+  color: var(--v-fg);
+}
+.v-mono       {
+  font-family: var(--v-font-mono); font-weight: 500; font-size: 13px;
+  line-height: 1.45; font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-tnum       { font-feature-settings: "tnum" on, "lnum" on; font-variant-numeric: tabular-nums; }
+
+/* Editorial scale (Newsreader) — voix de marque */
+.v-ed-display {
+  font-family: var(--v-font-display);
+  font-weight: 300; font-size: 80px; line-height: 1.05; letter-spacing: 0;
+}
+/* Editorial title large — v1.1.
+   Échelle officielle titres de section produit (ecosystem, offers, security,
+   testimonials, etc.). Remplace l'ancien clamp(40px, 4.6vw, 56px). */
+.v-ed-title-lg {
+  font-family: var(--v-font-display);
+  font-weight: 300;
+  font-size: clamp(56px, 6vw, 80px); /* 72-80px desktop, 56-72px tablet */
+  line-height: 1.1; letter-spacing: 0;
+}
+.v-ed-title {
+  /* sous-section, conservé 40-48px */
+  font-family: var(--v-font-editorial);
+  font-weight: 400; font-size: 48px; line-height: 1.15; letter-spacing: 0;
+}
+.v-ed-body {
+  font-family: var(--v-font-editorial);
+  font-weight: 400; font-size: 20px; line-height: 1.55;
+}
+.v-ed-quote {
+  font-family: var(--v-font-editorial);
+  font-weight: 300; font-style: italic;
+  font-size: 24px; line-height: 1.4;
+}
+
+/* Wordmark — Newsreader 0.4em letter-spacing, UPPERCASE */
+.v-wordmark {
+  font-family: var(--v-font-editorial);
+  font-weight: 400; font-size: 17px; line-height: 1;
+  letter-spacing: 0.4em; text-transform: uppercase;
+  color: var(--v-fg);
+}
+
+/* ============================================================
+   BASE RESET — discret, pas opinionated
+   ============================================================ */
+html, body {
+  margin: 0;
+  background: var(--v-bg);
+  color: var(--v-fg);
+  font-family: var(--v-font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+*, *::before, *::after { box-sizing: border-box; }
+
+::selection { background: var(--v-terracotta-bg-strong); color: var(--v-fg); }
+
+/* ============================================================
+   STORYTELLING FULLBLEED — v1.1 pattern
+   Image/vidéo full bleed, overlay sombre, texte blanc Newsreader,
+   1 CTA, parallax subtile. Usage strict : 2-3 max par page.
+   ============================================================ */
+.v-fullbleed-story {
+  position: relative;
+  width: 100%;
+  min-height: 80vh;
+  padding: clamp(96px, 12vw, 128px) var(--v-pad-desktop);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  color: #EDECEC;
+  background: #141208;
+}
+.v-fullbleed-story__media {
+  position: absolute;
+  inset: -10% 0 0 0;          /* room for parallax translateY */
+  width: 100%;
+  height: 120%;
+  object-fit: cover;
+  z-index: -2;
+  will-change: transform;
+}
+.v-fullbleed-story__media + .v-fullbleed-story__overlay,
+.v-fullbleed-story::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 18, 8, 0.35); /* overlay 35% */
+  z-index: -1;
+  pointer-events: none;
+}
+.v-fullbleed-story__inner {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2xl);
+}
+.v-fullbleed-story__title {
+  font-family: var(--v-font-display);
+  font-weight: 300;
+  font-size: clamp(56px, 6vw, 80px);
+  line-height: 1.1; letter-spacing: 0;
+  color: #EDECEC;
+  margin: 0;
+  text-wrap: pretty;
+}
+.v-fullbleed-story__body {
+  font-family: var(--v-font-editorial);
+  font-weight: 400; font-size: 22px; line-height: 1.55;
+  color: rgba(237, 236, 236, 0.92);
+  margin: 0;
+  text-wrap: pretty;
+}
+.v-fullbleed-story__cta {
+  display: inline-flex; align-items: center; gap: 12px;
+  align-self: flex-start;
+  font-family: var(--v-font-ui); font-weight: 500; font-size: 14px;
+  letter-spacing: 0;
+  padding: 14px 24px;
+  border-radius: var(--v-radius-pill);
+  border: 1px solid rgba(237, 236, 236, 0.6);
+  color: #EDECEC;
+  background: transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color var(--v-motion-fast) var(--v-ease-out),
+              background var(--v-motion-fast) var(--v-ease-out);
+}
+.v-fullbleed-story__cta:hover {
+  border-color: #EDECEC;
+  background: rgba(237, 236, 236, 0.06);
+}
+.v-fullbleed-story__cta-arrow {
+  display: inline-flex;
+  color: var(--v-terracotta);  /* flèche → terracotta */
+  transition: transform var(--v-motion-base) var(--v-ease-out);
+}
+.v-fullbleed-story__cta:hover .v-fullbleed-story__cta-arrow {
+  transform: translateX(4px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Parallax subtle — appliqué par JS au scroll : translateY(-10%) */
+}
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ======================================================================
+   EYEBROW SCALE — sm utility (10/11 px) for in-page section labels
+   Remplace les ~29 .lbl répétées dans les fichiers preview/
+   ====================================================================== */
+.v-eyebrow--sm {
+  font-family: var(--v-font-ui);
+  font-weight: 500; font-size: 10px;
+  line-height: 1.4; letter-spacing: var(--v-ls-eyebrow);
+  text-transform: uppercase;
+  color: var(--v-fg-light);
+}
+
+/* ======================================================================
+   COMPONENT PRIMITIVES — promoted from preview/ to DS global
+   ----------------------------------------------------------------------
+   Each primitive is the canonical implementation. Component files MAY
+   add skins / sizes / per-surface tweaks, but MUST NOT redefine the base.
+
+   Source of truth:
+     .btn       — preview/10 + 11
+     .ic-btn    — preview/40
+     .fab       — preview/12
+     .avt       — preview/16
+     .avt-x     — preview/41
+     .tag       — preview/15
+     .seg       — preview/20
+     .tgl/.rad/.cbx — preview/13
+   ====================================================================== */
+
+/* ---- .btn ----------------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; padding: 0 20px;
+  font-family: var(--v-font-ui); font-weight: 500; font-size: 14px;
+  line-height: 1;
+  border-radius: var(--v-radius-pill); border: 0;
+  cursor: pointer; background: none; white-space: nowrap;
+}
+.btn--sm { height: 32px; padding: 0 16px; font-size: 13px; }
+.btn--lg { height: 52px; padding: 0 28px; font-size: 15px; }
+.btn--icon-only { padding: 0; width: 40px; justify-content: center; }
+
+.btn--primary     { background: var(--v-fg);          color: #FFFFFF; }
+.btn--secondary   { background: transparent;          color: var(--v-fg);
+                    border: 1px solid var(--v-fg); }
+.btn--ghost       { background: transparent;          color: var(--v-fg); }
+.btn--link        { background: transparent;          color: var(--v-terracotta);
+                    padding: 0; height: auto; }
+.btn--destructive { background: var(--v-error);       color: #FFFFFF; }
+
+/* ---- .ic-btn (40 px circular icon button) ---------------------------- */
+.ic-btn {
+  width: 40px; height: 40px; border-radius: var(--v-radius-pill);
+  background: #FFFFFF; color: var(--v-fg);
+  border: 1px solid rgba(26, 24, 21, 0.04);
+  box-shadow: 0 1px 2px rgba(26, 24, 21, 0.04),
+              0 4px 14px rgba(26, 24, 21, 0.06);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; padding: 0;
+}
+.ic-btn svg { width: 18px; height: 18px; display: block; }
+
+/* ---- .fab (floating action button) ----------------------------------- */
+.fab {
+  width: 56px; height: 56px; border-radius: var(--v-radius-pill);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; border: 0; padding: 0; cursor: pointer;
+  color: #FFFFFF;
+}
+.fab svg { width: 24px; height: 24px; display: block; }
+.fab--md { width: 48px; height: 48px; }
+.fab--md svg { width: 20px; height: 20px; }
+.fab--dark  { background: var(--v-fg);          color: #FFFFFF; }
+.fab--white { background: #FFFFFF;              color: var(--v-fg);
+              box-shadow: 0 1px 2px rgba(26, 24, 21, 0.06); }
+.fab--terra { background: var(--v-terracotta);  color: #FFFFFF; }
+
+/* ---- .avt (avatar) --------------------------------------------------- */
+.avt {
+  --avt-size: 40px;
+  width: var(--avt-size); height: var(--avt-size);
+  flex-shrink: 0; border-radius: var(--v-radius-pill);
+  background: var(--v-card-warm); color: var(--v-fg);
+  border: 1px solid var(--v-fg-10);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--v-font-ui); font-weight: 500;
+  font-size: calc(var(--avt-size) * 0.35); line-height: 1;
+  position: relative;
+}
+.avt img {
+  width: 100%; height: 100%; object-fit: cover;
+  border-radius: inherit; display: block;
+}
+.avt--24 { --avt-size: 24px; }
+.avt--32 { --avt-size: 32px; }
+.avt--40 { --avt-size: 40px; }
+.avt--52 { --avt-size: 52px; }
+.avt--56 { --avt-size: 56px; }
+.avt--64 { --avt-size: 64px; }
+.avt--80 { --avt-size: 80px; }
+
+.avt--terra { background: var(--v-terracotta);  color: #FFFFFF; }
+.avt--green { background: var(--v-green);       color: #FFFFFF; }
+.avt--blue  { background: var(--v-blue);        color: #FFFFFF; }
+.avt--dark  { background: var(--v-fg);          color: #FFFFFF; }
+.avt--warm  { background: var(--v-card-warm);   color: var(--v-fg); }
+
+/* Kalai-icon glyph inside an avatar — set mask-image per usage */
+.avt__ic {
+  display: block;
+  width: 50%; height: 50%; background: currentColor;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain;    mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-mode: alpha; mask-mode: alpha;
+}
+/* When the icon is delivered as an <img> child (fallback for renderers
+   that don't support CSS masks), use brightness/invert filters to tint it.
+   Scoped strictly to `img.avt__ic` so plain photo avatars (.avt > img with
+   NO .avt__ic class) are left alone. */
+img.avt__ic {
+  width: 50%; height: 50%; display: block;
+  background: none; -webkit-mask: none; mask: none;
+  /* Default tint = white (for coloured avt backgrounds) */
+  filter: brightness(0) invert(1);
+}
+/* Warm / white / 20 avt backgrounds keep the icon dark */
+.avt--warm > img.avt__ic,
+.avt--white > img.avt__ic,
+.avt:not(.avt--terra):not(.avt--green):not(.avt--blue):not(.avt--dark) > img.avt__ic {
+  filter: brightness(0);
+}
+/* Common glyph mask-image modifiers — Kalai icon set */
+.avt__ic--user   { -webkit-mask-image: url("/icons/kalai/user.svg");          mask-image: url("/icons/kalai/user.svg"); }
+.avt__ic--group  { -webkit-mask-image: url("/icons/kalai/user-group.svg");    mask-image: url("/icons/kalai/user-group.svg"); }
+.avt__ic--home   { -webkit-mask-image: url("/icons/kalai/home-1.svg");        mask-image: url("/icons/kalai/home-1.svg"); }
+.avt__ic--card   { -webkit-mask-image: url("/icons/kalai/payment-card.svg");  mask-image: url("/icons/kalai/payment-card.svg"); }
+.avt__ic--btc    { -webkit-mask-image: url("/icons/kalai/bitcoin.svg");       mask-image: url("/icons/kalai/bitcoin.svg"); }
+.avt__ic--gift   { -webkit-mask-image: url("/icons/kalai/gift.svg");          mask-image: url("/icons/kalai/gift.svg"); }
+.avt__ic--bell   { -webkit-mask-image: url("/icons/kalai/bell.svg");          mask-image: url("/icons/kalai/bell.svg"); }
+.avt__ic--star   { -webkit-mask-image: url("/icons/kalai/star.svg");          mask-image: url("/icons/kalai/star.svg"); }
+.avt__ic--check  { -webkit-mask-image: url("/icons/kalai/check.svg");         mask-image: url("/icons/kalai/check.svg"); }
+.avt__ic--shield { -webkit-mask-image: url("/icons/kalai/shield-good.svg");   mask-image: url("/icons/kalai/shield-good.svg"); }
+.avt__ic--logo   { -webkit-mask-image: url("/brand/vancelian/logo-black-icon.svg"); mask-image: url("/brand/vancelian/logo-black-icon.svg"); }
+
+/* Status badge — bottom-right */
+.avt__status {
+  position: absolute; right: 0; bottom: 0;
+  width: 28%; height: 28%;
+  min-width: 10px; min-height: 10px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-green);
+  box-shadow: 0 0 0 2px var(--v-bg);
+  transform: translate(15%, 15%);
+}
+.avt__status--out  { background: var(--v-fg); }
+.avt__status--warn { background: var(--v-warning); }
+
+/* Notification badge — top-right (count) */
+.avt__notif {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-terracotta); color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-feature-settings: "tnum" on; line-height: 1;
+}
+
+/* Stacked avatars */
+.avt-stack { display: inline-flex; align-items: center; }
+.avt-stack .avt { box-shadow: 0 0 0 2px var(--v-bg); margin-left: -10px; }
+.avt-stack .avt:first-child { margin-left: 0; }
+.avt-stack__more {
+  margin-left: 10px;
+  font-size: 13px; font-weight: 600; color: var(--v-fg-body);
+  font-feature-settings: "tnum" on;
+}
+
+/* ---- .avt-x (exchange avatar — source + result) --------------------- */
+.avt-x {
+  --avt-size: 52px;
+  --ring: #FFFFFF;
+  position: relative; display: inline-block; flex-shrink: 0;
+  width: var(--avt-size); height: var(--avt-size);
+}
+.avt-x--40 { --avt-size: 40px; }
+.avt-x--48 { --avt-size: 48px; }
+.avt-x--56 { --avt-size: 56px; }
+.avt-x--72 { --avt-size: 72px; }
+.avt-x__source {
+  position: absolute; top: 0; left: 0;
+  width: 48%; height: 48%; border-radius: var(--v-radius-pill);
+  background: #FFFFFF; overflow: hidden; z-index: 1;
+}
+.avt-x__result {
+  position: absolute; bottom: 0; right: 0;
+  width: 80%; height: 80%; border-radius: var(--v-radius-pill);
+  background: #FFFFFF; overflow: hidden;
+  box-shadow: 0 0 0 2px var(--ring),
+              0 1px 2px rgba(26, 24, 21, 0.10);
+  z-index: 2;
+}
+.avt-x img { display: block; width: 100%; height: 100%; }
+
+/* ---- .tag (status/category pill) ------------------------------------ */
+.tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 10px;
+  border-radius: var(--v-radius-pill);
+  font-weight: 500; font-size: 12px; line-height: 1;
+}
+.tag__dot { width: 6px; height: 6px; border-radius: var(--v-radius-pill);
+            background: currentColor; flex-shrink: 0; }
+
+.tag--neutral { background: var(--v-card-warm);    color: var(--v-fg-body); }
+.tag--terra   { background: var(--v-terracotta-bg); color: var(--v-terracotta); }
+.tag--green   { background: var(--v-green-bg);      color: var(--v-green); }
+.tag--blue    { background: var(--v-blue-bg);       color: var(--v-blue); }
+.tag--yellow  { background: var(--v-yellow-bg);     color: var(--v-yellow-pressed); }
+
+/* Inverted (solid fill, white text) */
+.tag--inv             { color: #FFFFFF; }
+.tag--inv.tag--neutral{ background: var(--v-fg); }
+.tag--inv.tag--terra  { background: var(--v-terracotta); }
+.tag--inv.tag--green  { background: var(--v-green); }
+.tag--inv.tag--blue   { background: var(--v-blue); }
+.tag--inv.tag--yellow { background: var(--v-yellow); }
+.tag--inv .tag__dot   { background: #FFFFFF; }
+
+/* ---- .seg (segmented control) --------------------------------------- */
+.seg {
+  display: inline-flex; padding: 4px; gap: 4px;
+  background: var(--v-card-warm);
+  border-radius: var(--v-radius-pill);
+}
+.seg__item {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 14px; height: 28px;
+  font-family: var(--v-font-ui); font-weight: 500; font-size: 13px;
+  color: var(--v-fg-muted);
+  border-radius: var(--v-radius-pill);
+  cursor: pointer; border: 0; background: none;
+}
+.seg__item.is-on,
+.seg__item.on,
+.seg__item[aria-selected="true"] {
+  background: #FFFFFF; color: var(--v-fg);
+  box-shadow: 0 1px 2px rgba(26, 24, 21, 0.06);
+}
+
+/* ---- .tgl / .rad / .cbx (form controls) ----------------------------- */
+.tgl {
+  position: relative; width: 44px; height: 26px;
+  background: var(--v-fg-20);
+  border-radius: var(--v-radius-pill);
+  display: inline-block; flex-shrink: 0;
+  transition: background var(--v-motion-fast) var(--v-ease-out);
+}
+.tgl::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; background: #FFFFFF;
+  border-radius: var(--v-radius-pill);
+  box-shadow: 0 1px 2px rgba(26, 24, 21, 0.18);
+  transition: transform var(--v-motion-base) var(--v-ease-out);
+}
+.tgl.is-on { background: var(--v-fg); }
+.tgl.is-on::after { transform: translateX(18px); }
+
+.rad {
+  width: 22px; height: 22px;
+  border-radius: var(--v-radius-pill);
+  border: 1.5px solid var(--v-fg-muted);
+  background: #FFFFFF;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.rad.is-on { border-color: var(--v-fg); }
+.rad.is-on::after {
+  content: ""; width: 11px; height: 11px;
+  border-radius: var(--v-radius-pill); background: var(--v-fg);
+}
+
+.cbx {
+  width: 22px; height: 22px;
+  border-radius: var(--v-radius-tag);
+  border: 1.5px solid var(--v-fg-muted);
+  background: #FFFFFF;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: #FFFFFF;
+}
+.cbx.is-on,
+.cbx.is-indet {
+  background: var(--v-fg); border-color: var(--v-fg);
+}
+.cbx.is-indet::after {
+  content: ""; width: 10px; height: 2px; background: #FFFFFF;
+}

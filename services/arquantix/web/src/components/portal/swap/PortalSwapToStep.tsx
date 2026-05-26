@@ -48,7 +48,7 @@ export function PortalSwapToStep({ assets, onSelect, onBack }: Props) {
           className="w-full rounded-full border border-v-border bg-white px-4 py-3 font-ui text-[15px] shadow-v-subtle outline-none focus:border-v-accent"
         />
 
-        <article className="overflow-hidden rounded-v-card border border-v-border bg-v-card shadow-v-subtle">
+        <article className="overflow-hidden card-simple overflow-hidden !w-full">
           <ul className="m-0 list-none p-0">
             {filtered.map((asset) => (
               <AssetRow key={asset.symbol} asset={asset} onSelect={onSelect} />

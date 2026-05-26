@@ -10,7 +10,7 @@ import { PortalPageIntro } from '@/components/portal/PortalPageIntro'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalRouteSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalCryptoWalletPositionsCard } from '@/components/portal/wallet/PortalCryptoWalletPositionsCard'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import {
   buildUnifiedWalletRows,
@@ -49,7 +49,7 @@ function ProfileCachedPreview({
             {initials}
           </span>
           <div>
-            <VEyebrow>Account</VEyebrow>
+            <AppEyebrow>Account</AppEyebrow>
             <h1 className="m-0 font-ui text-[22px] font-semibold text-v-fg">{email}</h1>
           </div>
         </section>
@@ -76,7 +76,7 @@ function CryptoWalletCachedPreview({
     <PortalPageContainer>
       <PortalDashboardLayout>
         <section className="overflow-hidden rounded-v-card border border-[#0D1B2A]/20 bg-[#0D1B2A] p-4 text-white shadow-v-subtle sm:p-5">
-          <VEyebrow className="text-white/70">Wallet</VEyebrow>
+          <AppEyebrow className="text-white/70">Wallet</AppEyebrow>
           <h1 className="m-0 font-ui text-[22px] font-semibold leading-tight">Crypto</h1>
           <p className="mt-2 mb-0 font-ui text-[28px] font-bold leading-none sm:text-[32px]">
             {totalLabel}

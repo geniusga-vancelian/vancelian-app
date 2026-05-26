@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 24px; align-items: center;
+         justify-content: center; min-height: 100vh; }
+
+  .stats {
+    width: 480px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 8px 24px;
+  }
+  .stat {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0; gap: 16px;
+  }
+  .stat__label { font-weight: 700; font-size: 16px; color: var(--v-fg);
+                 display: inline-flex; align-items: center; gap: 12px; }
+  .stat__value {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 16px; color: var(--v-fg-light); font-feature-settings: "tnum" on;
+  }
+  .info {
+    width: 18px; height: 18px;
+    background: var(--v-fg-light);
+    -webkit-mask: url("/icons/kalai/info.svg") center/contain no-repeat;
+            mask: url("/icons/kalai/info.svg") center/contain no-repeat;
+  }
+
+  /* Variant 2 — with leading icons + separators between rows */
+  .stats--lined .stat { border-bottom: 1px solid var(--v-fg-10); }
+  .stats--lined .stat:last-child { border-bottom: 0; }
+
+  .lead {
+    width: 22px; height: 22px; flex-shrink: 0;
+    background: var(--v-fg-muted);
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .lead--trending  { -webkit-mask-image: url("/icons/kalai/trending-up.svg");  mask-image: url("/icons/kalai/trending-up.svg"); }
+  .lead--bar       { -webkit-mask-image: url("/icons/kalai/bar-chart-2.svg");  mask-image: url("/icons/kalai/bar-chart-2.svg"); }
+  .lead--graph     { -webkit-mask-image: url("/icons/kalai/graph.svg");        mask-image: url("/icons/kalai/graph.svg"); }
+  .lead--coin      { -webkit-mask-image: url("/icons/kalai/money-dollar.svg"); mask-image: url("/icons/kalai/money-dollar.svg"); }
+  .lead--shield    { -webkit-mask-image: url("/icons/kalai/shield-good.svg");  mask-image: url("/icons/kalai/shield-good.svg"); }
+  .lead--calendar  { -webkit-mask-image: url("/icons/kalai/calendar.svg");     mask-image: url("/icons/kalai/calendar.svg"); }
+
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+         font-weight: 500; color: var(--v-fg-light); align-self: flex-start; margin: 0 0 -8px; }
+</style></head>
+<body>
+
+  <p class="lbl">Default · plain rows</p>
+  <div class="stats">
+    <div class="stat"><span class="stat__label">5 year total return</span>      <span class="stat__value">XX.XX% <span class="info"></span></span></div>
+    <div class="stat"><span class="stat__label">Yearly investment return</span> <span class="stat__value">X.XX%  <span class="info"></span></span></div>
+    <div class="stat"><span class="stat__label">Projected net yield</span>      <span class="stat__value">X.XX%  <span class="info"></span></span></div>
+    <div class="stat"><span class="stat__label">Lorem</span>                    <span class="stat__value">Ipsum</span></div>
+    <div class="stat"><span class="stat__label">Lorem</span>                    <span class="stat__value">Ipsum <span class="info"></span></span></div>
+    <div class="stat"><span class="stat__label">Lorem</span>                    <span class="stat__value">Ipsum</span></div>
+  </div>
+
+  <p class="lbl">With icons · separators between rows</p>
+  <div class="stats stats--lined">
+    <div class="stat"><span class="stat__label"><span class="lead lead--trending"></span>5 year total return</span> <span class="stat__value">XX.XX% <span class="info"></span></span></div>
+    <div class="stat"><span class="stat__label"><span class="lead lead--bar"></span>Yearly investment return</span> <span class="stat__value">X.XX%  <span class="info"></span></span></div>
+    <div class="stat"><span class="stat__label"><span class="lead lead--graph"></span>Projected net yield</span>    <span class="stat__value">X.XX%  <span class="info"></span></span></div>
+    <div class="stat"><span class="stat__label"><span class="lead lead--coin"></span>Lorem</span>                   <span class="stat__value">Ipsum</span></div>
+    <div class="stat"><span class="stat__label"><span class="lead lead--shield"></span>Lorem</span>                 <span class="stat__value">Ipsum <span class="info"></span></span></div>
+    <div class="stat"><span class="stat__label"><span class="lead lead--calendar"></span>Lorem</span>               <span class="stat__value">Ipsum</span></div>
+  </div>
+
+</body></html>

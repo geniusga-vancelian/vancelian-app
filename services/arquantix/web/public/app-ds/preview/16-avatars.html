@@ -1,0 +1,188 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 22px;
+         align-items: flex-start; justify-content: center; min-height: 100vh;
+         max-width: 760px; margin: 0 auto; }
+
+  .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+
+  /* ============================================================
+     Avatar — three flavours: initials · photo · icon
+     ============================================================
+     Anatomy:
+       .avt           — square box, rounded to circle
+       .avt__photo    — fills the box, clipped to circle (used for photos)
+       .avt__ic       — Kalai mask icon, white on coloured bg
+
+     Size tokens (--avt-size): 24 / 32 / 40 / 56
+     Colour: default `--v-card-warm` bg + fg text. Modifier classes
+     replace bg + flip text/icon to white.
+     -------------------------------------------------------------- */
+  .avt {
+    --avt-size: 40px;
+    width: var(--avt-size); height: var(--avt-size);
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--v-card-warm); color: var(--v-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--v-font-ui); font-weight: 500;
+    font-size: calc(var(--avt-size) * 0.35);
+    line-height: 1;
+    position: relative;
+  }
+  /* The photo wraps its own image so we can clip the photo to a circle
+     WITHOUT putting `overflow: hidden` on .avt itself — that would clip
+     the status badge that sits just past the bottom-right edge. */
+  .avt img {
+    width: 100%; height: 100%; object-fit: cover;
+    border-radius: inherit;
+    display: block;
+  }
+
+  /* Sizes — anchored on the avatar scale (24 / 32 / 40 / 56 / 64 / 80) */
+  .avt--24 { --avt-size: 24px; }
+  .avt--32 { --avt-size: 32px; }
+  .avt--40 { --avt-size: 40px; }
+  .avt--56 { --avt-size: 56px; }
+  .avt--64 { --avt-size: 64px; }
+  .avt--80 { --avt-size: 80px; }
+
+  /* Colour variants */
+  .avt--terra { background: var(--v-terracotta); color: var(--v-white); }
+  .avt--green { background: var(--v-green);      color: var(--v-white); }
+  .avt--blue  { background: var(--v-blue);       color: var(--v-white); }
+  .avt--dark  { background: var(--v-fg);         color: var(--v-white); }
+  .avt--warm  { background: var(--v-card-warm);  color: var(--v-fg); }
+
+  /* Icon avatar — Kalai SVG mask, takes currentColor */
+  .avt__ic {
+    width: 50%; height: 50%;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .avt__ic--user  { -webkit-mask-image: url("/icons/kalai/user.svg");        mask-image: url("/icons/kalai/user.svg"); }
+  .avt__ic--group { -webkit-mask-image: url("/icons/kalai/user-group.svg");  mask-image: url("/icons/kalai/user-group.svg"); }
+  .avt__ic--home  { -webkit-mask-image: url("/icons/kalai/home-1.svg");      mask-image: url("/icons/kalai/home-1.svg"); }
+  .avt__ic--card  { -webkit-mask-image: url("/icons/kalai/payment-card.svg"); mask-image: url("/icons/kalai/payment-card.svg"); }
+  .avt__ic--btc   { -webkit-mask-image: url("/icons/kalai/bitcoin.svg");     mask-image: url("/icons/kalai/bitcoin.svg"); }
+  .avt__ic--gift  { -webkit-mask-image: url("/icons/kalai/gift.svg");        mask-image: url("/icons/kalai/gift.svg"); }
+  .avt__ic--bell  { -webkit-mask-image: url("/icons/kalai/bell.svg");        mask-image: url("/icons/kalai/bell.svg"); }
+  .avt__ic--star  { -webkit-mask-image: url("/icons/kalai/star.svg");        mask-image: url("/icons/kalai/star.svg"); }
+
+  /* Status dot — bottom-right, scales with the avatar.
+     Sits just past the edge with a ring of the host bg so it pops. */
+  .avt__status {
+    position: absolute;
+    right: 0; bottom: 0;
+    width: 28%; height: 28%;
+    min-width: 10px; min-height: 10px;
+    border-radius: 999px;
+    background: var(--v-green);
+    box-shadow: 0 0 0 2px var(--v-bg);
+    transform: translate(15%, 15%);
+  }
+  .avt__status--out  { background: var(--v-fg); }
+  .avt__status--warn { background: var(--v-warning); }
+
+  /* Stack */
+  .stack { display: inline-flex; align-items: center; }
+  .stack .avt { box-shadow: 0 0 0 2px var(--v-bg); margin-left: -10px; }
+  .stack .avt:first-child { margin-left: 0; }
+  .stack__more {
+    margin-left: 10px;
+    font-size: 13px; font-weight: 600; color: var(--v-fg-body);
+    font-feature-settings: "tnum" on;
+  }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">Sizes · 24 / 32 / 40 / 56 / 64 / 80</p>
+  <div class="row">
+    <span class="avt avt--24 avt--terra">JD</span>
+    <span class="avt avt--32 avt--terra">JD</span>
+    <span class="avt avt--40 avt--terra">JD</span>
+    <span class="avt avt--56 avt--terra">JD</span>
+    <span class="avt avt--64 avt--terra">JD</span>
+    <span class="avt avt--80 avt--terra">JD</span>
+  </div>
+
+  <p class="v-eyebrow--sm">Initials · semantic colors</p>
+  <div class="row">
+    <span class="avt avt--warm">CL</span>
+    <span class="avt avt--terra">JD</span>
+    <span class="avt avt--green">MN</span>
+    <span class="avt avt--blue">AR</span>
+    <span class="avt avt--dark">VK</span>
+  </div>
+
+  <p class="v-eyebrow--sm">Photo · cover-cropped portrait</p>
+  <div class="row">
+    <span class="avt avt--24"><img src="/app-ds/portraits/portrait-a.svg" alt=""/></span>
+    <span class="avt avt--32"><img src="/app-ds/portraits/portrait-a.svg" alt=""/></span>
+    <span class="avt avt--40"><img src="/app-ds/portraits/portrait-a.svg" alt=""/></span>
+    <span class="avt avt--56"><img src="/app-ds/portraits/portrait-a.svg" alt=""/></span>
+    <span style="width:16px"></span>
+    <span class="avt avt--40"><img src="/app-ds/portraits/portrait-b.svg" alt=""/></span>
+    <span class="avt avt--40"><img src="/app-ds/portraits/portrait-c.svg" alt=""/></span>
+    <span class="avt avt--40"><img src="/app-ds/portraits/portrait-d.svg" alt=""/></span>
+    <span class="avt avt--40"><img src="/app-ds/portraits/portrait-e.svg" alt=""/></span>
+  </div>
+
+  <p class="v-eyebrow--sm">Icon · white Kalai glyph on coloured circle</p>
+  <div class="row">
+    <span class="avt avt--terra"><span class="avt__ic avt__ic--user"></span></span>
+    <span class="avt avt--green"><span class="avt__ic avt__ic--group"></span></span>
+    <span class="avt avt--blue"><span class="avt__ic avt__ic--home"></span></span>
+    <span class="avt avt--dark"><span class="avt__ic avt__ic--card"></span></span>
+    <span class="avt avt--terra"><span class="avt__ic avt__ic--btc"></span></span>
+    <span class="avt avt--green"><span class="avt__ic avt__ic--gift"></span></span>
+    <span class="avt avt--blue"><span class="avt__ic avt__ic--bell"></span></span>
+    <span class="avt avt--dark"><span class="avt__ic avt__ic--star"></span></span>
+  </div>
+
+  <p class="v-eyebrow--sm">Icon · neutral surface (warm bg, fg glyph)</p>
+  <div class="row">
+    <span class="avt avt--warm"><span class="avt__ic avt__ic--user"></span></span>
+    <span class="avt avt--warm"><span class="avt__ic avt__ic--group"></span></span>
+    <span class="avt avt--warm"><span class="avt__ic avt__ic--home"></span></span>
+    <span class="avt avt--warm"><span class="avt__ic avt__ic--card"></span></span>
+    <span class="avt avt--warm"><span class="avt__ic avt__ic--bell"></span></span>
+  </div>
+
+  <p class="v-eyebrow--sm">XL · 80 px (avec status)</p>
+  <div class="row">
+    <span class="avt avt--80"><img src="/app-ds/portraits/portrait-a.svg" alt=""/><span class="avt__status"></span></span>
+    <span class="avt avt--80 avt--terra">JD<span class="avt__status"></span></span>
+    <span class="avt avt--80 avt--blue"><span class="avt__ic avt__ic--user"></span><span class="avt__status avt__status--warn"></span></span>
+    <span class="avt avt--80 avt--green"><span class="avt__ic avt__ic--gift"></span></span>
+    <span class="avt avt--80 avt--dark"><span class="avt__ic avt__ic--btc"></span></span>
+  </div>
+
+  <p class="v-eyebrow--sm">With status badge · online / offline / warning</p>
+  <div class="row">
+    <span class="avt avt--40"><img src="/app-ds/portraits/portrait-a.svg" alt=""/><span class="avt__status"></span></span>
+    <span class="avt avt--40"><img src="/app-ds/portraits/portrait-b.svg" alt=""/><span class="avt__status avt__status--out"></span></span>
+    <span class="avt avt--40 avt--terra">JD<span class="avt__status"></span></span>
+    <span class="avt avt--40 avt--blue"><span class="avt__ic avt__ic--user"></span><span class="avt__status avt__status--warn"></span></span>
+    <span style="width:16px"></span>
+    <span class="avt avt--56"><img src="/app-ds/portraits/portrait-a.svg" alt=""/><span class="avt__status"></span></span>
+    <span class="avt avt--56 avt--terra">JD<span class="avt__status avt__status--warn"></span></span>
+  </div>
+
+  <p class="v-eyebrow--sm">Stack · mix photo / initials / icon · max 4 + count</p>
+  <div class="row">
+    <div class="stack">
+      <span class="avt"><img src="/app-ds/portraits/portrait-a.svg" alt=""/></span>
+      <span class="avt"><img src="/app-ds/portraits/portrait-c.svg" alt=""/></span>
+      <span class="avt avt--terra">JD</span>
+      <span class="avt avt--blue"><span class="avt__ic avt__ic--user"></span></span>
+      <span class="stack__more">+12</span>
+    </div>
+  </div>
+</body></html>

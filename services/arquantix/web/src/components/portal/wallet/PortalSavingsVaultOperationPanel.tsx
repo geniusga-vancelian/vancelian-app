@@ -272,7 +272,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
   const betaLimits = morphoBeta?.limits ?? ledgityBeta?.limits
 
   return (
-    <article className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
+    <article className="card-simple overflow-hidden !w-full">
       <div className="border-b border-v-fg-10 px-4 py-3">
         <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">
           {activeTab === 'deposit' ? 'Déposer' : 'Retirer'}

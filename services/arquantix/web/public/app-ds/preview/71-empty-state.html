@@ -1,0 +1,98 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 32px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Empty state
+       .es              — vertical stack, centered
+       .es__visual      — illustration / icon slot (96 px)
+       .es__title       — short headline
+       .es__body        — 1-2 lines of context
+       .es__cta         — optional primary action
+     Slots accept any visual: muted icon, illustration placeholder,
+     coloured icon avatar.
+     ============================================================ */
+  .es {
+    width: 390px; max-width: 100%;
+    background: var(--v-white); border-radius: 16px; padding: 40px 28px;
+    border: 1px solid var(--v-fg-10);
+    display: flex; flex-direction: column; gap: 16px;
+    align-items: center; text-align: center;
+  }
+  .es--plain { background: transparent; border: 0; padding: 24px 16px; }
+
+  .es__visual {
+    width: 96px; height: 96px; border-radius: 24px;
+    background: var(--v-card-warm); color: var(--v-fg-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .es__visual .ic {
+    width: 44px; height: 44px;
+    background: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .ic--inbox    { -webkit-mask-image: url("/icons/kalai/archive.svg");    mask-image: url("/icons/kalai/archive.svg"); }
+  .ic--search   { -webkit-mask-image: url("/icons/kalai/search.svg");     mask-image: url("/icons/kalai/search.svg"); }
+  .ic--wallet   { -webkit-mask-image: url("/icons/kalai/wallet.svg");     mask-image: url("/icons/kalai/wallet.svg"); }
+  .ic--bell     { -webkit-mask-image: url("/icons/kalai/bell-off.svg");   mask-image: url("/icons/kalai/bell-off.svg"); }
+  .ic--cloud    { -webkit-mask-image: url("/icons/kalai/cloud-off.svg");  mask-image: url("/icons/kalai/cloud-off.svg"); }
+
+  .es__visual--terra  { background: var(--v-terracotta-bg); color: var(--v-terracotta); }
+  .es__visual--green  { background: var(--v-green-bg);      color: var(--v-green); }
+  .es__visual--circle { border-radius: 999px; width: 80px; height: 80px; }
+
+  .es__title { margin: 4px 0 0; font-size: 18px; font-weight: 700; color: var(--v-fg);
+               text-wrap: pretty; max-width: 280px; }
+  .es__body  { margin: 0; font-size: 14px; line-height: 1.5; color: var(--v-fg-body);
+               max-width: 300px; text-wrap: pretty; }
+  .es__cta   { margin-top: 8px; }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">No transactions yet · with CTA</p>
+  <div class="es">
+    <div class="es__visual"><span class="ic ic--inbox"></span></div>
+    <h3 class="es__title">Aucune transaction</h3>
+    <p class="es__body">Vos virements, paiements carte et conversions apparaîtront ici dès la première opération.</p>
+    <button class="btn btn--primary es__cta">Effectuer un versement</button>
+  </div>
+
+  <p class="v-eyebrow--sm">Search · no results</p>
+  <div class="es">
+    <div class="es__visual"><span class="ic ic--search"></span></div>
+    <h3 class="es__title">Aucun résultat pour « bondi »</h3>
+    <p class="es__body">Essayez un autre terme ou vérifiez l'orthographe.</p>
+  </div>
+
+  <p class="v-eyebrow--sm">No notifications · plain (no card)</p>
+  <div class="es es--plain">
+    <div class="es__visual es__visual--circle"><span class="ic ic--bell"></span></div>
+    <h3 class="es__title">Vous êtes à jour</h3>
+    <p class="es__body">Toutes vos notifications ont été traitées.</p>
+  </div>
+
+  <p class="v-eyebrow--sm">Offline · with retry</p>
+  <div class="es">
+    <div class="es__visual"><span class="ic ic--cloud"></span></div>
+    <h3 class="es__title">Connexion interrompue</h3>
+    <p class="es__body">Vérifiez votre connexion internet pour synchroniser vos données.</p>
+    <button class="btn btn--secondary es__cta">Réessayer</button>
+  </div>
+
+  <p class="v-eyebrow--sm">Coloured · positive empty (no goals yet)</p>
+  <div class="es">
+    <div class="es__visual es__visual--green"><span class="ic ic--wallet"></span></div>
+    <h3 class="es__title">Créez votre premier objectif</h3>
+    <p class="es__body">Définissez un objectif d'épargne — vacances, projet immobilier, retraite — et nous suivrons votre progression.</p>
+    <button class="btn btn--primary es__cta">Créer un objectif</button>
+  </div>
+
+</body></html>

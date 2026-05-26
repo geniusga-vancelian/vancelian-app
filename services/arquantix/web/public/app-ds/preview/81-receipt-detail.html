@@ -1,0 +1,198 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 28px;
+         align-items: center; min-height: 100vh; }
+
+  /* ============================================================
+     Receipt / transaction detail — full-screen detail panel
+       .rcp                — sheet (max 420)
+       .rcp__head          — back + title + share
+       .rcp__hero          — large amount block (+ status tag)
+       .rcp__rows          — k/v rows separated by dividers
+       .rcp__map           — optional map placeholder for POS tx
+       .rcp__cta-row       — bottom action row (export, support)
+     ============================================================ */
+  .rcp { width: 420px; max-width: 100%;
+         background: var(--v-white); border-radius: 16px;
+         border: 1px solid var(--v-fg-10);
+         display: flex; flex-direction: column; overflow: hidden; }
+
+  .rcp__head { display: flex; align-items: center; gap: 12px;
+               padding: 16px 16px 8px; }
+  .rcp__head__title { flex: 1; text-align: center;
+                      font-weight: 700; font-size: 16px; }
+
+  .rcp__hero {
+    text-align: center; padding: 8px 24px 24px;
+    display: flex; flex-direction: column; gap: 12px; align-items: center;
+  }
+  .rcp__counterparty { display: inline-flex; align-items: center; gap: 10px;
+                       font-size: 14px; color: var(--v-fg-body); }
+  .rcp__amount {
+    font-weight: 600; font-size: 40px; line-height: 1.05;
+    color: var(--v-fg); letter-spacing: -0.02em;
+    font-feature-settings: "tnum" on, "lnum" on;
+  }
+  .rcp__amount.is-in  { color: var(--v-green); }
+  .rcp__amount.is-out { color: var(--v-fg); }
+  .rcp__sub  { font-size: 13px; color: var(--v-fg-light); }
+
+  .rcp__rows { display: flex; flex-direction: column;
+               padding: 0 20px 16px; }
+  .rcp__row  { display: flex; align-items: center; gap: 12px;
+               padding: 14px 0; border-top: 1px solid var(--v-fg-10); }
+  .rcp__row:first-child { border-top: 0; }
+  .rcp__row__label { font-size: 13px; color: var(--v-fg-light); flex: 1; }
+  .rcp__row__value { font-size: 14px; color: var(--v-fg); font-weight: 500;
+                     font-feature-settings: "tnum" on;
+                     text-align: right; min-width: 0; max-width: 60%;
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rcp__row__value.copyable {
+    display: inline-flex; align-items: center; gap: 6px;
+    cursor: pointer;
+  }
+  .rcp__row__value .icc {
+    width: 14px; height: 14px; background: currentColor;
+    -webkit-mask-image: url("/icons/kalai/copy.svg"); mask-image: url("/icons/kalai/copy.svg");
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    color: var(--v-fg-light);
+  }
+
+  /* Map / POS location */
+  .rcp__map {
+    margin: 0 20px 16px;
+    height: 120px; border-radius: 12px;
+    background:
+      linear-gradient(135deg, var(--v-card-warm), var(--v-card-hover));
+    position: relative; overflow: hidden;
+  }
+  .rcp__map__pin {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -100%);
+    width: 28px; height: 28px; border-radius: 999px;
+    background: var(--v-terracotta);
+    box-shadow: 0 6px 16px rgba(192,81,46,0.30),
+                0 0 0 6px rgba(192,81,46,0.18);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--v-white);
+  }
+  .rcp__map__pin::after {
+    content: ""; position: absolute; bottom: -8px; left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--v-terracotta);
+  }
+  .rcp__map__pin svg { width: 12px; height: 12px; }
+
+  /* Bottom CTA row */
+  .rcp__cta-row {
+    display: flex; gap: 8px; padding: 16px 20px;
+    border-top: 1px solid var(--v-fg-10); background: var(--v-card-warm);
+  }
+  .rcp__cta-row .btn { flex: 1; }
+</style></head>
+<body>
+
+  <p class="v-eyebrow--sm">Carte · Starbucks (Café · Paris 9e)</p>
+  <div class="rcp">
+    <div class="rcp__head">
+      <button class="ic-btn" aria-label="Retour"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 6 9 12 15 18"/></svg></button>
+      <span class="rcp__head__title">Détail</span>
+      <button class="ic-btn" aria-label="Partager"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg></button>
+    </div>
+
+    <div class="rcp__hero">
+      <span class="rcp__counterparty">
+        <span class="avt avt--32 avt--warm">★</span>
+        Starbucks · Paris 9e
+      </span>
+      <div class="rcp__amount is-out">− 4,80&nbsp;€</div>
+      <span class="tag tag--green"><span class="tag__dot"></span>Validé</span>
+    </div>
+
+    <div class="rcp__map">
+      <span class="rcp__map__pin"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/></svg></span>
+    </div>
+
+    <div class="rcp__rows">
+      <div class="rcp__row">
+        <span class="rcp__row__label">Date</span>
+        <span class="rcp__row__value">22 mai 2026 · 08:42</span>
+      </div>
+      <div class="rcp__row">
+        <span class="rcp__row__label">Catégorie</span>
+        <span class="rcp__row__value">Café / restaurant</span>
+      </div>
+      <div class="rcp__row">
+        <span class="rcp__row__label">Carte</span>
+        <span class="rcp__row__value">Visa Premium •• 4827</span>
+      </div>
+      <div class="rcp__row">
+        <span class="rcp__row__label">Lieu</span>
+        <span class="rcp__row__value">12 rue La Fayette, 75009</span>
+      </div>
+      <div class="rcp__row">
+        <span class="rcp__row__label">Référence</span>
+        <span class="rcp__row__value copyable">TXN-2026-051821 <span class="icc"></span></span>
+      </div>
+    </div>
+
+    <div class="rcp__cta-row">
+      <button class="btn btn--secondary">Signaler</button>
+      <button class="btn btn--primary">Exporter</button>
+    </div>
+  </div>
+
+  <p class="v-eyebrow--sm">Crédit · salaire reçu</p>
+  <div class="rcp">
+    <div class="rcp__head">
+      <button class="ic-btn" aria-label="Retour"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 6 9 12 15 18"/></svg></button>
+      <span class="rcp__head__title">Détail</span>
+      <span style="width:40px"></span>
+    </div>
+
+    <div class="rcp__hero">
+      <span class="rcp__counterparty">
+        <span class="avt avt--32 avt--green"><span style="font-weight:700">V</span></span>
+        Vancelian SAS
+      </span>
+      <div class="rcp__amount is-in">+ 3 200,00&nbsp;€</div>
+      <span class="tag tag--green"><span class="tag__dot"></span>Reçu</span>
+    </div>
+
+    <div class="rcp__rows">
+      <div class="rcp__row">
+        <span class="rcp__row__label">Date</span>
+        <span class="rcp__row__value">18 mai 2026 · 09:00</span>
+      </div>
+      <div class="rcp__row">
+        <span class="rcp__row__label">Type</span>
+        <span class="rcp__row__value">Virement SEPA</span>
+      </div>
+      <div class="rcp__row">
+        <span class="rcp__row__label">Compte crédité</span>
+        <span class="rcp__row__value">Compte Euro</span>
+      </div>
+      <div class="rcp__row">
+        <span class="rcp__row__label">IBAN émetteur</span>
+        <span class="rcp__row__value copyable">FR76 •••• 1283 <span class="icc"></span></span>
+      </div>
+      <div class="rcp__row">
+        <span class="rcp__row__label">Motif</span>
+        <span class="rcp__row__value">Salaire mai 2026</span>
+      </div>
+    </div>
+
+    <div class="rcp__cta-row">
+      <button class="btn btn--secondary">Télécharger PDF</button>
+      <button class="btn btn--primary">Contacter advisor</button>
+    </div>
+  </div>
+
+</body></html>

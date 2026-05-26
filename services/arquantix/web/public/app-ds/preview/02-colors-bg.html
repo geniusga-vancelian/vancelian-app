@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 24px; background: var(--v-bg); }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .sw { display: flex; flex-direction: column; gap: 8px; }
+  .sw .chip { aspect-ratio: 3/2; border-radius: 8px; border: 1px solid rgba(0,0,0,0.06); }
+  .sw .name { font-family: var(--v-font-ui); font-weight: 500; font-size: 13px; color: var(--v-fg); }
+  .sw .hex { font-family: var(--v-font-ui); font-size: 12px; color: var(--v-fg-muted); font-feature-settings: "tnum" on; }
+</style></head>
+<body>
+<div class="grid">
+  <div class="sw"><div class="chip" style="background:#F7F7F4"></div><div class="name">Bg (paper)</div><div class="hex">#F7F7F4</div></div>
+  <div class="sw"><div class="chip" style="background:var(--v-white)"></div><div class="name">Card white</div><div class="hex">var(--v-white)</div></div>
+  <div class="sw"><div class="chip" style="background:#F3EDE6"></div><div class="name">Card warm</div><div class="hex">#F3EDE6</div></div>
+  <div class="sw"><div class="chip" style="background:var(--v-dark-bg)"></div><div class="name">Dark bg</div><div class="hex">var(--v-dark-bg)</div></div>
+</div>
+</body></html>

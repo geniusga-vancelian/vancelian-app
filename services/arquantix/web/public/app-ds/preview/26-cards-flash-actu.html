@@ -1,0 +1,94 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 32px; align-items: stretch; }
+  .wrap { max-width: 720px; margin: 0 auto; width: 100%; }
+
+  /* Cards remain 320 px wide but the deck becomes horizontally scrollable
+     so the full content stays reachable at any viewport width. */
+  .deck { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+          padding-bottom: 4px;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: thin; }
+  .deck > * { scroll-snap-align: start; }
+
+  /* Flash card — text only */
+  .flash {
+    flex: 0 0 auto; width: min(320px, calc(100% - 24px));
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 20px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .flash__title { font-weight: 700; font-size: 18px; line-height: 1.3; color: var(--v-fg); margin: 0;
+                  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .flash__meta { display: inline-flex; align-items: center; gap: 6px;
+                 font-size: 13px; color: var(--v-fg-light); margin-top: 4px; }
+  .flash__meta svg { width: 14px; height: 14px; color: var(--v-terracotta); }
+
+  /* Actu card — image hero with 2px margin on three edges */
+  .actu { flex: 0 0 auto; width: min(320px, calc(100% - 24px));
+          background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+          padding: 2px 2px 16px;
+          display: flex; flex-direction: column; gap: 14px; }
+  .actu__img {
+    width: 100%; aspect-ratio: 16 / 10;
+    /* Top corners follow the card (outer 16 − 2 gap = 14).
+       Bottom corners are interior — keep at 8 so the image feels tucked into the card. */
+    border-radius: 14px 14px 8px 8px;
+    background: #C9D1DD; display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.85);
+  }
+  .actu__img svg { width: 48px; height: 48px; }
+  .actu__title { font-weight: 700; font-size: 17px; line-height: 1.3; color: var(--v-fg);
+                 margin: 0 14px;
+                 display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .actu__meta { display: inline-flex; align-items: center; gap: 6px; margin: 0 14px;
+                font-size: 13px; color: var(--v-fg-light); }
+  .actu__meta svg { width: 14px; height: 14px; color: var(--v-terracotta); }
+</style></head>
+<body>
+  <div class="wrap">
+    <div class="deck">
+      <div class="flash">
+        <h3 class="flash__title">Post hanc adclinis Libano monti Phoenice, regio plena gratiarum et venustatis, urbibus decorata mag…</h3>
+        <div class="flash__meta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          Reading time
+        </div>
+      </div>
+      <div class="flash">
+        <h3 class="flash__title">Post hanc adclinis Libano monti Phoenice, regio plena gratiarum et venustatis, urbibus decorata mag…</h3>
+        <div class="flash__meta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          Reading time
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="deck">
+      <div class="actu">
+        <div class="actu__img">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 17l-5-5-9 9"/></svg>
+        </div>
+        <h3 class="actu__title">Post hanc adclinis Libano monti Phoenice, regio plena gratiarum et venustatis, urbibus decorata mag…</h3>
+        <div class="actu__meta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          Reading time
+        </div>
+      </div>
+      <div class="actu">
+        <div class="actu__img">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 17l-5-5-9 9"/></svg>
+        </div>
+        <h3 class="actu__title">Post hanc adclinis Libano monti Phoenice, regio plena gratiarum et venustatis, urbibus decorata mag…</h3>
+        <div class="actu__meta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          Reading time
+        </div>
+      </div>
+    </div>
+  </div>
+</body></html>

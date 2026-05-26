@@ -64,7 +64,7 @@ export function PortalSwapFromStep({
             </p>
           </article>
         ) : (
-          <article className="overflow-hidden rounded-v-card border border-v-border bg-v-card shadow-v-subtle">
+          <article className="overflow-hidden card-simple overflow-hidden !w-full">
             <ul className="m-0 list-none p-0">
               {options.map((opt) => (
                 <li key={`${opt.asset}-${opt.chain}`} className="border-b border-v-border last:border-b-0">

@@ -2,7 +2,7 @@
 
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { ArrowLeftRight, ArrowUpRight, Plus } from 'lucide-react'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { Button } from '@/components/ui/button'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
@@ -41,13 +41,11 @@ export function PortalDashboardHeader({
   return (
     <section className={cn('flex flex-col gap-4 pb-2 pt-5', className)}>
       <div className="flex flex-col gap-1">
-        <VEyebrow>Portfolio</VEyebrow>
-        <h1 className="m-0 font-ui text-[22px] font-semibold leading-tight tracking-v-tight text-v-fg">
-          Hello, {displayName}
-        </h1>
+        <AppEyebrow>Portfolio</AppEyebrow>
+        <h1 className="v-h3 m-0">Hello, {displayName}</h1>
       </div>
 
-      <article className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card p-4 shadow-v-subtle sm:p-5">
+      <article className="card-simple overflow-hidden p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="m-0 font-ui text-[13px] font-medium text-v-fg-muted">Total balance</p>
@@ -57,7 +55,7 @@ export function PortalDashboardHeader({
                 aria-hidden
               />
             ) : (
-              <p className="mt-1 mb-0 font-ui text-[28px] font-bold leading-none tracking-v-tight text-v-fg sm:text-[32px]">
+              <p className="v-mono m-0 mt-1 text-[28px] font-semibold leading-none text-v-fg sm:text-[32px]">
                 {balanceLabel}
               </p>
             )}

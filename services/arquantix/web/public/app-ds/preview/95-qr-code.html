@@ -1,0 +1,201 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg);
+         font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; gap: 24px; flex-wrap: wrap;
+         align-items: flex-start; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     QR code · scanner UI
+     -----------------------------------------------------------
+     A · QR display card     — own QR for incoming payments
+     B · Scanner viewfinder  — camera frame with overlay + cutout
+     -----------------------------------------------------------
+     QR rendered with programmatic CSS pattern (decorative — pas
+     un vrai code scannable, c'est un mockup de design).
+     ============================================================ */
+  .card { width: 360px; max-width: 100%;
+          background: var(--v-white); border-radius: 16px;
+          border: 1px solid var(--v-fg-10);
+          padding: 24px; display: flex; flex-direction: column;
+          gap: 18px; align-items: center; text-align: center; }
+
+  /* A · QR display */
+  .qr-frame {
+    position: relative;
+    width: 240px; height: 240px;
+    background: var(--v-white);
+    border-radius: 16px;
+    padding: 16px; box-sizing: border-box;
+    box-shadow: 0 4px 14px rgba(26,24,21,0.04);
+    border: 1px solid var(--v-fg-10);
+  }
+  .qr-code {
+    width: 100%; height: 100%;
+    background-image:
+      /* Three position markers (top-left / top-right / bottom-left) */
+      radial-gradient(circle at 10% 10%, var(--v-fg) 7%, transparent 7.5%),
+      radial-gradient(circle at 90% 10%, var(--v-fg) 7%, transparent 7.5%),
+      radial-gradient(circle at 10% 90%, var(--v-fg) 7%, transparent 7.5%),
+      /* checker pattern for data */
+      conic-gradient(from 0deg at 50% 50%,
+        var(--v-fg) 0deg 25%,
+        transparent 25% 50%,
+        var(--v-fg) 50% 75%,
+        transparent 75% 100%);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 9px 9px;
+    background-position: 0 0, 0 0, 0 0, 0 0;
+    -webkit-mask:
+      radial-gradient(circle at 50% 50%, #000 calc(50% + 4px), transparent calc(50% + 4px));
+    mask: none;
+  }
+  /* Center logo overlay */
+  .qr-logo {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 56px; height: 56px; border-radius: 12px;
+    background: var(--v-white); border: 1px solid var(--v-fg-10);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--v-font-editorial); font-weight: 400;
+    font-size: 28px; color: var(--v-fg);
+  }
+
+  .qr-title { font-size: 15px; font-weight: 700; color: var(--v-fg); }
+  .qr-sub   { font-size: 13px; color: var(--v-fg-light); line-height: 1.5; max-width: 280px; }
+
+  .qr-row-amount {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; background: var(--v-card-warm);
+    border-radius: 999px;
+    font-size: 13px; color: var(--v-fg); font-weight: 600;
+    font-feature-settings: "tnum" on;
+  }
+
+  /* B · Scanner viewfinder */
+  .scan {
+    width: 360px; max-width: 100%;
+    background: var(--v-fg); border-radius: 16px;
+    position: relative; overflow: hidden;
+    aspect-ratio: 3 / 4;
+  }
+  .scan__camera {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(120% 80% at 30% 30%, rgba(80,72,60,0.7), transparent 60%),
+      linear-gradient(135deg, rgba(120,108,90,0.4), rgba(20,18,8,0.95));
+  }
+  .scan__overlay {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(220px 220px at center 45%, transparent 0, transparent 49.5%, rgba(0,0,0,0.55) 51%);
+  }
+  /* Cutout square + 4 corner brackets */
+  .scan__target {
+    position: absolute; left: 50%; top: 45%;
+    transform: translate(-50%, -50%);
+    width: 220px; height: 220px;
+    border-radius: 16px;
+  }
+  .scan__corner {
+    position: absolute; width: 28px; height: 28px;
+    border: 3px solid var(--v-white);
+  }
+  .scan__corner.tl { top: 0; left: 0; border-right: 0; border-bottom: 0;
+                     border-radius: 12px 0 0 0; }
+  .scan__corner.tr { top: 0; right: 0; border-left: 0; border-bottom: 0;
+                     border-radius: 0 12px 0 0; }
+  .scan__corner.bl { bottom: 0; left: 0; border-right: 0; border-top: 0;
+                     border-radius: 0 0 0 12px; }
+  .scan__corner.br { bottom: 0; right: 0; border-left: 0; border-top: 0;
+                     border-radius: 0 0 12px 0; }
+
+  /* Scan line */
+  .scan__line {
+    position: absolute; left: 4px; right: 4px; top: 50%;
+    height: 2px; background: var(--v-terracotta);
+    box-shadow: 0 0 8px var(--v-terracotta);
+    border-radius: 999px;
+  }
+
+  /* Bottom toolbar */
+  .scan__hint {
+    position: absolute; left: 0; right: 0; bottom: 80px;
+    text-align: center; color: var(--v-white);
+    font-size: 14px; font-weight: 600;
+  }
+  .scan__toolbar {
+    position: absolute; left: 50%; bottom: 18px;
+    transform: translateX(-50%);
+    display: inline-flex; gap: 12px;
+  }
+  .scan__btn {
+    width: 44px; height: 44px; border-radius: 999px;
+    background: rgba(255,255,255,0.16); color: var(--v-white);
+    border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .scan__btn svg { width: 18px; height: 18px; }
+  .scan__btn.is-on { background: rgba(255,255,255,0.95); color: var(--v-fg); }
+
+  .scan__close {
+    position: absolute; top: 18px; left: 18px;
+    width: 36px; height: 36px; border-radius: 999px;
+    background: rgba(0,0,0,0.45); color: var(--v-white);
+    border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .scan__close svg { width: 16px; height: 16px; }
+
+  /* Stretching square pattern for design */
+  .col { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+</style></head>
+<body>
+
+  <div class="col">
+    <p class="v-eyebrow--sm">A · QR display · payment receive</p>
+    <div class="card">
+      <div class="qr-frame">
+        <div class="qr-code"></div>
+        <div class="qr-logo">V</div>
+      </div>
+      <div class="qr-title">Jean Dupont</div>
+      <div class="qr-sub">Scannez ce code pour recevoir un paiement instantané.</div>
+      <span class="qr-row-amount">125,00&nbsp;€</span>
+    </div>
+  </div>
+
+  <div class="col">
+    <p class="v-eyebrow--sm">B · Scanner · camera viewfinder</p>
+    <div class="scan">
+      <div class="scan__camera"></div>
+      <div class="scan__overlay"></div>
+      <div class="scan__target">
+        <span class="scan__corner tl"></span>
+        <span class="scan__corner tr"></span>
+        <span class="scan__corner bl"></span>
+        <span class="scan__corner br"></span>
+        <span class="scan__line"></span>
+      </div>
+      <button class="scan__close" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="scan__hint">Cadrez le QR dans le rectangle</div>
+      <div class="scan__toolbar">
+        <button class="scan__btn" aria-label="Flash">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </button>
+        <button class="scan__btn is-on" aria-label="Scanner QR">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3h-3z"/></svg>
+        </button>
+        <button class="scan__btn" aria-label="Galerie">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-9 9"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</body></html>

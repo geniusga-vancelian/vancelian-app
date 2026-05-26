@@ -1,0 +1,115 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+  .stepper { width: 520px; max-width: 100%;
+             background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+             padding: 28px 24px; box-shadow: 0 2px 6px rgba(26,24,21,0.05); }
+
+  .step { position: relative; display: flex; gap: 16px;
+          padding-bottom: 24px; }
+  .step:last-child { padding-bottom: 0; }
+
+  /* Dotted connector — runs strictly BETWEEN markers, never behind them.
+     Marker is 28px tall, sitting at top:0 of the step body row. The line
+     starts 6px below the marker bottom and ends 6px above the next marker. */
+  .step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 13.25px; /* marker center: 28/2 = 14, minus half line width (1.5/2 ≈ 0.75) */
+    top: 34px;
+    bottom: 6px;
+    border-left: 1.5px dotted var(--v-fg-20);
+    z-index: 0;
+  }
+
+  .marker { position: relative; z-index: 1; flex-shrink: 0;
+            width: 28px; height: 28px; border-radius: 999px;
+            background: var(--v-white);
+            display: inline-flex; align-items: center; justify-content: center; }
+
+  /* Done — vert anglais solid with white check */
+  .marker--done { background: var(--v-green); color: var(--v-white); }
+  .marker--done svg { width: 14px; height: 14px; }
+
+  /* Current — spinning ring, NEVER shows the dotted line through it */
+  .marker--current {
+    background: var(--v-white);
+    border: 2px solid var(--v-fg-10);
+    border-top-color: var(--v-fg);
+    border-right-color: var(--v-fg);
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Pending — outline only, but background covers the dotted line behind */
+  .marker--pending {
+    background: var(--v-white);
+    border: 1.5px solid var(--v-fg-20);
+  }
+
+  .step__body { flex: 1; min-width: 0; padding-top: 2px; }
+  .step__title { display: inline-flex; align-items: center; gap: 8px;
+                 font-weight: 700; font-size: 16px; color: var(--v-fg); line-height: 1.25; }
+  .step__title.dim { color: var(--v-fg-light); }
+  .step__title .tag {
+    display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
+    border-radius: 4px; background: var(--v-card-warm); color: var(--v-fg-muted);
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .step__sub { font-size: 14px; color: var(--v-fg-light); margin: 6px 0 0;
+               line-height: 1.5; }
+  svg { display: block; }
+</style></head>
+<body>
+  <div class="stepper">
+
+    <div class="step">
+      <span class="marker marker--done">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </span>
+      <div class="step__body">
+        <div class="step__title">Période de souscription</div>
+        <p class="step__sub">Over</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="marker marker--done">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </span>
+      <div class="step__body">
+        <div class="step__title">Clôture de la période de souscription</div>
+        <p class="step__sub">Over</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="marker marker--current" aria-label="En cours"></span>
+      <div class="step__body">
+        <div class="step__title">Versement des intérêts*<span class="tag">En cours</span></div>
+        <p class="step__sub">Tous les mois après la date de clôture de la période de souscription.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="marker marker--pending"></span>
+      <div class="step__body">
+        <div class="step__title dim">À partir de 6 mois</div>
+        <p class="step__sub">Les frais de sortie anticipée seront de 5 %, que vous choisissiez de quitter partiellement ou totalement le programme.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="marker marker--pending"></span>
+      <div class="step__body">
+        <div class="step__title dim">À partir de 18 mois</div>
+        <p class="step__sub">Les frais de sortie anticipée seront sans frais, que vous choisissiez de quitter partiellement ou totalement le programme.</p>
+      </div>
+    </div>
+
+  </div>
+</body></html>

@@ -12,7 +12,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { VEyebrow } from '@/components/design-system/vancelian/VEyebrow'
+import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { Button } from '@/components/ui/button'
 import {
@@ -113,7 +113,7 @@ export function PortalCryptoDepositScreen() {
         </PortalNavLink>
 
         <div className="mb-6">
-          <VEyebrow>Deposit</VEyebrow>
+          <AppEyebrow>Deposit</AppEyebrow>
           <h1 className="m-0 font-ui text-[26px] font-semibold tracking-v-tight text-v-fg sm:text-[28px]">
             Receive crypto
           </h1>
@@ -124,7 +124,7 @@ export function PortalCryptoDepositScreen() {
         </div>
 
         <div className="space-y-4">
-          <section className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-card shadow-v-subtle">
+          <section className="card-simple overflow-hidden !w-full">
             <div className="border-b border-v-fg-10 bg-v-fg-05 px-4 py-3 sm:px-5">
               <p className="m-0 font-ui text-[12px] font-semibold uppercase tracking-wide text-v-fg-muted">
                 Deposit network

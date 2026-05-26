@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; min-height: 100vh; }
+
+  .step-card {
+    width: 540px; max-width: 100%;
+    background: var(--v-white); border: 1px solid var(--v-fg-10); border-radius: 16px;
+    padding: 2px; gap: 2px;
+    display: flex; align-items: stretch;
+  }
+  .step-card__body {
+    flex: 1; min-width: 0;
+    padding: 20px 24px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .step-card__tag {
+    align-self: flex-start;
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 24px; padding: 0 10px;
+    background: var(--v-card-warm); border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--v-fg-muted);
+  }
+  .step-card__tag::before {
+    content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--v-terracotta);
+  }
+  .step-card__title { font-weight: 700; font-size: 22px; line-height: 1.2; color: var(--v-fg); margin: 0; }
+  .step-card__cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-weight: 700; font-size: 16px; color: var(--v-terracotta);
+    cursor: pointer; align-self: flex-start; line-height: 1;
+  }
+  .step-card__cta svg { width: 16px; height: 16px; }
+  .step-card__media {
+    width: 200px; flex-shrink: 0; align-self: stretch;
+    border-radius: 14px;
+    background:
+      linear-gradient(135deg, #2a2c30 0%, #1a1b1d 100%);
+    position: relative; overflow: hidden;
+  }
+  .step-card__media::after {
+    content: ""; position: absolute; inset: 30% 10% 5% 10%;
+    background: linear-gradient(180deg, #e9e7e3, #b9b7b3);
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+  }
+
+  .dots { display: inline-flex; align-items: center; gap: 8px; }
+  .dots span { width: 28px; height: 3px; border-radius: 999px; background: var(--v-fg-10); }
+  .dots span.on { background: var(--v-fg); width: 40px; }
+
+  svg { display: block; }
+</style></head>
+<body>
+  <div class="step-card">
+    <div class="step-card__body">
+      <span class="step-card__tag">Step 1</span>
+      <h3 class="step-card__title">Incenderat autem audaces usque ad insaniam</h3>
+      <span class="step-card__cta">Call to action <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+    </div>
+    <div class="step-card__media"></div>
+  </div>
+  <div class="dots">
+    <span class="on"></span><span></span><span></span>
+  </div>
+</body></html>
