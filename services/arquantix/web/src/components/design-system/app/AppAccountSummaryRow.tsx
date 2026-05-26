@@ -62,10 +62,10 @@ export function AppAccountSummaryRow({
             )}
           >
             {indicatorTone === 'up' ? (
-              <KalaiIcon name="arrow-up" size={12} className="shrink-0" />
+              <KalaiIcon name="arrow-up" size={16} className="shrink-0" />
             ) : null}
             {indicatorTone === 'dn' ? (
-              <KalaiIcon name="arrow-down" size={12} className="shrink-0" />
+              <KalaiIcon name="arrow-down" size={16} className="shrink-0" />
             ) : null}
             <span>{indicator}</span>
           </span>

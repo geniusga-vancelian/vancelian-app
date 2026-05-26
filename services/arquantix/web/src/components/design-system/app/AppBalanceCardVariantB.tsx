@@ -138,14 +138,14 @@ export function AppBalanceCardVariantB({
         </div>
         <div className="bal-v2__actions">
           <Link href={searchHref} className="bal-v2__ic-btn no-underline" aria-label="Recherche">
-            <KalaiIcon name="search" size={18} />
+            <KalaiIcon name="search" size={20} />
           </Link>
           <Link
             href={notificationsHref}
             className="bal-v2__ic-btn no-underline"
             aria-label="Notifications"
           >
-            <KalaiIcon name="bell" size={18} />
+            <KalaiIcon name="bell" size={20} />
           </Link>
         </div>
       </div>
@@ -174,9 +174,9 @@ export function AppBalanceCardVariantB({
           >
             {balanceVisible ? (
               changePositive ? (
-                <KalaiIcon name="arrow-up" size={12} className="shrink-0" />
+                <KalaiIcon name="arrow-up" size={16} className="shrink-0" />
               ) : (
-                <KalaiIcon name="arrow-down" size={12} className="shrink-0" />
+                <KalaiIcon name="arrow-down" size={16} className="shrink-0" />
               )
             ) : null}
             <span>{displayAmount}</span>
