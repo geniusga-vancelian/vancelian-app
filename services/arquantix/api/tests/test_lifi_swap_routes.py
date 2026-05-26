@@ -140,7 +140,7 @@ def test_quote_success(client: TestClient, db: Session, monkeypatch):
             "to_asset": "ETH",
             "amount": "1000",
             "from_chain": "base",
-            "to_chain": "ethereum",
+            "to_chain": "base",
         },
     )
     assert res.status_code == 200, res.text
@@ -149,6 +149,77 @@ def test_quote_success(client: TestClient, db: Session, monkeypatch):
     assert body["to_asset"] == "ETH"
     assert Decimal(body["estimated_receive"]) > 0
     assert body["route_steps"]
+    assert body["signing_wallet_mode"] == "privy_embedded"
+    assert body["network_fee"] == "0"
+    assert body.get("network_fee_usd") in (None, "0", "0.0")
+
+
+def test_quote_privy_embedded_zeros_network_fees_from_lifi_estimate(
+    client: TestClient, db: Session, monkeypatch
+):
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+
+    quote = _mock_lifi_quote()
+    quote["estimate"]["gasCosts"] = [
+        {"amountUSD": "0.01", "token": {"symbol": "ETH", "decimals": 18}}
+    ]
+
+    mock_client = MagicMock(spec=LifiClient)
+    mock_client.get_quote.return_value = quote
+    _quote_svc._lifi = mock_client
+    monkeypatch.setenv("LIFI_API_KEY", "test-key")
+
+    res = client.post(
+        "/api/swaps/quote",
+        headers=_auth_headers(db, pe),
+        json={
+            "from_asset": "USDC",
+            "to_asset": "ETH",
+            "amount": "12",
+            "from_chain": "base",
+            "to_chain": "base",
+        },
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["signing_wallet_mode"] == "privy_embedded"
+    assert body["network_fee"] == "0"
+    assert body.get("network_fee_usd") in (None, "0", "0.0")
+
+
+def test_quote_external_wallet_keeps_network_fees(client: TestClient, db: Session, monkeypatch):
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    _seed_external_wallet(db, pe)
+
+    quote = _mock_lifi_quote()
+    quote["estimate"]["gasCosts"] = [
+        {"amountUSD": "0.01", "token": {"symbol": "ETH", "decimals": 18}}
+    ]
+
+    mock_client = MagicMock(spec=LifiClient)
+    mock_client.get_quote.return_value = quote
+    _quote_svc._lifi = mock_client
+    monkeypatch.setenv("LIFI_API_KEY", "test-key")
+
+    res = client.post(
+        "/api/swaps/quote",
+        headers=_auth_headers(db, pe),
+        json={
+            "from_asset": "USDT",
+            "to_asset": "ETH",
+            "amount": "100",
+            "from_chain": "ethereum",
+            "to_chain": "ethereum",
+            "signing_wallet_mode": "external_evm",
+            "signing_wallet_address": EXTERNAL_ADDR,
+        },
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["signing_wallet_mode"] == "external_evm"
+    assert Decimal(body["network_fee"]) > 0
 
 
 def test_quote_external_wallet_uses_metamask_address(client: TestClient, db: Session, monkeypatch):

@@ -11,11 +11,8 @@ import { PortalNewsWidgetSection } from '@/components/portal/dashboard/PortalNew
 import {
   applyWalletRowAccess,
   buildWalletRows,
-  formatPerformancePct,
-  normalizeChartSeries,
   resolveDisplayName,
   resolveHeaderBalance,
-  resolvePerformancePct,
   resolveReferenceCurrency,
   shouldShowUnlockEuroBanner,
 } from '@/lib/portal/dashboardFormat'
@@ -90,8 +87,6 @@ export function PortalDashboardView({
     const balanceLabel = resolveHeaderBalance(data.globalStatistics, rows, currency, {
       scopedView: true,
     })
-    const performancePct = resolvePerformancePct(data.globalStatistics)
-    const chartValues = normalizeChartSeries(data.globalHistory?.points ?? [])
     const displayName = resolveDisplayName(data)
     const showUnlockEuroBanner = shouldShowUnlockEuroBanner(data.profile)
     const hasPrivyWallet = (data.privyPersonWallets?.wallets?.length ?? 0) > 0
@@ -101,8 +96,6 @@ export function PortalDashboardView({
       currency,
       rows,
       balanceLabel,
-      performanceLabel: formatPerformancePct(performancePct),
-      chartValues,
       displayName,
       showUnlockEuroBanner,
       depositHref,
@@ -119,8 +112,8 @@ export function PortalDashboardView({
           <PortalDashboardHeader
             displayName={derived.displayName}
             balanceLabel={derived.balanceLabel}
-            performanceLabel={derived.performanceLabel}
-            chartValues={derived.chartValues}
+            performanceLabel=""
+            showPerformance={false}
             depositHref={derived.depositHref}
             className="pt-0"
           />

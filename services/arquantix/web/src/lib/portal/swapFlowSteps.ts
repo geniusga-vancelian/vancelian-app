@@ -74,6 +74,12 @@ export function formatSwapFeeLine(quote: SwapQuotePayload): string {
     parts.push(`${formatSwapCryptoAmount(quote.vancelian_fee)} ${quote.from_asset} (Vancelian)`)
   }
 
+  const isPrivySponsored = quote.signing_wallet_mode !== 'external_evm'
+  if (isPrivySponsored) {
+    parts.push('0 (réseau · sponsorisé)')
+    return parts.join(' · ')
+  }
+
   const networkUsd = quote.network_fee_usd ? Number(quote.network_fee_usd) : 0
   const amountIn = Number(quote.amount_in)
   const maxSaneUsd = Number.isFinite(amountIn) && amountIn > 0 ? Math.max(5, amountIn * 1.5) : 5

@@ -14,6 +14,7 @@ type Props = {
   performanceLabel: string
   periodLabel?: string
   chartValues: number[]
+  showPerformance?: boolean
   depositHref: string
   className?: string
 }
@@ -28,6 +29,7 @@ export function PortalDashboardHeader({
   performanceLabel,
   periodLabel = 'All time',
   chartValues,
+  showPerformance = true,
   depositHref,
   className,
 }: Props) {
@@ -50,20 +52,24 @@ export function PortalDashboardHeader({
               {balanceLabel}
             </p>
           </div>
-          <span
-            className={cn(
-              'inline-flex shrink-0 flex-col items-end rounded-v-pill px-2.5 py-1 font-ui text-[12px] font-medium leading-tight sm:flex-row sm:items-center sm:gap-1',
-              perfPositive ? 'bg-v-green-bg text-v-green' : 'bg-v-error-bg text-v-error',
-            )}
-          >
-            <span>{performanceLabel}</span>
-            <span className="text-v-fg-muted">{periodLabel}</span>
-          </span>
+          {showPerformance ? (
+            <span
+              className={cn(
+                'inline-flex shrink-0 flex-col items-end rounded-v-pill px-2.5 py-1 font-ui text-[12px] font-medium leading-tight sm:flex-row sm:items-center sm:gap-1',
+                perfPositive ? 'bg-v-green-bg text-v-green' : 'bg-v-error-bg text-v-error',
+              )}
+            >
+              <span>{performanceLabel}</span>
+              <span className="text-v-fg-muted">{periodLabel}</span>
+            </span>
+          ) : null}
         </div>
 
-        <div className="mt-4 border-t border-v-fg-05 pt-4">
-          <PortalPerformanceChart values={chartValues} tone="light" height={88} />
-        </div>
+        {showPerformance ? (
+          <div className="mt-4 border-t border-v-fg-05 pt-4">
+            <PortalPerformanceChart values={chartValues} tone="light" height={88} />
+          </div>
+        ) : null}
       </article>
 
       <div className="flex flex-wrap gap-2">

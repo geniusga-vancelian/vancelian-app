@@ -121,6 +121,10 @@ class LifiQuoteService:
             to_asset=to_token.asset,
             to_decimals=to_token.decimals,
         )
+        if resolved_mode == "privy_embedded":
+            simplified["network_fee"] = Decimal("0")
+            simplified["network_fee_asset"] = None
+            simplified["network_fee_usd"] = None
 
         swap_row.status = SwapSessionStatus.QUOTE_RECEIVED.value
         swap_row.lifi_quote_id = str(lifi_quote.get("id") or "")

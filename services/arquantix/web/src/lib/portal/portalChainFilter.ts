@@ -14,18 +14,31 @@ const CHAIN_ID_TO_PORTAL: Record<number, PortalChain> = {
 type ChainResolvable = {
   chainType?: string | null
   chainId?: number | null
+  chain_type?: string | null
+  chain_id?: number | null
+}
+
+function normalizeChainResolvable(position: ChainResolvable): {
+  chainType?: string | null
+  chainId?: number | null
+} {
+  return {
+    chainType: position.chainType ?? position.chain_type ?? null,
+    chainId: position.chainId ?? position.chain_id ?? null,
+  }
 }
 
 /** Résout l’écosystème portail d’une position (soldes Privy, dépôts, etc.). */
 export function resolvePositionPortalChain(position: ChainResolvable): PortalChain | null {
-  const chainType = (position.chainType ?? '').trim().toLowerCase()
-  if (chainType === 'solana') return 'solana'
+  const { chainType, chainId } = normalizeChainResolvable(position)
+  const chainTypeNorm = (chainType ?? '').trim().toLowerCase()
+  if (chainTypeNorm === 'solana') return 'solana'
 
-  if (position.chainId != null && CHAIN_ID_TO_PORTAL[position.chainId]) {
-    return CHAIN_ID_TO_PORTAL[position.chainId]
+  if (chainId != null && CHAIN_ID_TO_PORTAL[chainId]) {
+    return CHAIN_ID_TO_PORTAL[chainId]
   }
 
-  if (chainType === 'evm' || chainType === 'ethereum') {
+  if (chainTypeNorm === 'evm' || chainTypeNorm === 'ethereum') {
     return 'ethereum'
   }
 

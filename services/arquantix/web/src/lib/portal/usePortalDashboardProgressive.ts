@@ -14,7 +14,6 @@ import {
   DASHBOARD_PORTFOLIO_API_URL,
   DASHBOARD_PORTFOLIO_CACHE_KEY,
   DASHBOARD_PORTFOLIO_TTL_MS,
-  getPortalDashboardBootstrapFromCache,
   resolvePortfolioCurrencyFromCore,
   syncPortalDashboardCompositeCache,
 } from '@/lib/portal/dashboardCache'
@@ -24,7 +23,11 @@ import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeConte
 import { appendPortalScopeQuery, buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
 import { usePortalScopeRevision } from '@/lib/portal/portalScopeReload'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-import { PortalFetchError, revalidatePortalCache } from '@/lib/portal/portalClientCache'
+import {
+  getPortalCacheBootstrap,
+  PortalFetchError,
+  revalidatePortalCache,
+} from '@/lib/portal/portalClientCache'
 
 export type UsePortalDashboardProgressiveResult = {
   data: PortalDashboardPayload | null
@@ -52,16 +55,19 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
   const scopeSuffix = buildPortalScopeCacheSuffix(chain, walletScopeId)
   const portfolioCacheKey = `${DASHBOARD_PORTFOLIO_CACHE_KEY}:${scopeSuffix}`
 
-  const bootstrapRef = useRef(getPortalDashboardBootstrapFromCache())
   const prevScopeKeyRef = useRef(`${scopeSuffix}:${scopeRevision}`)
 
-  const [core, setCore] = useState<PortalDashboardCorePayload | null>(() => bootstrapRef.current.core.data)
-  const [portfolio, setPortfolio] = useState<PortalDashboardPortfolioPayload | null>(
-    () => bootstrapRef.current.portfolio.data,
+  const [core, setCore] = useState<PortalDashboardCorePayload | null>(
+    () => getPortalCacheBootstrap<PortalDashboardCorePayload>(DASHBOARD_CORE_CACHE_KEY).data,
   )
-  const [loading, setLoading] = useState(() => !bootstrapRef.current.core.hasInitialData)
+  const [portfolio, setPortfolio] = useState<PortalDashboardPortfolioPayload | null>(
+    () => getPortalCacheBootstrap<PortalDashboardPortfolioPayload>(portfolioCacheKey).data,
+  )
+  const [loading, setLoading] = useState(
+    () => !getPortalCacheBootstrap<PortalDashboardCorePayload>(DASHBOARD_CORE_CACHE_KEY).hasInitialData,
+  )
   const [portfolioLoading, setPortfolioLoading] = useState(
-    () => !bootstrapRef.current.portfolio.hasInitialData,
+    () => !getPortalCacheBootstrap<PortalDashboardPortfolioPayload>(portfolioCacheKey).hasInitialData,
   )
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -143,15 +149,17 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
     const scopeChanged = prevScopeKeyRef.current !== scopeKey
     prevScopeKeyRef.current = scopeKey
 
+    const scopedBootstrap = getPortalCacheBootstrap<PortalDashboardPortfolioPayload>(portfolioCacheKey)
+
     if (scopeChanged) {
-      setPortfolio(null)
-      setPortfolioLoading(true)
+      setPortfolio(scopedBootstrap.data)
+      setPortfolioLoading(!scopedBootstrap.hasInitialData)
       const currency = resolvePortfolioCurrencyFromCore(coreRef.current)
-      void loadPortfolio(currency || undefined, true)
+      void loadPortfolio(currency || undefined, !scopedBootstrap.hasInitialData)
       return
     }
 
-    const bootstrap = bootstrapRef.current
+    const coreBootstrap = getPortalCacheBootstrap<PortalDashboardCorePayload>(DASHBOARD_CORE_CACHE_KEY)
     let cancelled = false
 
     const runCore = () => {
@@ -164,13 +172,13 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
       void loadPortfolio(currency || undefined, false)
     }
 
-    if (bootstrap.core.isFresh && bootstrap.core.data) {
+    if (coreBootstrap.isFresh && coreBootstrap.data) {
       scheduleIdleRevalidate(runCore)
     } else {
       runCore()
     }
 
-    if (bootstrap.portfolio.isFresh && bootstrap.portfolio.data) {
+    if (scopedBootstrap.isFresh && scopedBootstrap.data) {
       scheduleIdleRevalidate(runPortfolio)
     } else {
       runPortfolio()
@@ -179,7 +187,7 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
     return () => {
       cancelled = true
     }
-  }, [loadCore, loadPortfolio, scopeRevision, scopeSuffix])
+  }, [loadCore, loadPortfolio, portfolioCacheKey, scopeRevision, scopeSuffix])
 
   const data = useMemo(
     () => mergePortalDashboardPayload(core, portfolio),
