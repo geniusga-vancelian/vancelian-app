@@ -4,6 +4,7 @@ import { AppNewsDeck } from '@/components/design-system/app/AppNewsDeck'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalFeaturedArticleCard } from '@/components/portal/PortalFeaturedArticleCard'
 import type { PortalNewsItem, PortalNewsWidgetData } from '@/lib/portal/parseTop10NewsWidget'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 
 type Props = {
   data: PortalNewsWidgetData
@@ -19,11 +20,11 @@ function resolveItemMeta(item: PortalNewsItem, minReadLabel: string): string {
 export function PortalNewsWidget({ data, minReadLabel = 'min' }: Props) {
   if (data.items.length === 0) return null
 
-  const headerHref = data.headerHref ?? '/blog'
+  const headerHref = data.headerHref ?? PORTAL_ROUTES.academy
 
   return (
     <section className="flex w-full flex-col gap-3">
-      <AppSectionHeader title={data.title} moreHref={headerHref} moreLabel="Voir tout" />
+      <AppSectionHeader title={data.title} moreHref={headerHref} moreLabel="View all articles" />
       <AppNewsDeck>
         {data.items.map((item) => (
           <PortalFeaturedArticleCard

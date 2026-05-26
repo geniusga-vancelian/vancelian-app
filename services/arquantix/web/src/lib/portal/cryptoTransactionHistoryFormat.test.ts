@@ -148,7 +148,7 @@ describe('mapCryptoTransactionToHistoryItem', () => {
     assert.match(row.amount, /^\+/)
   })
 
-  it('maps crypto swap to exchange row with both legs and avatars', () => {
+  it('maps crypto swap to exchange row with date left and source amount right', () => {
     const row = mapCryptoTransactionToHistoryItem(
       {
         ...baseTx,
@@ -164,10 +164,12 @@ describe('mapCryptoTransactionToHistoryItem', () => {
       'EUR',
     )
     assert.equal(row.variant, 'swap')
+    assert.equal(row.title, 'Échange · USDC → CBBTC')
     assert.equal(row.fromAsset, 'USDC')
     assert.equal(row.toAsset, 'CBBTC')
-    assert.match(row.subtitle ?? '', /^−/)
-    assert.match(row.subtitle ?? '', /USDC/)
+    assert.match(row.subtitle ?? '', /22 mai/)
+    assert.match(row.meta ?? '', /^−/)
+    assert.match(row.meta ?? '', /USDC/)
     assert.match(row.amount, /^\+/)
     assert.match(row.amount, /CBBTC/)
   })
@@ -189,8 +191,11 @@ describe('mapCryptoTransactionToHistoryItem', () => {
       'EUR',
     )
     assert.equal(row.variant, 'swap')
+    assert.equal(row.title, 'Échange · USDC → CBBTC')
     assert.equal(row.fromAsset, 'USDC')
     assert.equal(row.toAsset, 'CBBTC')
+    assert.match(row.subtitle ?? '', /22 mai/)
+    assert.match(row.meta ?? '', /USDC/)
   })
 
   it('maps privy credit-only swap leg with title parse to exchange row', () => {
@@ -208,8 +213,11 @@ describe('mapCryptoTransactionToHistoryItem', () => {
       'EUR',
     )
     assert.equal(row.variant, 'swap')
+    assert.equal(row.title, 'Échange · USDC → CBBTC')
     assert.equal(row.fromAsset, 'USDC')
     assert.equal(row.toAsset, 'CBBTC')
+    assert.match(row.subtitle ?? '', /22 mai/)
+    assert.equal(row.meta, undefined)
     assert.match(row.amount, /^\+/)
     assert.match(row.amount, /CBBTC/)
   })

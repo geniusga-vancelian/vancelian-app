@@ -122,7 +122,6 @@ export function PortalRouteCachedPreview({ route, className }: Props) {
               topGainers={payload.data.topGainers}
               topLosers={payload.data.topLosers}
               favorites={payload.data.favorites}
-              allCrypto={payload.data.allCrypto}
             />
             <PortalCryptoBundlesSection bundles={payload.data.bundles} />
           </PortalDashboardLayout>

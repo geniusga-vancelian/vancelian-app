@@ -2,15 +2,71 @@
 
 import { useState } from 'react'
 
+import {
+  AppProductBasketCard,
+  buildProductBasketStackFromTickers,
+} from '@/components/design-system/app/AppProductBasketCard'
 import { PortalBundleInvestDialog } from '@/components/portal/bundles/PortalBundleInvestDialog'
-import { Button } from '@/components/ui/button'
 import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
-import { formatChangePct } from '@/lib/portal/marketsFormat'
-import { cn } from '@/lib/utils'
+import { formatChangePctIndicator } from '@/lib/portal/marketsFormat'
 
 type Props = {
   bundles: PortalCryptoBundle[]
+}
+
+function VaultIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="6" width="18" height="14" rx="2" />
+      <path d="M3 10h18M8 16h3" />
+    </svg>
+  )
+}
+
+function HorizonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  )
+}
+
+function TrendIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 16l5-6 4 4 7-9" />
+      <path d="M14 5h6v6" />
+    </svg>
+  )
+}
+
+function resolveBundleHeroImage(bundle: PortalCryptoBundle): string {
+  if (bundle.imageUrl?.trim()) return bundle.imageUrl.trim()
+  const code = bundle.code.toLowerCase()
+  if (code.includes('flex')) return '/app-ds/assets/photos/coffre-flex.png'
+  if (code.includes('avenir') || code.includes('future')) {
+    return '/app-ds/assets/photos/coffre-avenir.png'
+  }
+  return '/app-ds/assets/photos/panier-crypto.png'
+}
+
+function resolveBundleFootIcon(bundle: PortalCryptoBundle) {
+  const code = bundle.code.toLowerCase()
+  if (code.includes('flex')) return <VaultIcon />
+  if (code.includes('avenir') || code.includes('future')) return <HorizonIcon />
+  return <TrendIcon />
+}
+
+function formatBasketPerformance(value: number | null): { label: string; positive: boolean | null } {
+  if (value == null) return { label: '—', positive: null }
+  const positive = value >= 0
+  const formatted = formatChangePctIndicator(value)
+  return {
+    label: `${positive ? '+' : '−'}${formatted}`,
+    positive,
+  }
 }
 
 function BundleCard({
@@ -20,62 +76,27 @@ function BundleCard({
   bundle: PortalCryptoBundle
   onInvest: (bundle: PortalCryptoBundle) => void
 }) {
-  const perf = bundle.performance1d
-  const perfLabel = perf == null ? '—' : formatChangePct(perf)
+  const perf = formatBasketPerformance(bundle.performance1d)
+  const stack =
+    bundle.entryAssetsAllowed.length > 0
+      ? buildProductBasketStackFromTickers(bundle.entryAssetsAllowed)
+      : { assets: [], moreCount: undefined }
 
   return (
-    <article className="flex h-full flex-col card-simple overflow-hidden !w-full">
-      <div className="relative aspect-[2/1] w-full overflow-hidden bg-v-fg-05 sm:aspect-[5/2]">
-        {bundle.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={bundle.imageUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center font-ui text-[12px] text-v-fg-muted">
-            Bundle
-          </div>
-        )}
-        {bundle.riskLabel ? (
-          <span className="absolute left-2 top-2 rounded-v-tag bg-white/95 px-2 py-0.5 font-ui text-[10px] font-medium uppercase tracking-v-wide text-v-fg">
-            {bundle.riskLabel}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex flex-1 flex-col gap-2 p-3 sm:p-3.5">
-        <div className="min-w-0">
-          <h3 className="m-0 line-clamp-1 font-ui text-[15px] font-semibold leading-snug text-v-fg">
-            {bundle.title}
-          </h3>
-          {bundle.description ? (
-            <p className="mt-1 mb-0 line-clamp-2 font-ui text-[12px] leading-snug text-v-fg-body">
-              {bundle.description}
-            </p>
-          ) : null}
-        </div>
-        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-          <div className="min-w-0">
-            <p className="m-0 font-ui text-[11px] text-v-fg-muted">1d perf.</p>
-            <p
-              className={cn(
-                'm-0 font-ui text-[13px] font-semibold',
-                perf != null && perf >= 0 ? 'text-v-green' : 'text-v-error',
-              )}
-            >
-              {perfLabel}
-            </p>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 shrink-0 px-3 text-[12px]"
-            disabled={!bundle.portfolioId}
-            onClick={() => onInvest(bundle)}
-          >
-            Invest
-          </Button>
-        </div>
-      </div>
-    </article>
+    <AppProductBasketCard
+      heroImageUrl={resolveBundleHeroImage(bundle)}
+      heroTitle={bundle.title}
+      heroDescription={bundle.description || undefined}
+      stackAssets={stack.assets}
+      stackMoreCount={stack.moreCount}
+      footName={bundle.title}
+      performanceLabel={perf.label}
+      performancePositive={perf.positive}
+      footIcon={resolveBundleFootIcon(bundle)}
+      ctaLabel="Invest"
+      ctaDisabled={!bundle.portfolioId}
+      onCtaClick={() => onInvest(bundle)}
+    />
   )
 }
 
@@ -87,7 +108,7 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
   return (
     <section className="flex flex-col gap-4">
       <PortalSectionHeading title="Crypto Bundles" />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 justify-items-stretch gap-4 sm:grid-cols-2 xl:justify-items-start">
         {bundles.map((bundle) => (
           <BundleCard key={bundle.id} bundle={bundle} onInvest={setInvestBundle} />
         ))}

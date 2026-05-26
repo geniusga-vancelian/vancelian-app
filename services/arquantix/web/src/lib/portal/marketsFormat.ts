@@ -5,6 +5,7 @@ import type {
   PortalMarketsNewsItem,
   PortalResearchItem,
 } from '@/lib/portal/marketsTypes'
+import { portalAcademyHubRoute, resolvePortalArticleHref } from '@/lib/portal/portalArticleRouting'
 
 export const PORTAL_DEFAULT_CRYPTO_SYMBOLS = [
   'BTCUSDT',
@@ -346,7 +347,7 @@ function mapMarketsNewsRow(
   if (!id) return null
   const articleCategories = options?.articleCategories ?? []
   const categories = options?.categories ?? []
-  const hrefPath = slug ? `/blog/${encodeURIComponent(slug)}` : '/blog'
+  const hrefPath = slug ? resolvePortalArticleHref(slug) : portalAcademyHubRoute()
   const href =
     options?.origin && !hrefPath.startsWith('http')
       ? `${options.origin}${hrefPath}`
@@ -430,9 +431,7 @@ export function mapWidgetNewsItems(feed: unknown, origin?: string): PortalMarket
       undefined,
     )
     if (!mapped) continue
-    const hrefPath = mapped.slug ? `/blog/${encodeURIComponent(mapped.slug)}` : '/blog'
-    const href =
-      hrefPath.startsWith('http') || !origin ? hrefPath : `${origin}${hrefPath}`
+    const href = resolvePortalArticleHref(mapped.slug, origin)
     mappedItems.push({
       ...mapped,
       tags: mapped.tags.length > 0 ? mapped.tags : categoryLabels,
@@ -453,9 +452,7 @@ export function mapWidgetResearchItems(feed: unknown, origin?: string): PortalRe
     const slug = String(row.slug ?? '').trim()
     const title = String(row.title ?? '').trim()
     if (!title) continue
-    const hrefPath = slug ? `/blog/${encodeURIComponent(slug)}` : '/blog'
-    const href =
-      hrefPath.startsWith('http') || !origin ? hrefPath : `${origin}${hrefPath}`
+    const href = resolvePortalArticleHref(slug, origin)
     mapped.push({
       id: String(row.id ?? slug ?? title),
       title,
@@ -488,7 +485,7 @@ export function mapResearchWidget(payload: unknown): PortalResearchItem[] {
         coverUrl: String(row.coverUrl ?? row.cover_url ?? '').trim(),
         readingTime: toNumber(row.readingTime ?? row.reading_time, 5),
         tag: String(row.categoryLabel ?? row.categorySlug ?? '').trim() || undefined,
-        href: slug ? `/blog/${encodeURIComponent(slug)}` : '/blog',
+        href: slug ? resolvePortalArticleHref(slug) : portalAcademyHubRoute(),
       })
     }
   }

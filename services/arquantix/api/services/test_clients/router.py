@@ -4,7 +4,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
@@ -1859,6 +1859,35 @@ def mobile_my_bundles(
 # Bundle Orchestrator: invest into a bundle
 # ---------------------------------------------------------------------------
 
+@bootstrap_router.get("/bundle/invest/active-lock")
+def mobile_bundle_invest_active_lock(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Verrou investissement LI.FI en cours (reprise Portal après refresh)."""
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundles.bundle_invest_lock import (
+        get_active_invest_lock_for_portfolio,
+    )
+
+    try:
+        pid = _UUID(str(portfolio_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    lock = get_active_invest_lock_for_portfolio(
+        db, client_id=client.id, portfolio_id=pid,
+    )
+    if lock is None:
+        return {"status": "none"}
+    return {
+        "status": "active",
+        "lock": lock,
+    }
+
+
 @bootstrap_router.post("/bundle/invest")
 def mobile_bundle_invest(
     payload: dict,
@@ -1897,6 +1926,8 @@ def mobile_bundle_invest(
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
 
+    from services.portfolio_engine.bundles.bundle_invest_lock import BundleInvestAlreadyPendingError
+
     orchestrator = BundleOrchestrator()
     try:
         result = orchestrator.invest_into_bundle(
@@ -1908,6 +1939,9 @@ def mobile_bundle_invest(
         )
         db.commit()
         return result
+    except BundleInvestAlreadyPendingError as exc:
+        db.rollback()
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.to_response())
     except BundleOrchestratorError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except _ExchangeError as exc:
@@ -2461,6 +2495,151 @@ def mobile_bundle_rebalance_execute(
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@bootstrap_router.post("/bundle/leg/{swap_id}/prepare-sign")
+def mobile_bundle_leg_prepare_sign(
+    swap_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Payload de signature Privy pour un leg bundle LI.FI (après invest/rebalance pending)."""
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundle_execution.bundle_lifi_leg_service import BundleLifiLegService
+
+    if client.person_id is None:
+        raise HTTPException(status_code=400, detail="client_has_no_person_id")
+
+    try:
+        sid = _UUID(swap_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="invalid swap_id")
+
+    svc = BundleLifiLegService()
+    try:
+        resp = svc.prepare_signing(db, person_id=client.person_id, swap_id=sid)
+        return resp.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@bootstrap_router.post("/bundle/leg/{swap_id}/submit-tx")
+def mobile_bundle_leg_submit_tx(
+    swap_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Soumet la transaction signée ; settlement Privy + atoms PE si confirmé."""
+    from decimal import Decimal as _Dec
+    from uuid import UUID as _UUID
+
+    from services.lifi.swap_repository import PersonWalletSwapRepository
+    from services.portfolio_engine.bundle_execution.bundle_lifi_api import leg_from_swap_audit
+    from services.portfolio_engine.bundle_execution.bundle_lifi_leg_service import BundleLifiLegService
+
+    if client.person_id is None:
+        raise HTTPException(status_code=400, detail="client_has_no_person_id")
+
+    tx_hash = (payload or {}).get("tx_hash")
+    if not tx_hash:
+        raise HTTPException(status_code=422, detail="tx_hash required")
+
+    try:
+        sid = _UUID(swap_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="invalid swap_id")
+
+    swap = PersonWalletSwapRepository().get_for_person(
+        db, swap_id=sid, person_id=client.person_id,
+    )
+    if swap is None:
+        raise HTTPException(status_code=404, detail="swap_not_found")
+
+    leg = leg_from_swap_audit(swap)
+    if leg is None:
+        raise HTTPException(status_code=400, detail="not_a_bundle_swap_leg")
+
+    svc = BundleLifiLegService()
+    try:
+        result = svc.submit_leg_tx(
+            db,
+            leg=leg,
+            person_id=client.person_id,
+            swap_id=sid,
+            tx_hash=str(tx_hash),
+        )
+        db.commit()
+        return {
+            "leg_id": result.leg_id,
+            "status": result.status,
+            "swap_id": str(sid),
+            "tx_hash": result.tx_hash,
+            "amount_to": str(result.amount_to) if result.amount_to is not None else None,
+        }
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@bootstrap_router.post("/bundle/batch/finalize")
+def mobile_bundle_batch_finalize(
+    payload: dict,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Crédite le cash leg résiduel après legs LI.FI confirmés + invariant G dry-run."""
+    from decimal import Decimal as _Dec
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundles.orchestrator import BundleOrchestrator
+
+    portfolio_id = payload.get("portfolio_id")
+    batch_id = payload.get("batch_id")
+    entry_instrument_id = payload.get("entry_instrument_id")
+    planned_total = payload.get("planned_entry_total")
+    entry_consumed = payload.get("entry_consumed", 0)
+
+    if not all([portfolio_id, batch_id, entry_instrument_id, planned_total is not None]):
+        raise HTTPException(
+            status_code=422,
+            detail="portfolio_id, batch_id, entry_instrument_id, planned_entry_total required",
+        )
+
+    try:
+        pid = _UUID(str(portfolio_id))
+        eid = _UUID(str(entry_instrument_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="invalid uuid")
+
+    orch = BundleOrchestrator()
+    try:
+        out = orch.finalize_lifi_batch(
+            db,
+            client_id=client.id,
+            portfolio_id=pid,
+            batch_id=str(batch_id),
+            entry_instrument_id=eid,
+            planned_entry_total=_Dec(str(planned_total)),
+            entry_consumed=_Dec(str(entry_consumed)),
+        )
+        db.commit()
+        return out
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@bootstrap_router.get("/bundle/invariant-g")
+def mobile_bundle_invariant_g(
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Invariant G dry-run : atoms PE vs soldes Privy."""
+    from services.portfolio_engine.invariants.invariant_g import check_invariant_g
+
+    return check_invariant_g(db, client.id, dry_run=True)
 
 
 @bootstrap_router.get("/bundle/{portfolio_id}/invariant-e")

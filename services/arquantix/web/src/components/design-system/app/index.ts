@@ -30,6 +30,20 @@ export { AppSettingsList } from './AppSettingsList'
 export { AppSettingsRow } from './AppSettingsRow'
 export { AppBalanceCardVariantB, type AppBalanceCardFab } from './AppBalanceCardVariantB'
 export type { BalanceCardIdentity } from '@/lib/portal/dashboardFormat'
+export {
+  AppProductBasketCard,
+  appDsCryptoSvgPath,
+  buildProductBasketStackFromTickers,
+  type AppProductBasketCardProps,
+  type AppProductBasketStackAsset,
+} from './AppProductBasketCard'
+export {
+  AppNewsStackedList,
+  type AppNewsCategoryDot,
+  type AppNewsStackedAsset,
+  type AppNewsStackedFilter,
+  type AppNewsStackedListItem,
+} from './AppNewsStackedList'
 export { AppDesignSystemShowcase } from './AppDesignSystemShowcase'
 export { APP_DS_SHOWCASE_SECTIONS, APP_DS_SHOWCASE_VERSION } from './appDsShowcaseManifest'
 export { vancelianAppColors, vancelianAppRadius, vancelianAppSpacing } from './tokens'

@@ -464,6 +464,8 @@ class CryptoTransactionPayload(BaseModel):
     direction: str
     from_asset: Optional[str] = None
     to_asset: Optional[str] = None
+    swap_amount_from: Optional[str] = None
+    swap_amount_to: Optional[str] = None
     transaction_kind: Optional[str] = None
     source_system: Optional[str] = None
     tx_hash: Optional[str] = None

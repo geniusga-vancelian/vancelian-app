@@ -67,7 +67,7 @@ export function AppDesignSystemShowcase() {
       ))}
 
       <footer className="app-ds-footer">
-        <div>Vancelian · App design system · v2.1</div>
+        <div>Vancelian · App design system · v2.2</div>
         <div>Aman · Hermès · Cereal</div>
       </footer>
     </div>

@@ -2,17 +2,13 @@
 
 import { useMemo, useState } from 'react'
 
-import { AppAccountSummaryList } from '@/components/design-system/app/AppAccountSummaryList'
-import { AppAccountSummaryRow } from '@/components/design-system/app/AppAccountSummaryRow'
-import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
-import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
+import { PortalCryptoAssetList } from '@/components/portal/markets/PortalCryptoAssetList'
 import type { PortalCryptoAsset } from '@/lib/portal/marketsTypes'
-import { formatChangePctIndicator } from '@/lib/portal/marketsFormat'
-import { PORTAL_ROUTES, portalCryptoInstrumentRoute } from '@/lib/portal/portalRouting'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
-type TabId = 'favorites' | 'popular' | 'gainers' | 'losers' | 'allCrypto'
+type TabId = 'favorites' | 'popular' | 'gainers' | 'losers'
 
 export type TopCryptoTabId = TabId
 
@@ -21,7 +17,6 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'popular', label: 'Popular' },
   { id: 'gainers', label: 'Top Gainers' },
   { id: 'losers', label: 'Top Losers' },
-  { id: 'allCrypto', label: 'All crypto' },
 ]
 
 type Props = {
@@ -29,38 +24,19 @@ type Props = {
   topGainers: PortalCryptoAsset[]
   topLosers: PortalCryptoAsset[]
   favorites: PortalCryptoAsset[]
-  allCrypto: PortalCryptoAsset[]
+  /** Liste affichée telle quelle (page « All crypto »). */
+  assets?: PortalCryptoAsset[]
   activeTab?: TopCryptoTabId
   onTabChange?: (tab: TopCryptoTabId) => void
+  showTabs?: boolean
+  showBrowseLink?: boolean
+  title?: string
+  browseHref?: string
+  browseLabel?: string
   loading?: boolean
-  allCryptoLoading?: boolean
   error?: string
   onRetry?: () => void
-}
-
-function AssetRow({ asset }: { asset: PortalCryptoAsset }) {
-  const positive = asset.changePct >= 0
-
-  return (
-    <AppAccountSummaryRow
-      href={portalCryptoInstrumentRoute(asset.ticker)}
-      LinkComponent={PortalNavLink}
-      leading={
-        <PortalCryptoAvatar
-          ticker={asset.ticker}
-          symbol={asset.symbol}
-          apiLogoUrl={asset.logoUrl}
-          size="lg"
-          className="!h-[52px] !w-[52px]"
-        />
-      }
-      title={asset.name}
-      subtitle={asset.ticker}
-      amount={asset.priceLabel}
-      indicator={formatChangePctIndicator(asset.changePct)}
-      indicatorTone={positive ? 'up' : 'dn'}
-    />
-  )
+  emptyMessage?: string
 }
 
 export function PortalTopCryptoSection({
@@ -68,13 +44,18 @@ export function PortalTopCryptoSection({
   topGainers,
   topLosers,
   favorites,
-  allCrypto,
+  assets: assetsProp,
   activeTab: activeTabProp,
   onTabChange,
+  showTabs = true,
+  showBrowseLink = true,
+  title = 'Top Crypto',
+  browseHref = PORTAL_ROUTES.marketsAllCrypto,
+  browseLabel = 'Browse all Crypto',
   loading,
-  allCryptoLoading,
   error,
   onRetry,
+  emptyMessage,
 }: Props) {
   const [internalTab, setInternalTab] = useState<TabId>('popular')
   const tab = activeTabProp ?? internalTab
@@ -85,45 +66,50 @@ export function PortalTopCryptoSection({
   }
 
   const rows = useMemo(() => {
+    if (assetsProp) return assetsProp
     if (tab === 'favorites') return favorites
     if (tab === 'gainers') return topGainers
     if (tab === 'losers') return topLosers
-    if (tab === 'allCrypto') return allCrypto
     return popular
-  }, [allCrypto, favorites, popular, tab, topGainers, topLosers])
+  }, [assetsProp, favorites, popular, tab, topGainers, topLosers])
 
-  const emptyMessage =
-    tab === 'favorites'
+  const resolvedEmptyMessage =
+    emptyMessage ??
+    (tab === 'favorites'
       ? 'Star an instrument on its detail page to add it to your favorites.'
-      : tab === 'allCrypto'
-        ? 'No crypto instruments are available.'
-        : 'No assets to display.'
-
-  const showLoading = loading || (tab === 'allCrypto' && allCryptoLoading)
+      : 'No assets to display.')
 
   return (
-    <section className="flex flex-col gap-4">
-      <PortalSectionHeading title="Top Crypto" href={PORTAL_ROUTES.markets} />
+    <section className="flex w-full flex-col gap-3">
+      <AppSectionHeader
+        title={title}
+        moreHref={showBrowseLink ? browseHref : undefined}
+        moreLabel={browseLabel}
+      />
 
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={cn(
-              'rounded-v-pill border px-3 py-1.5 font-ui text-[13px] font-medium transition-colors duration-v-fast',
-              tab === item.id
-                ? 'border-v-fg bg-v-fg text-white'
-                : 'border-v-fg-10 bg-v-card text-v-fg-body hover:border-v-fg-20',
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      {showTabs ? (
+        <div className="nx__filters">
+          <div className="seg" role="tablist">
+            {TABS.map((item) => {
+              const active = tab === item.id
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  className={cn('seg__item', active && 'is-on')}
+                  onClick={() => setTab(item.id)}
+                >
+                  {item.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
-      {showLoading ? (
+      {loading ? (
         <div className="h-64 animate-pulse rounded-v-card bg-v-card" />
       ) : error ? (
         <div className="rounded-v-card border border-v-fg-10 bg-v-card p-5 text-center">
@@ -138,16 +124,8 @@ export function PortalTopCryptoSection({
             </button>
           ) : null}
         </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-v-card border border-v-fg-10 bg-v-card p-5 text-center">
-          <p className="m-0 font-ui text-[14px] text-v-fg-muted">{emptyMessage}</p>
-        </div>
       ) : (
-        <AppAccountSummaryList>
-          {rows.map((asset) => (
-            <AssetRow key={`${tab}-${asset.id}`} asset={asset} />
-          ))}
-        </AppAccountSummaryList>
+        <PortalCryptoAssetList assets={rows} emptyMessage={resolvedEmptyMessage} />
       )}
     </section>
   )

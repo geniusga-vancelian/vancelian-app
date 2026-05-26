@@ -7,6 +7,7 @@ réconciliée avec l’état on-chain (webhooks + reconcile périodique).
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -107,6 +108,8 @@ def person_wallet_swap_to_crypto_tx(swap: Any, *, asset: str) -> dict[str, Any] 
         "direction": direction,
         "from_asset": from_asset,
         "to_asset": to_asset,
+        "swap_amount_from": amount_in,
+        "swap_amount_to": amount_out,
         "transaction_kind": "crypto_swap",
         "source_system": "lifi_swap",
         "tx_hash": swap.tx_hash,
@@ -121,9 +124,32 @@ def privy_deposit_to_crypto_tx(row: PersonWalletDeposit) -> dict[str, Any]:
     if row.chain_id is not None:
         chain_label = f"{chain_label} ({row.chain_id})"
 
+    meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+    from_asset = str(meta.get("from_asset") or "").strip().upper() or None
+    to_asset = str(meta.get("to_asset") or "").strip().upper() or None
+    swap_amount_from = str(meta.get("swap_amount_from") or "").strip() or None
+    swap_amount_to = str(meta.get("swap_amount_to") or "").strip() or None
+
+    title = row.title or ""
+    if (not from_asset or not to_asset) and title:
+        match = re.match(
+            r"(?:Échange|Exchange)\s+([A-Z0-9]+)\s*(?:→|->)\s*([A-Z0-9]+)",
+            title.strip(),
+            re.IGNORECASE,
+        )
+        if match:
+            from_asset = from_asset or match.group(1).upper()
+            to_asset = to_asset or match.group(2).upper()
+
+    is_swap = (row.transaction_kind or "").strip().lower() == "crypto_swap"
+    if is_swap and from_asset and to_asset:
+        side = "swap"
+    else:
+        side = "deposit"
+
     return {
         "id": row.id,
-        "side": "deposit",
+        "side": side,
         "asset": row.asset,
         "amount_crypto": amount,
         "amount_fiat": "0",
@@ -137,8 +163,10 @@ def privy_deposit_to_crypto_tx(row: PersonWalletDeposit) -> dict[str, Any]:
         "title": row.title,
         "subtitle": row.subtitle or f"Wallet Privy · {chain_label}",
         "direction": row.direction,
-        "from_asset": None,
-        "to_asset": row.asset,
+        "from_asset": from_asset,
+        "to_asset": to_asset if is_swap else row.asset,
+        "swap_amount_from": swap_amount_from,
+        "swap_amount_to": swap_amount_to,
         "transaction_kind": row.transaction_kind,
         "source_system": "privy",
         "tx_hash": row.tx_hash,

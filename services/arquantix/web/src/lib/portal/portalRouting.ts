@@ -16,6 +16,8 @@ export const PORTAL_ROUTES = {
   myWallets: `${PORTAL_PATH_PREFIX}/wallets`,
   invest: `${PORTAL_PATH_PREFIX}/invest`,
   markets: `${PORTAL_PATH_PREFIX}/markets`,
+  marketsAllCrypto: `${PORTAL_PATH_PREFIX}/markets/all-crypto`,
+  academy: `${PORTAL_PATH_PREFIX}/academy`,
   design: `${PORTAL_PATH_PREFIX}/design`,
   search: `${PORTAL_PATH_PREFIX}/search`,
   profile: `${PORTAL_PATH_PREFIX}/profile`,

@@ -298,7 +298,7 @@ export const APP_DS_SHOWCASE_SECTIONS: AppDsShowcaseSection[] = [
     "id": "cards",
     "num": "07",
     "title": "Cards",
-    "count": "46 assets",
+    "count": "48 assets",
     "items": [
       {
         "title": "List items — transactions (asset rows + indicators)",
@@ -493,6 +493,18 @@ export const APP_DS_SHOWCASE_SECTIONS: AppDsShowcaseSection[] = [
         "openHref": "preview/74-confirmation-dialog.html"
       },
       {
+        "title": "Card — product basket (panier crypto · coffre flex · avenir)",
+        "file": "76-card-product-basket.html",
+        "height": 920,
+        "openHref": "preview/76-card-product-basket.html"
+      },
+      {
+        "title": "News — stacked list (segmented filters + category chips)",
+        "file": "79-news-stacked-list.html",
+        "height": 1100,
+        "openHref": "preview/79-news-stacked-list.html"
+      },
+      {
         "title": "Receipt — transaction detail (status + breakdown)",
         "file": "81-receipt-detail.html",
         "height": 1080,
@@ -636,4 +648,4 @@ export const APP_DS_SHOWCASE_SECTIONS: AppDsShowcaseSection[] = [
   }
 ] as const
 
-export const APP_DS_SHOWCASE_VERSION = 'v2.1 · 26 mai 2026' as const
+export const APP_DS_SHOWCASE_VERSION = 'v2.2 · 26 mai 2026' as const

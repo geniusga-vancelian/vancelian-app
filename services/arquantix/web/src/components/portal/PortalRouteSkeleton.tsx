@@ -64,6 +64,21 @@ export function PortalProfileSkeleton() {
   )
 }
 
+export function PortalAcademySkeleton() {
+  return (
+    <TwoColumnSkeleton>
+      <ShimmerBlock className="h-24 rounded-v-card" />
+      <ShimmerBlock className="h-80 rounded-v-card" />
+      <div className="grid grid-cols-1 gap-4 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3">
+        <ShimmerBlock className="h-56 rounded-v-card" />
+        <ShimmerBlock className="h-56 rounded-v-card" />
+        <ShimmerBlock className="h-56 rounded-v-card" />
+      </div>
+      <ShimmerBlock className="h-48 rounded-v-card" />
+    </TwoColumnSkeleton>
+  )
+}
+
 export function PortalGenericSkeleton() {
   return (
     <PortalPageContainer>
@@ -93,6 +108,12 @@ export function PortalRouteSkeleton({ route }: { route: string }) {
   }
   if (normalized === PORTAL_ROUTES.profile) {
     return <PortalProfileSkeleton />
+  }
+  if (normalized === PORTAL_ROUTES.academy) {
+    return <PortalAcademySkeleton />
+  }
+  if (normalized.startsWith(`${PORTAL_ROUTES.academy}/`)) {
+    return <PortalGenericSkeleton />
   }
   if (normalized === PORTAL_ROUTES.myWallets) {
     return <PortalProfileSkeleton />

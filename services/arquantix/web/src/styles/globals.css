@@ -8,6 +8,7 @@
 @import './app/portal-ds-patterns.css';
 @import './app/app-balance-card.css';
 @import './app/app-flash-actu.css';
+@import './app/app-academy-hub.css';
 @import './app/app-account-summary.css';
 
 @tailwind base;

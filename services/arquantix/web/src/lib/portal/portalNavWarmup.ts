@@ -119,6 +119,7 @@ export const PORTAL_IDLE_WARMUP_ROUTES = [
   PORTAL_ROUTES.cryptoWallet,
   PORTAL_ROUTES.invest,
   PORTAL_ROUTES.markets,
+  PORTAL_ROUTES.academy,
   PORTAL_ROUTES.profile,
 ] as const
 

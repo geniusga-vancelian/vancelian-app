@@ -1,0 +1,218 @@
+/* Academy hub — hero à la une + highlighted (esprit page blog, grammaire DS app) */
+
+@scope ([data-v-ds='app']) {
+  .academy-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    width: 100%;
+  }
+
+  @media (min-width: 960px) {
+    .academy-hero {
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+  }
+
+  .academy-hero__featured {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--v-fg-10);
+    background: var(--v-white);
+    box-shadow: var(--v-elev-subtle);
+    transition: box-shadow 120ms var(--v-ease-out);
+  }
+
+  .academy-hero__featured:hover {
+    box-shadow: var(--v-elev-medium, var(--v-elev-subtle));
+  }
+
+  .academy-hero__cover {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    background: var(--v-fg-05);
+    overflow: hidden;
+  }
+
+  @media (min-width: 960px) {
+    .academy-hero__cover {
+      aspect-ratio: 760 / 468;
+    }
+  }
+
+  .academy-hero__cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .academy-hero__cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--v-fg-muted);
+  }
+
+  .academy-hero__cover-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgb(0 0 0 / 72%) 0%, rgb(0 0 0 / 28%) 55%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .academy-hero__featured-body {
+    position: relative;
+    padding: 20px;
+    margin-top: -72px;
+    z-index: 1;
+  }
+
+  @media (min-width: 640px) {
+    .academy-hero__featured-body {
+      padding: 24px 28px 28px;
+      margin-top: -88px;
+    }
+  }
+
+  .academy-hero__featured-title {
+    margin: 0;
+    font-family: var(--v-font-ui);
+    font-weight: 700;
+    font-size: clamp(22px, 3vw, 28px);
+    line-height: 1.15;
+    color: var(--v-white);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .academy-hero__featured-standfirst {
+    margin: 10px 0 0;
+    font-family: var(--v-font-ui);
+    font-size: 15px;
+    line-height: 1.45;
+    color: rgb(255 255 255 / 92%);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .academy-hero__featured-meta {
+    margin: 12px 0 0;
+    font-family: var(--v-font-ui);
+    font-size: 13px;
+    color: rgb(255 255 255 / 80%);
+  }
+
+  .academy-hero__sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .academy-hero__sidebar-title {
+    margin: 0;
+    font-family: var(--v-font-ui);
+    font-weight: 700;
+    font-size: 20px;
+    line-height: 1.2;
+    color: var(--v-fg);
+  }
+
+  .academy-hero__highlighted-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .academy-hero__highlighted-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 12px 8px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 120ms var(--v-ease-out);
+  }
+
+  .academy-hero__highlighted-item:hover {
+    background: var(--v-fg-05);
+  }
+
+  .academy-hero__thumb {
+    flex-shrink: 0;
+    width: 108px;
+    height: 66px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--v-fg-05);
+  }
+
+  .academy-hero__thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .academy-hero__thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--v-fg-muted);
+  }
+
+  .academy-hero__highlighted-body {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .academy-hero__highlighted-title {
+    margin: 0;
+    font-family: var(--v-font-ui);
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1.25;
+    color: var(--v-fg);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .academy-hero__highlighted-standfirst {
+    margin: 4px 0 0;
+    font-family: var(--v-font-ui);
+    font-size: 14px;
+    line-height: 1.35;
+    color: var(--v-fg-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .academy-hero__divider {
+    height: 1px;
+    background: var(--v-fg-10);
+    margin: 0 8px;
+  }
+}

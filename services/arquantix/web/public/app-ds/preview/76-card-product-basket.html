@@ -1,0 +1,183 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; justify-content: center; min-height: 100vh; }
+
+  /* ============================================================
+     Card — produit marketing (panier crypto / coffre flex / avenir)
+     Anatomy :
+       .prod__hero — full-bleed photo + scrim
+         .prod__stack (crypto only, en haut) — real crypto SVGs stackés
+         .prod__title + .prod__desc
+       .prod__foot — thumbnail · nom · perf% · btn Investir (sm)
+     ============================================================ */
+  .prod { width: 360px; background: var(--v-white); border-radius: 16px; overflow: hidden;
+          border: 1px solid var(--v-fg-10); box-shadow: 0 2px 6px rgba(26,24,21,0.07);
+          display: flex; flex-direction: column; }
+
+  .prod__hero {
+    position: relative; aspect-ratio: 1 / 1; padding: 20px 24px 24px;
+    display: flex; flex-direction: column; gap: 12px;
+    color: var(--v-white); overflow: hidden;
+    isolation: isolate;
+    background: #1F1B17;
+  }
+  .prod__img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: -2;
+  }
+  .prod__hero::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(20,18,8,0.05) 0%, rgba(20,18,8,0.15) 45%, rgba(20,18,8,0.65) 100%);
+    z-index: -1; pointer-events: none;
+  }
+  .prod__spacer { flex: 1; }
+
+  /* Stacked crypto avatars — real SVG assets, circular crop, no ring */
+  .prod__stack { display: inline-flex; align-items: center; align-self: flex-start; }
+  .prod__stack .a {
+    width: 36px; height: 36px; border-radius: 999px;
+    margin-left: -10px; flex-shrink: 0;
+    overflow: hidden;
+    background: var(--v-white);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .prod__stack .a:first-child { margin-left: 0; }
+  .prod__stack .a img { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .prod__stack .a--more {
+    background: var(--v-white); color: var(--v-fg);
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 13px;
+    font-feature-settings: "tnum" on;
+  }
+
+  .prod__title {
+    margin: 0;
+    font-family: var(--v-font-ui); font-weight: 700;
+    font-size: 22px; line-height: 1.2; color: var(--v-white);
+    letter-spacing: -0.005em;
+    text-shadow: 0 1px 12px rgba(0,0,0,0.22);
+  }
+  .prod__desc {
+    margin: 0;
+    font-size: 14px; line-height: 1.45;
+    color: rgba(255,255,255,0.9);
+    text-wrap: pretty;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    text-shadow: 0 1px 12px rgba(0,0,0,0.22);
+  }
+
+  /* Footer */
+  .prod__foot {
+    background: var(--v-white);
+    padding: 12px 12px 12px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .prod__thumb {
+    width: 44px; height: 44px; flex-shrink: 0;
+    border-radius: 8px;
+    background: var(--v-fg-05); color: var(--v-fg-body);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .prod__thumb svg { width: 22px; height: 22px; }
+  .prod__meta { flex: 1; min-width: 0; line-height: 1.2; }
+  .prod__name { font-weight: 700; font-size: 15px; color: var(--v-fg); margin: 0 0 2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prod__perf { font-weight: 600; font-size: 14px; color: var(--v-green);
+                font-feature-settings: "tnum" on, "lnum" on; font-variant-numeric: tabular-nums;
+                display: inline-flex; align-items: center; gap: 4px; }
+  .prod__perf::before {
+    content: ""; width: 12px; height: 12px;
+    background: currentColor;
+    -webkit-mask: url("../assets/icons/arrow-up.svg") center/contain no-repeat;
+            mask: url("../assets/icons/arrow-up.svg") center/contain no-repeat;
+    flex-shrink: 0;
+  }
+
+  .cap {
+    width: 360px;
+    font-family: var(--v-font-ui); font-weight: 500; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--v-fg-light);
+  }
+  .col { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+</style></head>
+<body>
+
+  <!-- Variant 1 — Panier Crypto -->
+  <div class="col">
+    <div class="prod">
+      <div class="prod__hero">
+        <img class="prod__img" src="../assets/photos/panier-crypto.png" alt=""/>
+        <div class="prod__stack">
+          <span class="a"><img src="../crypto/btc.svg" alt=""/></span>
+          <span class="a"><img src="../crypto/eth.svg" alt=""/></span>
+          <span class="a"><img src="../crypto/sol.svg" alt=""/></span>
+          <span class="a"><img src="../crypto/usdc.svg" alt=""/></span>
+          <span class="a a--more">+5</span>
+        </div>
+        <div class="prod__spacer"></div>
+        <h3 class="prod__title">Top 10 capitalisations</h3>
+        <p class="prod__desc">Une exposition pondérée aux actifs les plus liquides du marché, rééquilibrée chaque mois.</p>
+      </div>
+      <div class="prod__foot">
+        <div class="prod__thumb">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l5-6 4 4 7-9"/><path d="M14 5h6v6"/></svg>
+        </div>
+        <div class="prod__meta">
+          <div class="prod__name">Panier crypto</div>
+          <div class="prod__perf">+18,4 %</div>
+        </div>
+        <button class="btn btn--primary btn--sm">Investir</button>
+      </div>
+    </div>
+    <div class="cap">PANIER CRYPTO</div>
+  </div>
+
+  <!-- Variant 2 — Coffre Flex -->
+  <div class="col">
+    <div class="prod">
+      <div class="prod__hero">
+        <img class="prod__img" src="../assets/photos/coffre-flex.png" alt=""/>
+        <div class="prod__spacer"></div>
+        <h3 class="prod__title">Coffre Flex</h3>
+        <p class="prod__desc">Une réserve productive, mobilisable à tout moment — sans engagement de durée.</p>
+      </div>
+      <div class="prod__foot">
+        <div class="prod__thumb">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M8 16h3"/></svg>
+        </div>
+        <div class="prod__meta">
+          <div class="prod__name">Coffre Flex</div>
+          <div class="prod__perf">+4,2 %</div>
+        </div>
+        <button class="btn btn--primary btn--sm">Investir</button>
+      </div>
+    </div>
+    <div class="cap">COFFRE FLEX</div>
+  </div>
+
+  <!-- Variant 3 — Coffre Avenir -->
+  <div class="col">
+    <div class="prod">
+      <div class="prod__hero">
+        <img class="prod__img" src="../assets/photos/coffre-avenir.png" alt=""/>
+        <div class="prod__spacer"></div>
+        <h3 class="prod__title">Coffre Avenir</h3>
+        <p class="prod__desc">Un horizon long, un rendement composé. Engagement de 5 à 10 ans, sortie programmée.</p>
+      </div>
+      <div class="prod__foot">
+        <div class="prod__thumb">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </div>
+        <div class="prod__meta">
+          <div class="prod__name">Coffre Avenir</div>
+          <div class="prod__perf">+7,6 %</div>
+        </div>
+        <button class="btn btn--primary btn--sm">Investir</button>
+      </div>
+    </div>
+    <div class="cap">COFFRE AVENIR</div>
+  </div>
+
+</body></html>

@@ -68,6 +68,17 @@ function formatSignedCryptoAmount(amount: string, asset: string, sign: '+' | '�
   return `${sign}\u00a0${formatCryptoAmountDisplay(amount)}\u00a0${assetU}`
 }
 
+function formatTransactionDateLabel(tx: PortalCryptoWalletTransaction): string | undefined {
+  if (!tx.createdAt) return undefined
+  const date = new Date(tx.createdAt)
+  if (Number.isNaN(date.getTime())) return undefined
+  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(date)
+}
+
+function formatSwapExchangeTitle(fromAsset: string, toAsset: string): string {
+  return `Échange · ${fromAsset} → ${toAsset}`
+}
+
 function formatTransactionMeta(tx: PortalCryptoWalletTransaction, currency: string): string | undefined {
   const parts: string[] = []
   const fiatRaw = tx.amountFiat?.trim().replace(',', '.')
@@ -78,14 +89,8 @@ function formatTransactionMeta(tx: PortalCryptoWalletTransaction, currency: stri
     }
   }
 
-  if (tx.createdAt) {
-    const date = new Date(tx.createdAt)
-    if (!Number.isNaN(date.getTime())) {
-      parts.push(
-        new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(date),
-      )
-    }
-  }
+  const dateLabel = formatTransactionDateLabel(tx)
+  if (dateLabel) parts.push(dateLabel)
 
   return parts.length > 0 ? parts.join(' · ') : undefined
 }
@@ -226,10 +231,8 @@ export function mapCryptoTransactionToHistoryItem(
       return {
         id: tx.id,
         variant: 'swap',
-        title: tx.title?.trim() || `Échange ${assets.fromAsset} → ${assets.toAsset}`,
-        subtitle: amountFrom
-          ? formatSignedCryptoAmount(amountFrom, assets.fromAsset, '−')
-          : undefined,
+        title: formatSwapExchangeTitle(assets.fromAsset, assets.toAsset),
+        subtitle: formatTransactionDateLabel(tx),
         amount: amountTo
           ? formatSignedCryptoAmount(amountTo, assets.toAsset, '+')
           : formatSignedCryptoAmount(
@@ -238,7 +241,9 @@ export function mapCryptoTransactionToHistoryItem(
               '+',
             ),
         amountTone: 'in',
-        meta: formatTransactionMeta(tx, currency),
+        meta: amountFrom
+          ? formatSignedCryptoAmount(amountFrom, assets.fromAsset, '−')
+          : undefined,
         fromAsset: assets.fromAsset,
         toAsset: assets.toAsset,
       }

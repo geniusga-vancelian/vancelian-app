@@ -1,0 +1,205 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
+         display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+  .wrap { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* Filter — DS segmented control (.seg) */
+  .nx__filters { padding: 0 4px; }
+
+  /* ============================================================
+     Stacked news card — chaque ligne :
+       Ligne 1 : avt-stack (assets réels) + .cchip catégorie
+       Lignes 2-3 : titre 2 lignes max
+       Ligne 4 : byline auteur · date
+     ============================================================ */
+  .nx__card {
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(26,24,21,0.05);
+  }
+  .nx__row {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 16px;
+    border-bottom: 1px solid var(--v-fg-10);
+    cursor: pointer;
+    transition: background var(--v-motion-fast) var(--v-ease-out);
+  }
+  .nx__row:last-child { border-bottom: 0; }
+  .nx__row:hover { background: var(--v-fg-05); }
+
+  .nx__rowhead {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+
+  /* Real crypto / institutional asset avatars — stacked, ring matches card. */
+  .nx__assets { display: inline-flex; align-items: center; flex-shrink: 0; }
+  .nx__assets .a {
+    width: 26px; height: 26px; border-radius: 999px;
+    box-shadow: 0 0 0 2px var(--v-white);
+    margin-left: -8px; flex-shrink: 0;
+    overflow: hidden;
+    background: var(--v-white);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--v-white);
+  }
+  .nx__assets .a:first-child { margin-left: 0; }
+  .nx__assets .a img { width: 100%; height: 100%; display: block; object-fit: cover; }
+  /* Custom-glyph variants — for non-crypto rows (immo, patrimoine) */
+  .nx__assets .a--immo { background: #0F2A47; }
+  .nx__assets .a--patri { background: #33614D; }
+  .nx__assets .a--ink   { background: var(--v-fg); }
+  .nx__assets .a--warm  {
+    background: var(--v-card-warm); color: var(--v-fg);
+    box-shadow: 0 0 0 2px var(--v-white), inset 0 0 0 1px var(--v-fg-10);
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 9px; letter-spacing: 0.02em;
+  }
+  .nx__assets .a--more  {
+    background: var(--v-white); color: var(--v-fg-body);
+    box-shadow: 0 0 0 2px var(--v-white), inset 0 0 0 1px var(--v-fg-10);
+    font-family: var(--v-font-ui); font-weight: 700; font-size: 10px;
+    font-feature-settings: "tnum" on;
+  }
+  .nx__assets .a svg { width: 13px; height: 13px; }
+
+  /* Category chip — DS component (file 15 .cchip).
+     Neutral white surface, hairline border, colored dot. */
+  .cchip {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 8px;
+    border-radius: 4px;
+    font-family: var(--v-font-ui); font-weight: 500; font-size: 12px;
+    color: var(--v-fg);
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    flex-shrink: 0;
+  }
+  .cchip .cdot { width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0; }
+  .cdot--terra { background: var(--v-terracotta); }
+  .cdot--green { background: var(--v-green); }
+  .cdot--blue  { background: var(--v-blue); }
+  .cdot--ink   { background: var(--v-fg); }
+
+  .nx__title {
+    margin: 0;
+    font-family: var(--v-font-ui); font-weight: 600;
+    font-size: 16px; line-height: 1.35; color: var(--v-fg);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    text-wrap: pretty;
+  }
+  .nx__byline {
+    margin: 0;
+    font-family: var(--v-font-ui); font-weight: 400;
+    font-size: 13px; line-height: 1.4; color: var(--v-fg-light);
+    font-feature-settings: "tnum" on;
+  }
+  .nx__byline .sep { display: inline-block; margin: 0 6px; color: var(--v-fg-20); }
+</style></head>
+<body>
+  <div class="wrap">
+
+    <div class="nx__filters">
+      <div class="seg" role="tablist">
+        <button class="seg__item is-on" role="tab" aria-selected="true" type="button">Tous</button>
+        <button class="seg__item" role="tab" type="button">Crypto</button>
+        <button class="seg__item" role="tab" type="button">Immobilier</button>
+        <button class="seg__item" role="tab" type="button">Patrimoine</button>
+      </div>
+    </div>
+
+    <div class="nx__card">
+
+      <!-- Row 1 — crypto news, multi-asset -->
+      <article class="nx__row">
+        <div class="nx__rowhead">
+          <div class="nx__assets" aria-hidden="true">
+            <span class="a"><img src="../crypto/btc.svg" alt=""/></span>
+            <span class="a"><img src="../crypto/eth.svg" alt=""/></span>
+            <span class="a"><img src="../crypto/sol.svg" alt=""/></span>
+            <span class="a a--more">+5</span>
+          </div>
+          <span class="cchip"><span class="cdot cdot--terra"></span>Crypto</span>
+        </div>
+        <h3 class="nx__title">Bitcoin repasse les 70 000 $ sur fond de flux ETF spot en hausse</h3>
+        <p class="nx__byline">Arquantix Research Desk <span class="sep">·</span> 11 mars 2026</p>
+      </article>
+
+      <!-- Row 2 — single-asset real estate -->
+      <article class="nx__row">
+        <div class="nx__rowhead">
+          <div class="nx__assets" aria-hidden="true">
+            <span class="a a--immo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1v-9z"/></svg>
+            </span>
+            <span class="a a--warm">DXB</span>
+          </div>
+          <span class="cchip"><span class="cdot cdot--blue"></span>Immobilier</span>
+        </div>
+        <h3 class="nx__title">Acquisition d'une villa d'exception à Al Barari, au cœur du quartier le plus verdoyant de Dubaï</h3>
+        <p class="nx__byline">Gael Itier <span class="sep">·</span> 14 mai 2026</p>
+      </article>
+
+      <!-- Row 3 — immobilier multi-marché -->
+      <article class="nx__row">
+        <div class="nx__rowhead">
+          <div class="nx__assets" aria-hidden="true">
+            <span class="a a--immo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1v-9z"/></svg>
+            </span>
+            <span class="a a--warm">PAR</span>
+            <span class="a a--warm">DXB</span>
+            <span class="a a--more">+2</span>
+          </div>
+          <span class="cchip"><span class="cdot cdot--blue"></span>Immobilier</span>
+        </div>
+        <h3 class="nx__title">Le marché immobilier de Dubaï enregistre un septième trimestre consécutif de hausse</h3>
+        <p class="nx__byline">Rédaction Vancelian <span class="sep">·</span> 02 mai 2026</p>
+      </article>
+
+      <!-- Row 4 — single asset ETH -->
+      <article class="nx__row">
+        <div class="nx__rowhead">
+          <div class="nx__assets" aria-hidden="true">
+            <span class="a"><img src="../crypto/eth.svg" alt=""/></span>
+          </div>
+          <span class="cchip"><span class="cdot cdot--terra"></span>Crypto</span>
+        </div>
+        <h3 class="nx__title">Ethereum franchit l'étape Pectra : ce qui change pour les détenteurs long terme</h3>
+        <p class="nx__byline">Arquantix Research Desk <span class="sep">·</span> 28 avril 2026</p>
+      </article>
+
+      <!-- Row 5 — patrimoine -->
+      <article class="nx__row">
+        <div class="nx__rowhead">
+          <div class="nx__assets" aria-hidden="true">
+            <span class="a a--patri">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a7 7 0 0 0-7 7c0 4 3 7 7 11 4-4 7-7 7-11a7 7 0 0 0-7-7z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            </span>
+          </div>
+          <span class="cchip"><span class="cdot cdot--green"></span>Patrimoine</span>
+        </div>
+        <h3 class="nx__title">Loi Industrie Verte : ce que les nouveaux supports éligibles changent pour votre assurance-vie</h3>
+        <p class="nx__byline">Cabinet Vancelian <span class="sep">·</span> 21 avril 2026</p>
+      </article>
+
+      <!-- Row 6 — stablecoin (EUR + USDC) -->
+      <article class="nx__row">
+        <div class="nx__rowhead">
+          <div class="nx__assets" aria-hidden="true">
+            <span class="a"><img src="../crypto/eurc.svg" alt=""/></span>
+            <span class="a"><img src="../crypto/usdc.svg" alt=""/></span>
+            <span class="a"><img src="../crypto/usdt.svg" alt=""/></span>
+          </div>
+          <span class="cchip"><span class="cdot cdot--terra"></span>Crypto</span>
+        </div>
+        <h3 class="nx__title">Stablecoins en euro : la régulation MiCA franchit une nouvelle étape côté émetteurs</h3>
+        <p class="nx__byline">Rédaction Vancelian <span class="sep">·</span> 09 avril 2026</p>
+      </article>
+
+    </div>
+  </div>
+</body></html>

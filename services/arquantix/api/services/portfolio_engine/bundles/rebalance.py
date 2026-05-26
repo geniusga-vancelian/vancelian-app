@@ -19,8 +19,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.exchange.assets import SUPPORTED_ASSETS
-from services.exchange.schemas import SwapRequest
-from services.exchange.service import ExchangeService, ExchangeError
+from services.exchange.service import ExchangeError, ExchangeService
+from services.portfolio_engine.bundle_execution import BundleExecutionAdapter
+from services.portfolio_engine.bundle_execution.lifi_base_config import normalize_bundle_asset
+from services.portfolio_engine.bundle_execution.types import ExecutionLeg
+from services.portfolio_engine.invariants.invariant_g import check_invariant_g
 from services.portfolio_engine.allocations.models import TargetAllocation
 from services.portfolio_engine.assets.models import Asset
 from services.portfolio_engine.hardening.audit_service import AuditService
@@ -97,7 +100,12 @@ class RebalancePlan:
 class BundleRebalanceOrchestrator:
     """Computes and executes sell-then-buy rebalance plans for bundle portfolios."""
 
-    def __init__(self, exchange_service: Optional[ExchangeService] = None):
+    def __init__(
+        self,
+        execution_adapter: Optional[BundleExecutionAdapter] = None,
+        exchange_service: Optional[ExchangeService] = None,
+    ):
+        self._execution = execution_adapter or BundleExecutionAdapter()
         self._exchange = exchange_service or ExchangeService()
 
     # ------------------------------------------------------------------
@@ -161,19 +169,35 @@ class BundleRebalanceOrchestrator:
             instrument_id = UUID(sell_item["instrument_id"])
 
             ext_ref = f"bundle-rebal-sell-{batch_id}-{asset}"
+            lifi_asset = normalize_bundle_asset(asset)
             try:
                 swap_result = self._execute_swap(
-                    db, client_id, asset, entry_asset,
+                    db, client_id, lifi_asset, entry_asset,
                     sell_qty, ext_ref, portfolio_id, batch_id, actor,
+                    leg_action="rebalance_sell",
+                    entry_instrument_id=entry_instrument_id,
+                    spot_instrument_id=instrument_id,
                 )
+                if swap_result.get("status") == "pending":
+                    sell_results.append({
+                        "asset": asset,
+                        "quantity_sold": 0,
+                        "entry_asset_received": 0,
+                        "value_eur": 0,
+                        "status": "pending",
+                        "swap_id": swap_result.get("swap_id"),
+                        "leg_id": ext_ref,
+                    })
+                    continue
                 entry_received = Decimal(str(swap_result.get("amount_to", 0)))
                 ref_value = Decimal(str(swap_result.get("reference_value_net", 0)))
 
-                self._debit_spot_atom(db, portfolio_id, instrument_id, sell_qty, ref_value)
-                BundleOrchestrator._credit_cash_leg(
-                    db, portfolio_id, entry_instrument_id,
-                    entry_received, ref_value,
-                )
+                if self._execution.provider_name != "lifi_base":
+                    self._debit_spot_atom(db, portfolio_id, instrument_id, sell_qty, ref_value)
+                    BundleOrchestrator._credit_cash_leg(
+                        db, portfolio_id, entry_instrument_id,
+                        entry_received, ref_value,
+                    )
                 current_cash_qty += entry_received
 
                 sell_results.append({
@@ -214,22 +238,38 @@ class BundleRebalanceOrchestrator:
                 continue
 
             ext_ref = f"bundle-rebal-buy-{batch_id}-{asset}"
+            lifi_asset = normalize_bundle_asset(asset)
             try:
                 swap_result = self._execute_swap(
-                    db, client_id, entry_asset, asset,
+                    db, client_id, entry_asset, lifi_asset,
                     buy_entry_amount, ext_ref, portfolio_id, batch_id, actor,
+                    leg_action="rebalance_buy",
+                    entry_instrument_id=entry_instrument_id,
+                    spot_instrument_id=instrument_id,
                 )
+                if swap_result.get("status") == "pending":
+                    buy_results.append({
+                        "asset": asset,
+                        "quantity_bought": 0,
+                        "entry_asset_spent": 0,
+                        "value_eur": 0,
+                        "status": "pending",
+                        "swap_id": swap_result.get("swap_id"),
+                        "leg_id": ext_ref,
+                    })
+                    continue
                 crypto_received = Decimal(str(swap_result.get("amount_to", 0)))
                 ref_value = Decimal(str(swap_result.get("reference_value_net", buy_entry_amount)))
 
-                BundleOrchestrator._sync_pe_position(
-                    db, portfolio_id, instrument_id,
-                    crypto_received, ref_value,
-                )
-                BundleOrchestrator._debit_cash_leg(
-                    db, portfolio_id, entry_instrument_id,
-                    buy_entry_amount, ref_value,
-                )
+                if self._execution.provider_name != "lifi_base":
+                    BundleOrchestrator._sync_pe_position(
+                        db, portfolio_id, instrument_id,
+                        crypto_received, ref_value,
+                    )
+                    BundleOrchestrator._debit_cash_leg(
+                        db, portfolio_id, entry_instrument_id,
+                        buy_entry_amount, ref_value,
+                    )
                 current_cash_qty -= buy_entry_amount
 
                 buy_results.append({
@@ -284,6 +324,13 @@ class BundleRebalanceOrchestrator:
             },
         )
 
+        invariant_g = check_invariant_g(db, client_id, dry_run=True)
+        any_pending = any(
+            r.get("status") == "pending" for r in sell_results + buy_results
+        )
+        if any_pending and exec_status == "completed":
+            exec_status = "pending_signature"
+
         return {
             "portfolio_id": str(portfolio_id),
             "status": exec_status,
@@ -293,6 +340,8 @@ class BundleRebalanceOrchestrator:
             "cash_leg_before": float(cash_leg_before_eur),
             "cash_leg_after": float(cash_leg_after_eur),
             "message": f"Rebalance {exec_status}",
+            "execution_provider": self._execution.provider_name,
+            "invariant_g": invariant_g,
         }
 
     # ------------------------------------------------------------------
@@ -567,20 +616,38 @@ class BundleRebalanceOrchestrator:
         portfolio_id: UUID,
         batch_id: str,
         actor: ActorContext,
+        *,
+        leg_action: str,
+        entry_instrument_id: UUID,
+        spot_instrument_id: UUID,
     ) -> dict:
-        payload = SwapRequest(
-            from_asset=from_asset,
-            to_asset=to_asset,
+        leg = ExecutionLeg(
+            leg_id=ext_ref,
+            portfolio_id=portfolio_id,
+            client_id=client_id,
+            action=leg_action,
+            from_asset=from_asset.upper(),
+            to_asset=to_asset.upper(),
             amount_from=amount_from,
-            external_reference=ext_ref,
+            batch_id=batch_id,
+            bundle_action="rebalance",
+            chain="base",
+            metadata={
+                "entry_instrument_id": str(entry_instrument_id),
+                "target_instrument_id": str(spot_instrument_id),
+            },
         )
-        result = self._exchange.swap(db, client_id, payload, actor)
-
-        sell_ref = f"{ext_ref}-sell"
-        buy_ref = f"{ext_ref}-buy"
-        BundleOrchestrator._tag_order_metadata(db, sell_ref, portfolio_id, batch_id, "rebalance")
-        BundleOrchestrator._tag_order_metadata(db, buy_ref, portfolio_id, batch_id, "rebalance")
-        return result
+        result = self._execution.execute_leg(db, leg, actor)
+        if result.status == "pending":
+            return {
+                "status": "pending",
+                "swap_id": result.provider_order_id,
+                "amount_to": 0,
+                "reference_value_net": 0,
+            }
+        out = result.to_swap_legacy_dict()
+        out["status"] = result.status
+        return out
 
     @staticmethod
     def _debit_spot_atom(

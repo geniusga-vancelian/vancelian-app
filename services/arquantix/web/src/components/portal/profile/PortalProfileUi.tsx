@@ -3,13 +3,23 @@
 import type { ReactNode } from 'react'
 import { AppSettingsList } from '@/components/design-system/app/AppSettingsList'
 import { AppSettingsRow } from '@/components/design-system/app/AppSettingsRow'
-import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
-import { cn } from '@/lib/utils'
 
 /** @deprecated Utiliser AppSettingsList directement. */
-export function PortalSettingsCard({ children, className }: { children: ReactNode; className?: string }) {
-  return <AppSettingsList className={className}>{children}</AppSettingsList>
+export function PortalSettingsCard({
+  children,
+  className,
+  seamless = true,
+}: {
+  children: ReactNode
+  className?: string
+  seamless?: boolean
+}) {
+  return (
+    <AppSettingsList seamless={seamless} className={className}>
+      {children}
+    </AppSettingsList>
+  )
 }
 
 type SettingsRowProps = {
@@ -31,28 +41,17 @@ export function PortalSettingsRow({
   leading,
   className,
 }: SettingsRowProps) {
-  if (href) {
-    return (
-      <PortalNavLink href={href} className={cn('stg-row no-underline', className)}>
-        {leading ? <span className="stg-row__lead">{leading}</span> : null}
-        <span className="stg-row__body">
-          <span className="stg-row__title">{title}</span>
-          {subtitle ? <span className="stg-row__sub">{subtitle}</span> : null}
-        </span>
-        <span className="stg-row__trail">{trailing}</span>
-      </PortalNavLink>
-    )
-  }
-
   return (
     <AppSettingsRow
       title={title}
       subtitle={subtitle}
       leading={leading}
       trailing={trailing}
+      href={href}
       onClick={onClick}
       staticRow={!href && !onClick}
       className={className}
+      LinkComponent={href ? PortalNavLink : undefined}
     />
   )
 }

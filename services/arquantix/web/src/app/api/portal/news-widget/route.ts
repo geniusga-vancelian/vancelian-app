@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadPortalTop10NewsWidget } from '@/lib/portal/loadTop10NewsWidget'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 
 /** Feed news dashboard — même widget Builder que Flutter (`top10news`). */
 export async function GET(request: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
     const parsed = await loadPortalTop10NewsWidget(locale, request.nextUrl.origin)
 
     if (!parsed || parsed.items.length === 0) {
-      return NextResponse.json({ title: 'Latest news', items: [], headerHref: '/blog' })
+      return NextResponse.json({ title: 'Latest news', items: [], headerHref: PORTAL_ROUTES.academy })
     }
 
     return NextResponse.json(parsed)

@@ -323,7 +323,7 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
 
         {isSolInstrument ? <PortalSolanaWalletSection /> : null}
 
-        <PortalMarketsNewsSection items={data.news} />
+        <PortalMarketsNewsSection items={data.news} showFilters={false} />
 
         <PortalResearchSection items={data.research} />
       </PortalDashboardLayout>

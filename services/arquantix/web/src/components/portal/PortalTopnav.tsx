@@ -114,7 +114,7 @@ type PortalTopnavProps = {
 
 /**
  * Topnav portail — même grammaire DS que {@link Navigation} (72px, grid 3 cols,
- * liens underline), avec les tabs mobile (My portfolio / Investing / Markets / Design S.)
+ * liens underline), avec les tabs mobile (My portfolio / Investing / Markets / Academy)
  * + action Search + profil.
  */
 export function PortalTopnav({ initials: initialsProp, brand: brandProp, className }: PortalTopnavProps) {

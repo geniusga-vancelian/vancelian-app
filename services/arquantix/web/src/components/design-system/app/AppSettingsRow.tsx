@@ -1,7 +1,13 @@
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import Link from 'next/link'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import { cn } from '@/lib/utils'
+
+type LinkLikeProps = {
+  href: string
+  className?: string
+  children: ReactNode
+}
 
 type Props = {
   title: string
@@ -13,6 +19,7 @@ type Props = {
   staticRow?: boolean
   danger?: boolean
   className?: string
+  LinkComponent?: ComponentType<LinkLikeProps>
 }
 
 export function AppSettingsRow({
@@ -25,6 +32,7 @@ export function AppSettingsRow({
   staticRow = false,
   danger = false,
   className,
+  LinkComponent,
 }: Props) {
   const content = (
     <>
@@ -50,10 +58,11 @@ export function AppSettingsRow({
   )
 
   if (href) {
+    const LinkImpl = LinkComponent ?? Link
     return (
-      <Link href={href} className={cn(rowClass, 'no-underline')}>
+      <LinkImpl href={href} className={cn(rowClass, 'no-underline')}>
         {content}
-      </Link>
+      </LinkImpl>
     )
   }
 

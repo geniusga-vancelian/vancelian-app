@@ -7,6 +7,7 @@ import {
   parseTop10NewsWidget,
   type PortalNewsWidgetData,
 } from '@/lib/portal/parseTop10NewsWidget'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { getPresignedUrl } from '@/lib/storage/storageClient'
 
 const WIDGETS_CHAPTER_SLUG = 'widget_builder_widgets'
@@ -183,7 +184,7 @@ export async function loadPortalTop10NewsWidget(
 
   const parsed = parseTop10NewsWidget(payload)
   if (!parsed || parsed.items.length === 0) {
-    return { title: 'Latest news', items: [], headerHref: '/blog' }
+    return { title: 'Latest news', items: [], headerHref: PORTAL_ROUTES.academy }
   }
   return parsed
 }

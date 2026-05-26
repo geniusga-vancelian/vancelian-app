@@ -19,8 +19,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.exchange.models import CryptoPosition, ExchangeOrder
-from services.exchange.schemas import ExchangeBuyRequest, SwapRequest
-from services.exchange.service import ExchangeService, ExchangeError
+from services.exchange.service import ExchangeError, ExchangeService
+from services.portfolio_engine.bundle_execution import BundleExecutionAdapter
+from services.portfolio_engine.bundle_execution.lifi_base_config import normalize_bundle_asset
+from services.portfolio_engine.bundle_execution.types import ExecutionLeg
+from services.portfolio_engine.invariants.invariant_g import check_invariant_g
 from services.portfolio_engine.allocations.models import TargetAllocation
 from services.portfolio_engine.assets.models import Asset
 from services.portfolio_engine.hardening.audit_service import AuditService
@@ -30,6 +33,15 @@ from services.portfolio_engine.portfolios.models import Portfolio
 from services.portfolio_engine.positions.enums import PositionType
 from services.portfolio_engine.positions.models import PositionAtom
 from services.portfolio_engine.products.models import ProductDefinition
+
+from .bundle_invest_lock import (
+    acquire_invest_lock,
+    assert_no_active_invest_lock,
+    clear_invest_lock,
+    load_portfolio_for_invest_lock,
+    release_invest_lock,
+    update_invest_lock_status,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +65,12 @@ class BundleOrchestrator:
         3. Persist the remainder in the cash leg atom
     """
 
-    def __init__(self, exchange_service: Optional[ExchangeService] = None):
+    def __init__(
+        self,
+        execution_adapter: Optional[BundleExecutionAdapter] = None,
+        exchange_service: Optional[ExchangeService] = None,
+    ):
+        self._execution = execution_adapter or BundleExecutionAdapter()
         self._exchange = exchange_service or ExchangeService()
 
     # ------------------------------------------------------------------
@@ -86,13 +103,27 @@ class BundleOrchestrator:
         if not allocations:
             raise BundleOrchestratorError("no_target_allocations_found")
 
+        entry_instrument = self._resolve_or_create_instrument(db, entry_asset)
+
+        if self._execution.provider_name == "lifi_base":
+            is_direct_entry = funding_asset.upper() == entry_asset.upper()
+            if is_direct_entry:
+                return self._invest_via_lifi(
+                    db,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    portfolio=portfolio,
+                    entry_asset=entry_asset,
+                    entry_instrument=entry_instrument,
+                    funding_amount=funding_amount,
+                    allocations=allocations,
+                )
+
         actor = ActorContext(
             actor_type="system",
             actor_id=f"bundle-orchestrator-{portfolio_id}",
         )
         batch_id = str(uuid_mod.uuid4())
-
-        entry_instrument = self._resolve_or_create_instrument(db, entry_asset)
 
         # ── Step 1: Funding — acquire entry asset ────────────────────────
         is_fiat_funding = funding_asset.upper() in ("EUR", "USD")
@@ -164,35 +195,27 @@ class BundleOrchestrator:
             ext_ref = f"bundle-alloc-{batch_id}-{target_asset}"
 
             try:
-                swap_result = self._execute_swap_from_entry(
-                    db, client_id, entry_asset, target_asset,
-                    alloc_entry_amount, ext_ref, portfolio_id, batch_id, actor,
+                exec_result = self._run_allocation_leg(
+                    db,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    entry_asset=entry_asset,
+                    entry_instrument_id=entry_instrument.id,
+                    target_asset=target_asset,
+                    target_instrument_id=alloc.instrument_id,
+                    alloc_entry_amount=alloc_entry_amount,
+                    ext_ref=ext_ref,
+                    batch_id=batch_id,
+                    actor=actor,
                 )
-
-                crypto_received = Decimal(str(swap_result.get("amount_to", 0)))
-                ref_value_net = Decimal(str(swap_result.get("reference_value_net", alloc_entry_amount)))
-
-                self._sync_pe_position(
-                    db, portfolio_id, alloc.instrument_id,
-                    crypto_received, ref_value_net,
-                )
-                self._debit_cash_leg(
-                    db, portfolio_id, entry_instrument.id,
-                    alloc_entry_amount, ref_value_net,
-                )
-
-                cash_available -= alloc_entry_amount
-                total_entry_consumed += alloc_entry_amount
-                succeeded += 1
-                alloc_results.append({
-                    "asset": target_asset,
-                    "instrument_id": str(alloc.instrument_id),
-                    "target_weight": float(alloc.target_weight),
-                    "entry_asset_consumed": float(alloc_entry_amount),
-                    "crypto_received": float(crypto_received),
-                    "status": "completed",
-                    "swap_group_id": str(swap_result.get("swap_group_id", "")),
-                })
+                if exec_result["status"] == "pending":
+                    alloc_results.append(exec_result["record"])
+                    continue
+                if exec_result["status"] == "completed":
+                    cash_available -= alloc_entry_amount
+                    total_entry_consumed += alloc_entry_amount
+                    succeeded += 1
+                    alloc_results.append(exec_result["record"])
             except (ExchangeError, Exception) as exc:
                 failed += 1
                 logger.warning(
@@ -237,7 +260,7 @@ class BundleOrchestrator:
             },
         )
 
-        return {
+        result = {
             "status": status,
             "batch_id": batch_id,
             "portfolio_id": str(portfolio_id),
@@ -249,6 +272,301 @@ class BundleOrchestrator:
             "legs_succeeded": succeeded,
             "legs_failed": failed,
             "allocation_details": alloc_results,
+            "execution_provider": self._execution.provider_name,
+        }
+        if any(r.get("status") == "pending" for r in alloc_results):
+            result["status"] = "pending_signature" if succeeded == 0 else "partial_pending"
+        return result
+
+    def _invest_via_lifi(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: UUID,
+        portfolio: Portfolio,
+        entry_asset: str,
+        entry_instrument: Instrument,
+        funding_amount: Decimal,
+        allocations: list[TargetAllocation],
+    ) -> dict:
+        """Investissement Base LI.FI — pas d'atoms avant confirmation swap."""
+        import uuid as _uuid
+
+        portfolio_locked = load_portfolio_for_invest_lock(
+            db, client_id=client_id, portfolio_id=portfolio_id,
+        )
+        assert_no_active_invest_lock(portfolio_locked, client_id)
+
+        batch_id = str(_uuid.uuid4())
+        acquire_invest_lock(
+            db,
+            portfolio_locked,
+            client_id=client_id,
+            batch_id=batch_id,
+            entry_instrument_id=str(entry_instrument.id),
+            status="pending_signature",
+            funding_asset=entry_asset.upper(),
+            funding_amount=str(funding_amount),
+        )
+
+        actor = ActorContext(
+            actor_type="system",
+            actor_id=f"bundle-orchestrator-lifi-{portfolio_id}",
+        )
+        entry_qty_received = funding_amount
+        cash_available = funding_amount
+        alloc_results: list[dict] = []
+        succeeded = 0
+        failed = 0
+        pending = 0
+        total_entry_consumed = Decimal("0")
+
+        for alloc in allocations:
+            instrument = alloc.instrument
+            if instrument is None:
+                instrument = db.query(Instrument).filter(
+                    Instrument.id == alloc.instrument_id
+                ).first()
+            asset_obj = db.query(Asset).filter(
+                Asset.id == instrument.asset_id
+            ).first()
+            target_asset = self._normalize_asset_symbol(asset_obj.symbol.upper())
+            lifi_target = normalize_bundle_asset(target_asset)
+
+            alloc_entry_amount = (entry_qty_received * alloc.target_weight).quantize(
+                Decimal("0.000001"), rounding=ROUND_DOWN,
+            )
+            if alloc_entry_amount <= 0 or alloc_entry_amount > cash_available:
+                continue
+
+            ext_ref = f"bundle-alloc-{batch_id}-{lifi_target}"
+            try:
+                exec_result = self._run_allocation_leg(
+                    db,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    entry_asset=entry_asset,
+                    entry_instrument_id=entry_instrument.id,
+                    target_asset=lifi_target,
+                    target_instrument_id=alloc.instrument_id,
+                    alloc_entry_amount=alloc_entry_amount,
+                    ext_ref=ext_ref,
+                    batch_id=batch_id,
+                    actor=actor,
+                )
+                if exec_result["status"] == "pending":
+                    pending += 1
+                    alloc_results.append(exec_result["record"])
+                    continue
+                if exec_result["status"] == "completed":
+                    total_entry_consumed += alloc_entry_amount
+                    cash_available -= alloc_entry_amount
+                    succeeded += 1
+                    alloc_results.append(exec_result["record"])
+            except Exception as exc:
+                failed += 1
+                alloc_results.append({
+                    "asset": lifi_target,
+                    "instrument_id": str(alloc.instrument_id),
+                    "target_weight": float(alloc.target_weight),
+                    "status": "failed",
+                    "error": str(exc),
+                })
+
+        cash_leg_remaining = cash_available
+        if succeeded > 0 and pending == 0 and failed == 0:
+            from services.portfolio_engine.bundle_execution.pe_settlement import (
+                credit_initial_cash_leg,
+            )
+
+            credit_initial_cash_leg(
+                db,
+                portfolio_id=portfolio_id,
+                entry_instrument_id=entry_instrument.id,
+                quantity=cash_leg_remaining,
+                cost_basis=cash_leg_remaining,
+            )
+            status = "completed"
+        elif pending > 0:
+            status = "pending_signature" if succeeded == 0 else "partial_pending"
+        elif succeeded > 0:
+            status = "partial"
+        else:
+            status = "failed"
+
+        if status == "completed":
+            clear_invest_lock(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+            )
+        elif status == "failed":
+            release_invest_lock(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                terminal_status="failed",
+            )
+        else:
+            update_invest_lock_status(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                status=status,
+            )
+
+        invariant_g = check_invariant_g(db, client_id, dry_run=True)
+
+        return {
+            "status": status,
+            "batch_id": batch_id,
+            "portfolio_id": str(portfolio_id),
+            "entry_asset": entry_asset,
+            "entry_instrument_id": str(entry_instrument.id),
+            "funding": {
+                "action": "direct_entry_asset_lifi",
+                "entry_asset": entry_asset,
+                "amount": float(funding_amount),
+            },
+            "total_entry_asset_received": float(entry_qty_received),
+            "total_entry_asset_consumed": float(total_entry_consumed),
+            "cash_leg_remaining": float(cash_leg_remaining),
+            "legs_succeeded": succeeded,
+            "legs_failed": failed,
+            "legs_pending": pending,
+            "allocation_details": alloc_results,
+            "execution_provider": "lifi_base",
+            "invariant_g": invariant_g,
+        }
+
+    def _run_allocation_leg(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: UUID,
+        entry_asset: str,
+        entry_instrument_id: UUID,
+        target_asset: str,
+        target_instrument_id: UUID,
+        alloc_entry_amount: Decimal,
+        ext_ref: str,
+        batch_id: str,
+        actor: ActorContext,
+    ) -> dict:
+        leg = ExecutionLeg(
+            leg_id=ext_ref,
+            portfolio_id=portfolio_id,
+            client_id=client_id,
+            action="allocation",
+            from_asset=entry_asset.upper(),
+            to_asset=target_asset.upper(),
+            amount_from=alloc_entry_amount,
+            batch_id=batch_id,
+            bundle_action="allocation",
+            chain="base",
+            metadata={
+                "entry_instrument_id": str(entry_instrument_id),
+                "target_instrument_id": str(target_instrument_id),
+            },
+        )
+        result = self._execution.execute_leg(db, leg, actor)
+
+        if result.status == "pending":
+            record = {
+                "asset": target_asset,
+                "instrument_id": str(target_instrument_id),
+                "target_weight": None,
+                "entry_asset_consumed": float(alloc_entry_amount),
+                "crypto_received": 0,
+                "status": "pending",
+                "swap_id": result.provider_order_id,
+                "leg_id": ext_ref,
+                "signing": result.raw.get("prepare"),
+            }
+            return {"status": "pending", "record": record}
+
+        if self._execution.provider_name == "lifi_base":
+            record = {
+                "asset": target_asset,
+                "instrument_id": str(target_instrument_id),
+                "entry_asset_consumed": float(alloc_entry_amount),
+                "crypto_received": float(result.amount_to or 0),
+                "status": "completed",
+                "swap_id": result.provider_order_id,
+                "tx_hash": result.tx_hash,
+            }
+            return {"status": "completed", "record": record}
+
+        swap_result = result.to_swap_legacy_dict()
+        crypto_received = Decimal(str(swap_result.get("amount_to", 0)))
+        ref_value_net = Decimal(
+            str(swap_result.get("reference_value_net", alloc_entry_amount))
+        )
+        self._sync_pe_position(
+            db, portfolio_id, target_instrument_id,
+            crypto_received, ref_value_net,
+        )
+        self._debit_cash_leg(
+            db, portfolio_id, entry_instrument_id,
+            alloc_entry_amount, ref_value_net,
+        )
+        record = {
+            "asset": target_asset,
+            "instrument_id": str(target_instrument_id),
+            "entry_asset_consumed": float(alloc_entry_amount),
+            "crypto_received": float(crypto_received),
+            "status": "completed",
+            "swap_group_id": str(swap_result.get("swap_group_id", "")),
+        }
+        return {"status": "completed", "record": record}
+
+    def finalize_lifi_batch(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: UUID,
+        batch_id: str,
+        entry_instrument_id: UUID,
+        planned_entry_total: Decimal,
+        entry_consumed: Decimal,
+    ) -> dict:
+        """Crédite le cash leg résiduel après legs LI.FI confirmés + invariant G."""
+        from services.portfolio_engine.bundle_execution.pe_settlement import credit_initial_cash_leg
+
+        update_invest_lock_status(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+            status="finalizing",
+        )
+
+        remaining = planned_entry_total - entry_consumed
+        if remaining > 0:
+            credit_initial_cash_leg(
+                db,
+                portfolio_id=portfolio_id,
+                entry_instrument_id=entry_instrument_id,
+                quantity=remaining,
+                cost_basis=remaining,
+            )
+        invariant_g = check_invariant_g(db, client_id, dry_run=True)
+        clear_invest_lock(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        )
+        return {
+            "batch_id": batch_id,
+            "cash_leg_credited": float(remaining),
+            "invariant_g": invariant_g,
         }
 
     # ------------------------------------------------------------------
@@ -768,40 +1086,38 @@ class BundleOrchestrator:
         self, db, client_id, target_asset, fiat_amount,
         currency, ext_ref, portfolio_id, batch_id, actor,
     ) -> dict:
-        payload = ExchangeBuyRequest(
+        leg = ExecutionLeg(
+            leg_id=ext_ref,
+            portfolio_id=portfolio_id,
             client_id=client_id,
-            asset=target_asset,
-            fiat_amount=fiat_amount,
+            action="funding",
+            from_asset=currency.upper(),
+            to_asset=target_asset.upper(),
+            amount_from=fiat_amount,
+            batch_id=batch_id,
+            bundle_action="funding",
             currency=currency.upper(),
-            external_reference=ext_ref,
         )
-        result = self._exchange.buy(db, payload, actor)
-        self._tag_order_metadata(
-            db, ext_ref, portfolio_id, batch_id, "funding",
-        )
-        return result
+        result = self._execution.execute_leg(db, leg, actor)
+        return result.to_buy_legacy_dict()
 
     def _execute_swap_from_entry(
         self, db, client_id, from_asset, to_asset,
         amount_from, ext_ref, portfolio_id, batch_id, actor,
     ) -> dict:
-        payload = SwapRequest(
-            from_asset=from_asset,
-            to_asset=to_asset,
+        leg = ExecutionLeg(
+            leg_id=ext_ref,
+            portfolio_id=portfolio_id,
+            client_id=client_id,
+            action="allocation",
+            from_asset=from_asset.upper(),
+            to_asset=to_asset.upper(),
             amount_from=amount_from,
-            external_reference=ext_ref,
+            batch_id=batch_id,
+            bundle_action="allocation",
         )
-        result = self._exchange.swap(db, client_id, payload, actor)
-
-        sell_ref = f"{ext_ref}-sell"
-        buy_ref = f"{ext_ref}-buy"
-        self._tag_order_metadata(
-            db, sell_ref, portfolio_id, batch_id, "allocation",
-        )
-        self._tag_order_metadata(
-            db, buy_ref, portfolio_id, batch_id, "allocation",
-        )
-        return result
+        result = self._execution.execute_leg(db, leg, actor)
+        return result.to_swap_legacy_dict()
 
     @staticmethod
     def _tag_order_metadata(
@@ -821,6 +1137,9 @@ class BundleOrchestrator:
         meta["bundle_action"] = action
         meta["portfolio_scope"] = "bundle"
         meta["portfolio_id"] = str(portfolio_id)
+        meta.setdefault("execution_provider", "exchange")
+        meta.setdefault("batch_id", batch_id)
+        meta.setdefault("leg_id", ext_ref)
         order.metadata_ = meta
         db.flush()
 

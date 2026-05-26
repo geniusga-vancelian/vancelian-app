@@ -13,6 +13,8 @@ type Props = {
   children: ReactNode
   /** Surcharge ponctuelle du contenu CMS (rare). */
   support?: SupportAsideContent
+  /** Masque la colonne Help — contenu pleine largeur (ex. Academy). */
+  hideSupport?: boolean
   className?: string
 }
 
@@ -20,10 +22,15 @@ type Props = {
  * Layout dashboard portail — même grille 70 / 30 que le module FAQ site
  * (`lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-16`).
  */
-export function PortalDashboardLayout({ children, support, className }: Props) {
+export function PortalDashboardLayout({
+  children,
+  support,
+  hideSupport = false,
+  className,
+}: Props) {
   const cmsSupport = usePortalSupportContent()
   const resolvedSupport = support ?? cmsSupport
-  const showSupport = hasSupportAsideContent(resolvedSupport)
+  const showSupport = !hideSupport && hasSupportAsideContent(resolvedSupport)
 
   return (
     <div

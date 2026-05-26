@@ -117,7 +117,14 @@ def _create_swap_ledger_entry(
             "idempotency_key": idempotency_key,
             "title": title,
             "subtitle": subtitle,
-            "metadata_json": {"swap_id": str(swap.id), "source": sync_source},
+            "metadata_json": {
+                "swap_id": str(swap.id),
+                "source": sync_source,
+                "from_asset": str(swap.from_asset).upper(),
+                "to_asset": str(swap.to_asset).upper(),
+                "swap_amount_from": _format_decimal(swap.amount_in),
+                "swap_amount_to": _format_decimal(swap.estimated_receive),
+            },
             "confirmed_at": datetime.now(timezone.utc),
         },
     )

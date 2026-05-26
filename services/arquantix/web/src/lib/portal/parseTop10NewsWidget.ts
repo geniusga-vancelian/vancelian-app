@@ -1,3 +1,6 @@
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { portalAcademyHubRoute, portalArticleRoute } from '@/lib/portal/portalArticleRouting'
+
 export type PortalNewsItem = {
   id: string
   slug: string
@@ -42,19 +45,20 @@ function mapKey(itemToCard: Record<string, unknown>, key: string): string {
 
 function articleHref(slug: string): string {
   const s = slug.trim()
-  if (!s) return '/blog'
+  if (!s) return portalAcademyHubRoute()
   if (s.startsWith('/')) return s
-  return `/blog/${s}`
+  return portalArticleRoute(s)
 }
 
 function resolveHeaderHref(schema: Record<string, unknown>): string | undefined {
   const redirect = asRecord(schema.titleRedirect)
-  if (!redirect) return '/blog'
+  if (!redirect) return PORTAL_ROUTES.academy
   const type = asString(redirect.type).toLowerCase()
   const target = asString(redirect.target).toLowerCase()
-  if (type === 'internal' && target === 'blog') return '/blog'
-  if (type === 'internal' && target === 'research') return '/blog?type=research'
-  return '/blog'
+  if (type === 'internal' && target === 'blog') return PORTAL_ROUTES.academy
+  if (type === 'internal' && target === 'research') return `${PORTAL_ROUTES.academy}?type=research`
+  if (type === 'internal' && target === 'academy') return PORTAL_ROUTES.academy
+  return PORTAL_ROUTES.academy
 }
 
 /** Parse la réponse `GET /api/mobile/flutter/widgets/top10news` (même source que Flutter). */

@@ -24,6 +24,7 @@ import { PortalProfileSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalSignOutButton } from '@/components/portal/PortalSignOutButton'
 import { Container } from '@/components/ui/Container'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { cn } from '@/lib/utils'
 
@@ -244,7 +245,7 @@ export function PortalProfileScreen() {
               />
               <PortalSettingsRow
                 title="Academy"
-                href="/help"
+                href={PORTAL_ROUTES.academy}
                 leading={<School className="h-6 w-6 text-v-fg" strokeWidth={1.75} />}
               />
               <PortalSettingsRow
