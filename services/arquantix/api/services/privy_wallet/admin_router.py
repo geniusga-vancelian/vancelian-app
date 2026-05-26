@@ -17,10 +17,14 @@ from .admin_service import (
 )
 from .readiness import get_customer_wallet_readiness, get_privy_infra_readiness
 from .schemas import (
+    PrivyBackfillDepositRequest,
+    PrivyBackfillDepositResponse,
     PrivyCustomerReadinessResponse,
     PrivyInfraReadinessResponse,
     PrivyReconcileWalletsRequest,
     PrivyReconcileWalletsResponse,
+    PrivyReconciliationRunRequest,
+    PrivyReconciliationRunResponse,
     PrivyReplayWebhookResponse,
     PrivySimulateDepositRequest,
     PrivySimulateDepositResponse,
@@ -109,7 +113,7 @@ def reconcile_privy_wallets(
     db: Session = Depends(get_db),
     _actor=Depends(_guard),
 ):
-    """Réconcilie ``person_crypto_wallets`` depuis l’API Privy (ou adresse manuelle)."""
+    """Synchronise ``person_crypto_wallets`` depuis l’API Privy (adresses uniquement)."""
     try:
         result = _svc.reconcile_wallets(db, payload)
         db.commit()
@@ -123,3 +127,45 @@ def reconcile_privy_wallets(
             else status.HTTP_400_BAD_REQUEST,
             detail={"code": exc.code, "message": str(exc)},
         ) from exc
+
+
+@privy_wallet_admin_router.post(
+    "/backfill-deposit",
+    response_model=PrivyBackfillDepositResponse,
+)
+def backfill_privy_deposit(
+    payload: PrivyBackfillDepositRequest,
+    db: Session = Depends(get_db),
+    _actor=Depends(_guard),
+):
+    """Crédite le ledger depuis une transaction on-chain (tx hash + chain_id)."""
+    try:
+        result = _svc.backfill_deposit(db, payload)
+        db.commit()
+        return result
+    except PrivyWalletNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PrivySimulateDepositError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@privy_wallet_admin_router.post(
+    "/reconciliation/run",
+    response_model=PrivyReconciliationRunResponse,
+)
+def run_privy_wallet_reconciliation(
+    payload: PrivyReconciliationRunRequest,
+    db: Session = Depends(get_db),
+    _actor=Depends(_guard),
+):
+    """Compare soldes on-chain vs ledger, rejoue webhooks failed et backfill auto si possible."""
+    try:
+        result = _svc.run_reconciliation(
+            db,
+            person_id=payload.person_id,
+            auto_heal=payload.auto_heal,
+        )
+        db.commit()
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

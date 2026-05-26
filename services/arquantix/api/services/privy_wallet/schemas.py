@@ -112,6 +112,53 @@ class PrivyReconcileWalletsResponse(BaseModel):
     message: str
 
 
+class PrivyBackfillDepositRequest(BaseModel):
+    person_id: UUID
+    chain_id: int = Field(..., description="Chain EVM (ex. 8453 Base, 1 Ethereum)")
+    tx_hash: str = Field(..., min_length=10, max_length=80)
+    wallet_address: Optional[str] = Field(
+        None,
+        description="Adresse cible si plusieurs wallets actifs.",
+    )
+
+
+class PrivyBackfillDepositResultItem(BaseModel):
+    status: str
+    event_id: Optional[str] = None
+    deposit_id: Optional[str] = None
+    tx_hash: str
+    asset: str
+    amount: str
+    error: Optional[str] = None
+
+
+class PrivyBackfillDepositResponse(BaseModel):
+    results: list[dict]
+    credited_count: int
+    message: str
+
+
+class PrivyReconciliationRunRequest(BaseModel):
+    person_id: UUID
+    auto_heal: bool = Field(True, description="Rejouer webhooks failed + backfill auto si écart")
+
+
+class PrivyReconciliationRunResponse(BaseModel):
+    run_id: UUID
+    scope: str
+    person_id: Optional[UUID] = None
+    status: str
+    items_checked: int
+    matched_count: int
+    healed_count: int
+    chain_ahead_count: int
+    ledger_ahead_count: int
+    mismatch_count: int
+    unresolved_count: int
+    replayed_webhooks: int
+    message: str
+
+
 class PrivyInfraReadinessResponse(BaseModel):
     ready_for_live_deposits: bool
     blockers: list[str] = Field(default_factory=list)

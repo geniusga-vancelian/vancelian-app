@@ -26,3 +26,19 @@ class PersonWalletTransactionKind(str, Enum):
 class PersonWalletDirection(str, Enum):
     CREDIT = "credit"
     DEBIT = "debit"
+
+
+class PrivyReconciliationRunStatus(str, Enum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    COMPLETED_WITH_ISSUES = "completed_with_issues"
+    FAILED = "failed"
+
+
+class PrivyReconciliationItemStatus(str, Enum):
+    MATCHED = "matched"
+    CHAIN_AHEAD = "chain_ahead"
+    LEDGER_AHEAD = "ledger_ahead"
+    MISMATCH = "mismatch"
+    HEALED = "healed"
+    UNRESOLVED = "unresolved"

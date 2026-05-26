@@ -11,7 +11,7 @@ from database import Person, PersonExternalIdentity
 from services.auth.person_identity_bridge import PROVIDER_PRIVY, get_pe_client_for_person
 from services.exchange.assets import ASSET_PRECISION
 
-from .asset_mapping import ERC20_CONTRACT_TO_ASSET
+from .asset_mapping import contract_for_asset
 from .enums import PrivyWebhookEventStatus
 from .repository import (
     PersonCryptoWalletRepository,
@@ -19,14 +19,19 @@ from .repository import (
     PersonWalletDepositRepository,
 )
 from .schemas import (
+    PrivyBackfillDepositRequest,
+    PrivyBackfillDepositResponse,
     PrivyReconcileWalletItem,
     PrivyReconcileWalletsRequest,
     PrivyReconcileWalletsResponse,
+    PrivyReconciliationRunResponse,
     PrivyReplayWebhookResponse,
     PrivySimulateDepositRequest,
     PrivySimulateDepositResponse,
 )
 from .service import _format_decimal
+from .deposit_backfill import DepositBackfillError, backfill_deposit_from_tx_hash
+from .reconciliation_service import run_person_wallet_reconciliation
 from .wallet_sync import reconcile_person_privy_wallets
 from .webhook_service import FUNDS_DEPOSITED_EVENT, PrivyWebhookProcessor
 
@@ -77,7 +82,7 @@ class PrivyWalletAdminService:
             "confirmations": 12,
         }
 
-        contract = _contract_for_asset(chain_id, asset)
+        contract = contract_for_asset(chain_id, asset)
         if contract:
             data["contract_address"] = contract
             data["asset"] = {"type": "erc20", "symbol": asset}
@@ -178,7 +183,7 @@ class PrivyWalletAdminService:
             manual_address=payload.manual_address,
             manual_chain_id=payload.chain_id,
         )
-        msg = f"{result.synced_count} wallet(s) synchronisé(s) ({result.source})."
+        msg = f"{result.synced_count} adresse(s) wallet synchronisée(s) depuis Privy ({result.source})."
         if result.api_error and result.source == "manual_address":
             msg += f" API Privy : {result.api_error}"
 
@@ -222,16 +227,64 @@ class PrivyWalletAdminService:
             message="Webhook rejoué.",
         )
 
+    def backfill_deposit(
+        self,
+        db: Session,
+        payload: PrivyBackfillDepositRequest,
+    ) -> PrivyBackfillDepositResponse:
+        try:
+            results = backfill_deposit_from_tx_hash(
+                db,
+                person_id=payload.person_id,
+                chain_id=payload.chain_id,
+                tx_hash=payload.tx_hash,
+                wallet_address=payload.wallet_address,
+            )
+        except DepositBackfillError as exc:
+            raise PrivySimulateDepositError(str(exc)) from exc
+
+        credited = [r for r in results if r.get("status") in ("processed", "already_ingested")]
+        return PrivyBackfillDepositResponse(
+            results=results,
+            credited_count=len(credited),
+            message=(
+                f"{len(credited)} transfert(s) crédité(s) depuis la transaction {payload.tx_hash}."
+                if credited
+                else "Aucun crédit appliqué."
+            ),
+        )
+
+    def run_reconciliation(
+        self,
+        db: Session,
+        *,
+        person_id: UUID,
+        auto_heal: bool = True,
+    ) -> PrivyReconciliationRunResponse:
+        summary = run_person_wallet_reconciliation(
+            db,
+            person_id=person_id,
+            auto_heal=auto_heal,
+        )
+        return PrivyReconciliationRunResponse(
+            run_id=summary.run_id,
+            scope=summary.scope,
+            person_id=summary.person_id,
+            status=summary.status,
+            items_checked=summary.items_checked,
+            matched_count=summary.matched_count,
+            healed_count=summary.healed_count,
+            chain_ahead_count=summary.chain_ahead_count,
+            ledger_ahead_count=summary.ledger_ahead_count,
+            mismatch_count=summary.mismatch_count,
+            unresolved_count=summary.unresolved_count,
+            replayed_webhooks=summary.replayed_webhooks,
+            message=summary.message,
+        )
+
 
 def _human_to_atomic(amount: Decimal, asset: str) -> str:
     precision = ASSET_PRECISION.get(asset.upper(), 18)
     atomic = amount * (Decimal(10) ** precision)
     return str(int(atomic))
 
-
-def _contract_for_asset(chain_id: int, asset: str) -> str | None:
-    contracts = ERC20_CONTRACT_TO_ASSET.get(chain_id, {})
-    for address, symbol in contracts.items():
-        if symbol.upper() == asset.upper():
-            return address
-    return None

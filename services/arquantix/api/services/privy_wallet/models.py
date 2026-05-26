@@ -147,3 +147,65 @@ class PersonWalletBalance(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+class PersonWalletReconciliationRun(Base):
+    __tablename__ = "person_wallet_reconciliation_runs"
+    __table_args__ = (
+        Index("ix_person_wallet_reconciliation_runs_person_id", "person_id"),
+        Index("ix_person_wallet_reconciliation_runs_started_at", "started_at"),
+        {"schema": "public"},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
+    scope = Column(String(20), nullable=False, server_default="person")
+    person_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.persons.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    status = Column(String(40), nullable=False, server_default="running")
+    started_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    items_checked = Column(Integer, nullable=False, server_default="0")
+    matched_count = Column(Integer, nullable=False, server_default="0")
+    healed_count = Column(Integer, nullable=False, server_default="0")
+    chain_ahead_count = Column(Integer, nullable=False, server_default="0")
+    ledger_ahead_count = Column(Integer, nullable=False, server_default="0")
+    mismatch_count = Column(Integer, nullable=False, server_default="0")
+    unresolved_count = Column(Integer, nullable=False, server_default="0")
+    replayed_webhooks = Column(Integer, nullable=False, server_default="0")
+    summary_json = Column(JSONB, nullable=True)
+
+
+class PersonWalletReconciliationItem(Base):
+    __tablename__ = "person_wallet_reconciliation_items"
+    __table_args__ = (
+        Index("ix_person_wallet_reconciliation_items_run_id", "run_id"),
+        Index("ix_person_wallet_reconciliation_items_person_id", "person_id"),
+        {"schema": "public"},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
+    run_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.person_wallet_reconciliation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    person_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.persons.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    wallet_address = Column(String(80), nullable=False)
+    chain_id = Column(Integer, nullable=True)
+    chain_label = Column(String(80), nullable=True)
+    asset = Column(String(20), nullable=False)
+    ledger_balance = Column(Numeric(30, 18), nullable=False, server_default="0")
+    on_chain_balance = Column(Numeric(30, 18), nullable=False, server_default="0")
+    delta = Column(Numeric(30, 18), nullable=False, server_default="0")
+    status = Column(String(40), nullable=False)
+    action_taken = Column(String(40), nullable=True)
+    notes = Column(Text, nullable=True)
+    metadata_json = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

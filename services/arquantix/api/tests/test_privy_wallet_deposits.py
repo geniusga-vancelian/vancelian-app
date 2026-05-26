@@ -293,6 +293,43 @@ def test_webhook_erc20_watchlist_assets(
     assert row["balance"] == expected
 
 
+def test_webhook_base_usdc_deposit(client: TestClient, db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_privy_wallet(db, pe)
+    db.flush()
+
+    payload = {
+        "type": "wallet.funds_deposited",
+        "id": f"evt_{uuid.uuid4().hex[:16]}",
+        "data": {
+            "to_address": wallet.address,
+            "from_address": f"0x{uuid.uuid4().hex[:40]}",
+            "transaction_hash": f"0x{uuid.uuid4().hex}{uuid.uuid4().hex[:32]}",
+            "chain_id": "eip155:8453",
+            "asset": {"type": "erc20", "symbol": "USDC"},
+            "contract_address": "0x833589fCD6eDb6E08Ab4aB98b4690795417555",
+            "amount": "15000000",
+            "log_index": 0,
+            "block_number": 12345678,
+            "confirmations": 12,
+        },
+    }
+    res = client.post(
+        "/api/webhooks/privy",
+        json=payload,
+        headers={"svix-id": f"msg_{uuid.uuid4().hex[:8]}"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["processing_status"] == "processed"
+
+    auth = mobile_auth_headers(db, pe)
+    usdc = next(
+        b for b in client.get("/api/app/privy-wallet/balances", headers=auth).json()["balances"]
+        if b["asset"] == "USDC"
+    )
+    assert usdc["balance"] == "15"
+
+
 def test_get_deposit_detail(client: TestClient, db: Session):
     pe = make_linked_client(db)
     wallet = _seed_privy_wallet(db, pe)

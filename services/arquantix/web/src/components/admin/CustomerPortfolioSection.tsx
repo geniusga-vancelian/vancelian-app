@@ -135,7 +135,12 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
   const [simAmount, setSimAmount] = useState('100')
   const [simAsset, setSimAsset] = useState('USDC')
   const [simulating, setSimulating] = useState(false)
-  const [reconciling, setReconciling] = useState(false)
+  const [syncingWallets, setSyncingWallets] = useState(false)
+  const [reconcilingBalances, setReconcilingBalances] = useState(false)
+  const [backfilling, setBackfilling] = useState(false)
+  const [backfillTxHash, setBackfillTxHash] = useState('')
+  const [backfillChainId, setBackfillChainId] = useState('8453')
+  const [lastReconMessage, setLastReconMessage] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -183,8 +188,8 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
     }
   }
 
-  const handleReconcile = async () => {
-    setReconciling(true)
+  const handleSyncWallets = async () => {
+    setSyncingWallets(true)
     try {
       const res = await fetch('/api/admin/privy-wallet/reconcile-wallets', {
         method: 'POST',
@@ -193,12 +198,64 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
       })
       if (!res.ok) throw new Error(await parseErrorMessage(res))
       const result = (await res.json()) as { message?: string }
-      toastSuccess(result.message || 'Wallets synchronisés')
+      toastSuccess(result.message || 'Adresses Privy synchronisées')
       await load()
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : 'Réconciliation échouée')
+      toastError(e instanceof Error ? e.message : 'Sync adresses échouée')
     } finally {
-      setReconciling(false)
+      setSyncingWallets(false)
+    }
+  }
+
+  const handleReconcileBalances = async () => {
+    setReconcilingBalances(true)
+    setLastReconMessage(null)
+    try {
+      const res = await fetch('/api/admin/privy-wallet/reconciliation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ person_id: personId, auto_heal: true }),
+      })
+      if (!res.ok) throw new Error(await parseErrorMessage(res))
+      const result = (await res.json()) as {
+        message?: string
+        healed_count?: number
+        replayed_webhooks?: number
+        unresolved_count?: number
+      }
+      setLastReconMessage(result.message || 'Réconciliation terminée')
+      toastSuccess(result.message || 'Réconciliation soldes terminée')
+      await load()
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : 'Réconciliation soldes échouée')
+    } finally {
+      setReconcilingBalances(false)
+    }
+  }
+
+  const handleBackfillDeposit = async () => {
+    const txHash = backfillTxHash.trim()
+    if (!txHash) return
+    setBackfilling(true)
+    try {
+      const res = await fetch('/api/admin/privy-wallet/backfill-deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          person_id: personId,
+          chain_id: Number(backfillChainId) || 8453,
+          tx_hash: txHash,
+        }),
+      })
+      if (!res.ok) throw new Error(await parseErrorMessage(res))
+      const result = (await res.json()) as { message?: string }
+      toastSuccess(result.message || 'Backfill appliqué')
+      setBackfillTxHash('')
+      await load()
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : 'Backfill échoué')
+    } finally {
+      setBackfilling(false)
     }
   }
 
@@ -283,7 +340,7 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
           />
 
           {data.privy_admin?.identity?.is_linked ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 space-y-4">
               <p className="text-xs font-semibold uppercase text-slate-500">Outils admin Privy</p>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
@@ -297,10 +354,48 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
                 <Button size="sm" onClick={() => void handleSimulate()} disabled={simulating}>
                   Simuler dépôt
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void handleReconcile()} disabled={reconciling}>
-                  Réconcilier wallets
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleSyncWallets()}
+                  disabled={syncingWallets}
+                >
+                  Sync adresses Privy
+                </Button>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => void handleReconcileBalances()}
+                  disabled={reconcilingBalances}
+                >
+                  Réconcilier soldes
                 </Button>
               </div>
+              <div className="flex flex-wrap gap-2 items-end border-t border-slate-200 pt-3">
+                <div>
+                  <label className="text-xs text-slate-500">Tx hash (backfill)</label>
+                  <Input
+                    value={backfillTxHash}
+                    onChange={(e) => setBackfillTxHash(e.target.value)}
+                    placeholder="0x…"
+                    className="w-72 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500">Chain ID</label>
+                  <Input
+                    value={backfillChainId}
+                    onChange={(e) => setBackfillChainId(e.target.value)}
+                    className="w-24"
+                  />
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => void handleBackfillDeposit()} disabled={backfilling}>
+                  Backfill dépôt
+                </Button>
+              </div>
+              {lastReconMessage ? (
+                <p className="text-xs text-slate-600">{lastReconMessage}</p>
+              ) : null}
             </div>
           ) : null}
         </div>

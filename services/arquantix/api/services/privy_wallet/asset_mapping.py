@@ -6,18 +6,22 @@ from decimal import Decimal, InvalidOperation
 
 from services.exchange.assets import ASSET_PRECISION, SUPPORTED_ASSETS
 
-# Ethereum mainnet — contrats ERC-20 alignés watchlist Privy (ETH natif via NATIVE_SYMBOL_BY_CHAIN).
-ETHEREUM_MAINNET_ERC20: dict[str, str] = {
-    "USDC": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-    "EURC": "0x1abaea1f781e1f27444163d08077255fb56359a",
-    "USDT": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+# Contrats ERC-20 par réseau — alignés watchlist Privy (ETH natif via NATIVE_SYMBOL_BY_CHAIN).
+EVM_ERC20_CONTRACTS: dict[int, dict[str, str]] = {
+    1: {
+        "USDC": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "EURC": "0x1abaea1f781e1f27444163d08077255fb56359a",
+        "USDT": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    },
+    8453: {
+        "USDC": "0x833589fCD6eDb6E08Ab4aB98b4690795417555",
+        "EURC": "0x60a3E35Cc2b24469b62337c93687d29a08D49Aca",
+    },
 }
 
 ERC20_CONTRACT_TO_ASSET: dict[int, dict[str, str]] = {
-    1: {
-        contract.lower(): asset
-        for asset, contract in ETHEREUM_MAINNET_ERC20.items()
-    },
+    chain_id: {contract.lower(): asset for asset, contract in contracts.items()}
+    for chain_id, contracts in EVM_ERC20_CONTRACTS.items()
 }
 
 NATIVE_SYMBOL_BY_CHAIN: dict[int, str] = {
@@ -28,6 +32,21 @@ NATIVE_SYMBOL_BY_CHAIN: dict[int, str] = {
     10: "ETH",  # Optimism
     137: "MATIC",
 }
+
+# Rétrocompat tests / imports historiques.
+ETHEREUM_MAINNET_ERC20: dict[str, str] = EVM_ERC20_CONTRACTS[1]
+
+
+def contract_for_asset(chain_id: int, asset: str) -> str | None:
+    contracts = EVM_ERC20_CONTRACTS.get(chain_id, {})
+    return contracts.get(asset.upper())
+
+
+def supported_assets_for_chain(chain_id: int) -> list[str]:
+    assets = set(EVM_ERC20_CONTRACTS.get(chain_id, {}).keys())
+    if chain_id in NATIVE_SYMBOL_BY_CHAIN:
+        assets.add(NATIVE_SYMBOL_BY_CHAIN[chain_id])
+    return sorted(assets)
 
 
 def parse_caip2_chain_id(raw: str | int | None) -> int | None:
