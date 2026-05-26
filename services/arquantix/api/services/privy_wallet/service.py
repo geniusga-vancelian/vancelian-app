@@ -1,6 +1,7 @@
 """Read API service for Privy user-wallet ledger."""
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from uuid import UUID
 
@@ -37,6 +38,9 @@ _ICON_KEYS = {
 }
 
 
+logger = logging.getLogger(__name__)
+
+
 class PrivyWalletLedgerService:
 
     def __init__(self) -> None:
@@ -45,6 +49,13 @@ class PrivyWalletLedgerService:
         self._wallet_repo = PersonCryptoWalletRepository()
 
     def get_balances(self, db: Session, *, person_id: UUID) -> PrivyWalletBalancesResponse:
+        try:
+            from services.lifi.lifi_swap_settlement import backfill_unsettled_confirmed_swaps
+
+            backfill_unsettled_confirmed_swaps(db, person_id=person_id)
+        except Exception:
+            logger.warning("privy.swap_backfill.failed", extra={"person_id": str(person_id)}, exc_info=True)
+
         wallets = self._wallet_repo.list_active_for_person(db, person_id)
         wallet_by_id = {w.id: w for w in wallets}
         chain_buckets = reconcile_chain_buckets_with_ledger(

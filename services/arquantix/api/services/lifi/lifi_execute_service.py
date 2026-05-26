@@ -16,7 +16,7 @@ from services.lifi.lifi_approval_service import (
     resolve_lifi_status_bridge,
 )
 from services.lifi.lifi_client import LifiClient, LifiClientError
-from services.lifi.lifi_mock_settlement import apply_mock_swap_settlement
+from services.lifi.lifi_swap_settlement import apply_swap_settlement, swap_settlement_already_applied
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.schemas import SwapExecuteResponse, SwapStatusResponse, SwapTransactionPayload
 from services.lifi.signing_wallet_service import read_signing_wallet_from_audit
@@ -91,10 +91,10 @@ class LifiExecuteService:
             swap.status = SwapSessionStatus.CONFIRMED.value
             swap.tx_hash = clean_hash or f"0xmock{swap.id.hex[:16]}"
             swap.confirmed_at = datetime.now(timezone.utc)
-            apply_mock_swap_settlement(db, swap)
+            apply_swap_settlement(db, swap, sync_source="lifi_mock_swap")
             self._swap_repo.append_audit(
                 swap,
-                {"event": "mock_settled", "tx_hash": swap.tx_hash},
+                {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_mock_swap"},
             )
             db.commit()
             db.refresh(swap)
@@ -193,6 +193,13 @@ class LifiExecuteService:
             else:
                 swap.status = SwapSessionStatus.CONFIRMED.value
                 swap.confirmed_at = datetime.now(timezone.utc)
+
+            if swap.status == SwapSessionStatus.CONFIRMED.value and not swap_settlement_already_applied(swap):
+                apply_swap_settlement(db, swap, sync_source="lifi_swap")
+                self._swap_repo.append_audit(
+                    swap,
+                    {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_swap"},
+                )
         elif lifi_status == "FAILED":
             swap.status = SwapSessionStatus.FAILED.value
             swap.error_message = substatus_message or f"Swap LI.FI échoué ({substatus or 'FAILED'})"

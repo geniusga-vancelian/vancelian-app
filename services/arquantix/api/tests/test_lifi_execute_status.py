@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -46,10 +46,12 @@ def test_refresh_lifi_status_confirmed(submitted_swap):
     svc = LifiExecuteService(lifi_client=mock_client)
     db = MagicMock()
 
-    svc.refresh_lifi_status(db, submitted_swap)
+    with patch("services.lifi.lifi_execute_service.apply_swap_settlement") as mock_settle:
+        svc.refresh_lifi_status(db, submitted_swap)
 
     assert submitted_swap.status == SwapSessionStatus.CONFIRMED.value
     assert submitted_swap.confirmed_at is not None
+    mock_settle.assert_called_once()
     mock_client.get_status.assert_called_once_with(
         tx_hash="0xabc123",
         bridge="stargateV2",
