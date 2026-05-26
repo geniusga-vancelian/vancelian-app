@@ -49,7 +49,7 @@ export function buildPrivyEthSendTransactionRpcBody(args: {
   }
 
   if (args.gasLimit !== undefined && `${args.gasLimit}`.trim()) {
-    transaction.gas = normalizePrivyTxValueHex(args.gasLimit)
+    transaction.gas_limit = normalizePrivyTxValueHex(args.gasLimit)
   }
 
   return {

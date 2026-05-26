@@ -27,7 +27,7 @@ describe('privySponsoredRpcRequest', () => {
           to: '0xabcdef0123456789012345678901234567890abcd',
           data: '0xaabbcc',
           value: '0xf4240',
-          gas: '0x5208',
+          gas_limit: '0x5208',
         },
       },
     })
