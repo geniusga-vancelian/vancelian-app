@@ -12,6 +12,7 @@ const TICKER_ALIASES: Record<string, string> = {
   POL: 'MATIC',
   LUNA: 'LUNC',
   BSC: 'BNB',
+  CBBTC: 'BTC',
 }
 
 /** Tickers présents dans `mobile/assets/crypto_svgs/` (export Figma). */

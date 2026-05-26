@@ -1,11 +1,21 @@
 export { AppEyebrow, type AppEyebrowProps } from './AppEyebrow'
 export { AppButton, type AppButtonProps, type AppButtonVariant, type AppButtonSize } from './AppButton'
 export { AppCard, type AppCardProps, type AppCardVariant } from './AppCard'
+export {
+  AppExclusiveOfferCard,
+  type AppExclusiveOfferCardProps,
+  type AppExclusiveOfferChip,
+} from './AppExclusiveOfferCard'
 export { AppSurfaceCard } from './AppSurfaceCard'
 export { AppTxList } from './AppTxList'
 export { AppTxRow, type AppTxAmountTone } from './AppTxRow'
+export { AppTxFlowAvatar } from './AppTxFlowAvatar'
+export { AppTxExchangeAvatar } from './AppTxExchangeAvatar'
 export { AppDataList } from './AppDataList'
 export { AppDataRow } from './AppDataRow'
+export { AppMetricsList, type AppMetricsListVariant } from './AppMetricsList'
+export { AppMetricsRow } from './AppMetricsRow'
+export { AppFilterChip } from './AppFilterChip'
 export { AppSectionHeader } from './AppSectionHeader'
 export { AppNewsDeck } from './AppNewsDeck'
 export { AppFlashCard } from './AppFlashCard'

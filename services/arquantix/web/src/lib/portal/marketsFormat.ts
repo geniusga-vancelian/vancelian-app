@@ -57,6 +57,14 @@ export function formatChangePct(value: number): string {
   return `${sign}${value.toFixed(2)}%`
 }
 
+/** Variation 24h pour `AppAccountSummaryRow` (flèche DS + valeur absolue, locale fr). */
+export function formatChangePctIndicator(value: number): string {
+  return `${new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(value))}\u00a0%`
+}
+
 type MarketSummaryRow = {
   symbol?: string
   price?: number | string | null
@@ -249,6 +257,12 @@ type BundleCatalogItem = {
   description?: string | null
   risk_label?: string | null
   riskLabel?: string | null
+  portfolio_id?: string | null
+  portfolioId?: string | null
+  entry_asset_default?: string | null
+  entryAssetDefault?: string | null
+  entry_assets_allowed?: string[] | null
+  entryAssetsAllowed?: string[] | null
 }
 
 type BundleConfig = {
@@ -269,6 +283,11 @@ export function mapCryptoBundles(
       const code = (item.product_code ?? item.productCode ?? '').trim().toUpperCase()
       if (!code) return null
       const config = configs[code] ?? configs[code.toLowerCase()]
+      const entryAllowedRaw = item.entry_assets_allowed ?? item.entryAssetsAllowed
+      const entryAssetsAllowed = Array.isArray(entryAllowedRaw)
+        ? entryAllowedRaw.map((a) => String(a).trim().toUpperCase()).filter(Boolean)
+        : []
+
       return {
         id: item.id?.trim() || code,
         code,
@@ -277,6 +296,11 @@ export function mapCryptoBundles(
         imageUrl: config?.headerMediaUrl ?? null,
         performance1d: config?.performance1d ?? null,
         riskLabel: (item.risk_label ?? item.riskLabel)?.toString?.() ?? null,
+        portfolioId: (item.portfolio_id ?? item.portfolioId)?.trim() || null,
+        productId: item.id?.trim() || null,
+        entryAssetDefault:
+          (item.entry_asset_default ?? item.entryAssetDefault)?.trim().toUpperCase() || null,
+        entryAssetsAllowed,
       } satisfies PortalCryptoBundle
     })
     .filter((item): item is PortalCryptoBundle => item != null)

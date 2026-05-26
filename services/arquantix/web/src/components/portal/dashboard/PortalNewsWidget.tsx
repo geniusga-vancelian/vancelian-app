@@ -1,10 +1,8 @@
 'use client'
 
-import { AppActuCard } from '@/components/design-system/app/AppActuCard'
-import { AppFlashCard } from '@/components/design-system/app/AppFlashCard'
 import { AppNewsDeck } from '@/components/design-system/app/AppNewsDeck'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import { PortalFeaturedArticleCard } from '@/components/portal/PortalFeaturedArticleCard'
 import type { PortalNewsItem, PortalNewsWidgetData } from '@/lib/portal/parseTop10NewsWidget'
 
 type Props = {
@@ -17,29 +15,7 @@ function resolveItemMeta(item: PortalNewsItem, minReadLabel: string): string {
   return `${item.readingTime} ${minReadLabel}`
 }
 
-function NewsItemCard({
-  item,
-  minReadLabel,
-}: {
-  item: PortalNewsItem
-  minReadLabel: string
-}) {
-  const meta = resolveItemMeta(item, minReadLabel)
-  const linkProps = {
-    href: item.href,
-    title: item.title,
-    meta,
-    LinkComponent: PortalNavLink,
-  }
-
-  if (item.coverUrl?.trim()) {
-    return <AppActuCard {...linkProps} imageUrl={item.coverUrl.trim()} />
-  }
-
-  return <AppFlashCard {...linkProps} />
-}
-
-/** Blog à la une — deck horizontal DS preview/26 (Flash & Actu). */
+/** Blog à la une — grille 1→2 colonnes DS preview/26 (Flash & Actu). */
 export function PortalNewsWidget({ data, minReadLabel = 'min' }: Props) {
   if (data.items.length === 0) return null
 
@@ -50,7 +26,13 @@ export function PortalNewsWidget({ data, minReadLabel = 'min' }: Props) {
       <AppSectionHeader title={data.title} moreHref={headerHref} moreLabel="Voir tout" />
       <AppNewsDeck>
         {data.items.map((item) => (
-          <NewsItemCard key={item.id} item={item} minReadLabel={minReadLabel} />
+          <PortalFeaturedArticleCard
+            key={item.id}
+            href={item.href}
+            title={item.title}
+            coverUrl={item.coverUrl}
+            meta={resolveItemMeta(item, minReadLabel)}
+          />
         ))}
       </AppNewsDeck>
     </section>

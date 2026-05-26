@@ -34,12 +34,19 @@ function swapStatusErrorMessage(status: { status: string; error_message?: string
   return status.error_message ?? 'Exécution impossible'
 }
 
+type LifiSwapExecutionOptions = {
+  /** Soumission tx (défaut : route swap portal `/api/portal/swaps/{id}`). */
+  submitTx?: (swapId: string, txHash: string) => Promise<unknown>
+}
+
 export function useLifiSwapExecution(
   swapMockMode = false,
   onPhaseChange?: (phase: SwapExecutionPhase) => void,
   fromAsset?: string,
+  options?: LifiSwapExecutionOptions,
 ) {
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
+  const submitTxFn = options?.submitTx ?? submitSwapTx
 
   const signAndSubmit = useCallback(
     async (exec: SwapExecutePayload) => {
@@ -50,7 +57,7 @@ export function useLifiSwapExecution(
 
       if (swapMockMode) {
         const hash = generateMockExternalWalletTxHash()
-        await submitSwapTx(exec.swap_id, hash)
+        await submitTxFn(exec.swap_id, hash)
         return hash
       }
 
@@ -68,7 +75,7 @@ export function useLifiSwapExecution(
 
       if (isLocalMockExternalWallet(wallet)) {
         const hash = generateMockExternalWalletTxHash()
-        await submitSwapTx(exec.swap_id, hash)
+        await submitTxFn(exec.swap_id, hash)
         return hash
       }
 
@@ -101,10 +108,10 @@ export function useLifiSwapExecution(
       )
 
       onPhaseChange?.('submitting')
-      await submitSwapTx(exec.swap_id, hash)
+      await submitTxFn(exec.swap_id, hash)
       return hash
     },
-    [fromAsset, onPhaseChange, resolveWallet, sendPortalTransaction, swapMockMode],
+    [fromAsset, onPhaseChange, resolveWallet, sendPortalTransaction, submitTxFn, swapMockMode],
   )
 
   const pollUntilTerminal = useCallback(async (swapId: string) => {

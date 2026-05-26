@@ -51,6 +51,12 @@ export function portalCryptoWalletAssetRoute(asset: string): string {
   return `${PORTAL_ROUTES.cryptoWallet}/${encodeURIComponent(ticker || 'btc')}`
 }
 
+/** Historique complet des transactions d'un actif crypto wallet. */
+export function portalCryptoWalletTransactionsRoute(asset: string): string {
+  const ticker = asset.trim().toLowerCase()
+  return `${portalCryptoWalletAssetRoute(ticker)}/transactions`
+}
+
 /** Détail vault épargne — `/app/wallet/savings/0x…`. */
 export function portalSavingsVaultRoute(vaultAddress: string): string {
   const normalized = vaultAddress.trim().toLowerCase()

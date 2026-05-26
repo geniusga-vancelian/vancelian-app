@@ -2,18 +2,23 @@
 
 @scope ([data-v-ds='app']) {
   .news-deck {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    padding-bottom: 4px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
     width: 100%;
   }
 
-  .news-deck > * {
-    scroll-snap-align: start;
+  @media (min-width: 640px) {
+    .news-deck {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .news-deck > .flash-card,
+  .news-deck > .actu-card {
+    width: 100%;
+    max-width: none;
+    flex: unset;
   }
 
   .flash-card {

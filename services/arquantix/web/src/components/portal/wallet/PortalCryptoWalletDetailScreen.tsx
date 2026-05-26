@@ -13,6 +13,8 @@ import {
   Plus,
 } from 'lucide-react'
 import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
+import { AppMetricsList } from '@/components/design-system/app/AppMetricsList'
+import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
@@ -26,10 +28,9 @@ import { Container } from '@/components/ui/Container'
 import { cryptoBrandColor } from '@/lib/portal/cryptoInstrumentAssets'
 import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 import { formatChangePct, formatCryptoPrice } from '@/lib/portal/marketsFormat'
+import { mapCryptoTransactionToHistoryItem } from '@/lib/portal/cryptoTransactionHistoryFormat'
 import {
   formatCryptoMoney,
-  formatCryptoTransactionAmount,
-  isIncomingCryptoTransaction,
   isPrivyOnlyScope,
   perfToneClass,
   selectMoneyValue,
@@ -38,26 +39,15 @@ import type { PortalCryptoWalletDetailPayload } from '@/lib/portal/cryptoWalletT
 import {
   PORTAL_ROUTES,
   portalCryptoInstrumentRoute,
+  portalCryptoWalletTransactionsRoute,
   portalDedicatedDepositRoute,
   portalSwapRoute,
 } from '@/lib/portal/portalRouting'
 import { isSwapV1Token } from '@/lib/portal/swapFlowTypes'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
-import { cn } from '@/lib/utils'
 
 type Props = {
   asset: string
-}
-
-function InfoRow({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="font-ui text-[14px] text-v-fg-muted">{label}</span>
-      <span className={cn('text-right font-ui text-[14px] font-medium tabular-nums text-v-fg', valueClassName)}>
-        {value}
-      </span>
-    </div>
-  )
 }
 
 export function PortalCryptoWalletDetailScreen({ asset }: Props) {
@@ -246,19 +236,19 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
         </PortalReveal>
 
         <PortalReveal index={2}>
-          <article className="card-simple overflow-hidden !w-full">
-            <div className="border-b border-v-fg-10 px-4 py-3">
-              <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">My position</h2>
-            </div>
-            <div className="divide-y divide-v-fg-05 px-4">
-              <InfoRow label="Volume" value={`${detail.volume} ${ticker}`} />
-              <InfoRow label="Solde total" value={formatCryptoMoney(totalValue, currency)} />
-              <InfoRow
+          <section className="flex w-full flex-col gap-3">
+            <header>
+              <h2 className="module-head__title">My position</h2>
+            </header>
+            <AppMetricsList variant="plain">
+              <AppMetricsRow label="Volume" value={`${detail.volume} ${ticker}`} />
+              <AppMetricsRow label="Solde total" value={formatCryptoMoney(totalValue, currency)} />
+              <AppMetricsRow
                 label="Gains en cours"
                 value={unrealized != null ? formatCryptoMoney(unrealized, currency) : '—'}
                 valueClassName={perfToneClass(detail.unrealizedGainsPct ?? unrealized)}
               />
-              <InfoRow
+              <AppMetricsRow
                 label="Prix moyen d'achat"
                 value={
                   selectMoneyValue(currency, detail.avgBuyPriceEur, detail.avgBuyPriceUsd) != null
@@ -269,41 +259,33 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
                     : '—'
                 }
               />
-              <InfoRow
+              <AppMetricsRow
                 label="Prix actuel"
                 value={livePrice != null ? formatCryptoMoney(livePrice, currency) : '—'}
               />
-              <InfoRow
+              <AppMetricsRow
                 label="Gains encaissés"
                 value={realized != null ? formatCryptoMoney(realized, currency) : '—'}
                 valueClassName={perfToneClass(realized)}
               />
-              <InfoRow
+              <AppMetricsRow
                 label="Total des gains"
                 value={totalGain != null ? formatCryptoMoney(totalGain, currency) : '—'}
                 valueClassName={perfToneClass(detail.totalGainsPct ?? totalGain)}
               />
-            </div>
-          </article>
+            </AppMetricsList>
+          </section>
         </PortalReveal>
 
         <PortalReveal index={3}>
           <PortalTransactionHistory
             title="Transactions history"
-            action={
-              <span className="module-head__action cursor-default">Voir l&apos;historique complet</span>
-            }
-            items={data.transactions.slice(0, 12).map((tx) => {
-              const incoming = isIncomingCryptoTransaction(tx)
-              return {
-                id: tx.id,
-                title: tx.title || tx.side,
-                subtitle: tx.subtitle,
-                amount: formatCryptoTransactionAmount(tx),
-                incoming,
-                amountTone: incoming ? 'in' : 'out',
-              }
-            })}
+            seamless
+            moreHref={portalCryptoWalletTransactionsRoute(ticker)}
+            moreLabel="All transactions"
+            items={data.transactions.slice(0, 12).map((tx) =>
+              mapCryptoTransactionToHistoryItem(tx, currency),
+            )}
           />
         </PortalReveal>
 

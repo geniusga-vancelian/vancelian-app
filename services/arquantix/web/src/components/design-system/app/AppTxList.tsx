@@ -8,11 +8,12 @@ type Props = {
   isEmpty?: boolean
   children: ReactNode
   className?: string
+  seamless?: boolean
 }
 
-export function AppTxList({ title, action, emptyMessage, isEmpty, children, className }: Props) {
+export function AppTxList({ title, action, emptyMessage, isEmpty, children, className, seamless }: Props) {
   return (
-    <AppSurfaceCard title={title} action={action} stacked className={className}>
+    <AppSurfaceCard title={title} action={action} stacked seamless={seamless} className={className}>
       {isEmpty && emptyMessage ? (
         <p className="m-0 px-4 py-6 v-body text-v-fg-muted">{emptyMessage}</p>
       ) : (

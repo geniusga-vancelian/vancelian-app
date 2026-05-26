@@ -1,16 +1,15 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  PortalSettingsCard,
-  PortalSettingsRow,
-} from '@/components/portal/profile/PortalProfileUi'
-import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-import type { PortalCryptoAsset } from '@/lib/portal/marketsTypes'
-import { formatChangePct } from '@/lib/portal/marketsFormat'
-import { portalCryptoInstrumentRoute } from '@/lib/portal/portalRouting'
+
+import { AppAccountSummaryList } from '@/components/design-system/app/AppAccountSummaryList'
+import { AppAccountSummaryRow } from '@/components/design-system/app/AppAccountSummaryRow'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
+import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import type { PortalCryptoAsset } from '@/lib/portal/marketsTypes'
+import { formatChangePctIndicator } from '@/lib/portal/marketsFormat'
+import { PORTAL_ROUTES, portalCryptoInstrumentRoute } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
 type TabId = 'favorites' | 'popular' | 'gainers' | 'losers' | 'allCrypto'
@@ -41,25 +40,25 @@ type Props = {
 
 function AssetRow({ asset }: { asset: PortalCryptoAsset }) {
   const positive = asset.changePct >= 0
+
   return (
-    <PortalSettingsRow
+    <AppAccountSummaryRow
       href={portalCryptoInstrumentRoute(asset.ticker)}
+      LinkComponent={PortalNavLink}
+      leading={
+        <PortalCryptoAvatar
+          ticker={asset.ticker}
+          symbol={asset.symbol}
+          apiLogoUrl={asset.logoUrl}
+          size="lg"
+          className="!h-[52px] !w-[52px]"
+        />
+      }
       title={asset.name}
       subtitle={asset.ticker}
-      leading={<PortalCryptoAvatar ticker={asset.ticker} symbol={asset.symbol} apiLogoUrl={asset.logoUrl} />}
-      trailing={
-        <span className="flex flex-col items-end gap-0.5">
-          <span className="font-ui text-[14px] font-semibold text-v-fg">{asset.priceLabel}</span>
-          <span
-            className={cn(
-              'font-ui text-[12px] font-medium',
-              positive ? 'text-v-green' : 'text-v-error',
-            )}
-          >
-            {formatChangePct(asset.changePct)}
-          </span>
-        </span>
-      }
+      amount={asset.priceLabel}
+      indicator={formatChangePctIndicator(asset.changePct)}
+      indicatorTone={positive ? 'up' : 'dn'}
     />
   )
 }
@@ -144,11 +143,11 @@ export function PortalTopCryptoSection({
           <p className="m-0 font-ui text-[14px] text-v-fg-muted">{emptyMessage}</p>
         </div>
       ) : (
-        <PortalSettingsCard>
+        <AppAccountSummaryList>
           {rows.map((asset) => (
             <AssetRow key={`${tab}-${asset.id}`} asset={asset} />
           ))}
-        </PortalSettingsCard>
+        </AppAccountSummaryList>
       )}
     </section>
   )

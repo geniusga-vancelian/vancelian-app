@@ -1,3 +1,4 @@
+import { consolidateSwapTransactions, parseSwapAssetsFromTitle } from '@/lib/portal/cryptoTransactionHistoryFormat'
 import { formatPortalMoney, normalizeChartSeries } from '@/lib/portal/dashboardFormat'
 import { resolvePositionPortalChain } from '@/lib/portal/portalChainFilter'
 import { PORTAL_CHAIN_LABELS, type PortalChain } from '@/config/portalChains'
@@ -253,9 +254,24 @@ export function parsePrivyWalletDeposits(raw: unknown): PortalCryptoWalletTransa
       const amountCrypto = String(item.amount ?? '')
       const direction = String(item.direction ?? 'credit')
       const isCredit = direction === 'credit' || direction === 'in'
+      const title = String(item.title ?? 'Dépôt')
+      const transactionKind =
+        typeof item.transaction_kind === 'string' ? item.transaction_kind : 'deposit'
+      const parsedSwap =
+        parseSwapAssetsFromTitle(title) ??
+        (typeof item.from_asset === 'string' && typeof item.to_asset === 'string'
+          ? {
+              fromAsset: String(item.from_asset).trim().toUpperCase(),
+              toAsset: String(item.to_asset).trim().toUpperCase(),
+            }
+          : null)
+      const isSwap =
+        transactionKind === 'crypto_swap' ||
+        (parsedSwap != null && parsedSwap.fromAsset !== parsedSwap.toAsset)
+
       return {
         id: String(item.id ?? ''),
-        side: isCredit ? 'deposit' : 'withdraw',
+        side: isSwap ? 'swap' : isCredit ? 'deposit' : 'withdraw',
         asset,
         amountCrypto,
         amountFiat: '',
@@ -263,15 +279,31 @@ export function parsePrivyWalletDeposits(raw: unknown): PortalCryptoWalletTransa
         currency: 'EUR',
         status: String(item.status ?? ''),
         createdAt: String(item.created_at ?? ''),
-        title: String(item.title ?? 'Dépôt'),
+        title,
         subtitle: String(item.subtitle ?? item.tx_hash ?? ''),
         direction,
-        transactionKind:
-          typeof item.transaction_kind === 'string' ? item.transaction_kind : 'deposit',
+        transactionKind,
         sourceSystem: 'privy',
+        txHash: typeof item.tx_hash === 'string' ? item.tx_hash : undefined,
+        fromAsset:
+          typeof item.from_asset === 'string'
+            ? item.from_asset
+            : parsedSwap?.fromAsset,
+        toAsset:
+          typeof item.to_asset === 'string' ? item.to_asset : parsedSwap?.toAsset,
+        swapAmountFrom:
+          typeof item.swap_amount_from === 'string' ? item.swap_amount_from : undefined,
+        swapAmountTo: typeof item.swap_amount_to === 'string' ? item.swap_amount_to : undefined,
       }
     })
     .filter((tx) => tx.id)
+}
+
+function swapTransactionPriority(tx: PortalCryptoWalletTransaction): number {
+  if (tx.sourceSystem === 'lifi_swap' || tx.side === 'swap') return 3
+  if (tx.swapAmountFrom && tx.swapAmountTo) return 2
+  if (tx.transactionKind === 'crypto_swap') return 1
+  return 0
 }
 
 /** Fusionne transactions crypto-positions + dépôts Privy (dédupliqués par id). */
@@ -279,14 +311,34 @@ export function mergeCryptoWalletTransactions(
   platformRaw: unknown,
   privyRaw: unknown,
 ): PortalCryptoWalletTransaction[] {
+  const platform = parseCryptoWalletTransactions(platformRaw)
+  const privy = parsePrivyWalletDeposits(privyRaw)
+
+  const bestByHash = new Map<string, PortalCryptoWalletTransaction>()
+  for (const tx of [...platform, ...privy]) {
+    const hash = tx.txHash?.trim().toLowerCase()
+    if (!hash) continue
+    const existing = bestByHash.get(hash)
+    if (!existing || swapTransactionPriority(tx) > swapTransactionPriority(existing)) {
+      bestByHash.set(hash, tx)
+    }
+  }
+
   const byId = new Map<string, PortalCryptoWalletTransaction>()
-  for (const tx of parseCryptoWalletTransactions(platformRaw)) {
+  for (const tx of platform) {
     byId.set(tx.id, tx)
   }
-  for (const tx of parsePrivyWalletDeposits(privyRaw)) {
-    if (!byId.has(tx.id)) byId.set(tx.id, tx)
+  for (const tx of privy) {
+    if (byId.has(tx.id)) continue
+    const hash = tx.txHash?.trim().toLowerCase()
+    if (hash) {
+      const preferred = bestByHash.get(hash)
+      if (preferred && preferred.id !== tx.id) continue
+    }
+    byId.set(tx.id, tx)
   }
-  return [...byId.values()].sort(
+
+  return consolidateSwapTransactions([...byId.values()]).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
 }
@@ -366,6 +418,12 @@ export function parseCryptoWalletTransactions(raw: unknown): PortalCryptoWalletT
       transactionKind:
         typeof item.transaction_kind === 'string' ? item.transaction_kind : undefined,
       sourceSystem: typeof item.source_system === 'string' ? item.source_system : undefined,
+      fromAsset: typeof item.from_asset === 'string' ? item.from_asset : undefined,
+      toAsset: typeof item.to_asset === 'string' ? item.to_asset : undefined,
+      swapAmountFrom:
+        typeof item.swap_amount_from === 'string' ? item.swap_amount_from : undefined,
+      swapAmountTo: typeof item.swap_amount_to === 'string' ? item.swap_amount_to : undefined,
+      txHash: typeof item.tx_hash === 'string' ? item.tx_hash : undefined,
     }))
     .filter((tx) => tx.id)
 }

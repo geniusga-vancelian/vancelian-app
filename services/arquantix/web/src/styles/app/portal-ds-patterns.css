@@ -12,6 +12,14 @@
     overflow: hidden;
   }
 
+  .tx-list--seamless {
+    padding: 8px;
+  }
+
+  .tx-list--seamless .tx-item + .tx-item {
+    border-top: none;
+  }
+
   .tx-item {
     display: flex;
     align-items: center;
@@ -141,6 +149,119 @@
 
   .list__item--static:hover {
     background: transparent;
+  }
+
+  /* Metrics list — preview/33-card-data-list */
+  .stats {
+    width: 100%;
+    max-width: 100%;
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: 16px;
+    padding: 8px 24px;
+    box-shadow: var(--v-elev-subtle);
+  }
+
+  .stats--lined .stat {
+    border-bottom: 1px solid var(--v-fg-10);
+  }
+
+  .stats--lined .stat:last-child {
+    border-bottom: 0;
+  }
+
+  .stat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0;
+    gap: 16px;
+  }
+
+  .stat__label {
+    margin: 0;
+    font-family: var(--v-font-ui);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--v-fg);
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .stat__value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    font-family: var(--v-font-ui);
+    font-weight: 400;
+    font-size: 16px;
+    color: var(--v-fg-light);
+    font-feature-settings: 'tnum' on, 'lnum' on;
+    text-align: right;
+  }
+
+  .stat__info {
+    color: var(--v-fg-light);
+    flex-shrink: 0;
+  }
+
+  .stat__lead {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    color: var(--v-fg-muted);
+  }
+
+  /* Filter chips — preview/50-selection-chips */
+  .chips {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .chips--scroll {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .chips--scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--v-white);
+    color: var(--v-fg);
+    border: 1px solid var(--v-fg-10);
+    font-family: var(--v-font-ui);
+    font-weight: 500;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition:
+      background 120ms var(--v-ease-out),
+      border-color 120ms var(--v-ease-out);
+  }
+
+  .chip:hover {
+    background: var(--v-fg-05);
+  }
+
+  .chip.is-selected {
+    background: var(--v-fg);
+    color: var(--v-white);
+    border-color: var(--v-fg);
   }
 
   /* Settings (preview 83) */

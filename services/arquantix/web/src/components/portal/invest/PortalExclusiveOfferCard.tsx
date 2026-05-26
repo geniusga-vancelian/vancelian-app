@@ -1,8 +1,9 @@
 'use client'
 
+import { Banknote, CalendarDays, Home, Users } from 'lucide-react'
+
+import { AppExclusiveOfferCard } from '@/components/design-system/app/AppExclusiveOfferCard'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
-import { OfferFundingProgressBar } from '@/components/design-system/offerFunding/OfferFundingProgressBar'
-import { Button } from '@/components/ui/button'
 import type { PortalExclusiveOffer } from '@/lib/portal/investTypes'
 import { cn } from '@/lib/utils'
 
@@ -11,76 +12,53 @@ type Props = {
   className?: string
 }
 
+function formatDurationMonths(months: number | null): string | null {
+  if (months == null || months <= 0) return null
+  return `${months}M`
+}
+
 export function PortalExclusiveOfferCard({ offer, className }: Props) {
+  const durationLabel = formatDurationMonths(offer.durationMonths)
+  const trailingChipLabel = durationLabel ?? (offer.apyLabel !== '—' ? offer.apyLabel : offer.targetLabel)
+
+  const chips = [
+    {
+      key: 'investors',
+      label: String(offer.investorsCount),
+      icon: <Users aria-hidden />,
+    },
+    {
+      key: 'raised',
+      label: offer.raisedLabel,
+      icon: <Banknote aria-hidden />,
+      progressPct: offer.progressPct,
+    },
+    {
+      key: 'meta',
+      label: trailingChipLabel,
+      icon: <CalendarDays aria-hidden />,
+    },
+  ]
+
   return (
-    <article
-      className={cn(
-        'flex h-full flex-col card-simple overflow-hidden !w-full',
-        className,
-      )}
-    >
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-v-fg-05">
-        {offer.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={offer.coverUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center font-ui text-[13px] text-v-fg-muted">
-            Vancelian
-          </div>
-        )}
-        <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-          <span className="rounded-v-tag bg-white/95 px-2 py-0.5 font-ui text-[11px] font-medium uppercase tracking-v-wide text-v-fg">
-            {offer.category}
-          </span>
-          <span className="rounded-v-tag bg-v-fg px-2 py-0.5 font-ui text-[11px] font-medium uppercase tracking-v-wide text-white">
-            {offer.isFunded ? 'Funded' : 'Live'}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-4 p-4 sm:p-5">
-        <div className="min-w-0">
-          <h3 className="m-0 line-clamp-2 font-ui text-[18px] font-semibold leading-snug text-v-fg">
-            {offer.title}
-          </h3>
-          {offer.description ? (
-            <p className="mt-2 mb-0 line-clamp-2 font-ui text-[14px] leading-relaxed text-v-fg-body">
-              {offer.description}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 font-ui text-[13px]">
-          <div>
-            <p className="m-0 text-v-fg-muted">Raised</p>
-            <p className="m-0 mt-0.5 font-semibold text-v-fg">{offer.raisedLabel}</p>
-          </div>
-          <div>
-            <p className="m-0 text-v-fg-muted">Investors</p>
-            <p className="m-0 mt-0.5 font-semibold text-v-fg">{offer.investorsCount}</p>
-          </div>
-          <div>
-            <p className="m-0 text-v-fg-muted">Target APR</p>
-            <p className="m-0 mt-0.5 font-semibold text-v-green">{offer.apyLabel}</p>
-          </div>
-          <div>
-            <p className="m-0 text-v-fg-muted">Target</p>
-            <p className="m-0 mt-0.5 font-semibold text-v-fg">{offer.targetLabel}</p>
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-2 flex items-center justify-between font-ui text-[13px] font-medium text-v-fg">
-            <span>Total funding</span>
-            <span>{Math.round(offer.progressPct)}%</span>
-          </div>
-          <OfferFundingProgressBar percentage={offer.progressPct} color="var(--v-green)" />
-        </div>
-
-        <Button type="button" className="mt-auto w-full" asChild>
-          <PortalNavLink href={offer.href}>Invest</PortalNavLink>
-        </Button>
-      </div>
-    </article>
+    <AppExclusiveOfferCard
+      className={cn(className)}
+      coverImageUrl={offer.coverUrl}
+      imageSeed={offer.id}
+      category={offer.category}
+      categoryIcon={<Home aria-hidden />}
+      chips={chips}
+      title={offer.title}
+      description={offer.description || offer.subtitle || undefined}
+      ctaLabel={offer.isFunded ? 'View' : 'Invest'}
+      ctaSlot={
+        <PortalNavLink
+          href={offer.href}
+          className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-v-fg px-[22px] font-ui text-[14px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+        >
+          {offer.isFunded ? 'View' : 'Invest'}
+        </PortalNavLink>
+      }
+    />
   )
 }

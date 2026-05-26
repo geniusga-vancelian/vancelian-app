@@ -1,24 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, TrendingUp } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 import { PortalLedgityVaultModal } from '@/components/portal/invest/PortalLedgityVaultModal'
+import { PortalDefiVaultOfferCard } from '@/components/portal/invest/PortalDefiVaultOfferCard'
 import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
-import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
-import { Button } from '@/components/ui/button'
 import { fetchPortalLedgityVaults } from '@/lib/portal/ledgity/ledgityVaultClient'
-import {
-  formatEarnApyFromBps,
-  formatPricePerShare,
-} from '@/lib/portal/ledgity/ledgityVaultFormat'
 import type {
   PortalLedgityBetaPortalFlags,
   PortalLedgityVaultDetails,
 } from '@/lib/portal/ledgity/ledgityVaultTypes'
-import { getPortalDefiIntegrationLabel } from '@/lib/portal/morphoConstants'
-import { formatEarnUsd } from '@/lib/portal/morphoVaultFormat'
-import { cn } from '@/lib/utils'
 
 type Props = {
   embedded?: boolean
@@ -97,68 +89,13 @@ export function PortalLedgityVaultSection({ embedded = false }: Props) {
       ) : null}
 
       {!loading && !error && vaults.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {vaults.map((vault) => (
-            <article
+            <PortalDefiVaultOfferCard
               key={vault.id}
-              className="flex flex-col gap-4 rounded-v-card border border-v-fg-10 bg-v-card p-5 shadow-v-subtle"
-            >
-              <div className="flex items-start gap-3">
-                <PortalCryptoAvatar ticker={vault.asset.symbol} symbol={vault.asset.symbol} size="md" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="m-0 font-ui text-[17px] font-semibold text-v-fg">{vault.name}</h3>
-                    <span className="rounded-v-tag bg-violet-100 px-2 py-0.5 font-ui text-[11px] font-medium uppercase tracking-v-wide text-violet-800">
-                      {vault.provider}
-                    </span>
-                    <span className="rounded-v-tag bg-v-fg-05 px-2 py-0.5 font-ui text-[11px] font-medium uppercase tracking-v-wide text-v-fg-muted">
-                      {getPortalDefiIntegrationLabel(vault.integrationMode)}
-                    </span>
-                  </div>
-                  {vault.description ? (
-                    <p className="mt-1 mb-0 font-ui text-[13px] leading-relaxed text-v-fg-muted">
-                      {vault.description}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 font-ui text-[13px]">
-                <div>
-                  <p className="m-0 text-v-fg-muted">Estimated APY</p>
-                  <p className="m-0 mt-0.5 flex items-center gap-1 font-semibold text-v-green">
-                    <TrendingUp className="h-3.5 w-3.5" />
-                    {formatEarnApyFromBps(vault.userApyBps)}
-                  </p>
-                </div>
-                <div>
-                  <p className="m-0 text-v-fg-muted">Price per share (PPS)</p>
-                  <p className="m-0 mt-0.5 font-semibold text-v-fg">{formatPricePerShare(vault.pricePerShare)}</p>
-                </div>
-                <div>
-                  <p className="m-0 text-v-fg-muted">Asset</p>
-                  <p className="m-0 mt-0.5 font-semibold text-v-fg">{vault.asset.symbol}</p>
-                </div>
-                <div>
-                  <p className="m-0 text-v-fg-muted">TVL</p>
-                  <p className="m-0 mt-0.5 font-semibold text-v-fg">{formatEarnUsd(vault.tvlUsd)}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="m-0 text-v-fg-muted">Available liquidity (on-chain buffer)</p>
-                  <p className="m-0 mt-0.5 font-semibold text-v-fg">
-                    {formatEarnUsd(vault.availableLiquidityUsd)}
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                className={cn('w-full rounded-full font-ui text-[15px] font-semibold')}
-                onClick={() => setSelectedVault(vault)}
-              >
-                Deposit / Withdraw
-              </Button>
-            </article>
+              vault={vault}
+              onOpen={() => setSelectedVault(vault)}
+            />
           ))}
         </div>
       ) : null}

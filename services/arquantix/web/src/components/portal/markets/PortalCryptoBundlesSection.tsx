@@ -1,5 +1,8 @@
 'use client'
 
+import { useState } from 'react'
+
+import { PortalBundleInvestDialog } from '@/components/portal/bundles/PortalBundleInvestDialog'
 import { Button } from '@/components/ui/button'
 import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
@@ -10,7 +13,13 @@ type Props = {
   bundles: PortalCryptoBundle[]
 }
 
-function BundleCard({ bundle }: { bundle: PortalCryptoBundle }) {
+function BundleCard({
+  bundle,
+  onInvest,
+}: {
+  bundle: PortalCryptoBundle
+  onInvest: (bundle: PortalCryptoBundle) => void
+}) {
   const perf = bundle.performance1d
   const perfLabel = perf == null ? '—' : formatChangePct(perf)
 
@@ -54,7 +63,14 @@ function BundleCard({ bundle }: { bundle: PortalCryptoBundle }) {
               {perfLabel}
             </p>
           </div>
-          <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 px-3 text-[12px]" disabled>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 px-3 text-[12px]"
+            disabled={!bundle.portfolioId}
+            onClick={() => onInvest(bundle)}
+          >
             Invest
           </Button>
         </div>
@@ -64,6 +80,8 @@ function BundleCard({ bundle }: { bundle: PortalCryptoBundle }) {
 }
 
 export function PortalCryptoBundlesSection({ bundles }: Props) {
+  const [investBundle, setInvestBundle] = useState<PortalCryptoBundle | null>(null)
+
   if (bundles.length === 0) return null
 
   return (
@@ -71,9 +89,18 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
       <PortalSectionHeading title="Crypto Bundles" />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {bundles.map((bundle) => (
-          <BundleCard key={bundle.id} bundle={bundle} />
+          <BundleCard key={bundle.id} bundle={bundle} onInvest={setInvestBundle} />
         ))}
       </div>
+      {investBundle ? (
+        <PortalBundleInvestDialog
+          bundle={investBundle}
+          open
+          onOpenChange={(open) => {
+            if (!open) setInvestBundle(null)
+          }}
+        />
+      ) : null}
     </section>
   )
 }

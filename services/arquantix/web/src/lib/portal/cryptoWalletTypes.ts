@@ -105,6 +105,11 @@ export type PortalCryptoWalletTransaction = {
   direction: string
   transactionKind?: string
   sourceSystem?: string
+  fromAsset?: string
+  toAsset?: string
+  swapAmountFrom?: string
+  swapAmountTo?: string
+  txHash?: string
 }
 
 export type PortalCryptoWalletDetailPayload = {

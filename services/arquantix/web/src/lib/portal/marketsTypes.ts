@@ -25,6 +25,11 @@ export type PortalCryptoBundle = {
   imageUrl: string | null
   performance1d: number | null
   riskLabel: string | null
+  /** Portfolio PE provisionné pour ce client (catalog `/api/app/bundle/catalog`). */
+  portfolioId: string | null
+  productId: string | null
+  entryAssetDefault: string | null
+  entryAssetsAllowed: string[]
 }
 
 export type PortalMarketsNewsItem = {

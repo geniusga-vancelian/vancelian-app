@@ -9,14 +9,24 @@ type Props = {
   action?: ReactNode
   /** Liste empilée avec séparateurs (pas de padding carte sur le corps). */
   stacked?: boolean
+  /** Preview/17 variant A — items sans bordure inter-lignes. */
+  seamless?: boolean
 }
 
 /** Carte surface produit — fond blanc, radius 8–12, ombre subtle (DS app). */
-export function AppSurfaceCard({ children, className, title, action, stacked = false }: Props) {
+export function AppSurfaceCard({
+  children,
+  className,
+  title,
+  action,
+  stacked = false,
+  seamless = false,
+}: Props) {
   return (
     <article
       className={cn(
         stacked ? 'tx-list overflow-hidden' : 'card-simple overflow-hidden !w-full p-0',
+        seamless && 'tx-list--seamless',
         className,
       )}
     >
