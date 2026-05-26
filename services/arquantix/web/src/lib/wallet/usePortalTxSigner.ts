@@ -2,11 +2,13 @@
 
 import { useCallback } from 'react'
 import type { ConnectedWallet, User } from '@privy-io/react-auth'
-import { useCreateWallet, usePrivy, useSendTransaction, useWallets } from '@privy-io/react-auth'
+import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useAccount, useSendTransaction as useWagmiSendTransaction, useSwitchChain } from 'wagmi'
 
 import { resolvePortalSwapSigningWallet } from '@/lib/portal/resolvePortalSwapSigningWallet'
-import { normalizeSwapTxValue, normalizeTxHash } from '@/lib/portal/swapTxFormat'
+import { resolvePrivyEmbeddedWalletId } from '@/lib/portal/resolvePrivyEmbeddedWalletId'
+import { sendPortalPrivySponsoredTransaction } from '@/lib/portal/privySponsoredTxClient'
+import { normalizeTxHash } from '@/lib/portal/swapTxFormat'
 import type { ExecutionWallet } from '@/lib/wallet/executionWalletTypes'
 import {
   generateMockExternalWalletTxHash,
@@ -42,10 +44,6 @@ function normalizeTxValueBigInt(value?: bigint | string | number): bigint {
   return BigInt(raw)
 }
 
-function normalizeTxValueHex(value?: bigint | string | number): `0x${string}` {
-  return normalizeSwapTxValue(normalizeTxValueBigInt(value).toString())
-}
-
 function isAlreadyOnTargetChainError(error: unknown): boolean {
   const haystack = `${error instanceof Error ? error.message : String(error)}`.toLowerCase()
   return (
@@ -57,7 +55,6 @@ function isAlreadyOnTargetChainError(error: unknown): boolean {
 
 export function usePortalTxSigner() {
   const { ready, authenticated, user } = usePrivy()
-  const { sendTransaction: sendPrivyTransaction } = useSendTransaction()
   const { wallets } = useWallets()
   const { createWallet } = useCreateWallet()
   const { sendTransactionAsync: sendWagmiTransaction } = useWagmiSendTransaction()
@@ -90,6 +87,11 @@ export function usePortalTxSigner() {
       return {
         type: 'privy_embedded',
         address: privyWallet.address,
+        privyWalletId: resolvePrivyEmbeddedWalletId({
+          user,
+          wallets,
+          walletAddress: privyWallet.address,
+        }),
       }
     },
     [authenticated, createWallet, mode, ready, resolveExecutionWallet, user, wallets],
@@ -180,20 +182,15 @@ export function usePortalTxSigner() {
           return await sendExternalWalletTransaction(tx, wallet)
         }
 
-        const { hash } = await sendPrivyTransaction(
-          {
-            chainId: tx.chainId,
-            to: tx.to,
-            data: tx.data,
-            value: normalizeTxValueHex(tx.value),
-            ...(tx.gasLimit !== undefined ? { gasLimit: tx.gasLimit } : {}),
-          },
-          {
-            address: wallet.address,
-            sponsor: true,
-            uiOptions: { showWalletUIs: false },
-          },
-        )
+        const { hash } = await sendPortalPrivySponsoredTransaction({
+          chainId: tx.chainId,
+          to: tx.to,
+          data: tx.data,
+          value: tx.value,
+          gasLimit: tx.gasLimit,
+          walletAddress: wallet.address,
+          privyWalletId: wallet.privyWalletId,
+        })
         return { hash: normalizeTxHash(hash), wallet }
       } catch (error) {
         throw new Error(
@@ -205,7 +202,7 @@ export function usePortalTxSigner() {
         )
       }
     },
-    [resolveWallet, sendExternalWalletTransaction, sendPrivyTransaction, switchToChain],
+    [resolveWallet, sendExternalWalletTransaction, switchToChain],
   )
 
   return { sendPortalTransaction, resolveWallet, mode }
