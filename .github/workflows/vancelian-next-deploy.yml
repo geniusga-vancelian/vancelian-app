@@ -1,5 +1,6 @@
 # Seul workflow de deploy auto sur push main pour services/arquantix/web (app.vancelian.finance).
 # Console, coming-soon et ECR legacy : workflow_dispatch — voir docs/arquantix/CI_DEPLOY_MATRIX.md
+# Dernier redeploy DS portal : push main incluant services/arquantix/web/**
 name: Vancelian Next - Deploy to ECS
 
 on:
