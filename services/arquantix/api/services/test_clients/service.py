@@ -423,17 +423,26 @@ class TestClientService:
 
         from services.privy_wallet.patrimony_merge import find_merged_position
 
+        person_id = getattr(client, "person_id", None)
+        if person_id is not None:
+            try:
+                from services.lifi.lifi_swap_settlement import backfill_unsettled_confirmed_swaps
+
+                backfill_unsettled_confirmed_swaps(db, person_id=person_id)
+            except Exception:
+                pass
+
         merged = find_merged_position(
             db,
-            person_id=getattr(client, "person_id", None),
+            person_id=person_id,
             asset=asset,
             chain_id=chain_id,
         )
 
         if chain_id is not None:
-            if merged is None:
-                return {"client": client, "detail": None}
-            return self._build_privy_only_wallet_detail(db, client=client, merged=merged, asset=asset)
+            if merged is not None:
+                return self._build_privy_only_wallet_detail(db, client=client, merged=merged, asset=asset)
+            return {"client": client, "detail": None}
 
         if pos is None and merged is None:
             return {"client": client, "detail": None}

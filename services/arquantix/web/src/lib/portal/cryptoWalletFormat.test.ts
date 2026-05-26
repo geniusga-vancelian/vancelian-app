@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   alignCryptoWalletDetailWithScopedPosition,
+  buildCryptoWalletDetailFromScopedPosition,
   buildPrivyWalletPositionsSummary,
   formatCryptoTransactionAmount,
   formatDetailVolumeAmount,
@@ -185,5 +186,33 @@ describe('alignCryptoWalletDetailWithScopedPosition', () => {
 
     assert.equal(aligned.volume, formatDetailVolumeAmount(0.00857064, 'ETH'))
     assert.ok((aligned.totalValueUsd ?? 0) < 20)
+  })
+
+  it('construit un détail depuis le hub Privy si crypto-positions est vide', () => {
+    const summary = buildPrivyWalletPositionsSummary(
+      {
+        balances: [
+          {
+            asset: 'ETH',
+            name: 'Ethereum',
+            balance: '0.00857064',
+            available_balance: '0.00857064',
+            icon_key: 'eth',
+            chain_type: 'ethereum',
+            chain_id: 8453,
+          },
+        ],
+      },
+      {
+        summaries: [{ symbol: 'ETHUSDT', price: '2131.29', price_eur: '1960.00' }],
+      },
+      'USD',
+    )
+
+    const scoped = resolveScopedPrivyPositionForAsset(summary, 'ETH', 'base', null)
+    assert.ok(scoped)
+    const detail = buildCryptoWalletDetailFromScopedPosition(scoped!)
+    assert.equal(detail.volume, formatDetailVolumeAmount(0.00857064, 'ETH'))
+    assert.equal(detail.asset, 'ETH')
   })
 })

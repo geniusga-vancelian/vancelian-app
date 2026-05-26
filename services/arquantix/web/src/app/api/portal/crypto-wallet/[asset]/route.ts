@@ -3,6 +3,7 @@ import { DEFAULT_PORTAL_CHAIN, isValidPortalChain, type PortalChain } from '@/co
 import { buildBackendUrl } from '@/lib/backend'
 import {
   alignCryptoWalletDetailWithScopedPosition,
+  buildCryptoWalletDetailFromScopedPosition,
   buildPrivyWalletPositionsSummary,
   extractUpstreamDetailPayload,
   mergeCryptoWalletTransactions,
@@ -73,20 +74,10 @@ export async function GET(
     walletScope,
   )
 
-  const detailRes = await fetchUpstreamJson(scopedDetailUrl)
-
-  if (!detailRes.ok || !detailRes.data) {
-    return NextResponse.json({ error: 'detail_unavailable' }, { status: 502 })
-  }
-
-  const detailRaw = extractUpstreamDetailPayload(detailRes.data)
-  let detail = parseCryptoWalletDetail(detailRaw)
-  if (!detail) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 })
-  }
-
-  const [txRes, privyDepRes, historyRes, bootstrapRes, marketRes, privyBalancesRes] =
+  const [detailRes, privyBalancesRes, txRes, privyDepRes, historyRes, bootstrapRes, marketRes] =
     await Promise.all([
+      fetchUpstreamJson(scopedDetailUrl),
+      fetchUpstreamJson('/api/app/privy-wallet/balances'),
       fetchUpstreamJson(
         `/api/app/crypto-positions/${encodeURIComponent(asset)}/transactions`,
       ),
@@ -100,7 +91,6 @@ export async function GET(
       fetchBackendJson(
         `/api/market-data/market-summary?symbols=${encodeURIComponent(providerSymbol)}`,
       ),
-      fetchUpstreamJson('/api/app/privy-wallet/balances'),
     ])
 
   const currency =
@@ -116,19 +106,34 @@ export async function GET(
           .toUpperCase()
       : 'EUR'
 
+  let scopedPosition = undefined
   if (privyBalancesRes.ok && privyBalancesRes.data) {
     const privySummary = buildPrivyWalletPositionsSummary(
       privyBalancesRes.data,
       marketRes.ok ? marketRes.data : null,
       currency,
     )
-    const scopedPosition = resolveScopedPrivyPositionForAsset(
+    scopedPosition = resolveScopedPrivyPositionForAsset(
       privySummary,
       asset,
       portalChain,
       walletScope,
     )
-    detail = alignCryptoWalletDetailWithScopedPosition(detail, scopedPosition)
+  }
+
+  const upstreamDetail = detailRes.ok
+    ? parseCryptoWalletDetail(extractUpstreamDetailPayload(detailRes.data))
+    : null
+
+  let detail = upstreamDetail
+  if (scopedPosition) {
+    detail = upstreamDetail
+      ? alignCryptoWalletDetailWithScopedPosition(upstreamDetail, scopedPosition)
+      : buildCryptoWalletDetailFromScopedPosition(scopedPosition)
+  }
+
+  if (!detail) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 })
   }
 
   let change24hPct: number | undefined
@@ -162,6 +167,6 @@ export async function GET(
     change24hPct,
     providerSymbol,
     logoUrl,
-    partial: !txRes.ok || !privyDepRes.ok || !historyRes.ok || !privyBalancesRes.ok,
+    partial: !detailRes.ok || !txRes.ok || !privyDepRes.ok || !historyRes.ok || !privyBalancesRes.ok,
   })
 }

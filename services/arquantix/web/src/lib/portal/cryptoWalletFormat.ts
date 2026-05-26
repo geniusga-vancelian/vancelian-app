@@ -431,6 +431,38 @@ export function resolveScopedPrivyPositionForAsset(
   return scoped.positions.find((row) => row.asset.toUpperCase() === assetU)
 }
 
+/** Construit un détail crypto depuis le hub Privy (source de vérité portail). */
+export function buildCryptoWalletDetailFromScopedPosition(
+  position: PortalCryptoPosition,
+): PortalCryptoWalletDetail {
+  const totalValueEur =
+    position.estimatedValueEur ??
+    (position.priceEur != null ? position.balance * position.priceEur : 0)
+  const totalValueUsd =
+    position.estimatedValueUsd ??
+    (position.priceUsd != null ? position.balance * position.priceUsd : undefined)
+
+  return {
+    asset: position.asset,
+    name: position.name,
+    iconKey: position.iconKey,
+    volume: formatDetailVolumeAmount(position.balance, position.asset),
+    currentPriceEur: position.priceEur,
+    currentPriceUsd: position.priceUsd,
+    totalValueEur,
+    totalValueUsd,
+    avgBuyPriceEur: undefined,
+    avgBuyPriceUsd: undefined,
+    unrealizedGainEur: 0,
+    unrealizedGains: 0,
+    realizedGainEur: 0,
+    realizedGains: 0,
+    portfolioScope: position.portfolioScope ?? 'privy',
+    privyBalance: position.privyBalance ?? position.balance,
+    platformBalance: position.platformBalance ?? 0,
+  }
+}
+
 /** Aligne volume / valorisation détail crypto sur le hub wallet (Privy + scope navbar). */
 export function alignCryptoWalletDetailWithScopedPosition(
   detail: PortalCryptoWalletDetail,
