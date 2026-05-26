@@ -82,7 +82,7 @@ export async function loadPortalDashboardPortfolioPayload(
     fetchPortalUpstreamJson('/api/app/crypto-positions'),
     fetchPortalUpstreamJson('/api/app/privy-wallet/balances'),
     fetchPortalUpstreamJson('/api/app/lending/earn/positions'),
-    loadPortalSavingsSummary({ personId, live: false, walletAddress }),
+    loadPortalSavingsSummary({ personId, live: true, walletAddress }),
   ])
 
   const currency =

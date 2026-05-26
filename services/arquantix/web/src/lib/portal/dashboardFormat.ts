@@ -229,7 +229,7 @@ function toPortalCryptoSummary(parsed: PortalCryptoPositionsSummary): PortalCryp
   }
 }
 
-/** Agrège crypto-positions API + soldes Privy réels pour le dashboard. */
+/** Agrège crypto-positions API + soldes Privy réels pour le dashboard (aligné hub crypto). */
 export function resolveDashboardCryptoSummary(
   cryptoPositionsRaw: unknown,
   privyRaw: unknown,
@@ -245,14 +245,15 @@ export function resolveDashboardCryptoSummary(
   if (privyRaw) {
     const privyBuilt = buildPrivyWalletPositionsSummary(privyRaw, marketRaw, currency)
     if (privyBuilt.positions.length > 0) {
-      const hasPlatform =
-        crypto?.positions?.some(
-          (position) =>
-            position.portfolio_scope &&
-            position.portfolio_scope !== 'privy' &&
-            position.portfolio_scope !== 'merged',
-        ) ?? false
-      if (!hasPlatform) {
+      const usesPlatformCustody =
+        crypto?.positions?.some((position) => {
+          const scope = position.portfolio_scope?.trim().toLowerCase()
+          if (scope === 'merged') return true
+          return Boolean(scope && scope !== 'privy')
+        }) ?? false
+
+      // Portefeuille 100 % Privy : mêmes soldes / valorisation que le hub crypto.
+      if (!usesPlatformCustody) {
         crypto = toPortalCryptoSummary(privyBuilt)
       }
     }

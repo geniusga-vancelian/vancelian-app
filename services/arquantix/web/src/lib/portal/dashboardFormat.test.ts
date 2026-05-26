@@ -6,6 +6,7 @@ import {
   hasEuroCashAccount,
   isRegistrationComplete,
   resolveCryptoPortfolioTotal,
+  resolveDashboardCryptoSummary,
   resolveSavingsPortfolioTotal,
   shouldShowRegistrationResume,
   shouldShowUnlockEuroBanner,
@@ -121,6 +122,54 @@ describe('buildWalletRows', () => {
     const crypto = rows.find((r) => r.id === 'crypto')
     assert.equal(crypto?.numericBalance, 110)
     assert.match(crypto?.balance ?? '', /\$/)
+  })
+})
+
+describe('resolveDashboardCryptoSummary', () => {
+  const privyRaw = {
+    balances: [
+      {
+        asset: 'USDC',
+        balance: 12,
+        available_balance: 12,
+        chain_id: 8453,
+        chain_type: 'ethereum',
+      },
+    ],
+  }
+
+  it('uses privy hub valuation for privy-only wallets', () => {
+    const cryptoPositionsRaw = {
+      summary: { total_value_eur: 99, positions_count: 1 },
+      positions: [
+        {
+          asset: 'USDC',
+          estimated_value_eur: 99,
+          portfolio_scope: 'privy',
+          chain_id: 8453,
+        },
+      ],
+    }
+
+    const summary = resolveDashboardCryptoSummary(cryptoPositionsRaw, privyRaw, null, 'EUR')
+    assert.ok(Math.abs((summary?.positions?.[0]?.estimated_value_eur as number) - 11.04) < 0.01)
+  })
+
+  it('keeps merged platform+privy totals from crypto-positions', () => {
+    const cryptoPositionsRaw = {
+      summary: { total_value_eur: 150, positions_count: 1 },
+      positions: [
+        {
+          asset: 'USDC',
+          estimated_value_eur: 150,
+          portfolio_scope: 'merged',
+          chain_id: 8453,
+        },
+      ],
+    }
+
+    const summary = resolveDashboardCryptoSummary(cryptoPositionsRaw, privyRaw, null, 'EUR')
+    assert.equal(summary?.positions?.[0]?.estimated_value_eur, 150)
   })
 })
 
