@@ -8,8 +8,12 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.market_data.fx import get_eurusdt_rate, usdt_to_eur
+from services.privy_wallet.chain_balance import (
+    aggregate_confirmed_deposit_balances,
+    reconcile_chain_buckets_with_ledger,
+)
 from services.privy_wallet.dedicated_wallet_assets import dedicated_wallet_placeholders_for_person
-from services.privy_wallet.repository import PersonWalletBalanceRepository
+from services.privy_wallet.repository import PersonCryptoWalletRepository, PersonWalletBalanceRepository
 from services.privy_wallet.service import _format_decimal
 from services.test_clients.schemas import ASSET_NAMES
 
@@ -27,28 +31,39 @@ def merge_app_crypto_positions(
     if person_id is None:
         return list(platform_positions)
 
-    privy_rows = [
-        row
-        for row in PersonWalletBalanceRepository().list_for_person(db, person_id)
-        if Decimal(str(row.balance)) > 0
-    ]
-    assets_with_positive = {str(row.asset or "").upper() for row in privy_rows if row.asset}
+    privy_wallets = PersonCryptoWalletRepository().list_active_for_person(db, person_id)
+    wallet_by_id = {wallet.id: wallet for wallet in privy_wallets}
+    chain_buckets = reconcile_chain_buckets_with_ledger(
+        db,
+        person_id=person_id,
+        wallets=privy_wallets,
+        buckets=aggregate_confirmed_deposit_balances(
+            db,
+            person_id=person_id,
+            wallets=privy_wallets,
+        ),
+    )
+    assets_with_positive = {bucket.asset for bucket in chain_buckets}
     dedicated_placeholders = dedicated_wallet_placeholders_for_person(
         db,
         person_id=person_id,
         exclude_assets=assets_with_positive,
     )
-    if not privy_rows and not platform_positions and not dedicated_placeholders:
+    if not chain_buckets and not platform_positions and not dedicated_placeholders:
         return []
 
     eurusdt_rate = get_eurusdt_rate(db, strict=False)
     merged: dict[str, dict[str, Any]] = {}
 
+    def _merge_key(asset: str, chain_id: int | None) -> str:
+        return f"{asset}:{chain_id if chain_id is not None else 'none'}"
+
     for pos in platform_positions:
         asset = str(pos.get("asset") or "").upper()
         if not asset:
             continue
-        merged[asset] = {
+        key = _merge_key(asset, pos.get("chain_id"))
+        merged[key] = {
             **pos,
             "asset": asset,
             "name": pos.get("name") or ASSET_NAMES.get(asset, asset),
@@ -56,19 +71,25 @@ def merge_app_crypto_positions(
             "platform_available": str(pos.get("available_balance") or "0"),
             "privy_balance": "0",
             "privy_available": "0",
+            "chain_id": pos.get("chain_id"),
+            "chain_type": pos.get("chain_type"),
         }
 
-    for row in privy_rows:
-        asset = str(row.asset or "").upper()
-        if not asset:
-            continue
-        privy_bal = _format_decimal(row.balance)
-        privy_avail = _format_decimal(row.available_balance)
-        if asset not in merged:
+    for bucket in chain_buckets:
+        asset = bucket.asset
+        wallet = wallet_by_id.get(bucket.wallet_id)
+        privy_bal = _format_decimal(bucket.balance)
+        privy_avail = privy_bal
+        chain_id = bucket.chain_id if bucket.chain_id > 0 else None
+        chain_type = wallet.chain_type if wallet else "ethereum"
+        if chain_id == 0:
+            chain_type = "solana"
+        key = _merge_key(asset, chain_id)
+        if key not in merged:
             price_eur, est_eur, price_usd, est_usd = _price_asset(
                 db, asset, privy_bal, eurusdt_rate
             )
-            merged[asset] = {
+            merged[key] = {
                 "asset": asset,
                 "name": ASSET_NAMES.get(asset, asset),
                 "balance": privy_bal,
@@ -84,11 +105,20 @@ def merge_app_crypto_positions(
                 "performance_1d_pct": None,
                 "icon_key": asset.lower(),
                 "portfolio_scope": "privy",
+                "chain_id": chain_id,
+                "chain_type": chain_type,
+                "wallet_address": wallet.address if wallet else None,
             }
         else:
-            entry = merged[asset]
+            entry = merged[key]
             entry["privy_balance"] = privy_bal
             entry["privy_available"] = privy_avail
+            if chain_id is not None:
+                entry["chain_id"] = chain_id
+            if chain_type:
+                entry["chain_type"] = chain_type
+            if wallet and wallet.address:
+                entry["wallet_address"] = wallet.address
             total_bal = Decimal(str(entry["platform_balance"])) + Decimal(privy_bal)
             total_avail = Decimal(str(entry["platform_available"])) + Decimal(privy_avail)
             price_eur, est_eur, price_usd, est_usd = _price_asset(
@@ -109,12 +139,16 @@ def merge_app_crypto_positions(
 
     for placeholder in dedicated_placeholders:
         asset = str(placeholder.get("asset") or "").upper()
-        if not asset or asset in merged:
+        if not asset:
             continue
-        merged[asset] = placeholder
+        chain_id = placeholder.get("chain_id")
+        key = _merge_key(asset, chain_id if isinstance(chain_id, int) else None)
+        if key in merged:
+            continue
+        merged[key] = placeholder
 
     out: list[dict[str, Any]] = []
-    for asset, entry in merged.items():
+    for _, entry in merged.items():
         balance = Decimal(str(entry.get("balance") or "0"))
         if balance <= 0 and not entry.get("dedicated_wallet"):
             continue

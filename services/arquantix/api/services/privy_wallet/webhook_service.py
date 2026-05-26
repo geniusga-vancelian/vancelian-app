@@ -190,6 +190,14 @@ class PrivyWebhookProcessor:
         if existing:
             return existing
 
+        for prior in self._deposit_repo.find_confirmed_by_tx_hash(
+            db,
+            tx_hash=normalized.tx_hash,
+            wallet_id=wallet.id,
+        ):
+            if prior.asset.upper() == normalized.asset.upper():
+                return prior
+
         asset_name = ASSET_NAMES.get(normalized.asset, normalized.asset)
         amount_display = format_amount_display(normalized.amount, normalized.asset)
         title = f"Dépôt {asset_name}"

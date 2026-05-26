@@ -138,6 +138,22 @@ class PrivyBackfillDepositResponse(BaseModel):
     message: str
 
 
+class PrivyVoidDepositRequest(BaseModel):
+    person_id: UUID
+    deposit_id: UUID
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class PrivyVoidDepositResponse(BaseModel):
+    deposit_id: UUID
+    asset: str
+    amount: str
+    previous_status: str
+    new_status: str
+    new_balance: Optional[str] = None
+    message: str
+
+
 class PrivyReconciliationRunRequest(BaseModel):
     person_id: UUID
     auto_heal: bool = Field(True, description="Rejouer webhooks failed + backfill auto si écart")

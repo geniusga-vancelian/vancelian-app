@@ -394,6 +394,7 @@ class CryptoPositionPayload(BaseModel):
     platform_balance: Optional[str] = None
     dedicated_wallet: Optional[bool] = None
     chain_type: Optional[str] = None
+    chain_id: Optional[int] = None
     wallet_address: Optional[str] = None
 
 

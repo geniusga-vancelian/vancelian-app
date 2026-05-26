@@ -328,6 +328,7 @@ def test_webhook_base_usdc_deposit(client: TestClient, db: Session):
         if b["asset"] == "USDC"
     )
     assert usdc["balance"] == "15"
+    assert usdc["chain_id"] == 8453
 
 
 def test_get_deposit_detail(client: TestClient, db: Session):
@@ -536,3 +537,98 @@ def test_direct_crypto_positions_include_privy_balances(client: TestClient, db: 
     assert usdc is not None, positions
     assert usdc["balance"] == "100"
     assert usdc["portfolio_scope"] in ("privy", "merged")
+
+
+def test_duplicate_tx_hash_different_log_index_not_double_credited(client: TestClient, db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_privy_wallet(db, pe)
+    db.flush()
+
+    tx_hash = f"0x{uuid.uuid4().hex}{uuid.uuid4().hex[:32]}"
+    base_payload = {
+        "to_address": wallet.address,
+        "from_address": f"0x{uuid.uuid4().hex[:40]}",
+        "transaction_hash": tx_hash,
+        "chain_id": "eip155:8453",
+        "asset": {"type": "erc20", "symbol": "USDC"},
+        "contract_address": "0x833589fCD6eDb6E08Ab4c7C32D4f71b54bdA02913",
+        "amount": "10000000",
+        "block_number": 12345678,
+        "confirmations": 12,
+    }
+
+    first = {
+        "type": "wallet.funds_deposited",
+        "id": f"evt_{uuid.uuid4().hex[:16]}",
+        "data": {**base_payload, "log_index": 0},
+    }
+    second = {
+        "type": "wallet.funds_deposited",
+        "id": f"evt_{uuid.uuid4().hex[:16]}",
+        "data": {**base_payload, "log_index": 99},
+    }
+
+    res1 = client.post(
+        "/api/webhooks/privy",
+        json=first,
+        headers={"svix-id": f"msg_{uuid.uuid4().hex[:8]}"},
+    )
+    assert res1.status_code == 200, res1.text
+    res2 = client.post(
+        "/api/webhooks/privy",
+        json=second,
+        headers={"svix-id": f"msg_{uuid.uuid4().hex[:8]}"},
+    )
+    assert res2.status_code == 200, res2.text
+
+    auth = mobile_auth_headers(db, pe)
+    usdc_rows = [
+        b for b in client.get("/api/app/privy-wallet/balances", headers=auth).json()["balances"]
+        if b["asset"] == "USDC"
+    ]
+    assert len(usdc_rows) == 1
+    assert usdc_rows[0]["balance"] == "10"
+    assert usdc_rows[0]["chain_id"] == 8453
+
+
+def test_admin_void_deposit_reverses_ledger(client: TestClient, db: Session):
+    pe = make_linked_client(db)
+    _seed_privy_wallet(db, pe)
+    db.flush()
+
+    sim = client.post(
+        "/api/admin/privy-wallet/simulate-deposit",
+        json={"person_id": str(pe.person_id), "amount": "7", "asset": "USDC", "chain_id": 8453},
+        headers={
+            "X-Actor-Type": "admin",
+            "X-Actor-Id": "admin@test.local",
+            "X-Actor-Roles": "admin",
+        },
+    )
+    assert sim.status_code == 200, sim.text
+    deposit_id = sim.json()["deposit_id"]
+
+    void = client.post(
+        "/api/admin/privy-wallet/void-deposit",
+        json={
+            "person_id": str(pe.person_id),
+            "deposit_id": deposit_id,
+            "reason": "test duplicate cleanup",
+        },
+        headers={
+            "X-Actor-Type": "admin",
+            "X-Actor-Id": "admin@test.local",
+            "X-Actor-Roles": "admin",
+        },
+    )
+    assert void.status_code == 200, void.text
+    body = void.json()
+    assert body["new_status"] == "failed"
+    assert body["new_balance"] == "0"
+
+    auth = mobile_auth_headers(db, pe)
+    usdc_rows = [
+        b for b in client.get("/api/app/privy-wallet/balances", headers=auth).json()["balances"]
+        if b["asset"] == "USDC"
+    ]
+    assert usdc_rows == []

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import PersonCryptoWallet
 
-from .enums import PrivyWebhookEventStatus
+from .enums import PersonWalletDepositStatus, PrivyWebhookEventStatus
 from .models import PersonWalletBalance, PersonWalletDeposit, PrivyWebhookEvent
 
 
@@ -79,13 +79,33 @@ class PersonWalletDepositRepository:
         tx_hash: str,
         log_index: int,
     ) -> PersonWalletDeposit | None:
+        normalized_hash = str(tx_hash or "").strip().lower()
         q = db.query(PersonWalletDeposit).filter(
-            PersonWalletDeposit.tx_hash == tx_hash,
+            PersonWalletDeposit.tx_hash == normalized_hash,
             PersonWalletDeposit.log_index == log_index,
         )
         if chain_id is not None:
             q = q.filter(PersonWalletDeposit.chain_id == chain_id)
         return q.first()
+
+    @staticmethod
+    def find_confirmed_by_tx_hash(
+        db: Session,
+        *,
+        tx_hash: str,
+        wallet_id: UUID | None = None,
+        person_id: UUID | None = None,
+    ) -> list[PersonWalletDeposit]:
+        normalized_hash = str(tx_hash or "").strip().lower()
+        q = db.query(PersonWalletDeposit).filter(
+            PersonWalletDeposit.tx_hash == normalized_hash,
+            PersonWalletDeposit.status == PersonWalletDepositStatus.CONFIRMED.value,
+        )
+        if wallet_id is not None:
+            q = q.filter(PersonWalletDeposit.person_crypto_wallet_id == wallet_id)
+        if person_id is not None:
+            q = q.filter(PersonWalletDeposit.person_id == person_id)
+        return q.order_by(PersonWalletDeposit.created_at.asc()).all()
 
     @staticmethod
     def create(db: Session, *, data: dict) -> PersonWalletDeposit:

@@ -5,6 +5,8 @@ import uuid
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
 from database import Person, PersonExternalIdentity
@@ -12,7 +14,7 @@ from services.auth.person_identity_bridge import PROVIDER_PRIVY, get_pe_client_f
 from services.exchange.assets import ASSET_PRECISION
 
 from .asset_mapping import contract_for_asset
-from .enums import PrivyWebhookEventStatus
+from .enums import PersonWalletDepositStatus, PrivyWebhookEventStatus
 from .repository import (
     PersonCryptoWalletRepository,
     PersonWalletBalanceRepository,
@@ -28,6 +30,8 @@ from .schemas import (
     PrivyReplayWebhookResponse,
     PrivySimulateDepositRequest,
     PrivySimulateDepositResponse,
+    PrivyVoidDepositRequest,
+    PrivyVoidDepositResponse,
 )
 from .service import _format_decimal
 from .deposit_backfill import DepositBackfillError, backfill_deposit_from_tx_hash
@@ -281,6 +285,101 @@ class PrivyWalletAdminService:
             replayed_webhooks=summary.replayed_webhooks,
             message=summary.message,
         )
+
+    def void_deposit(
+        self,
+        db: Session,
+        payload: PrivyVoidDepositRequest,
+    ) -> PrivyVoidDepositResponse:
+        deposit = self._deposit_repo.get_for_person(
+            db,
+            payload.deposit_id,
+            payload.person_id,
+        )
+        if deposit is None:
+            raise PrivyWalletNotFoundError("Dépôt introuvable pour cette personne")
+
+        previous_status = deposit.status
+        if previous_status == PersonWalletDepositStatus.FAILED.value:
+            new_balance = self._balance_for_wallet_asset(
+                db,
+                person_id=payload.person_id,
+                wallet_id=deposit.person_crypto_wallet_id,
+                asset=deposit.asset,
+            )
+            return PrivyVoidDepositResponse(
+                deposit_id=deposit.id,
+                asset=deposit.asset,
+                amount=_format_decimal(deposit.amount),
+                previous_status=previous_status,
+                new_status=previous_status,
+                new_balance=new_balance,
+                message="Dépôt déjà annulé.",
+            )
+
+        if previous_status != PersonWalletDepositStatus.CONFIRMED.value:
+            raise PrivySimulateDepositError(
+                f"Impossible d'annuler un dépôt au statut {previous_status}"
+            )
+
+        amount = Decimal(str(deposit.amount))
+        balance = self._balance_repo.get_or_create_for_update(
+            db,
+            wallet_id=deposit.person_crypto_wallet_id,
+            person_id=payload.person_id,
+            asset=deposit.asset,
+        )
+        current_balance = Decimal(str(balance.balance))
+        if current_balance < amount:
+            raise PrivySimulateDepositError(
+                "Solde ledger insuffisant pour annuler ce dépôt — investigation requise."
+            )
+
+        self._balance_repo.increment_balance(
+            db,
+            balance,
+            delta=-amount,
+            sync_source="admin_void_deposit",
+        )
+
+        metadata = dict(deposit.metadata_json or {})
+        metadata["admin_void"] = {
+            "reason": payload.reason.strip(),
+            "voided_at": datetime.now(timezone.utc).isoformat(),
+        }
+        deposit.status = PersonWalletDepositStatus.FAILED.value
+        deposit.metadata_json = metadata
+        db.add(deposit)
+        db.flush()
+
+        new_balance = self._balance_for_wallet_asset(
+            db,
+            person_id=payload.person_id,
+            wallet_id=deposit.person_crypto_wallet_id,
+            asset=deposit.asset,
+        )
+        return PrivyVoidDepositResponse(
+            deposit_id=deposit.id,
+            asset=deposit.asset,
+            amount=_format_decimal(amount),
+            previous_status=previous_status,
+            new_status=deposit.status,
+            new_balance=new_balance,
+            message=f"Dépôt {_format_decimal(amount)} {deposit.asset} annulé.",
+        )
+
+    def _balance_for_wallet_asset(
+        self,
+        db: Session,
+        *,
+        person_id: UUID,
+        wallet_id: UUID,
+        asset: str,
+    ) -> str | None:
+        for row in self._balance_repo.list_for_person(db, person_id):
+            if row.person_crypto_wallet_id == wallet_id and row.asset.upper() == asset.upper():
+                return _format_decimal(row.balance)
+        return None
 
 
 def _human_to_atomic(amount: Decimal, asset: str) -> str:

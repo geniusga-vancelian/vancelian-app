@@ -8,6 +8,10 @@ from sqlalchemy.orm import Session
 
 from services.test_clients.schemas import ASSET_NAMES
 
+from .chain_balance import (
+    aggregate_confirmed_deposit_balances,
+    reconcile_chain_buckets_with_ledger,
+)
 from .dedicated_wallet_assets import native_asset_for_dedicated_wallet
 from .repository import (
     PersonCryptoWalletRepository,
@@ -43,27 +47,37 @@ class PrivyWalletLedgerService:
     def get_balances(self, db: Session, *, person_id: UUID) -> PrivyWalletBalancesResponse:
         wallets = self._wallet_repo.list_active_for_person(db, person_id)
         wallet_by_id = {w.id: w for w in wallets}
-        rows = self._balance_repo.list_for_person(db, person_id)
+        chain_buckets = reconcile_chain_buckets_with_ledger(
+            db,
+            person_id=person_id,
+            wallets=wallets,
+            buckets=aggregate_confirmed_deposit_balances(
+                db,
+                person_id=person_id,
+                wallets=wallets,
+            ),
+        )
 
         balances: list[PrivyWalletBalancePayload] = []
         assets_with_positive_balance: set[str] = set()
 
-        for row in rows:
-            if Decimal(str(row.balance)) <= 0:
-                continue
-            wallet = wallet_by_id.get(row.person_crypto_wallet_id)
-            asset = row.asset.upper()
+        for bucket in chain_buckets:
+            wallet = wallet_by_id.get(bucket.wallet_id)
+            asset = bucket.asset.upper()
             assets_with_positive_balance.add(asset)
+            chain_type = wallet.chain_type if wallet else "ethereum"
+            if bucket.chain_id == 0:
+                chain_type = "solana"
             balances.append(
                 PrivyWalletBalancePayload(
                     asset=asset,
                     name=ASSET_NAMES.get(asset, asset),
-                    balance=_format_decimal(row.balance),
-                    available_balance=_format_decimal(row.available_balance),
+                    balance=_format_decimal(bucket.balance),
+                    available_balance=_format_decimal(bucket.balance),
                     icon_key=_ICON_KEYS.get(asset, asset.lower()),
                     wallet_address=wallet.address if wallet else None,
-                    chain_type=wallet.chain_type if wallet else None,
-                    chain_id=wallet.chain_id if wallet else None,
+                    chain_type=chain_type,
+                    chain_id=bucket.chain_id if bucket.chain_id > 0 else None,
                     dedicated_wallet=False,
                 )
             )

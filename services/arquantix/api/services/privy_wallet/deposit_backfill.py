@@ -88,6 +88,25 @@ def ingest_transfer_as_deposit(
             "amount": str(existing.amount),
         }
 
+    wallet = PersonCryptoWalletRepository.find_active_by_address(
+        db,
+        str(transfer["to_address"]),
+    )
+    if wallet is not None:
+        for prior in deposit_repo.find_confirmed_by_tx_hash(
+            db,
+            tx_hash=str(transfer["tx_hash"]).lower(),
+            wallet_id=wallet.id,
+        ):
+            if prior.asset.upper() == str(transfer["asset"]).upper():
+                return {
+                    "status": "already_ingested",
+                    "deposit_id": str(prior.id),
+                    "tx_hash": prior.tx_hash,
+                    "asset": prior.asset,
+                    "amount": str(prior.amount),
+                }
+
     payload = build_deposit_webhook_payload(transfer)
     idempotency_key = payload["idempotency_key"]
     event = processor.store_raw_event(
