@@ -112,6 +112,7 @@ export function PortalDashboardView({
           <PortalDashboardHeader
             displayName={derived.displayName}
             balanceLabel={derived.balanceLabel}
+            balancePending={portfolioLoading || refreshing}
             performanceLabel=""
             chartValues={[]}
             showPerformance={false}

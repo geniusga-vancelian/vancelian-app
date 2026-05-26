@@ -16,6 +16,8 @@ type Props = {
   chartValues: number[]
   showPerformance?: boolean
   depositHref: string
+  /** Soldes portfolio encore en chargement — shimmer sur le total (aligné My accounts). */
+  balancePending?: boolean
   className?: string
 }
 
@@ -31,6 +33,7 @@ export function PortalDashboardHeader({
   chartValues,
   showPerformance = true,
   depositHref,
+  balancePending = false,
   className,
 }: Props) {
   const perfPositive = !performanceLabel.startsWith('-')
@@ -48,9 +51,16 @@ export function PortalDashboardHeader({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="m-0 font-ui text-[13px] font-medium text-v-fg-muted">Total balance</p>
-            <p className="mt-1 mb-0 font-ui text-[28px] font-bold leading-none tracking-v-tight text-v-fg sm:text-[32px]">
-              {balanceLabel}
-            </p>
+            {balancePending ? (
+              <span
+                className="portal-shimmer mt-1 block h-8 w-28 rounded-v-input sm:h-9 sm:w-32"
+                aria-hidden
+              />
+            ) : (
+              <p className="mt-1 mb-0 font-ui text-[28px] font-bold leading-none tracking-v-tight text-v-fg sm:text-[32px]">
+                {balanceLabel}
+              </p>
+            )}
           </div>
           {showPerformance ? (
             <span
