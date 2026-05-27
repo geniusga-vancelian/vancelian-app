@@ -108,6 +108,7 @@ from services.custody import custody_admin_router, custody_transfer_router, cust
 from services.privy_wallet.webhook_router import privy_webhook_router
 from services.privy_wallet.routes import privy_wallet_app_router
 from services.privy_wallet.admin_router import privy_wallet_admin_router
+from services.defi_observability.admin_router import defi_observability_admin_router
 from services.exchange import exchange_admin_router, exchange_router
 from services.price_alerts import price_alerts_router, orders_router
 from services.favorites.router import router as favorites_router
@@ -235,6 +236,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(privy_webhook_router)
     app.include_router(privy_wallet_app_router)
     app.include_router(privy_wallet_admin_router)
+    app.include_router(defi_observability_admin_router)
     app.include_router(exchange_router)
     app.include_router(exchange_admin_router)
     app.include_router(price_alerts_router)
