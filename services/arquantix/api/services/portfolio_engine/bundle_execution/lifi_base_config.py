@@ -17,7 +17,7 @@ BUNDLE_LIFI_SOURCE_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "CBETH"})
 BUNDLE_LIFI_DESTINATION_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "CBETH", "CBBTC"})
 
 # Coinbase Wrapped BTC on Base mainnet (canonical).
-CBBTC_BASE_ADDRESS = "0xcbB7c0000aB88B473b1f5aFd9ef808440eed33Bf"
+CBBTC_BASE_ADDRESS = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"
 CBETH_BASE_ADDRESS = "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22"
 
 # Circle EURC on Base.

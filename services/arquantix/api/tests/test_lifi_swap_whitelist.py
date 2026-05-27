@@ -167,3 +167,9 @@ def test_public_chains_base_only():
 def test_destination_assets_payload():
     dest = list_supported_destination_assets_public()
     assert {d["symbol"] for d in dest} == BASE_SWAP_SYMBOLS
+
+
+def test_cbbtc_token_address_matches_lifi_checksum():
+    """Li.FI token lookup is case-sensitive — must use EIP-55 checksum (C not c after B7)."""
+    token = resolve_swap_token("CBBTC", "base")
+    assert token.token_address == "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"

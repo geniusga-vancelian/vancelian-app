@@ -64,7 +64,6 @@ export function collectLombardProdEnvChecks(options?: {
     'LOMBARD_V1_ENABLED',
     'LOMBARD_V1_BETA_ENABLED',
     'LOMBARD_V1_BETA_LIMITS_ENABLED',
-    'LOMBARD_V1_BETA_ALLOWED_WALLETS',
     'LOMBARD_V1_BETA_MAX_BORROW_USDC_PER_WALLET',
     'LOMBARD_V1_BETA_MAX_TOTAL_BORROW_USDC_GLOBAL',
   ] as const
@@ -77,6 +76,15 @@ export function collectLombardProdEnvChecks(options?: {
       required: true,
     })
   }
+
+  checks.push({
+    name: 'LOMBARD_V1_BETA_ALLOWED_WALLETS',
+    ok: true,
+    detail: isSet('LOMBARD_V1_BETA_ALLOWED_WALLETS')
+      ? 'allowlist configured'
+      : 'unset — all wallets allowed (beta caps still apply)',
+    required: false,
+  })
 
   checks.push({
     name: 'BASE_RPC_URL',

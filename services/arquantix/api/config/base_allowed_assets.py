@@ -68,7 +68,7 @@ BASE_ALLOWED_ASSETS: tuple[BaseAllowedAsset, ...] = (
         "provider_symbol": "BTCUSDT",
         "decimals": 8,
         "kind": "wrapped_btc",
-        "base_token_address": "0xcbB7c0000aB88B473b1f5aFd9ef808440eed33Bf",
+        "base_token_address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
         "swap_enabled": True,
     },
     {

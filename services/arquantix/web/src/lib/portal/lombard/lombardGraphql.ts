@@ -18,8 +18,8 @@ export type LombardMorphoMarketRow = {
 
 const MARKET_BY_ID_QUERY = `
   query LombardMarketById($chainId: Int!, $marketId: String!) {
-    marketByUniqueKey(uniqueKey: $marketId, chainId: $chainId) {
-      uniqueKey
+    marketById(marketId: $marketId, chainId: $chainId) {
+      marketId
       loanAsset {
         address
         symbol
@@ -71,8 +71,8 @@ export async function fetchLombardMorphoMarket(args: {
   chainId: number
 }): Promise<LombardMorphoMarketRow | null> {
   const data = await morphoGraphqlRequest<{
-    marketByUniqueKey?: {
-      uniqueKey?: string
+    marketById?: {
+      marketId?: string
       loanAsset?: { address?: string; symbol?: string; decimals?: number }
       collateralAsset?: { address?: string; symbol?: string; decimals?: number }
       lltv?: string
@@ -89,8 +89,9 @@ export async function fetchLombardMorphoMarket(args: {
     marketId: args.marketId,
   })
 
-  const row = data.marketByUniqueKey
-  if (!row?.uniqueKey || !row.loanAsset?.address || !row.collateralAsset?.address) {
+  const row = data.marketById
+  const resolvedMarketId = row?.marketId?.trim() || args.marketId.trim()
+  if (!row?.marketId || !row.loanAsset?.address || !row.collateralAsset?.address) {
     return null
   }
   if (!row.oracle?.address || !row.irmAddress) {
@@ -98,7 +99,7 @@ export async function fetchLombardMorphoMarket(args: {
   }
 
   return {
-    marketId: row.uniqueKey,
+    marketId: resolvedMarketId,
     loanAsset: {
       address: row.loanAsset.address,
       symbol: row.loanAsset.symbol ?? 'USDC',

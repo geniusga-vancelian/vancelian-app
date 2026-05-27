@@ -17,7 +17,7 @@ EVM_ERC20_CONTRACTS: dict[int, dict[str, str]] = {
         # Circle native USDC on Base (EIP-55) — voir developers.circle.com/stablecoins/usdc-contract-addresses
         "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "EURC": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
-        "CBBTC": "0xcbB7c0000aB88B473b1f5aFd9ef808440eed33Bf",
+        "CBBTC": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
         "CBETH": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
         "LINK": "0x88fb150bdc53a65fe94dea0c9ba0a6daf8c6e196",
         "AAVE": "0x63706e401c06ac8513145b7687a14804d17f814b",

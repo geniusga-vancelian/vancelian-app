@@ -163,7 +163,7 @@ describe('lombardProdEnvValidation', () => {
       const result = validateLombardProductionEnv({ lombardEnabled: true })
       assert.equal(result.ok, false)
       assert.ok(result.missing.includes('LOMBARD_V1_BETA_ENABLED'))
-      assert.ok(result.missing.includes('LOMBARD_V1_BETA_ALLOWED_WALLETS'))
+      assert.equal(result.missing.includes('LOMBARD_V1_BETA_ALLOWED_WALLETS'), false)
     } finally {
       restoreEnv(saved)
     }
