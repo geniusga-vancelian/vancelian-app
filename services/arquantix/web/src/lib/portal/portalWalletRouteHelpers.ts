@@ -7,6 +7,7 @@ import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import { readPortalPersonIdFromToken, PortalAuthError } from '@/lib/portal/portalJwt'
 import { idempotencyKeySchema } from '@/lib/portal/morphoVaultValidation'
 import { MorphoVaultLedgerError } from '@/lib/portal/morphoVaultLedger'
+import { MorphoVaultBetaError } from '@/lib/portal/morphoUsdcBetaAccess'
 import { LedgityVaultBetaError } from '@/lib/portal/ledgity/ledgityBetaAccess'
 import { buildLedgityLedgerMetadata } from '@/lib/portal/ledgity/ledgityLedgerMetadata'
 import {

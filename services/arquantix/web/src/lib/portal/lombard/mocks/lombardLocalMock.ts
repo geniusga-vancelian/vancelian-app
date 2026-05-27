@@ -17,6 +17,7 @@ import {
   isLombardMockEnabled,
   isLombardMockPositionEnabled,
 } from '@/lib/portal/lombard/lombardMockConfig'
+import type { LombardMorphoMarketRow } from '@/lib/portal/lombard/lombardGraphql'
 import { buildLombardActivePositionRow } from '@/lib/portal/lombard/lombardPositionService'
 import type { LombardActivePosition } from '@/lib/portal/lombard/lombardPositionTypes'
 import { clampLombardTargetLtvPercent, lombardTargetLtvRatio } from '@/lib/portal/lombard/lombardBorrowLtv'
@@ -348,10 +349,14 @@ export async function lombardMockUpdateLedgerSuccess(args: {
   })
 }
 
-function mockGqlRow(collateral: 'cbBTC' | 'cbETH') {
+function mockGqlRow(collateral: 'cbBTC' | 'cbETH'): LombardMorphoMarketRow {
   const gql = MOCK_GQL_BY_COLLATERAL[collateral]
   const cfg = getLombardMockConfig()
+  const market =
+    VANCELIAN_LOMBARD_V1.markets.find((row) => row.collateral === collateral) ??
+    VANCELIAN_LOMBARD_V1.markets[0]
   return {
+    marketId: market.marketId,
     loanAsset: { address: gql.loanTokenAddress, symbol: 'USDC', decimals: gql.loanDecimals },
     collateralAsset: {
       address: gql.collateralTokenAddress,
@@ -359,6 +364,8 @@ function mockGqlRow(collateral: 'cbBTC' | 'cbETH') {
       decimals: gql.collateralDecimals,
     },
     lltv: String(Math.round(cfg.lltvBps * 1e14)),
+    oracle: { address: '0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9' },
+    irmAddress: '0x46415998764C29aB2a25CbeA6254146D50D22687',
     state: {
       borrowApy: cfg.borrowApyBps / 10_000,
       borrowAssets: '0',
