@@ -10,7 +10,10 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { buildPortalWalletScopes } from '@/lib/portal/buildPortalWalletScopes'
+import {
+  buildEmbeddedVancelianWalletScope,
+  buildSwitchablePortalWalletScopes,
+} from '@/lib/portal/buildPortalWalletScopes'
 import { fetchPortalPersonCryptoWallets } from '@/lib/portal/privyWalletClient'
 import { getCurrentPortalWalletScopeId, usePortalWalletScopeId } from '@/lib/portal/portalWalletScope'
 import type { PortalWalletScope, PortalWalletScopeId } from '@/lib/portal/portalWalletScopeTypes'
@@ -21,6 +24,7 @@ type PortalWalletScopeContextValue = {
   walletScope: PortalWalletScope | null
   walletScopeId: PortalWalletScopeId | null
   setWalletScopeId: (scopeId: PortalWalletScopeId | null) => void
+  /** Wallets affichés dans le sélecteur navbar (externes uniquement). */
   scopes: PortalWalletScope[]
   loading: boolean
   refreshScopes: () => Promise<void>
@@ -28,9 +32,21 @@ type PortalWalletScopeContextValue = {
 
 const PortalWalletScopeContext = createContext<PortalWalletScopeContextValue | null>(null)
 
+function resolveActiveWalletScope(
+  scopeId: PortalWalletScopeId | null,
+  embedded: PortalWalletScope | null,
+  switchable: PortalWalletScope[],
+): PortalWalletScope | null {
+  if (scopeId?.startsWith('external:')) {
+    return switchable.find((scope) => scope.id === scopeId) ?? embedded
+  }
+  return embedded
+}
+
 export function PortalWalletScopeProvider({ children }: { children: ReactNode }) {
   const execution = useOptionalExecutionWallet()
   const [walletScopeId, setWalletScopeId] = usePortalWalletScopeId()
+  const [embeddedScope, setEmbeddedScope] = useState<PortalWalletScope | null>(null)
   const [scopes, setScopes] = useState<PortalWalletScope[]>([])
   const [loading, setLoading] = useState(true)
   const hasLoadedRef = useRef(false)
@@ -54,23 +70,21 @@ export function PortalWalletScopeProvider({ children }: { children: ReactNode })
       const personWallets = personResult.status === 'fulfilled' ? personResult.value : []
       const externalWallets = externalResult.status === 'fulfilled' ? externalResult.value : []
 
-      const built = buildPortalWalletScopes({
-        personWallets,
-        externalWallets,
-      })
-      setScopes(built)
+      const embedded = buildEmbeddedVancelianWalletScope(personWallets)
+      const switchable = buildSwitchablePortalWalletScopes({ externalWallets })
+      setEmbeddedScope(embedded)
+      setScopes(switchable)
 
       const current = getCurrentPortalWalletScopeId()
-      if (!current && built[0]) {
-        setWalletScopeId(built[0].id)
+      if (current?.startsWith('external:') && switchable.some((scope) => scope.id === current)) {
+        setWalletScopeId(current)
         return
       }
 
-      if (current && !built.some((scope) => scope.id === current) && current.startsWith('privy:')) {
-        const privyScope = built.find((scope) => scope.kind === 'privy_embedded')
-        if (privyScope) {
-          setWalletScopeId(privyScope.id)
-        }
+      if (embedded) {
+        setWalletScopeId(embedded.id)
+      } else if (switchable[0]) {
+        setWalletScopeId(switchable[0].id)
       }
     } finally {
       hasLoadedRef.current = true
@@ -84,8 +98,8 @@ export function PortalWalletScopeProvider({ children }: { children: ReactNode })
   }, [refreshScopes])
 
   const walletScope = useMemo(
-    () => scopes.find((scope) => scope.id === walletScopeId) ?? null,
-    [scopes, walletScopeId],
+    () => resolveActiveWalletScope(walletScopeId, embeddedScope, scopes),
+    [embeddedScope, scopes, walletScopeId],
   )
 
   const setExecutionMode = execution?.setMode

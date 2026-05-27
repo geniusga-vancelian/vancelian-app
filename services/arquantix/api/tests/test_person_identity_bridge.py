@@ -346,6 +346,26 @@ def test_privy_exchange_jwt_verified_roundtrip(client: TestClient, db: Session, 
     assert pl.get("person_id") == str(c.person_id)
 
 
+def test_privy_exchange_stub_login_email_body_fallback(client: TestClient, db: Session, monkeypatch):
+    """Dev mock : jeton stub + e-mail OTP dans le corps → rattachement AdminUser."""
+    monkeypatch.setenv("PRIVY_EXCHANGE_VERIFICATION_MODE", "stub")
+    from tests.conftest import make_admin_user_with_pe_client
+
+    login_email = f"stub-login-{uuid.uuid4().hex[:8]}@example.com"
+    make_admin_user_with_pe_client(db, email=login_email, password="test")
+    db.commit()
+
+    ext = f"local-dev:{login_email}"
+    res = client.post(
+        "/auth/privy/exchange",
+        json={"privy_access_token": f"stub:{ext}", "email": login_email},
+        headers={"X-Device-ID": f"dev-{uuid.uuid4().hex[:8]}"},
+    )
+    assert res.status_code == 200, res.text
+    linked = get_person_from_external_identity(db, provider=PROVIDER_PRIVY, external_subject=ext)
+    assert linked is not None
+
+
 def test_privy_exchange_jwt_login_email_body_fallback(client: TestClient, db: Session, monkeypatch):
     """Web prod : JWT access sans e-mail + adresse OTP dans le corps → rattachement AdminUser."""
     priv_key = ec.generate_private_key(ec.SECP256R1(), default_backend())

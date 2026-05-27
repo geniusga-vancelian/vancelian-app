@@ -48,7 +48,7 @@ def test_bundle_lifi_allows_cbbtc_base():
     assert tok.chain_key == "base"
     assert tok.lifi_chain_id == 8453
 
-    assert not is_swap_destination_asset("CBBTC")
+    assert is_swap_destination_asset("CBBTC")
 
     with pytest.raises(BundleLifiValidationError) as exc:
         validate_bundle_quote_request(

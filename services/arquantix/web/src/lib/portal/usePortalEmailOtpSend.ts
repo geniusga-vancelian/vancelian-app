@@ -9,6 +9,7 @@ import {
   isPrivyCaptchaError,
   isPrivyUnauthorizedError,
 } from '@/lib/portal/privyConfigErrors'
+import { isPortalPrivyOtpDevMockEnabled } from '@/lib/portal/privyOtpDevMockConfig'
 
 type SendEmailOtpArgs = {
   email: string
@@ -35,6 +36,10 @@ export function usePortalEmailOtpSend() {
 
   return useCallback(
     async ({ email, disableSignup }: SendEmailOtpArgs) => {
+      if (isPortalPrivyOtpDevMockEnabled()) {
+        return
+      }
+
       const dispatch = async () => {
         const current = getCaptcha()
         if (current.enabled) {

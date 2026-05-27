@@ -29,7 +29,7 @@ import {
 } from '@/lib/portal/swapClient'
 import type { PortalSwapFlowStep, SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import {
-  isSwapV1Token,
+  parsePortalSwapUrlIntent,
   pickSwapCatalogListsForChain,
 } from '@/lib/portal/swapFlowTypes'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -43,7 +43,6 @@ export function PortalSwapFlow() {
   const [catalog, setCatalog] = useState<SwapSupportedAssetsPayload | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState<string | null>(null)
-  const [preselectApplied, setPreselectApplied] = useState(false)
 
   const [toAsset, setToAsset] = useState('')
   const [toChain, setToChain] = useState('')
@@ -94,6 +93,11 @@ export function PortalSwapFlow() {
     [activeSwapChain, catalog],
   )
 
+  const urlIntent = useMemo(
+    () => parsePortalSwapUrlIntent(searchParams, activeSwapChain),
+    [activeSwapChain, searchParams],
+  )
+
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true)
     setCatalogError(null)
@@ -118,29 +122,44 @@ export function PortalSwapFlow() {
   }, [])
 
   useEffect(() => {
+    setAmount('')
+    setQuote(null)
+    resetExecution()
+  }, [resetExecution, swapChainKey])
+
+  useEffect(() => {
+    if (!activeSwapChain) return
+
+    if (urlIntent.mode === 'buy') {
+      setToAsset(urlIntent.toAsset)
+      setToChain(urlIntent.toChain)
+      setFromAsset('')
+      setFromChain('')
+      setSourceBalance(0)
+      setStep('from')
+      return
+    }
+
+    if (urlIntent.mode === 'sell') {
+      const position = positions.find(
+        (p) => p.asset.toUpperCase() === urlIntent.fromAsset,
+      )
+      setFromAsset(urlIntent.fromAsset)
+      setFromChain(urlIntent.fromChain)
+      setSourceBalance(position?.availableBalance ?? position?.balance ?? 0)
+      setToAsset('')
+      setToChain('')
+      setStep('to')
+      return
+    }
+
     setStep('to')
     setToAsset('')
     setToChain('')
     setFromAsset('')
     setFromChain('')
     setSourceBalance(0)
-    setAmount('')
-    setQuote(null)
-    setPreselectApplied(false)
-    resetExecution()
-  }, [resetExecution, swapChainKey])
-
-  useEffect(() => {
-    if (!catalog || preselectApplied || !searchParams || !activeSwapChain) return
-    const toParam = searchParams.get('to')?.trim().toUpperCase()
-    if (!toParam || !isSwapV1Token(toParam)) return
-    const dest = destinationAssets.find((a) => a.symbol.toUpperCase() === toParam)
-    if (!dest) return
-    setToAsset(dest.symbol)
-    setToChain(activeSwapChain)
-    setStep('from')
-    setPreselectApplied(true)
-  }, [activeSwapChain, catalog, destinationAssets, preselectApplied, searchParams])
+  }, [activeSwapChain, positions, urlIntent])
 
   const onSelectTo = useCallback(
     (asset: string) => {
@@ -247,9 +266,26 @@ export function PortalSwapFlow() {
         />
       ) : step === 'to' ? (
         <PortalSwapToStep
-          assets={destinationAssets}
+          description={
+            urlIntent.mode === 'sell'
+              ? `Choose what to receive for your ${urlIntent.fromAsset} on ${chainLabel}.`
+              : undefined
+          }
+          assets={
+            fromAsset && fromChain
+              ? destinationAssets.filter(
+                  (a) => a.symbol.toUpperCase() !== fromAsset.toUpperCase(),
+                )
+              : destinationAssets
+          }
           onSelect={onSelectTo}
-          onBack={() => router.push(PORTAL_ROUTES.cryptoWallet)}
+          onBack={() => {
+            if (urlIntent.mode === 'sell') {
+              router.push(portalCryptoWalletAssetRoute(urlIntent.fromAsset))
+              return
+            }
+            router.push(PORTAL_ROUTES.cryptoWallet)
+          }}
         />
       ) : step === 'from' && toAsset && toChain ? (
         <PortalSwapFromStep
@@ -258,7 +294,21 @@ export function PortalSwapFlow() {
           catalog={sourceAssets}
           positions={positions}
           onSelect={onSelectFrom}
-          onBack={() => setStep('to')}
+          stepEyebrow={urlIntent.mode === 'buy' ? 'Step 1' : 'Step 2'}
+          description={
+            urlIntent.mode === 'buy'
+              ? `Pay with USDC, EURC or ETH on ${chainLabel} to buy ${toAsset}.`
+              : undefined
+          }
+          onBack={() => {
+            if (urlIntent.mode === 'buy') {
+              router.push(portalCryptoWalletAssetRoute(toAsset))
+              return
+            }
+            setToAsset('')
+            setToChain('')
+            setStep('to')
+          }}
         />
       ) : step === 'amount' && fromAsset && toAsset && fromChain && toChain ? (
         <PortalSwapAmountStep
@@ -268,7 +318,7 @@ export function PortalSwapFlow() {
           toChain={toChain}
           sourceBalance={sourceBalance}
           onContinue={onAmountContinue}
-          onBack={() => setStep('from')}
+          onBack={() => setStep(urlIntent.mode === 'sell' ? 'to' : urlIntent.mode === 'buy' ? 'from' : 'from')}
         />
       ) : step === 'confirm' && quote ? (
         <>

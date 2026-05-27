@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+DEPRECATED — Top 5 bundle removed. Use instead:
+  scripts/bootstrap_crypto_bundle_base_portfolio.py
+  scripts/delete_legacy_crypto_bundles.py
+
 Bootstrap: Crypto Bundle Top 5 — produit PE + template + allocations.
 
 Allocation cible:
@@ -185,6 +189,9 @@ def bootstrap() -> None:
 
 
 if __name__ == "__main__":
+    print("DEPRECATED: Top 5 bundle is no longer used. Exiting.")
+    print("  Run: python3 scripts/delete_legacy_crypto_bundles.py")
+    sys.exit(1)
     print("Bootstrapping Top 5 Crypto Bundle (CRYPTO_BUNDLE_TOP5)...")
     print()
     bootstrap()

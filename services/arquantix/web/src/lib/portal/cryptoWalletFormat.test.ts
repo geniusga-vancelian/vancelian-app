@@ -14,6 +14,42 @@ import {
 } from './cryptoWalletFormat'
 
 describe('buildPrivyWalletPositionsSummary', () => {
+  it('values CBBTC using BTC market quote', () => {
+    const summary = buildPrivyWalletPositionsSummary(
+      {
+        balances: [
+          {
+            asset: 'CBBTC',
+            name: 'CBBTC',
+            balance: '0.3',
+            available_balance: '0.3',
+            icon_key: 'cbbtc',
+            chain_type: 'ethereum',
+            chain_id: 8453,
+          },
+        ],
+      },
+      {
+        summaries: [
+          {
+            symbol: 'BTCUSDT',
+            price: '100000',
+            price_eur: '92000',
+            change_24h_pct: '1.5',
+          },
+        ],
+      },
+      'EUR',
+    )
+    assert.equal(summary.positions.length, 1)
+    const pos = summary.positions[0]
+    assert.equal(pos?.asset, 'CBBTC')
+    assert.equal(pos?.priceEur, 92000)
+    assert.equal(pos?.estimatedValueEur, 27600)
+    assert.equal(pos?.performance1dPct, 1.5)
+    assert.equal(summary.totalValueEur, 27600)
+  })
+
   it('includes dedicated Solana wallet at zero balance', () => {
     const summary = buildPrivyWalletPositionsSummary(
       {

@@ -32,7 +32,8 @@
   }
 
   .news-deck > .flash-card,
-  .news-deck > .actu-card {
+  .news-deck > .actu-card,
+  .news-deck > .prod {
     width: 100%;
     max-width: none;
     flex: unset;

@@ -1,3 +1,4 @@
+import { normalizeCryptoBaseTicker } from '@/lib/portal/cryptoInstrumentAssets'
 import { formatCryptoPrice, formatChangePct } from '@/lib/portal/marketsFormat'
 
 export const CHART_PERIOD_OPTIONS = [
@@ -12,18 +13,13 @@ export type ChartPeriodId = (typeof CHART_PERIOD_OPTIONS)[number]['id']
 
 const SYMBOL_NAMES: Record<string, string> = {
   BTC: 'Bitcoin',
-  ETH: 'Ether',
-  SOL: 'Solana',
-  XRP: 'XRP',
-  BNB: 'BNB',
-  ADA: 'Cardano',
-  DOGE: 'Dogecoin',
+  CBBTC: 'Bitcoin',
+  ETH: 'Ethereum',
   USDC: 'USD Coin',
-  USDT: 'Tether',
-  AVAX: 'Avalanche',
+  EURC: 'Euro Coin',
   LINK: 'Chainlink',
-  DOT: 'Polkadot',
-  TRX: 'Tron',
+  AAVE: 'Aave',
+  UNI: 'Uniswap',
 }
 
 export function normalizeInstrumentTicker(raw: string): string {
@@ -34,13 +30,22 @@ export function normalizeInstrumentTicker(raw: string): string {
 export function tickerToProviderSymbol(ticker: string): string {
   const t = normalizeInstrumentTicker(ticker)
   if (!t) return 'BTCUSDT'
+  if (t === 'EURC') return 'EURUSDT'
+  if (t === 'CBBTC') return 'BTCUSDT'
   if (t === 'USDT') return 'USDTUSDT'
   if (t.endsWith('USDT')) return t
   return `${t}USDT`
 }
 
+/** Symbole marché pour cotation — wrappers (CBBTC → BTCUSDT). */
+export function assetToMarketProviderSymbol(asset: string): string {
+  return tickerToProviderSymbol(normalizeCryptoBaseTicker(asset))
+}
+
 export function providerSymbolToTicker(symbol: string): string {
   const s = symbol.trim().toUpperCase()
+  if (s === 'EURUSDT') return 'EURC'
+  if (s === 'BTCUSDT') return 'CBBTC'
   if (s === 'USDTUSDT') return 'USDT'
   if (s.endsWith('USDT')) return s.slice(0, -4)
   return s
@@ -48,7 +53,20 @@ export function providerSymbolToTicker(symbol: string): string {
 
 export function instrumentDisplayName(ticker: string): string {
   const t = normalizeInstrumentTicker(ticker)
-  return SYMBOL_NAMES[t] ?? t
+  if (SYMBOL_NAMES[t]) return SYMBOL_NAMES[t]
+  const base = normalizeCryptoBaseTicker(t)
+  if (SYMBOL_NAMES[base]) return SYMBOL_NAMES[base]
+  return t
+}
+
+/** Titre header détail position — nom lisible (CBBTC → Bitcoin). */
+export function cryptoPositionHeaderTitle(ticker: string, fallbackName?: string): string {
+  const code = normalizeInstrumentTicker(ticker)
+  const mapped = instrumentDisplayName(code)
+  if (mapped !== code) return mapped
+  const name = fallbackName?.trim()
+  if (name && name.toUpperCase() !== code) return name
+  return mapped
 }
 
 export type InstrumentCandle = {

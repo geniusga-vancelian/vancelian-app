@@ -13,6 +13,7 @@ from services.auth.jwt_user_claims import build_user_jwt_access_base_claims
 from services.auth.person_identity_bridge import PROVIDER_PRIVY, link_external_identity_to_person, upsert_person_crypto_wallet
 from services.lifi.lifi_client import LifiClient
 from services.lifi.routes import _quote_svc
+from config.base_allowed_assets import BASE_SWAP_SYMBOLS
 from tests.conftest import ensure_admin_for_linked_client, make_linked_client
 
 
@@ -83,7 +84,7 @@ def _mock_lifi_quote():
     return {
         "id": "quote-test-1",
         "tool": "stargateV2",
-        "action": {"fromChainId": 1, "toChainId": 1},
+        "action": {"fromChainId": 8453, "toChainId": 8453},
         "estimate": {
             "toAmount": "450000000000000000",
             "toAmountMin": "445000000000000000",
@@ -94,7 +95,7 @@ def _mock_lifi_quote():
             "to": "0x1234567890123456789012345678901234567890",
             "data": "0xdeadbeef",
             "value": "0",
-            "chainId": 1,
+            "chainId": 8453,
         },
     }
 
@@ -105,8 +106,8 @@ def test_supported_assets_public(client: TestClient):
     body = res.json()
     assert body["swap_fee_bps"] == 0
     symbols = {a["symbol"] for a in body["assets"]}
-    assert symbols == {"USDC", "USDT", "ETH"}
-    assert {a["symbol"] for a in body["destination_assets"]} == {"USDC", "USDT", "ETH"}
+    assert symbols == BASE_SWAP_SYMBOLS
+    assert {a["symbol"] for a in body["destination_assets"]} == BASE_SWAP_SYMBOLS
 
 
 def test_quote_requires_auth(client: TestClient):
@@ -117,7 +118,7 @@ def test_quote_requires_auth(client: TestClient):
             "to_asset": "ETH",
             "amount": "100",
             "from_chain": "base",
-            "to_chain": "ethereum",
+            "to_chain": "base",
         },
     )
     assert res.status_code == 401
@@ -207,11 +208,11 @@ def test_quote_external_wallet_keeps_network_fees(client: TestClient, db: Sessio
         "/api/swaps/quote",
         headers=_auth_headers(db, pe),
         json={
-            "from_asset": "USDT",
+            "from_asset": "USDC",
             "to_asset": "ETH",
             "amount": "100",
-            "from_chain": "ethereum",
-            "to_chain": "ethereum",
+            "from_chain": "base",
+            "to_chain": "base",
             "signing_wallet_mode": "external_evm",
             "signing_wallet_address": EXTERNAL_ADDR,
         },
@@ -236,11 +237,11 @@ def test_quote_external_wallet_uses_metamask_address(client: TestClient, db: Ses
         "/api/swaps/quote",
         headers=_auth_headers(db, pe),
         json={
-            "from_asset": "USDT",
+            "from_asset": "USDC",
             "to_asset": "ETH",
             "amount": "100",
-            "from_chain": "ethereum",
-            "to_chain": "ethereum",
+            "from_chain": "base",
+            "to_chain": "base",
             "signing_wallet_mode": "external_evm",
             "signing_wallet_address": EXTERNAL_ADDR,
         },
@@ -273,7 +274,7 @@ def test_execute_after_quote(client: TestClient, db: Session, monkeypatch):
             "to_asset": "ETH",
             "amount": "1000",
             "from_chain": "base",
-            "to_chain": "ethereum",
+            "to_chain": "base",
         },
     )
     swap_id = quote_res.json()["swap_id"]

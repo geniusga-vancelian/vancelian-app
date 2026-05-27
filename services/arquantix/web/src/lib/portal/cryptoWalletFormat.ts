@@ -1,3 +1,5 @@
+import { normalizeCryptoBaseTicker } from '@/lib/portal/cryptoInstrumentAssets'
+import { entityIdToTicker } from '@/lib/portal/marketsFormat'
 import { consolidateSwapTransactions, parseSwapAssetsFromTitle } from '@/lib/portal/cryptoTransactionHistoryFormat'
 import { formatPortalMoney, normalizeChartSeries } from '@/lib/portal/dashboardFormat'
 import { resolvePositionPortalChain } from '@/lib/portal/portalChainFilter'
@@ -10,6 +12,7 @@ import type {
   PortalCryptoWalletDetail,
   PortalCryptoWalletRow,
   PortalCryptoWalletTransaction,
+  PortalBundlePosition,
   PortalMyBundleSummary,
 } from '@/lib/portal/cryptoWalletTypes'
 
@@ -20,10 +23,7 @@ const STABLECOIN_USD_PRICE: Record<string, number> = {
 }
 
 function tickerFromProviderSymbol(symbol: string): string {
-  const upper = symbol.trim().toUpperCase()
-  if (upper.endsWith('USDT')) return upper.slice(0, -4)
-  if (upper.endsWith('USDC')) return upper.slice(0, -4)
-  return upper
+  return entityIdToTicker(symbol)
 }
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -80,6 +80,18 @@ export function parseCryptoPositionsPayload(raw: unknown): PortalCryptoPositions
   }
 }
 
+function parseBundlePosition(item: Record<string, unknown>): PortalBundlePosition {
+  return {
+    asset: String(item.asset ?? '').trim().toUpperCase(),
+    quantity: toNumber(item.quantity),
+    costBasis: toNumber(item.cost_basis),
+    positionType: String(item.position_type ?? ''),
+    marketValue: toOptionalNumber(item.market_value),
+    priceEur: toOptionalNumber(item.price_eur),
+    targetWeight: toOptionalNumber(item.target_weight),
+  }
+}
+
 export function parseMyBundles(raw: unknown): PortalMyBundleSummary[] {
   let list: unknown[] = []
   if (Array.isArray(raw)) {
@@ -90,17 +102,35 @@ export function parseMyBundles(raw: unknown): PortalMyBundleSummary[] {
   }
   return list
     .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
-    .map((item) => ({
-      portfolioId: String(item.portfolio_id ?? ''),
-      portfolioName: String(item.portfolio_name ?? 'Portfolio'),
-      status: String(item.status ?? ''),
-      assetsCount: toNumber(item.assets_count),
-      totalCostBasis: toNumber(item.total_cost_basis),
-      totalMarketValue: toOptionalNumber(item.total_market_value),
-      performancePct: toOptionalNumber(item.performance_pct),
-      hasHoldings: item.has_holdings === true,
-    }))
+    .map((item) => {
+      const rawPositions = Array.isArray(item.positions) ? item.positions : []
+      const positions = rawPositions
+        .filter((p): p is Record<string, unknown> => p != null && typeof p === 'object')
+        .map(parseBundlePosition)
+        .filter((p) => p.asset)
+
+      return {
+        portfolioId: String(item.portfolio_id ?? ''),
+        portfolioName: String(item.portfolio_name ?? 'Portfolio'),
+        status: String(item.status ?? ''),
+        assetsCount: toNumber(item.assets_count),
+        totalCostBasis: toNumber(item.total_cost_basis),
+        totalMarketValue: toOptionalNumber(item.total_market_value),
+        performancePct: toOptionalNumber(item.performance_pct),
+        hasHoldings: item.has_holdings === true,
+        positions: positions.length > 0 ? positions : undefined,
+      }
+    })
     .filter((b) => b.portfolioId)
+}
+
+export function findMyBundleByPortfolioId(
+  bundles: PortalMyBundleSummary[],
+  portfolioId: string,
+): PortalMyBundleSummary | undefined {
+  const id = portfolioId.trim()
+  if (!id) return undefined
+  return bundles.find((b) => b.portfolioId === id)
 }
 
 export function parseWalletHistoryPoints(raw: unknown): number[] {
@@ -180,7 +210,8 @@ export function buildPrivyWalletPositionsSummary(
       const asset = String(item.asset ?? '').trim().toUpperCase()
       const balance = toNumber(item.balance)
       const availableBalance = toNumber(item.available_balance, balance)
-      const marketRow = market.get(asset)
+      const quoteTicker = normalizeCryptoBaseTicker(asset)
+      const marketRow = market.get(asset) ?? market.get(quoteTicker)
       let priceEur = marketRow ? toOptionalNumber(marketRow.price_eur ?? marketRow.priceEur) : undefined
       let priceUsd = marketRow ? toOptionalNumber(marketRow.price) : undefined
       let estimatedValueEur = priceEur != null ? balance * priceEur : undefined
@@ -565,8 +596,8 @@ export function resolvePositionSubtitle(position: PortalCryptoPosition): string 
     const chainLabel = resolvePositionChainLabel(position)
     return `Wallet ${chainLabel} · ${volumeStr}`
   }
-  if (position.portfolioScope === 'privy') return `Wallet Privy · ${volumeStr}`
-  if (position.portfolioScope === 'merged') return `${volumeStr} · incl. Privy`
+  if (position.portfolioScope === 'privy') return volumeStr
+  if (position.portfolioScope === 'merged') return `${volumeStr} · incl. integrated wallet`
   return volumeStr
 }
 

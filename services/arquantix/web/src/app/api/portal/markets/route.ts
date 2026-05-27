@@ -59,7 +59,12 @@ export async function GET(request: NextRequest) {
   const newsItems = mapMarketsNewsFeed(newsRes.data, { maxItems: 5, origin: publicOrigin })
   const configs = ((configsRes.data as { configs?: Record<string, unknown> })?.configs ?? {}) as Record<
     string,
-    { headerMediaUrl?: string | null; cardTitle?: string | null; performance1d?: number | null }
+    {
+      headerMediaUrl?: string | null
+      cardTitle?: string | null
+      performance1d?: number | null
+      sortOrder?: number | null
+    }
   >
 
   let bundles: PortalMarketsPayload['bundles'] = []

@@ -414,6 +414,7 @@ class PrivyIdentityBridgeService {
   /// Échange le jeton Privy contre une session JWT Vancelian (`sub=au:…`).
   Future<PrivyExchangeResult> exchangePrivyToken({
     required String privyAccessToken,
+    String? emailForStubDev,
     List<Map<String, dynamic>>? wallets,
   }) async {
     if (!SecureApiConfig.hasAuthBackend) {
@@ -427,6 +428,10 @@ class PrivyIdentityBridgeService {
     final body = <String, dynamic>{
       'privy_access_token': privyAccessToken,
     };
+    final stubEmail = emailForStubDev?.trim();
+    if (stubEmail != null && stubEmail.isNotEmpty) {
+      body['email'] = stubEmail;
+    }
     if (wallets != null && wallets.isNotEmpty) {
       body['wallets'] = wallets;
     }

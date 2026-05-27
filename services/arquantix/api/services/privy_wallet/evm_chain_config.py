@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 # Chaînes supportées pour dépôts Privy + réconciliation ledger.
-PRIVY_EVM_PILOT_CHAIN_IDS: tuple[int, ...] = (1, 8453)
+PRIVY_EVM_PILOT_CHAIN_IDS: tuple[int, ...] = (8453,)
 
 CHAIN_LABELS: dict[int, str] = {
     1: "Ethereum",

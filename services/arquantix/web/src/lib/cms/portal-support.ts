@@ -6,18 +6,18 @@ import {
 } from '@/lib/cms/portalSupportStorage'
 import type { SupportAsideContent } from '@/components/design-system/SupportAsidePanel'
 
-/** Runtime portail : FR (aligné footer shell / copy actuelle). */
-export const PORTAL_SUPPORT_RUNTIME_LOCALE: Locale = 'fr'
+/** Runtime portail — English UI (aligned with portal nav copy). */
+export const PORTAL_SUPPORT_RUNTIME_LOCALE: Locale = 'en'
 
 export type PortalSupportContent = SupportAsideContent
 
 export function getDefaultPortalSupportContent(): PortalSupportContent {
   return {
-    title: 'Une question ?',
-    description: 'Notre équipe répond aux questions techniques sous 24 h.',
-    ctaLabel: 'Contacter le support →',
+    title: 'Questions?',
+    description: 'Our team answers technical questions within 24 hours.',
+    ctaLabel: 'Contact support →',
     ctaHref: '/help',
-    secondaryLinkLabel: 'Centre d’aide →',
+    secondaryLinkLabel: 'Help center →',
     secondaryLinkHref: '/help',
   }
 }

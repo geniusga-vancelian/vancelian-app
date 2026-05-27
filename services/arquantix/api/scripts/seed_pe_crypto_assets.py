@@ -117,6 +117,22 @@ CRYPTO_BRIDGE_MAP = {
         "supports_staking": True,
         "supports_collateral": False,
     },
+    "AAVEUSDT": {
+        "asset_symbol": "AAVE",
+        "asset_name": "Aave",
+        "asset_type": "crypto",
+        "risk_profile": "aggressive",
+        "supports_staking": False,
+        "supports_collateral": False,
+    },
+    "UNIUSDT": {
+        "asset_symbol": "UNI",
+        "asset_name": "Uniswap",
+        "asset_type": "crypto",
+        "risk_profile": "aggressive",
+        "supports_staking": False,
+        "supports_collateral": False,
+    },
 }
 
 BRIDGE_METADATA_KEYS = frozenset({
@@ -151,11 +167,14 @@ def seed_pe_crypto_assets() -> None:
 
         missing = [ps for ps in provider_symbols if ps not in source_by_ps]
         if missing:
-            print(f"  ✗ FATAL: missing market_data_instruments: {missing}")
-            print("    Run ensure_binance_instruments.py first.")
+            print(f"  ⚠ Skipping missing market_data_instruments: {missing}")
+
+        if not source_by_ps:
+            print("  ✗ FATAL: no market_data_instruments matched the bridge map.")
+            print("    Run sync_base_allowed_instruments.py or ensure_binance_instruments.py first.")
             sys.exit(1)
 
-        print(f"  ✓ Found all {len(source_by_ps)} source instruments in market_data_instruments")
+        print(f"  ✓ Bridging {len(source_by_ps)} instrument(s) from market_data_instruments")
 
         assets_created = 0
         assets_updated = 0
@@ -165,7 +184,9 @@ def seed_pe_crypto_assets() -> None:
         instruments_skipped = 0
 
         for provider_symbol, cfg in CRYPTO_BRIDGE_MAP.items():
-            md_inst = source_by_ps[provider_symbol]
+            md_inst = source_by_ps.get(provider_symbol)
+            if md_inst is None:
+                continue
             ticker = cfg["asset_symbol"]
 
             # ── Asset bridge metadata ────────────────────────────────

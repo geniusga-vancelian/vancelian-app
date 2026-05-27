@@ -21,6 +21,7 @@ type Props = {
   indicatorTone?: AppAccountIndicatorTone
   showChevron?: boolean
   href?: string
+  onClick?: () => void
   LinkComponent?: ComponentType<LinkLikeProps>
   className?: string
 }
@@ -36,6 +37,7 @@ export function AppAccountSummaryRow({
   indicatorTone = 'plus',
   showChevron = true,
   href,
+  onClick,
   LinkComponent,
   className,
 }: Props) {
@@ -85,6 +87,18 @@ export function AppAccountSummaryRow({
       <LinkImpl href={href} className={cn('acct-summary__item no-underline', className)}>
         {inner}
       </LinkImpl>
+    )
+  }
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn('acct-summary__item w-full cursor-pointer border-0 bg-transparent text-left', className)}
+      >
+        {inner}
+      </button>
     )
   }
 

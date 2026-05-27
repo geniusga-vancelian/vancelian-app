@@ -1,7 +1,7 @@
 """Whitelist stricte des actifs et chaînes autorisés pour les swaps LI.FI V1.
 
-V1 scope : EVM uniquement — USDC, USDT, ETH (source et destination).
-Aucune adresse de contrat côté front — source de vérité backend uniquement.
+Routing 100 % Base (chain 8453) — source de vérité : ``base_allowed_assets``.
+Aucune adresse de contrat côté front.
 """
 from __future__ import annotations
 
@@ -9,97 +9,67 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Union
 
+from config.base_allowed_assets import (
+    BASE_ALLOWED_ASSETS,
+    BASE_CHAIN_KEY,
+    BASE_LIFI_CHAIN_ID,
+    BASE_SWAP_SYMBOLS,
+    EVM_NATIVE_TOKEN,
+)
 from services.lifi.config import swap_v1_pilot_chains
 
-# Adresse native EVM (LI.FI convention).
-EVM_NATIVE_TOKEN = "0x0000000000000000000000000000000000000000"
-
-# V1 — périmètre produit (EVM, 3 jetons).
-SWAP_V1_EVM_CHAIN_KEYS: frozenset[str] = frozenset({"ethereum", "arbitrum", "base", "polygon"})
-SWAP_V1_SOURCE_ASSETS: frozenset[str] = frozenset({"USDC", "USDT", "ETH"})
-SWAP_V1_DESTINATION_ASSETS: frozenset[str] = frozenset({"USDC", "USDT", "ETH"})
+SWAP_V1_EVM_CHAIN_KEYS: frozenset[str] = frozenset({BASE_CHAIN_KEY})
+SWAP_V1_SOURCE_ASSETS: frozenset[str] = BASE_SWAP_SYMBOLS
+SWAP_V1_DESTINATION_ASSETS: frozenset[str] = BASE_SWAP_SYMBOLS
 
 SUPPORTED_SWAP_CHAINS: dict[str, dict[str, Any]] = {
-    "ethereum": {
-        "lifi_chain_id": 1,
-        "display_name": "Ethereum",
-        "wallet_chain_type": "ethereum",
-        "evm": True,
-    },
-    "arbitrum": {
-        "lifi_chain_id": 42161,
-        "display_name": "Arbitrum",
-        "wallet_chain_type": "ethereum",
-        "evm": True,
-    },
-    "base": {
-        "lifi_chain_id": 8453,
+    BASE_CHAIN_KEY: {
+        "lifi_chain_id": BASE_LIFI_CHAIN_ID,
         "display_name": "Base",
-        "wallet_chain_type": "ethereum",
-        "evm": True,
-    },
-    "polygon": {
-        "lifi_chain_id": 137,
-        "display_name": "Polygon",
         "wallet_chain_type": "ethereum",
         "evm": True,
     },
 }
 
-# Montants min/max en unités humaines (pas wei).
 DEFAULT_MIN_SWAP_AMOUNT: dict[str, Decimal] = {
     "ETH": Decimal("0.001"),
     "USDC": Decimal("5"),
-    "USDT": Decimal("5"),
+    "EURC": Decimal("5"),
+    "CBBTC": Decimal("0.00001"),
+    "LINK": Decimal("1"),
+    "AAVE": Decimal("0.01"),
+    "UNI": Decimal("0.1"),
 }
 
 DEFAULT_MAX_SWAP_AMOUNT: dict[str, Decimal] = {
     "ETH": Decimal("50"),
     "USDC": Decimal("250000"),
-    "USDT": Decimal("250000"),
+    "EURC": Decimal("250000"),
+    "CBBTC": Decimal("5"),
+    "LINK": Decimal("50000"),
+    "AAVE": Decimal("50000"),
+    "UNI": Decimal("50000"),
 }
 
-SUPPORTED_SWAP_ASSETS: dict[str, dict[str, Any]] = {
-    "USDC": {
-        "display_name": "USD Coin",
-        "symbol": "USDC",
-        "decimals": 6,
-        "kind": "stablecoin",
-        "chains": ["ethereum", "arbitrum", "base", "polygon"],
-        "addresses": {
-            "ethereum": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-            "arbitrum": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-            "base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-            "polygon": "0x3c499c542cEF5E3811e1192ae670659704471293",
-        },
-    },
-    "USDT": {
-        "display_name": "Tether",
-        "symbol": "USDT",
-        "decimals": 6,
-        "kind": "stablecoin",
-        "chains": ["ethereum", "arbitrum", "base", "polygon"],
-        "addresses": {
-            "ethereum": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-            "arbitrum": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
-            "base": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
-            "polygon": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
-        },
-    },
-    "ETH": {
-        "display_name": "Ethereum",
-        "symbol": "ETH",
-        "decimals": 18,
-        "kind": "native",
-        "chains": ["ethereum", "arbitrum", "base", "polygon"],
-        "addresses": {
-            "ethereum": EVM_NATIVE_TOKEN,
-            "arbitrum": EVM_NATIVE_TOKEN,
-            "base": EVM_NATIVE_TOKEN,
-            "polygon": EVM_NATIVE_TOKEN,
-        },
-    },
-}
+
+def _build_supported_swap_assets() -> dict[str, dict[str, Any]]:
+    assets: dict[str, dict[str, Any]] = {}
+    for row in BASE_ALLOWED_ASSETS:
+        if not row["swap_enabled"] or not row["base_token_address"]:
+            continue
+        sym = row["symbol"]
+        assets[sym] = {
+            "display_name": row["name"],
+            "symbol": sym,
+            "decimals": row["decimals"],
+            "kind": row["kind"],
+            "chains": [BASE_CHAIN_KEY],
+            "addresses": {BASE_CHAIN_KEY: row["base_token_address"]},
+        }
+    return assets
+
+
+SUPPORTED_SWAP_ASSETS: dict[str, dict[str, Any]] = _build_supported_swap_assets()
 
 
 @dataclass(frozen=True)
@@ -121,16 +91,21 @@ def normalize_chain_key(chain: str) -> str:
         "matic": "polygon",
         "pol": "polygon",
     }
-    return aliases.get(key, key)
+    normalized = aliases.get(key, key)
+    if normalized == "ethereum":
+        return BASE_CHAIN_KEY
+    return normalized
 
 
 def normalize_asset_symbol(asset: str) -> str:
-    return (asset or "").strip().upper()
+    raw = (asset or "").strip().upper()
+    if raw in {"CBTC", "CBBTC", "WBTC"}:
+        return "CBBTC"
+    return raw
 
 
 def is_evm_swap_chain(chain_key: str) -> bool:
-    chain = normalize_chain_key(chain_key)
-    return chain in SWAP_V1_EVM_CHAIN_KEYS
+    return normalize_chain_key(chain_key) in SWAP_V1_EVM_CHAIN_KEYS
 
 
 def is_supported_chain(chain_key: str) -> bool:
@@ -203,7 +178,7 @@ def atomic_amount_to_human(amount_atomic: str | int, decimals: int) -> Decimal:
 
 
 def effective_swap_v1_chain_keys() -> frozenset[str]:
-    """Chaînes exposées en V1 (pilote : Base + Ethereum mainnet par défaut)."""
+    """Chaînes exposées en V1 (pilote : Base uniquement par défaut)."""
     pilot = swap_v1_pilot_chains()
     return SWAP_V1_EVM_CHAIN_KEYS & pilot
 
@@ -227,7 +202,6 @@ def _asset_public_payload(symbol: str, meta: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_supported_source_assets_public() -> list[dict[str, Any]]:
-    """Actifs éligibles en wallet source (V1 : USDC, USDT, ETH — EVM)."""
     items: list[dict[str, Any]] = []
     for symbol in sorted(SWAP_V1_SOURCE_ASSETS):
         meta = SUPPORTED_SWAP_ASSETS.get(symbol)
@@ -237,7 +211,6 @@ def list_supported_source_assets_public() -> list[dict[str, Any]]:
 
 
 def list_supported_destination_assets_public() -> list[dict[str, Any]]:
-    """Actifs éligibles en destination (V1 : USDC, USDT, ETH — EVM)."""
     items: list[dict[str, Any]] = []
     for symbol in sorted(SWAP_V1_DESTINATION_ASSETS):
         meta = SUPPORTED_SWAP_ASSETS.get(symbol)
@@ -247,7 +220,6 @@ def list_supported_destination_assets_public() -> list[dict[str, Any]]:
 
 
 def list_supported_assets_public() -> list[dict[str, Any]]:
-    """Alias rétrocompat — liste complète swappable V1 (= source assets)."""
     return list_supported_source_assets_public()
 
 

@@ -35,7 +35,7 @@ export function AppTxExchangeAvatar({ fromAsset, toAsset, className }: Props) {
   const to = toAsset.trim().toUpperCase()
 
   return (
-    <span className={cn('avt-x avt-x--52 shrink-0', className)}>
+    <span className={cn('avt-x avt-x--46 shrink-0', className)}>
       <span className="avt-x__source">
         <CryptoAvatarBubble asset={from} />
       </span>

@@ -58,10 +58,7 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
     [data?.symbol, ticker],
   )
 
-  const favoriteEntityId = useMemo(
-    () => `${ticker.trim().toUpperCase()}USDT`,
-    [ticker],
-  )
+  const favoriteEntityId = useMemo(() => tickerToProviderSymbol(ticker), [ticker])
 
   const loadDetail = useCallback(async () => {
     setLoading(true)

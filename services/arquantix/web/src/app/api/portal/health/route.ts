@@ -6,6 +6,10 @@ import {
   isPrivyConfigured,
 } from '@/lib/portal/privyConfig'
 import { getBackendBaseUrl } from '@/lib/backend'
+import {
+  getPortalPrivyOtpDevFixedCode,
+  isPortalPrivyOtpDevMockEnabled,
+} from '@/lib/portal/privyOtpDevMockConfig'
 
 /** Diagnostic portail — vérifie env + reachability API (sans exposer de secrets). */
 export async function GET() {
@@ -29,5 +33,7 @@ export async function GET() {
       'Do not use PRIVY_APP_CLIENT_ID from Flutter on web — it is a mobile app client and triggers Invalid nativeAppID.',
     backendUrl: getBackendBaseUrl(),
     apiHealth,
+    privyOtpDevMockEnabled: isPortalPrivyOtpDevMockEnabled(),
+    privyOtpDevMockCode: getPortalPrivyOtpDevFixedCode(),
   })
 }

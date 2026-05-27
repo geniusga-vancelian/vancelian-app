@@ -1,10 +1,6 @@
 /**
- * Prisma — config d’affichage Vault / Flutter pour CRYPTO_BUNDLE_TOP5.
- *
- * À exécuter après bootstrap_crypto_bundle_top5.py (produit présent dans le catalogue FastAPI).
- *
- * Usage (services/arquantix/web) :
- *   npx tsx scripts/seed-crypto-top5-portfolio-config.ts
+ * DEPRECATED — Top 5 bundle removed.
+ * Use: npx tsx scripts/seed-crypto-base-bundles-portfolio-config.ts
  */
 
 import { randomUUID } from 'crypto'
@@ -16,6 +12,9 @@ const prisma = new PrismaClient()
 const PRODUCT_CODE = 'CRYPTO_BUNDLE_TOP5'
 
 async function main() {
+  console.error('DEPRECATED: Top 5 bundle removed. Use seed-crypto-base-bundles-portfolio-config.ts')
+  process.exit(1)
+
   const greys = ['#374151', '#6B7280', '#9CA3AF', '#D1D5DB', '#E5E7EB']
   const slices = [
     { label: 'BTC', percentage: 50, colorHex: '#F7931A' },

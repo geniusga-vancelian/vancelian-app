@@ -6,6 +6,7 @@ import '../../../core/session_identity_context.dart';
 import '../../../design_system/atoms/app_colors.dart';
 import '../../deposit/presentation/screens/deposit_crypto_screen.dart';
 import '../privy/privy_auth_provider.dart';
+import '../privy/privy_otp_dev_mock.dart';
 
 /// Issue quand la suite link + wallet + exchange se termine sans `pop(true)` (wallet déjà connu).
 enum PrivyWalletCompletionOutcome {
@@ -19,6 +20,75 @@ enum PrivyWalletCompletionOutcome {
 /// Suite commune après authentification Privy (OAuth ou e-mail OTP) : lien `person`,
 /// création wallet embarqué si besoin, échange session Vancelian.
 ///
+/// Création wallet sans SDK Privy (stub + adresse mock par e-mail).
+Future<PrivyWalletCompletionOutcome> runPrivyWalletDevMockCompletion({
+  required BuildContext context,
+  required String email,
+}) async {
+  if (!PrivyOtpDevMock.isEnabled) {
+    throw PrivyAuthProviderException('Mock OTP Privy désactivé.');
+  }
+  if (!SecureApiConfig.hasAuthBackend) {
+    throw PrivyExchangeException(
+      0,
+      'privy.exchange.no_auth_backend',
+      'AUTH_API_BASE_URL / resolvedAuthApiBaseUrl vide.',
+    );
+  }
+
+  final trimmed = email.trim();
+  final persistedPre =
+      await PrivyIdentityBridgeService.instance.fetchAuthenticatedPersonCryptoWallets();
+  if (!context.mounted) {
+    return PrivyWalletCompletionOutcome.successPopped;
+  }
+  if (persistedPre.isNotEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Un wallet existe déjà pour ce compte.'),
+        backgroundColor: AppColors.semanticWarning,
+      ),
+    );
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(builder: (_) => const DepositCryptoScreen()),
+    );
+    return PrivyWalletCompletionOutcome.alreadyHadWalletNavigatedToDeposit;
+  }
+
+  await PrivyIdentityBridgeService.instance.linkPrivyForAuthenticatedSession(
+    privyUserId: PrivyOtpDevMock.stubExternalSubject(trimmed),
+  );
+
+  final addr = PrivyOtpDevMock.mockWalletAddress(trimmed);
+  await PrivyIdentityBridgeService.instance.exchangePrivyToken(
+    privyAccessToken: PrivyOtpDevMock.stubAccessToken(trimmed),
+    emailForStubDev: trimmed,
+    wallets: <Map<String, dynamic>>[
+      <String, dynamic>{
+        'address': addr,
+        'chain_type': 'evm',
+        'chain_id': 1,
+        'wallet_type': 'embedded',
+        'privy_wallet_id': PrivyOtpDevMock.mockWalletId(trimmed),
+      },
+    ],
+  );
+
+  if (!context.mounted) {
+    return PrivyWalletCompletionOutcome.successPopped;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        addr.length > 8 ? '${addr.substring(0, 8)}… (mock dev)' : 'Wallet mock synchronisé.',
+      ),
+      backgroundColor: AppColors.semanticPositive,
+    ),
+  );
+  Navigator.of(context).pop(true);
+  return PrivyWalletCompletionOutcome.successPopped;
+}
+
 /// Réutilisé par [PrivyWalletOAuthScreen] et [PrivyWalletEmailOtpScreen].
 Future<PrivyWalletCompletionOutcome> runPrivyWalletLinkExchangeAndFinish({
   required BuildContext context,

@@ -23,6 +23,7 @@ from services.auth.person_identity_bridge import (
 from services.auth.refresh_session import MOBILE_APP_NOT_ALLOWED_DETAIL
 from services.auth.privy_token_verifier import (
     MODE_JWT,
+    MODE_STUB,
     PrivyVerifyError,
     _exchange_mode,
     enrich_verified_privy_access,
@@ -95,12 +96,13 @@ def _resolved_login_email(
     verified_email: Optional[str],
     body_email: Optional[str],
 ) -> Optional[str]:
-    """Repli e-mail OTP (web) quand le JWT Privy n’embarque pas l’adresse (prod jwt)."""
+    """Repli e-mail OTP (web) quand le JWT Privy n’embarque pas l’adresse (prod jwt / dev stub)."""
     email = (verified_email or "").strip().lower()
     if email:
         return email
     fallback = (body_email or "").strip().lower()
-    if _exchange_mode() == MODE_JWT and fallback and "@" in fallback:
+    mode = _exchange_mode()
+    if fallback and "@" in fallback and mode in (MODE_JWT, MODE_STUB):
         return fallback
     return None
 

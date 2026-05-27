@@ -135,9 +135,22 @@ function resolveWarmupConfigs(route: string): WarmupConfig[] {
 
   const cryptoAssetPrefix = `${PORTAL_ROUTES.cryptoWallet}/`
   if (route.startsWith(cryptoAssetPrefix)) {
-    const ticker = decodeURIComponent(route.slice(cryptoAssetPrefix.length).split('/')[0] ?? '')
-      .trim()
-      .toUpperCase()
+    const rest = route.slice(cryptoAssetPrefix.length)
+    const segment = decodeURIComponent(rest.split('/')[0] ?? '').trim()
+
+    if (segment === 'bundle') {
+      const portfolioId = decodeURIComponent(rest.split('/')[1] ?? '').trim()
+      if (!portfolioId) return []
+      return [
+        {
+          cacheKey: `portal:crypto-wallet:bundle:${portfolioId}`,
+          url: `/api/portal/crypto-wallet/bundle/${encodeURIComponent(portfolioId)}`,
+          ttlMs: 45_000,
+        },
+      ]
+    }
+
+    const ticker = segment.toUpperCase()
     if (!ticker) return []
     return [
       {
@@ -150,9 +163,22 @@ function resolveWarmupConfigs(route: string): WarmupConfig[] {
 
   const marketsAssetPrefix = `${PORTAL_ROUTES.markets}/`
   if (route.startsWith(marketsAssetPrefix)) {
-    const slug = decodeURIComponent(route.slice(marketsAssetPrefix.length).split('/')[0] ?? '')
-      .trim()
-      .toLowerCase()
+    const rest = route.slice(marketsAssetPrefix.length)
+    const segment = decodeURIComponent(rest.split('/')[0] ?? '').trim()
+
+    if (segment === 'bundle') {
+      const productCode = decodeURIComponent(rest.split('/')[1] ?? '').trim().toUpperCase()
+      if (!productCode) return []
+      return [
+        {
+          cacheKey: `portal:bundle-product:${productCode}`,
+          url: `/api/portal/bundles/product/${encodeURIComponent(productCode)}`,
+          ttlMs: 60_000,
+        },
+      ]
+    }
+
+    const slug = segment.toLowerCase()
     if (!slug) return []
     return [
       {
@@ -205,7 +231,12 @@ export function warmPortalRoute(href: string, router?: PortalRouter): void {
 
 /** Précharge les onglets principaux en idle (post-mount shell). */
 export function warmAllPortalMainRoutes(router: PortalRouter): void {
-  for (const href of PORTAL_IDLE_WARMUP_ROUTES) {
-    warmPortalRoute(href, router)
-  }
+  PORTAL_IDLE_WARMUP_ROUTES.forEach((href, index) => {
+    const delayMs = index * 400
+    if (delayMs === 0) {
+      warmPortalRoute(href, router)
+      return
+    }
+    window.setTimeout(() => warmPortalRoute(href, router), delayMs)
+  })
 }

@@ -17,23 +17,69 @@ function bridgeEnv(target, ...sources) {
   }
 }
 
+function isTruthyEnvFlag(raw) {
+  const v = (raw || '').trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
+}
+
+/** Active le mock Privy OTP si TWO_FACTOR_DEV_* est déjà configuré (stack locale). */
+function applyPrivyOtpDevMockDefaults() {
+  const explicitOff = ['0', 'false', 'no'].includes(
+    (process.env.PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED || '').trim().toLowerCase(),
+  )
+  if (explicitOff) return
+
+  if (process.env.NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED?.trim()) return
+  if (process.env.PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED?.trim()) return
+
+  const devCode = (process.env.TWO_FACTOR_DEV_FIXED_CODE || '').trim()
+  if (!isTruthyEnvFlag(process.env.TWO_FACTOR_DEV_EXPOSE_CODE) || !/^\d{6}$/.test(devCode)) {
+    return
+  }
+
+  process.env.PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED = 'true'
+  process.env.NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED = 'true'
+}
+
 /**
  * Monorepo : `next dev` s’exécute dans `services/arquantix/web` — Next ne charge pas les `.env` racine par défaut.
- * On charge `.env` et `.env.arquantix` (source unique Privy / ports / R2) sans écraser `.env.local`.
- * En conteneur Docker, l’env est injecté par Compose.
+ * Ordre : racine (.env, .env.arquantix) → web/.env → web/.env.local (surcharge locale).
+ * Build Docker : passer les NEXT_PUBLIC_* en ARG (le repo root n’est pas dans l’image builder).
  */
-;(function loadRepoRootEnv() {
+;(function loadMonorepoEnv() {
   try {
     require('dotenv')
   } catch {
     return
   }
 
+  const dotenv = require('dotenv')
+  const webDir = __dirname
+
   for (const fileName of ['.env', '.env.arquantix']) {
     const envPath = path.join(repoRoot, fileName)
     if (!fs.existsSync(envPath)) continue
     try {
-      require('dotenv').config({ path: envPath })
+      dotenv.config({ path: envPath })
+    } catch {
+      /* erreur de lecture */
+    }
+  }
+
+  for (const fileName of ['.env']) {
+    const envPath = path.join(webDir, fileName)
+    if (!fs.existsSync(envPath)) continue
+    try {
+      dotenv.config({ path: envPath })
+    } catch {
+      /* erreur de lecture */
+    }
+  }
+
+  const localPath = path.join(webDir, '.env.local')
+  if (fs.existsSync(localPath)) {
+    try {
+      dotenv.config({ path: localPath, override: true })
     } catch {
       /* erreur de lecture */
     }
@@ -42,6 +88,19 @@ function bridgeEnv(target, ...sources) {
   bridgeEnv('NEXT_PUBLIC_PRIVY_APP_ID', 'PRIVY_APP_ID', 'NEXT_PUBLIC_PRIVY_APP_ID')
   bridgeEnv('PRIVY_APP_ID', 'NEXT_PUBLIC_PRIVY_APP_ID')
   bridgeEnv('NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID', 'PRIVY_WEB_CLIENT_ID', 'NEXT_PUBLIC_PRIVY_WEB_CLIENT_ID')
+  bridgeEnv(
+    'NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED',
+    'PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED',
+    'NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED',
+  )
+  bridgeEnv(
+    'NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_FIXED_CODE',
+    'PORTAL_PRIVY_OTP_DEV_FIXED_CODE',
+    'TWO_FACTOR_DEV_FIXED_CODE',
+    'NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_FIXED_CODE',
+  )
+
+  applyPrivyOtpDevMockDefaults()
 })()
 
 /** @type {import('next').NextConfig} */
@@ -65,6 +124,17 @@ const nextConfig = {
   // output: 'standalone', // Désactivé pour utiliser next start
   experimental: {
     instrumentationHook: true,
+    turbo: {
+      // Turbopack n’accepte pas les chemins absolus dans resolveAlias (Next 14.2).
+      resolveAlias: {
+        '@react-native-async-storage/async-storage': './src/lib/wallet/metamaskAsyncStorageStub.js',
+        '@privy-io/react-auth': './node_modules/@privy-io/react-auth/dist/cjs/index.js',
+        '@privy-auth-internal/provider':
+          './node_modules/@privy-io/react-auth/dist/cjs/privy-provider-zm0SWrLy.js',
+        '@privy-auth-internal/context':
+          './node_modules/@privy-io/react-auth/dist/cjs/internal-context-B_aIJuQh.js',
+      },
+    },
     /**
      * Externalise les packages serveur qui :
      * - utilisent du `require` dynamique non bundlable (`mjml`, `mjml-core` chargent les composants par nom),
@@ -103,12 +173,12 @@ const nextConfig = {
         ),
       }
     }
-    // Augmenter les timeouts pour les opérations de fichiers
+    // Polling uniquement sur FS lents (iCloud/OneDrive) — coûteux sur disque local.
     config.watchOptions = {
       ...config.watchOptions,
-      poll: 1000,
       aggregateTimeout: 300,
       ignored: ['**/node_modules', '**/.git', '**/.next'],
+      ...(process.env.NEXT_WEBPACK_POLL === '1' ? { poll: 1000 } : {}),
     }
     // Cache fichier webpack souvent corrompu sur FS synchronisé (iCloud / OneDrive)
     // → ENOENT rename *.pack.gz + modules `undefined` dans __webpack_require__.

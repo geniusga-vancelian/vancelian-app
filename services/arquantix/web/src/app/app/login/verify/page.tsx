@@ -20,6 +20,12 @@ import {
 import { formatPortalPrivyAuthError } from '@/lib/portal/privyConfigErrors'
 import { navigateToPortalDashboard } from '@/lib/portal/navigateToPortalDashboard'
 import { parsePortalExchangeError } from '@/lib/portal/parsePortalExchangeError'
+import {
+  buildPrivyDevStubAccessToken,
+  isPortalPrivyOtpDevMockCode,
+  portalPrivyOtpDevMockCode,
+} from '@/lib/portal/privyOtpDevMock'
+import { isPortalPrivyOtpDevMockEnabled } from '@/lib/portal/privyOtpDevMockConfig'
 
 function formatPrivyError(err: unknown, fallback: string, context: 'send-code' | 'verify-code'): string {
   return formatPortalPrivyAuthError(err, context, fallback)
@@ -144,8 +150,9 @@ function VerifyContent() {
     void sendOtp()
   }, [sendOtp])
 
-  const exchangeSession = useCallback(async () => {
-    const privyToken = await resolvePrivyAccessToken(getAccessToken)
+  const exchangeSession = useCallback(async (privyTokenOverride?: string) => {
+    const privyToken =
+      privyTokenOverride?.trim() || (await resolvePrivyAccessToken(getAccessToken))
     if (!privyToken) {
       throw new Error('missing_privy_token')
     }
@@ -209,11 +216,17 @@ function VerifyContent() {
       setError('')
       setVerifying(true)
       try {
-        await loginWithCode({ code: otp })
-        if (epoch !== verifyEpochRef.current || resendingRef.current) return
+        const useDevMock = isPortalPrivyOtpDevMockEnabled() && isPortalPrivyOtpDevMockCode(otp)
+        if (useDevMock) {
+          otpAcceptedRef.current = true
+          await exchangeSession(buildPrivyDevStubAccessToken(email))
+        } else {
+          await loginWithCode({ code: otp })
+          if (epoch !== verifyEpochRef.current || resendingRef.current) return
 
-        otpAcceptedRef.current = true
-        await exchangeSession()
+          otpAcceptedRef.current = true
+          await exchangeSession()
+        }
         if (epoch !== verifyEpochRef.current || resendingRef.current) return
 
         verifySucceededRef.current = true
@@ -227,7 +240,11 @@ function VerifyContent() {
         // OTP accepté par Privy mais échange JWT échoué — retry exchange uniquement.
         if (otpAcceptedRef.current) {
           try {
-            await exchangeSession()
+            const stubRetry =
+              isPortalPrivyOtpDevMockEnabled() && isPortalPrivyOtpDevMockCode(otp)
+                ? buildPrivyDevStubAccessToken(email)
+                : undefined
+            await exchangeSession(stubRetry)
             if (epoch !== verifyEpochRef.current || resendingRef.current) return
 
             verifySucceededRef.current = true
@@ -264,7 +281,7 @@ function VerifyContent() {
         }
       }
     },
-    [exchangeSession, loginWithCode, ready, router],
+    [email, exchangeSession, loginWithCode, ready, router],
   )
 
   useEffect(() => {
@@ -308,6 +325,12 @@ function VerifyContent() {
           loading={isOtpLoading}
           autoFocus
         />
+
+        {portalPrivyOtpDevMockCode() ? (
+          <p className="portal-auth__helper text-center">
+            Mode test local : utilisez {portalPrivyOtpDevMockCode()} (aucun e-mail Privy envoyé).
+          </p>
+        ) : null}
 
         <div className="text-center">
           {resendCountdown > 0 ? (

@@ -326,6 +326,18 @@ body {
   animation: portal-shimmer 1.4s ease-in-out infinite;
 }
 
+/** Shimmer sur fonds foncés (balance card anthracite, preview/19 variante A). */
+.portal-shimmer-dark {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: portal-shimmer 1.4s ease-in-out infinite;
+}
+
 @keyframes portal-reveal {
   from {
     opacity: 0;
@@ -342,7 +354,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .portal-shimmer {
+  .portal-shimmer,
+  .portal-shimmer-dark {
     animation: none;
   }
 

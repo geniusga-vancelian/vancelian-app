@@ -1,10 +1,9 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft } from 'lucide-react'
 
+import { AppTopAppBar } from '@/components/design-system/app/AppTopAppBar'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
-import { Button } from '@/components/ui/button'
 
 type Props = {
   title?: string
@@ -26,24 +25,7 @@ export function PortalSwapFlowShell({
       <div
         className={`mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 ${footer ? 'pb-6' : ''}`}
       >
-        <header className="flex shrink-0 items-center gap-3">
-          {onBack ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-9 w-9 shrink-0 rounded-full border-v-border bg-v-card shadow-v-subtle"
-              onClick={onBack}
-              aria-label="Retour"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          ) : (
-            <span className="w-9" />
-          )}
-          <h1 className="m-0 flex-1 text-center font-ui text-[16px] font-semibold text-v-fg">{title}</h1>
-          <span className="w-9" />
-        </header>
+        <AppTopAppBar title={title} onBack={onBack} />
         <div className={`flex flex-1 flex-col ${centered ? 'justify-center' : ''}`}>{children}</div>
       </div>
       {footer ? (

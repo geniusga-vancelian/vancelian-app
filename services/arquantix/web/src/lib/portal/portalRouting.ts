@@ -28,15 +28,40 @@ export function portalProfileWalletsRoute(): string {
   return `${PORTAL_ROUTES.profile}#wallets`
 }
 
-/** Flow swap LI.FI — destination optionnelle via query (`?to=ETH&toChain=ethereum`). */
-export function portalSwapRoute(options?: { to?: string; toChain?: string }): string {
+export type PortalSwapRouteOptions = {
+  /** Buy flow — destination asset already known. */
+  to?: string
+  toChain?: string
+  /** Sell flow — source asset already known. */
+  from?: string
+  fromChain?: string
+}
+
+/** Flow swap LI.FI — query `to` (buy) or `from` (sell) pour sauter une étape de sélection. */
+export function portalSwapRoute(options?: PortalSwapRouteOptions): string {
   const base = PORTAL_ROUTES.walletSwap
-  const to = options?.to?.trim().toUpperCase()
-  if (!to) return base
-  const params = new URLSearchParams({ to })
-  const chain = options?.toChain?.trim().toLowerCase()
-  if (chain) params.set('toChain', chain)
-  return `${base}?${params.toString()}`
+  if (!options) return base
+
+  const params = new URLSearchParams()
+  const to = options.to?.trim().toUpperCase()
+  const from = options.from?.trim().toUpperCase()
+  if (to) params.set('to', to)
+  if (from) params.set('from', from)
+  const toChain = options.toChain?.trim().toLowerCase()
+  const fromChain = options.fromChain?.trim().toLowerCase()
+  if (toChain) params.set('toChain', toChain)
+  if (fromChain) params.set('fromChain', fromChain)
+
+  const query = params.toString()
+  return query ? `${base}?${query}` : base
+}
+
+export function portalSwapBuyRoute(asset: string, chain?: string): string {
+  return portalSwapRoute({ to: asset, toChain: chain })
+}
+
+export function portalSwapSellRoute(asset: string, chain?: string): string {
+  return portalSwapRoute({ from: asset, fromChain: chain })
 }
 
 /** Lien dashboard « My accounts » → hub wallet ou inscription EUR. */
@@ -51,6 +76,12 @@ export function resolveAccountsRowHref(rowId: string, locked?: boolean): string 
 export function portalCryptoWalletAssetRoute(asset: string): string {
   const ticker = asset.trim().toLowerCase()
   return `${PORTAL_ROUTES.cryptoWallet}/${encodeURIComponent(ticker || 'btc')}`
+}
+
+/** Détail bundle wallet — `/app/wallet/crypto/bundle/{portfolioId}`. */
+export function portalCryptoWalletBundleRoute(portfolioId: string): string {
+  const id = portfolioId.trim()
+  return `${PORTAL_ROUTES.cryptoWallet}/bundle/${encodeURIComponent(id)}`
 }
 
 /** Historique complet des transactions d'un actif crypto wallet. */
@@ -91,6 +122,12 @@ export function supportsDedicatedPrivyDeposit(asset: string): boolean {
 export function portalCryptoInstrumentRoute(ticker: string): string {
   const slug = ticker.trim().toLowerCase()
   return `${PORTAL_ROUTES.markets}/${encodeURIComponent(slug || 'btc')}`
+}
+
+/** Détail produit crypto bundle (catalogue Markets) — modules Vault Builder CMS. */
+export function portalCryptoBundleProductRoute(productCode: string): string {
+  const code = productCode.trim().toUpperCase()
+  return `${PORTAL_ROUTES.markets}/bundle/${encodeURIComponent(code)}`
 }
 
 export type PortalRouteKey = keyof typeof PORTAL_ROUTES

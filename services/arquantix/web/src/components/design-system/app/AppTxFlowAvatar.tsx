@@ -9,7 +9,7 @@ type Props = {
 export function AppTxFlowAvatar({ direction, className }: Props) {
   const icon = direction === 'in' ? 'arrow-down' : 'arrow-up'
   return (
-    <span className={cn('avt avt--52 avt--warm shrink-0', className)}>
+    <span className={cn('avt avt--46 avt--warm shrink-0', className)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className="avt__ic" src={`/icons/kalai/${icon}.svg`} alt="" />
     </span>

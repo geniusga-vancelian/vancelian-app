@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { MouseEventHandler, ReactNode } from 'react'
 import { AppButton } from '@/components/design-system/app/AppButton'
 import { normalizeCryptoBaseTicker } from '@/lib/portal/cryptoInstrumentAssets'
 import { cn } from '@/lib/utils'
@@ -21,7 +21,7 @@ export type AppProductBasketCardProps = {
   performancePositive?: boolean | null
   footIcon?: ReactNode
   ctaLabel?: string
-  onCtaClick?: () => void
+  onCtaClick?: MouseEventHandler<HTMLButtonElement>
   ctaDisabled?: boolean
   className?: string
 }

@@ -11,7 +11,7 @@ import {
   parseWalletHistoryPoints,
   resolveScopedPrivyPositionForAsset,
 } from '@/lib/portal/cryptoWalletFormat'
-import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+import { assetToMarketProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 import { appendPortalScopeQuery } from '@/lib/portal/portalScopeQuery'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
@@ -67,7 +67,7 @@ export async function GET(
 
   const portalChain = resolvePortalChain(request)
   const walletScope = resolveWalletScope(request, portalChain)
-  const providerSymbol = tickerToProviderSymbol(asset)
+  const providerSymbol = assetToMarketProviderSymbol(asset)
   const scopedDetailUrl = appendPortalScopeQuery(
     `/api/app/crypto-positions/${encodeURIComponent(asset)}`,
     portalChain,

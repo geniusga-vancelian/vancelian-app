@@ -1,7 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import Link from 'next/link'
+import { useMemo, useState, type ReactNode } from 'react'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
@@ -12,6 +11,16 @@ export type AppBalanceCardFab = {
   id: string
   label: string
   icon: string
+  href?: string
+  disabled?: boolean
+  onClick?: () => void
+}
+
+/** Boutons utilitaires coin haut-droit (preview/19 · `ic-btn`, pas des FABs d’action). */
+export type AppBalanceCardTopAction = {
+  id: string
+  icon: string
+  label: string
   href?: string
   disabled?: boolean
   onClick?: () => void
@@ -30,6 +39,15 @@ type Props = {
   chartValues: number[]
   showChart?: boolean
   balanceLabelText?: string
+  /** Ligne sous le libellé solde (ex. « 3 actifs · Base · Wallet »). */
+  metaLabel?: string
+  welcomeHi?: string
+  /** Avatar ou icône à gauche du bloc welcome (ex. logo crypto). */
+  welcomeLeading?: ReactNode
+  showTopActions?: boolean
+  /** Remplace search/bell du dashboard si fourni (ex. Alertes + Stats sur détail crypto). */
+  topActions?: AppBalanceCardTopAction[]
+  showChange?: boolean
   searchHref?: string
   notificationsHref?: string
   fabs?: AppBalanceCardFab[]
@@ -44,6 +62,30 @@ const DEFAULT_FABS: AppBalanceCardFab[] = [
   { id: 'invest', label: 'Investir', icon: 'trending-up', href: PORTAL_ROUTES.invest },
   { id: 'more', label: 'More', icon: 'apps', href: PORTAL_ROUTES.profile },
 ]
+
+function BalanceTopAction({ action }: { action: AppBalanceCardTopAction }) {
+  const inner = <KalaiIcon name={action.icon} size={20} />
+
+  if (action.href && !action.disabled) {
+    return (
+      <PortalNavLink href={action.href} className="bal-v2__ic-btn no-underline" aria-label={action.label}>
+        {inner}
+      </PortalNavLink>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="bal-v2__ic-btn"
+      disabled={action.disabled}
+      aria-label={action.label}
+      onClick={action.onClick}
+    >
+      {inner}
+    </button>
+  )
+}
 
 function BalanceFab({ fab }: { fab: AppBalanceCardFab }) {
   const inner = (
@@ -94,6 +136,12 @@ export function AppBalanceCardVariantB({
   chartValues,
   showChart = true,
   balanceLabelText = 'Solde patrimonial',
+  metaLabel,
+  welcomeHi = 'Welcome back',
+  welcomeLeading,
+  showTopActions = true,
+  topActions,
+  showChange = true,
   searchHref = PORTAL_ROUTES.search,
   notificationsHref = PORTAL_ROUTES.profile,
   fabs = DEFAULT_FABS,
@@ -102,6 +150,15 @@ export function AppBalanceCardVariantB({
 }: Props) {
   const isDark = variant === 'dark'
   const [balanceVisible, setBalanceVisible] = useState(true)
+
+  const resolvedTopActions: AppBalanceCardTopAction[] | null = topActions?.length
+    ? topActions
+    : showTopActions
+      ? [
+          { id: 'search', icon: 'search', label: 'Recherche', href: searchHref },
+          { id: 'notifications', icon: 'bell', label: 'Notifications', href: notificationsHref },
+        ]
+      : null
 
   const displayBalance = balanceVisible ? balanceLabel : '••••••'
   const displayAmount = balanceVisible ? changeAmountLabel : '••••'
@@ -116,7 +173,9 @@ export function AppBalanceCardVariantB({
     <article className={cn('bal-v2', isDark ? 'bal-v2--dark' : 'bal-v2--light', className)}>
       <div className="bal-v2__tab">
         <div className="bal-v2__welcome">
-          {showAvatar ? (
+          {welcomeLeading ? (
+            <span className="bal-v2__welcome-leading shrink-0">{welcomeLeading}</span>
+          ) : showAvatar ? (
             <span
               className={cn(
                 'avt avt--40 shrink-0',
@@ -132,22 +191,17 @@ export function AppBalanceCardVariantB({
             </span>
           ) : null}
           <div className="bal-v2__welcome-text">
-            <span className="bal-v2__welcome-hi">Welcome back</span>
+            <span className="bal-v2__welcome-hi">{welcomeHi}</span>
             <span className="bal-v2__welcome-name">{welcomeName}</span>
           </div>
         </div>
-        <div className="bal-v2__actions">
-          <Link href={searchHref} className="bal-v2__ic-btn no-underline" aria-label="Recherche">
-            <KalaiIcon name="search" size={20} />
-          </Link>
-          <Link
-            href={notificationsHref}
-            className="bal-v2__ic-btn no-underline"
-            aria-label="Notifications"
-          >
-            <KalaiIcon name="bell" size={20} />
-          </Link>
-        </div>
+        {resolvedTopActions ? (
+          <div className="bal-v2__actions">
+            {resolvedTopActions.map((action) => (
+              <BalanceTopAction key={action.id} action={action} />
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="bal-v2__solde">
@@ -163,11 +217,20 @@ export function AppBalanceCardVariantB({
           </button>
         </div>
         {balancePending ? (
-          <span className="portal-shimmer bal-v2__shimmer-amt" aria-hidden />
+          <span
+            className={cn(
+              'bal-v2__shimmer-amt',
+              isDark ? 'portal-shimmer-dark' : 'portal-shimmer',
+            )}
+            aria-hidden
+          />
         ) : (
           <div className="bal-v2__amt">{displayBalance}</div>
         )}
-        {!balancePending ? (
+        {!balancePending && metaLabel ? (
+          <p className="bal-v2__meta m-0">{metaLabel}</p>
+        ) : null}
+        {!balancePending && showChange && (changeAmountLabel || changePercentLabel) ? (
           <div
             className={cn('bal-v2__chg', !changePositive && balanceVisible && 'bal-v2__chg--neg')}
             aria-label="Performance"
@@ -179,8 +242,13 @@ export function AppBalanceCardVariantB({
                 <KalaiIcon name="arrow-down" size={16} className="shrink-0" />
               )
             ) : null}
-            <span>{displayAmount}</span>
-            <span className="bal-v2__chg-pct">· {displayPercent}</span>
+            {changeAmountLabel ? <span>{displayAmount}</span> : null}
+            {changePercentLabel ? (
+              <span className="bal-v2__chg-pct">
+                {changeAmountLabel ? '· ' : ''}
+                {displayPercent}
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>

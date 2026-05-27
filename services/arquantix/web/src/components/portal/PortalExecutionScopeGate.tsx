@@ -51,11 +51,11 @@ export function PortalExecutionScopeGate({ requirement, children, className }: P
         )}
       >
         <p className="m-0 font-ui text-[15px] font-semibold text-v-fg">
-          Réseau incompatible
+          Incompatible network
         </p>
         <p className="m-0 mt-2 font-ui text-[14px] leading-relaxed text-v-fg-muted">
-          Cette opération nécessite le réseau <strong>{requiredLabel}</strong>. Sélectionnez{' '}
-          {requiredLabel} dans la barre de navigation — réseau actuel : {chainLabel}.
+          This action requires the <strong>{requiredLabel}</strong> network. Select{' '}
+          {requiredLabel} in the navigation bar — current network: {chainLabel}.
         </p>
       </article>
     )
@@ -69,17 +69,17 @@ export function PortalExecutionScopeGate({ requirement, children, className }: P
           className,
         )}
       >
-        <p className="m-0 font-ui text-[15px] font-semibold text-v-fg">Wallet requis</p>
+        <p className="m-0 font-ui text-[15px] font-semibold text-v-fg">Wallet required</p>
         <p className="m-0 font-ui text-[14px] leading-relaxed text-v-fg-muted">
-          Aucun wallet disponible pour {chainLabel}
-          {walletLabel !== 'Aucun wallet' ? ` (${walletLabel})` : ''}. Choisissez un wallet dans
-          la navbar ou liez MetaMask depuis Mon wallet.
+          No wallet available for {chainLabel}
+          {walletLabel !== 'No wallet' ? ` (${walletLabel})` : ''}. Choose a wallet in the navbar
+          or link MetaMask from My wallets.
         </p>
         <Button type="button" asChild className="rounded-full">
-          <PortalNavLink href={PORTAL_ROUTES.walletCreate}>Créer mon wallet crypto</PortalNavLink>
+          <PortalNavLink href={PORTAL_ROUTES.walletCreate}>Create my crypto wallet</PortalNavLink>
         </Button>
         <Button type="button" asChild variant="outline" className="rounded-full">
-          <PortalNavLink href={portalProfileWalletsRoute()}>Lier MetaMask</PortalNavLink>
+          <PortalNavLink href={portalProfileWalletsRoute()}>Link MetaMask</PortalNavLink>
         </Button>
       </article>
     )

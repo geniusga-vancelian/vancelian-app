@@ -13,7 +13,7 @@ import type {
   PortalPrivyPersonWallets,
 } from '@/lib/portal/dashboardTypes'
 import { loadPortalSavingsSummary } from '@/lib/portal/portalSavingsService'
-import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+import { assetToMarketProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 
 export async function fetchPortalUpstreamJson(path: string) {
@@ -94,7 +94,7 @@ export async function loadPortalDashboardPortfolioPayload(
   )
     ? ((privyBalances.data as { balances: { asset?: string }[] }).balances ?? [])
     : []
-  const symbols = [...new Set(privyList.map((b) => tickerToProviderSymbol(String(b.asset ?? ''))))]
+  const symbols = [...new Set(privyList.map((b) => assetToMarketProviderSymbol(String(b.asset ?? ''))))]
     .filter(Boolean)
     .join(',')
 

@@ -562,6 +562,7 @@ html, body {
 .avt--24 { --avt-size: 24px; }
 .avt--32 { --avt-size: 32px; }
 .avt--40 { --avt-size: 40px; }
+.avt--46 { --avt-size: 46px; }
 .avt--52 { --avt-size: 52px; }
 .avt--56 { --avt-size: 56px; }
 .avt--64 { --avt-size: 64px; }
@@ -654,6 +655,7 @@ img.avt__ic {
   width: var(--avt-size); height: var(--avt-size);
 }
 .avt-x--40 { --avt-size: 40px; }
+.avt-x--46 { --avt-size: 46px; }
 .avt-x--48 { --avt-size: 48px; }
 .avt-x--56 { --avt-size: 56px; }
 .avt-x--72 { --avt-size: 72px; }

@@ -2,13 +2,17 @@
 
 import { useMemo } from 'react'
 
+import { AppAccountSummaryList } from '@/components/design-system/app/AppAccountSummaryList'
+import { AppAccountSummaryRow } from '@/components/design-system/app/AppAccountSummaryRow'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
+import { PortalPageIntro } from '@/components/portal/PortalPageIntro'
 import { PortalSwapFlowShell } from '@/components/portal/swap/PortalSwapFlowShell'
 import { formatSwapCryptoAmount, resolveSwapSourceChain } from '@/lib/portal/swapFlowFormat'
 import type { SwapCatalogAsset } from '@/lib/portal/swapFlowTypes'
 import { SWAP_V1_SAME_CHAIN_ONLY, SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import type { PortalCryptoPosition } from '@/lib/portal/cryptoWalletTypes'
 import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+
 export type SwapFromOption = {
   asset: string
   name: string
@@ -25,6 +29,9 @@ type Props = {
   positions: PortalCryptoPosition[]
   onSelect: (option: SwapFromOption) => void
   onBack: () => void
+  /** Ex. buy via `?to=` — seule étape de sélection. */
+  stepEyebrow?: string
+  description?: string
 }
 
 export function PortalSwapFromStep({
@@ -34,6 +41,8 @@ export function PortalSwapFromStep({
   positions,
   onSelect,
   onBack,
+  stepEyebrow = 'Step 2',
+  description,
 }: Props) {
   const options = useMemo(() => buildFromOptions(catalog, positions, toAsset, toChain), [
     catalog,
@@ -42,57 +51,50 @@ export function PortalSwapFromStep({
     toChain,
   ])
 
+  const chainHint = SWAP_CHAIN_LABELS[toChain] ?? toChain
+
   return (
     <PortalSwapFlowShell title="Swap" onBack={onBack}>
       <div className="flex flex-col gap-5">
-        <div>
-          <p className="m-0 font-ui text-[13px] uppercase tracking-wide text-v-fg-muted">Étape 2</p>
-          <h2 className="mt-2 mb-0 font-ui text-[24px] font-bold leading-tight text-v-fg">
-            Depuis quel actif ?
-          </h2>
-          <p className="mt-2 mb-0 font-ui text-[15px] text-v-fg-muted">
-            {SWAP_V1_SAME_CHAIN_ONLY
-              ? `Wallet et réseau définis dans la navbar — swaps sur ${SWAP_CHAIN_LABELS[toChain] ?? toChain} uniquement.`
-              : 'Wallet et réseau définis dans la navbar — USDC, USDT ou ETH éligibles.'}
-          </p>
-        </div>
+        <PortalPageIntro
+          eyebrow={stepEyebrow}
+          title="From which asset?"
+          description={
+            description ??
+            (SWAP_V1_SAME_CHAIN_ONLY
+              ? `Wallet and network are set in the navbar — swaps on ${chainHint} only.`
+              : 'Wallet and network are set in the navbar — Base assets eligible (USDC, EURC, ETH, etc.).')
+          }
+        />
 
         {options.length === 0 ? (
-          <article className="rounded-v-card border border-v-border bg-v-card p-8 text-center shadow-v-subtle">
+          <div className="acct-summary p-8 text-center">
             <p className="m-0 font-ui text-[15px] text-v-fg-muted">
-              Aucun wallet éligible avec solde. Effectuez un dépôt crypto d&apos;abord.
+              No eligible wallet with balance. Make a crypto deposit first.
             </p>
-          </article>
+          </div>
         ) : (
-          <article className="overflow-hidden card-simple overflow-hidden !w-full">
-            <ul className="m-0 list-none p-0">
-              {options.map((opt) => (
-                <li key={`${opt.asset}-${opt.chain}`} className="border-b border-v-border last:border-b-0">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-v-card-hover"
-                    onClick={() => onSelect(opt)}
-                  >
-                    <PortalCryptoAvatar
-                      ticker={opt.asset}
-                      symbol={tickerToProviderSymbol(opt.asset)}
-                      apiLogoUrl={opt.logoUrl}
-                      size="md"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-ui text-[15px] font-semibold text-v-fg">{opt.name}</span>
-                      <span className="mt-0.5 block font-ui text-[13px] text-v-fg-muted">
-                        {SWAP_CHAIN_LABELS[opt.chain] ?? opt.chain} · Swap
-                      </span>
-                    </span>
-                    <span className="font-ui text-[15px] font-semibold tabular-nums text-v-fg">
-                      {formatSwapCryptoAmount(opt.balance)} {opt.asset}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </article>
+          <AppAccountSummaryList>
+            {options.map((opt) => (
+              <AppAccountSummaryRow
+                key={`${opt.asset}-${opt.chain}`}
+                showChevron={false}
+                onClick={() => onSelect(opt)}
+                leading={
+                  <PortalCryptoAvatar
+                    ticker={opt.asset}
+                    symbol={tickerToProviderSymbol(opt.asset)}
+                    apiLogoUrl={opt.logoUrl}
+                    size="lg"
+                    className="!h-[46px] !w-[46px]"
+                  />
+                }
+                title={opt.name}
+                subtitle={`${SWAP_CHAIN_LABELS[opt.chain] ?? opt.chain} · Swap`}
+                amount={`${formatSwapCryptoAmount(opt.balance)} ${opt.asset}`}
+              />
+            ))}
+          </AppAccountSummaryList>
         )}
       </div>
     </PortalSwapFlowShell>

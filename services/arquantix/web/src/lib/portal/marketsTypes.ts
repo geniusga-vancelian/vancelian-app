@@ -30,6 +30,10 @@ export type PortalCryptoBundle = {
   productId: string | null
   entryAssetDefault: string | null
   entryAssetsAllowed: string[]
+  /** Actifs du panier (poids décroissant) — stack hero carte DS. */
+  allocationTickers: string[]
+  /** Ordre d’affichage CMS (`portfolio_product_configs.sort_order`). */
+  sortOrder: number
 }
 
 export type PortalMarketsNewsItem = {

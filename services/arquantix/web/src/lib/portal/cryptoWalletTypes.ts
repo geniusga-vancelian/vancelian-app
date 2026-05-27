@@ -28,6 +28,16 @@ export type PortalCryptoPositionsSummary = {
   positions: PortalCryptoPosition[]
 }
 
+export type PortalBundlePosition = {
+  asset: string
+  quantity: number
+  costBasis: number
+  positionType: string
+  marketValue?: number
+  priceEur?: number
+  targetWeight?: number
+}
+
 export type PortalMyBundleSummary = {
   portfolioId: string
   portfolioName: string
@@ -37,6 +47,14 @@ export type PortalMyBundleSummary = {
   totalMarketValue?: number
   performancePct?: number
   hasHoldings: boolean
+  positions?: PortalBundlePosition[]
+}
+
+export type PortalCryptoWalletBundleDetailPayload = {
+  currency: string
+  bundle: PortalMyBundleSummary
+  historyPoints: number[]
+  partial?: boolean
 }
 
 export type PortalCryptoWalletRow =
@@ -111,6 +129,9 @@ export type PortalCryptoWalletTransaction = {
   swapAmountTo?: string
   txHash?: string
 }
+
+/** Aperçu historique sur la page détail position crypto (preview/17). */
+export const CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW = 10
 
 export type PortalCryptoWalletDetailPayload = {
   currency: string

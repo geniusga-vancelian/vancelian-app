@@ -5,6 +5,8 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "next dev",
+    "dev:turbo": "next dev --turbo",
+    "dev:fast": "NEXT_WEBPACK_MEMORY_CACHE=1 next dev",
     "dev:clean": "rm -rf .next && next dev",
     "dev:clean-cache": "rm -rf .next/cache && next dev",
     "dev:nocache": "rm -rf .next && NEXT_WEBPACK_DISABLE_CACHE=1 next dev",

@@ -16,7 +16,7 @@ import {
   buildUnifiedWalletRows,
   formatCryptoMoney,
   resolveHubCountLabel,
-  resolvePrivyHubTotalValue,
+  resolveHubTotalValue,
 } from '@/lib/portal/cryptoWalletFormat'
 import {
   readPortalRouteCachedPayload,
@@ -65,7 +65,7 @@ function CryptoWalletCachedPreview({
 }) {
   const rows = buildUnifiedWalletRows(data.positions.positions, data.bundles, data.currency)
   const totalLabel = formatCryptoMoney(
-    resolvePrivyHubTotalValue(data.positions, data.currency),
+    resolveHubTotalValue(data.positions, data.bundles, data.currency),
     data.currency,
   )
   const countLabel = resolveHubCountLabel(data.positions, data.bundles, {

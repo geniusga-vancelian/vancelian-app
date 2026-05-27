@@ -24,9 +24,13 @@ export function defaultChainForAsset(
   }
   const sym = asset.toUpperCase()
   const preferred: Record<string, string> = {
-    USDC: 'ethereum',
-    USDT: 'ethereum',
-    ETH: 'ethereum',
+    USDC: 'base',
+    EURC: 'base',
+    ETH: 'base',
+    CBBTC: 'base',
+    LINK: 'base',
+    AAVE: 'base',
+    UNI: 'base',
   }
   const pick = preferred[sym]
   if (pick && chains.includes(pick)) return pick

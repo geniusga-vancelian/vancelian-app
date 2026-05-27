@@ -144,7 +144,7 @@ export function PortalMarketsScreen() {
         </PortalReveal>
 
         <PortalReveal index={4}>
-          <PortalResearchSection items={data.research} />
+          <PortalResearchSection items={data.research} maxItems={2} />
         </PortalReveal>
 
         {data.partial ? (

@@ -20,6 +20,7 @@ import '../../../profile/presentation/screens/edit_account_email_screen.dart';
 import '../../../security/login/application/auth_flow_lifecycle_guard.dart'
     show AuthFlowLifecycleObserver;
 import '../../privy/privy_auth_provider.dart';
+import '../../privy/privy_otp_dev_mock.dart';
 import '../privy_wallet_completion_flow.dart';
 
 /// Création wallet Privy : code à 6 chiffres envoyé par **e-mail Privy** (pas l’OTP login Vancelian).
@@ -53,6 +54,7 @@ class _PrivyWalletEmailOtpScreenState extends State<PrivyWalletEmailOtpScreen> {
   Timer? _timer;
   int _otpGen = 0;
   bool _resendInProgress = false;
+  String? _devExposedCode;
 
   static const _resendDefaultSeconds = 45;
 
@@ -216,11 +218,14 @@ class _PrivyWalletEmailOtpScreenState extends State<PrivyWalletEmailOtpScreen> {
       _wrongCode = false;
     });
     try {
-      await _privy.sendPrivyEmailCode(widget.email.trim());
+      if (!PrivyOtpDevMock.isEnabled) {
+        await _privy.sendPrivyEmailCode(widget.email.trim());
+      }
       if (!mounted) return;
       setState(() {
         _sending = false;
         _sendSucceeded = true;
+        _devExposedCode = PrivyOtpDevMock.fixedCode;
       });
       _startCountdown();
     } on PrivyAuthProviderException catch (e) {
@@ -242,16 +247,27 @@ class _PrivyWalletEmailOtpScreenState extends State<PrivyWalletEmailOtpScreen> {
       _wrongCode = false;
     });
     try {
-      await _privy.completePrivyEmailLogin(
-        email: widget.email.trim(),
-        code: code.trim(),
-      );
+      final useDevMock =
+          PrivyOtpDevMock.isEnabled && PrivyOtpDevMock.isMockCode(code.trim());
+      if (!useDevMock) {
+        await _privy.completePrivyEmailLogin(
+          email: widget.email.trim(),
+          code: code.trim(),
+        );
+      }
       if (!mounted) return;
       try {
-        await runPrivyWalletLinkExchangeAndFinish(
-          context: context,
-          privy: _privy,
-        );
+        if (useDevMock) {
+          await runPrivyWalletDevMockCompletion(
+            context: context,
+            email: widget.email.trim(),
+          );
+        } else {
+          await runPrivyWalletLinkExchangeAndFinish(
+            context: context,
+            privy: _privy,
+          );
+        }
       } on PrivyExchangeException catch (e) {
         if (!mounted) return;
         setState(() {
@@ -374,6 +390,17 @@ class _PrivyWalletEmailOtpScreenState extends State<PrivyWalletEmailOtpScreen> {
               const SizedBox(height: AppSpacing.md),
               const AppPageTitle('Code de validation'),
               const SizedBox(height: AppSpacing.sm),
+              if (_devExposedCode != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Text(
+                    'Mode test : utilisez $_devExposedCode',
+                    style: AppTypography.paragraph.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
               if (_sending && !_sendSucceeded)
                 Expanded(
                   child: Center(

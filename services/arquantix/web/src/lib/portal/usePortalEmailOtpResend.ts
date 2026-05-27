@@ -11,6 +11,7 @@ import {
   isPrivyCaptchaError,
   isPrivyUnauthorizedError,
 } from '@/lib/portal/privyConfigErrors'
+import { isPortalPrivyOtpDevMockEnabled } from '@/lib/portal/privyOtpDevMockConfig'
 
 type ResendEmailOtpArgs = {
   email: string
@@ -59,6 +60,10 @@ export function usePortalEmailOtpResend() {
 
   return useCallback(
     async ({ email, disableSignup }: ResendEmailOtpArgs) => {
+      if (isPortalPrivyOtpDevMockEnabled()) {
+        return
+      }
+
       const dispatchOnActiveFlow = async () => {
         const activeFlow = getActiveEmailAuthFlow(getAuthFlow)
         if (!activeFlow?.sendCodeEmail) return false

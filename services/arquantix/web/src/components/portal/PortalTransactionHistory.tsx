@@ -87,6 +87,7 @@ export function PortalTransactionHistoryRows({
           amount={tx.amount}
           amountTone={tx.amountTone ?? (tx.incoming ? 'in' : 'out')}
           meta={tx.meta}
+          showChevron={false}
         />
       ))}
     </AppTxList>

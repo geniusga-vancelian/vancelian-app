@@ -5,10 +5,10 @@
   body { margin: 0; padding: 32px; background: var(--v-bg);
          font-family: var(--v-font-ui); color: var(--v-fg);
          display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .list { background: var(--v-white); border-radius: 12px; padding: 8px;
+  .list { background: var(--v-white); border-radius: 12px; padding: 0;
           box-shadow: var(--v-elev-subtle); border: 1px solid var(--v-fg-10);
           width: 560px; }
-  .item { display: flex; align-items: center; gap: 16px; padding: 12px 16px; }
+  .item { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
 
   /* Kalai mask glyphs for the avatar — referenced via .avt__ic (preview/16) */
   .avt__ic--card    { -webkit-mask-image: url("/icons/kalai/payment-card.svg"); mask-image: url("/icons/kalai/payment-card.svg"); }
@@ -18,7 +18,7 @@
   .avt__ic--btc     { -webkit-mask-image: url("/icons/kalai/bitcoin.svg");      mask-image: url("/icons/kalai/bitcoin.svg"); }
 
   .body { flex: 1; min-width: 0; }
-  .title { font-weight: 700; font-size: 17px; line-height: 1.25; color: var(--v-fg); }
+  .title { font-weight: 700; font-size: 16px; line-height: 1.25; color: var(--v-fg); }
   .sub { font-size: 14px; color: var(--v-fg-light); margin-top: 2px; }
 
   .right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
@@ -42,7 +42,7 @@
 <div class="list">
 
   <div class="item">
-    <span class="avt avt--52 avt--dark"><img class="avt__ic" src="/icons/kalai/payment-card.svg" alt=""/><span class="avt__notif">1</span></span>
+    <span class="avt avt--46 avt--dark"><img class="avt__ic" src="/icons/kalai/payment-card.svg" alt=""/><span class="avt__notif">1</span></span>
     <div class="body">
       <div class="title">Euro Account</div>
       <div class="sub">Virement reçu</div>
@@ -55,7 +55,7 @@
   </div>
 
   <div class="item">
-    <span class="avt avt--52 avt--dark"><img class="avt__ic" src="/icons/kalai/suitcase.svg" alt=""/></span>
+    <span class="avt avt--46 avt--dark"><img class="avt__ic" src="/icons/kalai/suitcase.svg" alt=""/></span>
     <div class="body">
       <div class="title">Projets d'épargne</div>
       <div class="sub">4 objectifs · livret jeunes</div>
@@ -71,7 +71,7 @@
   </div>
 
   <div class="item">
-    <span class="avt avt--52 avt--dark"><img class="avt__ic" src="/icons/kalai/star.svg" alt=""/></span>
+    <span class="avt avt--46 avt--dark"><img class="avt__ic" src="/icons/kalai/star.svg" alt=""/></span>
     <div class="body">
       <div class="title">Exclusive offers</div>
       <div class="sub">Niseko · Provence · Bali</div>
@@ -87,7 +87,7 @@
   </div>
 
   <div class="item">
-    <span class="avt avt--52 avt--dark"><img class="avt__ic" src="/icons/kalai/shopping-bag.svg" alt=""/></span>
+    <span class="avt avt--46 avt--dark"><img class="avt__ic" src="/icons/kalai/shopping-bag.svg" alt=""/></span>
     <div class="body">
       <div class="title">Crypto baskets</div>
       <div class="sub">DeFi index · Layer 1 majors</div>
@@ -103,7 +103,7 @@
   </div>
 
   <div class="item">
-    <span class="avt avt--52 avt--dark"><img class="avt__ic" src="/icons/kalai/bitcoin.svg" alt=""/></span>
+    <span class="avt avt--46 avt--dark"><img class="avt__ic" src="/icons/kalai/bitcoin.svg" alt=""/></span>
     <div class="body">
       <div class="title">Crypto</div>
       <div class="sub">BTC · ETH · spot</div>

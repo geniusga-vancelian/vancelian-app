@@ -43,7 +43,14 @@ export function PortalWalletSwitcher({
     }
   }, [isOpen])
 
+  const onEmbeddedDefault = walletScope?.kind === 'privy_embedded'
+
   if (!loading && scopes.length === 0) {
+    return null
+  }
+
+  /** Pas de sélecteur tant que seul le wallet intégré est actif (vue « Privy » retirée). */
+  if (!loading && onEmbeddedDefault) {
     return null
   }
 

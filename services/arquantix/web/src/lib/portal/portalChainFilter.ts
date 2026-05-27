@@ -136,9 +136,9 @@ export function isPortalChainDeFiEnabled(chain: PortalChain): boolean {
   return chain === 'base'
 }
 
-/** Réseau LI.FI associé au sélecteur navbar (1:1 pour les EVM portail). */
-export function resolvePortalChainSwapKey(chain: PortalChain): 'base' | 'ethereum' | null {
-  if (chain === 'base' || chain === 'ethereum') return chain
+/** Réseau LI.FI associé au sélecteur navbar — Base uniquement (pilote V1). */
+export function resolvePortalChainSwapKey(chain: PortalChain): 'base' | null {
+  if (chain === 'base') return 'base'
   return null
 }
 

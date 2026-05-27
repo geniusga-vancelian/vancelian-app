@@ -15,14 +15,30 @@ export function formatPortalWalletAddressShort(address: string): string {
   return `${trimmed.slice(0, 6)}…${trimmed.slice(-4)}`
 }
 
-function buildPrivyScope(wallet: PortalPersonCryptoWallet): PortalWalletScope {
+function findPrivyEvmWallet(
+  personWallets: PortalPersonCryptoWallet[],
+): PortalPersonCryptoWallet | undefined {
+  return personWallets.find(
+    (wallet) =>
+      wallet.provider.trim().toLowerCase() === 'privy' &&
+      wallet.chain_type.trim().toLowerCase() === 'evm',
+  )
+}
+
+/** Wallet crypto intégré Vancelian (scope par défaut, hors sélecteur navbar). */
+export function buildEmbeddedVancelianWalletScope(
+  personWallets: PortalPersonCryptoWallet[],
+): PortalWalletScope | null {
+  const privyEvm = findPrivyEvmWallet(personWallets)
+  if (!privyEvm) return null
+
   return {
-    id: `privy:${wallet.id}`,
+    id: `privy:${privyEvm.id}`,
     kind: 'privy_embedded',
-    label: 'Wallet Vancelian (Privy)',
-    shortLabel: 'Privy',
-    address: wallet.address,
-    personWalletId: wallet.id,
+    label: 'Wallet crypto',
+    shortLabel: 'Crypto',
+    address: privyEvm.address,
+    personWalletId: privyEvm.id,
     chainType: 'evm',
   }
 }
@@ -41,25 +57,21 @@ function buildExternalScope(wallet: VerifiedExternalWallet): PortalWalletScope {
   }
 }
 
-/** Wallets connectés (Privy + externes) — sans distinction réseau (gérée par l’autre bouton navbar). */
+/** Wallets externes affichés dans le sélecteur navbar (pas le wallet intégré). */
+export function buildSwitchablePortalWalletScopes(args: {
+  externalWallets: VerifiedExternalWallet[]
+}): PortalWalletScope[] {
+  return args.externalWallets.map(buildExternalScope)
+}
+
+/** @deprecated Préférer `buildEmbeddedVancelianWalletScope` + `buildSwitchablePortalWalletScopes`. */
 export function buildPortalWalletScopes(args: {
   personWallets: PortalPersonCryptoWallet[]
   externalWallets: VerifiedExternalWallet[]
 }): PortalWalletScope[] {
   const scopes: PortalWalletScope[] = []
-
-  const privyEvm = args.personWallets.find(
-    (wallet) =>
-      wallet.provider.trim().toLowerCase() === 'privy' &&
-      wallet.chain_type.trim().toLowerCase() === 'evm',
-  )
-  if (privyEvm) {
-    scopes.push(buildPrivyScope(privyEvm))
-  }
-
-  for (const external of args.externalWallets) {
-    scopes.push(buildExternalScope(external))
-  }
-
+  const embedded = buildEmbeddedVancelianWalletScope(args.personWallets)
+  if (embedded) scopes.push(embedded)
+  scopes.push(...buildSwitchablePortalWalletScopes(args))
   return scopes
 }

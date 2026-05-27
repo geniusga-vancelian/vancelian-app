@@ -1,19 +1,27 @@
 'use client'
 
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PieChart } from 'lucide-react'
-import { KalaiIcon } from '@/components/ui/KalaiIcon'
-import { AppDataList } from '@/components/design-system/app/AppDataList'
+import {
+  AppAccountSummaryList,
+} from '@/components/design-system/app/AppAccountSummaryList'
+import {
+  AppAccountSummaryRow,
+  type AppAccountIndicatorTone,
+} from '@/components/design-system/app/AppAccountSummaryRow'
+import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import {
   formatCryptoMoney,
   formatPerfPct,
-  perfToneClass,
   resolvePositionSubtitle,
 } from '@/lib/portal/cryptoWalletFormat'
 import type { PortalCryptoWalletRow } from '@/lib/portal/cryptoWalletTypes'
-import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
-import { portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
+import { cryptoPositionHeaderTitle, tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+import {
+  portalCryptoWalletAssetRoute,
+  portalCryptoWalletBundleRoute,
+} from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -23,85 +31,94 @@ type Props = {
   emptyMessage?: string
 }
 
+function perfIndicatorTone(pct: number | undefined): AppAccountIndicatorTone | undefined {
+  if (pct == null || Number.isNaN(pct)) return undefined
+  if (pct > 0.005) return 'up'
+  if (pct < -0.005) return 'dn'
+  return 'plus'
+}
+
 export function PortalCryptoWalletPositionsCard({
   rows,
   currency,
   title = 'Positions',
-  emptyMessage = 'Aucune position crypto pour le moment',
+  emptyMessage = 'No crypto positions yet',
 }: Props) {
+  if (rows.length === 0) {
+    return (
+      <section className="flex w-full flex-col gap-3">
+        <AppSectionHeader title={title} />
+        <p className="m-0 rounded-v-card border border-v-fg-10 bg-v-card px-6 py-10 text-center font-ui text-[15px] text-v-fg-muted">
+          {emptyMessage}
+        </p>
+      </section>
+    )
+  }
+
   return (
-    <AppDataList title={title} isEmpty={rows.length === 0} emptyMessage={emptyMessage}>
-      {rows.map((row) => {
-        if (row.kind === 'bundle') {
-          const perf = formatPerfPct(row.bundle.performancePct)
+    <section className="flex w-full flex-col gap-3">
+      <AppSectionHeader title={title} />
+      <AppAccountSummaryList>
+        {rows.map((row) => {
+          if (row.kind === 'bundle') {
+            const perf = formatPerfPct(row.bundle.performancePct)
+            const valueLabel = formatCryptoMoney(
+              row.bundle.totalMarketValue ?? row.bundle.totalCostBasis,
+              currency,
+            )
+            return (
+              <AppAccountSummaryRow
+                key={`bundle-${row.bundle.portfolioId}`}
+                href={portalCryptoWalletBundleRoute(row.bundle.portfolioId)}
+                LinkComponent={PortalNavLink}
+                leading={
+                  <span className="inline-flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full bg-v-blue text-white">
+                    <PieChart className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+                  </span>
+                }
+                title={row.bundle.portfolioName}
+                subtitle={`${row.bundle.assetsCount} asset${row.bundle.assetsCount === 1 ? '' : 's'}`}
+                amount={valueLabel}
+                indicator={perf ?? undefined}
+                indicatorTone={perfIndicatorTone(row.bundle.performancePct)}
+                showChevron={false}
+              />
+            )
+          }
+
+          const { position } = row
+          const perf = formatPerfPct(position.performance1dPct)
+          const href = portalCryptoWalletAssetRoute(position.asset)
           const valueLabel = formatCryptoMoney(
-            row.bundle.totalMarketValue ?? row.bundle.totalCostBasis,
+            currency === 'USD'
+              ? position.estimatedValueUsd ?? position.estimatedValueEur
+              : position.estimatedValueEur ?? position.estimatedValueUsd,
             currency,
           )
+
           return (
-            <div
-              key={`bundle-${row.bundle.portfolioId}`}
-              className="list__item list__item--static flex w-full items-center gap-3 opacity-70"
-            >
-              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-v-input bg-v-blue text-white">
-                <PieChart className="h-5 w-5" strokeWidth={1.75} />
-              </span>
-              <div className="list__body min-w-0 flex-1">
-                <div className="list__title">{row.bundle.portfolioName}</div>
-                <div className="list__sub">
-                  {row.bundle.assetsCount} actif{row.bundle.assetsCount === 1 ? '' : 's'}
-                </div>
-              </div>
-              <div className="list__amt-col flex shrink-0 flex-col items-end gap-0.5">
-                <span className="list__amt">{valueLabel}</span>
-                {perf ? (
-                  <span className={cn('list__indic', perfToneClass(row.bundle.performancePct))}>
-                    {perf}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          )
-        }
-
-        const { position } = row
-        const perf = formatPerfPct(position.performance1dPct)
-        const href = portalCryptoWalletAssetRoute(position.asset)
-        const valueLabel = formatCryptoMoney(
-          currency === 'USD'
-            ? position.estimatedValueUsd ?? position.estimatedValueEur
-            : position.estimatedValueEur ?? position.estimatedValueUsd,
-          currency,
-        )
-
-        return (
-          <PortalNavLink
-            key={`position-${position.asset}`}
-            href={href}
-            className="list__item flex w-full items-center gap-3 no-underline"
-          >
-            <PortalCryptoAvatar
-              ticker={position.asset}
-              symbol={position.providerSymbol ?? tickerToProviderSymbol(position.asset)}
-              apiLogoUrl={position.logoUrl}
-              size="md"
+            <AppAccountSummaryRow
+              key={`position-${position.asset}`}
+              href={href}
+              LinkComponent={PortalNavLink}
+              leading={
+                <PortalCryptoAvatar
+                  ticker={position.asset}
+                  symbol={position.providerSymbol ?? tickerToProviderSymbol(position.asset)}
+                  apiLogoUrl={position.logoUrl}
+                  size="lg"
+                />
+              }
+              title={cryptoPositionHeaderTitle(position.asset, position.name)}
+              subtitle={resolvePositionSubtitle(position)}
+              amount={valueLabel}
+              indicator={perf ?? undefined}
+              indicatorTone={perfIndicatorTone(position.performance1dPct)}
+              showChevron={false}
             />
-            <div className="list__body min-w-0 flex-1">
-              <div className="list__title">{position.name}</div>
-              <div className="list__sub">{resolvePositionSubtitle(position)}</div>
-            </div>
-            <div className="list__amt-col flex shrink-0 flex-col items-end gap-0.5">
-              <span className="list__amt">{valueLabel}</span>
-              {perf ? (
-                <span className={cn('list__indic', perfToneClass(position.performance1dPct))}>
-                  {perf}
-                </span>
-              ) : null}
-              <KalaiIcon name="chevron-right" size={20} className="list__chv shrink-0" />
-            </div>
-          </PortalNavLink>
-        )
-      })}
-    </AppDataList>
+          )
+        })}
+      </AppAccountSummaryList>
+    </section>
   )
 }

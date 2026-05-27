@@ -7,37 +7,43 @@ import type {
 } from '@/lib/portal/marketsTypes'
 import { portalAcademyHubRoute, resolvePortalArticleHref } from '@/lib/portal/portalArticleRouting'
 
-export const PORTAL_DEFAULT_CRYPTO_SYMBOLS = [
-  'BTCUSDT',
-  'ETHUSDT',
-  'SOLUSDT',
-  'XRPUSDT',
-  'BNBUSDT',
-  'ADAUSDT',
-  'DOGEUSDT',
-  'USDCUSDT',
-] as const
+import { BASE_MARKET_PROVIDER_SYMBOLS } from '@/lib/portal/baseAllowedAssets'
+
+export const PORTAL_DEFAULT_CRYPTO_SYMBOLS = BASE_MARKET_PROVIDER_SYMBOLS
+
+/** Paires Binance utilisées pour coter EURC / CBBTC (pas de paires dédiées). */
+export const EURC_MARKET_PROVIDER_SYMBOL = 'EURUSDT'
+export const CBBTC_MARKET_PROVIDER_SYMBOL = 'BTCUSDT'
+
+const WRAPPED_MARKET_DISPLAY: Record<string, { name: string; ticker: string }> = {
+  [EURC_MARKET_PROVIDER_SYMBOL]: { name: 'Euro Coin', ticker: 'EURC' },
+  [CBBTC_MARKET_PROVIDER_SYMBOL]: { name: 'Bitcoin', ticker: 'CBBTC' },
+}
 
 const SYMBOL_NAMES: Record<string, string> = {
   BTC: 'Bitcoin',
-  ETH: 'Ether',
-  SOL: 'Solana',
-  XRP: 'XRP',
-  BNB: 'BNB',
-  ADA: 'Cardano',
-  DOGE: 'Dogecoin',
+  CBBTC: 'Bitcoin',
+  ETH: 'Ethereum',
   USDC: 'USD Coin',
-  USDT: 'Tether',
+  EURC: 'Euro Coin',
+  LINK: 'Chainlink',
+  AAVE: 'Aave',
+  UNI: 'Uniswap',
 }
 
 function tickerFromSymbol(symbol: string): string {
   const upper = symbol.trim().toUpperCase()
+  const wrapped = WRAPPED_MARKET_DISPLAY[upper]
+  if (wrapped) return wrapped.ticker
   if (upper.endsWith('USDT')) return upper.slice(0, -4)
   if (upper.endsWith('USDC')) return upper.slice(0, -4)
   return upper
 }
 
 function nameFromSymbol(symbol: string): string {
+  const upper = symbol.trim().toUpperCase()
+  const wrapped = WRAPPED_MARKET_DISPLAY[upper]
+  if (wrapped) return wrapped.name
   const ticker = tickerFromSymbol(symbol)
   return SYMBOL_NAMES[ticker] ?? ticker
 }
@@ -141,16 +147,18 @@ function mapAllCryptoSummaryRow(
   const symbol = providerSymbol || instrumentSymbol
   if (!symbol) return null
 
-  const ticker = instrumentSymbol || tickerFromSymbol(symbol)
   const mapped = mapMarketSummaryRow({ ...row, symbol }, options)
-  const name = String(row.name ?? '').trim()
   const marketCapRank = toNumber(row.market_cap_rank, 9999)
+  const wrapped = WRAPPED_MARKET_DISPLAY[symbol]
+  const displayName = wrapped
+    ? wrapped.name
+    : String(row.name ?? '').trim() || mapped.name
 
   return {
     ...mapped,
     id: symbol,
-    name: name || mapped.name,
-    ticker,
+    name: displayName,
+    ticker: mapped.ticker,
     symbol,
     marketCapRank,
   }
@@ -176,9 +184,11 @@ type PortalFavoriteRow = {
   entity_id?: string
 }
 
-/** entity_id API → ticker court (BTCUSDT → BTC). */
+/** entity_id API → ticker produit (BTCUSDT → CBBTC, EURUSDT → EURC). */
 export function entityIdToTicker(entityId: string): string {
   const upper = entityId.trim().toUpperCase()
+  const wrapped = WRAPPED_MARKET_DISPLAY[upper]
+  if (wrapped) return wrapped.ticker
   if (upper.endsWith('USDT')) return upper.slice(0, -4)
   if (upper.endsWith('USDC')) return upper.slice(0, -4)
   return upper
@@ -250,6 +260,12 @@ export function applyQuoteUpdates(
   return changed ? next : assets
 }
 
+/** Tickers cibles par bundle (aligné bootstrap + seed CMS). */
+export const BUNDLE_STACK_TICKERS_BY_CODE: Record<string, string[]> = {
+  CRYPTO_BUNDLE_TWO_KINGS: ['CBBTC', 'ETH'],
+  CRYPTO_BUNDLE_CRYPTO_MAJORS: ['CBBTC', 'ETH', 'LINK', 'AAVE', 'UNI'],
+}
+
 type BundleCatalogItem = {
   id?: string
   product_code?: string
@@ -264,12 +280,40 @@ type BundleCatalogItem = {
   entryAssetDefault?: string | null
   entry_assets_allowed?: string[] | null
   entryAssetsAllowed?: string[] | null
+  allocations?: Array<{
+    asset_symbol?: string
+    assetSymbol?: string
+    target_weight?: number | string
+    targetWeight?: number | string
+  }>
+}
+
+function parseBundleAllocationTickers(item: BundleCatalogItem, code: string): string[] {
+  const raw = item.allocations
+  if (Array.isArray(raw) && raw.length > 0) {
+    const rows = raw
+      .map((row) => {
+        const assetSymbol = String(row.asset_symbol ?? row.assetSymbol ?? '')
+          .trim()
+          .toUpperCase()
+        const weight = Number(row.target_weight ?? row.targetWeight ?? 0)
+        if (!assetSymbol || assetSymbol === 'USDC') return null
+        return { assetSymbol, weight: Number.isFinite(weight) ? weight : 0 }
+      })
+      .filter((r): r is { assetSymbol: string; weight: number } => r != null)
+      .sort((a, b) => b.weight - a.weight)
+    if (rows.length > 0) {
+      return rows.map((r) => r.assetSymbol)
+    }
+  }
+  return BUNDLE_STACK_TICKERS_BY_CODE[code] ?? []
 }
 
 type BundleConfig = {
   headerMediaUrl?: string | null
   cardTitle?: string | null
   performance1d?: number | null
+  sortOrder?: number | null
 }
 
 export function mapCryptoBundles(
@@ -302,10 +346,15 @@ export function mapCryptoBundles(
         entryAssetDefault:
           (item.entry_asset_default ?? item.entryAssetDefault)?.trim().toUpperCase() || null,
         entryAssetsAllowed,
+        allocationTickers: parseBundleAllocationTickers(item, code),
+        sortOrder:
+          typeof config?.sortOrder === 'number' && Number.isFinite(config.sortOrder)
+            ? config.sortOrder
+            : 999,
       } satisfies PortalCryptoBundle
     })
     .filter((item): item is PortalCryptoBundle => item != null)
-    .sort((a, b) => a.title.localeCompare(b.title))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'fr'))
 }
 
 function resolveNewsTagLabel(

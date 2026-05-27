@@ -21,6 +21,7 @@ import '../application/auth_flow_lifecycle_guard.dart'
 import '../../../../core/privy_identity_bridge_service.dart';
 import '../../../wallet/privy/privy_auth_provider.dart';
 import '../../../wallet/privy/privy_dart_defines.dart';
+import '../../../wallet/privy/privy_otp_dev_mock.dart';
 import '../../passcode/data/device_id_service.dart';
 import '../../passcode/data/session_service.dart';
 import '../../passkeys/data/passkey_api.dart';
@@ -187,12 +188,14 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
     });
     try {
       if (_usePrivy) {
-        await _privy.sendPrivyEmailCode(widget.email);
+        if (!PrivyOtpDevMock.isEnabled) {
+          await _privy.sendPrivyEmailCode(widget.email);
+        }
         if (!mounted) return;
         setState(() {
           _sending = false;
           _sendSucceeded = true;
-          _devExposedCode = null;
+          _devExposedCode = PrivyOtpDevMock.fixedCode;
         });
         _startCountdown();
         return;
@@ -252,15 +255,22 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
     });
     try {
       if (_usePrivy) {
-        await _privy.completePrivyEmailLogin(
-          email: widget.email,
-          code: code,
-        );
-        final privyToken = await _privy.getAccessToken();
-        if (privyToken == null || privyToken.trim().isEmpty) {
-          throw PrivyAuthProviderException(
-            'Jeton Privy indisponible après validation du code.',
+        final useDevMock = PrivyOtpDevMock.isEnabled && PrivyOtpDevMock.isMockCode(code);
+        final String privyToken;
+        if (useDevMock) {
+          privyToken = PrivyOtpDevMock.stubAccessToken(widget.email);
+        } else {
+          await _privy.completePrivyEmailLogin(
+            email: widget.email,
+            code: code,
           );
+          final token = await _privy.getAccessToken();
+          if (token == null || token.trim().isEmpty) {
+            throw PrivyAuthProviderException(
+              'Jeton Privy indisponible après validation du code.',
+            );
+          }
+          privyToken = token;
         }
         if (widget.signUpMode) {
           await PrivyIdentityBridgeService.instance.exchangeSignupPrivyToken(
@@ -271,6 +281,7 @@ class _LoginEmailOtpScreenState extends State<LoginEmailOtpScreen> {
         } else {
           await PrivyIdentityBridgeService.instance.exchangePrivyToken(
             privyAccessToken: privyToken,
+            emailForStubDev: widget.email,
           );
           await PostLoginLocalSecurityFlow.flagRegistrationResumeIfAccountNotActive();
         }

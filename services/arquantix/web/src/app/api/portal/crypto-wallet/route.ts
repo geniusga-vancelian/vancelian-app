@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildBackendUrl } from '@/lib/backend'
-import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+import { assetToMarketProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 import {
   buildPrivyWalletPositionsSummary,
+  parseMyBundles,
   parseWalletHistoryPoints,
 } from '@/lib/portal/cryptoWalletFormat'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
@@ -30,12 +31,13 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const [privyRes, history, bootstrap] = await Promise.all([
+  const [privyRes, history, bootstrap, bundlesRes] = await Promise.all([
     fetchUpstreamJson('/api/app/privy-wallet/balances'),
     fetchUpstreamJson(
       '/api/app/wallet/history?period=ALL&mode=performance_value&scope=crypto',
     ),
     fetchUpstreamJson('/api/app/bootstrap'),
+    fetchUpstreamJson('/api/app/bundle/my-bundles'),
   ])
 
   if (!privyRes.ok || !privyRes.data) {
@@ -58,7 +60,7 @@ export async function GET(_request: NextRequest) {
   const balances = Array.isArray((privyRes.data as { balances?: unknown }).balances)
     ? ((privyRes.data as { balances: unknown[] }).balances as { asset?: string }[])
     : []
-  const symbols = [...new Set(balances.map((b) => tickerToProviderSymbol(String(b.asset ?? ''))))]
+  const symbols = [...new Set(balances.map((b) => assetToMarketProviderSymbol(String(b.asset ?? ''))))]
     .filter(Boolean)
     .join(',')
 
@@ -75,13 +77,14 @@ export async function GET(_request: NextRequest) {
     currency,
   )
   const historyPoints = history.ok ? parseWalletHistoryPoints(history.data) : []
+  const bundles = bundlesRes.ok ? parseMyBundles(bundlesRes.data) : []
 
   return NextResponse.json({
     currency,
     positions,
-    bundles: [],
+    bundles,
     historyPoints,
     source: 'privy',
-    partial: !marketRes.ok || !history.ok,
+    partial: !marketRes.ok || !history.ok || !bundlesRes.ok,
   })
 }

@@ -16,8 +16,14 @@ import { Button } from '@/components/ui/button'
 import { PORTAL_ROUTES, resolvePortalDepositHref } from '@/lib/portal/portalRouting'
 import { fetchPortalPersonCryptoWallets, findEvmPersonWallet } from '@/lib/portal/privyWalletClient'
 import { runPortalPrivyWalletCompletion } from '@/lib/portal/runPortalPrivyWalletCompletion'
+import { runPortalPrivyWalletDevMockCompletion } from '@/lib/portal/runPortalPrivyWalletDevMockCompletion'
 import { usePortalEmailOtpSend } from '@/lib/portal/usePortalEmailOtpSend'
 import { formatPortalPrivyAuthError } from '@/lib/portal/privyConfigErrors'
+import {
+  isPortalPrivyOtpDevMockCode,
+  portalPrivyOtpDevMockCode,
+} from '@/lib/portal/privyOtpDevMock'
+import { isPortalPrivyOtpDevMockEnabled } from '@/lib/portal/privyOtpDevMockConfig'
 
 type ProfileEmail = {
   email?: string
@@ -41,8 +47,10 @@ export function PortalCreateWalletScreen() {
   const [otpSent, setOtpSent] = useState(false)
   const [sendingOtp, setSendingOtp] = useState(false)
   const [verifyingOtp, setVerifyingOtp] = useState(false)
+  const [privyMockAuthed, setPrivyMockAuthed] = useState(false)
 
-  const needsPrivyAuth = ready && !authenticated
+  const privyOtpDevMock = isPortalPrivyOtpDevMockEnabled()
+  const needsPrivyAuth = ready && !authenticated && !privyMockAuthed
 
   useEffect(() => {
     let cancelled = false
@@ -111,6 +119,11 @@ export function PortalCreateWalletScreen() {
     setError('')
     void (async () => {
       try {
+        if (privyOtpDevMock && isPortalPrivyOtpDevMockCode(otpCode)) {
+          setPrivyMockAuthed(true)
+          setOtpCode('')
+          return
+        }
         await loginWithCode({ code: otpCode })
       } catch (err) {
         setOtpCode('')
@@ -121,7 +134,7 @@ export function PortalCreateWalletScreen() {
         setVerifyingOtp(false)
       }
     })()
-  }, [loginWithCode, needsPrivyAuth, otpCode, verifyingOtp])
+  }, [loginWithCode, needsPrivyAuth, otpCode, privyOtpDevMock, verifyingOtp])
 
   const findEmbeddedWallet = useCallback(() => {
     const embedded = wallets.find((w) => w.type === 'ethereum' && w.address)
@@ -137,10 +150,22 @@ export function PortalCreateWalletScreen() {
   const isSyncMode = Boolean(privyEmbeddedWallet)
 
   const onCreateWallet = useCallback(async () => {
-    if (creating || !ready || !authenticated) return
+    if (creating || !ready) return
+    if (!privyOtpDevMock && !authenticated) return
+    if (privyOtpDevMock && !privyMockAuthed && !authenticated) return
     setError('')
     setCreating(true)
     try {
+      if (privyOtpDevMock) {
+        const result = await runPortalPrivyWalletDevMockCompletion(profileEmail)
+        if (result === 'already_exists') {
+          router.replace(resolvePortalDepositHref(true))
+          return
+        }
+        router.replace(`${PORTAL_ROUTES.cryptoWallet}?wallet_created=1`)
+        return
+      }
+
       const result = await runPortalPrivyWalletCompletion({
         getPrivyUserId: () => user?.id ?? null,
         getAccessToken,
@@ -182,6 +207,9 @@ export function PortalCreateWalletScreen() {
     findEmbeddedWallet,
     getAccessToken,
     identityToken,
+    privyMockAuthed,
+    privyOtpDevMock,
+    profileEmail,
     ready,
     router,
     user?.id,
@@ -222,8 +250,22 @@ export function PortalCreateWalletScreen() {
 
           {needsPrivyAuth ? (
             <p className="mt-3 mb-0 font-ui text-[15px] leading-relaxed text-v-fg-body">
-              To create your embedded EVM wallet securely, confirm the code sent to{' '}
-              <strong className="font-semibold text-v-fg">{profileEmail || 'your email'}</strong>.
+              {privyOtpDevMock ? (
+                <>
+                  Mode test local : saisissez le code{' '}
+                  <strong className="font-semibold text-v-fg">
+                    {portalPrivyOtpDevMockCode() ?? '111111'}
+                  </strong>{' '}
+                  pour{' '}
+                  <strong className="font-semibold text-v-fg">{profileEmail || 'your email'}</strong>{' '}
+                  (aucun e-mail Privy, wallet mock dédié).
+                </>
+              ) : (
+                <>
+                  To create your embedded EVM wallet securely, confirm the code sent to{' '}
+                  <strong className="font-semibold text-v-fg">{profileEmail || 'your email'}</strong>.
+                </>
+              )}
             </p>
           ) : isSyncMode ? (
             <p className="mt-3 mb-0 font-ui text-[15px] leading-relaxed text-v-fg-body">
@@ -258,6 +300,30 @@ export function PortalCreateWalletScreen() {
               >
                 Resend code
               </button>
+            </div>
+          ) : privyMockAuthed && privyOtpDevMock ? (
+            <div className="mt-8">
+              <Button
+                type="button"
+                className="w-full gap-2"
+                disabled={creating}
+                onClick={() => void onCreateWallet()}
+              >
+                {creating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Linking mock wallet…
+                  </>
+                ) : (
+                  <>
+                    <Wallet className="h-4 w-4" aria-hidden />
+                    Create mock wallet (dev)
+                  </>
+                )}
+              </Button>
+              <p className="mt-4 mb-0 font-ui text-[13px] leading-relaxed text-v-fg-muted">
+                Enregistre un wallet EVM simulé lié à votre e-mail, sans compte Privy production.
+              </p>
             </div>
           ) : (
             <div className="mt-8">

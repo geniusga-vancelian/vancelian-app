@@ -144,7 +144,7 @@ export function filterCryptoPositionsSummaryByPortalScope(
 }
 
 export function portalWalletScopeContextLabel(scope: PortalWalletScope | null): string {
-  if (!scope) return 'Aucun wallet'
+  if (!scope) return 'No wallet'
   return scope.label
 }
 

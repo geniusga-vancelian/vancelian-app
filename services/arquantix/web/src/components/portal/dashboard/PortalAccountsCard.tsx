@@ -51,7 +51,7 @@ export function PortalAccountsCard({ rows, title = 'My accounts', portfolioPendi
               subtitle={row.subtitle}
               amount={amountNode ? '' : row.balance}
               amountNode={amountNode}
-              showChevron={Boolean(href)}
+              showChevron={false}
             />
           )
         })}

@@ -127,6 +127,7 @@ export async function linkPrivyForAuthenticatedSession(privyUserId: string): Pro
 export async function exchangePrivyAccessTokenWithWallets(args: {
   privyAccessToken: string
   privyIdentityToken?: string | null
+  email?: string
   wallets?: PrivyExchangeWalletPayload[]
 }): Promise<void> {
   const res = await fetch('/api/portal/privy/exchange', {
@@ -136,6 +137,7 @@ export async function exchangePrivyAccessTokenWithWallets(args: {
     body: JSON.stringify({
       privy_access_token: args.privyAccessToken,
       privy_identity_token: args.privyIdentityToken || undefined,
+      email: args.email?.trim() || undefined,
       signUpMode: false,
       wallets: args.wallets,
     }),

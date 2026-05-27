@@ -26,7 +26,7 @@ function AssetRow({ asset }: { asset: PortalCryptoAsset }) {
           symbol={asset.symbol}
           apiLogoUrl={asset.logoUrl}
           size="lg"
-          className="!h-[52px] !w-[52px]"
+          className="!h-[46px] !w-[46px]"
         />
       }
       title={asset.name}

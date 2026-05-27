@@ -18,7 +18,7 @@ const WALLET_AVT_TONE: Record<PortalWalletRow['iconTone'], string> = {
   'fg-body': 'avt--dark',
 }
 
-/** Avatar 52px — preview/67-card-account (anthracite) ou teintes produit. */
+/** Avatar 46px — preview/67-card-account (anthracite) ou teintes produit. */
 export function PortalWalletRowAvatar({
   iconKey,
   iconTone,
@@ -34,7 +34,7 @@ export function PortalWalletRowAvatar({
   return (
     <span
       className={cn(
-        'avt avt--52 shrink-0',
+        'avt avt--46 shrink-0',
         surface === 'account' ? 'avt--dark' : WALLET_AVT_TONE[iconTone],
         locked && 'opacity-50',
       )}

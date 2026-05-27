@@ -1,4 +1,6 @@
 export { AppEyebrow, type AppEyebrowProps } from './AppEyebrow'
+export { AppSearchField, type AppSearchFieldProps } from './AppSearchField'
+export { AppTopAppBar, type AppTopAppBarProps } from './AppTopAppBar'
 export { AppButton, type AppButtonProps, type AppButtonVariant, type AppButtonSize } from './AppButton'
 export { AppCard, type AppCardProps, type AppCardVariant } from './AppCard'
 export {
@@ -37,6 +39,11 @@ export {
   type AppProductBasketCardProps,
   type AppProductBasketStackAsset,
 } from './AppProductBasketCard'
+export {
+  AppPortfolioAllocationDonut,
+  type AppPortfolioAllocationDonutProps,
+  type AppPortfolioAllocationSlice,
+} from './AppPortfolioAllocationDonut'
 export {
   AppNewsStackedList,
   type AppNewsCategoryDot,

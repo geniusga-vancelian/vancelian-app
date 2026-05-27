@@ -1,23 +1,18 @@
 'use client'
 
 import { useMemo } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowLeftRight,
-  ArrowUp,
-  BarChart3,
-  Bell,
-  ChevronRight,
-  ListOrdered,
-  Plus,
-} from 'lucide-react'
-import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
+  AppBalanceCardVariantB,
+  type AppBalanceCardFab,
+  type AppBalanceCardTopAction,
+} from '@/components/design-system/app/AppBalanceCardVariantB'
 import { AppMetricsList } from '@/components/design-system/app/AppMetricsList'
 import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
+import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
-import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
+import { PortalCryptoAssetList } from '@/components/portal/markets/PortalCryptoAssetList'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
@@ -25,39 +20,53 @@ import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
-import { cryptoBrandColor } from '@/lib/portal/cryptoInstrumentAssets'
-import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
-import { formatChangePct, formatCryptoPrice } from '@/lib/portal/marketsFormat'
+import type { PortalChain } from '@/config/portalChains'
+import {
+  assetToMarketProviderSymbol,
+  cryptoPositionHeaderTitle,
+} from '@/lib/portal/instrumentDetailFormat'
+import { formatCryptoPrice } from '@/lib/portal/marketsFormat'
 import { mapCryptoTransactionToHistoryItem } from '@/lib/portal/cryptoTransactionHistoryFormat'
 import {
   formatCryptoMoney,
-  isPrivyOnlyScope,
   perfToneClass,
   selectMoneyValue,
 } from '@/lib/portal/cryptoWalletFormat'
-import type { PortalCryptoWalletDetailPayload } from '@/lib/portal/cryptoWalletTypes'
+import {
+  CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW,
+  type PortalCryptoWalletDetailPayload,
+} from '@/lib/portal/cryptoWalletTypes'
+import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import {
   PORTAL_ROUTES,
-  portalCryptoInstrumentRoute,
   portalCryptoWalletTransactionsRoute,
-  portalDedicatedDepositRoute,
-  portalSwapRoute,
+  portalSwapBuyRoute,
+  portalSwapSellRoute,
 } from '@/lib/portal/portalRouting'
-import { isSwapV1Token } from '@/lib/portal/swapFlowTypes'
+import { isPortalSwapTradeAsset } from '@/lib/portal/swapFlowTypes'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
 type Props = {
   asset: string
 }
 
+const MIN_TRADE_VALUE_USD = 1
+
+function resolveSwapChainForAsset(asset: string, portalChain: PortalChain): string | undefined {
+  if (asset === 'CBBTC') return 'base'
+  if (portalChain === 'solana') return undefined
+  return portalChain
+}
+
 export function PortalCryptoWalletDetailScreen({ asset }: Props) {
   const ticker = asset.trim().toUpperCase()
+  const { chain } = usePortalChainContext()
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletDetailPayload>({
       cacheKey: `portal:crypto-wallet:${ticker}`,
       url: `/api/portal/crypto-wallet/${encodeURIComponent(ticker)}`,
       ttlMs: 45_000,
-      errorMessage: 'Impossible de charger les détails.',
+      errorMessage: 'Unable to load position details.',
       scopeAware: true,
     })
 
@@ -69,9 +78,54 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
     return selectMoneyValue(currency, detail.totalValueEur, detail.totalValueUsd) ?? 0
   }, [currency, detail])
 
-  const heroColor = cryptoBrandColor(ticker)
-  const avatarSymbol = data?.providerSymbol ?? tickerToProviderSymbol(ticker)
+  const valueUsd = useMemo(() => {
+    if (!detail) return 0
+    return selectMoneyValue('USD', detail.totalValueEur, detail.totalValueUsd) ?? 0
+  }, [detail])
+
+  const avatarSymbol = data?.providerSymbol ?? assetToMarketProviderSymbol(ticker)
   const avatarLogoUrl = data?.logoUrl
+
+  const canTrade = valueUsd > MIN_TRADE_VALUE_USD && isPortalSwapTradeAsset(ticker)
+  const swapChainKey = resolveSwapChainForAsset(ticker, chain)
+
+  const headerTopActions = useMemo(
+    (): AppBalanceCardTopAction[] => [
+      { id: 'alerts', icon: 'bell', label: 'Alerts', disabled: true },
+      { id: 'stats', icon: 'pie-chart', label: 'Stats', disabled: true },
+    ],
+    [],
+  )
+
+  const headerFabs = useMemo((): AppBalanceCardFab[] => {
+    const buyHref =
+      canTrade && swapChainKey ? portalSwapBuyRoute(ticker, swapChainKey) : undefined
+    const sellHref =
+      canTrade && swapChainKey ? portalSwapSellRoute(ticker, swapChainKey) : undefined
+
+    return [
+      {
+        id: 'buy',
+        label: 'Buy',
+        icon: 'add',
+        href: buyHref,
+        disabled: !buyHref,
+      },
+      {
+        id: 'sell',
+        label: 'Sell',
+        icon: 'arrow-up-right',
+        href: sellHref,
+        disabled: !sellHref,
+      },
+      {
+        id: 'swap',
+        label: 'Swap',
+        icon: 'exchange',
+        href: PORTAL_ROUTES.walletSwap,
+      },
+    ]
+  }, [canTrade, swapChainKey, ticker])
 
   if (loading && !data) {
     return <PortalDashboardSkeleton />
@@ -82,7 +136,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-error">{error}</p>
         <Button type="button" onClick={() => void refresh()}>
-          Réessayer
+          Retry
         </Button>
       </Container>
     )
@@ -90,14 +144,9 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
 
   if (!detail || !data) return null
 
-  const privyOnly = isPrivyOnlyScope(detail.portfolioScope)
-  const dedicatedDepositHref = portalDedicatedDepositRoute(ticker)
-  const canDeposit = Boolean(dedicatedDepositHref)
   const livePrice =
     selectMoneyValue(currency, detail.currentPriceEur, detail.currentPriceUsd) ?? undefined
-  const changePct = data.change24hPct
-  const changeLabel = changePct != null ? formatChangePct(changePct) : null
-  const changePositive = changePct != null && changePct >= 0
+  const changePct = data.change24hPct ?? 0
   const unrealized =
     selectMoneyValue(currency, detail.unrealizedGainEur, detail.unrealizedGainUsd) ??
     detail.unrealizedGains
@@ -105,7 +154,27 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
     selectMoneyValue(currency, detail.realizedGainEur, detail.realizedGainUsd) ?? detail.realizedGains
   const totalGain =
     selectMoneyValue(currency, detail.totalGainEur, detail.totalGainUsd) ?? detail.totalGains
-  const swapHref = isSwapV1Token(ticker) ? portalSwapRoute({ to: ticker }) : PORTAL_ROUTES.walletSwap
+  const transactions = data.transactions
+  const hasMoreTransactions =
+    transactions.length > CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW
+  const previewTransactions = transactions.slice(0, CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW)
+
+  const scopeMeta = detail.portfolioScope === 'merged' ? ' · incl. wallet intégré' : ''
+
+  const instrumentPriceLabel =
+    livePrice != null
+      ? formatCryptoPrice(livePrice, currency === 'USD' ? 'USD' : 'EUR')
+      : '—'
+  const instrumentMarketRow = {
+    id: ticker,
+    name: cryptoPositionHeaderTitle(ticker, detail.name),
+    ticker,
+    symbol: avatarSymbol,
+    priceLabel: instrumentPriceLabel,
+    priceUsd: livePrice ?? 0,
+    changePct,
+    logoUrl: avatarLogoUrl ?? null,
+  }
 
   return (
     <PortalPageContainer>
@@ -120,136 +189,52 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
               Crypto wallet
             </PortalNavLink>
 
-            <section
-              className="overflow-hidden rounded-v-card border border-black/10 p-4 text-white shadow-v-subtle sm:p-5"
-              style={{ backgroundColor: heroColor }}
-            >
-              <AppEyebrow tone="inverse">Position</AppEyebrow>
-              <div className="mt-1 flex items-center gap-3">
+            <AppBalanceCardVariantB
+              welcomeLeading={
                 <PortalCryptoAvatar
                   ticker={ticker}
                   symbol={avatarSymbol}
                   apiLogoUrl={avatarLogoUrl}
                   size="lg"
                 />
-                <div>
-                  <h1 className="m-0 font-ui text-[22px] font-semibold leading-tight">{detail.name}</h1>
-                  <p className="mt-1 mb-0 font-ui text-[28px] font-bold leading-none sm:text-[32px]">
-                    {formatCryptoMoney(totalValue, currency)}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-2 mb-0 font-ui text-[13px] text-white/80">
-                {detail.volume} {ticker}
-                {detail.portfolioScope === 'merged'
-                  ? ' · incl. wallet Privy'
-                  : privyOnly
-                    ? ' · wallet Privy'
-                    : ''}
-              </p>
-              <div className="mt-4 border-t border-white/15 pt-4">
-                <PortalPerformanceChart
-                  values={data.historyPoints}
-                  tone="dark"
-                  height={88}
-                  className="text-white"
-                />
-              </div>
-            </section>
-
-            <div className="flex flex-wrap gap-2">
-              {canDeposit && dedicatedDepositHref ? (
-                <Button type="button" size="sm" className="gap-1.5" asChild>
-                  <PortalNavLink href={dedicatedDepositHref}>
-                    <Plus className="h-4 w-4" />
-                    Dépôt
-                  </PortalNavLink>
-                </Button>
-              ) : (
-                <>
-                  <Button type="button" size="sm" className="gap-1.5" disabled>
-                    <ArrowUp className="h-4 w-4" />
-                    Acheter
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
-                    <ArrowDown className="h-4 w-4" />
-                    Vendre
-                  </Button>
-                </>
-              )}
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
-                <PortalNavLink href={swapHref}>
-                  <ArrowLeftRight className="h-4 w-4" />
-                  Échanger
-                </PortalNavLink>
-              </Button>
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
-                <ListOrdered className="h-4 w-4" />
-                Ordres
-              </Button>
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
-                <Bell className="h-4 w-4" />
-                Alertes
-              </Button>
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
-                <BarChart3 className="h-4 w-4" />
-                Stats
-              </Button>
-            </div>
+              }
+              welcomeHi={cryptoPositionHeaderTitle(ticker, detail.name).toUpperCase()}
+              welcomeName={ticker}
+              showAvatar={false}
+              topActions={headerTopActions}
+              balanceLabel={formatCryptoMoney(totalValue, currency)}
+              balanceLabelText="Estimated value"
+              metaLabel={`${detail.volume} ${ticker}${scopeMeta}`}
+              showChange={false}
+              chartValues={data.historyPoints}
+              showChart
+              balancePending={refreshing}
+              fabs={headerFabs}
+              className="pt-0"
+            />
           </div>
         </PortalReveal>
 
         <PortalReveal index={1}>
-          <article className="card-simple overflow-hidden !w-full">
-            <div className="border-b border-v-fg-10 px-4 py-3">
-              <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">Instrument</h2>
-            </div>
-            <PortalNavLink
-              href={portalCryptoInstrumentRoute(ticker)}
-              className="flex items-center gap-3 px-4 py-3.5 no-underline transition-colors hover:bg-v-card-hover"
-            >
-              <PortalCryptoAvatar
-                ticker={ticker}
-                symbol={avatarSymbol}
-                apiLogoUrl={avatarLogoUrl}
-                size="md"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block font-ui text-[15px] font-semibold text-v-fg">{detail.name}</span>
-                <span className="mt-0.5 block font-ui text-[13px] text-v-fg-muted">
-                  {livePrice != null
-                    ? formatCryptoPrice(livePrice, currency === 'USD' ? 'USD' : 'EUR')
-                    : '—'}
-                  {changeLabel ? (
-                    <>
-                      {' · '}
-                      <span className={changePositive ? 'text-v-green' : 'text-v-error'}>
-                        {changeLabel}
-                      </span>
-                    </>
-                  ) : null}
-                </span>
-              </span>
-              <ChevronRight className="h-4 w-4 text-v-fg-muted" />
-            </PortalNavLink>
-          </article>
+          <section className="flex w-full flex-col gap-3">
+            <AppSectionHeader title="Instrument" />
+            <PortalCryptoAssetList assets={[instrumentMarketRow]} />
+          </section>
         </PortalReveal>
 
         <PortalReveal index={2}>
           <section className="flex w-full flex-col gap-3">
-            <header>
-              <h2 className="module-head__title">My position</h2>
-            </header>
+            <AppSectionHeader title="My position" />
             <AppMetricsList variant="plain">
               <AppMetricsRow label="Volume" value={`${detail.volume} ${ticker}`} />
-              <AppMetricsRow label="Solde total" value={formatCryptoMoney(totalValue, currency)} />
+              <AppMetricsRow label="Total balance" value={formatCryptoMoney(totalValue, currency)} />
               <AppMetricsRow
-                label="Gains en cours"
+                label="Unrealized P&L"
                 value={unrealized != null ? formatCryptoMoney(unrealized, currency) : '—'}
                 valueClassName={perfToneClass(detail.unrealizedGainsPct ?? unrealized)}
               />
               <AppMetricsRow
-                label="Prix moyen d'achat"
+                label="Avg. buy price"
                 value={
                   selectMoneyValue(currency, detail.avgBuyPriceEur, detail.avgBuyPriceUsd) != null
                     ? formatCryptoMoney(
@@ -260,16 +245,16 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
                 }
               />
               <AppMetricsRow
-                label="Prix actuel"
+                label="Current price"
                 value={livePrice != null ? formatCryptoMoney(livePrice, currency) : '—'}
               />
               <AppMetricsRow
-                label="Gains encaissés"
+                label="Realized P&L"
                 value={realized != null ? formatCryptoMoney(realized, currency) : '—'}
                 valueClassName={perfToneClass(realized)}
               />
               <AppMetricsRow
-                label="Total des gains"
+                label="Total P&L"
                 value={totalGain != null ? formatCryptoMoney(totalGain, currency) : '—'}
                 valueClassName={perfToneClass(detail.totalGainsPct ?? totalGain)}
               />
@@ -278,15 +263,22 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
         </PortalReveal>
 
         <PortalReveal index={3}>
-          <PortalTransactionHistory
-            title="Transactions history"
-            seamless
-            moreHref={portalCryptoWalletTransactionsRoute(ticker)}
-            moreLabel="All transactions"
-            items={data.transactions.slice(0, 12).map((tx) =>
-              mapCryptoTransactionToHistoryItem(tx, currency),
-            )}
-          />
+          <section className="flex w-full flex-col gap-3">
+            <AppSectionHeader
+              title="Transaction history"
+              moreHref={
+                hasMoreTransactions ? portalCryptoWalletTransactionsRoute(ticker) : undefined
+              }
+              moreLabel="All transactions"
+            />
+            <PortalTransactionHistory
+              title=""
+              seamless
+              items={previewTransactions.map((tx) =>
+                mapCryptoTransactionToHistoryItem(tx, currency),
+              )}
+            />
+          </section>
         </PortalReveal>
 
         <button
@@ -295,7 +287,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
           onClick={() => void refresh()}
           className="v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50"
         >
-          {refreshing ? 'Actualisation…' : 'Actualiser'}
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </PortalDashboardLayout>
     </PortalPageContainer>

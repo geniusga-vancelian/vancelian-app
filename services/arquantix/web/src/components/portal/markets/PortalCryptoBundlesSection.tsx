@@ -2,14 +2,17 @@
 
 import { useState } from 'react'
 
+import { AppNewsDeck } from '@/components/design-system/app/AppNewsDeck'
 import {
   AppProductBasketCard,
   buildProductBasketStackFromTickers,
 } from '@/components/design-system/app/AppProductBasketCard'
 import { PortalBundleInvestDialog } from '@/components/portal/bundles/PortalBundleInvestDialog'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { formatChangePctIndicator } from '@/lib/portal/marketsFormat'
+import { portalCryptoBundleProductRoute } from '@/lib/portal/portalRouting'
 
 type Props = {
   bundles: PortalCryptoBundle[]
@@ -77,26 +80,37 @@ function BundleCard({
   onInvest: (bundle: PortalCryptoBundle) => void
 }) {
   const perf = formatBasketPerformance(bundle.performance1d)
-  const stack =
-    bundle.entryAssetsAllowed.length > 0
-      ? buildProductBasketStackFromTickers(bundle.entryAssetsAllowed)
-      : { assets: [], moreCount: undefined }
+  const stack = buildProductBasketStackFromTickers(
+    bundle.allocationTickers.length > 0 ? bundle.allocationTickers : [],
+  )
+
+  const detailHref = portalCryptoBundleProductRoute(bundle.code)
 
   return (
-    <AppProductBasketCard
-      heroImageUrl={resolveBundleHeroImage(bundle)}
-      heroTitle={bundle.title}
-      heroDescription={bundle.description || undefined}
-      stackAssets={stack.assets}
-      stackMoreCount={stack.moreCount}
-      footName={bundle.title}
-      performanceLabel={perf.label}
-      performancePositive={perf.positive}
-      footIcon={resolveBundleFootIcon(bundle)}
-      ctaLabel="Invest"
-      ctaDisabled={!bundle.portfolioId}
-      onCtaClick={() => onInvest(bundle)}
-    />
+    <PortalNavLink
+      href={detailHref}
+      className="block text-inherit no-underline"
+    >
+      <AppProductBasketCard
+        className="h-full w-full max-w-none"
+        heroImageUrl={resolveBundleHeroImage(bundle)}
+        heroTitle={bundle.title}
+        heroDescription={bundle.description || undefined}
+        stackAssets={stack.assets}
+        stackMoreCount={stack.moreCount}
+        footName={bundle.title}
+        performanceLabel={perf.label}
+        performancePositive={perf.positive}
+        footIcon={resolveBundleFootIcon(bundle)}
+        ctaLabel="Invest"
+        ctaDisabled={!bundle.portfolioId}
+        onCtaClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onInvest(bundle)
+        }}
+      />
+    </PortalNavLink>
   )
 }
 
@@ -106,13 +120,13 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
   if (bundles.length === 0) return null
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex w-full flex-col gap-4">
       <PortalSectionHeading title="Crypto Bundles" />
-      <div className="grid grid-cols-1 justify-items-stretch gap-4 sm:grid-cols-2 xl:justify-items-start">
+      <AppNewsDeck>
         {bundles.map((bundle) => (
           <BundleCard key={bundle.id} bundle={bundle} onInvest={setInvestBundle} />
         ))}
-      </div>
+      </AppNewsDeck>
       {investBundle ? (
         <PortalBundleInvestDialog
           bundle={investBundle}

@@ -121,6 +121,11 @@
     transition: background 120ms var(--v-ease-out);
   }
 
+  .bal-v2__ic-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
   .bal-v2--light .bal-v2__ic-btn:hover {
     background: var(--v-fg-05);
   }
@@ -179,6 +184,21 @@
 
   .bal-v2--dark .bal-v2__amt {
     color: var(--v-white);
+  }
+
+  .bal-v2__meta {
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 500;
+  }
+
+  .bal-v2--light .bal-v2__meta {
+    color: var(--v-fg-muted);
+  }
+
+  .bal-v2--dark .bal-v2__meta {
+    color: rgb(255 255 255 / 0.72);
   }
 
   /* Gain band — preview/19 · E3 inline (pas de pill) */
@@ -306,6 +326,14 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
+  }
+
+  .bal-v2--no-fabs .bal-v2__fabs {
+    display: none;
+  }
+
+  .bal-v2--fabs-6 .bal-v2__fabs {
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .bal-v2__fb {
