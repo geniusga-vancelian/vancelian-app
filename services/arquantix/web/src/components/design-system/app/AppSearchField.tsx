@@ -61,7 +61,7 @@ export function AppSearchField({
           onClick={() => onChange('')}
           aria-label="Clear search"
         >
-          <KalaiIcon name="remove" size={12} className="text-white" />
+          <KalaiIcon name="remove" size={16} className="text-white" />
         </button>
       ) : null}
     </div>

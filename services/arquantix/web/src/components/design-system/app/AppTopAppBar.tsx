@@ -25,7 +25,7 @@ export function AppTopAppBar({
     <header className={cn('flex shrink-0 items-center gap-3', className)}>
       {onBack ? (
         <button type="button" className="ic-btn" onClick={onBack} aria-label={backLabel}>
-          <KalaiIcon name="arrow-left" size={18} />
+          <KalaiIcon name="arrow-left" size={20} />
         </button>
       ) : (
         SPACER
