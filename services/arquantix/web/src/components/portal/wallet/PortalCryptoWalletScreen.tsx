@@ -9,6 +9,7 @@ import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalCryptoWalletPositionsCard } from '@/components/portal/wallet/PortalCryptoWalletPositionsCard'
+import { PortalLombardActiveLoansCard } from '@/components/portal/lombard/PortalLombardActiveLoansCard'
 import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
 import {
@@ -121,6 +122,10 @@ export function PortalCryptoWalletScreen() {
         </PortalReveal>
 
         <PortalReveal index={1}>
+          <PortalLombardActiveLoansCard walletPositions={filteredPositions.positions} />
+        </PortalReveal>
+
+        <PortalReveal index={2}>
           <PortalCryptoWalletPositionsCard
             rows={rows}
             currency={data.currency}

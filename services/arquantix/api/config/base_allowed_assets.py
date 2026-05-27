@@ -36,13 +36,13 @@ BASE_ALLOWED_ASSETS: tuple[BaseAllowedAsset, ...] = (
         "swap_enabled": True,
     },
     {
-        "symbol": "cbETH",
+        "symbol": "CBETH",
         "name": "Ethereum",
         "provider_symbol": "ETHUSDT",
         "decimals": 18,
         "kind": "wrapped_eth",
         "base_token_address": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
-        "swap_enabled": False,
+        "swap_enabled": True,
     },
     {
         "symbol": "USDC",

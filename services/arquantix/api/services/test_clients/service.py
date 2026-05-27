@@ -399,7 +399,7 @@ class TestClientService:
         asset: str,
         *,
         client: Client,
-        chain_id: int | None = None,
+        chain_id: Optional[int] = None,
     ) -> dict:
         """Return detailed wallet info for a single crypto asset including PRU and gains.
 

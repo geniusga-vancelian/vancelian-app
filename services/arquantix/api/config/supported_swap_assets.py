@@ -33,6 +33,7 @@ SUPPORTED_SWAP_CHAINS: dict[str, dict[str, Any]] = {
 
 DEFAULT_MIN_SWAP_AMOUNT: dict[str, Decimal] = {
     "ETH": Decimal("0.001"),
+    "CBETH": Decimal("0.001"),
     "USDC": Decimal("5"),
     "EURC": Decimal("5"),
     "CBBTC": Decimal("0.00001"),
@@ -43,6 +44,7 @@ DEFAULT_MIN_SWAP_AMOUNT: dict[str, Decimal] = {
 
 DEFAULT_MAX_SWAP_AMOUNT: dict[str, Decimal] = {
     "ETH": Decimal("50"),
+    "CBETH": Decimal("50"),
     "USDC": Decimal("250000"),
     "EURC": Decimal("250000"),
     "CBBTC": Decimal("5"),
@@ -101,6 +103,8 @@ def normalize_asset_symbol(asset: str) -> str:
     raw = (asset or "").strip().upper()
     if raw in {"CBTC", "CBBTC", "WBTC"}:
         return "CBBTC"
+    if raw == "CBETH":
+        return "CBETH"
     return raw
 
 

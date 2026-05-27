@@ -28,13 +28,21 @@ from services.portfolio_engine.bundle_execution.types import ExecutionLeg
 def test_bundle_lifi_allows_cbbtc_base():
     """CBBTC accepté bundle ; BTC logique → CBBTC ; portail swap V1 inchangé."""
     assert normalize_bundle_asset("BTC") == "CBBTC"
+    assert normalize_bundle_asset("ETH") == "CBETH"
     assert "CBBTC" in BUNDLE_LIFI_DESTINATION_ASSETS
+    assert "CBETH" in BUNDLE_LIFI_DESTINATION_ASSETS
     assert "USDC" in BUNDLE_LIFI_SOURCE_ASSETS
 
     validate_bundle_leg_assets("USDC", "CBBTC")
+    validate_bundle_leg_assets("USDC", "CBETH")
     validate_bundle_quote_request(
         from_asset="USDC",
         to_asset="CBBTC",
+        amount="15",
+    )
+    validate_bundle_quote_request(
+        from_asset="USDC",
+        to_asset="CBETH",
         amount="15",
     )
     validate_bundle_quote_request(
@@ -48,12 +56,17 @@ def test_bundle_lifi_allows_cbbtc_base():
     assert tok.chain_key == "base"
     assert tok.lifi_chain_id == 8453
 
+    cbeth_tok = resolve_bundle_base_token("ETH")
+    assert cbeth_tok.asset == "CBETH"
+    assert cbeth_tok.token_address.lower() == "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22"
+
     assert is_swap_destination_asset("CBBTC")
+    assert is_swap_destination_asset("CBETH")
 
     with pytest.raises(BundleLifiValidationError) as exc:
         validate_bundle_quote_request(
             from_asset="BTC",
-            to_asset="ETH",
+            to_asset="CBETH",
             amount="1",
         )
     assert "native_btc" in exc.value.code or "BTC" in str(exc.value)
@@ -61,7 +74,7 @@ def test_bundle_lifi_allows_cbbtc_base():
     with pytest.raises(BundleLifiValidationError):
         validate_bundle_lifi_leg(
             from_asset="USDC",
-            to_asset="ETH",
+            to_asset="CBETH",
             amount_from=Decimal("10"),
             chain="ethereum",
         )
@@ -76,6 +89,7 @@ def test_bundle_lifi_allows_cbbtc_base():
 
 def test_normalize_btc_to_cbbtc():
     assert normalize_bundle_asset("BTC") == "CBBTC"
+    assert normalize_bundle_asset("ETH") == "CBETH"
 
 
 def test_resolve_cbbtc_base():
@@ -88,7 +102,7 @@ def test_validate_rejects_non_base_chain():
     with pytest.raises(BundleLifiValidationError):
         validate_bundle_lifi_leg(
             from_asset="USDC",
-            to_asset="ETH",
+            to_asset="CBETH",
             amount_from=Decimal("10"),
             chain="ethereum",
         )

@@ -29,7 +29,9 @@ from .schemas import (
 
 _ICON_KEYS = {
     "BTC": "btc",
+    "CBBTC": "cbbtc",
     "ETH": "eth",
+    "CBETH": "cbeth",
     "SOL": "sol",
     "XRP": "xrp",
     "ADA": "ada",

@@ -1,7 +1,8 @@
 /** Base mainnet — seule chaîne supportée en v1. */
 export const MORPHO_CHAIN_ID = 8453
 
-export const MORPHO_GRAPHQL_URL = 'https://api.morpho.org/graphql'
+export const MORPHO_GRAPHQL_URL =
+  process.env.MORPHO_GRAPHQL_URL?.trim() || 'https://api.morpho.org/graphql'
 
 /** @deprecated Préférer `createBasePublicClient()` — conservé pour compat imports legacy. */
 export function getMorphoDefaultBaseRpcUrl(): string {

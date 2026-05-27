@@ -371,7 +371,14 @@ class TransactionDetailResponse(BaseModel):
 
 ASSET_NAMES: dict[str, str] = {
     "BTC": "Bitcoin",
+    "CBBTC": "Bitcoin",
     "ETH": "Ethereum",
+    "CBETH": "Ethereum",
+    "USDC": "USD Coin",
+    "EURC": "Euro Coin",
+    "LINK": "Chainlink",
+    "AAVE": "Aave",
+    "UNI": "Uniswap",
     "SOL": "Solana",
     "XRP": "Ripple",
     "ADA": "Cardano",

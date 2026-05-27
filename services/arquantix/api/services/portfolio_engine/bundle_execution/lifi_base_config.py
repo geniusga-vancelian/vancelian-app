@@ -9,15 +9,16 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from config.supported_swap_assets import EVM_NATIVE_TOKEN, SUPPORTED_SWAP_CHAINS
+from config.supported_swap_assets import SUPPORTED_SWAP_CHAINS
 
 BUNDLE_LIFI_CHAIN_KEY = "base"
 
-BUNDLE_LIFI_SOURCE_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "ETH"})
-BUNDLE_LIFI_DESTINATION_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "ETH", "CBBTC"})
+BUNDLE_LIFI_SOURCE_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "CBETH"})
+BUNDLE_LIFI_DESTINATION_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "CBETH", "CBBTC"})
 
 # Coinbase Wrapped BTC on Base mainnet (canonical).
 CBBTC_BASE_ADDRESS = "0xcbB7c0000aB88B473b1f5aFd9ef808440eed33Bf"
+CBETH_BASE_ADDRESS = "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22"
 
 # Circle EURC on Base.
 EURC_BASE_ADDRESS = "0x60a3E35Cc106573386850dcfc71F6a032A550f1"
@@ -35,11 +36,11 @@ BUNDLE_BASE_ASSETS: dict[str, dict[str, Any]] = {
         "kind": "stablecoin",
         "addresses": {"base": EURC_BASE_ADDRESS},
     },
-    "ETH": {
-        "display_name": "Ethereum",
+    "CBETH": {
+        "display_name": "Coinbase Wrapped ETH",
         "decimals": 18,
-        "kind": "native",
-        "addresses": {"base": EVM_NATIVE_TOKEN},
+        "kind": "wrapped_eth",
+        "addresses": {"base": CBETH_BASE_ADDRESS},
     },
     "CBBTC": {
         "display_name": "Coinbase Wrapped BTC",
@@ -52,7 +53,7 @@ BUNDLE_BASE_ASSETS: dict[str, dict[str, Any]] = {
 DEFAULT_BUNDLE_MIN: dict[str, Decimal] = {
     "USDC": Decimal("5"),
     "EURC": Decimal("5"),
-    "ETH": Decimal("0.001"),
+    "CBETH": Decimal("0.001"),
     "CBBTC": Decimal("0.00001"),
 }
 
@@ -61,8 +62,9 @@ PE_ASSET_TO_BUNDLE_LIFI: dict[str, str] = {
     "BTC": "CBBTC",
     "TBTC": "CBBTC",
     "BTC_CB": "CBBTC",
-    "ETH": "ETH",
-    "TETH": "ETH",
+    "ETH": "CBETH",
+    "TETH": "CBETH",
+    "CBETH": "CBETH",
     "USDC": "USDC",
     "EURC": "EURC",
 }

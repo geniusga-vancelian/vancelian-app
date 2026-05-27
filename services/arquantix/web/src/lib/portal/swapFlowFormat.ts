@@ -27,6 +27,7 @@ export function defaultChainForAsset(
     USDC: 'base',
     EURC: 'base',
     ETH: 'base',
+    CBETH: 'base',
     CBBTC: 'base',
     LINK: 'base',
     AAVE: 'base',

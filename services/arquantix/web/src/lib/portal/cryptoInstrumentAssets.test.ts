@@ -16,4 +16,8 @@ describe('normalizeCryptoBaseTicker', () => {
   it('maps wrapped BTC variants to BTC avatar', () => {
     assert.equal(normalizeCryptoBaseTicker('CBBTC'), 'BTC')
   })
+
+  it('maps wrapped ETH variants to ETH avatar for market quotes', () => {
+    assert.equal(normalizeCryptoBaseTicker('CBETH'), 'ETH')
+  })
 })

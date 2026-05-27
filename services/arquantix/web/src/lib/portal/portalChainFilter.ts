@@ -30,6 +30,10 @@ function normalizeChainResolvable(position: ChainResolvable): {
 
 /** Résout l’écosystème portail d’une position (soldes Privy, dépôts, etc.). */
 export function resolvePositionPortalChain(position: ChainResolvable): PortalChain | null {
+  if ('lombard' in position && (position as PortalCryptoPosition).lombard) {
+    return 'base'
+  }
+
   const { chainType, chainId } = normalizeChainResolvable(position)
   const chainTypeNorm = (chainType ?? '').trim().toLowerCase()
   if (chainTypeNorm === 'solana') return 'solana'

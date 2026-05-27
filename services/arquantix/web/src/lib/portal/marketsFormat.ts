@@ -11,13 +11,19 @@ import { BASE_MARKET_PROVIDER_SYMBOLS } from '@/lib/portal/baseAllowedAssets'
 
 export const PORTAL_DEFAULT_CRYPTO_SYMBOLS = BASE_MARKET_PROVIDER_SYMBOLS
 
-/** Paires Binance utilisées pour coter EURC / CBBTC (pas de paires dédiées). */
+/** Paires Binance utilisées pour coter EURC / CBBTC / CBETH (pas de paires dédiées). */
 export const EURC_MARKET_PROVIDER_SYMBOL = 'EURUSDT'
 export const CBBTC_MARKET_PROVIDER_SYMBOL = 'BTCUSDT'
+export const CBETH_MARKET_PROVIDER_SYMBOL = 'ETHUSDT'
 
 const WRAPPED_MARKET_DISPLAY: Record<string, { name: string; ticker: string }> = {
   [EURC_MARKET_PROVIDER_SYMBOL]: { name: 'Euro Coin', ticker: 'EURC' },
   [CBBTC_MARKET_PROVIDER_SYMBOL]: { name: 'Bitcoin', ticker: 'CBBTC' },
+}
+
+/** Produits supplémentaires partageant la cotation d'une paire Binance (ex. CBETH + ETH sur ETHUSDT). */
+const ALL_CRYPTO_EXTRA_PRODUCTS: Record<string, Array<{ ticker: string; name: string }>> = {
+  [CBETH_MARKET_PROVIDER_SYMBOL]: [{ ticker: 'CBETH', name: 'Ethereum' }],
 }
 
 const SYMBOL_NAMES: Record<string, string> = {
@@ -135,6 +141,21 @@ type AllCryptoSummaryRow = MarketSummaryRow & {
   market_cap_rank?: number | string | null
 }
 
+function allCryptoTickerFromRow(instrumentSymbol: string, providerSymbol: string): string {
+  const inst = instrumentSymbol.trim().toUpperCase()
+  if (inst && !inst.endsWith('USDT') && !inst.endsWith('USDC')) {
+    return inst
+  }
+  const wrapped = WRAPPED_MARKET_DISPLAY[providerSymbol]
+  if (wrapped) return wrapped.ticker
+  return tickerFromSymbol(providerSymbol || inst)
+}
+
+function allCryptoNameFromRow(instrumentSymbol: string, providerSymbol: string, fallbackName: string): string {
+  const ticker = allCryptoTickerFromRow(instrumentSymbol, providerSymbol)
+  return SYMBOL_NAMES[ticker] ?? fallbackName
+}
+
 function mapAllCryptoSummaryRow(
   row: AllCryptoSummaryRow,
   options?: { currency?: 'EUR' | 'USD'; logoBaseUrl?: string },
@@ -145,24 +166,62 @@ function mapAllCryptoSummaryRow(
   const instrumentSymbol = String(row.symbol ?? '')
     .trim()
     .toUpperCase()
-  const symbol = providerSymbol || instrumentSymbol
-  if (!symbol) return null
+  const quoteSymbol = providerSymbol || instrumentSymbol
+  if (!quoteSymbol) return null
 
-  const mapped = mapMarketSummaryRow({ ...row, symbol }, options)
+  const mapped = mapMarketSummaryRow({ ...row, symbol: quoteSymbol }, options)
   const marketCapRank = toNumber(row.market_cap_rank, 9999)
-  const wrapped = WRAPPED_MARKET_DISPLAY[symbol]
-  const displayName = wrapped
-    ? wrapped.name
-    : String(row.name ?? '').trim() || mapped.name
+  const ticker = allCryptoTickerFromRow(instrumentSymbol, quoteSymbol)
+  const wrapped = WRAPPED_MARKET_DISPLAY[quoteSymbol]
+  const displayName = allCryptoNameFromRow(
+    instrumentSymbol,
+    quoteSymbol,
+    wrapped ? wrapped.name : String(row.name ?? '').trim() || mapped.name,
+  )
 
   return {
     ...mapped,
-    id: symbol,
+    id: instrumentSymbol || quoteSymbol,
     name: displayName,
-    ticker: mapped.ticker,
-    symbol,
+    ticker,
+    symbol: quoteSymbol,
     marketCapRank,
   }
+}
+
+/** Duplique les lignes produit (CBETH) si absentes — fallback quand l’API ne les renvoie pas encore. */
+export function expandAllCryptoProductRows(assets: PortalCryptoAsset[]): PortalCryptoAsset[] {
+  const out = [...assets]
+  const seen = new Set(out.map((row) => row.ticker.toUpperCase()))
+
+  for (const asset of assets) {
+    const providerSymbol = asset.symbol?.trim().toUpperCase() ?? ''
+    const extras = ALL_CRYPTO_EXTRA_PRODUCTS[providerSymbol] ?? []
+    for (const extra of extras) {
+      if (seen.has(extra.ticker.toUpperCase())) continue
+      seen.add(extra.ticker.toUpperCase())
+      out.push({
+        ...asset,
+        id: extra.ticker,
+        ticker: extra.ticker,
+        name: extra.name,
+      })
+    }
+  }
+
+  return dedupeAllCryptoByTicker(out)
+}
+
+function dedupeAllCryptoByTicker(assets: PortalCryptoAsset[]): PortalCryptoAsset[] {
+  const seen = new Set<string>()
+  const out: PortalCryptoAsset[] = []
+  for (const asset of assets) {
+    const key = asset.ticker.toUpperCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(asset)
+  }
+  return out
 }
 
 /** Tous les instruments crypto actifs — tri market cap décroissant (aligné Flutter `AllCryptoApi`). */
@@ -172,11 +231,13 @@ export function mapAllCryptoList(
 ): PortalCryptoAsset[] {
   if (!Array.isArray(rows)) return []
 
-  return rows
+  const mapped = rows
     .map((row) => mapAllCryptoSummaryRow(row as AllCryptoSummaryRow, options))
     .filter((item): item is PortalCryptoAsset & { marketCapRank: number } => item != null)
     .sort((a, b) => a.marketCapRank - b.marketCapRank)
     .map(({ marketCapRank: _rank, ...asset }) => asset)
+
+  return dedupeAllCryptoByTicker(expandAllCryptoProductRows(mapped))
 }
 
 type PortalFavoriteRow = {
@@ -263,8 +324,8 @@ export function applyQuoteUpdates(
 
 /** Tickers cibles par bundle (aligné bootstrap + seed CMS). */
 export const BUNDLE_STACK_TICKERS_BY_CODE: Record<string, string[]> = {
-  CRYPTO_BUNDLE_TWO_KINGS: ['CBBTC', 'ETH'],
-  CRYPTO_BUNDLE_CRYPTO_MAJORS: ['CBBTC', 'ETH', 'LINK', 'AAVE', 'UNI'],
+  CRYPTO_BUNDLE_TWO_KINGS: ['CBBTC', 'CBETH'],
+  CRYPTO_BUNDLE_CRYPTO_MAJORS: ['CBBTC', 'CBETH', 'LINK', 'AAVE', 'UNI'],
 }
 
 type BundleCatalogItem = {

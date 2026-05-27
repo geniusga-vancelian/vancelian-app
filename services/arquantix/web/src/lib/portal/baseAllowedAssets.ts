@@ -1,7 +1,7 @@
 /** Actifs Base autorisés — aligné sur `api/config/base_allowed_assets.py`. */
 export const BASE_ALLOWED_ASSETS = [
   { symbol: 'ETH', name: 'Ethereum' },
-  { symbol: 'cbETH', name: 'Ethereum' },
+  { symbol: 'CBETH', name: 'Ethereum' },
   { symbol: 'USDC', name: 'USD Coin' },
   { symbol: 'EURC', name: 'Euro Coin' },
   { symbol: 'CBBTC', name: 'Bitcoin' },
@@ -28,6 +28,7 @@ export const BASE_MARKET_PROVIDER_SYMBOLS = [
 /** Actifs éligibles au flow swap Li.FI same-chain sur Base. */
 export const BASE_SWAP_TRADE_ASSETS = [
   'ETH',
+  'CBETH',
   'USDC',
   'EURC',
   'CBBTC',

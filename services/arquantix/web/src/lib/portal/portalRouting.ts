@@ -15,6 +15,7 @@ export const PORTAL_ROUTES = {
   walletCreate: `${PORTAL_PATH_PREFIX}/wallet/create`,
   myWallets: `${PORTAL_PATH_PREFIX}/wallets`,
   invest: `${PORTAL_PATH_PREFIX}/invest`,
+  borrow: `${PORTAL_PATH_PREFIX}/borrow`,
   markets: `${PORTAL_PATH_PREFIX}/markets`,
   marketsAllCrypto: `${PORTAL_PATH_PREFIX}/markets/all-crypto`,
   academy: `${PORTAL_PATH_PREFIX}/academy`,
@@ -62,6 +63,37 @@ export function portalSwapBuyRoute(asset: string, chain?: string): string {
 
 export function portalSwapSellRoute(asset: string, chain?: string): string {
   return portalSwapRoute({ from: asset, fromChain: chain })
+}
+
+export type PortalBorrowRouteOptions = {
+  collateral: string
+}
+
+/** Flow Lombard — query `collateral=cbBTC|cbETH` pour pré-sélectionner la garantie. */
+export function portalBorrowRoute(options?: PortalBorrowRouteOptions): string {
+  const base = PORTAL_ROUTES.borrow
+  if (!options?.collateral?.trim()) return base
+
+  const params = new URLSearchParams()
+  params.set('collateral', options.collateral.trim())
+  return `${base}?${params.toString()}`
+}
+
+export type PortalLombardPositionRouteOptions = {
+  marketId?: string
+  collateral?: string
+}
+
+/** Détail read-only d'un emprunt Lombard actif. */
+export function portalLombardPositionRoute(options?: PortalLombardPositionRouteOptions): string {
+  const base = `${PORTAL_ROUTES.borrow}/position`
+  if (!options) return base
+
+  const params = new URLSearchParams()
+  if (options.marketId?.trim()) params.set('marketId', options.marketId.trim())
+  if (options.collateral?.trim()) params.set('collateral', options.collateral.trim())
+  const query = params.toString()
+  return query ? `${base}?${query}` : base
 }
 
 /** Lien dashboard « My accounts » → hub wallet ou inscription EUR. */

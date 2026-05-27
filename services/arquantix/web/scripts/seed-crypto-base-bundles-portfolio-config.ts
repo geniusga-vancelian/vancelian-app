@@ -39,7 +39,7 @@ const BUNDLES: BundleUiSpec[] = [
     sortOrder: 10,
     title: 'Two Crypto Kings',
     subtitle:
-      'A concentrated allocation to Bitcoin (70%) and Ethereum (30%) on Base. Subscribe in USDC; cbBTC is used for Bitcoin exposure.',
+      'A concentrated allocation to Bitcoin (70%) and Ethereum (30%) on Base. cbBTC and cbETH are used for on-chain exposure.',
     mediaKey: 'bundle-two-crypto-kings-placeholder',
     imageUrl: 'https://picsum.photos/seed/vancelian-two-crypto-kings/1200/800',
     slices: [
@@ -52,7 +52,7 @@ const BUNDLES: BundleUiSpec[] = [
     sortOrder: 20,
     title: 'Crypto Majors',
     subtitle:
-      'Bitcoin, Ethereum, and three DeFi leaders (Chainlink, Aave, Uniswap). 50% / 30% core plus ~6.7% each on the remaining assets.',
+      'Bitcoin, Ethereum, and three DeFi leaders (Chainlink, Aave, Uniswap). 50% / 30% core (cbBTC / cbETH) plus ~6.7% each on the remaining assets.',
     mediaKey: 'bundle-crypto-majors-placeholder',
     imageUrl: 'https://picsum.photos/seed/vancelian-crypto-majors/1200/800',
     slices: [

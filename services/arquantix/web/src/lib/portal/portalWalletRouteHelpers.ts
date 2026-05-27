@@ -14,7 +14,7 @@ import {
   LedgityVaultLiquidityError,
   readLedgityVaultLiquidityMetrics,
 } from '@/lib/portal/ledgity/ledgityVaultLiquidity'
-import { MorphoVaultBetaError } from '@/lib/portal/morphoUsdcBetaAccess'
+import { LombardBetaError, LombardSafetyError } from '@/lib/portal/lombard/lombardBetaErrors'
 import { PortalForbiddenError } from '@/lib/portal/portalWalletOwnership'
 import {
   formatBaseRpcUserMessage,
@@ -63,6 +63,9 @@ export function ledgityRpcErrorResponse(error: unknown, route?: string): NextRes
 
 export function morphoLedgerErrorResponse(error: unknown): NextResponse {
   if (error instanceof MorphoVaultBetaError || error instanceof LedgityVaultBetaError) {
+    return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })
+  }
+  if (error instanceof LombardBetaError || error instanceof LombardSafetyError) {
     return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })
   }
   if (error instanceof LedgityVaultLiquidityError) {

@@ -6,6 +6,7 @@ const SANDBOX_FLAGS: Array<{ name: string; forbiddenValue?: string }> = [
   { name: 'EXTERNAL_WALLET_LOCAL_MOCK_ENABLED', forbiddenValue: 'true' },
   { name: 'LIFI_LOCAL_SANDBOX_ENABLED', forbiddenValue: 'true' },
   { name: 'LIFI_SWAPS_MOCK', forbiddenValue: 'true' },
+  { name: 'LOMBARD_V1_MOCK_ENABLED', forbiddenValue: 'true' },
 ]
 
 function isTruthySandboxValue(raw: string | undefined): boolean {

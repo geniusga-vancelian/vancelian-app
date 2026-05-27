@@ -9,7 +9,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 SUPPORTED_ASSETS: set[str] = {
-    "BTC", "CBBTC", "ETH", "SOL", "XRP", "ADA",
+    "BTC", "CBBTC", "cbBTC", "CBETH", "cbETH", "ETH", "SOL", "XRP", "ADA",
     "BNB", "DOGE", "AVAX", "LINK", "DOT",
     "USDC", "USDT", "EURC",
     "AAVE", "UNI",
@@ -18,6 +18,9 @@ SUPPORTED_ASSETS: set[str] = {
 ASSET_PRECISION: dict[str, int] = {
     "BTC": 8,
     "CBBTC": 8,
+    "cbBTC": 8,
+    "CBETH": 18,
+    "cbETH": 18,
     "ETH": 18,
     "SOL": 9,
     "XRP": 6,
@@ -47,6 +50,9 @@ ASSET_PROVIDER_SYMBOL_MAP: dict[str, str] = {
     "AAVE": "AAVEUSDT",
     "UNI": "UNIUSDT",
     "CBBTC": "BTCUSDT",
+    "cbBTC": "BTCUSDT",
+    "CBETH": "ETHUSDT",
+    "cbETH": "ETHUSDT",
     "DOT": "DOTUSDT",
     "USDC": "USDCUSDT",
     # EURC: no Binance pair exists (EURCUSDT is invalid).

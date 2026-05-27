@@ -10,6 +10,14 @@ export async function register() {
     }
 
     try {
+      const { logLombardProductionEnvValidation } = await import('@/lib/portal/lombard/lombardProdEnvValidation')
+      logLombardProductionEnvValidation()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[STARTUP] Lombard prod env validation error:', msg)
+    }
+
+    try {
       const { validateBffStartupConfig } = await import('@/lib/bff-startup-validation')
       await validateBffStartupConfig()
     } catch (e) {

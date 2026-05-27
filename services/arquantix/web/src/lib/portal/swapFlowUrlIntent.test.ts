@@ -30,6 +30,15 @@ test('parsePortalSwapUrlIntent — chain from navbar when query omits chain', ()
   })
 })
 
+test('parsePortalSwapUrlIntent — buy CBETH on Base', () => {
+  const params = new URLSearchParams('to=CBETH&toChain=base')
+  assert.deepEqual(parsePortalSwapUrlIntent(params, 'base'), {
+    mode: 'buy',
+    toAsset: 'CBETH',
+    toChain: 'base',
+  })
+})
+
 test('parsePortalSwapUrlIntent — full when no trade params', () => {
   assert.deepEqual(parsePortalSwapUrlIntent(new URLSearchParams(), 'base'), { mode: 'full' })
 })

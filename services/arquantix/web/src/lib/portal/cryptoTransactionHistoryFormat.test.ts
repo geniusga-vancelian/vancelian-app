@@ -236,4 +236,31 @@ describe('mapCryptoTransactionToHistoryItem', () => {
     assert.equal(row.flowDirection, 'out')
     assert.match(row.amount, /^−/)
   })
+
+  it('maps lombard borrow to exchange-style borrow row', () => {
+    const row = mapCryptoTransactionToHistoryItem(
+      {
+        ...baseTx,
+        id: 'lombard-borrow-1',
+        transactionKind: 'lombard_borrow',
+        sourceSystem: 'lombard_v1',
+        title: 'Emprunt · cbBTC → USDC',
+        subtitle: 'Morpho · Base',
+        fromAsset: 'CBBTC',
+        toAsset: 'USDC',
+        swapAmountFrom: '0.017857',
+        swapAmountTo: '1000',
+        amountCrypto: '1000',
+      },
+      'EUR',
+    )
+    assert.equal(row.variant, 'borrow')
+    assert.equal(row.title, 'Emprunt · cbBTC → USDC')
+    assert.equal(row.subtitle, 'Morpho · Base')
+    assert.equal(row.fromAsset, 'CBBTC')
+    assert.equal(row.toAsset, 'USDC')
+    assert.match(row.amount, /1\s?000/)
+    assert.match(row.amount, /USDC/)
+    assert.match(row.meta ?? '', /Garantie · 0,017857 CBBTC/)
+  })
 })

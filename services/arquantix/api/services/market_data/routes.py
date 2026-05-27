@@ -27,7 +27,7 @@ from services.market_data.chart_period_config import CHART_PERIODS
 from services.market_data.chart_history_service import get_chart_history
 from services.market_data.market_summary_repo import get_market_summaries
 from services.market_data.top_movers_repo import get_top_movers
-from config.base_allowed_assets import BASE_MARKET_PROVIDER_SYMBOLS
+from config.base_allowed_assets import BASE_ALLOWED_ASSETS, BASE_MARKET_PROVIDER_SYMBOLS
 from services.market_data.ohlc_holes import compute_ohlc_holes_for_instruments
 from services.market_data.candles_backfill_service import run_backfill
 
@@ -540,6 +540,21 @@ def get_all_crypto(db: Session = Depends(get_db)):
             "market_cap_rank": rank,
             "logo_url": logo_url,
         })
+
+    ethusdt_row = next(
+        (row for row in result if str(row.get("provider_symbol") or "").upper() == "ETHUSDT"),
+        None,
+    )
+    cbeth_meta = next((a for a in BASE_ALLOWED_ASSETS if a["symbol"] == "CBETH"), None)
+    if ethusdt_row and cbeth_meta and not any(r.get("symbol") == "CBETH" for r in result):
+        result.append(
+            {
+                **ethusdt_row,
+                "symbol": cbeth_meta["symbol"],
+                "name": cbeth_meta["name"],
+            }
+        )
+
     return {"summaries": result}
 
 

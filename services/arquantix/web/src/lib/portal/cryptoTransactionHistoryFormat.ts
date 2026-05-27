@@ -7,7 +7,7 @@ const SWAP_TITLE_RE = /(?:Échange|Exchange)\s+([A-Z0-9]+)\s*(?:→|->)\s*([A-Z0
 
 export type PortalCryptoTransactionHistoryItem = {
   id: string
-  variant: 'flow' | 'swap'
+  variant: 'flow' | 'swap' | 'borrow'
   title: string
   subtitle?: string
   amount: string
@@ -95,7 +95,14 @@ function formatTransactionMeta(tx: PortalCryptoWalletTransaction, currency: stri
   return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
+export function isLombardBorrowTransaction(tx: PortalCryptoWalletTransaction): boolean {
+  const kind = tx.transactionKind?.trim().toLowerCase()
+  if (kind === 'lombard_borrow') return true
+  return tx.sourceSystem === 'lombard_v1'
+}
+
 export function isCryptoSwapTransaction(tx: PortalCryptoWalletTransaction): boolean {
+  if (isLombardBorrowTransaction(tx)) return false
   const kind = tx.transactionKind?.trim().toLowerCase()
   if (kind === 'crypto_swap') return true
   if (tx.side?.trim().toLowerCase() === 'swap') return true
@@ -215,10 +222,36 @@ export function consolidateSwapTransactions(
   return [...passthrough, ...consolidated]
 }
 
+function formatLombardBorrowMeta(collateralAmount: string | undefined, collateral: string): string | undefined {
+  const amount = collateralAmount?.trim()
+  const asset = normalizeAsset(collateral)
+  if (!amount || !asset) return undefined
+  return `Garantie · ${formatCryptoAmountDisplay(amount)} ${asset}`
+}
+
 export function mapCryptoTransactionToHistoryItem(
   tx: PortalCryptoWalletTransaction,
   currency: string,
 ): PortalCryptoTransactionHistoryItem {
+  if (isLombardBorrowTransaction(tx)) {
+    const collateral = normalizeAsset(tx.fromAsset) || 'COLLATERAL'
+    const borrowAmount =
+      tx.swapAmountTo?.trim() || tx.amountCrypto?.trim() || '0'
+    const collateralAmount = tx.swapAmountFrom?.trim()
+
+    return {
+      id: tx.id,
+      variant: 'borrow',
+      title: tx.title?.trim() || `Emprunt · ${collateral} → USDC`,
+      subtitle: tx.subtitle?.trim() || formatTransactionDateLabel(tx),
+      amount: formatSignedCryptoAmount(borrowAmount, 'USDC', '+'),
+      amountTone: 'in',
+      meta: formatLombardBorrowMeta(collateralAmount, collateral),
+      fromAsset: collateral,
+      toAsset: 'USDC',
+    }
+  }
+
   if (isCryptoSwapTransaction(tx)) {
     const assets = resolveSwapAssets(tx)
     if (assets) {

@@ -1,0 +1,90 @@
+import type { LombardBorrowCapacity } from '@/lib/portal/lombard/lombardTypes'
+import { LombardQuoteError } from '@/lib/portal/lombard/lombardQuote'
+import { isLombardMockEnabled } from '@/lib/portal/lombard/lombardMockConfig'
+import { lombardMaxUserLtvWad, VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/lombardConfig'
+import {
+  clampLombardTargetLtvPercent,
+  lombardTargetLtvPercentToWad,
+} from '@/lib/portal/lombard/lombardBorrowLtv'
+import {
+  formatLombardTokenAmount,
+  lltvWadToPercent,
+  rawToLombardHumanAmount,
+} from '@/lib/portal/lombard/lombardFormat'
+import { resolveLombardMarket } from '@/lib/portal/lombard/lombardMarket'
+import { erc20Abi, type Address } from 'viem'
+import { createBasePublicClient } from '@/lib/blockchain/baseRpcProvider'
+
+async function readCollateralBalance(args: {
+  tokenAddress: string
+  walletAddress: string
+  decimals: number
+}): Promise<{ raw: bigint; display: string }> {
+  const client = createBasePublicClient({ side: 'server' })
+  const raw = await client.readContract({
+    address: args.tokenAddress as Address,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [args.walletAddress as Address],
+  })
+  return {
+    raw,
+    display: rawToLombardHumanAmount(raw, args.decimals),
+  }
+}
+
+export async function buildLombardBorrowCapacity(args: {
+  collateral: string
+  walletAddress: string
+  targetLtvPercent: number
+}): Promise<LombardBorrowCapacity> {
+  const targetLtvPercent = clampLombardTargetLtvPercent(args.targetLtvPercent)
+  if (targetLtvPercent <= 0) {
+    throw new LombardQuoteError('lombard.invalid_target_ltv', 'Choose a target LTV between 1% and 70%.')
+  }
+
+  if (isLombardMockEnabled()) {
+    const { buildLombardMockBorrowCapacity } = await import('@/lib/portal/lombard/mocks/lombardLocalMock')
+    return buildLombardMockBorrowCapacity({ ...args, targetLtvPercent })
+  }
+
+  const resolved = await resolveLombardMarket({ collateral: args.collateral })
+  const { config, gql, morphoMarket } = resolved
+
+  const [marketData, walletBalance] = await Promise.all([
+    morphoMarket.getMarketData(),
+    readCollateralBalance({
+      tokenAddress: gql.collateralAsset.address,
+      walletAddress: args.walletAddress,
+      decimals: gql.collateralAsset.decimals,
+    }),
+  ])
+
+  const absoluteMaxLtvWad = lombardMaxUserLtvWad()
+  const targetLtvWad = lombardTargetLtvPercentToWad(targetLtvPercent)
+  const absoluteMaxBorrowRaw = marketData.getMaxBorrowAssets(walletBalance.raw, { maxLtv: absoluteMaxLtvWad })
+  const maxBorrowRaw = marketData.getMaxBorrowAssets(walletBalance.raw, { maxLtv: targetLtvWad })
+  if (maxBorrowRaw == null || absoluteMaxBorrowRaw == null) {
+    throw new LombardQuoteError('lombard.oracle_unavailable', 'Market pricing is temporarily unavailable.')
+  }
+
+  const recommendedBorrowRaw = (maxBorrowRaw * BigInt(70)) / BigInt(100)
+  const borrowApyPercent =
+    gql.state?.borrowApy != null && Number.isFinite(gql.state.borrowApy) ? gql.state.borrowApy * 100 : null
+
+  return {
+    marketId: config.marketId,
+    collateral: config.collateral,
+    collateralName: config.displayName,
+    targetLtvPercent,
+    maxBorrowAmount: formatLombardTokenAmount(maxBorrowRaw, gql.loanAsset.decimals),
+    maxBorrowAmountRaw: maxBorrowRaw.toString(),
+    absoluteMaxBorrowAmount: formatLombardTokenAmount(absoluteMaxBorrowRaw, gql.loanAsset.decimals),
+    recommendedBorrowAmount: formatLombardTokenAmount(recommendedBorrowRaw, gql.loanAsset.decimals),
+    walletGuaranteeBalance: walletBalance.display,
+    borrowApyPercent,
+    liquidationLltvPercent: lltvWadToPercent(BigInt(gql.lltv)),
+    maxUserLtvPercent: VANCELIAN_LOMBARD_V1.maxUserLtv * 100,
+    poweredBy: 'Morpho',
+  }
+}

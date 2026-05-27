@@ -1,9 +1,17 @@
 import { normalizeCryptoBaseTicker } from '@/lib/portal/cryptoInstrumentAssets'
 import { entityIdToTicker } from '@/lib/portal/marketsFormat'
+import { instrumentDisplayName } from '@/lib/portal/instrumentDetailFormat'
 import { consolidateSwapTransactions, parseSwapAssetsFromTitle } from '@/lib/portal/cryptoTransactionHistoryFormat'
+import {
+  shouldHidePrivyDepositForLombardBorrow,
+} from '@/lib/portal/lombard/lombardWalletTransactions'
 import { formatPortalMoney, normalizeChartSeries } from '@/lib/portal/dashboardFormat'
 import { resolvePositionPortalChain } from '@/lib/portal/portalChainFilter'
 import { PORTAL_CHAIN_LABELS, type PortalChain } from '@/config/portalChains'
+import {
+  buildLombardWalletDetailFields,
+  formatLombardPositionSubtitle,
+} from '@/lib/portal/lombard/lombardWalletBalanceOverlay'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import type { PortalWalletScope } from '@/lib/portal/portalWalletScopeTypes'
 import type {
@@ -235,7 +243,7 @@ export function buildPrivyWalletPositionsSummary(
 
       return {
         asset,
-        name: String(item.name ?? asset),
+        name: instrumentDisplayName(asset) || String(item.name ?? asset).trim() || asset,
         balance,
         availableBalance,
         priceEur,
@@ -370,6 +378,29 @@ export function mergeCryptoWalletTransactions(
   }
 
   return consolidateSwapTransactions([...byId.values()]).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
+}
+
+/** Ajoute les emprunts Lombard USDC et masque les dépôts Privy génériques redondants. */
+export function mergeLombardBorrowWalletTransactions(
+  merged: PortalCryptoWalletTransaction[],
+  lombardBorrow: PortalCryptoWalletTransaction[],
+  hiddenPrivyKeys: Set<string>,
+): PortalCryptoWalletTransaction[] {
+  const filtered = merged.filter(
+    (tx) => !shouldHidePrivyDepositForLombardBorrow(tx, hiddenPrivyKeys),
+  )
+
+  const byId = new Map<string, PortalCryptoWalletTransaction>()
+  for (const tx of filtered) {
+    byId.set(tx.id, tx)
+  }
+  for (const tx of lombardBorrow) {
+    byId.set(tx.id, tx)
+  }
+
+  return [...byId.values()].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
 }
@@ -524,22 +555,12 @@ export function resolveScopedPrivyPositionForAsset(
 export function buildCryptoWalletDetailFromScopedPosition(
   position: PortalCryptoPosition,
 ): PortalCryptoWalletDetail {
-  const totalValueEur =
-    position.estimatedValueEur ??
-    (position.priceEur != null ? position.balance * position.priceEur : 0)
-  const totalValueUsd =
-    position.estimatedValueUsd ??
-    (position.priceUsd != null ? position.balance * position.priceUsd : undefined)
-
   return {
     asset: position.asset,
     name: position.name,
     iconKey: position.iconKey,
-    volume: formatDetailVolumeAmount(position.balance, position.asset),
     currentPriceEur: position.priceEur,
     currentPriceUsd: position.priceUsd,
-    totalValueEur,
-    totalValueUsd,
     avgBuyPriceEur: undefined,
     avgBuyPriceUsd: undefined,
     unrealizedGainEur: 0,
@@ -549,6 +570,7 @@ export function buildCryptoWalletDetailFromScopedPosition(
     portfolioScope: position.portfolioScope ?? 'privy',
     privyBalance: position.privyBalance ?? position.balance,
     platformBalance: position.platformBalance ?? 0,
+    ...buildLombardWalletDetailFields(position),
   }
 }
 
@@ -559,23 +581,14 @@ export function alignCryptoWalletDetailWithScopedPosition(
 ): PortalCryptoWalletDetail {
   if (!position || position.balance <= 0) return detail
 
-  const totalValueEur =
-    position.estimatedValueEur ??
-    (position.priceEur != null ? position.balance * position.priceEur : detail.totalValueEur)
-  const totalValueUsd =
-    position.estimatedValueUsd ??
-    (position.priceUsd != null ? position.balance * position.priceUsd : detail.totalValueUsd)
-
   return {
     ...detail,
-    volume: formatDetailVolumeAmount(position.balance, position.asset),
     privyBalance: position.privyBalance ?? position.balance,
     platformBalance: position.platformBalance ?? 0,
     portfolioScope: position.portfolioScope ?? detail.portfolioScope ?? 'privy',
-    totalValueEur,
-    totalValueUsd,
     currentPriceEur: position.priceEur ?? detail.currentPriceEur,
     currentPriceUsd: position.priceUsd ?? detail.currentPriceUsd,
+    ...buildLombardWalletDetailFields(position),
   }
 }
 
@@ -591,6 +604,9 @@ function resolvePositionChainLabel(position: PortalCryptoPosition): string {
 }
 
 export function resolvePositionSubtitle(position: PortalCryptoPosition): string {
+  const lombardSubtitle = formatLombardPositionSubtitle(position)
+  if (lombardSubtitle) return lombardSubtitle
+
   const volumeStr = formatCryptoVolume(position.balance, position.asset)
   if (position.dedicatedWallet && position.chainType) {
     const chainLabel = resolvePositionChainLabel(position)

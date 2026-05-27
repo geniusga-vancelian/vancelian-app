@@ -18,8 +18,7 @@ EVM_ERC20_CONTRACTS: dict[int, dict[str, str]] = {
         "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "EURC": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
         "CBBTC": "0xcbB7c0000aB88B473b1f5aFd9ef808440eed33Bf",
-        "cbBTC": "0xcbB7c0000aB88B473b1f5aFd9ef808440eed33Bf",
-        "cbETH": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "CBETH": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
         "LINK": "0x88fb150bdc53a65fe94dea0c9ba0a6daf8c6e196",
         "AAVE": "0x63706e401c06ac8513145b7687a14804d17f814b",
         "UNI": "0xc3de830ea07524a0761646a6a4e4be0e114a3c83",
@@ -43,10 +42,26 @@ NATIVE_SYMBOL_BY_CHAIN: dict[int, str] = {
 # Rétrocompat tests / imports historiques.
 ETHEREUM_MAINNET_ERC20: dict[str, str] = EVM_ERC20_CONTRACTS[1]
 
+PRODUCT_ASSET_ALIASES: dict[str, str] = {
+    "CBBTC": "CBBTC",
+    "CBETH": "CBETH",
+    "WETH": "ETH",
+}
+
+
+def canonicalize_product_asset_symbol(sym: str | None) -> str | None:
+    if sym is None:
+        return None
+    text = str(sym).strip().upper()
+    if not text:
+        return None
+    return PRODUCT_ASSET_ALIASES.get(text, text)
+
 
 def contract_for_asset(chain_id: int, asset: str) -> str | None:
     contracts = EVM_ERC20_CONTRACTS.get(chain_id, {})
-    return contracts.get(asset.upper())
+    key = canonicalize_product_asset_symbol(asset) or asset.upper()
+    return contracts.get(key) or contracts.get(asset.upper())
 
 
 def supported_assets_for_chain(chain_id: int) -> list[str]:
@@ -91,9 +106,9 @@ def resolve_asset_symbol(
 ) -> str | None:
     """Résout le symbole canonique (ETH, USDC, …) depuis le payload Privy."""
     if isinstance(asset_payload, str) and asset_payload.strip():
-        sym = asset_payload.strip().upper()
-        if sym in SUPPORTED_ASSETS or sym in {"MATIC", "WETH"}:
-            return "ETH" if sym == "WETH" else sym
+        sym = canonicalize_product_asset_symbol(asset_payload.strip())
+        if sym in SUPPORTED_ASSETS or sym in {"MATIC"}:
+            return sym
 
     if isinstance(asset_payload, dict):
         sym = (
@@ -102,9 +117,7 @@ def resolve_asset_symbol(
             or asset_payload.get("name")
         )
         if sym:
-            sym_u = str(sym).strip().upper()
-            if sym_u == "WETH":
-                return "ETH"
+            sym_u = canonicalize_product_asset_symbol(str(sym).strip())
             if sym_u in SUPPORTED_ASSETS or sym_u == "MATIC":
                 return sym_u
 
@@ -118,12 +131,12 @@ def resolve_asset_symbol(
         if contract and chain_id is not None:
             mapped = ERC20_CONTRACT_TO_ASSET.get(chain_id, {}).get(normalize_evm_address(contract) or "")
             if mapped:
-                return mapped
+                return canonicalize_product_asset_symbol(mapped)
 
     if contract_address and chain_id is not None:
         mapped = ERC20_CONTRACT_TO_ASSET.get(chain_id, {}).get(normalize_evm_address(contract_address) or "")
         if mapped:
-            return mapped
+            return canonicalize_product_asset_symbol(mapped)
 
     return None
 

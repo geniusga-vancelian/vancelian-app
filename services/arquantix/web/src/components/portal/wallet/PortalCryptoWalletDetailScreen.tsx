@@ -10,6 +10,8 @@ import {
 import { AppMetricsList } from '@/components/design-system/app/AppMetricsList'
 import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
+import { PortalLombardWalletAssetCta } from '@/components/portal/lombard/PortalLombardWalletAssetCta'
+import { PortalLombardAssetDetailLoanSection } from '@/components/portal/lombard/PortalLombardAssetDetailLoanSection'
 import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalCryptoAssetList } from '@/components/portal/markets/PortalCryptoAssetList'
@@ -44,6 +46,7 @@ import {
   portalSwapSellRoute,
 } from '@/lib/portal/portalRouting'
 import { isPortalSwapTradeAsset } from '@/lib/portal/swapFlowTypes'
+import { normalizeLombardCollateralSymbol } from '@/lib/portal/lombard/lombardWalletAsset'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
 type Props = {
@@ -53,7 +56,7 @@ type Props = {
 const MIN_TRADE_VALUE_USD = 1
 
 function resolveSwapChainForAsset(asset: string, portalChain: PortalChain): string | undefined {
-  if (asset === 'CBBTC') return 'base'
+  if (asset === 'CBBTC' || asset === 'CBETH') return 'base'
   if (portalChain === 'solana') return undefined
   return portalChain
 }
@@ -158,6 +161,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
   const hasMoreTransactions =
     transactions.length > CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW
   const previewTransactions = transactions.slice(0, CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW)
+  const walletBalance = Number.parseFloat(String(detail.volume).replace(',', '.')) || 0
 
   const scopeMeta = detail.portfolioScope === 'merged' ? ' · incl. wallet intégré' : ''
 
@@ -216,16 +220,42 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
         </PortalReveal>
 
         <PortalReveal index={1}>
+          <PortalLombardWalletAssetCta asset={ticker} chain={chain} balance={walletBalance} />
+        </PortalReveal>
+
+        <PortalReveal index={2}>
+          <PortalLombardAssetDetailLoanSection asset={ticker} chain={chain} />
+        </PortalReveal>
+
+        <PortalReveal index={3}>
           <section className="flex w-full flex-col gap-3">
             <AppSectionHeader title="Instrument" />
             <PortalCryptoAssetList assets={[instrumentMarketRow]} />
           </section>
         </PortalReveal>
 
-        <PortalReveal index={2}>
+        <PortalReveal index={4}>
           <section className="flex w-full flex-col gap-3">
             <AppSectionHeader title="My position" />
             <AppMetricsList variant="plain">
+              {detail.availableVolume && detail.lockedVolume ? (
+                <>
+                  <AppMetricsRow label="Available" value={`${detail.availableVolume} ${ticker}`} />
+                  <AppMetricsRow label="Locked in Lombard" value={`${detail.lockedVolume} ${ticker}`} />
+                </>
+              ) : null}
+              {detail.lombard?.borrowedUsdcAmount && normalizeLombardCollateralSymbol(ticker) ? (
+                <AppMetricsRow
+                  label="USDC credit line"
+                  value={`${detail.lombard.borrowedUsdcAmount} USDC`}
+                />
+              ) : null}
+              {detail.lombard?.borrowedUsdcAmount && ticker === 'USDC' ? (
+                <AppMetricsRow
+                  label="From Lombard borrow"
+                  value={`${detail.lombard.borrowedUsdcAmount} USDC`}
+                />
+              ) : null}
               <AppMetricsRow label="Volume" value={`${detail.volume} ${ticker}`} />
               <AppMetricsRow label="Total balance" value={formatCryptoMoney(totalValue, currency)} />
               <AppMetricsRow
@@ -262,7 +292,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={3}>
+        <PortalReveal index={5}>
           <section className="flex w-full flex-col gap-3">
             <AppSectionHeader
               title="Transaction history"

@@ -6,8 +6,14 @@ import {
   parseMyBundles,
   parseWalletHistoryPoints,
 } from '@/lib/portal/cryptoWalletFormat'
+import {
+  maybeApplyLombardWalletOverlay,
+  resolveLombardOverlayWalletAddress,
+  resolvePortalChainFromSearchParams,
+} from '@/lib/portal/lombard/resolveLombardWalletOverlayForApi'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
+import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
 
 async function fetchUpstreamJson(path: string) {
   const res = await portalUpstreamFetch(path, { signal: AbortSignal.timeout(15000) })
@@ -24,12 +30,27 @@ async function fetchBackendJson(path: string) {
   return { ok: res.ok, data }
 }
 
-/** Hub wallet crypto — soldes réels Privy (aligné mobile + ledger on-chain). */
-export async function GET(_request: NextRequest) {
+/** Hub wallet crypto — soldes Privy enrichis Lombard (locked / USDC empruntés). */
+export async function GET(request: NextRequest) {
   const token = await readPortalAccessToken()
   if (!token) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const personId = await requirePortalPersonId()
+  if (personId instanceof NextResponse) return personId
+
+  const portalChain = resolvePortalChainFromSearchParams(
+    request.nextUrl.searchParams.get('portal_chain'),
+  )
+  const walletFromQuery =
+    request.nextUrl.searchParams.get('wallet_address')?.trim() ??
+    request.nextUrl.searchParams.get('walletAddress')?.trim() ??
+    null
+  const walletAddress = await resolveLombardOverlayWalletAddress({
+    request,
+    walletFromQuery,
+  })
 
   const [privyRes, history, bootstrap, bundlesRes] = await Promise.all([
     fetchUpstreamJson('/api/app/privy-wallet/balances'),
@@ -71,11 +92,21 @@ export async function GET(_request: NextRequest) {
         )
       : { ok: false, data: null }
 
-  const positions = buildPrivyWalletPositionsSummary(
+  let positions = buildPrivyWalletPositionsSummary(
     privyRes.data,
     marketRes.ok ? marketRes.data : null,
     currency,
   )
+  try {
+    positions = await maybeApplyLombardWalletOverlay({
+      personId,
+      portalChain,
+      walletAddress,
+      summary: positions,
+    })
+  } catch (error) {
+    console.warn('[api/portal/crypto-wallet GET] Lombard overlay skipped:', error)
+  }
   const historyPoints = history.ok ? parseWalletHistoryPoints(history.data) : []
   const bundles = bundlesRes.ok ? parseMyBundles(bundlesRes.data) : []
 

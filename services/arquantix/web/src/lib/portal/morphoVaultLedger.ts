@@ -15,6 +15,9 @@ import { prisma } from '@/lib/prisma'
 import { MORPHO_CHAIN_ID, normalizeVaultAddress } from '@/lib/portal/morphoConstants'
 import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
 import { sandboxUpdateLedgerSuccess } from '@/lib/portal/mocks/morphoLocalSandbox'
+import { LOMBARD_INTEGRATION_MODE } from '@/lib/portal/lombard/lombardConfig'
+import { isLombardMockEnabled } from '@/lib/portal/lombard/lombardMockConfig'
+import { lombardMockUpdateLedgerSuccess } from '@/lib/portal/lombard/mocks/lombardLocalMock'
 import { verifyMorphoTransactionReceipt } from '@/lib/portal/morphoReceiptVerification'
 import { emitMorphoLedgerTerminalSupportLog } from '@/lib/portal/morphoBetaSupportEmit'
 
@@ -212,6 +215,17 @@ export async function updateLedgerAfterReceipt(args: {
 
   if (entry.status === 'success') {
     return entry
+  }
+
+  if (
+    isLombardMockEnabled() &&
+    entry.integrationMode === LOMBARD_INTEGRATION_MODE
+  ) {
+    return lombardMockUpdateLedgerSuccess({
+      ledgerEntryId: entry.id,
+      personId: args.personId,
+      txHash: args.txHash,
+    })
   }
 
   if (isMorphoLocalSandboxEnabled()) {

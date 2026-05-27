@@ -42,8 +42,8 @@ export function PortalDashboardHeader({
   const fabs: AppBalanceCardFab[] = [
     { id: 'deposit', label: 'Déposer', icon: 'add', href: depositHref },
     { id: 'withdraw', label: 'Retirer', icon: 'send-1', disabled: true },
+    { id: 'swap', label: 'Échanger', icon: 'exchange', href: PORTAL_ROUTES.walletSwap },
     { id: 'invest', label: 'Investir', icon: 'trending-up', href: PORTAL_ROUTES.invest },
-    { id: 'more', label: 'More', icon: 'apps', href: PORTAL_ROUTES.profile },
   ]
 
   return (

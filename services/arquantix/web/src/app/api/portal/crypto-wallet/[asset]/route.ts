@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DEFAULT_PORTAL_CHAIN, isValidPortalChain, type PortalChain } from '@/config/portalChains'
+import type { PortalChain } from '@/config/portalChains'
 import { buildBackendUrl } from '@/lib/backend'
 import {
   alignCryptoWalletDetailWithScopedPosition,
@@ -7,14 +7,22 @@ import {
   buildPrivyWalletPositionsSummary,
   extractUpstreamDetailPayload,
   mergeCryptoWalletTransactions,
+  mergeLombardBorrowWalletTransactions,
   parseCryptoWalletDetail,
   parseWalletHistoryPoints,
   resolveScopedPrivyPositionForAsset,
 } from '@/lib/portal/cryptoWalletFormat'
 import { assetToMarketProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+import {
+  maybeApplyLombardWalletOverlay,
+  resolveLombardOverlayWalletAddress,
+  resolvePortalChainFromSearchParams,
+} from '@/lib/portal/lombard/resolveLombardWalletOverlayForApi'
+import { fetchLombardBorrowWalletTransactions } from '@/lib/portal/lombard/lombardWalletTransactions'
 import { appendPortalScopeQuery } from '@/lib/portal/portalScopeQuery'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
+import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
 import type { PortalWalletScope } from '@/lib/portal/portalWalletScopeTypes'
 
 async function fetchUpstreamJson(path: string) {
@@ -33,8 +41,7 @@ async function fetchBackendJson(path: string) {
 }
 
 function resolvePortalChain(request: NextRequest): PortalChain {
-  const raw = request.nextUrl.searchParams.get('portal_chain')?.trim().toLowerCase() ?? ''
-  return isValidPortalChain(raw) ? raw : DEFAULT_PORTAL_CHAIN
+  return resolvePortalChainFromSearchParams(request.nextUrl.searchParams.get('portal_chain'))
 }
 
 function resolveWalletScope(request: NextRequest, chain: PortalChain): PortalWalletScope | null {
@@ -59,6 +66,9 @@ export async function GET(
   if (!token) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const personId = await requirePortalPersonId()
+  if (personId instanceof NextResponse) return personId
 
   const asset = (params.asset ?? '').trim().toUpperCase()
   if (!asset) {
@@ -108,11 +118,24 @@ export async function GET(
 
   let scopedPosition = undefined
   if (privyBalancesRes.ok && privyBalancesRes.data) {
-    const privySummary = buildPrivyWalletPositionsSummary(
+    let privySummary = buildPrivyWalletPositionsSummary(
       privyBalancesRes.data,
       marketRes.ok ? marketRes.data : null,
       currency,
     )
+    try {
+      privySummary = await maybeApplyLombardWalletOverlay({
+        personId,
+        portalChain,
+        walletAddress: await resolveLombardOverlayWalletAddress({
+          request,
+          walletFromQuery: walletScope?.address ?? null,
+        }),
+        summary: privySummary,
+      })
+    } catch (error) {
+      console.warn('[api/portal/crypto-wallet/[asset] GET] Lombard overlay skipped:', error)
+    }
     scopedPosition = resolveScopedPrivyPositionForAsset(
       privySummary,
       asset,
@@ -154,10 +177,33 @@ export async function GET(
     }
   }
 
-  const transactions = mergeCryptoWalletTransactions(
+  let transactions = mergeCryptoWalletTransactions(
     txRes.ok ? txRes.data : null,
     privyDepRes.ok ? privyDepRes.data : null,
   )
+
+  if (asset === 'USDC') {
+    try {
+      const walletAddress = await resolveLombardOverlayWalletAddress({
+        request,
+        walletFromQuery: walletScope?.address ?? null,
+      })
+      if (walletAddress) {
+        const lombardBorrow = await fetchLombardBorrowWalletTransactions({
+          personId,
+          walletAddress,
+          asset,
+        })
+        transactions = mergeLombardBorrowWalletTransactions(
+          transactions,
+          lombardBorrow.transactions,
+          lombardBorrow.hiddenPrivyKeys,
+        )
+      }
+    } catch (error) {
+      console.warn('[api/portal/crypto-wallet/[asset] GET] Lombard borrow tx merge skipped:', error)
+    }
+  }
 
   return NextResponse.json({
     currency,

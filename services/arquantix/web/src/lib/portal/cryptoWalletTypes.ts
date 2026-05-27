@@ -1,8 +1,17 @@
+export type PortalLombardWalletPositionOverlay = {
+  lockedCollateralAmount: number
+  lockedCollateralSymbol: string
+  borrowedUsdcAmount: number
+  /** true when local mock simulates USDC credit not yet reflected in Privy balances */
+  simulatePrivyCredit: boolean
+}
+
 export type PortalCryptoPosition = {
   asset: string
   name: string
   balance: number
   availableBalance: number
+  lombard?: PortalLombardWalletPositionOverlay
   priceEur?: number
   estimatedValueEur?: number
   priceUsd?: number
@@ -106,6 +115,11 @@ export type PortalCryptoWalletDetail = {
   portfolioScope?: string
   privyBalance?: number
   platformBalance?: number
+  lombard?: PortalLombardWalletPositionOverlay
+  /** Human-readable available amount (detail screen). */
+  availableVolume?: string
+  /** Human-readable locked Lombard collateral (detail screen). */
+  lockedVolume?: string
 }
 
 export type PortalCryptoWalletTransaction = {

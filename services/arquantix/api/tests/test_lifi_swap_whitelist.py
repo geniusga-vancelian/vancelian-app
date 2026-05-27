@@ -20,6 +20,7 @@ def test_whitelist_base_assets_only():
     assert is_supported_asset("USDC")
     assert is_supported_asset("ETH")
     assert is_supported_asset("CBBTC")
+    assert is_supported_asset("CBETH")
     assert is_supported_asset("LINK")
     assert not is_supported_asset("USDT")
     assert not is_supported_asset("SOL")
@@ -29,8 +30,9 @@ def test_source_and_destination_sets():
     assert is_swap_source_asset("USDC")
     assert is_swap_destination_asset("ETH")
     assert is_swap_destination_asset("CBBTC")
+    assert is_swap_destination_asset("CBETH")
     assert BASE_SWAP_SYMBOLS == frozenset(
-        {"ETH", "USDC", "EURC", "CBBTC", "LINK", "AAVE", "UNI"}
+        {"ETH", "CBETH", "USDC", "EURC", "CBBTC", "LINK", "AAVE", "UNI"}
     )
 
 
