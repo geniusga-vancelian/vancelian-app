@@ -1,6 +1,7 @@
 'use client'
 
 import type { LombardBetaCapSnapshot } from '@/lib/portal/lombard/lombardQaContext'
+import type { LombardExecutionFailureView } from '@/lib/portal/lombard/lombardExecutionError'
 import type { LombardExecutionPhase, LombardQuoteResult } from '@/lib/portal/lombard/lombardTypes'
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
   betaCaps: LombardBetaCapSnapshot | null
   executionPhase: LombardExecutionPhase
   ledgerGroupId: string | null
+  executionFailure?: LombardExecutionFailureView | null
   mockMode?: boolean
 }
 
@@ -32,6 +34,7 @@ export function PortalLombardQaDebugPanel({
   betaCaps,
   executionPhase,
   ledgerGroupId,
+  executionFailure,
   mockMode,
 }: Props) {
   const warnings = quote?.warnings?.length
@@ -90,6 +93,8 @@ export function PortalLombardQaDebugPanel({
         />
         <Row label="mock mode" value={mockMode ? 'on (no Privy signature)' : 'off (live on-chain)'} />
         <Row label="prepare status" value={executionPhase} />
+        <Row label="failed step" value={executionFailure?.stepLabel ?? null} />
+        <Row label="failed tx" value={executionFailure?.txHash ?? null} />
         <Row label="ledger group" value={ledgerGroupId} />
       </div>
     </aside>

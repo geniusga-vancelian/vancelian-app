@@ -10,6 +10,12 @@ import {
   lombardTargetLtvPercentToWad,
 } from '@/lib/portal/lombard/lombardBorrowLtv'
 import {
+  computeMaxIncrementalBorrowRaw,
+  computeProjectedPositionLtvRatio,
+  findMinimumIncrementalCollateralForBorrow,
+  readLombardPositionBorrowSnapshot,
+} from '@/lib/portal/lombard/lombardBorrowMath'
+import {
   formatLombardTokenAmount,
   lltvWadToPercent,
   parseLombardHumanAmountToRaw,
@@ -49,50 +55,37 @@ async function readCollateralBalance(args: {
 
 function findMinimumCollateralForBorrow(args: {
   marketData: Awaited<ReturnType<ResolvedLombardMarket['morphoMarket']['getMarketData']>>
+  position: ReturnType<typeof readLombardPositionBorrowSnapshot>
   borrowAmountRaw: bigint
   maxLtvWad: bigint
+  walletCollateralRaw: bigint
 }): bigint {
-  const { marketData, borrowAmountRaw, maxLtvWad } = args
-  if (borrowAmountRaw <= BigInt(0)) {
-    throw new LombardQuoteError('lombard.invalid_borrow_amount', 'Borrow amount must be positive.')
-  }
-
-  let low = BigInt(1)
-  let high = borrowAmountRaw * BigInt(10) ** BigInt(12)
-  let best: bigint | null = null
-
-  for (let i = 0; i < 96; i += 1) {
-    const mid = (low + high) / BigInt(2)
-    const maxBorrow = marketData.getMaxBorrowAssets(mid, { maxLtv: maxLtvWad })
-    if (maxBorrow != null && maxBorrow >= borrowAmountRaw) {
-      best = mid
-      high = mid - BigInt(1)
-    } else {
-      low = mid + BigInt(1)
-    }
-    if (low > high) break
-  }
-
-  if (best == null) {
+  const guaranteeAmountRaw = findMinimumIncrementalCollateralForBorrow(args)
+  if (guaranteeAmountRaw == null) {
     throw new LombardQuoteError(
       'lombard.collateral_quote_failed',
       'Unable to compute guarantee amount for this borrow request.',
     )
   }
-
-  return best
+  return guaranteeAmountRaw
 }
 
 function projectedLtvRatio(args: {
   marketData: Awaited<ReturnType<ResolvedLombardMarket['morphoMarket']['getMarketData']>>
-  collateralRaw: bigint
-  borrowAmountRaw: bigint
+  position: ReturnType<typeof readLombardPositionBorrowSnapshot>
+  additionalCollateralRaw: bigint
+  additionalBorrowRaw: bigint
 }): number {
-  const collateralValue = args.marketData.getCollateralValue(args.collateralRaw)
-  if (collateralValue == null || collateralValue <= BigInt(0)) {
+  const projected = computeProjectedPositionLtvRatio({
+    marketData: args.marketData,
+    position: args.position,
+    additionalCollateralRaw: args.additionalCollateralRaw,
+    additionalBorrowRaw: args.additionalBorrowRaw,
+  })
+  if (projected == null) {
     throw new LombardQuoteError('lombard.oracle_unavailable', 'Market pricing is temporarily unavailable.')
   }
-  return Number(args.borrowAmountRaw) / Number(collateralValue)
+  return projected
 }
 
 export async function buildLombardQuote(args: {
@@ -119,19 +112,31 @@ export async function buildLombardQuote(args: {
     throw new LombardQuoteError('lombard.invalid_borrow_amount', 'Enter a valid USDC amount.')
   }
 
-  const [marketData, walletBalance] = await Promise.all([
+  const [marketData, walletBalance, positionData] = await Promise.all([
     morphoMarket.getMarketData(),
     readCollateralBalance({
       tokenAddress: gql.collateralAsset.address,
       walletAddress: args.walletAddress,
       decimals: gql.collateralAsset.decimals,
     }),
+    morphoMarket.getPositionData(args.walletAddress as Address),
   ])
+  const position = readLombardPositionBorrowSnapshot(positionData)
 
   const targetLtvWad = lombardTargetLtvPercentToWad(targetLtvPercent)
   const absoluteMaxLtvWad = lombardMaxUserLtvWad()
-  const absoluteMaxBorrowRaw = marketData.getMaxBorrowAssets(walletBalance.raw, { maxLtv: absoluteMaxLtvWad })
-  const maxBorrowRaw = marketData.getMaxBorrowAssets(walletBalance.raw, { maxLtv: targetLtvWad })
+  const absoluteMaxBorrowRaw = computeMaxIncrementalBorrowRaw({
+    marketData,
+    position,
+    walletCollateralRaw: walletBalance.raw,
+    maxLtvWad: absoluteMaxLtvWad,
+  })
+  const maxBorrowRaw = computeMaxIncrementalBorrowRaw({
+    marketData,
+    position,
+    walletCollateralRaw: walletBalance.raw,
+    maxLtvWad: targetLtvWad,
+  })
   if (maxBorrowRaw == null || absoluteMaxBorrowRaw == null) {
     throw new LombardQuoteError('lombard.oracle_unavailable', 'Market pricing is temporarily unavailable.')
   }
@@ -154,8 +159,10 @@ export async function buildLombardQuote(args: {
 
   const guaranteeAmountRaw = findMinimumCollateralForBorrow({
     marketData,
+    position,
     borrowAmountRaw,
     maxLtvWad: targetLtvWad,
+    walletCollateralRaw: walletBalance.raw,
   })
 
   if (guaranteeAmountRaw > walletBalance.raw) {
@@ -167,8 +174,9 @@ export async function buildLombardQuote(args: {
 
   const projectedLtv = projectedLtvRatio({
     marketData,
-    collateralRaw: guaranteeAmountRaw,
-    borrowAmountRaw,
+    position,
+    additionalCollateralRaw: guaranteeAmountRaw,
+    additionalBorrowRaw: borrowAmountRaw,
   })
 
   try {

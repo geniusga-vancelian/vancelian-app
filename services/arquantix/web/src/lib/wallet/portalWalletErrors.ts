@@ -54,6 +54,29 @@ export function isPortalWalletUserRejectedError(error: unknown): boolean {
   )
 }
 
+export function isPortalWalletTransferFromFailedError(error: unknown): boolean {
+  const haystack = `${errorMessage(error)} ${errorDetails(error)}`.toLowerCase()
+  return haystack.includes('transfer_from_failed')
+}
+
+function formatTransferFromFailedError(context?: PortalWalletErrorContext): string {
+  const chain = chainLabel(context)
+  const asset = assetLabel(context)
+
+  if (context?.phase === 'approve') {
+    if (isExternalWallet(context)) {
+      return `Approbation ${asset} refusée sur ${chain}. Vérifiez MetaMask (réseau ${chain}) puis réessayez.`
+    }
+    return `Approbation ${asset} impossible sur ${chain}. Vérifiez le gas sponsorship Privy sur ce réseau puis réessayez.`
+  }
+
+  if (isExternalWallet(context)) {
+    return `Solde ${asset} insuffisant dans MetaMask sur ${chain} pour ce swap. Vérifiez le solde disponible puis refaites une estimation avec un montant plus bas.`
+  }
+
+  return `Solde ${asset} insuffisant dans le wallet Vancelian sur ${chain} pour ce swap. Vérifiez le solde disponible puis refaites une estimation avec un montant plus bas.`
+}
+
 function formatExecutionRevertedError(context?: PortalWalletErrorContext): string {
   const chain = chainLabel(context)
   const asset = assetLabel(context)
@@ -109,7 +132,11 @@ export function formatPortalWalletError(
     return `Le wallet Vancelian n’est pas sur ${chainLabel(context)}. Changez de réseau dans la navbar puis réessayez.`
   }
 
-  if (lower.includes('execution reverted') || lower.includes('transfer_from_failed')) {
+  if (isPortalWalletTransferFromFailedError(error)) {
+    return formatTransferFromFailedError(context)
+  }
+
+  if (lower.includes('execution reverted')) {
     return formatExecutionRevertedError(context)
   }
 

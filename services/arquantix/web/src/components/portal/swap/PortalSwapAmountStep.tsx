@@ -7,6 +7,7 @@ import { PortalExecutionScopeBanner } from '@/components/portal/PortalExecutionS
 import { PortalCryptoExchangeDirection } from '@/components/portal/swap/PortalCryptoExchangeDirection'
 import { PortalSwapFlowShell } from '@/components/portal/swap/PortalSwapFlowShell'
 import { Button } from '@/components/ui/button'
+import { isSwapAmountOverPrivyBalance } from '@/lib/portal/swapAmountValidation'
 import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
 import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import { requestSwapQuote, type SwapQuotePayload } from '@/lib/portal/swapClient'
@@ -57,7 +58,7 @@ export function PortalSwapAmountStep({
 
   const parsed = Number(amount.replace(',', '.'))
   const usesPrivyBalance = mode === 'privy_embedded'
-  const overBalance = usesPrivyBalance && parsed > sourceBalance && sourceBalance > 0
+  const overBalance = usesPrivyBalance && isSwapAmountOverPrivyBalance(parsed, sourceBalance)
   const canContinue = parsed > 0 && !overBalance && quote !== null && !loading && !walletLoading
 
   const fetchQuote = useCallback(async () => {
@@ -164,9 +165,23 @@ export function PortalSwapAmountStep({
           )}
         </div>
 
-        {usesPrivyBalance && sourceBalance > 0 ? (
+        {usesPrivyBalance ? (
           <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-            Solde wallet Vancelian : {formatSwapCryptoAmount(sourceBalance)} {fromAsset}
+            {sourceBalance > 0 ? (
+              <>
+                Solde wallet Vancelian : {formatSwapCryptoAmount(sourceBalance)} {fromAsset}
+              </>
+            ) : (
+              <>Solde {fromAsset} indisponible — sélectionnez un actif source avec un solde positif.</>
+            )}
+          </p>
+        ) : null}
+
+        {overBalance ? (
+          <p className="m-0 rounded-v-control bg-red-50 px-3 py-2 font-ui text-[13px] text-v-error">
+            {sourceBalance > 0
+              ? `Montant supérieur au solde disponible (${formatSwapCryptoAmount(sourceBalance)} ${fromAsset}).`
+              : `Solde ${fromAsset} insuffisant pour ce montant.`}
           </p>
         ) : null}
 
