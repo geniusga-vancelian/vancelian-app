@@ -13,8 +13,15 @@ import {
 } from '@/lib/portal/marketsFormat'
 import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
 
+/** Agrégation BFF (7 upstreams parallèles + fallback Binance API) — 15s provoquait des timeouts prod. */
+const PORTAL_MARKETS_FETCH_TIMEOUT_MS = 30_000
+
 async function fetchJson(url: string, init?: RequestInit) {
-  const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000), ...init })
+  const res = await fetch(url, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(PORTAL_MARKETS_FETCH_TIMEOUT_MS),
+    ...init,
+  })
   const data = await res.json().catch(() => null)
   return { ok: res.ok, data }
 }
@@ -43,8 +50,12 @@ export async function GET(request: NextRequest) {
       fetchJson(`${bffOrigin}/api/blog?articleType=NEWS&page=1&pageSize=5&locale=fr`),
       fetchJson(`${bffOrigin}/api/mobile/flutter/portfolio-products/configs`),
       fetchJson(`${bffOrigin}/api/mobile/flutter/widgets/top10research?locale=fr`),
-      portalUpstreamFetch('/api/app/bundle/catalog'),
-      portalUpstreamFetch('/api/app/favorites?entity_type=instrument'),
+      portalUpstreamFetch('/api/app/bundle/catalog', {
+        signal: AbortSignal.timeout(PORTAL_MARKETS_FETCH_TIMEOUT_MS),
+      }),
+      portalUpstreamFetch('/api/app/favorites?entity_type=instrument', {
+        signal: AbortSignal.timeout(PORTAL_MARKETS_FETCH_TIMEOUT_MS),
+      }),
     ])
 
   const marketDataPublicBaseUrl = getMarketDataPublicBaseUrl()

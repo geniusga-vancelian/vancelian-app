@@ -90,6 +90,25 @@ def refresh_binance_quotes_for_provider_symbols(
         _fetch_binance_and_upsert(session, instrument_id, provider_symbol)
 
 
+def _quote_is_stale(quote, now_utc: datetime, max_age_sec: int) -> bool:
+    """True if quote is missing or older than max_age_sec."""
+    if quote is None:
+        return True
+    if not quote.updated_at:
+        return True
+    utc_updated = quote.updated_at if quote.updated_at.tzinfo else quote.updated_at.replace(tzinfo=timezone.utc)
+    return (now_utc - utc_updated).total_seconds() >= max_age_sec
+
+
+def _price_from_quote(quote) -> Optional[float]:
+    if quote is None:
+        return None
+    try:
+        return float(quote.last_price)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _fetch_binance_and_upsert(
     session: Session,
     instrument_id: int,
@@ -163,22 +182,22 @@ def get_market_summaries(
 
     summaries = []
     for instrument_id, provider_symbol, provider in instruments:
-        price = None
-        if provider == "binance" and provider_symbol and live_fallback_binance_sec is not None:
+        quote = quote_by_id.get(instrument_id)
+        price = _price_from_quote(quote)
+
+        needs_binance_fallback = (
+            live_fallback_binance_sec is not None
+            and provider == "binance"
+            and provider_symbol
+            and (price is None or _quote_is_stale(quote, now_utc, live_fallback_binance_sec))
+        )
+        if needs_binance_fallback:
             live_price = _fetch_binance_and_upsert(session, instrument_id, provider_symbol)
             if live_price is not None:
                 price = live_price
-        if price is None:
-            quote = quote_by_id.get(instrument_id)
-            if quote:
-                try:
-                    price = float(quote.last_price)
-                except (TypeError, ValueError):
-                    price = 0.0
-            if price is None and live_fallback_binance_sec is not None and provider == "binance" and provider_symbol:
-                live_price = _fetch_binance_and_upsert(session, instrument_id, provider_symbol)
-                if live_price is not None:
-                    price = live_price
+            elif price is None:
+                price = _price_from_quote(quote_by_id.get(instrument_id))
+
         if price is None:
             continue
 
