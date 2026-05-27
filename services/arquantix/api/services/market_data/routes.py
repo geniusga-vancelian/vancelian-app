@@ -27,6 +27,7 @@ from services.market_data.chart_period_config import CHART_PERIODS
 from services.market_data.chart_history_service import get_chart_history
 from services.market_data.market_summary_repo import get_market_summaries
 from services.market_data.top_movers_repo import get_top_movers
+from config.base_allowed_assets import BASE_MARKET_PROVIDER_SYMBOLS
 from services.market_data.ohlc_holes import compute_ohlc_holes_for_instruments
 from services.market_data.candles_backfill_service import run_backfill
 
@@ -500,12 +501,14 @@ def get_market_summary(
 
 @router.get("/all-crypto")
 def get_all_crypto(db: Session = Depends(get_db)):
-    """List all active crypto instruments with market summary (price, 24h change). Public for mobile."""
+    """List Base-allowed active crypto instruments with market summary (price, 24h change)."""
+    allowed = set(BASE_MARKET_PROVIDER_SYMBOLS)
     instruments = (
         db.query(MarketDataInstrument)
         .filter(
             MarketDataInstrument.asset_class == "crypto",
             MarketDataInstrument.is_active == "true",
+            MarketDataInstrument.provider_symbol.in_(list(allowed)),
         )
         .order_by(MarketDataInstrument.symbol)
         .all()
@@ -553,9 +556,10 @@ def get_top_movers_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="limit must be between 1 and 50",
         )
-    sym_list: Optional[List[str]] = None
     if symbols:
         sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    else:
+        sym_list = list(BASE_MARKET_PROVIDER_SYMBOLS)
     result = get_top_movers(db, limit=limit, provider_symbols=sym_list)
     all_summaries = (result.get("top_gainers") or []) + (result.get("top_losers") or []) + (result.get("top_volume") or [])
     if all_summaries:

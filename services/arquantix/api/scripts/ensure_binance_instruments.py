@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Créer en base les instruments Binance nécessaires pour market-summary, top-movers et WebSocket.
-À lancer une fois (ou après reset DB). Puis lancer l'ingestion des quotes (REST ou WS).
+Limite au périmètre ``config.base_allowed_assets`` (+ EURUSDT pour cotation EURC).
+
+Préférer ``sync_base_allowed_instruments`` pour activer/désactiver le catalogue complet.
 
 Usage (depuis la racine du repo ou depuis api/):
   python -m scripts.ensure_binance_instruments
@@ -16,26 +18,24 @@ if str(api_dir) not in sys.path:
     sys.path.insert(0, str(api_dir))
 
 from services.portfolio_engine.clients.models import Client as _Client  # noqa: F401 — force mapper init
+from config.base_allowed_assets import BASE_ALLOWED_ASSETS
 from database import SessionLocal, MarketDataInstrument
-
-# Paires utilisées par le Flutter (defaultPopularSymbols) + quelques autres pour top-movers
-BINANCE_CRYPTO_SYMBOLS = [
-    ("BTCUSDT", "Bitcoin"),
-    ("ETHUSDT", "Ethereum"),
-    ("SOLUSDT", "Solana"),
-    ("XRPUSDT", "XRP"),
-    ("BNBUSDT", "BNB"),
-    ("ADAUSDT", "Cardano"),
-    ("DOGEUSDT", "Dogecoin"),
-    ("USDCUSDT", "USD Coin"),
-    ("AVAXUSDT", "Avalanche"),
-    ("LINKUSDT", "Chainlink"),
-    ("DOTUSDT", "Polkadot"),
-]
 
 BINANCE_FX_SYMBOLS = [
     ("EURUSDT", "EUR/USDT"),
 ]
+
+
+def _base_crypto_symbols():
+    seen: set[str] = set()
+    out: list[tuple[str, str]] = []
+    for row in BASE_ALLOWED_ASSETS:
+        ps = row["provider_symbol"]
+        if ps in seen:
+            continue
+        seen.add(ps)
+        out.append((ps, row["name"]))
+    return out
 
 
 def _ensure_instruments(db, symbols, asset_class):
@@ -76,18 +76,18 @@ def _ensure_instruments(db, symbols, asset_class):
 def ensure_binance_instruments():
     db = SessionLocal()
     try:
-        c1 = _ensure_instruments(db, BINANCE_CRYPTO_SYMBOLS, "crypto")
+        c1 = _ensure_instruments(db, _base_crypto_symbols(), "crypto")
         c2 = _ensure_instruments(db, BINANCE_FX_SYMBOLS, "forex")
         total = c1 + c2
         if total == 0:
             print("  → All Binance instruments already present.")
         else:
             print(f"  → {total} instrument(s) created.")
+        print("  → Run sync_base_allowed_instruments to deactivate out-of-scope cryptos.")
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    print("Ensuring Binance instruments for market-data / Flutter Markets...")
+    print("Ensuring Binance instruments (Base allowed + EURUSDT)...")
     ensure_binance_instruments()
-    print("Done.")

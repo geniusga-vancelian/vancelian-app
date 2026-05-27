@@ -35,7 +35,11 @@ export async function GET(request: NextRequest) {
       fetchJson(
         buildBackendUrl(`/api/market-data/market-summary?symbols=${encodeURIComponent(symbols)}`),
       ),
-      fetchJson(buildBackendUrl('/api/market-data/top-movers?limit=10')),
+      fetchJson(
+        buildBackendUrl(
+          `/api/market-data/top-movers?limit=10&symbols=${encodeURIComponent(symbols)}`,
+        ),
+      ),
       fetchJson(`${bffOrigin}/api/blog?articleType=NEWS&page=1&pageSize=5&locale=fr`),
       fetchJson(`${bffOrigin}/api/mobile/flutter/portfolio-products/configs`),
       fetchJson(`${bffOrigin}/api/mobile/flutter/widgets/top10research?locale=fr`),

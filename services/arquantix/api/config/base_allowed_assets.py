@@ -36,6 +36,15 @@ BASE_ALLOWED_ASSETS: tuple[BaseAllowedAsset, ...] = (
         "swap_enabled": True,
     },
     {
+        "symbol": "cbETH",
+        "name": "Ethereum",
+        "provider_symbol": "ETHUSDT",
+        "decimals": 18,
+        "kind": "wrapped_eth",
+        "base_token_address": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "swap_enabled": False,
+    },
+    {
         "symbol": "USDC",
         "name": "USD Coin",
         "provider_symbol": "USDCUSDT",
@@ -94,4 +103,8 @@ BASE_ALLOWED_ASSETS: tuple[BaseAllowedAsset, ...] = (
 BASE_ALLOWED_SYMBOLS: frozenset[str] = frozenset(a["symbol"] for a in BASE_ALLOWED_ASSETS)
 BASE_SWAP_SYMBOLS: frozenset[str] = frozenset(
     a["symbol"] for a in BASE_ALLOWED_ASSETS if a["swap_enabled"]
+)
+# Paires Binance uniques pour marchés / top-movers / all-crypto (ordre stable).
+BASE_MARKET_PROVIDER_SYMBOLS: tuple[str, ...] = tuple(
+    dict.fromkeys(a["provider_symbol"] for a in BASE_ALLOWED_ASSETS)
 )

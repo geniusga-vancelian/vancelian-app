@@ -2,8 +2,8 @@
 """
 Seed bridge: market_data_instruments → pe_assets + pe_instruments (spot).
 
-Creates or updates pe_assets and pe_instruments records for the 11 crypto
-instruments already present in market_data_instruments (Binance universe).
+Creates or updates pe_assets and pe_instruments for Base-allowed cryptos
+(``config.base_allowed_assets``) present in market_data_instruments.
 
 Idempotent: safe to run multiple times.  Existing records are matched by
 pe_assets.symbol (e.g. "BTC") and pe_instruments.code (e.g. "BTC-SPOT").
@@ -20,120 +20,66 @@ api_dir = Path(__file__).resolve().parent.parent
 if str(api_dir) not in sys.path:
     sys.path.insert(0, str(api_dir))
 
+from config.base_allowed_assets import BASE_ALLOWED_ASSETS
 from database import SessionLocal, MarketDataInstrument
 from services.portfolio_engine.assets.models import Asset
 from services.portfolio_engine.instruments.models import Instrument
 
 # ────────────────────────────────────────────────────────────────────────────
-# Static mapping: provider_symbol → seed parameters
+# provider_symbol → seed parameters (Base allowed only, one row per pair)
 # ────────────────────────────────────────────────────────────────────────────
 
-CRYPTO_BRIDGE_MAP = {
-    "BTCUSDT": {
-        "asset_symbol": "BTC",
-        "asset_name": "Bitcoin",
-        "asset_type": "crypto",
-        "risk_profile": "moderate",
-        "supports_staking": False,
-        "supports_collateral": True,
-    },
-    "ETHUSDT": {
-        "asset_symbol": "ETH",
-        "asset_name": "Ethereum",
+_KIND_SEED = {
+    "native": {
         "asset_type": "crypto",
         "risk_profile": "moderate",
         "supports_staking": True,
         "supports_collateral": True,
     },
-    "SOLUSDT": {
-        "asset_symbol": "SOL",
-        "asset_name": "Solana",
-        "asset_type": "crypto",
-        "risk_profile": "aggressive",
-        "supports_staking": True,
-        "supports_collateral": True,
-    },
-    "XRPUSDT": {
-        "asset_symbol": "XRP",
-        "asset_name": "XRP",
-        "asset_type": "crypto",
-        "risk_profile": "aggressive",
-        "supports_staking": False,
-        "supports_collateral": False,
-    },
-    "BNBUSDT": {
-        "asset_symbol": "BNB",
-        "asset_name": "BNB",
-        "asset_type": "crypto",
-        "risk_profile": "aggressive",
-        "supports_staking": False,
-        "supports_collateral": True,
-    },
-    "ADAUSDT": {
-        "asset_symbol": "ADA",
-        "asset_name": "Cardano",
-        "asset_type": "crypto",
-        "risk_profile": "aggressive",
-        "supports_staking": True,
-        "supports_collateral": False,
-    },
-    "DOGEUSDT": {
-        "asset_symbol": "DOGE",
-        "asset_name": "Dogecoin",
-        "asset_type": "crypto",
-        "risk_profile": "aggressive",
-        "supports_staking": False,
-        "supports_collateral": False,
-    },
-    "USDCUSDT": {
-        "asset_symbol": "USDC",
-        "asset_name": "USD Coin",
+    "stablecoin": {
         "asset_type": "stablecoin",
         "risk_profile": "conservative",
         "supports_staking": False,
         "supports_collateral": True,
     },
-    "AVAXUSDT": {
-        "asset_symbol": "AVAX",
-        "asset_name": "Avalanche",
+    "wrapped_btc": {
         "asset_type": "crypto",
-        "risk_profile": "aggressive",
+        "risk_profile": "moderate",
         "supports_staking": False,
-        "supports_collateral": False,
+        "supports_collateral": True,
     },
-    "LINKUSDT": {
-        "asset_symbol": "LINK",
-        "asset_name": "Chainlink",
+    "wrapped_eth": {
         "asset_type": "crypto",
-        "risk_profile": "aggressive",
+        "risk_profile": "moderate",
         "supports_staking": False,
-        "supports_collateral": False,
+        "supports_collateral": True,
     },
-    "DOTUSDT": {
-        "asset_symbol": "DOT",
-        "asset_name": "Polkadot",
-        "asset_type": "crypto",
-        "risk_profile": "aggressive",
-        "supports_staking": True,
-        "supports_collateral": False,
-    },
-    "AAVEUSDT": {
-        "asset_symbol": "AAVE",
-        "asset_name": "Aave",
-        "asset_type": "crypto",
-        "risk_profile": "aggressive",
-        "supports_staking": False,
-        "supports_collateral": False,
-    },
-    "UNIUSDT": {
-        "asset_symbol": "UNI",
-        "asset_name": "Uniswap",
+    "token": {
         "asset_type": "crypto",
         "risk_profile": "aggressive",
         "supports_staking": False,
         "supports_collateral": False,
     },
 }
+
+
+def _build_crypto_bridge_entries() -> list[dict]:
+    entries: list[dict] = []
+    for row in BASE_ALLOWED_ASSETS:
+        kind = row.get("kind", "token")
+        seed = _KIND_SEED.get(kind, _KIND_SEED["token"])
+        entries.append(
+            {
+                "asset_symbol": row["symbol"],
+                "asset_name": row["name"],
+                "provider_symbol": row["provider_symbol"],
+                **seed,
+            }
+        )
+    return entries
+
+
+CRYPTO_BRIDGE_ENTRIES = _build_crypto_bridge_entries()
 
 BRIDGE_METADATA_KEYS = frozenset({
     "market_data_instrument_id",
@@ -155,7 +101,7 @@ def seed_pe_crypto_assets() -> None:
     db = SessionLocal()
     try:
         # ── Step 1: load source instruments from market_data_instruments ──
-        provider_symbols = list(CRYPTO_BRIDGE_MAP.keys())
+        provider_symbols = list({e["provider_symbol"] for e in CRYPTO_BRIDGE_ENTRIES})
         source_rows = (
             db.query(MarketDataInstrument)
             .filter(MarketDataInstrument.provider_symbol.in_(provider_symbols))
@@ -183,7 +129,8 @@ def seed_pe_crypto_assets() -> None:
         instruments_updated = 0
         instruments_skipped = 0
 
-        for provider_symbol, cfg in CRYPTO_BRIDGE_MAP.items():
+        for cfg in CRYPTO_BRIDGE_ENTRIES:
+            provider_symbol = cfg["provider_symbol"]
             md_inst = source_by_ps.get(provider_symbol)
             if md_inst is None:
                 continue

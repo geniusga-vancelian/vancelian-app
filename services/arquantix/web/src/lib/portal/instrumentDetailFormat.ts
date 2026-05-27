@@ -15,6 +15,7 @@ const SYMBOL_NAMES: Record<string, string> = {
   BTC: 'Bitcoin',
   CBBTC: 'Bitcoin',
   ETH: 'Ethereum',
+  CBETH: 'Ethereum',
   USDC: 'USD Coin',
   EURC: 'Euro Coin',
   LINK: 'Chainlink',
@@ -32,6 +33,7 @@ export function tickerToProviderSymbol(ticker: string): string {
   if (!t) return 'BTCUSDT'
   if (t === 'EURC') return 'EURUSDT'
   if (t === 'CBBTC') return 'BTCUSDT'
+  if (t === 'CBETH') return 'ETHUSDT'
   if (t === 'USDT') return 'USDTUSDT'
   if (t.endsWith('USDT')) return t
   return `${t}USDT`

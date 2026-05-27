@@ -24,6 +24,7 @@ const SYMBOL_NAMES: Record<string, string> = {
   BTC: 'Bitcoin',
   CBBTC: 'Bitcoin',
   ETH: 'Ethereum',
+  CBETH: 'Ethereum',
   USDC: 'USD Coin',
   EURC: 'Euro Coin',
   LINK: 'Chainlink',

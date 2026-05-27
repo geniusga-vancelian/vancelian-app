@@ -13,6 +13,7 @@ const TICKER_ALIASES: Record<string, string> = {
   LUNA: 'LUNC',
   BSC: 'BNB',
   CBBTC: 'BTC',
+  CBETH: 'ETH',
 }
 
 /** Tickers présents dans `mobile/assets/crypto_svgs/` (export Figma). */
@@ -39,6 +40,7 @@ export const CRYPTO_ASSET_BRAND: Record<string, string> = {
   USDC: '#2775CA',
   EURC: '#2196F3',
   CBBTC: '#FF9230',
+  CBETH: '#627EEA',
   AAVE: '#B6509E',
   UNI: '#FF007A',
   XRP: '#23292F',

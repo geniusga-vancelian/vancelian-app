@@ -1,6 +1,7 @@
 /** Actifs Base autorisés — aligné sur `api/config/base_allowed_assets.py`. */
 export const BASE_ALLOWED_ASSETS = [
   { symbol: 'ETH', name: 'Ethereum' },
+  { symbol: 'cbETH', name: 'Ethereum' },
   { symbol: 'USDC', name: 'USD Coin' },
   { symbol: 'EURC', name: 'Euro Coin' },
   { symbol: 'CBBTC', name: 'Bitcoin' },
@@ -42,5 +43,6 @@ export function isBaseSwapTradeAsset(symbol: string): symbol is BaseSwapTradeAss
 }
 
 export function isBaseAllowedSymbol(symbol: string): boolean {
-  return BASE_ALLOWED_SYMBOLS.includes(symbol.toUpperCase() as BaseAllowedSymbol)
+  const u = symbol.trim().toUpperCase()
+  return BASE_ALLOWED_ASSETS.some((a) => a.symbol.toUpperCase() === u)
 }
