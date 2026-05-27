@@ -28,6 +28,8 @@ export type PortalCryptoPosition = {
   chainId?: number | null
   dedicatedWallet?: boolean
   walletAddress?: string
+  /** Solde ERC-20 on-chain (Base) — min avec ledger pour swap spendable. */
+  onChainBalance?: number
 }
 
 export type PortalCryptoPositionsSummary = {

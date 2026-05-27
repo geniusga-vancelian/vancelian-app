@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { isSwapAmountOverPrivyBalance } from '@/lib/portal/swapAmountValidation'
+import { isSwapAmountOverPrivyBalance, resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
 
 describe('swapAmountValidation', () => {
   it('blocks positive amount when source balance is zero or unknown', () => {
@@ -18,5 +18,12 @@ describe('swapAmountValidation', () => {
   it('ignores invalid or empty amounts', () => {
     assert.equal(isSwapAmountOverPrivyBalance(0, 100), false)
     assert.equal(isSwapAmountOverPrivyBalance(Number.NaN, 100), false)
+  })
+
+  it('resolveSpendableSwapBalance prefers min ledger/on-chain', () => {
+    assert.equal(resolveSpendableSwapBalance({ balance: 1150, onChainBalance: 38 }), 38)
+    assert.equal(resolveSpendableSwapBalance({ balance: 10, onChainBalance: 38 }), 10)
+    assert.equal(resolveSpendableSwapBalance({ balance: 0, onChainBalance: 38 }), 38)
+    assert.equal(resolveSpendableSwapBalance({ balance: 50 }), 50)
   })
 })

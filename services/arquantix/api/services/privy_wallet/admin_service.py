@@ -14,7 +14,7 @@ from services.auth.person_identity_bridge import PROVIDER_PRIVY, get_pe_client_f
 from services.exchange.assets import ASSET_PRECISION
 
 from .asset_mapping import contract_for_asset
-from .enums import PersonWalletDepositStatus, PrivyWebhookEventStatus
+from .enums import PersonWalletDepositStatus, PersonWalletDirection, PrivyWebhookEventStatus
 from .repository import (
     PersonCryptoWalletRepository,
     PersonWalletBalanceRepository,
@@ -330,15 +330,20 @@ class PrivyWalletAdminService:
             asset=deposit.asset,
         )
         current_balance = Decimal(str(balance.balance))
-        if current_balance < amount:
-            raise PrivySimulateDepositError(
-                "Solde ledger insuffisant pour annuler ce dépôt — investigation requise."
-            )
+        direction = str(deposit.direction or PersonWalletDirection.CREDIT.value).lower()
+        if direction == PersonWalletDirection.DEBIT.value:
+            balance_delta = amount
+        else:
+            balance_delta = -amount
+            if current_balance < amount:
+                raise PrivySimulateDepositError(
+                    "Solde ledger insuffisant pour annuler ce dépôt — investigation requise."
+                )
 
         self._balance_repo.increment_balance(
             db,
             balance,
-            delta=-amount,
+            delta=balance_delta,
             sync_source="admin_void_deposit",
         )
 
