@@ -13,6 +13,7 @@ import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import type { LombardExecutionPhase } from '@/lib/portal/lombard/lombardTypes'
 import { VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/lombardConfig'
 import { generateLombardMockTxHash } from '@/lib/portal/lombard/mocks/lombardMockTxHash'
+import { resolvePortalTransactionReceiptStatus } from '@/lib/portal/portalTransactionReceiptStatus'
 import { buildWalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
@@ -111,7 +112,7 @@ export function usePortalLombardExecution() {
         if (!receipt) {
           throw new Error(formatBaseRpcUserMessage('Transaction confirmation timed out.'))
         }
-        if (receipt.status !== 'success') {
+        if (resolvePortalTransactionReceiptStatus(receipt) !== 'success') {
           throw new Error('On-chain transaction reverted.')
         }
 

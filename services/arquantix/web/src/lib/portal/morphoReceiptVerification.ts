@@ -2,6 +2,7 @@ import type { Hash } from 'viem'
 
 import { createBasePublicClient } from '@/lib/blockchain/baseRpcProvider'
 import { MORPHO_CHAIN_ID } from '@/lib/portal/morphoConstants'
+import { resolvePortalTransactionReceiptStatus } from '@/lib/portal/portalTransactionReceiptStatus'
 
 export type VerifiedTxReceipt = {
   txHash: string
@@ -40,7 +41,7 @@ export async function verifyMorphoTransactionReceipt(args: {
     throw new Error('Numéro de bloc absent du receipt.')
   }
 
-  const status = receipt.status === 'success' ? 'success' : 'reverted'
+  const status = resolvePortalTransactionReceiptStatus(receipt)
   return {
     txHash: receipt.transactionHash,
     chainId: expectedChainId,
