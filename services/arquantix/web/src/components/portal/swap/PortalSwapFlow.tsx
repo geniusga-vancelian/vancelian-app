@@ -21,6 +21,7 @@ import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWa
 import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
 import { buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
+import { resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
 import {
   executeSwap,
   fetchSupportedSwapAssets,
@@ -146,7 +147,11 @@ export function PortalSwapFlow() {
       )
       setFromAsset(urlIntent.fromAsset)
       setFromChain(urlIntent.fromChain)
-      setSourceBalance(position?.availableBalance ?? position?.balance ?? 0)
+      setSourceBalance(
+        position
+          ? resolveSpendableSwapBalance(position)
+          : 0,
+      )
       setToAsset('')
       setToChain('')
       setStep('to')
@@ -176,7 +181,9 @@ export function PortalSwapFlow() {
       if (!activeSwapChain) return
       setFromAsset(option.asset)
       setFromChain(activeSwapChain)
-      setSourceBalance(option.balance)
+      setSourceBalance(
+        option.position ? resolveSpendableSwapBalance(option.position) : option.balance,
+      )
       setStep('amount')
     },
     [activeSwapChain],

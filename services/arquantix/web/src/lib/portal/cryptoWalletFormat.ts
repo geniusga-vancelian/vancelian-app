@@ -218,6 +218,7 @@ export function buildPrivyWalletPositionsSummary(
       const asset = String(item.asset ?? '').trim().toUpperCase()
       const balance = toNumber(item.balance)
       const availableBalance = toNumber(item.available_balance, balance)
+      const onChainBalance = toOptionalNumber(item.on_chain_balance)
       const quoteTicker = normalizeCryptoBaseTicker(asset)
       const marketRow = market.get(asset) ?? market.get(quoteTicker)
       let priceEur = marketRow ? toOptionalNumber(marketRow.price_eur ?? marketRow.priceEur) : undefined
@@ -262,6 +263,7 @@ export function buildPrivyWalletPositionsSummary(
         dedicatedWallet: item.dedicated_wallet === true,
         walletAddress:
           typeof item.wallet_address === 'string' ? item.wallet_address : undefined,
+        onChainBalance,
       }
     })
     .filter((p) => p.asset && (p.balance > 0 || p.dedicatedWallet))

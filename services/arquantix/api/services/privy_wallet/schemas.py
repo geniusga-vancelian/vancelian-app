@@ -18,6 +18,8 @@ class PrivyWalletBalancePayload(BaseModel):
     chain_type: Optional[str] = None
     chain_id: Optional[int] = None
     dedicated_wallet: bool = False
+    """Solde ERC-20 / natif lu on-chain (Base) — source de vérité spendable."""
+    on_chain_balance: Optional[str] = None
 
 
 class PrivyWalletBalancesSummary(BaseModel):

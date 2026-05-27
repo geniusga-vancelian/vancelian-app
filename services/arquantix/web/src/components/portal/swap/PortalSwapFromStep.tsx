@@ -11,6 +11,7 @@ import { formatSwapCryptoAmount, resolveSwapSourceChain } from '@/lib/portal/swa
 import type { SwapCatalogAsset } from '@/lib/portal/swapFlowTypes'
 import { SWAP_V1_SAME_CHAIN_ONLY, SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import type { PortalCryptoPosition } from '@/lib/portal/cryptoWalletTypes'
+import { resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
 import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 
 export type SwapFromOption = {
@@ -114,7 +115,7 @@ function buildFromOptions(
     const sym = pos.asset.toUpperCase()
     const meta = catalogBySymbol.get(sym)
     if (!meta) continue
-    const balance = pos.availableBalance ?? pos.balance ?? 0
+    const balance = resolveSpendableSwapBalance(pos)
     if (balance <= 0) continue
     const chain = resolveSwapSourceChain(sym, meta.chains, toChain)
     if (SWAP_V1_SAME_CHAIN_ONLY && chain !== toChain) continue

@@ -115,6 +115,8 @@ class PrivyWalletLedgerService:
                 )
             )
 
+        balances = _attach_on_chain_balances(balances, wallets=wallets)
+
         return PrivyWalletBalancesResponse(
             summary=PrivyWalletBalancesSummary(
                 positions_count=len(balances),
@@ -199,6 +201,54 @@ class PrivyWalletLedgerService:
             created_at=row.created_at,
             confirmed_at=row.confirmed_at,
         )
+
+
+def _attach_on_chain_balances(
+    balances: list[PrivyWalletBalancePayload],
+    *,
+    wallets: list,
+) -> list[PrivyWalletBalancePayload]:
+    """Enrichit les lignes Base avec le solde ERC-20 lu on-chain (spendable réel)."""
+    from .deposit_backfill import fetch_aggregated_on_chain_balances
+    from .evm_chain_config import PRIVY_EVM_PILOT_CHAIN_IDS, resolve_chain_rpc_url
+
+    if not balances or not wallets:
+        return balances
+
+    primary = next((w for w in wallets if (w.provider or "").strip().lower() == "privy"), wallets[0])
+    address = getattr(primary, "address", None)
+    if not address:
+        return balances
+
+    chain_ids = [cid for cid in PRIVY_EVM_PILOT_CHAIN_IDS if resolve_chain_rpc_url(cid)]
+    if not chain_ids:
+        return balances
+
+    assets = sorted({row.asset.upper() for row in balances})
+    try:
+        per_chain = fetch_aggregated_on_chain_balances(
+            wallet_address=address,
+            chain_ids=chain_ids,
+            assets=assets,
+        )
+    except Exception:
+        logger.warning("privy.on_chain_balance.failed", exc_info=True)
+        return balances
+
+    enriched: list[PrivyWalletBalancePayload] = []
+    for row in balances:
+        chain_id = row.chain_id if row.chain_id is not None else (chain_ids[0] if len(chain_ids) == 1 else None)
+        on_chain = None
+        if chain_id is not None:
+            on_chain = per_chain.get((int(chain_id), row.asset.upper()))
+        enriched.append(
+            row.model_copy(
+                update={
+                    "on_chain_balance": _format_decimal(on_chain) if on_chain is not None else None,
+                }
+            )
+        )
+    return enriched
 
 
 def _format_decimal(value: Decimal | object) -> str:
