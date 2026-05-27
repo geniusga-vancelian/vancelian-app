@@ -12,6 +12,7 @@ import { bumpLombardPositionsRevision } from '@/lib/portal/lombard/lombardPositi
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import type { LombardExecutionPhase } from '@/lib/portal/lombard/lombardTypes'
 import { VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/lombardConfig'
+import { LombardExecutionError } from '@/lib/portal/lombard/lombardExecutionError'
 import { generateLombardMockTxHash } from '@/lib/portal/lombard/mocks/lombardMockTxHash'
 import { resolvePortalTransactionReceiptStatus } from '@/lib/portal/portalTransactionReceiptStatus'
 import { buildWalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
@@ -110,10 +111,23 @@ export function usePortalLombardExecution() {
           await sleep(3_000)
         }
         if (!receipt) {
-          throw new Error(formatBaseRpcUserMessage('Transaction confirmation timed out.'))
+          throw new LombardExecutionError({
+            code: 'receipt_timeout',
+            operation: tx.operation,
+            txHash: lastHash,
+            message: formatBaseRpcUserMessage('Transaction confirmation timed out.'),
+          })
         }
         if (resolvePortalTransactionReceiptStatus(receipt) !== 'success') {
-          throw new Error('On-chain transaction reverted.')
+          await confirmPortalLombardTransactions({
+            groupKey: prepared.groupKey,
+            results: [{ ledgerEntryId: ledgerEntry.id, txHash: lastHash }],
+          }).catch(() => null)
+          throw new LombardExecutionError({
+            code: 'reverted',
+            operation: tx.operation,
+            txHash: lastHash,
+          })
         }
 
         confirmResults.push({ ledgerEntryId: ledgerEntry.id, txHash: hash })
@@ -161,3 +175,9 @@ export function lombardExecutionPhaseLabel(phase: LombardExecutionPhase): string
 export function isBaseRpcExecutionError(error: unknown): boolean {
   return isBaseRpcTransientError(error)
 }
+
+export {
+  formatLombardExecutionErrorMessage,
+  LombardExecutionError,
+  resolveLombardExecutionFailure,
+} from '@/lib/portal/lombard/lombardExecutionError'

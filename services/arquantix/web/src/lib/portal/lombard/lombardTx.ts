@@ -1,3 +1,4 @@
+import { DEFAULT_SLIPPAGE_TOLERANCE } from '@morpho-org/blue-sdk'
 import { MorphoClient } from '@morpho-org/morpho-sdk'
 import type { Address } from 'viem'
 
@@ -57,7 +58,7 @@ export async function buildLombardOpenLoanTransactions(args: {
     positionData,
     amount: args.guaranteeAmountRaw,
     borrowAmount: args.borrowAmountRaw,
-    slippageTolerance: BigInt(50),
+    slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
   })
 
   const requirements = await getRequirements()

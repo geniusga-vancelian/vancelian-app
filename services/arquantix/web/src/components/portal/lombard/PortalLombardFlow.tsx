@@ -38,8 +38,10 @@ const PRIVY_SIGNING_SESSION_HINT =
   'Pour signer le dépôt de garantie, activez votre wallet Vancelian (code e-mail) depuis Mon wallet crypto, puis relancez l’emprunt.'
 import {
   lombardExecutionPhaseLabel,
+  resolveLombardExecutionFailure,
   usePortalLombardExecution,
 } from '@/lib/portal/usePortalLombardExecution'
+import type { LombardExecutionFailureView } from '@/lib/portal/lombard/lombardExecutionError'
 import { usePortalLombardQaDebug } from '@/lib/portal/lombard/usePortalLombardQaDebug'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -102,7 +104,7 @@ export function PortalLombardFlow() {
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false)
   const [executing, setExecuting] = useState(false)
   const [executionPhase, setExecutionPhase] = useState<LombardExecutionPhase>('idle')
-  const [executionError, setExecutionError] = useState<string | null>(null)
+  const [executionFailure, setExecutionFailure] = useState<LombardExecutionFailureView | null>(null)
   const [success, setSuccess] = useState(false)
   const [ledgerGroupId, setLedgerGroupId] = useState<string | null>(null)
   const idempotencyKeyRef = useRef<string | null>(null)
@@ -163,6 +165,7 @@ export function PortalLombardFlow() {
         betaCaps={betaCaps}
         executionPhase={executionPhase}
         ledgerGroupId={ledgerGroupId}
+        executionFailure={executionFailure}
         mockMode={lombardMockMode}
       />
     ) : null
@@ -234,7 +237,7 @@ export function PortalLombardFlow() {
   const handleConfirm = useCallback(async () => {
     if (!selectedCollateral || !borrowAmount.trim() || !disclaimerAccepted || !executionAddress) return
     setExecuting(true)
-    setExecutionError(null)
+    setExecutionFailure(null)
     setSuccess(false)
     idempotencyKeyRef.current = createIdempotencyKey()
     setLedgerGroupId(idempotencyKeyRef.current)
@@ -250,7 +253,7 @@ export function PortalLombardFlow() {
       setSuccess(true)
     } catch (error) {
       setExecutionPhase('failed')
-      setExecutionError(error instanceof Error ? error.message : 'Transaction failed.')
+      setExecutionFailure(resolveLombardExecutionFailure(error))
     } finally {
       setExecuting(false)
     }
@@ -475,7 +478,21 @@ export function PortalLombardFlow() {
                 </PortalNavLink>
               </div>
             ) : null}
-            {executionError ? <p className="font-ui text-[14px] text-v-error">{executionError}</p> : null}
+            {executionFailure ? (
+              <div className="rounded-xl border border-v-error/30 bg-v-error/5 p-4">
+                <p className="m-0 font-ui text-[14px] font-medium text-v-error">{executionFailure.headline}</p>
+                {executionFailure.stepLabel ? (
+                  <p className="m-0 mt-2 font-ui text-[13px] text-v-fg">
+                    Step: {executionFailure.stepLabel}
+                  </p>
+                ) : null}
+                {executionFailure.txHash ? (
+                  <p className="m-0 mt-1 break-all font-mono text-[12px] text-v-muted">
+                    Transaction: {executionFailure.txHash}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {qaDebugPanel}
             {success ? (
               <Button type="button" className="w-full" onClick={() => router.push(PORTAL_ROUTES.cryptoWallet)}>
