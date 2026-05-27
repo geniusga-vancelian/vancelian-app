@@ -62,29 +62,47 @@ export async function resolvePortalSwapSigningWallet(args: {
   user: User | null | undefined
   wallets: ConnectedWallet[]
   createWallet: () => Promise<{ address: string }>
+  /** Adresse déjà sélectionnée côté portail (Mon wallet / BFF). */
+  expectedAddress?: string | null
 }): Promise<PortalSwapSigningWallet> {
+  const expected = args.expectedAddress?.trim().toLowerCase() || null
+
   const connected = pickConnectedWallet(args.wallets)
   if (connected?.address) {
-    return toSigningWallet(connected)
+    if (!expected || connected.address.toLowerCase() === expected) {
+      return toSigningWallet(connected)
+    }
+  }
+
+  const linkedAddress = findEmbeddedEvmAddressFromUser(args.user)
+  if (linkedAddress) {
+    if (!expected || linkedAddress.toLowerCase() === expected) {
+      return { address: linkedAddress as `0x${string}` }
+    }
+  }
+
+  if (expected) {
+    try {
+      const backendWallet = findEvmPersonWallet(await fetchPortalPersonCryptoWallets())
+      if (backendWallet?.address?.toLowerCase() === expected) {
+        return { address: backendWallet.address as `0x${string}` }
+      }
+    } catch {
+      /* ignore — on continue avec le flux Privy */
+    }
   }
 
   if (!args.ready) {
     throw new Error('Initialisation Privy en cours. Réessayez dans un instant.')
   }
 
-  const linkedAddress = findEmbeddedEvmAddressFromUser(args.user)
-  if (linkedAddress) {
-    return { address: linkedAddress as `0x${string}` }
-  }
-
-  let hasBackendWallet = false
-  try {
-    hasBackendWallet = Boolean(findEvmPersonWallet(await fetchPortalPersonCryptoWallets()))
-  } catch {
-    /* ignore — on continue avec le flux Privy */
-  }
-
   if (!args.authenticated) {
+    let hasBackendWallet = false
+    try {
+      hasBackendWallet = Boolean(findEvmPersonWallet(await fetchPortalPersonCryptoWallets()))
+    } catch {
+      /* ignore */
+    }
     throw privySessionRequiredError(hasBackendWallet)
   }
 
@@ -108,5 +126,11 @@ export async function resolvePortalSwapSigningWallet(args: {
     }
   }
 
-  throw privySessionRequiredError(hasBackendWallet)
+  throw privySessionRequiredError(
+    Boolean(
+      expected ||
+        findEmbeddedEvmAddressFromUser(args.user) ||
+        pickConnectedWallet(args.wallets),
+    ),
+  )
 }

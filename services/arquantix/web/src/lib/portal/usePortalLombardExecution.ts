@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
+import { usePrivy } from '@privy-io/react-auth'
 
 import { createBasePublicClient } from '@/lib/blockchain/baseRpcProvider'
 import { formatBaseRpcUserMessage, isBaseRpcTransientError } from '@/lib/blockchain/baseRpcErrors'
@@ -13,6 +14,8 @@ import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import type { LombardExecutionPhase } from '@/lib/portal/lombard/lombardTypes'
 import { VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/lombardConfig'
 import { generateLombardMockTxHash } from '@/lib/portal/lombard/mocks/lombardMockTxHash'
+import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
+import { buildWalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
 const RECEIPT_TIMEOUT_MS = 180_000
@@ -28,6 +31,9 @@ function mapTxPhase(operation: string): LombardExecutionPhase {
 }
 
 export function usePortalLombardExecution() {
+  const { ready } = usePrivy()
+  const readyRef = useRef(ready)
+  readyRef.current = ready
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
 
   const executeOpenLoan = useCallback(
@@ -41,14 +47,24 @@ export function usePortalLombardExecution() {
     }) => {
       args.onPhaseChange?.('preparing')
 
+      await waitForPrivyClientReady(() => readyRef.current)
+
+      const wallet = await resolveWallet(null, { expectedAddress: args.walletAddress })
+      if (wallet.address.toLowerCase() !== args.walletAddress.toLowerCase()) {
+        throw new Error('Active wallet does not match the selected execution wallet.')
+      }
+
+      const walletMetadata = buildWalletSourceMetadata(wallet)
+
       const prepared = await preparePortalLombardOpenLoan({
         collateral: args.collateral,
         borrowAmount: args.borrowAmount,
-        walletAddress: args.walletAddress,
+        walletAddress: wallet.address,
         targetLtvPercent: args.targetLtvPercent,
         idempotencyKey: args.idempotencyKey,
-        walletSource: { wallet_source: 'privy_embedded' },
-        privyWalletId: null,
+        walletSource: walletMetadata,
+        externalWalletId: wallet.type === 'external_evm' ? wallet.externalWalletId : null,
+        privyWalletId: wallet.type === 'privy_embedded' ? wallet.privyWalletId ?? null : null,
       })
 
       if (prepared.mockExecution) {
@@ -65,11 +81,6 @@ export function usePortalLombardExecution() {
         invalidatePortalCache()
         args.onPhaseChange?.('confirmed')
         return prepared.groupKey
-      }
-
-      const wallet = await resolveWallet()
-      if (wallet.address.toLowerCase() !== args.walletAddress.toLowerCase()) {
-        throw new Error('Active wallet does not match the selected execution wallet.')
       }
 
       const client = createBasePublicClient({ side: 'client' })

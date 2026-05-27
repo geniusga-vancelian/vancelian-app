@@ -69,7 +69,10 @@ export function usePortalTxSigner() {
   const { mode, resolveExecutionWallet } = useExecutionWallet()
 
   const resolveWallet = useCallback(
-    async (override?: ExecutionWallet | null): Promise<ExecutionWallet> => {
+    async (
+      override?: ExecutionWallet | null,
+      options?: { expectedAddress?: string | null },
+    ): Promise<ExecutionWallet> => {
       if (override) return override
       if (mode === 'external_evm') {
         const external = await resolveExecutionWallet()
@@ -84,6 +87,7 @@ export function usePortalTxSigner() {
         authenticated,
         user,
         wallets,
+        expectedAddress: options?.expectedAddress,
         createWallet: async () => {
           const created = await createWallet()
           return { address: created.address }
