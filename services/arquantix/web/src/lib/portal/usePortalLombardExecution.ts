@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
-import { usePrivy } from '@privy-io/react-auth'
+import { useCallback } from 'react'
 
 import { createBasePublicClient } from '@/lib/blockchain/baseRpcProvider'
 import { formatBaseRpcUserMessage, isBaseRpcTransientError } from '@/lib/blockchain/baseRpcErrors'
@@ -14,7 +13,6 @@ import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import type { LombardExecutionPhase } from '@/lib/portal/lombard/lombardTypes'
 import { VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/lombardConfig'
 import { generateLombardMockTxHash } from '@/lib/portal/lombard/mocks/lombardMockTxHash'
-import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 import { buildWalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
@@ -31,9 +29,6 @@ function mapTxPhase(operation: string): LombardExecutionPhase {
 }
 
 export function usePortalLombardExecution() {
-  const { ready } = usePrivy()
-  const readyRef = useRef(ready)
-  readyRef.current = ready
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
 
   const executeOpenLoan = useCallback(
@@ -46,8 +41,6 @@ export function usePortalLombardExecution() {
       onPhaseChange?: (phase: LombardExecutionPhase) => void
     }) => {
       args.onPhaseChange?.('preparing')
-
-      await waitForPrivyClientReady(() => readyRef.current)
 
       const wallet = await resolveWallet(null, { expectedAddress: args.walletAddress })
       if (wallet.address.toLowerCase() !== args.walletAddress.toLowerCase()) {

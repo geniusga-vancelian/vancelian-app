@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { usePrivy } from '@privy-io/react-auth'
 
+import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalLombardLtvSlider } from '@/components/portal/lombard/PortalLombardLtvSlider'
 import { PortalLombardQaDebugPanel } from '@/components/portal/lombard/PortalLombardQaDebugPanel'
 import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
@@ -30,6 +33,9 @@ import type {
 } from '@/lib/portal/lombard/lombardTypes'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+
+const PRIVY_SIGNING_SESSION_HINT =
+  'Pour signer le dépôt de garantie, activez votre wallet Vancelian (code e-mail) depuis Mon wallet crypto, puis relancez l’emprunt.'
 import {
   lombardExecutionPhaseLabel,
   usePortalLombardExecution,
@@ -66,7 +72,10 @@ export function PortalLombardFlow() {
     () => parsePortalBorrowUrlIntent(searchParams),
     [searchParams],
   )
-  const { chain, deFiEnabled, executionAddress, walletReady, walletScope } = usePortalExecutionScope()
+  const { chain, deFiEnabled, executionAddress, isExternalWallet, walletReady, walletScope } =
+    usePortalExecutionScope()
+  const { ready: privySdkReady, authenticated: privyAuthenticated } = usePrivy()
+  const { privyReady: privyProviderReady } = usePortalAuthPrivy()
   const { executeOpenLoan } = usePortalLombardExecution()
   const { visible: qaDebugVisible, betaCaps, maxUserLtvPercent } = usePortalLombardQaDebug(executionAddress)
 
@@ -137,6 +146,12 @@ export function PortalLombardFlow() {
     () => markets.find((m) => m.collateral === selectedCollateral) ?? null,
     [markets, selectedCollateral],
   )
+
+  const requiresPrivySigning = !lombardMockMode && !isExternalWallet
+  const privySigningReady =
+    !requiresPrivySigning || (privyProviderReady && privySdkReady && privyAuthenticated)
+  const privySigningHint =
+    requiresPrivySigning && !privySigningReady ? PRIVY_SIGNING_SESSION_HINT : null
 
   const qaDebugPanel =
     qaDebugVisible && (step === 'amount' || step === 'summary') ? (
@@ -449,6 +464,17 @@ export function PortalLombardFlow() {
                 ) : null}
               </div>
             ) : null}
+            {privySigningHint ? (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-ui text-[13px] text-amber-950">
+                <p className="m-0">{privySigningHint}</p>
+                <PortalNavLink
+                  href={PORTAL_ROUTES.walletCreate}
+                  className="mt-2 inline-block font-medium text-amber-950 underline"
+                >
+                  Activer mon wallet crypto
+                </PortalNavLink>
+              </div>
+            ) : null}
             {executionError ? <p className="font-ui text-[14px] text-v-error">{executionError}</p> : null}
             {qaDebugPanel}
             {success ? (
@@ -463,7 +489,7 @@ export function PortalLombardFlow() {
                 <Button
                   type="button"
                   className="flex-1"
-                  disabled={!disclaimerAccepted || executing}
+                  disabled={!disclaimerAccepted || executing || !privySigningReady}
                   onClick={() => void handleConfirm()}
                 >
                   {executing ? 'Processing…' : 'Confirm and receive USDC'}
