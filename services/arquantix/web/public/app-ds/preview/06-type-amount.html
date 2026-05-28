@@ -3,14 +3,25 @@
 <link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
 <style>
   body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg);
-         display: flex; flex-direction: column; gap: 24px; align-items: center; justify-content: center; }
-  .num { font-family: var(--v-font-ui); font-weight: 600; font-size: 48px;
-         color: var(--v-fg); font-feature-settings: "tnum" on, "lnum" on;
-         letter-spacing: -0.02em; line-height: 1; }
-  .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--v-fg-muted); }
+         display: flex; flex-direction: column; gap: 28px; align-items: center; justify-content: center; min-height: 100vh; }
+  .stack { display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%; max-width: 480px; }
+  .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--v-fg-muted); margin: 0; }
 </style></head>
 <body>
-  <div class="lbl">Amount · Inter SemiBold · tabular</div>
-  <div class="num">48 920,00&nbsp;€</div>
-  <div class="lbl">font-feature-settings: "tnum" on, "lnum" on</div>
+  <div class="stack">
+    <p class="lbl">.v-amount-hero · Newsreader Display · exception bilan</p>
+    <span class="v-amount-hero">48 920,00 €</span>
+  </div>
+  <div class="stack">
+    <p class="lbl">.v-amount-lg · Inter 600 · 28px</p>
+    <span class="v-amount-lg">12 450,00 €</span>
+  </div>
+  <div class="stack">
+    <p class="lbl">.v-amount-md · Inter 600 · 17px</p>
+    <span class="v-amount-md">3 280,50 €</span>
+  </div>
+  <div class="stack">
+    <p class="lbl">.v-amount-sm · Inter 600 · 14px</p>
+    <span class="v-amount-sm">+ 42,18 €</span>
+  </div>
 </body></html>
