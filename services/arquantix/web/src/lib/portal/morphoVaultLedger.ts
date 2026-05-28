@@ -20,6 +20,7 @@ import { isLombardMockEnabled } from '@/lib/portal/lombard/lombardMockConfig'
 import { lombardMockUpdateLedgerSuccess } from '@/lib/portal/lombard/mocks/lombardLocalMock'
 import { verifyMorphoTransactionReceipt } from '@/lib/portal/morphoReceiptVerification'
 import { emitMorphoLedgerTerminalSupportLog } from '@/lib/portal/morphoBetaSupportEmit'
+import { syncMorphoIntentAfterReceipt, syncMorphoIntentPending } from '@/lib/portal/morphoIntentSync'
 
 const ACTIVE_PENDING_STATUSES: OnchainVaultTransactionStatus[] = ['pending']
 
@@ -178,6 +179,22 @@ export async function createMorphoLedgerEntries(
         },
       })
       created.push(row)
+      if (
+        entry.integrationMode === 'direct_morpho' &&
+        (entry.operation === 'deposit' || entry.operation === 'withdraw')
+      ) {
+        void syncMorphoIntentPending({
+          personId: entry.personId,
+          vaultTransactionId: row.id,
+          vaultAddress: entry.vaultAddress,
+          chainId: entry.chainId,
+          walletAddress: entry.walletAddress,
+          operation: entry.operation,
+          idempotencyKey: entry.idempotencyKey,
+          txIndex: entry.txIndex,
+          vaultStatus: 'pending',
+        })
+      }
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         const existing = await prisma.onchainVaultTransaction.findFirst({
@@ -252,6 +269,17 @@ export async function updateLedgerAfterReceipt(args: {
         errorMessage: message,
       },
     }).then((updated) => {
+      if (
+        updated.integrationMode === 'direct_morpho' &&
+        (updated.operation === 'deposit' || updated.operation === 'withdraw')
+      ) {
+        void syncMorphoIntentAfterReceipt({
+          personId: updated.personId,
+          vaultTransactionId: updated.id,
+          txHash: updated.txHash,
+          vaultStatus: updated.status,
+        })
+      }
       emitMorphoLedgerTerminalSupportLog(updated)
       return updated
     })
@@ -278,6 +306,18 @@ export async function updateLedgerAfterReceipt(args: {
       walletAddress: updated.walletAddress,
       assetSymbol: updated.assetSymbol,
       assetDecimals: updated.assetDecimals,
+    })
+  }
+
+  if (
+    updated.integrationMode === 'direct_morpho' &&
+    (updated.operation === 'deposit' || updated.operation === 'withdraw')
+  ) {
+    void syncMorphoIntentAfterReceipt({
+      personId: updated.personId,
+      vaultTransactionId: updated.id,
+      txHash: updated.txHash,
+      vaultStatus: updated.status,
     })
   }
 

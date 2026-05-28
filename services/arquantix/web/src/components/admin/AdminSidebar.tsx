@@ -84,6 +84,16 @@ const navItems: NavItem[] = [
   { label: 'Crypto market', href: '/admin/crypto-market', icon: Coins },
   { label: 'Bundles', href: '/admin/bundles', icon: Package },
   { label: 'Clients', href: '/admin/customers', icon: UserCircle2 },
+  {
+    label: 'Réconciliation on-chain',
+    href: '/admin/onchain-reconciliation',
+    icon: Activity,
+  },
+  {
+    label: 'Transaction intents',
+    href: '/admin/onchain-reconciliation/intents',
+    icon: Activity,
+  },
   { label: 'Custody', href: '/admin/custody', icon: Landmark },
   { label: 'Lending — EO pools', href: '/admin/exclusive-offers', icon: Coins },
   { label: 'Exchange Test', href: '/admin/exchange-test', icon: ArrowRightLeft },

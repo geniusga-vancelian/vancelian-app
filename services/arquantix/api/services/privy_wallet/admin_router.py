@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from services.portfolio_engine.hardening.security.dependencies import require_admin_or_ops
+from services.security.security_env import is_production_env
 
 from services.privy_wallet.privy_api_client import PrivyApiError
 from .admin_service import (
@@ -50,6 +51,11 @@ def simulate_privy_deposit(
     _actor=Depends(_guard),
 ):
     """Simule un webhook ``wallet.funds_deposited`` pour créditer le ledger Privy d'un client."""
+    if is_production_env():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Les dépôts simulés sont interdits en production.",
+        )
     try:
         result = _svc.simulate_deposit(db, payload)
         db.commit()

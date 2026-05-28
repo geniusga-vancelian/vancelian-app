@@ -16,7 +16,16 @@ from services.lifi.lifi_approval_service import (
     resolve_lifi_status_bridge,
 )
 from services.lifi.lifi_client import LifiClient, LifiClientError
-from services.lifi.lifi_swap_settlement import apply_swap_settlement, swap_settlement_already_applied
+from services.lifi.lifi_actual_receive import (
+    is_lifi_done_complete_substatus,
+    is_lifi_partial_substatus,
+    resolve_lifi_actual_receive_amount,
+)
+from services.lifi.lifi_swap_settlement import (
+    SwapSettlementBlocked,
+    apply_swap_settlement,
+    swap_settlement_already_applied,
+)
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.schemas import SwapExecuteResponse, SwapStatusResponse, SwapTransactionPayload
 from services.lifi.signing_wallet_service import read_signing_wallet_from_audit
@@ -57,6 +66,9 @@ class LifiExecuteService:
         swap.status = SwapSessionStatus.AWAITING_SIGNATURE.value
         swap.expires_at = datetime.now(timezone.utc) + timedelta(seconds=EXECUTE_GRACE_SECONDS)
         self._swap_repo.append_audit(swap, {"event": "awaiting_signature"})
+        from services.transaction_intents.lifi_intent_sync import on_swap_awaiting_signature
+
+        on_swap_awaiting_signature(db, swap)
         db.commit()
         db.refresh(swap)
 
@@ -91,11 +103,33 @@ class LifiExecuteService:
             swap.status = SwapSessionStatus.CONFIRMED.value
             swap.tx_hash = clean_hash or f"0xmock{swap.id.hex[:16]}"
             swap.confirmed_at = datetime.now(timezone.utc)
-            apply_swap_settlement(db, swap, sync_source="lifi_mock_swap")
-            self._swap_repo.append_audit(
-                swap,
-                {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_mock_swap"},
-            )
+            try:
+                apply_swap_settlement(
+                    db,
+                    swap,
+                    sync_source="lifi_mock_swap",
+                    allow_mock_quote_amount=True,
+                )
+                self._swap_repo.append_audit(
+                    swap,
+                    {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_mock_swap"},
+                )
+            except SwapSettlementBlocked as exc:
+                self._swap_repo.append_audit(
+                    swap,
+                    {
+                        "event": "settlement_blocked",
+                        "reason": exc.code,
+                        "message": str(exc),
+                    },
+                )
+                from services.transaction_intents.lifi_intent_sync import on_swap_settlement_blocked
+
+                on_swap_settlement_blocked(db, swap, reason=exc.code)
+            else:
+                from services.transaction_intents.lifi_intent_sync import on_swap_confirmed
+
+                on_swap_confirmed(db, swap)
             db.commit()
             db.refresh(swap)
             logger.info(
@@ -107,6 +141,9 @@ class LifiExecuteService:
         swap.status = SwapSessionStatus.SUBMITTED.value
         swap.tx_hash = clean_hash
         self._swap_repo.append_audit(swap, {"event": "submitted", "tx_hash": clean_hash})
+        from services.transaction_intents.lifi_intent_sync import on_swap_submitted
+
+        on_swap_submitted(db, swap, tx_hash=clean_hash)
         db.commit()
         db.refresh(swap)
 
@@ -179,30 +216,110 @@ class LifiExecuteService:
             },
         )
 
+        from services.transaction_intents.lifi_intent_sync import (
+            on_swap_confirmed,
+            on_swap_failed,
+            on_swap_lifi_poll,
+            on_swap_settlement_blocked,
+        )
+
         if lifi_status in {"", "NOT_FOUND", "PENDING", "INVALID"}:
+            on_swap_lifi_poll(db, swap, lifi_status=lifi_status, substatus=substatus)
             db.commit()
             return
 
-        if lifi_status == "DONE":
-            if substatus in {"COMPLETED", "PARTIAL", ""}:
-                swap.status = SwapSessionStatus.CONFIRMED.value
-                swap.confirmed_at = datetime.now(timezone.utc)
-            elif substatus == "REFUNDED":
-                swap.status = SwapSessionStatus.FAILED.value
-                swap.error_message = substatus_message or "Swap remboursé sur la chaîne source"
-            else:
-                swap.status = SwapSessionStatus.CONFIRMED.value
-                swap.confirmed_at = datetime.now(timezone.utc)
+        on_swap_lifi_poll(db, swap, lifi_status=lifi_status, substatus=substatus)
 
-            if swap.status == SwapSessionStatus.CONFIRMED.value and not swap_settlement_already_applied(swap):
-                apply_swap_settlement(db, swap, sync_source="lifi_swap")
+        if lifi_status == "DONE":
+            if is_lifi_partial_substatus(substatus):
                 self._swap_repo.append_audit(
                     swap,
-                    {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_swap"},
+                    {
+                        "event": "partial_confirmed",
+                        "lifi_status": lifi_status,
+                        "substatus": substatus,
+                        "substatus_message": substatus_message,
+                    },
                 )
+                db.commit()
+                return
+
+            if substatus == "REFUNDED":
+                swap.status = SwapSessionStatus.FAILED.value
+                swap.error_message = substatus_message or "Swap remboursé sur la chaîne source"
+                on_swap_failed(db, swap)
+                db.commit()
+                return
+
+            if not is_lifi_done_complete_substatus(substatus):
+                self._swap_repo.append_audit(
+                    swap,
+                    {
+                        "event": "settlement_blocked",
+                        "reason": "unknown_lifi_substatus",
+                        "substatus": substatus,
+                    },
+                )
+                on_swap_settlement_blocked(db, swap, reason="unknown_lifi_substatus")
+                db.commit()
+                return
+
+            actual = resolve_lifi_actual_receive_amount(db, swap, lifi_status_payload=payload)
+            if actual is None:
+                swap.status = SwapSessionStatus.CONFIRMED.value
+                swap.confirmed_at = datetime.now(timezone.utc)
+                self._swap_repo.append_audit(
+                    swap,
+                    {
+                        "event": "settlement_blocked",
+                        "reason": "actual_amount_missing",
+                        "lifi_status": lifi_status,
+                        "substatus": substatus,
+                    },
+                )
+                on_swap_settlement_blocked(db, swap, reason="actual_amount_missing")
+                db.commit()
+                return
+
+            swap.status = SwapSessionStatus.CONFIRMED.value
+            swap.confirmed_at = datetime.now(timezone.utc)
+
+            if not swap_settlement_already_applied(swap):
+                try:
+                    apply_swap_settlement(
+                        db,
+                        swap,
+                        sync_source="lifi_swap",
+                        actual_receive=actual,
+                        lifi_status_payload=payload,
+                    )
+                    self._swap_repo.append_audit(
+                        swap,
+                        {
+                            "event": "swap_settled",
+                            "tx_hash": swap.tx_hash,
+                            "source": "lifi_swap",
+                            "actual_receive_amount": str(actual.amount),
+                            "actual_receive_source": actual.source,
+                        },
+                    )
+                    on_swap_confirmed(db, swap)
+                except SwapSettlementBlocked as exc:
+                    self._swap_repo.append_audit(
+                        swap,
+                        {
+                            "event": "settlement_blocked",
+                            "reason": exc.code,
+                            "message": str(exc),
+                        },
+                    )
+                    on_swap_settlement_blocked(db, swap, reason=exc.code)
+            else:
+                on_swap_confirmed(db, swap)
         elif lifi_status == "FAILED":
             swap.status = SwapSessionStatus.FAILED.value
             swap.error_message = substatus_message or f"Swap LI.FI échoué ({substatus or 'FAILED'})"
+            on_swap_failed(db, swap)
 
         db.commit()
 

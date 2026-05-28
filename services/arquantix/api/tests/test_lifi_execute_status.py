@@ -37,17 +37,28 @@ def submitted_swap():
 
 
 def test_refresh_lifi_status_confirmed(submitted_swap):
+    from services.lifi.lifi_actual_receive import LifiActualReceiveResult
+
     mock_client = MagicMock(spec=LifiClient)
     mock_client.get_status.return_value = {
         "status": "DONE",
         "substatus": "COMPLETED",
         "substatusMessage": "The transfer is complete.",
+        "receiving": {
+            "amount": "500000000000000000",
+            "token": {"symbol": "ETH", "decimals": 18},
+        },
     }
     svc = LifiExecuteService(lifi_client=mock_client)
     db = MagicMock()
+    actual = LifiActualReceiveResult(amount=Decimal("0.5"), source="lifi_status_receiving")
 
-    with patch("services.lifi.lifi_execute_service.apply_swap_settlement") as mock_settle:
-        svc.refresh_lifi_status(db, submitted_swap)
+    with patch(
+        "services.lifi.lifi_execute_service.resolve_lifi_actual_receive_amount",
+        return_value=actual,
+    ):
+        with patch("services.lifi.lifi_execute_service.apply_swap_settlement") as mock_settle:
+            svc.refresh_lifi_status(db, submitted_swap)
 
     assert submitted_swap.status == SwapSessionStatus.CONFIRMED.value
     assert submitted_swap.confirmed_at is not None

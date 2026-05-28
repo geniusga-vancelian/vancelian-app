@@ -83,6 +83,9 @@ class LifiQuoteService:
             slippage_bps=slippage,
             expires_at=expires_at,
         )
+        from services.transaction_intents.lifi_intent_sync import on_swap_created
+
+        on_swap_created(db, swap_row)
         self._swap_repo.append_audit(
             swap_row,
             {
@@ -139,6 +142,9 @@ class LifiQuoteService:
         swap_row.estimated_receive_min = simplified["estimated_receive_min"]
         swap_row.route_steps = [step.model_dump() for step in simplified["route_steps"]]
         self._swap_repo.append_audit(swap_row, {"event": "quote_received", "tool": swap_row.lifi_tool})
+        from services.transaction_intents.lifi_intent_sync import sync_lifi_swap_intent
+
+        sync_lifi_swap_intent(db, swap_row)
         db.commit()
         db.refresh(swap_row)
 

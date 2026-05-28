@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { LOMBARD_INTEGRATION_MODE } from '@/lib/portal/lombard/lombardConfig'
+import { syncLombardIntentAfterPrepare } from '@/lib/portal/lombard/lombardIntentSync'
 import type { LombardPreparedTx, LombardQuoteResult } from '@/lib/portal/lombard/lombardTypes'
 import { normalizeVaultAddress } from '@/lib/portal/morphoConstants'
 import {
@@ -41,6 +42,18 @@ export async function createLombardLedgerEntries(args: {
   }
 
   if (existing.length > 0) {
+    void syncLombardIntentAfterPrepare({
+      personId: args.personId,
+      groupKey,
+      marketId: args.marketId,
+      walletAddress: args.walletAddress,
+      chainId: args.transactions[0]?.chainId ?? 8453,
+      steps: args.transactions.map((tx, index) => ({
+        step: tx.operation,
+        txIndex: existing[index]?.txIndex ?? index,
+        ledgerEntryId: existing[index]?.id ?? '',
+      })).filter((s) => s.ledgerEntryId),
+    })
     return existing
   }
 
@@ -48,7 +61,7 @@ export async function createLombardLedgerEntries(args: {
     (tx) => tx.operation === 'approve' || tx.operation === 'authorize',
   ).length
 
-  return createMorphoLedgerEntries(
+  const ledgerRows = await createMorphoLedgerEntries(
     args.transactions.map((tx, index) => {
       const operation = mapLombardTxToLedgerOperation(tx.operation)
       const txIndex = operation === 'approve' ? index : index - approveCount
@@ -80,6 +93,21 @@ export async function createLombardLedgerEntries(args: {
       }
     }),
   )
+
+  void syncLombardIntentAfterPrepare({
+    personId: args.personId,
+    groupKey,
+    marketId: args.marketId,
+    walletAddress: args.walletAddress,
+    chainId: args.transactions[0]?.chainId ?? 8453,
+    steps: args.transactions.map((tx, index) => ({
+      step: tx.operation,
+      txIndex: ledgerRows[index]?.txIndex ?? index,
+      ledgerEntryId: ledgerRows[index]?.id ?? '',
+    })).filter((s) => s.ledgerEntryId),
+  })
+
+  return ledgerRows
 }
 
 export async function findLombardLedgerGroup(args: {

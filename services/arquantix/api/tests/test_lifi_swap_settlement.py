@@ -82,7 +82,12 @@ def test_apply_swap_settlement_credits_eth_on_base_chain(db: Session):
     db.add(swap)
     db.flush()
 
-    apply_swap_settlement(db, swap, sync_source="lifi_swap")
+    apply_swap_settlement(
+        db,
+        swap,
+        sync_source="lifi_swap",
+        amount_actual=Decimal("0.00475"),
+    )
     db.commit()
 
     svc = PrivyWalletLedgerService()
@@ -114,7 +119,7 @@ def test_swap_settlement_is_idempotent(db: Session):
     db.add(swap)
     db.flush()
 
-    apply_swap_settlement(db, swap, sync_source="lifi_swap")
+    apply_swap_settlement(db, swap, sync_source="lifi_swap", amount_actual=Decimal("0.00475"))
     swap.audit_log = [{"event": "swap_settled"}]
     db.commit()
 

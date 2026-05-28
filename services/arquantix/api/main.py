@@ -108,7 +108,9 @@ from services.custody import custody_admin_router, custody_transfer_router, cust
 from services.privy_wallet.webhook_router import privy_webhook_router
 from services.privy_wallet.routes import privy_wallet_app_router
 from services.privy_wallet.admin_router import privy_wallet_admin_router
-from services.defi_observability.admin_router import defi_observability_admin_router
+from services.onchain_reconciliation.admin_router import onchain_reconciliation_admin_router
+from services.transaction_intents.lombard_intent_router import lombard_intent_internal_router
+from services.transaction_intents.morpho_intent_router import morpho_intent_internal_router
 from services.exchange import exchange_admin_router, exchange_router
 from services.price_alerts import price_alerts_router, orders_router
 from services.favorites.router import router as favorites_router
@@ -166,6 +168,10 @@ def create_app(testing: bool = False) -> FastAPI:
     from services.auth.auth_bootstrap import enforce_auth_infrastructure_bootstrap
 
     enforce_auth_infrastructure_bootstrap(testing=testing)
+
+    from services.security.production_mock_guard import enforce_production_mock_guard
+
+    enforce_production_mock_guard(testing=testing)
 
     from database import engine as _db_engine
     from services.auth.db_sql_metrics import install_db_sql_metrics_listener
@@ -236,7 +242,9 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(privy_webhook_router)
     app.include_router(privy_wallet_app_router)
     app.include_router(privy_wallet_admin_router)
-    app.include_router(defi_observability_admin_router)
+    app.include_router(onchain_reconciliation_admin_router)
+    app.include_router(morpho_intent_internal_router)
+    app.include_router(lombard_intent_internal_router)
     app.include_router(exchange_router)
     app.include_router(exchange_admin_router)
     app.include_router(price_alerts_router)

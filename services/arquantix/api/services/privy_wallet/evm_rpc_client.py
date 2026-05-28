@@ -62,6 +62,23 @@ def atomic_to_decimal(amount_atomic: int, asset: str) -> Decimal:
     return Decimal(amount_atomic) / (Decimal(10) ** precision)
 
 
+def fetch_block_number(rpc_url: str) -> int:
+    result = json_rpc_call(rpc_url, "eth_blockNumber", [])
+    return hex_to_int(result)
+
+
+def fetch_block_by_number(rpc_url: str, block_number: int, *, full_txs: bool = True) -> dict[str, Any]:
+    result = json_rpc_call(
+        rpc_url,
+        "eth_getBlockByNumber",
+        [hex(block_number), full_txs],
+        timeout=30.0,
+    )
+    if not isinstance(result, dict):
+        raise EvmRpcError("Block introuvable", code="evm.rpc.block_missing")
+    return result
+
+
 def fetch_native_balance_wei(rpc_url: str, wallet_address: str) -> int:
     result = json_rpc_call(rpc_url, "eth_getBalance", [wallet_address, "latest"])
     return hex_to_int(result)

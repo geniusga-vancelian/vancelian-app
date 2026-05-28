@@ -9,6 +9,7 @@ import {
 import { reconcileLombardOpenLoanGroup } from '@/lib/portal/lombard/lombardReconciliation'
 import { logLombardOpsEvent } from '@/lib/portal/lombard/lombardOpsLog'
 import { creditLombardMockBorrowToPrivyLedger } from '@/lib/portal/lombard/lombardMockPrivyLedgerCredit'
+import { syncLombardIntentAfterConfirm } from '@/lib/portal/lombard/lombardIntentSync'
 import { updateLedgerAfterReceipt } from '@/lib/portal/morphoVaultLedger'
 import { idempotencyKeySchema } from '@/lib/portal/lombard/lombardValidation'
 import {
@@ -76,12 +77,14 @@ export async function POST(request: NextRequest) {
     }
 
     const updates = []
+    let marketId = ''
     for (const result of parsed.results) {
       const updated = await updateLedgerAfterReceipt({
         ledgerEntryId: result.ledgerEntryId,
         personId,
         txHash: result.txHash,
       })
+      if (!marketId) marketId = updated.vaultAddress
       updates.push({
         ledgerEntryId: updated.id,
         txHash: updated.txHash,
@@ -141,6 +144,17 @@ export async function POST(request: NextRequest) {
         },
       })
     }
+
+    void syncLombardIntentAfterConfirm({
+      personId,
+      groupKey: parsed.groupKey,
+      marketId,
+      results: updates.map((row) => ({
+        ledgerEntryId: row.ledgerEntryId,
+        txHash: row.txHash,
+        ledgerStatus: row.status,
+      })),
+    })
 
     return NextResponse.json({
       results: updates,

@@ -1,14 +1,20 @@
-"""Règlement ledger Privy après swap LI.FI confirmé (mock ou réel)."""
+"""Règlement ledger Privy après swap LI.FI confirmé (montant réel uniquement)."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from config.supported_swap_assets import SUPPORTED_SWAP_CHAINS, normalize_chain_key
 from database import PersonCryptoWallet
+from services.lifi.lifi_actual_receive import (
+    LifiActualReceiveResult,
+    resolve_lifi_actual_receive_amount,
+)
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.signing_wallet_service import read_signing_wallet_from_audit
 from services.privy_wallet.asset_mapping import normalize_evm_address
@@ -19,6 +25,8 @@ from services.privy_wallet.repository import (
     PersonWalletDepositRepository,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _format_decimal(value: Decimal | object) -> str:
     d = Decimal(str(value))
@@ -26,6 +34,14 @@ def _format_decimal(value: Decimal | object) -> str:
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return text or "0"
+
+
+class SwapSettlementBlocked(Exception):
+    """Settlement refusé — swap laissé pour réconciliation manuelle."""
+
+    def __init__(self, code: str, message: str):
+        self.code = code
+        super().__init__(message)
 
 
 def swap_settlement_already_applied(swap) -> bool:
@@ -75,6 +91,7 @@ def _create_swap_ledger_entry(
     log_index: int,
     idempotency_key: str,
     sync_source: str,
+    settlement_meta: dict[str, Any] | None = None,
 ) -> None:
     deposit_repo = PersonWalletDepositRepository()
     balance_repo = PersonWalletBalanceRepository()
@@ -123,7 +140,10 @@ def _create_swap_ledger_entry(
                 "from_asset": str(swap.from_asset).upper(),
                 "to_asset": str(swap.to_asset).upper(),
                 "swap_amount_from": _format_decimal(swap.amount_in),
-                "swap_amount_to": _format_decimal(swap.estimated_receive),
+                "swap_amount_to_estimated": _format_decimal(swap.estimated_receive),
+                "swap_amount_to": _format_decimal(amount),
+                "amount_actual": _format_decimal(amount),
+                **(settlement_meta or {}),
             },
             "confirmed_at": datetime.now(timezone.utc),
         },
@@ -161,7 +181,10 @@ def backfill_unsettled_confirmed_swaps(db: Session, *, person_id: UUID, limit: i
     for swap in rows:
         if swap_settlement_already_applied(swap):
             continue
-        apply_swap_settlement(db, swap, sync_source="lifi_swap_backfill")
+        try:
+            apply_swap_settlement(db, swap, sync_source="lifi_swap_backfill")
+        except SwapSettlementBlocked:
+            continue
         swap_repo.append_audit(
             swap,
             {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_swap_backfill"},
@@ -173,8 +196,17 @@ def backfill_unsettled_confirmed_swaps(db: Session, *, person_id: UUID, limit: i
     return settled
 
 
-def apply_swap_settlement(db: Session, swap, *, sync_source: str = "lifi_swap") -> None:
-    """Débite l'actif source et crédite la destination dans le ledger Privy (par chain_id)."""
+def apply_swap_settlement(
+    db: Session,
+    swap,
+    *,
+    sync_source: str = "lifi_swap",
+    amount_actual: Decimal | None = None,
+    actual_receive: LifiActualReceiveResult | None = None,
+    lifi_status_payload: dict[str, Any] | None = None,
+    allow_mock_quote_amount: bool = False,
+) -> None:
+    """Débite l'actif source et crédite la destination (montant réel ``amount_actual`` uniquement)."""
     if swap_settlement_already_applied(swap):
         return
 
@@ -182,14 +214,47 @@ def apply_swap_settlement(db: Session, swap, *, sync_source: str = "lifi_swap") 
     if not tx_hash:
         raise SwapValidationError("swap.missing_tx_hash", "Hash transaction requis pour le règlement")
 
+    resolved = actual_receive
+    if resolved is None and amount_actual is not None:
+        if amount_actual <= 0:
+            raise SwapSettlementBlocked(
+                "actual_amount_missing",
+                "Montant réel invalide pour le règlement.",
+            )
+        resolved = LifiActualReceiveResult(
+            amount=amount_actual,
+            source="caller_amount_actual",
+            receive_tx_hash=tx_hash,
+        )
+    if resolved is None:
+        resolved = resolve_lifi_actual_receive_amount(
+            db,
+            swap,
+            lifi_status_payload=lifi_status_payload,
+            allow_mock_quote_amount=allow_mock_quote_amount,
+        )
+
+    if resolved is None or resolved.amount <= 0:
+        raise SwapSettlementBlocked(
+            "actual_amount_missing",
+            "Montant réellement reçu introuvable — règlement bloqué.",
+        )
+
     wallet = _resolve_swap_wallet(db, swap)
     from_asset = str(swap.from_asset).upper()
     to_asset = str(swap.to_asset).upper()
     amount_in = Decimal(str(swap.amount_in))
-    amount_out = Decimal(str(swap.estimated_receive or 0))
+    amount_out = resolved.amount
 
-    if amount_in <= 0 or amount_out <= 0:
-        raise SwapValidationError("swap.invalid_amounts", "Montants swap invalides pour le règlement")
+    if amount_in <= 0:
+        raise SwapValidationError("swap.invalid_amounts", "Montant source invalide pour le règlement")
+
+    settlement_meta = {
+        "actual_receive_source": resolved.source,
+        "actual_receive_amount": _format_decimal(resolved.amount),
+    }
+    if resolved.receive_tx_hash:
+        settlement_meta["actual_receive_tx_hash"] = resolved.receive_tx_hash
 
     from_chain_id = _chain_id_for_swap(str(swap.from_chain))
     to_chain_id = _chain_id_for_swap(str(swap.to_chain))
@@ -208,6 +273,8 @@ def apply_swap_settlement(db: Session, swap, *, sync_source: str = "lifi_swap") 
         )
 
     swap_id = str(swap.id)
+    credit_log_index = resolved.log_index if resolved.log_index is not None else 1
+
     _create_swap_ledger_entry(
         db,
         swap=swap,
@@ -219,6 +286,7 @@ def apply_swap_settlement(db: Session, swap, *, sync_source: str = "lifi_swap") 
         log_index=0,
         idempotency_key=f"lifi-swap:{swap_id}:debit",
         sync_source=sync_source,
+        settlement_meta=settlement_meta,
     )
     _create_swap_ledger_entry(
         db,
@@ -228,7 +296,8 @@ def apply_swap_settlement(db: Session, swap, *, sync_source: str = "lifi_swap") 
         asset=to_asset,
         amount=amount_out,
         chain_id=to_chain_id,
-        log_index=1,
+        log_index=credit_log_index,
         idempotency_key=f"lifi-swap:{swap_id}:credit",
         sync_source=sync_source,
+        settlement_meta=settlement_meta,
     )

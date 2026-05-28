@@ -387,6 +387,52 @@ def test_admin_simulate_deposit_credits_ledger(client: TestClient, db: Session):
     assert eth["wallet_address"].lower() == wallet.address.lower()
 
 
+def test_admin_simulate_deposit_forbidden_in_production(client: TestClient, db: Session, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    pe = make_linked_client(db)
+    _seed_privy_wallet(db, pe)
+    db.flush()
+
+    res = client.post(
+        "/api/admin/privy-wallet/simulate-deposit",
+        json={
+            "person_id": str(pe.person_id),
+            "amount": "0.1",
+            "asset": "ETH",
+        },
+        headers={
+            "X-Actor-Type": "admin",
+            "X-Actor-Id": "admin@test.local",
+            "X-Actor-Roles": "admin",
+        },
+    )
+    assert res.status_code == 403, res.text
+
+
+def test_admin_simulate_deposit_service_raises_in_production(db: Session, monkeypatch):
+    from services.privy_wallet.admin_service import (
+        PrivySimulateDepositError,
+        PrivyWalletAdminService,
+    )
+    from services.privy_wallet.schemas import PrivySimulateDepositRequest
+
+    monkeypatch.setenv("APP_ENV", "production")
+    pe = make_linked_client(db)
+    wallet = _seed_privy_wallet(db, pe)
+    db.flush()
+
+    with pytest.raises(PrivySimulateDepositError, match="interdits en production"):
+        PrivyWalletAdminService().simulate_deposit(
+            db,
+            PrivySimulateDepositRequest(
+                person_id=pe.person_id,
+                wallet_address=wallet.address,
+                asset="ETH",
+                amount="0.1",
+            ),
+        )
+
+
 def test_admin_simulate_deposit_unknown_person(client: TestClient):
     res = client.post(
         "/api/admin/privy-wallet/simulate-deposit",

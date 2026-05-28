@@ -129,6 +129,9 @@ class BundleLifiLegService:
             raise BundleLifiValidationError("bundle.lifi.swap_missing", "Swap introuvable après quote")
 
         self._attach_bundle_context(swap, leg)
+        from services.transaction_intents.bundle_intent_sync import sync_bundle_leg_from_swap
+
+        sync_bundle_leg_from_swap(db, person_id=person_id, swap=swap, leg=leg)
         db.commit()
         db.refresh(swap)
 
@@ -244,6 +247,23 @@ class BundleLifiLegService:
             db, person_id=person_id, swap_id=swap_id, tx_hash=tx_hash,
         )
         swap = self._swap_repo.get_for_person(db, swap_id=swap_id, person_id=person_id)
+        from services.transaction_intents.bundle_intent_sync import (
+            bundle_context_from_swap_audit,
+            mark_bundle_leg_submitted,
+        )
+
+        if swap is not None:
+            ctx = bundle_context_from_swap_audit(swap)
+            if ctx and ctx.get("batch_id"):
+                mark_bundle_leg_submitted(
+                    db,
+                    person_id=person_id,
+                    bundle_id=str(ctx.get("portfolio_id") or leg.portfolio_id),
+                    batch_id=str(ctx["batch_id"]),
+                    swap_id=swap_id,
+                    tx_hash=tx_hash,
+                    leg_id=str(ctx.get("leg_id") or leg.leg_id),
+                )
         if swap is None:
             raise BundleLifiValidationError("bundle.lifi.swap_missing", "Swap introuvable")
 
@@ -272,6 +292,29 @@ class BundleLifiLegService:
             )
 
         self._apply_post_confirmation(db, leg=leg, swap=swap)
+        from services.transaction_intents.bundle_intent_sync import (
+            bundle_context_from_swap_audit,
+            mark_bundle_leg_confirmed,
+            recompute_bundle_parent_intent,
+        )
+
+        ctx = bundle_context_from_swap_audit(swap)
+        if ctx and ctx.get("batch_id"):
+            mark_bundle_leg_confirmed(
+                db,
+                person_id=person_id,
+                bundle_id=str(ctx.get("portfolio_id") or leg.portfolio_id),
+                batch_id=str(ctx["batch_id"]),
+                swap_id=swap.id,
+                tx_hash=swap.tx_hash,
+                leg_id=str(ctx.get("leg_id") or leg.leg_id),
+            )
+            recompute_bundle_parent_intent(
+                db,
+                person_id=person_id,
+                bundle_id=str(ctx.get("portfolio_id") or leg.portfolio_id),
+                batch_id=str(ctx["batch_id"]),
+            )
         amount_out = Decimal(str(swap.estimated_receive or 0))
         return ExecutionResult(
             leg_id=leg.leg_id,
@@ -384,6 +427,31 @@ class BundleLifiLegService:
                 provider_order_id=str(swap.id),
                 raw={},
             )
+        if swap.status == SwapSessionStatus.FAILED.value:
+            from services.transaction_intents.bundle_intent_sync import (
+                bundle_context_from_swap_audit,
+                mark_bundle_leg_failed,
+                recompute_bundle_parent_intent,
+            )
+
+            ctx = bundle_context_from_swap_audit(swap)
+            if ctx and ctx.get("batch_id"):
+                mark_bundle_leg_failed(
+                    db,
+                    person_id=person_id,
+                    bundle_id=str(ctx.get("portfolio_id") or leg.portfolio_id),
+                    batch_id=str(ctx["batch_id"]),
+                    swap_id=swap.id,
+                    tx_hash=swap.tx_hash,
+                    leg_id=str(ctx.get("leg_id") or leg.leg_id),
+                    reason="swap_failed",
+                )
+                recompute_bundle_parent_intent(
+                    db,
+                    person_id=person_id,
+                    bundle_id=str(ctx.get("portfolio_id") or leg.portfolio_id),
+                    batch_id=str(ctx["batch_id"]),
+                )
         return ExecutionResult(
             leg_id=leg.leg_id,
             status="pending" if swap.status != SwapSessionStatus.FAILED.value else "failed",

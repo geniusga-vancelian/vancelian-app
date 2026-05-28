@@ -310,6 +310,18 @@ class BundleOrchestrator:
             funding_amount=str(funding_amount),
         )
 
+        from services.portfolio_engine.clients.models import Client as _Client
+        from services.transaction_intents.bundle_intent_sync import ensure_bundle_parent_intent
+
+        _client_row = db.query(_Client).filter(_Client.id == client_id).first()
+        if _client_row is not None and _client_row.person_id is not None:
+            ensure_bundle_parent_intent(
+                db,
+                person_id=_client_row.person_id,
+                bundle_id=str(portfolio_id),
+                batch_id=batch_id,
+            )
+
         actor = ActorContext(
             actor_type="system",
             actor_id=f"bundle-orchestrator-lifi-{portfolio_id}",
@@ -420,6 +432,28 @@ class BundleOrchestrator:
             )
 
         invariant_g = check_invariant_g(db, client_id, dry_run=True)
+
+        if _client_row is not None and _client_row.person_id is not None:
+            from services.transaction_intents.bundle_intent_sync import (
+                recompute_bundle_parent_intent,
+                sync_bundle_parent_from_batch_status,
+            )
+
+            if status == "completed":
+                recompute_bundle_parent_intent(
+                    db,
+                    person_id=_client_row.person_id,
+                    bundle_id=str(portfolio_id),
+                    batch_id=batch_id,
+                )
+            else:
+                sync_bundle_parent_from_batch_status(
+                    db,
+                    person_id=_client_row.person_id,
+                    bundle_id=str(portfolio_id),
+                    batch_id=batch_id,
+                    batch_status=status,
+                )
 
         return {
             "status": status,
@@ -557,6 +591,18 @@ class BundleOrchestrator:
                 cost_basis=remaining,
             )
         invariant_g = check_invariant_g(db, client_id, dry_run=True)
+        from services.portfolio_engine.clients.models import Client as _Client
+        from services.transaction_intents.bundle_intent_sync import recompute_bundle_parent_intent
+
+        _client_row = db.query(_Client).filter(_Client.id == client_id).first()
+        if _client_row is not None and _client_row.person_id is not None:
+            recompute_bundle_parent_intent(
+                db,
+                person_id=_client_row.person_id,
+                bundle_id=str(portfolio_id),
+                batch_id=batch_id,
+            )
+
         clear_invest_lock(
             db,
             client_id=client_id,

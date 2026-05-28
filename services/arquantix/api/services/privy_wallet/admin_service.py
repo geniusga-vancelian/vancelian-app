@@ -38,6 +38,7 @@ from .deposit_backfill import DepositBackfillError, backfill_deposit_from_tx_has
 from .reconciliation_service import run_person_wallet_reconciliation
 from .wallet_sync import reconcile_person_privy_wallets
 from .webhook_service import FUNDS_DEPOSITED_EVENT, PrivyWebhookProcessor
+from services.security.security_env import is_production_env
 
 
 class PrivyWalletNotFoundError(ValueError):
@@ -61,6 +62,11 @@ class PrivyWalletAdminService:
         db: Session,
         payload: PrivySimulateDepositRequest,
     ) -> PrivySimulateDepositResponse:
+        if is_production_env():
+            raise PrivySimulateDepositError(
+                "Les dépôts simulés sont interdits en production (admin_simulate_deposit).",
+            )
+
         person = db.query(Person).filter(Person.id == payload.person_id).first()
         if person is None:
             raise PrivyWalletNotFoundError("Person not found")
