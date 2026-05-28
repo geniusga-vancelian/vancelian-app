@@ -65,7 +65,7 @@ const APPLY_ACTION = 'create_missing_deposit_from_raw_event'
 export default function OnchainReconciliationDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const id = String(params.id || '')
+  const id = String(params?.id ?? '')
 
   const [detail, setDetail] = useState<DiscrepancyDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -455,14 +455,15 @@ export default function OnchainReconciliationDetailPage() {
             <CardTitle className="text-base">Événement raw_onchain_events (preuve)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {detail.raw_onchain_event.consumed_by_correction_id && (
+            {detail.raw_onchain_event.consumed_by_correction_id != null &&
+            String(detail.raw_onchain_event.consumed_by_correction_id) !== '' ? (
               <p className="text-sm text-amber-800 font-medium">
                 Consommé par correction{' '}
                 <span className="font-mono text-xs">
                   {String(detail.raw_onchain_event.consumed_by_correction_id)}
                 </span>
               </p>
-            )}
+            ) : null}
             <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-48">
               {JSON.stringify(detail.raw_onchain_event, null, 2)}
             </pre>

@@ -67,15 +67,15 @@ export default function OnchainReconciliationPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  const [status, setStatus] = useState(searchParams.get('status') || 'open')
-  const [layer, setLayer] = useState(searchParams.get('layer') || ALL)
-  const [severity, setSeverity] = useState(searchParams.get('severity') || ALL)
+  const [status, setStatus] = useState(searchParams?.get('status') || 'open')
+  const [layer, setLayer] = useState(searchParams?.get('layer') || ALL)
+  const [severity, setSeverity] = useState(searchParams?.get('severity') || ALL)
   const [discrepancyType, setDiscrepancyType] = useState(
-    searchParams.get('discrepancy_type') || '',
+    searchParams?.get('discrepancy_type') || '',
   )
-  const [personId, setPersonId] = useState(searchParams.get('person_id') || '')
+  const [personId, setPersonId] = useState(searchParams?.get('person_id') || '')
   const [walletAddress, setWalletAddress] = useState(
-    searchParams.get('wallet_address') || '',
+    searchParams?.get('wallet_address') || '',
   )
 
   const load = useCallback(async () => {
