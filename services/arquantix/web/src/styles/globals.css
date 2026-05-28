@@ -10,6 +10,16 @@
 @import './app/app-flash-actu.css';
 @import './app/app-academy-hub.css';
 @import './app/app-account-summary.css';
+@import './app/app-webapp4-patterns.css';
+@import './app/placer-layout.css';
+@import './app/placer.css';
+@import './app/position-detail-patterns.css';
+@import './app/transaction-detail-patterns.css';
+@import './app/markets-layout-patterns.css';
+@import './app/academy-layout-patterns.css';
+@import './app/article-layout-patterns.css';
+@import './app/offer-detail-layout-patterns.css';
+@import './app/bundle-detail-layout-patterns.css';
 
 @tailwind base;
 @tailwind components;

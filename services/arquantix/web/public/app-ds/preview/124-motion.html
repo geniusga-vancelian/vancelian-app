@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Motion · Webapp4</p>
+<p class="pv-caption" style="margin:0">Discret, court, naturel. Trois durées, deux easings.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:20px;width:100%">
+        
+        <div class="pv-token" data-anim>
+          <div class="pv-token__sw motion-demo" style="background:var(--v-terracotta);transition:transform 120 ms var(--v-ease-out)"></div>
+          <span class="pv-token__name">--v-motion-fast</span>
+          <span class="pv-token__hex">120 ms</span>
+          <span class="pv-token__meta">Hover, focus, color shift</span>
+        </div>
+        <div class="pv-token" data-anim>
+          <div class="pv-token__sw motion-demo" style="background:var(--v-terracotta);transition:transform 200 ms var(--v-ease-out)"></div>
+          <span class="pv-token__name">--v-motion-base</span>
+          <span class="pv-token__hex">200 ms</span>
+          <span class="pv-token__meta">Section enter, fade-up</span>
+        </div>
+        <div class="pv-token" data-anim>
+          <div class="pv-token__sw motion-demo" style="background:var(--v-terracotta);transition:transform 320 ms var(--v-ease-out)"></div>
+          <span class="pv-token__name">--v-motion-slow</span>
+          <span class="pv-token__hex">320 ms</span>
+          <span class="pv-token__meta">Page transition, drawer</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span class="pv-token__name">--v-ease-out</span>
+        <span class="pv-token__hex">cubic-bezier(0.22, 1, 0.36, 1)</span>
+        <span class="pv-token__name" style="margin-top:8px">--v-ease-in-out</span>
+        <span class="pv-token__hex">cubic-bezier(0.65, 0, 0.35, 1)</span>
+      </div>
+    </div>
+
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">Si tu hésites, prends <code>--v-motion-fast</code> + <code>--v-ease-out</code>. Animation = service, pas spectacle.</div>
+</div></body></html>

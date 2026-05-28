@@ -1,0 +1,81 @@
+/* Position detail — handoff Position.html (offer-detail.css + position-detail.css extrait) */
+
+@scope ([data-v-ds='app']) {
+  .ofd-back {
+    margin-bottom: 16px;
+  }
+
+  .ofd-back__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 12px 0 8px;
+    white-space: nowrap;
+    background: transparent;
+    border-radius: var(--v-radius-pill);
+    font-family: var(--v-font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--v-fg-light);
+    text-decoration: none;
+    transition:
+      background var(--v-motion-fast) var(--v-ease-out),
+      color var(--v-motion-fast) var(--v-ease-out);
+  }
+
+  .ofd-back__link:hover {
+    background: var(--v-fg-05);
+    color: var(--v-fg);
+    text-decoration: none;
+  }
+
+  .pos-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--v-fg-10);
+    border: 1px solid var(--v-fg-10);
+    border-radius: var(--v-radius-lg);
+    overflow: hidden;
+    font-family: var(--v-font-ui);
+  }
+
+  .pos-stats__cell {
+    background: var(--v-white);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .pos-stats__k {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--v-fg-light);
+  }
+
+  .pos-stats__v {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--v-fg);
+    font-feature-settings: 'tnum' on;
+    letter-spacing: -0.01em;
+  }
+
+  .pos-stats__v.is-up {
+    color: var(--v-green);
+  }
+
+  .pos-stats__v.is-down {
+    color: var(--v-error);
+  }
+
+  @media (max-width: 720px) {
+    .pos-stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+}

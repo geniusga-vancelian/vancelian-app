@@ -31,6 +31,11 @@ export { AppBanner, type AppBannerVariant } from './AppBanner'
 export { AppSettingsList } from './AppSettingsList'
 export { AppSettingsRow } from './AppSettingsRow'
 export { AppBalanceCardVariantB, type AppBalanceCardFab } from './AppBalanceCardVariantB'
+export {
+  AppBalanceCardProduct,
+  type AppBalanceCardProductAction,
+} from './AppBalanceCardProduct'
+export { AppMoneyPhrase } from './AppMoneyPhrase'
 export type { BalanceCardIdentity } from '@/lib/portal/dashboardFormat'
 export {
   AppProductBasketCard,

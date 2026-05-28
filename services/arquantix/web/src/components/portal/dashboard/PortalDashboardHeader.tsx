@@ -1,66 +1,72 @@
 'use client'
 
 import {
-  AppBalanceCardVariantB,
-  type AppBalanceCardFab,
-} from '@/components/design-system/app/AppBalanceCardVariantB'
+  AppBalanceCardProduct,
+  type AppBalanceCardProductAction,
+} from '@/components/design-system/app/AppBalanceCardProduct'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
 type Props = {
-  welcomeName: string
-  showAvatar?: boolean
-  avatarInitials?: string | null
-  avatarImageUrl?: string | null
   balanceLabel: string
   changeAmountLabel?: string
-  changePercentLabel?: string
   changePositive?: boolean
-  chartValues: number[]
-  showChart?: boolean
   depositHref: string
   balancePending?: boolean
+  /** Conservé pour compatibilité appelants — ignoré (Webapp4 n’affiche plus le chart ici). */
+  chartValues?: number[]
   className?: string
 }
 
-/** En-tête dashboard — Balance Card variante A anthracite (DS preview/19). */
+/** En-tête dashboard — Balance Card Webapp4 (home produit). */
 export function PortalDashboardHeader({
-  welcomeName,
-  showAvatar = true,
-  avatarInitials,
-  avatarImageUrl,
   balanceLabel,
   changeAmountLabel,
-  changePercentLabel,
   changePositive = true,
-  chartValues,
-  showChart = true,
   depositHref,
   balancePending = false,
   className,
 }: Props) {
-  const fabs: AppBalanceCardFab[] = [
-    { id: 'deposit', label: 'Déposer', icon: 'add', href: depositHref },
-    { id: 'withdraw', label: 'Retirer', icon: 'send-1', disabled: true },
-    { id: 'swap', label: 'Échanger', icon: 'exchange', href: PORTAL_ROUTES.walletSwap },
-    { id: 'invest', label: 'Investir', icon: 'trending-up', href: PORTAL_ROUTES.invest },
+  const actions: AppBalanceCardProductAction[] = [
+    {
+      id: 'invest',
+      label: 'Investir',
+      icon: 'arrow-up-right',
+      href: PORTAL_ROUTES.invest,
+      variant: 'primary',
+    },
+    {
+      id: 'swap',
+      label: 'Échanger',
+      icon: 'exchange',
+      href: PORTAL_ROUTES.walletSwap,
+      variant: 'secondary',
+    },
+    {
+      id: 'deposit',
+      label: 'Déposer',
+      icon: 'arrow-down',
+      href: depositHref,
+      variant: 'secondary',
+    },
+    {
+      id: 'withdraw',
+      label: 'Envoyer',
+      icon: 'arrow-up',
+      disabled: true,
+      variant: 'secondary',
+    },
   ]
 
   return (
     <section className={cn('pb-2 pt-5', className)}>
-      <AppBalanceCardVariantB
-        welcomeName={welcomeName}
-        showAvatar={showAvatar}
-        avatarInitials={avatarInitials}
-        avatarImageUrl={avatarImageUrl}
+      <AppBalanceCardProduct
         balanceLabel={balanceLabel}
         balancePending={balancePending}
-        changeAmountLabel={changeAmountLabel}
-        changePercentLabel={changePercentLabel}
-        changePositive={changePositive}
-        chartValues={chartValues}
-        showChart={showChart}
-        fabs={fabs}
+        revenueAmountLabel={changeAmountLabel}
+        revenuePositive={changePositive}
+        showRevenuePhrase={Boolean(changeAmountLabel)}
+        actions={actions}
       />
     </section>
   )

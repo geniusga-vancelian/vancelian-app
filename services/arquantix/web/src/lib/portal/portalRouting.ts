@@ -122,6 +122,13 @@ export function portalCryptoWalletTransactionsRoute(asset: string): string {
   return `${portalCryptoWalletAssetRoute(ticker)}/transactions`
 }
 
+/** Détail d'une transaction crypto wallet — handoff Transaction.html. */
+export function portalCryptoWalletTransactionRoute(asset: string, txId: string): string {
+  const ticker = asset.trim().toLowerCase()
+  const id = encodeURIComponent(txId.trim())
+  return `${portalCryptoWalletTransactionsRoute(ticker)}/${id}`
+}
+
 /** Détail vault épargne — `/app/wallet/savings/0x…`. */
 export function portalSavingsVaultRoute(vaultAddress: string): string {
   const normalized = vaultAddress.trim().toLowerCase()
@@ -156,10 +163,17 @@ export function portalCryptoInstrumentRoute(ticker: string): string {
   return `${PORTAL_ROUTES.markets}/${encodeURIComponent(slug || 'btc')}`
 }
 
-/** Détail produit crypto bundle (catalogue Markets) — modules Vault Builder CMS. */
-export function portalCryptoBundleProductRoute(productCode: string): string {
+/** Détail produit crypto bundle (catalogue Markets / Placer) — layout Panier.html. */
+export function portalCryptoBundleProductRoute(
+  productCode: string,
+  options?: { back?: 'invest' },
+): string {
   const code = productCode.trim().toUpperCase()
-  return `${PORTAL_ROUTES.markets}/bundle/${encodeURIComponent(code)}`
+  const base = `${PORTAL_ROUTES.markets}/bundle/${encodeURIComponent(code)}`
+  if (options?.back === 'invest') {
+    return `${base}?back=invest`
+  }
+  return base
 }
 
 export type PortalRouteKey = keyof typeof PORTAL_ROUTES

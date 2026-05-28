@@ -1,13 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
+import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalMarketsSkeleton } from '@/components/portal/PortalRouteSkeleton'
-import { PortalPageIntro } from '@/components/portal/PortalPageIntro'
 import { PortalCryptoBundlesSection } from '@/components/portal/markets/PortalCryptoBundlesSection'
 import { PortalMarketsNewsSection } from '@/components/portal/markets/PortalMarketsNewsSection'
+import { PortalMarketsSidebar } from '@/components/portal/markets/PortalMarketsSidebar'
 import { PortalResearchSection } from '@/components/portal/markets/PortalResearchSection'
 import { PortalTopCryptoSection, type TopCryptoTabId } from '@/components/portal/markets/PortalTopCryptoSection'
 import { applyQuoteUpdates } from '@/lib/portal/marketsFormat'
@@ -49,7 +49,7 @@ export function PortalMarketsScreen() {
   const [liveGainers, setLiveGainers] = useState<PortalMarketsPayload['topGainers']>([])
   const [liveLosers, setLiveLosers] = useState<PortalMarketsPayload['topLosers']>([])
   const [liveFavorites, setLiveFavorites] = useState<PortalMarketsPayload['favorites']>([])
-  const [activeTab, setActiveTab] = useState<TopCryptoTabId>('popular')
+  const [activeTab, setActiveTab] = useState<TopCryptoTabId>('gainers')
 
   useEffect(() => {
     if (!data) return
@@ -97,7 +97,7 @@ export function PortalMarketsScreen() {
           onClick={() => void refresh()}
           className="v-text-link border-0 bg-transparent p-0 font-ui text-[14px]"
         >
-          Retry
+          Réessayer
         </button>
       </Container>
     )
@@ -107,64 +107,67 @@ export function PortalMarketsScreen() {
 
   const topCryptoError =
     livePopular.length === 0 && liveGainers.length === 0 && liveLosers.length === 0
-      ? 'Market data is temporarily unavailable.'
+      ? 'Les données de marché sont temporairement indisponibles.'
       : undefined
 
   return (
     <PortalPageContainer>
-      <PortalDashboardLayout>
-        <PortalReveal index={0}>
-          <PortalPageIntro
-            eyebrow="Markets"
-            title="Crypto Markets"
-            description="Live USD prices, top movers, thematic bundles, news and research."
-          />
-        </PortalReveal>
+      <PortalPortfolioLayout
+        main={
+          <div className="mk-grid">
+            <PortalReveal index={0}>
+              <PortalTopCryptoSection
+                popular={livePopular}
+                topGainers={liveGainers}
+                topLosers={liveLosers}
+                favorites={liveFavorites}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                loading={false}
+                error={topCryptoError}
+                onRetry={() => void refresh()}
+              />
+            </PortalReveal>
 
-        <PortalReveal index={1}>
-          <PortalTopCryptoSection
-            popular={livePopular}
-            topGainers={liveGainers}
-            topLosers={liveLosers}
-            favorites={liveFavorites}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            loading={false}
-            error={topCryptoError}
-            onRetry={() => void refresh()}
-          />
-        </PortalReveal>
+            {data.bundles.length > 0 ? (
+              <PortalReveal index={1}>
+                <PortalCryptoBundlesSection bundles={data.bundles} />
+              </PortalReveal>
+            ) : null}
 
-        <PortalReveal index={2}>
-          <PortalCryptoBundlesSection bundles={data.bundles} />
-        </PortalReveal>
+            <PortalReveal index={data.bundles.length > 0 ? 2 : 1}>
+              <PortalMarketsNewsSection items={data.news} title="Actualités" />
+            </PortalReveal>
 
-        <PortalReveal index={3}>
-          <PortalMarketsNewsSection items={data.news} />
-        </PortalReveal>
+            <PortalReveal index={data.bundles.length > 0 ? 3 : 2}>
+              <PortalResearchSection
+                items={data.research}
+                title="Analyses"
+                maxItems={2}
+              />
+            </PortalReveal>
 
-        <PortalReveal index={4}>
-          <PortalResearchSection items={data.research} maxItems={2} />
-        </PortalReveal>
+            {data.partial ? (
+              <p className="m-0 font-ui text-[12px] text-v-fg-muted">
+                Certaines sections n&apos;ont pas pu être chargées entièrement.
+              </p>
+            ) : null}
 
-        {data.partial ? (
-          <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-            Some market sections could not be loaded completely.
-          </p>
-        ) : null}
-
-        <button
-          type="button"
-          disabled={refreshing}
-          onClick={() => void refresh()}
-          className={cn(
-            'v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px]',
-            refreshing && 'opacity-50',
-          )}
-        >
-          {refreshing ? 'Refreshing…' : 'Refresh markets'}
-        </button>
-      </PortalDashboardLayout>
+            <button
+              type="button"
+              disabled={refreshing}
+              onClick={() => void refresh()}
+              className={cn(
+                'v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px]',
+                refreshing && 'opacity-50',
+              )}
+            >
+              {refreshing ? 'Actualisation…' : 'Actualiser'}
+            </button>
+          </div>
+        }
+        side={<PortalMarketsSidebar />}
+      />
     </PortalPageContainer>
   )
 }

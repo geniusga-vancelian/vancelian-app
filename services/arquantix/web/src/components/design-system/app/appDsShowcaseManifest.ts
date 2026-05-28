@@ -4,6 +4,7 @@ export type AppDsShowcaseItem = {
   file: string
   height: number
   openHref?: string
+  desc?: string
 }
 
 export type AppDsShowcaseSection = {
@@ -789,7 +790,326 @@ export const APP_DS_SHOWCASE_SECTIONS: AppDsShowcaseSection[] = [
         "openHref": "preview/118-support-card.html"
       }
     ]
+  },
+  {
+    "id": "w4-foundations",
+    "num": "12",
+    "title": "Webapp4 — Fondations",
+    "count": "8 composants · Webapp4",
+    "items": [
+      {
+        "title": "Couleurs",
+        "file": "119-colors.html",
+        "height": 520,
+        "openHref": "preview/119-colors.html",
+        "desc": "Triade terracotta · vert anglais · bleu de Prusse"
+      },
+      {
+        "title": "Typographie",
+        "file": "120-typography.html",
+        "height": 480,
+        "openHref": "preview/120-typography.html",
+        "desc": "Inter + Newsreader · optical sizes"
+      },
+      {
+        "title": "Espacement",
+        "file": "121-spacing.html",
+        "height": 360,
+        "openHref": "preview/121-spacing.html",
+        "desc": "Échelle 4·8·12·16·24·32·48·64"
+      },
+      {
+        "title": "Rayons",
+        "file": "122-radii.html",
+        "height": 320,
+        "openHref": "preview/122-radii.html",
+        "desc": "4 · 6 · 8 · 12 · 24 · pill"
+      },
+      {
+        "title": "Élévations",
+        "file": "123-elevation.html",
+        "height": 280,
+        "openHref": "preview/123-elevation.html",
+        "desc": "flat · subtle · medium"
+      },
+      {
+        "title": "Motion",
+        "file": "124-motion.html",
+        "height": 280,
+        "openHref": "preview/124-motion.html",
+        "desc": "120 / 200 / 320 ms · ease-out"
+      },
+      {
+        "title": "Iconographie",
+        "file": "125-iconography.html",
+        "height": 640,
+        "openHref": "preview/125-iconography.html",
+        "desc": "Kalai — 45 icônes webapp"
+      },
+      {
+        "title": "Logo",
+        "file": "126-logo.html",
+        "height": 280,
+        "openHref": "preview/126-logo.html",
+        "desc": "Lockups noir / blanc"
+      }
+    ]
+  },
+  {
+    "id": "w4-primitives",
+    "num": "13",
+    "title": "Webapp4 — Primitives",
+    "count": "12 composants · Webapp4",
+    "items": [
+      {
+        "title": "Button",
+        "file": "127-button.html",
+        "height": 420,
+        "openHref": "preview/127-button.html",
+        "desc": "7 variantes × 3 tailles"
+      },
+      {
+        "title": "Icon Button",
+        "file": "128-icon-button.html",
+        "height": 240,
+        "openHref": "preview/128-icon-button.html",
+        "desc": "40 px circulaire · topnav"
+      },
+      {
+        "title": "FAB",
+        "file": "129-fab.html",
+        "height": 280,
+        "openHref": "preview/129-fab.html",
+        "desc": "48/56 px · dark / terra / white"
+      },
+      {
+        "title": "Avatar",
+        "file": "130-avatar.html",
+        "height": 480,
+        "openHref": "preview/130-avatar.html",
+        "desc": "Initiales · icône · photo"
+      },
+      {
+        "title": "Avatar Exchange",
+        "file": "131-avatar-exchange.html",
+        "height": 320,
+        "openHref": "preview/131-avatar-exchange.html",
+        "desc": "Paire source + résultat"
+      },
+      {
+        "title": "Icon",
+        "file": "132-icon.html",
+        "height": 360,
+        "openHref": "preview/132-icon.html",
+        "desc": "Mask CSS Kalai · currentColor"
+      },
+      {
+        "title": "Eyebrow",
+        "file": "133-eyebrow.html",
+        "height": 220,
+        "openHref": "preview/133-eyebrow.html",
+        "desc": "UPPERCASE · sm · tagged"
+      },
+      {
+        "title": "Tag",
+        "file": "134-tag.html",
+        "height": 320,
+        "openHref": "preview/134-tag.html",
+        "desc": "Status success / warning / info / error"
+      },
+      {
+        "title": "Card",
+        "file": "135-card.html",
+        "height": 360,
+        "openHref": "preview/135-card.html",
+        "desc": ".v-card · warm · grey · list"
+      },
+      {
+        "title": "Amount",
+        "file": "136-amount.html",
+        "height": 360,
+        "openHref": "preview/136-amount.html",
+        "desc": "hero / lg / md / sm · tnum"
+      },
+      {
+        "title": "Network Dot",
+        "file": "137-net-dot.html",
+        "height": 200,
+        "openHref": "preview/137-net-dot.html",
+        "desc": "Base / Ethereum / Solana"
+      },
+      {
+        "title": "Segmented",
+        "file": "138-segmented.html",
+        "height": 240,
+        "openHref": "preview/138-segmented.html",
+        "desc": "Plages 24h / 1S / 1M / 1A / Max"
+      }
+    ]
+  },
+  {
+    "id": "w4-app-shell",
+    "num": "14",
+    "title": "Webapp4 — App shell",
+    "count": "8 composants · Webapp4",
+    "items": [
+      {
+        "title": "Top Nav",
+        "file": "139-topnav.html",
+        "height": 120,
+        "openHref": "preview/139-topnav.html",
+        "desc": "Logo · nav · wallet · réseau · search"
+      },
+      {
+        "title": "Mobile Tab Bar",
+        "file": "140-mobile-tab-bar.html",
+        "height": 120,
+        "openHref": "preview/140-mobile-tab-bar.html",
+        "desc": "5 onglets · safe area"
+      },
+      {
+        "title": "Mobile Chain Bar",
+        "file": "141-mobile-chain-bar.html",
+        "height": 120,
+        "openHref": "preview/141-mobile-chain-bar.html",
+        "desc": "Wallet + réseau ≤960px"
+      },
+      {
+        "title": "Pill Dropdown",
+        "file": "142-pill-dropdown.html",
+        "height": 360,
+        "openHref": "preview/142-pill-dropdown.html",
+        "desc": "Déclencheur pill + panneau .dd"
+      },
+      {
+        "title": "Dropdown Menu",
+        "file": "143-dropdown-menu.html",
+        "height": 360,
+        "openHref": "preview/143-dropdown-menu.html",
+        "desc": "Panneau .dd · sections · items"
+      },
+      {
+        "title": "Search Overlay",
+        "file": "144-search-overlay.html",
+        "height": 480,
+        "openHref": "preview/144-search-overlay.html",
+        "desc": "Plein écran · résultats groupés"
+      },
+      {
+        "title": "Footer Slim",
+        "file": "145-footer-slim.html",
+        "height": 120,
+        "openHref": "preview/145-footer-slim.html",
+        "desc": "Copyright + liens utiles"
+      },
+      {
+        "title": "Side Panel",
+        "file": "146-side-panel.html",
+        "height": 400,
+        "openHref": "preview/146-side-panel.html",
+        "desc": "Drawer droit + scrim"
+      }
+    ]
+  },
+  {
+    "id": "w4-patterns",
+    "num": "15",
+    "title": "Webapp4 — Patterns",
+    "count": "13 composants · Webapp4",
+    "items": [
+      {
+        "title": "Section Head",
+        "file": "147-section-head.html",
+        "height": 320,
+        "openHref": "preview/147-section-head.html",
+        "desc": "Titre + count + voir tout · lg/md/sm"
+      },
+      {
+        "title": "Account Dot",
+        "file": "148-account-dot.html",
+        "height": 240,
+        "openHref": "preview/148-account-dot.html",
+        "desc": "Avatar typé compte"
+      },
+      {
+        "title": "Asset Chip",
+        "file": "149-asset-chip.html",
+        "height": 280,
+        "openHref": "preview/149-asset-chip.html",
+        "desc": "Dot + label + chevron"
+      },
+      {
+        "title": "Money Phrase",
+        "file": "150-money-phrase.html",
+        "height": 200,
+        "openHref": "preview/150-money-phrase.html",
+        "desc": "Phrase éditoriale + montant vert"
+      },
+      {
+        "title": "Perf Chart",
+        "file": "151-perf-chart.html",
+        "height": 420,
+        "openHref": "preview/151-perf-chart.html",
+        "desc": "Graphique multi-plage SVG"
+      },
+      {
+        "title": "Balance Card",
+        "file": "152-balance-card.html",
+        "height": 480,
+        "openHref": "preview/152-balance-card.html",
+        "desc": "Solde héro Newsreader · home produit"
+      },
+      {
+        "title": "Accounts List",
+        "file": "153-accounts-list.html",
+        "height": 480,
+        "openHref": "preview/153-accounts-list.html",
+        "desc": ".v-card--list + .acc-row"
+      },
+      {
+        "title": "News Section",
+        "file": "154-news-section.html",
+        "height": 520,
+        "openHref": "preview/154-news-section.html",
+        "desc": "Grille actu cards"
+      },
+      {
+        "title": "Featured Card",
+        "file": "155-featured-card.html",
+        "height": 400,
+        "openHref": "preview/155-featured-card.html",
+        "desc": "Offre du mois full bleed"
+      },
+      {
+        "title": "Advisor — Portrait",
+        "file": "156-advisor-portrait.html",
+        "height": 360,
+        "openHref": "preview/156-advisor-portrait.html",
+        "desc": "Photo + nom + CTA"
+      },
+      {
+        "title": "Advisor — Banner",
+        "file": "157-advisor-banner.html",
+        "height": 360,
+        "openHref": "preview/157-advisor-banner.html",
+        "desc": "Bannière photo + headline"
+      },
+      {
+        "title": "Advisor — Multi-channel",
+        "file": "158-advisor-multichannel.html",
+        "height": 400,
+        "openHref": "preview/158-advisor-multichannel.html",
+        "desc": "Téléphone · mail · chat"
+      },
+      {
+        "title": "Support Card",
+        "file": "159-support-card.html",
+        "height": 280,
+        "openHref": "preview/159-support-card.html",
+        "desc": "Sidebar compacte"
+      }
+    ]
   }
 ] as const
 
-export const APP_DS_SHOWCASE_VERSION = 'v2.3 · 28 mai 2026 · 114 modules' as const
+export const APP_DS_SHOWCASE_VERSION = 'v2.4 · 28 mai 2026 · 114 + 41 Webapp4' as const

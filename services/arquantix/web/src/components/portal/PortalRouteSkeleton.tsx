@@ -66,16 +66,22 @@ export function PortalProfileSkeleton() {
 
 export function PortalAcademySkeleton() {
   return (
-    <TwoColumnSkeleton>
-      <ShimmerBlock className="h-24 rounded-v-card" />
-      <ShimmerBlock className="h-80 rounded-v-card" />
-      <div className="grid grid-cols-1 gap-4 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3">
-        <ShimmerBlock className="h-56 rounded-v-card" />
-        <ShimmerBlock className="h-56 rounded-v-card" />
-        <ShimmerBlock className="h-56 rounded-v-card" />
+    <PortalPageContainer>
+      <div className="portal-placer-grid">
+        <div className="col-main space-y-6">
+          <ShimmerBlock className="h-12 max-w-xl rounded-v-pill" />
+          <ShimmerBlock className="h-80 rounded-v-card" />
+          <ShimmerBlock className="h-10 w-full max-w-lg rounded-v-pill" />
+          <div className="grid grid-cols-1 gap-5 min-[880px]:grid-cols-2 min-[1200px]:grid-cols-3">
+            <ShimmerBlock className="h-72 rounded-v-card" />
+            <ShimmerBlock className="h-72 rounded-v-card" />
+            <ShimmerBlock className="h-72 rounded-v-card" />
+          </div>
+          <ShimmerBlock className="h-32 rounded-v-card" />
+        </div>
+        <ShimmerBlock className="col-side hidden h-80 rounded-v-card lg:block" />
       </div>
-      <ShimmerBlock className="h-48 rounded-v-card" />
-    </TwoColumnSkeleton>
+    </PortalPageContainer>
   )
 }
 

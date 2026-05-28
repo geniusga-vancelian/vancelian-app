@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Card · Webapp4</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:16px;width:100%">
+          <div class="v-card">
+            <p class="v-h4" style="margin:0 0 4px">.v-card</p>
+            <p class="v-body-sm" style="margin:0;color:var(--v-fg-muted)">Fond blanc, bordure 1 px.</p>
+          </div>
+          <div class="v-card v-card--warm">
+            <p class="v-h4" style="margin:0 0 4px">.v-card--warm</p>
+            <p class="v-body-sm" style="margin:0;color:var(--v-fg-muted)">Fond fg-05.</p>
+          </div>
+          <div class="v-card v-card--grey">
+            <p class="v-h4" style="margin:0 0 4px">.v-card--grey</p>
+            <p class="v-body-sm" style="margin:0;color:var(--v-fg-muted)">Fond card.</p>
+          </div>
+          <div class="v-card v-card--list" style="padding:0;display:flex;flex-direction:column">
+            <div style="padding:14px 16px;border-bottom:1px solid var(--v-fg-10)">Ligne 1</div>
+            <div style="padding:14px 16px;border-bottom:1px solid var(--v-fg-10)">Ligne 2</div>
+            <div style="padding:14px 16px">Ligne 3 · .v-card--list</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">card.html</span>
+          </div>
+&lt;div class="v-card"&gt;Default&lt;/div&gt;
+&lt;div class="v-card v-card--warm"&gt;Warm — testimonials, marketing&lt;/div&gt;
+&lt;div class="v-card v-card--grey"&gt;Grey — sidebar&lt;/div&gt;
+
+&lt;!-- Liste : padding 0, items gèrent leur propre padding --&gt;
+&lt;div class="v-card v-card--list"&gt;
+  &lt;button class="acc-row"&gt;…&lt;/button&gt;
+  &lt;button class="acc-row"&gt;…&lt;/button&gt;
+&lt;/div&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">Padding par défaut <code>24 px</code>. Pas de left-border accent. Pas d'icon-in-circle header. Au hover, on shifte le fond (jamais on translate / scale).</div>
+</div></body></html>

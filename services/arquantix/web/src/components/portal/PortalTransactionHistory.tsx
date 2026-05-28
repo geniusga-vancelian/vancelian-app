@@ -21,6 +21,7 @@ export type PortalTransactionHistoryItem = {
   flowDirection?: 'in' | 'out'
   fromAsset?: string
   toAsset?: string
+  href?: string
 }
 
 type Props = {
@@ -81,13 +82,15 @@ export function PortalTransactionHistoryRows({
       {items.map((tx) => (
         <AppTxRow
           key={tx.id}
+          href={tx.href}
+          LinkComponent={tx.href ? PortalNavLink : undefined}
           leading={resolveLeading(tx)}
           title={tx.title}
           subtitle={tx.subtitle}
           amount={tx.amount}
           amountTone={tx.amountTone ?? (tx.incoming ? 'in' : 'out')}
           meta={tx.meta}
-          showChevron={false}
+          showChevron={Boolean(tx.href)}
         />
       ))}
     </AppTxList>

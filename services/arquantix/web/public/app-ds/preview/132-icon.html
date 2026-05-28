@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Icon · Webapp4</p>
+<div class="pv-row" style="align-items:center">
+          <span class="ic-demo" style="--s:16px"><span class="ic" style="width:var(--s);height:var(--s);background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;display:inline-block"></span> 16 px</span>
+          <span class="ic-demo" style="--s:20px"><span class="ic" style="width:var(--s);height:var(--s);background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;display:inline-block"></span> 20 px (default)</span>
+          <span class="ic-demo" style="--s:24px"><span class="ic" style="width:var(--s);height:var(--s);background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;display:inline-block"></span> 24 px</span>
+          <span class="ic-demo" style="--s:32px"><span class="ic" style="width:var(--s);height:var(--s);background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;display:inline-block"></span> 32 px</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Hérite de la couleur parent</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <div class="pv-row">
+          <span style="display:inline-flex;align-items:center;gap:6px;color:var(--v-fg)"><span class="ic" style="width:20px;height:20px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat"></span> fg</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;color:var(--v-fg-muted)"><span class="ic" style="width:20px;height:20px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat"></span> fg-muted</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;color:var(--v-terracotta)"><span class="ic" style="width:20px;height:20px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat"></span> terracotta (interdit sur icône)</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;color:var(--v-green)"><span class="ic" style="width:20px;height:20px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/check.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/check.svg) center/contain no-repeat"></span> green (states)</span>
+        </div>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">icon.html</span>
+          </div>
+&lt;span style="
+  display: inline-block;
+  width: 20px; height: 20px;
+  background: currentColor;
+  -webkit-mask: url(assets/icons/wallet.svg) center / contain no-repeat;
+          mask: url(assets/icons/wallet.svg) center / contain no-repeat;
+"&gt;&lt;/span&gt;
+
+&lt;!-- En React : --&gt;
+&lt;Icon name="wallet" size={20} /&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">Default 20 px. <strong>Terracotta interdit</strong> sur les icônes — réservée au texte. Pour les états : <code>--v-green</code> (success), <code>--v-blue</code> (info), <code>--v-yellow</code> (warning), <code>--v-error</code>.</div>
+</div></body></html>

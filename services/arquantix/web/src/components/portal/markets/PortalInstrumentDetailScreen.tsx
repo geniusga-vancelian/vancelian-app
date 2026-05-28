@@ -1,32 +1,36 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
-import { useRouter } from 'next/navigation'
-import { ArrowDown, ArrowLeft, ArrowUp, Star } from 'lucide-react'
-import { AppEyebrow } from '@/components/design-system/app/AppEyebrow'
-import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
-import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
+
+import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
+import { PortalInstrumentAboutSection } from '@/components/portal/markets/PortalInstrumentAboutSection'
 import { PortalInstrumentChartModule } from '@/components/portal/markets/PortalInstrumentChartModule'
-import { PortalSolanaWalletSection } from '@/components/portal/markets/PortalSolanaWalletSection'
-import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
+import { PortalInstrumentCtaBar } from '@/components/portal/markets/PortalInstrumentCtaBar'
+import { PortalInstrumentExtendedStats } from '@/components/portal/markets/PortalInstrumentExtendedStats'
+import { PortalInstrumentHeader } from '@/components/portal/markets/PortalInstrumentHeader'
+import { PortalInstrumentSidebar } from '@/components/portal/markets/PortalInstrumentSidebar'
 import { PortalMarketsNewsSection } from '@/components/portal/markets/PortalMarketsNewsSection'
-import { PortalResearchSection } from '@/components/portal/markets/PortalResearchSection'
-import { Button } from '@/components/ui/button'
+import { PortalSolanaWalletSection } from '@/components/portal/markets/PortalSolanaWalletSection'
+import { PortalDetailBackLink } from '@/components/portal/PortalDetailBackLink'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
+import type { PortalChain } from '@/config/portalChains'
 import {
   type ChartPeriodId,
-  formatChangePct,
-  formatCryptoPrice,
+  buildInstrumentExtendedStats,
+  buildInstrumentSidebarStats,
   formatPeriodCaption,
-  formatUsdAbsChange,
   parseInstrumentCandles,
   periodPerformanceFromCandles,
   tickerToProviderSymbol,
 } from '@/lib/portal/instrumentDetailFormat'
 import type { PortalInstrumentDetailPayload } from '@/lib/portal/instrumentDetailTypes'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { formatCryptoPrice } from '@/lib/portal/marketsFormat'
+import { usePortalChainContext } from '@/lib/portal/portalChainContext'
+import { PORTAL_ROUTES, portalSwapBuyRoute, portalSwapSellRoute } from '@/lib/portal/portalRouting'
+import { isPortalSwapTradeAsset } from '@/lib/portal/swapFlowTypes'
 import { useMarketDataQuotesWs } from '@/lib/portal/useMarketDataQuotesWs'
-import { cn } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 
 type Props = {
   ticker: string
@@ -38,33 +42,46 @@ type PortalFavoriteRow = {
   entity_id: string
 }
 
+const MIN_TRADE_VALUE_USD = 1
+
+function resolveSwapChainForAsset(asset: string, portalChain: PortalChain): string | undefined {
+  if (asset === 'CBBTC' || asset === 'CBETH') return 'base'
+  if (portalChain === 'solana') return undefined
+  return portalChain
+}
+
+/** Fiche instrument marché — handoff Asset.html (`ast-*` · `portal-placer-grid`). */
 export function PortalInstrumentDetailScreen({ ticker }: Props) {
   const router = useRouter()
+  const { chain } = usePortalChainContext()
+  const normalizedTicker = ticker.trim().toUpperCase()
+
   const [data, setData] = useState<PortalInstrumentDetailPayload | null>(null)
   const [livePriceUsd, setLivePriceUsd] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [period, setPeriod] = useState<ChartPeriodId>('1j')
-  const [displayPeriod, setDisplayPeriod] = useState<ChartPeriodId>('1j')
+  const [period, setPeriod] = useState<ChartPeriodId>('1a')
+  const [displayPeriod, setDisplayPeriod] = useState<ChartPeriodId>('1a')
   const [candles, setCandles] = useState<ReturnType<typeof parseInstrumentCandles>>([])
   const [candlesLoading, setCandlesLoading] = useState(false)
   const [candlesError, setCandlesError] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [favoriteId, setFavoriteId] = useState<string | null>(null)
   const [favoriteBusy, setFavoriteBusy] = useState(false)
+  const [hasPosition, setHasPosition] = useState(false)
 
   const symbol = useMemo(
-    () => (data?.symbol ? data.symbol : tickerToProviderSymbol(ticker)),
-    [data?.symbol, ticker],
+    () => (data?.symbol ? data.symbol : tickerToProviderSymbol(normalizedTicker)),
+    [data?.symbol, normalizedTicker],
   )
 
-  const favoriteEntityId = useMemo(() => tickerToProviderSymbol(ticker), [ticker])
+  const favoriteEntityId = useMemo(() => tickerToProviderSymbol(normalizedTicker), [normalizedTicker])
 
   const loadDetail = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/portal/instruments/${encodeURIComponent(ticker)}`, {
+      const res = await fetch(`/api/portal/instruments/${encodeURIComponent(normalizedTicker)}`, {
         credentials: 'include',
         cache: 'no-store',
       })
@@ -73,18 +90,18 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
         return
       }
       if (!res.ok) {
-        setError('Unable to load instrument.')
+        setError("Impossible de charger l'instrument.")
         return
       }
       const json = (await res.json()) as PortalInstrumentDetailPayload
       setData(json)
       setLivePriceUsd(json.priceUsd > 0 ? json.priceUsd : null)
     } catch {
-      setError('Unable to load instrument.')
+      setError("Impossible de charger l'instrument.")
     } finally {
       setLoading(false)
     }
-  }, [router, ticker])
+  }, [normalizedTicker, router])
 
   const loadFavoriteStatus = useCallback(async () => {
     try {
@@ -106,6 +123,21 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
       // ignore
     }
   }, [favoriteEntityId])
+
+  const loadPositionHint = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/portal/crypto-wallet/${encodeURIComponent(normalizedTicker)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+      if (!res.ok) return
+      const json = (await res.json()) as { detail?: { volume?: string } }
+      const qty = Number.parseFloat(String(json.detail?.volume ?? '').replace(',', '.')) || 0
+      setHasPosition(qty > 0)
+    } catch {
+      // ignore
+    }
+  }, [normalizedTicker])
 
   const toggleFavorite = useCallback(async () => {
     if (favoriteBusy) return
@@ -153,14 +185,14 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
           { cache: 'no-store' },
         )
         if (!res.ok) {
-          setCandlesError('Chart data is temporarily unavailable.')
+          setCandlesError('Données graphiques temporairement indisponibles.')
           return
         }
         const json = (await res.json()) as { candles?: unknown }
         setCandles(parseInstrumentCandles(json.candles))
         setDisplayPeriod(nextPeriod)
       } catch {
-        setCandlesError('Chart data is temporarily unavailable.')
+        setCandlesError('Données graphiques temporairement indisponibles.')
       } finally {
         setCandlesLoading(false)
       }
@@ -174,7 +206,8 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
 
   useEffect(() => {
     void loadFavoriteStatus()
-  }, [loadFavoriteStatus])
+    void loadPositionHint()
+  }, [loadFavoriteStatus, loadPositionHint])
 
   useEffect(() => {
     if (!symbol) return
@@ -199,6 +232,36 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
     [candles, priceUsd],
   )
 
+  const sidebarStats = useMemo(
+    () =>
+      buildInstrumentSidebarStats({
+        priceLabel,
+        change24hPct: data?.change24hPct ?? 0,
+        change24hAbs: data?.change24hAbs ?? null,
+      }),
+    [data?.change24hAbs, data?.change24hPct, priceLabel],
+  )
+
+  const extendedStats = useMemo(
+    () =>
+      buildInstrumentExtendedStats({
+        priceLabel,
+        change24hPct: data?.change24hPct ?? 0,
+        change24hAbs: data?.change24hAbs ?? null,
+        periodPerf,
+        periodLabel: formatPeriodCaption(displayPeriod),
+      }),
+    [data?.change24hAbs, data?.change24hPct, displayPeriod, periodPerf, priceLabel],
+  )
+
+  const swapChainKey = resolveSwapChainForAsset(normalizedTicker, chain)
+  const canTrade = priceUsd > MIN_TRADE_VALUE_USD && isPortalSwapTradeAsset(normalizedTicker)
+  const buyHref = canTrade && swapChainKey ? portalSwapBuyRoute(normalizedTicker, swapChainKey) : undefined
+  const sellHref =
+    canTrade && swapChainKey && hasPosition
+      ? portalSwapSellRoute(normalizedTicker, swapChainKey)
+      : undefined
+
   if (loading && !data) {
     return (
       <PortalPageContainer>
@@ -213,7 +276,7 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 text-center">
           <p className="m-0 font-ui text-[15px] text-v-error">{error}</p>
           <PortalNavLink href={PORTAL_ROUTES.markets} className="v-text-link font-ui text-[14px]">
-            Back to Markets
+            Retour aux marchés
           </PortalNavLink>
         </div>
       </PortalPageContainer>
@@ -222,79 +285,26 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
 
   if (!data) return null
 
-  const perfPositive = (periodPerf?.absUsd ?? 0) >= 0
-  const isSolInstrument = ticker.trim().toUpperCase() === 'SOL'
+  const isSolInstrument = normalizedTicker === 'SOL'
 
   return (
     <PortalPageContainer>
-      <PortalDashboardLayout>
-        <PortalNavLink
-          href={PORTAL_ROUTES.markets}
-          className="inline-flex w-fit items-center gap-2 font-ui text-[14px] font-medium text-v-fg-body no-underline transition-colors hover:text-v-fg"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Markets
-        </PortalNavLink>
+      <PortalPortfolioLayout
+        main={
+          <div className="ast-page">
+            <PortalDetailBackLink href={PORTAL_ROUTES.markets} label="Retour aux marchés" />
 
-        <section className="overflow-hidden rounded-v-card border border-v-fg-10 bg-v-fg-05">
-          <div className="flex flex-col gap-5 p-5 sm:p-6">
-            <AppEyebrow>Crypto</AppEyebrow>
-
-            <div className="flex items-center gap-3">
-              <PortalCryptoAvatar
-                ticker={data.ticker}
-                symbol={data.symbol}
-                apiLogoUrl={data.logoUrl}
-                size="md"
-              />
-              <h1 className="m-0 flex-1 font-ui text-[22px] font-semibold tracking-v-tight text-v-fg sm:text-[26px]">
-                {data.name}
-              </h1>
-              <button
-                type="button"
-                onClick={() => void toggleFavorite()}
-                disabled={favoriteBusy}
-                aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                className={cn(
-                  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-v-fg-10 bg-v-card transition-colors duration-v-fast hover:border-v-fg-20 disabled:opacity-50',
-                )}
-              >
-                <Star
-                  className={cn(
-                    'h-5 w-5',
-                    isFavorite ? 'fill-[#FFB800] text-[#FFB800]' : 'text-v-fg-muted',
-                  )}
-                />
-              </button>
-            </div>
-
-            <p className="m-0 font-ui text-[28px] font-bold leading-none tracking-v-tight text-v-fg sm:text-[32px]">
-              {priceLabel}
-            </p>
-
-            {periodPerf ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={cn(
-                    'rounded-v-pill px-2.5 py-1 font-ui text-[12px] font-semibold',
-                    perfPositive ? 'bg-v-green-bg text-v-green' : 'bg-v-error-bg text-v-error',
-                  )}
-                >
-                  {formatUsdAbsChange(periodPerf.absUsd)}
-                </span>
-                <span
-                  className={cn(
-                    'font-ui text-[13px] font-semibold',
-                    perfPositive ? 'text-v-green' : 'text-v-error',
-                  )}
-                >
-                  {formatChangePct(periodPerf.pct)}
-                </span>
-                <span className="font-ui text-[13px] text-v-fg-muted">
-                  {formatPeriodCaption(displayPeriod)}
-                </span>
-              </div>
-            ) : null}
+            <PortalInstrumentHeader
+              ticker={data.ticker}
+              symbol={data.symbol}
+              name={data.name}
+              logoUrl={data.logoUrl}
+              priceLabel={priceLabel}
+              change24hPct={data.change24hPct}
+              isFavorite={isFavorite}
+              favoriteBusy={favoriteBusy}
+              onToggleFavorite={() => void toggleFavorite()}
+            />
 
             <PortalInstrumentChartModule
               candles={candles}
@@ -303,27 +313,35 @@ export function PortalInstrumentDetailScreen({ ticker }: Props) {
               loading={candlesLoading}
               error={candlesError}
               onRetry={() => void loadCandles(period)}
+              periodPerf={periodPerf}
+              priceUsd={priceUsd}
             />
 
-            <div className="flex flex-wrap gap-2 border-t border-v-fg-10 pt-5">
-              <Button type="button" className="gap-1.5" disabled>
-                <ArrowUp className="h-4 w-4" />
-                Buy
-              </Button>
-              <Button type="button" variant="outline" className="gap-1.5" disabled>
-                <ArrowDown className="h-4 w-4" />
-                Sell
-              </Button>
-            </div>
+            <PortalInstrumentExtendedStats stats={extendedStats} />
+
+            <PortalInstrumentAboutSection name={data.name} ticker={data.ticker} />
+
+            {isSolInstrument ? <PortalSolanaWalletSection /> : null}
+
+            <PortalMarketsNewsSection
+              items={data.news}
+              title="Actualités liées"
+              showFilters={false}
+            />
+
+            <PortalInstrumentCtaBar buyHref={buyHref} sellHref={sellHref} canSell={hasPosition} />
           </div>
-        </section>
-
-        {isSolInstrument ? <PortalSolanaWalletSection /> : null}
-
-        <PortalMarketsNewsSection items={data.news} showFilters={false} />
-
-        <PortalResearchSection items={data.research} />
-      </PortalDashboardLayout>
+        }
+        side={
+          <PortalInstrumentSidebar
+            ticker={data.ticker}
+            priceUsd={priceUsd}
+            sidebarStats={sidebarStats}
+            buyHref={buyHref}
+            sellHref={sellHref}
+          />
+        }
+      />
     </PortalPageContainer>
   )
 }

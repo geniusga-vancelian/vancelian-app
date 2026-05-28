@@ -43,6 +43,7 @@ type Props = {
   currency: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  onCompleted?: () => void
 }
 
 type Step = 'form' | 'confirm' | 'executing' | 'done' | 'error' | 'blocked'
@@ -54,6 +55,7 @@ export function PortalBundleWithdrawDialog({
   currency,
   open,
   onOpenChange,
+  onCompleted,
 }: Props) {
   const [step, setStep] = useState<Step>('form')
   const [fullWithdraw, setFullWithdraw] = useState(false)
@@ -196,10 +198,12 @@ export function PortalBundleWithdrawDialog({
     try {
       await runner()
       invalidatePortalCache('portal:crypto-wallet')
+      invalidatePortalCache(`portal:crypto-wallet:bundle:${portfolioId}`)
       invalidatePortalCache('portal:dashboard')
       invalidatePortalCache('portal:markets')
       clearBundleWithdrawSession(portfolioId)
       setStep('done')
+      onCompleted?.()
     } catch (err) {
       setExecutionPhase('failed')
       setError(err instanceof Error ? err.message : 'Retrait impossible')

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Typographie · Webapp4</p>
+<p class="v-eyebrow">Brand voice</p>
+        <p style="font-family:var(--v-font-editorial);font-weight:300;font-style:italic;font-size:36px;line-height:1.3;margin:0;color:var(--v-fg)">« Là où l'argent travaille. »</p>
+        <p class="v-ed-body" style="margin:0;max-width:48ch">Nous sélectionnons un patrimoine d'exception, accessible dès quelques centaines d'euros, dans un cadre réglementaire européen.</p>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Échelle UI — Inter</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <span class="pv-caption">v-display · 64 / 1.0 · 700</span>
+        <p class="v-display" style="margin:0">Vancelian</p>
+        <span class="pv-caption">v-h1 · 44 / 1.1 · 600</span>
+        <p class="v-h1" style="margin:0">Mon portefeuille</p>
+        <span class="pv-caption">v-h2 · 30 / 1.2 · 600</span>
+        <p class="v-h2" style="margin:0">Offres exclusives</p>
+        <span class="pv-caption">v-h3 · 22 / 1.3 · 500</span>
+        <p class="v-h3" style="margin:0">Niseko · Lot 04</p>
+        <span class="pv-caption">v-body-lg · 16 / 1.5 · 400</span>
+        <p class="v-body-lg" style="margin:0">Patrimoine tokenisé, sélectionné par notre comité.</p>
+        <span class="pv-caption">v-body · 14 / 1.5 · 400</span>
+        <p class="v-body" style="margin:0">Tous les fonds sont en EUR, conservés en Europe.</p>
+        <span class="pv-caption">v-body-sm · 13 / 1.45 · 400</span>
+        <p class="v-body-sm" style="margin:0;color:var(--v-fg-muted)">Frais : 1,2 % par an, prélevés trimestriellement.</p>
+        <span class="pv-caption">v-eyebrow · 13 / 1.4 · 600 · 0.08em uppercase</span>
+        <p class="v-eyebrow" style="margin:0">Offres exclusives</p>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Échelle éditoriale — Newsreader optical sizes</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <span class="pv-caption">v-ed-display · 80 / 1.05 · 300 Newsreader 60pt</span>
+        <p class="v-ed-display" style="margin:0">Bâtir.</p>
+        <span class="pv-caption">v-ed-title-lg · clamp(56, 6vw, 80) · 300</span>
+        <p class="v-ed-title-lg" style="margin:0">Accédez à un patrimoine d'exception.</p>
+        <span class="pv-caption">v-ed-title · 48 / 1.15 · 400 Newsreader 24pt</span>
+        <p class="v-ed-title" style="margin:0">Vol. III · Typographie</p>
+        <span class="pv-caption">v-ed-quote · 24 / 1.4 · 300 italic</span>
+        <p class="v-ed-quote" style="margin:0">« Le silence comme luxe. »</p>
+        <span class="pv-caption">v-wordmark · 17 / 1 · 400 · 0.4em uppercase</span>
+        <p class="v-wordmark" style="margin:0">VANCELIAN</p>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">typography.html</span>
+          </div>
+&lt;h1 class="v-h1"&gt;Mon portefeuille&lt;/h1&gt;
+&lt;p class="v-body"&gt;Tous les fonds sont en EUR.&lt;/p&gt;
+&lt;p class="v-eyebrow"&gt;Offres exclusives&lt;/p&gt;
+&lt;p class="v-ed-title-lg"&gt;Accédez à un patrimoine d'exception.&lt;/p&gt;
+&lt;p class="v-ed-quote"&gt;« Là où l'argent travaille. »&lt;/p&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body"><strong>Newsreader sur un bouton est un bug.</strong> <strong>Inter sur le wordmark est un bug.</strong> Le mix Inter + Newsreader fonctionne parce que chaque rôle est strict. Pour les montants, on utilise les classes <code>.v-amount-*</code> qui ajoutent <code>tnum</code> et <code>lnum</code> — pas de chiffres oldstyle accidentels.</div>
+</div></body></html>

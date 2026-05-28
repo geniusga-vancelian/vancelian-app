@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Accounts List · Webapp4</p>
+<div class="v-card v-card--list" style="width:100%">
+        <button class="acc-row" type="button">
+          <span class="avt avt--40 avt--terra"><img class="avt__ic" src="/app-ds/assets/icons/payment-card.svg" alt="" /></span>
+          <span class="acc-row__body">
+            <p class="acc-row__title v-h4">Compte courant</p>
+            <span class="acc-row__sub">EUR · 8 245,00 €</span>
+          </span>
+          <span class="acc-row__right">
+            <span class="v-amount-md">8 245,00 €</span>
+            <span class="acc-row__daily" style="color:var(--v-green)">+ 1,20 €</span>
+          </span>
+        </button>
+        <button class="acc-row" type="button">
+          <span class="avt avt--40 avt--green"><img class="avt__ic" src="/app-ds/assets/icons/folder.svg" alt="" /></span>
+          <span class="acc-row__body">
+            <p class="acc-row__title v-h4">Coffre Flex</p>
+            <span class="acc-row__sub">4 placements · TRI moyen 6,8 %</span>
+          </span>
+          <span class="acc-row__right">
+            <span class="v-amount-md">3 420,80 €</span>
+            <span class="acc-row__daily" style="color:var(--v-green)">+ 0,64 €</span>
+          </span>
+        </button>
+        <button class="acc-row" type="button">
+          <span class="avt avt--40 avt--blue"><img class="avt__ic" src="/app-ds/assets/icons/shield.svg" alt="" /></span>
+          <span class="acc-row__body">
+            <p class="acc-row__title v-h4">Patrimoine institutionnel</p>
+            <span class="acc-row__sub">2 placements · Lockup 24 mois</span>
+          </span>
+          <span class="acc-row__right">
+            <span class="v-amount-md">814,52 €</span>
+            <span class="acc-row__daily" style="color:var(--v-green)">+ 0,76 €</span>
+          </span>
+        </button>
+      </div>
+</div></body></html>

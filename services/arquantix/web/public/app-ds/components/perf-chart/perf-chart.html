@@ -1,19 +1,11 @@
-<section>
-  <div class="perf-chart__head">
-    <h2 class="perf-chart__title">Performance</h2>
-    <span class="perf-chart__now">
-      <span class="perf-chart__now-k">Variation</span>
-      <span class="perf-chart__now-v" style="color:var(--v-green)">+ 12,4 %</span>
-    </span>
-  </div>
-  <svg class="perf-chart__svg" viewBox="0 0 720 200" preserveAspectRatio="none">
-    <line x1="24" x2="696" y1="100" y2="100" stroke="var(--v-fg-10)" stroke-width="1"/>
-    <path d="M24,140 L180,120 L360,90 L540,70 L696,55" fill="none" stroke="var(--v-green)" stroke-width="2"/>
-  </svg>
-  <div class="perf-chart__xaxis"><span>Jan</span><span>Jun</span><span>Déc</span></div>
-  <div class="perf-tabs" role="tablist">
-    <button type="button" class="perf-tabs__tab">1M</button>
-    <button type="button" class="perf-tabs__tab is-active">1A</button>
-    <button type="button" class="perf-tabs__tab">Max</button>
-  </div>
-</section>
+<!-- En React (cf. PerfChart dans primitives.jsx) -->
+<PerfChart
+  title="Performance"
+  ranges={{
+    "1S": { values: [100,102,101,…], labels: ["L","M","M","J","V","S","D"] },
+    "1A": { values: […], labels: [...] },
+    Max:  { values: […], labels: [...] },
+  }}
+  defaultRange="1A"
+  valueAxisFmt={(v) => v.toFixed(1) + " %"}
+/>

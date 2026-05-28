@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Avatar · Webapp4</p>
+<div class="pv-row">
+          <span class="avt avt--terra">FL</span>
+          <span class="avt avt--green">CB</span>
+          <span class="avt avt--blue">MN</span>
+          <span class="avt avt--dark">JD</span>
+          <span class="avt avt--warm">VW</span>
+          <span class="avt">VL</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Variantes — icône Kalai</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <div class="pv-row">
+          <span class="avt avt--dark"><img class="avt__ic" src="/app-ds/assets/icons/wallet.svg" alt="" /></span>
+          <span class="avt avt--terra"><img class="avt__ic" src="/app-ds/assets/icons/payment-card.svg" alt="" /></span>
+          <span class="avt avt--green"><img class="avt__ic" src="/app-ds/assets/icons/check.svg" alt="" /></span>
+          <span class="avt avt--blue"><img class="avt__ic" src="/app-ds/assets/icons/shield.svg" alt="" /></span>
+          <span class="avt avt--warm"><img class="avt__ic" src="/app-ds/assets/icons/star.svg" alt="" /></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Tailles</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <div class="pv-row" style="align-items:flex-end">
+          <span class="avt avt--24 avt--dark">FL</span>
+          <span class="avt avt--32 avt--dark">FL</span>
+          <span class="avt avt--40 avt--dark">FL</span>
+          <span class="avt avt--52 avt--dark">FL</span>
+          <span class="avt avt--64 avt--dark">FL</span>
+          <span class="avt avt--80 avt--dark">FL</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Photo + status</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <div class="pv-row">
+          <span class="avt avt--56"><img src="/app-ds/assets/photos/advisor-helene.jpg" alt="Hélène" /><span class="avt__status"></span></span>
+          <span class="avt avt--56"><img src="/app-ds/assets/photos/advisor-helene.jpg" alt="Hélène" /><span class="avt__status avt__status--out"></span></span>
+          <span class="avt avt--56"><img src="/app-ds/assets/photos/advisor-helene.jpg" alt="Hélène" /><span class="avt__status avt__status--warn"></span></span>
+          <span class="avt avt--56 avt--dark" style="--avt-size:56px"><img class="avt__ic" src="/app-ds/assets/icons/bell.svg" alt="" /><span class="avt__notif">3</span></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Pile</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <div class="avt-stack">
+          <span class="avt avt--32 avt--terra">A</span>
+          <span class="avt avt--32 avt--green">B</span>
+          <span class="avt avt--32 avt--blue">C</span>
+          <span class="avt avt--32 avt--warm">D</span>
+          <span class="avt-stack__more">+12</span>
+        </div>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">avatar.html</span>
+          </div>
+&lt;!-- Initiales --&gt;
+&lt;span class="avt avt--terra"&gt;FL&lt;/span&gt;
+
+&lt;!-- Icône Kalai en slot --&gt;
+&lt;span class="avt avt--dark"&gt;
+  &lt;img class="avt__ic" src="assets/icons/wallet.svg" alt="" /&gt;
+&lt;/span&gt;
+
+&lt;!-- Photo --&gt;
+&lt;span class="avt avt--56"&gt;
+  &lt;img src="assets/photos/advisor.jpg" alt="Hélène" /&gt;
+  &lt;span class="avt__status"&gt;&lt;/span&gt;
+&lt;/span&gt;
+
+&lt;!-- Pile --&gt;
+&lt;span class="avt-stack"&gt;
+  &lt;span class="avt avt--32 avt--terra"&gt;A&lt;/span&gt;
+  &lt;span class="avt avt--32 avt--green"&gt;B&lt;/span&gt;
+  &lt;span class="avt-stack__more"&gt;+12&lt;/span&gt;
+&lt;/span&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">L'avatar par défaut est <strong>warm</strong> (fond <code>--v-card-warm</code>). Initiales : 2 lettres, Inter Medium, 0.35 × taille. Le slot d'icône utilise <code>.avt__ic</code> avec brightness/invert filter pour teindre l'icône en fonction du background.</div>
+</div></body></html>

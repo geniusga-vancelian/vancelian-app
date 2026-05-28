@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Section Head · Webapp4</p>
+<section class="sec sec--lg" style="width:100%;margin:0">
+          <div class="sec__head">
+            <h2 class="sec__title">Mes comptes</h2>
+            <div class="sec__actions">
+              <button class="sec__more">Voir tout
+                <span class="ic" style="width:14px;height:14px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/chevron-right.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/chevron-right.svg) center/contain no-repeat;color:var(--v-fg-muted)"></span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Avec eyebrow + count + drillable</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <section class="sec sec--lg" style="width:100%;margin:0">
+          <p class="v-eyebrow" style="margin:0">Offres exclusives</p>
+          <div class="sec__head">
+            <h2 class="sec__title">Accédez à un patrimoine d'exception.</h2>
+            <span class="sec__count">12</span>
+            <span class="sec__chev"><span class="ic" style="width:18px;height:18px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/chevron-right.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/chevron-right.svg) center/contain no-repeat"></span></span>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Avec description</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <section class="sec sec--md" style="width:100%;margin:0">
+          <div class="sec__head">
+            <h2 class="sec__title">Besoin d'aide ?</h2>
+          </div>
+          <p class="sec__desc">Notre équipe vous répond généralement sous 1 heure ouvrée.</p>
+        </section>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Avec action accent terracotta</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <section class="sec sec--lg" style="width:100%;margin:0">
+          <div class="sec__head">
+            <h2 class="sec__title">Actualités</h2>
+            <div class="sec__actions">
+              <button class="sec__more sec__more--accent">Toutes les actus
+                <span class="ic" style="width:14px;height:14px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/chevron-right.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/chevron-right.svg) center/contain no-repeat"></span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">section-head.html</span>
+          </div>
+&lt;section class="sec sec--lg"&gt;
+  &lt;p class="v-eyebrow"&gt;Offres exclusives&lt;/p&gt;
+  &lt;div class="sec__head"&gt;
+    &lt;h2 class="sec__title"&gt;Accédez à un patrimoine d'exception.&lt;/h2&gt;
+    &lt;span class="sec__count"&gt;12&lt;/span&gt;
+    &lt;span class="sec__chev"&gt;…&lt;/span&gt;
+    &lt;div class="sec__actions"&gt;
+      &lt;button class="sec__more"&gt;Voir tout&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;p class="sec__desc"&gt;Notre équipe vous répond généralement sous 1 heure ouvrée.&lt;/p&gt;
+&lt;/section&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">Taille <code>--lg</code> (default) = 28 px Inter 700. <code>--md</code> = 22 px 600. <code>--sm</code> = 17 px 700. Le « Voir tout » est par défaut neutre (gris), variante <code>--accent</code> en terracotta réservée aux sections éditoriales.</div>
+</div></body></html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Search Overlay · Webapp4</p>
+<div class="pv-canvas pv-canvas--white" style="padding:0">
+      <div class="pv-search-demo" style="width:100%">
+        <div class="search-scrim"></div>
+        <div class="search-shell">
+          <header class="search-bar">
+            <div class="search-bar__inner">
+              <span class="ic search-bar__ic" style="width:18px;height:18px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/search.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/search.svg) center/contain no-repeat"></span>
+              <input class="search-bar__input" placeholder="Rechercher un placement, une page, une aide…" value="Niseko" />
+              <button class="search-bar__close">
+                <span class="search-bar__kbd">Esc</span>Fermer
+              </button>
+            </div>
+          </header>
+          <div class="search-results">
+            <div class="search-results__inner">
+              <section>
+                <h3 class="search-group__title">Mes placements</h3>
+                <ul class="search-list">
+                  <li><button class="search-row">
+                    <span class="search-row__ic">
+                      <img src="/app-ds/assets/icons/folder.svg" width="16" height="16" alt="" />
+                    </span>
+                    <span class="search-row__body">
+                      <span class="search-row__title"><mark class="search-mark">Niseko</mark> · Lot 04</span>
+                      <span class="search-row__sub">Tokenisation immobilière · Funded 30 %</span>
+                    </span>
+                  </button></li>
+                </ul>
+              </section>
+              <section>
+                <h3 class="search-group__title">Offres exclusives</h3>
+                <ul class="search-list">
+                  <li><button class="search-row">
+                    <span class="search-row__ic"><img src="/app-ds/assets/icons/folder.svg" width="16" height="16" alt="" /></span>
+                    <span class="search-row__body">
+                      <span class="search-row__title">Résidence <mark class="search-mark">Niseko</mark> Hokkaido</span>
+                      <span class="search-row__sub">Offre fermée le 12 mars 2026</span>
+                    </span>
+                  </button></li>
+                </ul>
+              </section>
+              <section>
+                <h3 class="search-group__title">Suggestions</h3>
+                <div class="search-suggest">
+                  <button class="search-suggest__chip">Coffre Flex</button>
+                  <button class="search-suggest__chip">Lubéron</button>
+                  <button class="search-suggest__chip">Panier crypto</button>
+                  <button class="search-suggest__chip">Marseille</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+</div></body></html>

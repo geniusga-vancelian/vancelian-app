@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Asset Chip · Webapp4</p>
+<div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:380px">
+        <button class="achip">
+          <span class="avt avt--40 avt--warm" style="--avt-size:38px"><img class="avt__ic" src="/app-ds/assets/icons/bitcoin.svg" alt="" /></span>
+          <span class="achip__body">
+            <span class="achip__name">Bitcoin</span>
+            <span class="achip__sub">BTC · 65 240,12 €</span>
+          </span>
+          <span class="ic achip__chv" style="width:14px;height:14px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/chevron-down.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/chevron-down.svg) center/contain no-repeat"></span>
+        </button>
+        <button class="achip">
+          <span class="avt avt--40 avt--terra" style="--avt-size:38px"><img class="avt__ic" src="/app-ds/assets/icons/payment-card.svg" alt="" /></span>
+          <span class="achip__body">
+            <span class="achip__name">Compte courant</span>
+            <span class="achip__sub">EUR · 8 245,00 €</span>
+          </span>
+          <span class="ic achip__chv" style="width:14px;height:14px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/chevron-down.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/chevron-down.svg) center/contain no-repeat"></span>
+        </button>
+      </div>
+</div></body></html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Eyebrow · Webapp4</p>
+<p class="v-eyebrow" style="margin:0">Offres exclusives</p>
+        <p class="v-eyebrow" style="margin:0;color:var(--v-fg)">Funded 30 %</p>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Variante sm (10 px)</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <p class="v-eyebrow--sm" style="margin:0">MIN. INVESTI</p>
+        <p class="v-eyebrow--sm" style="margin:0">DURÉE MOYENNE</p>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Variante tagged (fond card-warm)</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <span class="v-eyebrow v-eyebrow--tagged">Cadre réglementaire</span>
+        <span class="v-eyebrow v-eyebrow--tagged" style="margin-left:12px">Vol. III · Planche 02</span>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">eyebrow.html</span>
+          </div>
+&lt;span class="v-eyebrow"&gt;Offres exclusives&lt;/span&gt;
+&lt;span class="v-eyebrow--sm"&gt;Min. investi&lt;/span&gt;
+&lt;span class="v-eyebrow v-eyebrow--tagged"&gt;Cadre réglementaire&lt;/span&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">Tracking <code>0.08em</code>, weight 600. <strong>Jamais</strong> sur un titre éditorial (Newsreader) — c'est un label fonctionnel. La variante <code>--tagged</code> est rare, réservée à l'ouverture d'une section dans un récit.</div>
+</div></body></html>

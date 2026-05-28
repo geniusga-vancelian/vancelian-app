@@ -1,13 +1,17 @@
-<article class="bal bal--dark" style="max-width:420px;">
-  <button type="button" class="bal__toggle" aria-label="Afficher allocation"><span class="ic" style="width:16px;height:16px;-webkit-mask-image:url('/icons/kalai/bar-chart-2.svg');mask-image:url('/icons/kalai/bar-chart-2.svg');"></span></button>
-  <div class="bal__solde">
-    <span class="bal__lbl">Solde total <button type="button" class="ic-btn" style="width:28px;height:28px;border:0;background:none;padding:0;"><span class="ic" style="width:16px;height:16px;-webkit-mask-image:url('/icons/kalai/eye.svg');mask-image:url('/icons/kalai/eye.svg');"></span></button></span>
-    <span class="v-amount-hero bal__amt" style="font-size:clamp(40px,8vw,56px);color:var(--v-white);">48 920,00 €</span>
-    <span class="bal__chg"><span class="ic" style="width:14px;height:14px;-webkit-mask-image:url('/icons/kalai/trending-up.svg');mask-image:url('/icons/kalai/trending-up.svg');"></span> + 842 € <span class="bal__chg-pct">(+ 1,8 %)</span></span>
+<div class="v-card" style="padding:32px;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <p class="v-eyebrow">Solde total</p>
+    <div style="display:flex;gap:8px">
+      <button class="ic-btn" aria-label="Masquer le solde">…</button>
+      <button class="ic-btn" aria-label="Vue allocation">…</button>
+    </div>
   </div>
-  <div class="bal__actions">
-    <button type="button" class="btn btn--lg">Investir</button>
-    <button type="button" class="btn btn--lg">Échanger</button>
-    <button type="button" class="btn btn--lg">Déposer</button>
+  <p class="v-amount-hero">12 480,32 €</p>
+  <p class="money-phrase">Vous gagnez aujourd'hui <span>24,60 €</span> de revenus.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn--primary">Investir</button>
+    <button class="btn btn--secondary">Échanger</button>
+    <button class="btn btn--secondary">Déposer</button>
+    <button class="btn btn--secondary">Envoyer</button>
   </div>
-</article>
+</div>

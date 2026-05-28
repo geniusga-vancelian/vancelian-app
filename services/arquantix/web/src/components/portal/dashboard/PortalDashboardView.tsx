@@ -1,22 +1,25 @@
 'use client'
 
 import { useMemo } from 'react'
+import {
+  SupportAsidePanel,
+  hasSupportAsideContent,
+} from '@/components/design-system/SupportAsidePanel'
 import { PortalAccountsCard } from '@/components/portal/dashboard/PortalAccountsCard'
 import { PortalDashboardHeader } from '@/components/portal/dashboard/PortalDashboardHeader'
-import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
-import { PortalUnlockEuroBanner } from '@/components/portal/dashboard/PortalUnlockEuroBanner'
+import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalNewsWidgetSection } from '@/components/portal/dashboard/PortalNewsWidgetSection'
+import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
+import { usePortalSupportContent } from '@/components/portal/PortalSupportContentProvider'
 import {
   applyWalletRowAccess,
   buildWalletRows,
   normalizeChartSeries,
-  resolveBalanceCardIdentity,
   resolveHeaderBalance,
   resolvePerformanceChangeLabels,
   resolveReferenceCurrency,
-  shouldShowUnlockEuroBanner,
 } from '@/lib/portal/dashboardFormat'
 import type { PortalDashboardPayload } from '@/lib/portal/dashboardTypes'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
@@ -51,6 +54,8 @@ export function PortalDashboardView({
 }: Props) {
   const { chain } = usePortalChainContext()
   const { walletScope } = usePortalWalletScopeContext()
+  const cmsSupport = usePortalSupportContent()
+  const showSupportAside = hasSupportAsideContent(cmsSupport)
 
   const derived = useMemo(() => {
     const currency = resolveReferenceCurrency(data)
@@ -89,84 +94,88 @@ export function PortalDashboardView({
     const balanceLabel = resolveHeaderBalance(data.globalStatistics, rows, currency, {
       scopedView: true,
     })
-    const identity = resolveBalanceCardIdentity(data)
-    const showUnlockEuroBanner = shouldShowUnlockEuroBanner(data.profile)
     const hasPrivyWallet = (data.privyPersonWallets?.wallets?.length ?? 0) > 0
     const depositHref = resolvePortalDepositHref(hasPrivyWallet)
     const chartValues = normalizeChartSeries(data.globalHistory?.points ?? [])
     const performance = resolvePerformanceChangeLabels(data.globalStatistics, currency)
-    const showChart = true
 
     return {
       currency,
       rows,
       balanceLabel,
-      identity,
-      showUnlockEuroBanner,
       depositHref,
       chartValues,
       performance,
-      showChart,
       registrationProgress: data.profile?.registration_derived_progress_percent,
+      registrationStepCompleted: data.profile?.registration_derived_completed_count,
+      registrationStepTotal: data.profile?.registration_derived_total_count,
       chainLabel,
       walletLabel,
     }
   }, [data, chain, walletScope])
 
+  const portfolioPending = portfolioLoading || refreshing
+
   return (
     <PortalPageContainer className={className}>
-      <PortalDashboardLayout>
-        <PortalReveal index={0}>
-          <PortalDashboardHeader
-            welcomeName={derived.identity.displayName}
-            showAvatar={derived.identity.showAvatar}
-            avatarInitials={derived.identity.avatarInitials}
-            avatarImageUrl={derived.identity.avatarImageUrl}
-            balanceLabel={derived.balanceLabel}
-            balancePending={portfolioLoading || refreshing}
-            changeAmountLabel={derived.performance.amountLabel}
-            changePercentLabel={derived.performance.percentLabel}
-            changePositive={derived.performance.positive}
-            chartValues={derived.chartValues}
-            showChart={derived.showChart}
-            depositHref={derived.depositHref}
-            className="pt-0"
-          />
-        </PortalReveal>
+      <PortalPortfolioLayout
+        main={
+          <>
+            <PortalReveal index={0}>
+              <PortalDashboardHeader
+                balanceLabel={derived.balanceLabel}
+                balancePending={portfolioPending}
+                changeAmountLabel={derived.performance.amountLabel}
+                changePositive={derived.performance.positive}
+                depositHref={derived.depositHref}
+                chartValues={derived.chartValues}
+                className="pt-0"
+              />
+            </PortalReveal>
 
-        {derived.showUnlockEuroBanner ? (
-          <PortalReveal index={1}>
-            <PortalUnlockEuroBanner progressPercent={derived.registrationProgress} />
-          </PortalReveal>
-        ) : null}
+            <PortalReveal index={1}>
+              <PortalAccountsCard
+                rows={derived.rows}
+                portfolioPending={portfolioPending}
+                registrationProgressPercent={derived.registrationProgress}
+                registrationStepCompleted={derived.registrationStepCompleted}
+                registrationStepTotal={derived.registrationStepTotal}
+              />
+            </PortalReveal>
 
-        <PortalReveal index={2}>
-          <PortalAccountsCard rows={derived.rows} portfolioPending={portfolioLoading || refreshing} />
-        </PortalReveal>
+            <PortalReveal index={2}>
+              <PortalNewsWidgetSection locale="fr" initialData={data.newsWidget} />
+            </PortalReveal>
 
-        <PortalReveal index={3}>
-          <PortalNewsWidgetSection locale="fr" initialData={data.newsWidget} />
-        </PortalReveal>
+            {data.partial ? (
+              <p className="m-0 font-ui text-[12px] text-v-fg-muted">
+                Some portfolio data could not be loaded. Refresh or check the API.
+              </p>
+            ) : null}
 
-        {data.partial ? (
-          <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-            Some portfolio data could not be loaded. Refresh or check the API.
-          </p>
-        ) : null}
-
-        {showRefreshLink && onRefresh ? (
-          <button
-            type="button"
-            disabled={refreshing}
-            onClick={() => void onRefresh()}
-            className={cn(
-              'v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50',
-            )}
-          >
-            {refreshing ? 'Refreshing…' : 'Refresh dashboard'}
-          </button>
-        ) : null}
-      </PortalDashboardLayout>
+            {showRefreshLink && onRefresh ? (
+              <button
+                type="button"
+                disabled={refreshing}
+                onClick={() => void onRefresh()}
+                className={cn(
+                  'v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50',
+                )}
+              >
+                {refreshing ? 'Refreshing…' : 'Refresh dashboard'}
+              </button>
+            ) : null}
+          </>
+        }
+        side={
+          <>
+            <PortalAdvisorBanner />
+            {showSupportAside ? (
+              <SupportAsidePanel support={cmsSupport} stickyTopClassName="static" className="static" />
+            ) : null}
+          </>
+        }
+      />
     </PortalPageContainer>
   )
 }

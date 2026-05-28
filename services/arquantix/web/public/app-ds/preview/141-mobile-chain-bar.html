@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Mobile Chain Bar · Webapp4</p>
+<div class="pv-canvas pv-canvas--phone" style="padding:16px;align-items:stretch">
+      <div class="mchain" style="display:flex;gap:8px">
+        <button class="topnav__pill" type="button">
+          <span class="ic" style="width:14px;height:14px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat"></span>
+          <span>Wallet</span>
+          <span class="ic ic--chv" style="width:12px;height:12px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/chevron-down.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/chevron-down.svg) center/contain no-repeat"></span>
+        </button>
+        <button class="topnav__pill" type="button">
+          <span class="net-dot net-dot--base"></span>
+          <span>Base</span>
+          <span class="ic ic--chv" style="width:12px;height:12px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/chevron-down.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/chevron-down.svg) center/contain no-repeat"></span>
+        </button>
+      </div>
+    </div>
+</div></body></html>

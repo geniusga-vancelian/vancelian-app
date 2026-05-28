@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Featured Card · Webapp4</p>
+<button type="button" style="position:relative;width:100%;max-width:340px;aspect-ratio:3/4;border-radius:12px;overflow:hidden;border:0;padding:0;cursor:pointer;background:#141208">
+        <div style="position:absolute;inset:0;background:url(/app-ds/assets/photos/niseko-entrance.jpg) center/cover;"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(20,18,8,0) 30%, rgba(20,18,8,0.75) 100%);"></div>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:24px;text-align:left;color:#EDECEC">
+          <span class="v-eyebrow" style="color:rgba(237,236,236,0.75);align-self:flex-start">Offre du mois</span>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <p style="font-family:var(--v-font-display);font-weight:300;font-size:28px;line-height:1.15;margin:0;color:#fff">Niseko · Lot 04</p>
+            <p style="font-family:var(--v-font-ui);font-size:14px;line-height:1.5;margin:0;color:rgba(237,236,236,0.85)">Résidence d'altitude à Hokkaido. TRI cible 7,2 %. Funded 30 %.</p>
+            <span style="display:inline-flex;align-items:center;gap:8px;color:#fff;font-weight:500;font-size:14px;margin-top:4px">
+              Découvrir l'offre
+              <img src="/app-ds/assets/icons/arrow-right.svg" alt="" width="14" height="14" style="filter:invert(1)" />
+            </span>
+          </div>
+        </div>
+      </button>
+</div></body></html>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Dropdown Menu · Webapp4</p>
+<div class="dd" role="menu" style="position:relative;animation:none;opacity:1;transform:none;width:300px">
+        <div class="dd__section-lbl">Connecté</div>
+        <button class="dd__item" type="button">
+          <span class="avt avt--36 avt--dark" style="--avt-size:36px"><img class="avt__ic" src="/app-ds/assets/icons/wallet.svg" alt="" /></span>
+          <div class="dd__item-body">
+            <div class="dd__item-name">Wallet Vancelian (Privy)</div>
+            <div class="dd__item-sub">Privy · 0xb1ab…dc83</div>
+          </div>
+          <span class="ic dd__item-check" style="width:16px;height:16px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/check.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/check.svg) center/contain no-repeat;color:var(--v-green)"></span>
+        </button>
+        <div class="dd__sep"></div>
+        <a href="#" class="dd__item dd__item--row">
+          <span class="ic" style="width:16px;height:16px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/plus.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/plus.svg) center/contain no-repeat;color:var(--v-fg-muted)"></span>
+          <span>Ajouter un wallet</span>
+        </a>
+      </div>
+</div></body></html>

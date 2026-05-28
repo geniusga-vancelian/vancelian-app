@@ -16,6 +16,7 @@ import { AppButton } from '@/components/design-system/app/AppButton'
 import { AppMetricsList } from '@/components/design-system/app/AppMetricsList'
 import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
+import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
 import { PortalBundleAllocationPanel } from '@/components/portal/bundles/PortalBundleAllocationPanel'
 import { PortalBundleWithdrawDialog } from '@/components/portal/bundles/PortalBundleWithdrawDialog'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
@@ -35,8 +36,10 @@ import {
   perfToneClass,
   selectMoneyValue,
 } from '@/lib/portal/cryptoWalletFormat'
+import { mapCryptoTransactionToHistoryItem } from '@/lib/portal/cryptoTransactionHistoryFormat'
 import { splitBundleHoldings } from '@/lib/portal/bundleWithdrawFormat'
 import type { PortalBundlePosition, PortalCryptoWalletBundleDetailPayload } from '@/lib/portal/cryptoWalletTypes'
+import { CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW } from '@/lib/portal/cryptoWalletTypes'
 import {
   PORTAL_ROUTES,
   portalCryptoWalletAssetRoute,
@@ -103,6 +106,16 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
     () => splitBundleHoldings(bundle?.positions, currency),
     [bundle?.positions, currency],
   )
+
+  const transactionPreview = useMemo(() => {
+    const txs = data?.transactions ?? []
+    return txs
+      .slice(0, CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW)
+      .map((tx) => mapCryptoTransactionToHistoryItem(tx, currency))
+  }, [currency, data?.transactions])
+
+  const hasMoreTransactions =
+    (data?.transactions?.length ?? 0) > CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW
 
   const canWithdraw = holdingsSplit.totalWithdrawableEstimate > 0.001
 
@@ -287,6 +300,25 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
           </section>
         </PortalReveal>
 
+        <PortalReveal index={5}>
+          <section className="flex w-full flex-col gap-3">
+            <AppSectionHeader title="Activité" size="sm" />
+            {transactionPreview.length > 0 ? (
+              <PortalTransactionHistory title="" seamless items={transactionPreview} />
+            ) : (
+              <p className="m-0 font-ui text-[13px] text-v-fg-muted">
+                Aucune opération enregistrée pour ce bundle.
+              </p>
+            )}
+            {hasMoreTransactions ? (
+              <p className="m-0 font-ui text-[12px] text-v-fg-muted">
+                {data?.transactions?.length ?? 0} opérations au total — rechargez pour voir la liste
+                complète.
+              </p>
+            ) : null}
+          </section>
+        </PortalReveal>
+
         <button
           type="button"
           disabled={refreshing}
@@ -303,6 +335,7 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
           currency={currency}
           open={withdrawOpen}
           onOpenChange={setWithdrawOpen}
+          onCompleted={() => void refresh()}
         />
       </PortalDashboardLayout>
     </PortalPageContainer>

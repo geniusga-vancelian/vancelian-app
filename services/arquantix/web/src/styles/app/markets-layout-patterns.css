@@ -1,0 +1,898 @@
+@scope ([data-v-ds='app']) {
+.mk-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+}
+
+/* The segmented filter sits flush above the section's list card.
+   Reuse the .placer-filter visual (warm seg over off-white). */
+.mk-filter {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: -8px;
+  margin-bottom: 12px;
+}
+.mk-filter .seg { background: var(--v-fg-05); }
+
+/* ---- Asset list row (used by Top crypto & Top actions) ---------- */
+.mk-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--v-motion-fast) var(--v-ease-out);
+}
+.mk-row:hover { background: var(--v-fg-05); }
+.mk-row__rank {
+  width: 18px;
+  font-family: var(--v-font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--v-fg-light);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  flex-shrink: 0;
+}
+.mk-row__ic {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  color: var(--v-fg);
+}
+.mk-row__ic img {
+  width: 36px;
+  height: 36px;
+  display: block;
+}
+.mk-row__ic-letter {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+.mk-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mk-row__name {
+  font-family: var(--v-font-ui);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--v-fg);
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mk-row__sym {
+  font-family: var(--v-font-ui);
+  font-size: 12px;
+  color: var(--v-fg-light);
+  letter-spacing: 0.04em;
+}
+.mk-row__spark {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.mk-row__spark svg { display: block; }
+.mk-row__nums {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 130px;
+  flex-shrink: 0;
+}
+.mk-row__price {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+  letter-spacing: -0.005em;
+}
+.mk-row__chg {
+  font-family: var(--v-font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' on;
+}
+.mk-row__chg--up   { color: var(--v-green); }
+.mk-row__chg--down { color: var(--v-error); }
+.mk-row__chv {
+  color: var(--v-fg-20);
+  flex-shrink: 0;
+}
+
+/* Compact responsive — hide sparkline + rank below */
+@media (max-width: 720px) {
+  .mk-row { padding: 12px 16px; gap: 12px; }
+  .mk-row__rank { display: none; }
+  .mk-row__spark { display: none; }
+  .mk-row__nums { min-width: 100px; }
+  .mk-row__name { font-size: 14px; }
+}
+
+/* ---- Coloured letter tile for stock tickers --------------------- */
+.mk-tile {
+  width: 36px; height: 36px;
+  border-radius: var(--v-radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+}
+
+/* ---- News list filter (reuses .nsl from position-detail) -------- */
+/* The nsl already has v-card padding + hr-thin separators.
+   We just need a category dot column visible in the markets view. */
+.mk-news-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--v-font-ui);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v-fg-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.mk-news-cat__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+
+/* ====================================================================
+   ASSET DETAIL TEMPLATE — page-level
+   ==================================================================== */
+.ast-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.ast-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ast-header__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ast-header__ic {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.ast-header__ic img { width: 52px; height: 52px; display: block; }
+.ast-header__name {
+  font-family: var(--v-font-ui);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--v-fg);
+  margin: 0;
+}
+.ast-header__sym {
+  font-family: var(--v-font-ui);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  color: var(--v-fg-light);
+  text-transform: uppercase;
+}
+
+.ast-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.ast-price {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+.ast-chg {
+  font-family: var(--v-font-ui);
+  font-weight: 500;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.ast-chg--up   { color: var(--v-green); }
+.ast-chg--down { color: var(--v-error); }
+.ast-chg__lbl  { color: var(--v-fg-light); font-weight: 400; margin-left: 6px; }
+
+/* ---- Favorite button (top-right of header) -------------------- */
+.ast-fav {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px 0 12px;
+  border-radius: var(--v-radius-pill);
+  background: transparent;
+  border: 1px solid var(--v-fg-10);
+  color: var(--v-fg-muted);
+  cursor: pointer;
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  align-self: center;
+  transition: background var(--v-motion-fast) var(--v-ease-out),
+              color var(--v-motion-fast) var(--v-ease-out),
+              border-color var(--v-motion-fast) var(--v-ease-out);
+}
+.ast-fav:hover {
+  background: var(--v-fg-05);
+  color: var(--v-fg);
+  border-color: var(--v-fg-20);
+}
+.ast-fav.is-on {
+  background: var(--v-terracotta-bg);
+  color: var(--v-terracotta);
+  border-color: transparent;
+}
+.ast-fav.is-on .ic {
+  color: var(--v-terracotta);
+}
+.ast-fav .ic { color: currentColor; }
+
+@media (max-width: 540px) {
+  .ast-fav__lbl { display: none; }
+  .ast-fav { padding: 0 10px; width: 36px; justify-content: center; }
+}
+
+/* ---- Stats grid ------------------------------------------------- */
+.ast-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  padding: 0;
+  background: var(--v-card);
+  border-radius: var(--v-radius-card);
+  overflow: hidden;
+}
+.ast-stat {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-right: 1px solid var(--v-fg-10);
+}
+.ast-stat:last-child { border-right: 0; }
+.ast-stat__k {
+  font-family: var(--v-font-ui);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v-fg-light);
+}
+.ast-stat__v {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+}
+@media (max-width: 720px) {
+  .ast-stats { grid-template-columns: repeat(2, 1fr); }
+  .ast-stat { border-bottom: 1px solid var(--v-fg-10); }
+  .ast-stat:nth-child(2n) { border-right: 0; }
+  .ast-stat:nth-child(n+3) { border-bottom: 0; }
+}
+
+/* ---- About prose ------------------------------------------------ */
+.ast-prose {
+  font-family: var(--v-font-ui);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--v-fg-body);
+  margin: 0;
+  text-wrap: pretty;
+  max-width: 70ch;
+}
+
+/* ---- Sticky bottom CTA bar (asset detail) ----------------------- */
+.ast-cta {
+  display: flex;
+  gap: 12px;
+  padding: 16px 0;
+}
+.ast-cta .btn { flex: 1; }
+
+/* ====================================================================
+   ASSET CHART — line / candles toggle
+   Sits below the SVG, on its own row, with time-ranges to the right.
+   ==================================================================== */
+.ast-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ast-chart__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ast-chart__title {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.005em;
+  color: var(--v-fg);
+  margin: 0;
+}
+.ast-chart__delta {
+  font-family: var(--v-font-ui);
+  font-weight: 500;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.ast-chart__delta-lbl {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v-fg-light);
+  font-weight: 500;
+}
+.ast-chart__svg {
+  width: 100%;
+  height: 240px;
+  display: block;
+}
+/* ---- Hover tooltip (line + candle) ----------------------------- */
+.ast-chart__plot {
+  position: relative;
+  cursor: crosshair;
+  touch-action: none;
+}
+.ast-chart__tip {
+  position: absolute;
+  top: 8px;
+  pointer-events: none;
+  background: #FFFFFF;
+  border: 1px solid var(--v-fg-10);
+  border-radius: 8px;
+  box-shadow: var(--v-elev-medium, 0 8px 24px rgba(26,24,21,0.08));
+  padding: 10px 12px;
+  display: flex; flex-direction: column;
+  gap: 4px;
+  font-family: var(--v-font-ui);
+  min-width: 140px;
+  z-index: 2;
+  animation: astTipIn 140ms var(--v-ease-out);
+}
+@keyframes astTipIn {
+  from { opacity: 0; transform: translate(var(--tx, 10px), -2px); }
+  to   { opacity: 1; }
+}
+.ast-chart__tip-cap {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v-fg-muted);
+}
+.ast-chart__tip-price {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--v-fg);
+  font-feature-settings: "tnum" on, "lnum" on;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.ast-chart__tip-cur {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v-fg-light);
+  margin-left: 2px;
+}
+.ast-chart__tip-ohlc {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 14px;
+  font-size: 12.5px;
+  color: var(--v-fg);
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.ast-chart__tip-ohlc b {
+  font-weight: 700;
+  color: var(--v-fg-muted);
+  margin-right: 4px;
+  letter-spacing: 0.04em;
+}
+.ast-chart__tip-delta {
+  font-size: 12px;
+  font-weight: 600;
+  font-feature-settings: "tnum" on;
+}
+.ast-chart__xaxis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  color: var(--v-fg-light);
+  padding: 0 24px;
+  font-variant-numeric: tabular-nums;
+  margin-top: -4px;
+}
+.ast-chart__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+/* .ast-chart__type / .ast-chart__type-btn — segmented control shared
+   with .perf-tabs (definition lives in coffre-detail.css so both pages
+   reach it without a duplicate). */
+.perf-tabs,
+.ast-chart__type {
+  margin-top: 14px;
+  display: inline-flex;
+  background: var(--v-fg-05);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+  align-self: center;
+  width: fit-content;
+}
+.ast-chart__type { margin-top: 0; }
+.perf-tabs__tab,
+.ast-chart__type-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-family: var(--v-font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--v-fg-light);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background var(--v-motion-fast) var(--v-ease-out),
+              color var(--v-motion-fast) var(--v-ease-out);
+}
+.perf-tabs__tab:hover,
+.ast-chart__type-btn:hover { color: var(--v-fg); }
+.perf-tabs__tab.is-active,
+.ast-chart__type-btn.is-active {
+  background: var(--v-fg);
+  color: var(--v-white);
+}
+.ast-chart__type-btn .ic { color: currentColor; }
+.perf-tabs__tab:focus-visible,
+.ast-chart__type-btn:focus-visible {
+  outline: 2px solid var(--v-terracotta);
+  outline-offset: 2px;
+}
+
+/* ---- Holding card buttons (Acheter / Vendre) -------------------- */
+.ast-pos__cta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ast-pos__cta .btn {
+  width: 100%;
+  justify-content: center;
+}
+.ast-pos--empty {
+  gap: 12px;
+}
+.ast-pos__empty {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--v-fg-body);
+}
+.ast-pos--empty .ast-pos__cta {
+  grid-template-columns: 1fr;
+}
+
+/* ---- Stats grid (main column) — extended set --------------------- */
+.ast-stats-x {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--v-fg-10);
+  border: 1px solid var(--v-fg-10);
+  border-radius: var(--v-radius-card);
+  overflow: hidden;
+}
+@media (max-width: 720px) {
+  .ast-stats-x { grid-template-columns: repeat(2, 1fr); }
+}
+.ast-stats-x__cell {
+  background: var(--v-white);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ast-stats-x__k {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--v-fg-light);
+}
+.ast-stats-x__v {
+  font-family: var(--v-font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--v-fg);
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+.ast-stats-x__sub {
+  font-family: var(--v-font-ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--v-fg-light);
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+.ast-stats-x__sub--up   { color: var(--v-green); }
+.ast-stats-x__sub--down { color: var(--v-error); }
+
+/* ---- Holding card (your position) ------------------------------ */
+.ast-pos {
+  background: var(--v-bg);
+  border: 1px solid var(--v-fg-10);
+  border-radius: var(--v-radius-card);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ast-pos__eyebrow {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v-fg-muted);
+}
+.ast-pos__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ast-pos__value {
+  font-family: var(--v-font-ui);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--v-fg);
+  line-height: 1.1;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+.ast-pos__qty {
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v-fg-light);
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+.ast-pos__pl {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--v-font-ui);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+.ast-pos__pl--up   { color: var(--v-green); }
+.ast-pos__pl--down { color: var(--v-error); }
+.ast-pos__pl-pct {
+  font-weight: 500;
+  font-size: 12.5px;
+  opacity: 0.85;
+}
+.ast-pos__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--v-fg-10);
+}
+.ast-pos__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ast-pos__k {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v-fg-light);
+  font-weight: 500;
+}
+.ast-pos__v {
+  font-family: var(--v-font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--v-fg);
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+/* ---- Sidecard (key stats) -------------------------------------- */
+.ast-sidecard {
+  background: var(--v-white);
+  border: 1px solid var(--v-fg-10);
+  border-radius: var(--v-radius-card);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ast-sidecard__eyebrow {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v-fg-muted);
+}
+.ast-sidecard__rows {
+  display: flex;
+  flex-direction: column;
+}
+.ast-kv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+}
+.ast-kv + .ast-kv {
+  border-top: 1px solid var(--v-fg-10);
+}
+.ast-kv__k {
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  color: var(--v-fg-body);
+  letter-spacing: -0.005em;
+}
+.ast-kv__v {
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v-fg);
+  text-align: right;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+.ast-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 88px;
+}
+
+/* ====================================================================
+   SIDEBAR cards — markets page
+   ==================================================================== */
+.mk-side-card {
+  background: var(--v-white);
+  border: 1px solid var(--v-fg-10);
+  border-radius: var(--v-radius-card);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mk-side-card__eyebrow {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v-fg-light);
+}
+
+/* ---- Indices list (4 compact rows) ----------------------------- */
+.mk-idx-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  text-decoration: none;
+  color: inherit;
+}
+.mk-idx-row + .mk-idx-row { border-top: 1px solid var(--v-fg-10); }
+.mk-idx-row__name {
+  font-family: var(--v-font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--v-fg);
+  letter-spacing: -0.005em;
+}
+.mk-idx-row__price {
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v-fg-body);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' on;
+}
+.mk-idx-row__chg {
+  font-family: var(--v-font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  min-width: 60px;
+  text-align: right;
+}
+.mk-idx-row__chg--up   { color: var(--v-green); }
+.mk-idx-row__chg--down { color: var(--v-error); }
+
+/* ---- Calendar rows --------------------------------------------- */
+.mk-cal-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+}
+.mk-cal-row + .mk-cal-row { border-top: 1px solid var(--v-fg-10); }
+.mk-cal-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--v-font-ui);
+  line-height: 1;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.mk-cal-date__d {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+}
+.mk-cal-date__m {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v-fg-light);
+  margin-top: 4px;
+}
+.mk-cal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mk-cal-title {
+  font-family: var(--v-font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--v-fg);
+  letter-spacing: -0.005em;
+  text-wrap: pretty;
+}
+.mk-cal-meta {
+  font-family: var(--v-font-ui);
+  font-size: 11.5px;
+  color: var(--v-fg-light);
+}
+.mk-cal-impact {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+.mk-cal-impact__dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--v-fg-20);
+}
+.mk-cal-impact__dot.is-on { background: var(--v-terracotta); }
+
+/* ---- Watchlist banner ----------------------------------------- */
+.mk-watch {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: var(--v-fg);
+  color: #fff;
+  border-radius: var(--v-radius-card);
+  text-decoration: none;
+  transition: background var(--v-motion-fast) var(--v-ease-out);
+}
+.mk-watch:hover { background: var(--v-fg-hover); }
+.mk-watch__ic {
+  width: 36px; height: 36px;
+  border-radius: var(--v-radius-pill);
+  background: rgba(255,255,255,0.08);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.mk-watch__body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.mk-watch__title {
+  font-family: var(--v-font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.mk-watch__sub {
+  font-family: var(--v-font-ui);
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.65);
+  line-height: 1.4;
+}
+
+  .hr-thin { height: 1px; background: var(--v-fg-10); margin: 0; border: 0; }
+}

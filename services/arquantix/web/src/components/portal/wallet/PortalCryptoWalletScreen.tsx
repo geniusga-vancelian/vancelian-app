@@ -1,13 +1,17 @@
 'use client'
 
+import { useMemo } from 'react'
 import {
-  AppBalanceCardVariantB,
-  type AppBalanceCardFab,
-} from '@/components/design-system/app/AppBalanceCardVariantB'
-import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
+  SupportAsidePanel,
+  hasSupportAsideContent,
+} from '@/components/design-system/SupportAsidePanel'
+import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
+import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
+import { usePortalSupportContent } from '@/components/portal/PortalSupportContentProvider'
+import { PortalCryptoWalletHeader } from '@/components/portal/wallet/PortalCryptoWalletHeader'
 import { PortalCryptoWalletPositionsCard } from '@/components/portal/wallet/PortalCryptoWalletPositionsCard'
 import { PortalLombardActiveLoansCard } from '@/components/portal/lombard/PortalLombardActiveLoansCard'
 import { Button } from '@/components/ui/button'
@@ -15,7 +19,6 @@ import { Container } from '@/components/ui/Container'
 import {
   buildUnifiedWalletRows,
   formatCryptoMoney,
-  resolveHubCountLabel,
   resolveHubTotalValue,
 } from '@/lib/portal/cryptoWalletFormat'
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
@@ -30,7 +33,7 @@ import {
 import { portalChainContextLabel } from '@/lib/portal/portalChainFilter'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
-import { useMemo } from 'react'
+import { cn } from '@/lib/utils'
 
 function resolveChainDepositHref(chain: PortalChain): string {
   if (chain === 'solana') return PORTAL_ROUTES.walletDepositSol
@@ -39,9 +42,15 @@ function resolveChainDepositHref(chain: PortalChain): string {
 
 const CACHE_KEY = 'portal:crypto-wallet'
 
+const CRYPTO_POSITIONS_FOOTER =
+  'Exposition crypto via paniers diversifiés ou actifs détenus en direct. Conservation Fireblocks (régulé NYDFS), couverture Aon 100 M $.'
+
 export function PortalCryptoWalletScreen() {
   const { chain } = usePortalChainContext()
   const { walletScope } = usePortalWalletScopeContext()
+  const cmsSupport = usePortalSupportContent()
+  const showSupportAside = hasSupportAsideContent(cmsSupport)
+
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletHubPayload>({
       cacheKey: CACHE_KEY,
@@ -51,15 +60,7 @@ export function PortalCryptoWalletScreen() {
       scopeAware: true,
     })
 
-  const fabs = useMemo<AppBalanceCardFab[]>(
-    () => [
-      { id: 'swap', label: 'Swap', icon: 'exchange', href: PORTAL_ROUTES.walletSwap },
-      { id: 'deposit', label: 'Deposit', icon: 'add', href: resolveChainDepositHref(chain) },
-      { id: 'invest', label: 'Invest', icon: 'trending-up', href: PORTAL_ROUTES.invest },
-      { id: 'more', label: 'More', icon: 'apps', href: PORTAL_ROUTES.profile },
-    ],
-    [chain],
-  )
+  const depositHref = useMemo(() => resolveChainDepositHref(chain), [chain])
 
   if (loading && !data) {
     return <PortalDashboardSkeleton />
@@ -91,68 +92,67 @@ export function PortalCryptoWalletScreen() {
     resolveHubTotalValue(filteredPositions, data.bundles, data.currency),
     data.currency,
   )
-  const countLabel =
-    rows.length > 0
-      ? `${resolveHubCountLabel(filteredPositions, data.bundles)} · ${chainLabel}${
-          isPortalScopeExternal(walletScope) ? ` · ${walletLabel}` : ''
-        }`
-      : isPortalScopeExternal(walletScope)
-        ? `No balance on ${walletLabel} (on-chain DeFi)`
-        : `No assets · ${chainLabel}`
+  const positionsTitle =
+    rows.length > 0 ? `Mes positions · ${rows.length}` : 'Mes positions'
+  const emptyMessage = isPortalScopeExternal(walletScope)
+    ? `Integrated wallet balances do not apply to ${walletLabel}. Use Invest for on-chain DeFi positions.`
+    : `No positions on ${chainLabel}`
 
   return (
     <PortalPageContainer>
-      <PortalDashboardLayout>
-        <PortalReveal index={0}>
-          <AppBalanceCardVariantB
-            welcomeHi="Wallet"
-            welcomeName="Crypto"
-            showAvatar={false}
-            showTopActions={false}
-            balanceLabel={totalLabel}
-            balanceLabelText="Crypto balance"
-            metaLabel={countLabel}
-            showChange={false}
-            chartValues={data.historyPoints}
-            showChart
-            balancePending={refreshing}
-            fabs={fabs}
-            className="pt-0"
-          />
-        </PortalReveal>
+      <PortalPortfolioLayout
+        main={
+          <>
+            <PortalReveal index={0}>
+              <PortalCryptoWalletHeader
+                balanceLabel={totalLabel}
+                depositHref={depositHref}
+                balancePending={refreshing}
+                className="pt-0"
+              />
+            </PortalReveal>
 
-        <PortalReveal index={1}>
-          <PortalLombardActiveLoansCard walletPositions={filteredPositions.positions} />
-        </PortalReveal>
+            <PortalReveal index={1}>
+              <PortalLombardActiveLoansCard walletPositions={filteredPositions.positions} />
+            </PortalReveal>
 
-        <PortalReveal index={2}>
-          <PortalCryptoWalletPositionsCard
-            rows={rows}
-            currency={data.currency}
-            title="Positions"
-            emptyMessage={
-              isPortalScopeExternal(walletScope)
-                ? `Integrated wallet balances do not apply to ${walletLabel}. Use Invest for on-chain DeFi positions.`
-                : `No positions on ${chainLabel}`
-            }
-          />
-        </PortalReveal>
+            <PortalReveal index={2}>
+              <PortalCryptoWalletPositionsCard
+                rows={rows}
+                currency={data.currency}
+                title={positionsTitle}
+                emptyMessage={emptyMessage}
+                footerHint={rows.length > 0 ? CRYPTO_POSITIONS_FOOTER : undefined}
+              />
+            </PortalReveal>
 
-        {data.partial ? (
-          <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-            Some wallet data could not be loaded.
-          </p>
-        ) : null}
+            {data.partial ? (
+              <p className="m-0 font-ui text-[12px] text-v-fg-muted">
+                Some wallet data could not be loaded.
+              </p>
+            ) : null}
 
-        <button
-          type="button"
-          disabled={refreshing}
-          onClick={() => void refresh()}
-          className="v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50"
-        >
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
-      </PortalDashboardLayout>
+            <button
+              type="button"
+              disabled={refreshing}
+              onClick={() => void refresh()}
+              className={cn(
+                'v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50',
+              )}
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </>
+        }
+        side={
+          <>
+            <PortalAdvisorBanner />
+            {showSupportAside ? (
+              <SupportAsidePanel support={cmsSupport} stickyTopClassName="static" className="static" />
+            ) : null}
+          </>
+        }
+      />
     </PortalPageContainer>
   )
 }

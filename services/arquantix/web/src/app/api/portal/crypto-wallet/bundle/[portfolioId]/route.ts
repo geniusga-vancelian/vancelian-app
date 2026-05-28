@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   findMyBundleByPortfolioId,
+  parseCryptoWalletTransactions,
   parseMyBundles,
   parseWalletHistoryPoints,
 } from '@/lib/portal/cryptoWalletFormat'
+import { consolidateSwapTransactions } from '@/lib/portal/cryptoTransactionHistoryFormat'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 
@@ -28,12 +30,15 @@ export async function GET(
     return NextResponse.json({ error: 'invalid_portfolio_id' }, { status: 400 })
   }
 
-  const [bundlesRes, historyRes, bootstrapRes] = await Promise.all([
+  const [bundlesRes, historyRes, bootstrapRes, txRes] = await Promise.all([
     fetchUpstreamJson('/api/app/bundle/my-bundles'),
     fetchUpstreamJson(
       `/api/app/bundle/${encodeURIComponent(portfolioId)}/history?period=ALL&mode=performance_value`,
     ),
     fetchUpstreamJson('/api/app/bootstrap'),
+    fetchUpstreamJson(
+      `/api/app/bundle/${encodeURIComponent(portfolioId)}/transactions`,
+    ),
   ])
 
   if (!bundlesRes.ok) {
@@ -60,11 +65,15 @@ export async function GET(
       : 'EUR'
 
   const historyPoints = historyRes.ok ? parseWalletHistoryPoints(historyRes.data) : []
+  const transactions = consolidateSwapTransactions(
+    txRes.ok ? parseCryptoWalletTransactions(txRes.data) : [],
+  )
 
   return NextResponse.json({
     currency,
     bundle,
     historyPoints,
-    partial: !historyRes.ok,
+    transactions,
+    partial: !historyRes.ok || !txRes.ok,
   })
 }

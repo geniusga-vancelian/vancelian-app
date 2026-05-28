@@ -8,28 +8,32 @@ type Props = {
   moreHref?: string
   moreLabel?: string
   action?: ReactNode
+  size?: 'lg' | 'md' | 'sm'
   className?: string
 }
 
-/** En-tête de section in-page — pattern `sh-app` du DS. */
+/** En-tête de section — pattern Webapp4 `.sec` (remplace `sh-app`). */
 export function AppSectionHeader({
   title,
   moreHref,
   moreLabel = 'Voir tout',
   action,
+  size = 'sm',
   className,
 }: Props) {
   return (
-    <div className={cn('sh-app w-full', className)}>
-      <span className="sh-app__dot" aria-hidden />
-      <h2 className="sh-app__title m-0">{title}</h2>
-      {action ??
-        (moreHref ? (
-          <Link href={moreHref} className="sh-app__more inline-flex items-center gap-1 no-underline">
-            {moreLabel}
-            <KalaiIcon name="chevron-right" size={16} className="text-current" aria-hidden />
-          </Link>
+    <section className={cn('sec', size === 'lg' && 'sec--lg', size === 'md' && 'sec--md', size === 'sm' && 'sec--sm', className)}>
+      <div className="sec__head">
+        <h2 className="sec__title">{title}</h2>
+        {action ?? (moreHref ? (
+          <div className="sec__actions">
+            <Link href={moreHref} className="sec__more inline-flex items-center gap-1 no-underline">
+              {moreLabel}
+              <KalaiIcon name="chevron-right" size={16} className="text-current" aria-hidden />
+            </Link>
+          </div>
         ) : null)}
-    </div>
+      </div>
+    </section>
   )
 }

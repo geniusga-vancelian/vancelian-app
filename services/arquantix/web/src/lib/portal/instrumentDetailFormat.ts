@@ -2,11 +2,11 @@ import { normalizeCryptoBaseTicker } from '@/lib/portal/cryptoInstrumentAssets'
 import { formatCryptoPrice, formatChangePct } from '@/lib/portal/marketsFormat'
 
 export const CHART_PERIOD_OPTIONS = [
-  { id: '1j', chip: '1D', caption: '1 day' },
-  { id: '1s', chip: '1W', caption: '1 week' },
-  { id: '1m', chip: '1M', caption: '1 month' },
-  { id: '1a', chip: '1Y', caption: '1 year' },
-  { id: '5a', chip: '5Y', caption: '5 years' },
+  { id: '1j', chip: '24h', caption: '24 heures' },
+  { id: '1s', chip: '1S', caption: '1 semaine' },
+  { id: '1m', chip: '1M', caption: '1 mois' },
+  { id: '1a', chip: '1A', caption: '1 an' },
+  { id: '5a', chip: '5A', caption: '5 ans' },
 ] as const
 
 export type ChartPeriodId = (typeof CHART_PERIOD_OPTIONS)[number]['id']
@@ -122,7 +122,73 @@ export function formatUsdAbsChange(value: number): string {
 }
 
 export function formatPeriodCaption(periodId: ChartPeriodId): string {
-  return CHART_PERIOD_OPTIONS.find((p) => p.id === periodId)?.caption ?? '1 day'
+  return CHART_PERIOD_OPTIONS.find((p) => p.id === periodId)?.caption ?? '24 heures'
+}
+
+export type InstrumentStatCell = {
+  key: string
+  value: string
+  sub?: string
+  subDir?: 1 | -1 | 0
+}
+
+export function instrumentAboutBlurb(name: string, ticker: string): string {
+  return `${name} (${ticker}) est un actif numérique tokenisé, négocié 24 h / 24 sur les places de marché crypto. Vancelian opère via un dépositaire institutionnel (Fireblocks) et n'autorise les achats que sur les paires liquides admises par notre cellule conformité.`
+}
+
+export function buildInstrumentSidebarStats(args: {
+  priceLabel: string
+  change24hPct: number
+  change24hAbs: number | null
+}): Array<{ key: string; value: string }> {
+  const stats = [
+    { key: 'Cours actuel', value: args.priceLabel },
+    { key: 'Variation 24 h', value: formatChangePct(args.change24hPct) },
+  ]
+  if (args.change24hAbs != null) {
+    stats.push({ key: 'Variation abs. 24 h', value: formatUsdAbsChange(args.change24hAbs) })
+  }
+  stats.push({ key: "Frais d'échange", value: '0,5 %' })
+  return stats
+}
+
+export function buildInstrumentExtendedStats(args: {
+  priceLabel: string
+  change24hPct: number
+  change24hAbs: number | null
+  periodPerf: { absUsd: number; pct: number } | null
+  periodLabel: string
+}): InstrumentStatCell[] {
+  const cells: InstrumentStatCell[] = [
+    { key: 'Cours actuel', value: args.priceLabel },
+    {
+      key: 'Variation 24 h',
+      value: formatChangePct(args.change24hPct),
+      sub: args.change24hAbs != null ? formatUsdAbsChange(args.change24hAbs) : undefined,
+      subDir: args.change24hPct >= 0 ? 1 : -1,
+    },
+  ]
+
+  if (args.periodPerf) {
+    cells.push({
+      key: `Variation ${args.periodLabel}`,
+      value: formatChangePct(args.periodPerf.pct),
+      sub: formatUsdAbsChange(args.periodPerf.absUsd),
+      subDir: args.periodPerf.pct >= 0 ? 1 : -1,
+    })
+  }
+
+  cells.push(
+    { key: 'Liquidité Vancelian', value: 'Élevée' },
+    { key: "Frais d'échange", value: '0,5 %' },
+    { key: 'Devise de cotation', value: 'USD (USDT)' },
+  )
+
+  return cells
+}
+
+export function formatInstrumentChange24h(changePct: number): string {
+  return formatChangePct(changePct)
 }
 
 export function lineTrendPositive(candles: InstrumentCandle[]): boolean {

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Balance Card · Webapp4</p>
+<div class="v-card" style="width:100%;padding:32px;display:flex;flex-direction:column;gap:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <p class="v-eyebrow" style="margin:0">Solde total</p>
+          <div style="display:flex;gap:8px">
+            <button class="ic-btn" aria-label="Masquer"><img src="/app-ds/assets/icons/eye.svg" alt="" width="18" height="18" /></button>
+            <button class="ic-btn" aria-label="Vue allocation"><img src="/app-ds/assets/icons/bar-chart-2.svg" alt="" width="18" height="18" /></button>
+          </div>
+        </div>
+        <p class="v-amount-hero" style="margin:0;font-size:64px;line-height:1.05">12 480,32 €</p>
+        <p style="font-family:var(--v-font-editorial);font-weight:300;font-size:17px;line-height:1.5;color:var(--v-fg-body);margin:0">
+          Vous gagnez aujourd'hui
+          <span style="font-weight:500;color:var(--v-green);font-feature-settings:'tnum' on">24,60 €</span>
+          de revenus.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn--primary">
+            <img src="/app-ds/assets/icons/arrow-up-right.svg" alt="" width="14" height="14" style="filter:invert(1)" />
+            Investir
+          </button>
+          <button class="btn btn--secondary">
+            <img src="/app-ds/assets/icons/exchange.svg" alt="" width="14" height="14" />
+            Échanger
+          </button>
+          <button class="btn btn--secondary">
+            <img src="/app-ds/assets/icons/arrow-down.svg" alt="" width="14" height="14" />
+            Déposer
+          </button>
+          <button class="btn btn--secondary">
+            <img src="/app-ds/assets/icons/arrow-up.svg" alt="" width="14" height="14" />
+            Envoyer
+          </button>
+        </div>
+      </div>
+</div></body></html>

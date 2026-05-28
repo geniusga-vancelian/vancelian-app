@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Amount · Webapp4</p>
+<p class="pv-caption" style="margin:0">v-amount-hero · Newsreader 60pt light · exception éditoriale (Balance)</p>
+      <p class="v-amount-hero" style="margin:0">12 480,32 €</p>
+      <p class="pv-caption" style="margin:0;margin-top:16px">v-amount-lg · Inter 600 · 32 px</p>
+      <p class="v-amount-lg" style="margin:0">8 245,00 €</p>
+      <p class="pv-caption" style="margin:0;margin-top:16px">v-amount-md · Inter 600 · 22 px</p>
+      <p class="v-amount-md" style="margin:0">1 240,80 €</p>
+      <p class="pv-caption" style="margin:0;margin-top:16px">v-amount-sm · Inter 600 · 17 px</p>
+      <p class="v-amount-sm" style="margin:0">+ 24,60 €</p>
+    </div>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Formatage français</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <p class="v-body" style="margin:0">Espace insécable mille · virgule décimale · espace insécable avant €</p>
+        <ul style="margin:0;padding-left:20px;font-family:var(--v-font-ui);color:var(--v-fg-body);line-height:1.7">
+          <li>Montant · <span class="v-tnum">12 480,00 €</span></li>
+          <li>Pourcent · <span class="v-tnum">+12,4 %</span></li>
+          <li>Date · 12 mars 2026</li>
+          <li>Date-heure · 12 mars 2026 · 14h32</li>
+        </ul>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">amount.html</span>
+          </div>
+&lt;p class="v-amount-hero"&gt;12 480,32 €&lt;/p&gt;  &lt;!-- Newsreader, hero only --&gt;
+&lt;p class="v-amount-lg"&gt;8 245,00 €&lt;/p&gt;
+&lt;p class="v-amount-md"&gt;1 240,80 €&lt;/p&gt;
+&lt;p class="v-amount-sm"&gt;+ 24,60 €&lt;/p&gt;
+
+&lt;!-- En texte courant, pour aligner les chiffres --&gt;
+&lt;span class="v-tnum"&gt;12 480,00 €&lt;/span&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">Le <code>v-amount-hero</code> est <strong>la seule exception</strong> à la règle « Inter pour tout ce qui se lit fonctionnellement ». Réservé au montant principal de la Balance card. Partout ailleurs : Inter 600 + tnum.</div>
+</div></body></html>

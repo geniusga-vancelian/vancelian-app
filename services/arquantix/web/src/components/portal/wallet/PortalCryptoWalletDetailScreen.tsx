@@ -1,25 +1,28 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ArrowLeft } from 'lucide-react'
 import {
-  AppBalanceCardVariantB,
-  type AppBalanceCardFab,
-  type AppBalanceCardTopAction,
-} from '@/components/design-system/app/AppBalanceCardVariantB'
+  SupportAsidePanel,
+  hasSupportAsideContent,
+} from '@/components/design-system/SupportAsidePanel'
 import { AppMetricsList } from '@/components/design-system/app/AppMetricsList'
 import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalLombardWalletAssetCta } from '@/components/portal/lombard/PortalLombardWalletAssetCta'
 import { PortalLombardAssetDetailLoanSection } from '@/components/portal/lombard/PortalLombardAssetDetailLoanSection'
 import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
-import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
-import { PortalCryptoAssetList } from '@/components/portal/markets/PortalCryptoAssetList'
-import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
+import { PortalDetailBackLink } from '@/components/portal/PortalDetailBackLink'
+import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
+import { usePortalSupportContent } from '@/components/portal/PortalSupportContentProvider'
+import {
+  PortalCryptoMarketStatsGrid,
+  type PortalCryptoMarketStat,
+} from '@/components/portal/wallet/PortalCryptoMarketStatsGrid'
+import { PortalCryptoWalletDetailHeader } from '@/components/portal/wallet/PortalCryptoWalletDetailHeader'
 import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
 import type { PortalChain } from '@/config/portalChains'
@@ -27,10 +30,11 @@ import {
   assetToMarketProviderSymbol,
   cryptoPositionHeaderTitle,
 } from '@/lib/portal/instrumentDetailFormat'
-import { formatCryptoPrice } from '@/lib/portal/marketsFormat'
+import { formatCryptoPrice, formatChangePctIndicator } from '@/lib/portal/marketsFormat'
 import { mapCryptoTransactionToHistoryItem } from '@/lib/portal/cryptoTransactionHistoryFormat'
 import {
   formatCryptoMoney,
+  formatPerfPct,
   perfToneClass,
   selectMoneyValue,
 } from '@/lib/portal/cryptoWalletFormat'
@@ -39,15 +43,11 @@ import {
   type PortalCryptoWalletDetailPayload,
 } from '@/lib/portal/cryptoWalletTypes'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
-import {
-  PORTAL_ROUTES,
-  portalCryptoWalletTransactionsRoute,
-  portalSwapBuyRoute,
-  portalSwapSellRoute,
-} from '@/lib/portal/portalRouting'
-import { isPortalSwapTradeAsset } from '@/lib/portal/swapFlowTypes'
 import { normalizeLombardCollateralSymbol } from '@/lib/portal/lombard/lombardWalletAsset'
+import { portalBorrowRoute, PORTAL_ROUTES, portalCryptoWalletTransactionsRoute, portalSwapBuyRoute, portalSwapSellRoute } from '@/lib/portal/portalRouting'
+import { isPortalSwapTradeAsset } from '@/lib/portal/swapFlowTypes'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
+import { cn } from '@/lib/utils'
 
 type Props = {
   asset: string
@@ -61,9 +61,63 @@ function resolveSwapChainForAsset(asset: string, portalChain: PortalChain): stri
   return portalChain
 }
 
+function buildHoldingsPhrase(
+  volume: string,
+  ticker: string,
+  totalGainsPct?: number,
+): string {
+  const perf = formatPerfPct(totalGainsPct)
+  if (perf) return `${volume} ${ticker} détenus · ${perf} sur 1 an`
+  return `${volume} ${ticker} détenus`
+}
+
+function buildMarketStats(args: {
+  ticker: string
+  currency: string
+  livePrice?: number
+  change24hPct?: number
+  totalValue: number
+  volume: string
+}): PortalCryptoMarketStat[] {
+  const { ticker, currency, livePrice, change24hPct, totalValue, volume } = args
+  const changeLabel = formatChangePctIndicator(change24hPct ?? 0)
+  const changeTone =
+    change24hPct == null || change24hPct >= -0.005
+      ? change24hPct != null && change24hPct > 0.005
+        ? 'up'
+        : undefined
+      : 'down'
+
+  return [
+    {
+      key: `Cours ${ticker}`,
+      value:
+        livePrice != null
+          ? formatCryptoPrice(livePrice, currency === 'USD' ? 'USD' : 'EUR')
+          : '—',
+    },
+    {
+      key: 'Valorisation',
+      value: formatCryptoMoney(totalValue, currency),
+    },
+    {
+      key: 'Volume détenu',
+      value: `${volume} ${ticker}`,
+    },
+    {
+      key: 'Variation 24 h',
+      value: changeLabel,
+      tone: changeTone,
+    },
+  ]
+}
+
 export function PortalCryptoWalletDetailScreen({ asset }: Props) {
   const ticker = asset.trim().toUpperCase()
   const { chain } = usePortalChainContext()
+  const cmsSupport = usePortalSupportContent()
+  const showSupportAside = hasSupportAsideContent(cmsSupport)
+
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletDetailPayload>({
       cacheKey: `portal:crypto-wallet:${ticker}`,
@@ -91,44 +145,9 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
 
   const canTrade = valueUsd > MIN_TRADE_VALUE_USD && isPortalSwapTradeAsset(ticker)
   const swapChainKey = resolveSwapChainForAsset(ticker, chain)
-
-  const headerTopActions = useMemo(
-    (): AppBalanceCardTopAction[] => [
-      { id: 'alerts', icon: 'bell', label: 'Alerts', disabled: true },
-      { id: 'stats', icon: 'pie-chart', label: 'Stats', disabled: true },
-    ],
-    [],
-  )
-
-  const headerFabs = useMemo((): AppBalanceCardFab[] => {
-    const buyHref =
-      canTrade && swapChainKey ? portalSwapBuyRoute(ticker, swapChainKey) : undefined
-    const sellHref =
-      canTrade && swapChainKey ? portalSwapSellRoute(ticker, swapChainKey) : undefined
-
-    return [
-      {
-        id: 'buy',
-        label: 'Buy',
-        icon: 'add',
-        href: buyHref,
-        disabled: !buyHref,
-      },
-      {
-        id: 'sell',
-        label: 'Sell',
-        icon: 'arrow-up-right',
-        href: sellHref,
-        disabled: !sellHref,
-      },
-      {
-        id: 'swap',
-        label: 'Swap',
-        icon: 'exchange',
-        href: PORTAL_ROUTES.walletSwap,
-      },
-    ]
-  }, [canTrade, swapChainKey, ticker])
+  const buyHref = canTrade && swapChainKey ? portalSwapBuyRoute(ticker, swapChainKey) : undefined
+  const sellHref = canTrade && swapChainKey ? portalSwapSellRoute(ticker, swapChainKey) : undefined
+  const lombardCollateral = normalizeLombardCollateralSymbol(ticker)
 
   if (loading && !data) {
     return <PortalDashboardSkeleton />
@@ -162,164 +181,165 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
     transactions.length > CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW
   const previewTransactions = transactions.slice(0, CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW)
   const walletBalance = Number.parseFloat(String(detail.volume).replace(',', '.')) || 0
-
-  const scopeMeta = detail.portfolioScope === 'merged' ? ' · incl. wallet intégré' : ''
-
-  const instrumentPriceLabel =
-    livePrice != null
-      ? formatCryptoPrice(livePrice, currency === 'USD' ? 'USD' : 'EUR')
-      : '—'
-  const instrumentMarketRow = {
-    id: ticker,
-    name: cryptoPositionHeaderTitle(ticker, detail.name),
+  const assetTitle = cryptoPositionHeaderTitle(ticker, detail.name)
+  const marketStats = buildMarketStats({
     ticker,
-    symbol: avatarSymbol,
-    priceLabel: instrumentPriceLabel,
-    priceUsd: livePrice ?? 0,
-    changePct,
-    logoUrl: avatarLogoUrl ?? null,
-  }
+    currency,
+    livePrice,
+    change24hPct: changePct,
+    totalValue,
+    volume: detail.volume,
+  })
 
   return (
     <PortalPageContainer>
-      <PortalDashboardLayout>
-        <PortalReveal index={0}>
-          <div className="flex flex-col gap-4">
-            <PortalNavLink
-              href={PORTAL_ROUTES.cryptoWallet}
-              className="inline-flex w-fit items-center gap-1.5 font-ui text-[13px] text-v-fg-muted no-underline transition-colors hover:text-v-fg"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Crypto wallet
-            </PortalNavLink>
+      <PortalPortfolioLayout
+        main={
+          <>
+            <PortalReveal index={0}>
+              <PortalDetailBackLink href={PORTAL_ROUTES.cryptoWallet} label="Retour aux cryptos" />
+              <PortalCryptoWalletDetailHeader
+                ticker={ticker}
+                title={assetTitle}
+                balanceLabel={formatCryptoMoney(totalValue, currency)}
+                holdingsPhrase={buildHoldingsPhrase(
+                  detail.volume,
+                  ticker,
+                  detail.totalGainsPct,
+                )}
+                buyHref={buyHref}
+                sellHref={sellHref}
+                balancePending={refreshing}
+                avatarSymbol={avatarSymbol}
+                avatarLogoUrl={avatarLogoUrl}
+                className="pt-0"
+              />
+            </PortalReveal>
 
-            <AppBalanceCardVariantB
-              welcomeLeading={
-                <PortalCryptoAvatar
-                  ticker={ticker}
-                  symbol={avatarSymbol}
-                  apiLogoUrl={avatarLogoUrl}
-                  size="lg"
+            <PortalReveal index={1}>
+              <PortalLombardWalletAssetCta asset={ticker} chain={chain} balance={walletBalance} />
+            </PortalReveal>
+
+            <PortalReveal index={2}>
+              <PortalLombardAssetDetailLoanSection asset={ticker} chain={chain} />
+            </PortalReveal>
+
+            <PortalReveal index={3}>
+              <section className="flex w-full flex-col gap-3">
+                <AppSectionHeader title="Marché" size="sm" />
+                <PortalCryptoMarketStatsGrid stats={marketStats} />
+              </section>
+            </PortalReveal>
+
+            <PortalReveal index={4}>
+              <section className="flex w-full flex-col gap-3">
+                <AppSectionHeader title="Ma position" size="sm" />
+                <AppMetricsList variant="plain">
+                  {detail.availableVolume && detail.lockedVolume ? (
+                    <>
+                      <AppMetricsRow label="Available" value={`${detail.availableVolume} ${ticker}`} />
+                      <AppMetricsRow
+                        label="Locked in Lombard"
+                        value={`${detail.lockedVolume} ${ticker}`}
+                      />
+                    </>
+                  ) : null}
+                  {detail.lombard?.borrowedUsdcAmount && lombardCollateral ? (
+                    <AppMetricsRow
+                      label="USDC credit line"
+                      value={`${detail.lombard.borrowedUsdcAmount} USDC`}
+                    />
+                  ) : null}
+                  {detail.lombard?.borrowedUsdcAmount && ticker === 'USDC' ? (
+                    <AppMetricsRow
+                      label="From Lombard borrow"
+                      value={`${detail.lombard.borrowedUsdcAmount} USDC`}
+                    />
+                  ) : null}
+                  <AppMetricsRow label="Volume" value={`${detail.volume} ${ticker}`} />
+                  <AppMetricsRow
+                    label="Total balance"
+                    value={formatCryptoMoney(totalValue, currency)}
+                  />
+                  <AppMetricsRow
+                    label="Unrealized P&L"
+                    value={unrealized != null ? formatCryptoMoney(unrealized, currency) : '—'}
+                    valueClassName={perfToneClass(detail.unrealizedGainsPct ?? unrealized)}
+                  />
+                  <AppMetricsRow
+                    label="Avg. buy price"
+                    value={
+                      selectMoneyValue(currency, detail.avgBuyPriceEur, detail.avgBuyPriceUsd) != null
+                        ? formatCryptoMoney(
+                            selectMoneyValue(
+                              currency,
+                              detail.avgBuyPriceEur,
+                              detail.avgBuyPriceUsd,
+                            )!,
+                            currency,
+                          )
+                        : '—'
+                    }
+                  />
+                  <AppMetricsRow
+                    label="Current price"
+                    value={livePrice != null ? formatCryptoMoney(livePrice, currency) : '—'}
+                  />
+                  <AppMetricsRow
+                    label="Realized P&L"
+                    value={realized != null ? formatCryptoMoney(realized, currency) : '—'}
+                    valueClassName={perfToneClass(realized)}
+                  />
+                  <AppMetricsRow
+                    label="Total P&L"
+                    value={totalGain != null ? formatCryptoMoney(totalGain, currency) : '—'}
+                    valueClassName={perfToneClass(detail.totalGainsPct ?? totalGain)}
+                  />
+                </AppMetricsList>
+              </section>
+            </PortalReveal>
+
+            <PortalReveal index={5}>
+              <section className="flex w-full flex-col gap-3">
+                <AppSectionHeader
+                  title="Activité"
+                  size="sm"
+                  moreHref={
+                    hasMoreTransactions ? portalCryptoWalletTransactionsRoute(ticker) : undefined
+                  }
+                  moreLabel="Toutes les transactions"
                 />
-              }
-              welcomeHi={cryptoPositionHeaderTitle(ticker, detail.name).toUpperCase()}
-              welcomeName={ticker}
-              showAvatar={false}
-              topActions={headerTopActions}
-              balanceLabel={formatCryptoMoney(totalValue, currency)}
-              balanceLabelText="Estimated value"
-              metaLabel={`${detail.volume} ${ticker}${scopeMeta}`}
-              showChange={false}
-              chartValues={data.historyPoints}
-              showChart
-              balancePending={refreshing}
-              fabs={headerFabs}
-              className="pt-0"
-            />
-          </div>
-        </PortalReveal>
-
-        <PortalReveal index={1}>
-          <PortalLombardWalletAssetCta asset={ticker} chain={chain} balance={walletBalance} />
-        </PortalReveal>
-
-        <PortalReveal index={2}>
-          <PortalLombardAssetDetailLoanSection asset={ticker} chain={chain} />
-        </PortalReveal>
-
-        <PortalReveal index={3}>
-          <section className="flex w-full flex-col gap-3">
-            <AppSectionHeader title="Instrument" />
-            <PortalCryptoAssetList assets={[instrumentMarketRow]} />
-          </section>
-        </PortalReveal>
-
-        <PortalReveal index={4}>
-          <section className="flex w-full flex-col gap-3">
-            <AppSectionHeader title="My position" />
-            <AppMetricsList variant="plain">
-              {detail.availableVolume && detail.lockedVolume ? (
-                <>
-                  <AppMetricsRow label="Available" value={`${detail.availableVolume} ${ticker}`} />
-                  <AppMetricsRow label="Locked in Lombard" value={`${detail.lockedVolume} ${ticker}`} />
-                </>
-              ) : null}
-              {detail.lombard?.borrowedUsdcAmount && normalizeLombardCollateralSymbol(ticker) ? (
-                <AppMetricsRow
-                  label="USDC credit line"
-                  value={`${detail.lombard.borrowedUsdcAmount} USDC`}
-                />
-              ) : null}
-              {detail.lombard?.borrowedUsdcAmount && ticker === 'USDC' ? (
-                <AppMetricsRow
-                  label="From Lombard borrow"
-                  value={`${detail.lombard.borrowedUsdcAmount} USDC`}
-                />
-              ) : null}
-              <AppMetricsRow label="Volume" value={`${detail.volume} ${ticker}`} />
-              <AppMetricsRow label="Total balance" value={formatCryptoMoney(totalValue, currency)} />
-              <AppMetricsRow
-                label="Unrealized P&L"
-                value={unrealized != null ? formatCryptoMoney(unrealized, currency) : '—'}
-                valueClassName={perfToneClass(detail.unrealizedGainsPct ?? unrealized)}
-              />
-              <AppMetricsRow
-                label="Avg. buy price"
-                value={
-                  selectMoneyValue(currency, detail.avgBuyPriceEur, detail.avgBuyPriceUsd) != null
-                    ? formatCryptoMoney(
-                        selectMoneyValue(currency, detail.avgBuyPriceEur, detail.avgBuyPriceUsd)!,
-                        currency,
-                      )
-                    : '—'
-                }
-              />
-              <AppMetricsRow
-                label="Current price"
-                value={livePrice != null ? formatCryptoMoney(livePrice, currency) : '—'}
-              />
-              <AppMetricsRow
-                label="Realized P&L"
-                value={realized != null ? formatCryptoMoney(realized, currency) : '—'}
-                valueClassName={perfToneClass(realized)}
-              />
-              <AppMetricsRow
-                label="Total P&L"
-                value={totalGain != null ? formatCryptoMoney(totalGain, currency) : '—'}
-                valueClassName={perfToneClass(detail.totalGainsPct ?? totalGain)}
-              />
-            </AppMetricsList>
-          </section>
-        </PortalReveal>
-
-        <PortalReveal index={5}>
-          <section className="flex w-full flex-col gap-3">
-            <AppSectionHeader
-              title="Transaction history"
-              moreHref={
-                hasMoreTransactions ? portalCryptoWalletTransactionsRoute(ticker) : undefined
-              }
-              moreLabel="All transactions"
-            />
-            <PortalTransactionHistory
-              title=""
-              seamless
+                <PortalTransactionHistory
+                  title=""
+                  seamless
               items={previewTransactions.map((tx) =>
-                mapCryptoTransactionToHistoryItem(tx, currency),
+                mapCryptoTransactionToHistoryItem(tx, currency, { assetTicker: ticker }),
               )}
-            />
-          </section>
-        </PortalReveal>
+                />
+              </section>
+            </PortalReveal>
 
-        <button
-          type="button"
-          disabled={refreshing}
-          onClick={() => void refresh()}
-          className="v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50"
-        >
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
-      </PortalDashboardLayout>
+            <button
+              type="button"
+              disabled={refreshing}
+              onClick={() => void refresh()}
+              className={cn(
+                'v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50',
+              )}
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </>
+        }
+        side={
+          <>
+            <PortalAdvisorBanner />
+            {showSupportAside ? (
+              <SupportAsidePanel support={cmsSupport} stickyTopClassName="static" className="static" />
+            ) : null}
+          </>
+        }
+      />
     </PortalPageContainer>
   )
 }

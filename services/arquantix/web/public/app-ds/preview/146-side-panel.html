@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Side Panel · Webapp4</p>
+<div class="pv-canvas pv-canvas--white" style="padding:0;height:540px;overflow:hidden;position:relative;width:100%">
+      <div style="position:absolute;inset:0;background:rgba(20,18,8,0.32);pointer-events:none"></div>
+      <div style="position:absolute;top:0;right:0;bottom:0;width:540px;max-width:94%;background:var(--v-bg);box-shadow:0 8px 24px rgba(26,24,21,.10);overflow-y:auto;display:flex;flex-direction:column">
+        <header style="padding:24px 32px;border-bottom:1px solid var(--v-fg-10);display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <p class="v-eyebrow" style="margin:0 0 4px">Fiche placement</p>
+            <p class="v-h3" style="margin:0">Niseko · Lot 04</p>
+          </div>
+          <button class="ic-btn" aria-label="Fermer">
+            <span class="ic" style="width:18px;height:18px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/close.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/close.svg) center/contain no-repeat"></span>
+          </button>
+        </header>
+        <div style="padding:32px;display:flex;flex-direction:column;gap:24px">
+          <div>
+            <p class="pv-caption" style="margin:0 0 8px">MONTANT INVESTI</p>
+            <p class="v-amount-lg" style="margin:0">12 480,00 €</p>
+          </div>
+          <div>
+            <p class="pv-caption" style="margin:0 0 8px">REVENU QUOTIDIEN</p>
+            <p class="v-amount-md" style="margin:0;color:var(--v-green)">+ 2,40 €</p>
+          </div>
+          <button class="btn btn--primary">Voir le détail</button>
+        </div>
+      </div>
+    </div>
+</div></body></html>

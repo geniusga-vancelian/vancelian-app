@@ -6,7 +6,7 @@ type Props = {
   className?: string
 }
 
-/** Carte liste comptes — preview/67-card-account (multi-currency). */
+/** Liste comptes — Webapp4 `.v-card--list`. */
 export function AppAccountSummaryList({ children, className }: Props) {
-  return <div className={cn('acct-summary', className)}>{children}</div>
+  return <div className={cn('v-card v-card--list', className)}>{children}</div>
 }

@@ -29,7 +29,7 @@ export function PortalResearchSection({
 
   return (
     <section className="flex w-full flex-col gap-3">
-      <AppSectionHeader title={title} moreHref={headerHref} moreLabel="View all articles" />
+      <AppSectionHeader title={title} moreHref={headerHref} moreLabel="Voir toutes les analyses" />
       <AppNewsDeck columns={deckColumns}>
         {visibleItems.map((item) => (
           <PortalFeaturedArticleCard

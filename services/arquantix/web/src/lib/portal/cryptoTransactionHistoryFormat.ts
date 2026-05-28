@@ -1,6 +1,7 @@
 import type { AppTxAmountTone } from '@/components/design-system/app/AppTxRow'
 import { formatPortalMoney } from '@/lib/portal/dashboardFormat'
 import type { PortalCryptoWalletTransaction } from '@/lib/portal/cryptoWalletTypes'
+import { portalCryptoWalletTransactionRoute } from '@/lib/portal/portalRouting'
 
 const FIAT_CURRENCIES = new Set(['EUR', 'USD', 'GBP', 'CHF'])
 const SWAP_TITLE_RE = /(?:Échange|Exchange)\s+([A-Z0-9]+)\s*(?:→|->)\s*([A-Z0-9]+)/i
@@ -16,13 +17,14 @@ export type PortalCryptoTransactionHistoryItem = {
   flowDirection?: 'in' | 'out'
   fromAsset?: string
   toAsset?: string
+  href?: string
 }
 
 function normalizeAsset(value: string | undefined): string {
   return (value ?? '').trim().toUpperCase()
 }
 
-function isIncomingLeg(tx: PortalCryptoWalletTransaction): boolean {
+export function isIncomingLeg(tx: PortalCryptoWalletTransaction): boolean {
   const direction = tx.direction?.trim().toLowerCase()
   if (direction === 'credit' || direction === 'in') return true
   if (direction === 'debit' || direction === 'out') return false
@@ -115,7 +117,7 @@ export function isCryptoSwapTransaction(tx: PortalCryptoWalletTransaction): bool
   return !FIAT_CURRENCIES.has(from) && !FIAT_CURRENCIES.has(to)
 }
 
-function resolveSwapAmounts(
+export function resolveSwapAmounts(
   tx: PortalCryptoWalletTransaction,
   assets: { fromAsset: string; toAsset: string },
 ): { amountFrom: string; amountTo: string } | null {
@@ -232,7 +234,12 @@ function formatLombardBorrowMeta(collateralAmount: string | undefined, collatera
 export function mapCryptoTransactionToHistoryItem(
   tx: PortalCryptoWalletTransaction,
   currency: string,
+  options?: { assetTicker?: string },
 ): PortalCryptoTransactionHistoryItem {
+  const href = options?.assetTicker
+    ? portalCryptoWalletTransactionRoute(options.assetTicker, tx.id)
+    : undefined
+
   if (isLombardBorrowTransaction(tx)) {
     const collateral = normalizeAsset(tx.fromAsset) || 'COLLATERAL'
     const borrowAmount =
@@ -249,6 +256,7 @@ export function mapCryptoTransactionToHistoryItem(
       meta: formatLombardBorrowMeta(collateralAmount, collateral),
       fromAsset: collateral,
       toAsset: 'USDC',
+      href,
     }
   }
 
@@ -279,6 +287,7 @@ export function mapCryptoTransactionToHistoryItem(
           : undefined,
         fromAsset: assets.fromAsset,
         toAsset: assets.toAsset,
+        href,
       }
     }
   }
@@ -304,6 +313,7 @@ export function mapCryptoTransactionToHistoryItem(
     amountTone,
     meta: formatTransactionMeta(tx, currency),
     flowDirection: incoming ? 'in' : 'out',
+    href,
   }
 }
 
@@ -361,6 +371,7 @@ export function groupCryptoTransactionsByDay(
   txs: PortalCryptoWalletTransaction[],
   currency: string,
   monthKey: string | null,
+  assetTicker?: string,
 ): PortalCryptoTransactionDaySection[] {
   const filtered = monthKey
     ? txs.filter((tx) => {
@@ -384,7 +395,7 @@ export function groupCryptoTransactionsByDay(
       byDay.set(dayKey, [])
       dayLabels.set(dayKey, formatCryptoTransactionDayLabel(date))
     }
-    byDay.get(dayKey)!.push(mapCryptoTransactionToHistoryItem(tx, currency))
+    byDay.get(dayKey)!.push(mapCryptoTransactionToHistoryItem(tx, currency, { assetTicker }))
   }
 
   return [...byDay.entries()]

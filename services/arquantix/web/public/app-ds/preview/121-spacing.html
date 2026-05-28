@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Espacement · Webapp4</p>
+<div style="display:flex;flex-direction:column;gap:6px">
+          <span class="pv-token__name">--v-container-desktop · 1280 px</span>
+          <span class="pv-token__name">--v-container-tablet · 720 px</span>
+          <span class="pv-token__name">--v-container-mobile · 100 %</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:16px">
+          <span class="pv-token__name">--v-pad-desktop · 48 px</span>
+          <span class="pv-token__name">--v-pad-tablet · 24 px</span>
+          <span class="pv-token__name">--v-pad-mobile · 16 px</span>
+        </div>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">spacing.html</span>
+          </div>
+&lt;section style="display:flex; flex-direction:column; gap:var(--v-space-xl)"&gt;
+  &lt;div style="padding:var(--v-space-lg)"&gt;…&lt;/div&gt;
+&lt;/section&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">Pas de <code>13px</code>, pas de <code>20px</code>, pas de <code>40px</code>. Si ça ne tient pas dans la grille, c'est l'arrangement qui doit changer, pas l'espacement.</div>
+</div></body></html>

@@ -1,11 +1,14 @@
-<div class="side-panel is-open" style="position:relative;height:320px;overflow:hidden;border:1px solid var(--v-fg-10);border-radius:var(--v-radius-lg);">
-  <div class="side-panel__scrim"></div>
-  <div class="side-panel__drawer" style="--side-panel-width:280px;position:absolute;">
-    <div style="padding:20px 24px;border-bottom:1px solid var(--v-fg-10);">
-      <span class="v-eyebrow">Fiche placement</span>
-    </div>
-    <div style="padding:24px;">
-      <p class="v-body" style="margin:0">Contenu drawer — pattern canonique app produit.</p>
-    </div>
-  </div>
-</div>
+<!-- Scrim -->
+<div onclick="close()" style="position:fixed;inset:0;background:rgba(20,18,8,0.32);
+     opacity:1;transition:opacity 320ms var(--v-ease-out)"></div>
+
+<!-- Panel -->
+<div role="dialog" aria-label="Fiche placement" style="
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 540px; max-width: 94vw;
+  background: var(--v-bg);
+  box-shadow: var(--v-elev-medium);
+  transform: translateX(0);
+  transition: transform 380ms var(--v-ease-out);
+  overflow-y: auto;
+">…contenu…</div>

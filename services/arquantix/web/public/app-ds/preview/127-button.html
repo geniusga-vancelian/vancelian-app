@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Button · Webapp4</p>
+<div class="pv-row">
+          <button class="btn btn--primary">Investir</button>
+          <button class="btn btn--secondary">Découvrir</button>
+          <button class="btn btn--ghost">Annuler</button>
+          <button class="btn btn--link">En savoir plus</button>
+          <button class="btn btn--terra">Découvrir l'offre</button>
+          <button class="btn btn--white" style="box-shadow:0 0 0 1px var(--v-fg-10)">Action</button>
+          <button class="btn btn--destructive">Supprimer</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Tailles</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <div class="pv-row">
+          <button class="btn btn--primary btn--sm">Small · 32 px</button>
+          <button class="btn btn--primary">Default · 40 px</button>
+          <button class="btn btn--primary btn--lg">Large · 52 px</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">État disabled</h3>
+      <div class="pv-canvas pv-canvas--white">
+        <div class="pv-row">
+          <button class="btn btn--primary" disabled>Indisponible</button>
+          <button class="btn btn--secondary" disabled>Indisponible</button>
+        </div>
+      </div>
+    </section>
+
+        <div class="pv-snippet">
+          <div class="pv-snippet__head">
+            <span class="pv-snippet__lbl">HTML</span>
+            <span class="pv-snippet__file">button.html</span>
+          </div>
+&lt;button class="btn btn--primary"&gt;Investir&lt;/button&gt;
+&lt;button class="btn btn--secondary"&gt;Découvrir&lt;/button&gt;
+&lt;button class="btn btn--ghost"&gt;Annuler&lt;/button&gt;
+&lt;button class="btn btn--link"&gt;En savoir plus&lt;/button&gt;
+&lt;button class="btn btn--terra"&gt;Découvrir l'offre&lt;/button&gt;
+&lt;button class="btn btn--destructive"&gt;Supprimer&lt;/button&gt;
+&lt;button class="btn btn--primary btn--sm"&gt;Small&lt;/button&gt;
+&lt;button class="btn btn--primary btn--lg"&gt;Large&lt;/button&gt;
+        </div>
+
+        <div class="pv-notes">
+          <h4 class="pv-notes__title">Notes d'usage</h4>
+          <div class="pv-notes__body">Le primary est <strong>anthracite</strong>, pas terracotta. La terracotta est l'accent rare — un seul <code>btn--terra</code> par surface visible. <code>btn--link</code> est le seul élément cliquable qui peut être terracotta en aplat. Focus visible = 2 px terracotta, offset 2 px, automatique.</div>
+</div></body></html>

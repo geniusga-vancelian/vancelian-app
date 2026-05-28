@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
-import { PortalCryptoAssetList } from '@/components/portal/markets/PortalCryptoAssetList'
+import { PortalMarketsAssetList } from '@/components/portal/markets/PortalMarketsAssetList'
 import type { PortalCryptoAsset } from '@/lib/portal/marketsTypes'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
@@ -13,10 +13,10 @@ type TabId = 'favorites' | 'popular' | 'gainers' | 'losers'
 export type TopCryptoTabId = TabId
 
 const TABS: Array<{ id: TabId; label: string }> = [
-  { id: 'favorites', label: 'Favorites' },
-  { id: 'popular', label: 'Popular' },
-  { id: 'gainers', label: 'Top Gainers' },
-  { id: 'losers', label: 'Top Losers' },
+  { id: 'favorites', label: 'Favoris' },
+  { id: 'gainers', label: 'Top gainers' },
+  { id: 'losers', label: 'Top losers' },
+  { id: 'popular', label: 'Populaires' },
 ]
 
 type Props = {
@@ -49,15 +49,15 @@ export function PortalTopCryptoSection({
   onTabChange,
   showTabs = true,
   showBrowseLink = true,
-  title = 'Top Crypto',
+  title = 'Top crypto',
   browseHref = PORTAL_ROUTES.marketsAllCrypto,
-  browseLabel = 'Browse all Crypto',
+  browseLabel = 'Voir tout',
   loading,
   error,
   onRetry,
   emptyMessage,
 }: Props) {
-  const [internalTab, setInternalTab] = useState<TabId>('popular')
+  const [internalTab, setInternalTab] = useState<TabId>('gainers')
   const tab = activeTabProp ?? internalTab
 
   const setTab = (next: TabId) => {
@@ -76,20 +76,21 @@ export function PortalTopCryptoSection({
   const resolvedEmptyMessage =
     emptyMessage ??
     (tab === 'favorites'
-      ? 'Star an instrument on its detail page to add it to your favorites.'
-      : 'No assets to display.')
+      ? "Aucun favori pour l'instant. Ajoutez vos premiers actifs depuis leur fiche."
+      : 'Aucun actif à afficher.')
 
   return (
     <section className="flex w-full flex-col gap-3">
       <AppSectionHeader
         title={title}
+        size="sm"
         moreHref={showBrowseLink ? browseHref : undefined}
         moreLabel={browseLabel}
       />
 
       {showTabs ? (
-        <div className="nx__filters">
-          <div className="seg" role="tablist">
+        <div className="mk-filter">
+          <div className="seg seg--md" role="tablist" aria-label="Filtrer">
             {TABS.map((item) => {
               const active = tab === item.id
               return (
@@ -120,12 +121,12 @@ export function PortalTopCryptoSection({
               onClick={onRetry}
               className="v-text-link mt-3 border-0 bg-transparent p-0 font-ui text-[13px]"
             >
-              Retry
+              Réessayer
             </button>
           ) : null}
         </div>
       ) : (
-        <PortalCryptoAssetList assets={rows} emptyMessage={resolvedEmptyMessage} />
+        <PortalMarketsAssetList assets={rows} emptyMessage={resolvedEmptyMessage} />
       )}
     </section>
   )

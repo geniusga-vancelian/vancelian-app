@@ -1,0 +1,35 @@
+/* Placer page — grille 2 colonnes (handoff Placer.html / layout.css) */
+
+@scope ([data-v-ds='app']) {
+  .portal-placer-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 40px;
+    align-items: start;
+  }
+
+  .portal-placer-grid .col-main {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    min-width: 0;
+  }
+
+  .portal-placer-grid .col-side {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: 100px;
+  }
+
+  @media (max-width: 960px) {
+    .portal-placer-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .portal-placer-grid .col-side {
+      display: none !important;
+    }
+  }
+}

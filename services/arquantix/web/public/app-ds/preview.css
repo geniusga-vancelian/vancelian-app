@@ -1,0 +1,252 @@
+/* ======================================================================
+   Preview frame — shared chrome for every component preview page.
+   Component pages are kept neutral: a centered viewport with a tagged
+   title, a tiny meta strip, and the component rendered on a paper
+   background. Nothing decorative — the component is the subject.
+   ====================================================================== */
+
+.pv-frame {
+  min-height: 100vh;
+  background: var(--v-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.pv-header {
+  padding: 32px 48px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--v-fg-10);
+  background: #fff;
+}
+.pv-header__left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.pv-header__crumb {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--v-ls-eyebrow);
+  text-transform: uppercase;
+  color: var(--v-fg-muted);
+}
+.pv-header__title {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--v-fg);
+}
+.pv-header__desc {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--v-fg-body);
+  max-width: 64ch;
+}
+.pv-header__home {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--v-fg-10);
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v-fg);
+  text-decoration: none;
+  flex-shrink: 0;
+  background: #fff;
+  transition: background var(--v-motion-fast) var(--v-ease-out);
+}
+.pv-header__home:hover { background: var(--v-fg-05); }
+
+.pv-stage {
+  flex: 1;
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+}
+
+/* A canvas hosting the component(s). Off-white paper background — same
+   as DS bg — so the component renders as it would on a real page. */
+.pv-canvas {
+  background: var(--v-bg);
+  border: 1px solid var(--v-fg-10);
+  border-radius: 12px;
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  align-items: flex-start;
+  min-height: 240px;
+}
+.pv-canvas--center { align-items: center; justify-content: center; }
+.pv-canvas--dark   { background: #141208; color: #EDECEC; border-color: transparent; }
+.pv-canvas--white  { background: #FFFFFF; }
+.pv-canvas--warm   { background: var(--v-card-warm); border-color: transparent; }
+.pv-canvas--narrow { max-width: 720px; }
+.pv-canvas--phone  { max-width: 420px; padding: 0; overflow: hidden; }
+
+.pv-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.pv-caption {
+  font-family: var(--v-font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: var(--v-ls-eyebrow);
+  text-transform: uppercase;
+  color: var(--v-fg-muted);
+  margin: 0;
+}
+
+/* Section inside a preview — separates variant groups */
+.pv-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+.pv-section__title {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--v-fg);
+}
+
+/* Token strip — colored / typo /  tokens */
+.pv-tokens {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+.pv-token {
+  background: #fff;
+  border: 1px solid var(--v-fg-10);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv-token__sw {
+  height: 64px;
+  border-radius: 6px;
+  border: 1px solid rgba(26,24,21,0.04);
+}
+.pv-token__name {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--v-fg);
+}
+.pv-token__meta {
+  font-family: var(--v-font-ui);
+  font-feature-settings: "tnum" on;
+  font-size: 12px;
+  color: var(--v-fg-muted);
+}
+.pv-token__hex {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v-fg-light);
+}
+
+/* Snippet block — the raw HTML you'd copy */
+.pv-snippet {
+  background: #1A1815;
+  color: #EDECEC;
+  border-radius: 12px;
+  padding: 20px 24px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+  width: 100%;
+  box-sizing: border-box;
+}
+.pv-snippet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.pv-snippet__lbl {
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--v-ls-eyebrow);
+  text-transform: uppercase;
+  color: rgba(237,236,236,0.6);
+}
+.pv-snippet__file {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: rgba(237,236,236,0.7);
+}
+
+/* Notes block */
+.pv-notes {
+  background: var(--v-card-warm);
+  border-radius: 12px;
+  padding: 20px 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.pv-notes__title {
+  margin: 0 0 6px;
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: var(--v-ls-eyebrow);
+  text-transform: uppercase;
+  color: var(--v-fg);
+}
+.pv-notes__body {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--v-fg-body);
+}
+.pv-notes__body code {
+  background: rgba(26,24,21,0.06);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .pv-header { padding: 20px 16px; flex-direction: column; align-items: flex-start; }
+  .pv-stage  { padding: 24px 16px; }
+  .pv-canvas { padding: 24px; }
+}

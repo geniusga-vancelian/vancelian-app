@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
     const payload: PortalAcademyHubPayload = {
       ...newsHub,
       research,
+      categories: newsHub.categories,
     }
 
     return NextResponse.json(payload)

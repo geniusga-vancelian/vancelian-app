@@ -23,23 +23,9 @@
 }
 @font-face {
   font-family: "Newsreader";
-  font-style: italic;
-  font-weight: 300;
-  src: url("/fonts/newsreader/Newsreader_24pt-LightItalic.ttf") format("truetype");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Newsreader";
   font-style: normal;
   font-weight: 400;
   src: url("/fonts/newsreader/Newsreader_24pt-Regular.ttf") format("truetype");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Newsreader";
-  font-style: italic;
-  font-weight: 400;
-  src: url("/fonts/newsreader/Newsreader_24pt-Italic.ttf") format("truetype");
   font-display: swap;
 }
 @font-face {
@@ -49,33 +35,12 @@
   src: url("/fonts/newsreader/Newsreader_24pt-Medium.ttf") format("truetype");
   font-display: swap;
 }
-@font-face {
-  font-family: "Newsreader";
-  font-style: normal;
-  font-weight: 600;
-  src: url("/fonts/newsreader/Newsreader_24pt-SemiBold.ttf") format("truetype");
-  font-display: swap;
-}
 /* Display optical size — for 60–96px hero / editorial display */
 @font-face {
   font-family: "Newsreader Display";
   font-style: normal;
   font-weight: 300;
   src: url("/fonts/newsreader/Newsreader_60pt-Light.ttf") format("truetype");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Newsreader Display";
-  font-style: italic;
-  font-weight: 300;
-  src: url("/fonts/newsreader/Newsreader_60pt-LightItalic.ttf") format("truetype");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Newsreader Display";
-  font-style: normal;
-  font-weight: 400;
-  src: url("/fonts/newsreader/Newsreader_60pt-Regular.ttf") format("truetype");
   font-display: swap;
 }
 
@@ -371,6 +336,14 @@ html, body {
 }
 *, *::before, *::after { box-sizing: border-box; }
 
+/* Global anchor reset — never underline by default, never use a generic
+   browser link blue. Exceptions (footer hover, .btn--link hover, legal
+   fine print) explicitly opt back in below. */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
 ::selection { background: var(--v-terracotta-bg-strong); color: var(--v-fg); }
 
 /* ============================================================
@@ -479,54 +452,6 @@ html, body {
 }
 
 /* ======================================================================
-   AMOUNT TYPOGRAPHY — sémantique montants (webapp produit)
-   Newsreader uniquement sur .v-amount-hero (exception bilan).
-   Tous les autres montants : Inter SemiBold + tabular-nums.
-   ====================================================================== */
-.v-amount-hero {
-  font-family: var(--v-font-display);
-  font-weight: 300;
-  font-size: clamp(56px, 6vw, 80px);
-  line-height: 1.0;
-  letter-spacing: -0.015em;
-  color: var(--v-fg);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" on, "lnum" on;
-}
-.v-amount-lg {
-  font-family: var(--v-font-ui);
-  font-weight: 600;
-  font-size: 28px;
-  line-height: 1.0;
-  letter-spacing: -0.015em;
-  color: var(--v-fg);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" on, "lnum" on;
-}
-.v-amount-md {
-  font-family: var(--v-font-ui);
-  font-weight: 600;
-  font-size: 17px;
-  line-height: 1.2;
-  color: var(--v-fg);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" on, "lnum" on;
-}
-.v-amount-sm {
-  font-family: var(--v-font-ui);
-  font-weight: 600;
-  font-size: 14px;
-  line-height: 1.2;
-  color: var(--v-fg);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" on, "lnum" on;
-}
-.v-tnum {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" on, "lnum" on;
-}
-
-/* ======================================================================
    COMPONENT PRIMITIVES — promoted from preview/ to DS global
    ----------------------------------------------------------------------
    Each primitive is the canonical implementation. Component files MAY
@@ -551,6 +476,7 @@ html, body {
   line-height: 1;
   border-radius: var(--v-radius-pill); border: 0;
   cursor: pointer; background: none; white-space: nowrap;
+  text-decoration: none;
 }
 .btn--sm { height: 32px; padding: 0 16px; font-size: 13px; }
 .btn--lg { height: 52px; padding: 0 28px; font-size: 15px; }
@@ -563,6 +489,59 @@ html, body {
 .btn--link        { background: transparent;          color: var(--v-terracotta);
                     padding: 0; height: auto; }
 .btn--destructive { background: var(--v-error);       color: #FFFFFF; }
+.btn--terra       { background: var(--v-terracotta);  color: #FFFFFF; }
+.btn--white       { background: #FFFFFF;              color: var(--v-fg); }
+
+/* Interactive states ---------------------------------------------------- */
+.btn { transition: background-color var(--v-motion-fast) var(--v-ease-out),
+                   border-color var(--v-motion-fast) var(--v-ease-out),
+                   color var(--v-motion-fast) var(--v-ease-out),
+                   opacity var(--v-motion-fast) var(--v-ease-out); }
+
+.btn--primary:hover     { background: var(--v-fg-hover); }
+.btn--primary:active    { background: #0E0D0C; }
+
+.btn--secondary:hover   { background: var(--v-fg-05); }
+.btn--secondary:active  { background: var(--v-fg-10); }
+
+.btn--ghost:hover       { background: var(--v-fg-05); }
+.btn--ghost:active      { background: var(--v-fg-10); }
+
+.btn--link:hover        { color: var(--v-terracotta-pressed); text-decoration: underline; }
+.btn--link:active       { color: var(--v-terracotta-pressed); }
+
+.btn--destructive:hover { background: #9F2E2E; }
+.btn--destructive:active{ background: #862626; }
+
+.btn--terra:hover       { background: var(--v-terracotta-pressed); }
+.btn--terra:active      { background: #862F12; }
+
+.btn--white:hover       { background: #F1EEE8; }
+.btn--white:active      { background: #E6E1D7; }
+
+.btn:focus-visible      { outline: 2px solid var(--v-terracotta);
+                          outline-offset: 2px; }
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.4; cursor: not-allowed; pointer-events: none;
+}
+
+/* ic-btn + fab — same hover treatment */
+.ic-btn { transition: background-color var(--v-motion-fast) var(--v-ease-out),
+                      box-shadow var(--v-motion-fast) var(--v-ease-out); }
+.ic-btn:hover  { background: #F6F3EC; }
+.ic-btn:active { background: #EDE8DC; }
+.ic-btn:focus-visible { outline: 2px solid var(--v-terracotta); outline-offset: 2px; }
+
+.fab { transition: background-color var(--v-motion-fast) var(--v-ease-out),
+                   transform var(--v-motion-fast) var(--v-ease-out); }
+.fab:hover  { transform: translateY(-1px); }
+.fab:active { transform: translateY(0); }
+.fab--dark:hover  { background: var(--v-fg-hover); }
+.fab--terra:hover { background: var(--v-terracotta-pressed); }
+.fab--white:hover { background: #F6F3EC; }
+.fab:focus-visible { outline: 2px solid var(--v-terracotta); outline-offset: 2px; }
 
 /* ---- .ic-btn (40 px circular icon button) ---------------------------- */
 .ic-btn {
@@ -610,7 +589,6 @@ html, body {
 .avt--24 { --avt-size: 24px; }
 .avt--32 { --avt-size: 32px; }
 .avt--40 { --avt-size: 40px; }
-.avt--46 { --avt-size: 46px; }
 .avt--52 { --avt-size: 52px; }
 .avt--56 { --avt-size: 56px; }
 .avt--64 { --avt-size: 64px; }
@@ -648,17 +626,17 @@ img.avt__ic {
   filter: brightness(0);
 }
 /* Common glyph mask-image modifiers — Kalai icon set */
-.avt__ic--user   { -webkit-mask-image: url("/icons/kalai/user.svg");          mask-image: url("/icons/kalai/user.svg"); }
-.avt__ic--group  { -webkit-mask-image: url("/icons/kalai/user-group.svg");    mask-image: url("/icons/kalai/user-group.svg"); }
-.avt__ic--home   { -webkit-mask-image: url("/icons/kalai/home-1.svg");        mask-image: url("/icons/kalai/home-1.svg"); }
-.avt__ic--card   { -webkit-mask-image: url("/icons/kalai/payment-card.svg");  mask-image: url("/icons/kalai/payment-card.svg"); }
-.avt__ic--btc    { -webkit-mask-image: url("/icons/kalai/bitcoin.svg");       mask-image: url("/icons/kalai/bitcoin.svg"); }
-.avt__ic--gift   { -webkit-mask-image: url("/icons/kalai/gift.svg");          mask-image: url("/icons/kalai/gift.svg"); }
-.avt__ic--bell   { -webkit-mask-image: url("/icons/kalai/bell.svg");          mask-image: url("/icons/kalai/bell.svg"); }
-.avt__ic--star   { -webkit-mask-image: url("/icons/kalai/star.svg");          mask-image: url("/icons/kalai/star.svg"); }
-.avt__ic--check  { -webkit-mask-image: url("/icons/kalai/check.svg");         mask-image: url("/icons/kalai/check.svg"); }
-.avt__ic--shield { -webkit-mask-image: url("/icons/kalai/shield-good.svg");   mask-image: url("/icons/kalai/shield-good.svg"); }
-.avt__ic--logo   { -webkit-mask-image: url("/brand/vancelian/logo-black-icon.svg"); mask-image: url("/brand/vancelian/logo-black-icon.svg"); }
+.avt__ic--user   { -webkit-mask-image: url("assets/icons/user.svg");          mask-image: url("assets/icons/user.svg"); }
+.avt__ic--group  { -webkit-mask-image: url("assets/icons/user-group.svg");    mask-image: url("assets/icons/user-group.svg"); }
+.avt__ic--home   { -webkit-mask-image: url("assets/icons/home-1.svg");        mask-image: url("assets/icons/home-1.svg"); }
+.avt__ic--card   { -webkit-mask-image: url("assets/icons/payment-card.svg");  mask-image: url("assets/icons/payment-card.svg"); }
+.avt__ic--btc    { -webkit-mask-image: url("assets/icons/bitcoin.svg");       mask-image: url("assets/icons/bitcoin.svg"); }
+.avt__ic--gift   { -webkit-mask-image: url("assets/icons/gift.svg");          mask-image: url("assets/icons/gift.svg"); }
+.avt__ic--bell   { -webkit-mask-image: url("assets/icons/bell.svg");          mask-image: url("assets/icons/bell.svg"); }
+.avt__ic--star   { -webkit-mask-image: url("assets/icons/star.svg");          mask-image: url("assets/icons/star.svg"); }
+.avt__ic--check  { -webkit-mask-image: url("assets/icons/check.svg");         mask-image: url("assets/icons/check.svg"); }
+.avt__ic--shield { -webkit-mask-image: url("assets/icons/shield-good.svg");   mask-image: url("assets/icons/shield-good.svg"); }
+.avt__ic--logo   { -webkit-mask-image: url("assets/logos/logo-black-icon.svg"); mask-image: url("assets/logos/logo-black-icon.svg"); }
 
 /* Status badge — bottom-right */
 .avt__status {
@@ -703,7 +681,6 @@ img.avt__ic {
   width: var(--avt-size); height: var(--avt-size);
 }
 .avt-x--40 { --avt-size: 40px; }
-.avt-x--46 { --avt-size: 46px; }
 .avt-x--48 { --avt-size: 48px; }
 .avt-x--56 { --avt-size: 56px; }
 .avt-x--72 { --avt-size: 72px; }

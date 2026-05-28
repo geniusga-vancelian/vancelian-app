@@ -42,8 +42,8 @@ export function PortalCryptoWalletTransactionsScreen({ asset }: Props) {
 
   const monthKeys = useMemo(() => listCryptoTransactionMonthKeys(transactions), [transactions])
   const sections = useMemo(
-    () => groupCryptoTransactionsByDay(transactions, currency, selectedMonth),
-    [transactions, currency, selectedMonth],
+    () => groupCryptoTransactionsByDay(transactions, currency, selectedMonth, ticker),
+    [transactions, currency, selectedMonth, ticker],
   )
 
   if (loading && !data) {

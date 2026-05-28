@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Couleurs · Webapp4</p>
+<section class="pv-section">
+      <h3 class="pv-section__title">Backgrounds</h3>
+      <div class="pv-tokens">
+        
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#F7F7F4;"></div>
+          <span class="pv-token__name">--v-bg</span>
+          <span class="pv-token__hex">#F7F7F4</span>
+          <span class="pv-token__meta">Fond papier principal</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#F2F1ED;"></div>
+          <span class="pv-token__name">--v-card</span>
+          <span class="pv-token__hex">#F2F1ED</span>
+          <span class="pv-token__meta">Carte niveau 1</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#F3EDE6;"></div>
+          <span class="pv-token__name">--v-card-warm</span>
+          <span class="pv-token__hex">#F3EDE6</span>
+          <span class="pv-token__meta">Carte warm — testimonials, marketing</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#EBEAE5;"></div>
+          <span class="pv-token__name">--v-card-hover</span>
+          <span class="pv-token__hex">#EBEAE5</span>
+          <span class="pv-token__meta">Hover de carte interactive</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#FFFFFF;border-color:var(--v-fg-10)"></div>
+          <span class="pv-token__name">--v-white</span>
+          <span class="pv-token__hex">#FFFFFF</span>
+          <span class="pv-token__meta">Surface élevée au-dessus de bg/card</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#141208;"></div>
+          <span class="pv-token__name">--v-dark-bg</span>
+          <span class="pv-token__hex">#141208</span>
+          <span class="pv-token__meta">Dark mode bg / footer</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Foregrounds — anthracite, jamais noir pur</h3>
+      <div class="pv-tokens">
+        
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#1A1815"></div>
+          <span class="pv-token__name">--v-fg</span>
+          <span class="pv-token__hex">#1A1815</span>
+          <span class="pv-token__meta">Anthracite principal</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#3A352F"></div>
+          <span class="pv-token__name">--v-fg-body</span>
+          <span class="pv-token__hex">#3A352F</span>
+          <span class="pv-token__meta">Texte body</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#6E665C"></div>
+          <span class="pv-token__name">--v-fg-muted</span>
+          <span class="pv-token__hex">#6E665C</span>
+          <span class="pv-token__meta">Texte muted</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#8E867A"></div>
+          <span class="pv-token__name">--v-fg-light</span>
+          <span class="pv-token__hex">#8E867A</span>
+          <span class="pv-token__meta">Texte light</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#C9C3B5"></div>
+          <span class="pv-token__name">--v-fg-20</span>
+          <span class="pv-token__hex">#C9C3B5</span>
+          <span class="pv-token__meta">Disabled / muted borders</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#E2DED4"></div>
+          <span class="pv-token__name">--v-fg-10</span>
+          <span class="pv-token__hex">#E2DED4</span>
+          <span class="pv-token__meta">Dividers</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#EFEDE6"></div>
+          <span class="pv-token__name">--v-fg-05</span>
+          <span class="pv-token__hex">#EFEDE6</span>
+          <span class="pv-token__meta">Subtle background</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Triade chromatique — identité, jamais simultanée en aplat</h3>
+      <div class="pv-tokens">
+        
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#C0512E"></div>
+          <span class="pv-token__name" style="color:#C0512E">--v-terracotta</span>
+          <span class="pv-token__hex">#C0512E</span>
+          <span class="pv-token__meta">PRIMAIRE — accent rare de marque</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#33614D"></div>
+          <span class="pv-token__name" style="color:#33614D">--v-green</span>
+          <span class="pv-token__hex">#33614D</span>
+          <span class="pv-token__meta">Vert anglais — success / patrimoine</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#0F2A47"></div>
+          <span class="pv-token__name" style="color:#0F2A47">--v-blue</span>
+          <span class="pv-token__hex">#0F2A47</span>
+          <span class="pv-token__meta">Bleu de Prusse — info / institutionnel</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#C99A2E"></div>
+          <span class="pv-token__name" style="color:#C99A2E">--v-yellow</span>
+          <span class="pv-token__hex">#C99A2E</span>
+          <span class="pv-token__meta">Safran — warning</span>
+        </div>
+        <div class="pv-token">
+          <div class="pv-token__sw" style="background:#B83A3A"></div>
+          <span class="pv-token__name" style="color:#B83A3A">--v-error</span>
+          <span class="pv-token__hex">#B83A3A</span>
+          <span class="pv-token__meta">Seul rouge autorisé</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section">
+      <h3 class="pv-section__title">Variantes on-dark — calibrées pour les surfaces anthracite</h3>
+      <div class="pv-tokens">
+        
+        <div class="pv-token" style="background:#141208;border-color:rgba(237,236,236,0.08)">
+          <div class="pv-token__sw" style="background:#E5896E"></div>
+          <span class="pv-token__name" style="color:#EDECEC">--v-terracotta-on-dark</span>
+          <span class="pv-token__hex" style="color:rgba(237,236,236,0.6)">#E5896E</span>
+        </div>
+        <div class="pv-token" style="background:#141208;border-color:rgba(237,236,236,0.08)">
+          <div class="pv-token__sw" style="background:#8FC9A8"></div>
+          <span class="pv-token__name" style="color:#EDECEC">--v-green-on-dark</span>
+          <span class="pv-token__hex" style="color:rgba(237,236,236,0.6)">#8FC9A8</span>
+        </div>
+        <div class="pv-token" style="background:#141208;border-color:rgba(237,236,236,0.08)">
+          <div class="pv-token__sw" style="background:#8FB4D8"></div>
+          <span class="pv-token__name" style="color:#EDECEC">--v-blue-on-dark</span>
+          <span class="pv-token__hex" style="color:rgba(237,236,236,0.6)">#8FB4D8</span>
+        </div>
+        <div class="pv-token" style="background:#141208;border-color:rgba(237,236,236,0.08)">
+          <div class="pv-token__sw" style="background:#E8C778"></div>
+          <span class="pv-token__name" style="color:#EDECEC">--v-yellow-on-dark</span>
+          <span class="pv-token__hex" style="color:rgba(237,236,236,0.6)">#E8C778</span>
+        </div>
+        <div class="pv-token" style="background:#141208;border-color:rgba(237,236,236,0.08)">
+          <div class="pv-token__sw" style="background:#E89090"></div>
+          <span class="pv-token__name" style="color:#EDECEC">--v-error-on-dark</span>
+          <span class="pv-token__hex" style="color:rgba(237,236,236,0.6)">#E89090</span>
+        </div>
+      </div>
+    </section>
+</div></body></html>

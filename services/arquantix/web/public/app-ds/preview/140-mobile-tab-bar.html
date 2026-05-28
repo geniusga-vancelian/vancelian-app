@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Mobile Tab Bar · Webapp4</p>
+<div class="pv-canvas pv-canvas--phone" style="background:var(--v-bg);min-height:520px;position:relative;align-items:stretch">
+      <div style="padding:32px 16px;flex:1">
+        <p class="v-eyebrow" style="margin:0 0 6px">Mockup</p>
+        <p class="v-h3" style="margin:0">Contenu de l'écran</p>
+        <p class="v-body" style="margin:16px 0 0;color:var(--v-fg-muted)">La tab bar est ancrée en bas, indépendamment du scroll de la page.</p>
+      </div>
+      <nav class="mtab" aria-label="Navigation principale" style="position:relative;display:flex">
+        <a href="#" class="mtab__item">
+          <span class="mtab__ic"><span class="mtab__avt">FL</span></span>
+          <span class="mtab__lbl">Profil</span>
+        </a>
+        <a href="#" class="mtab__item is-active" aria-current="page">
+          <span class="mtab__ic"><span class="ic" style="width:22px;height:22px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/wallet.svg) center/contain no-repeat"></span></span>
+          <span class="mtab__lbl">Portefeuille</span>
+        </a>
+        <a href="#" class="mtab__item">
+          <span class="mtab__ic"><span class="ic" style="width:22px;height:22px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/plus.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/plus.svg) center/contain no-repeat"></span></span>
+          <span class="mtab__lbl">Placer</span>
+        </a>
+        <a href="#" class="mtab__item">
+          <span class="mtab__ic"><span class="ic" style="width:22px;height:22px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/arrow-up-right.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/arrow-up-right.svg) center/contain no-repeat"></span></span>
+          <span class="mtab__lbl">Marchés</span>
+        </a>
+        <a href="#" class="mtab__item">
+          <span class="mtab__ic"><span class="ic" style="width:22px;height:22px;background:currentColor;-webkit-mask:url(/app-ds/assets/icons/document.svg) center/contain no-repeat;mask:url(/app-ds/assets/icons/document.svg) center/contain no-repeat"></span></span>
+          <span class="mtab__lbl">Académie</span>
+        </a>
+      </nav>
+    </div>
+</div></body></html>

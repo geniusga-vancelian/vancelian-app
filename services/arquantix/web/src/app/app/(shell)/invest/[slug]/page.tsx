@@ -1,12 +1,12 @@
 import { notFound } from 'next/navigation'
 import { getExclusiveOfferVaultPayload } from '@/lib/cms/exclusiveOfferVaultPage'
-import { ExclusiveOfferVaultDetail } from '@/components/exclusive-offer/ExclusiveOfferVaultDetail'
+import { PortalOfferDetailScreen } from '@/components/portal/invest/PortalOfferDetailScreen'
 
 type Props = {
   params: Promise<{ slug: string }>
 }
 
-/** Détail offre exclusive dans la webapp — même rendu vault DS que le site public. */
+/** Détail offre exclusive portail — handoff Offre.html. */
 export default async function PortalInvestOfferPage({ params }: Props) {
   const { slug } = await params
   const payload = await getExclusiveOfferVaultPayload(slug, 'fr')
@@ -14,5 +14,5 @@ export default async function PortalInvestOfferPage({ params }: Props) {
     notFound()
   }
 
-  return <ExclusiveOfferVaultDetail payload={payload} />
+  return <PortalOfferDetailScreen payload={payload} />
 }

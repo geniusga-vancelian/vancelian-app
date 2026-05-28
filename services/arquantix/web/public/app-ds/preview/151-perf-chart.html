@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Perf Chart · Webapp4</p>
+<div style="width:100%;background:#fff;border:1px solid var(--v-fg-10);border-radius:12px;padding:24px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+          <div>
+            <p class="pv-caption" style="margin:0 0 4px">Variation</p>
+            <p style="margin:0;font-size:24px;font-weight:600;font-family:var(--v-font-ui);color:var(--v-green);font-feature-settings:'tnum' on">+ 8,4 %</p>
+          </div>
+          <div class="perf-tabs" role="tablist" style="display:inline-flex;gap:4px;padding:4px;background:var(--v-fg-05);border-radius:999px">
+            <button style="height:28px;padding:0 12px;border-radius:999px;font:500 12px var(--v-font-ui);color:var(--v-fg-muted);background:transparent;border:0;cursor:pointer">24h</button>
+            <button style="height:28px;padding:0 12px;border-radius:999px;font:500 12px var(--v-font-ui);color:var(--v-fg-muted);background:transparent;border:0;cursor:pointer">1S</button>
+            <button style="height:28px;padding:0 12px;border-radius:999px;font:500 12px var(--v-font-ui);color:var(--v-fg-muted);background:transparent;border:0;cursor:pointer">1M</button>
+            <button style="height:28px;padding:0 12px;border-radius:999px;font:500 12px var(--v-font-ui);color:#fff;background:var(--v-fg);border:0;cursor:pointer">1A</button>
+            <button style="height:28px;padding:0 12px;border-radius:999px;font:500 12px var(--v-font-ui);color:var(--v-fg-muted);background:transparent;border:0;cursor:pointer">Max</button>
+          </div>
+        </div>
+        <svg viewBox="0 0 720 200" preserveAspectRatio="none" style="width:100%;height:200px;display:block">
+          <line x1="24" x2="696" y1="50"  stroke="#E2DED4" />
+          <line x1="24" x2="696" y1="100" stroke="#E2DED4" />
+          <line x1="24" x2="696" y1="150" stroke="#E2DED4" />
+          <path d="M 24,160 L 100,140 L 180,150 L 260,120 L 340,130 L 420,100 L 500,80 L 580,60 L 660,50 L 696,40 L 696,176 L 24,176 Z" fill="#33614D" opacity="0.10" />
+          <path d="M 24,160 L 100,140 L 180,150 L 260,120 L 340,130 L 420,100 L 500,80 L 580,60 L 660,50 L 696,40" fill="none" stroke="#33614D" stroke-width="2" stroke-linejoin="round" />
+          <circle cx="696" cy="40" r="4" fill="#33614D" />
+          <circle cx="696" cy="40" r="8" fill="#33614D" opacity="0.18" />
+        </svg>
+        <div style="display:flex;justify-content:space-between;font:500 11px var(--v-font-ui);color:var(--v-fg-muted);margin-top:8px">
+          <span>Mai 25</span><span>Juil</span><span>Sept</span><span>Nov</span><span>Janv 26</span><span>Mars</span><span>Mai 26</span>
+        </div>
+      </div>
+</div></body></html>

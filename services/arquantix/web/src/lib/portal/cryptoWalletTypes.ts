@@ -70,6 +70,7 @@ export type PortalCryptoWalletBundleDetailPayload = {
   currency: string
   bundle: PortalMyBundleSummary
   historyPoints: number[]
+  transactions: PortalCryptoWalletTransaction[]
   partial?: boolean
 }
 

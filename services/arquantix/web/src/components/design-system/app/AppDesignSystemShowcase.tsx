@@ -11,9 +11,13 @@ const TOC_GROUPS: { head: string; sectionIds: string[] }[] = [
   { head: 'Foundations', sectionIds: ['brand', 'colors', 'type', 'spacing'] },
   { head: 'Components', sectionIds: ['simple', 'ui', 'cards', 'misc'] },
   { head: 'App product', sectionIds: ['app-primitives', 'app-shell', 'app-patterns'] },
+  {
+    head: 'Webapp4',
+    sectionIds: ['w4-foundations', 'w4-primitives', 'w4-app-shell', 'w4-patterns'],
+  },
 ]
 
-/** Showcase complet — handoff App Vancelian + Webapp3 (mai 2026). */
+/** Showcase complet — App Vancelian + Webapp3 + Webapp4 (mai 2026). */
 export function AppDesignSystemShowcase() {
   return (
     <div className="app-ds-page">
@@ -30,7 +34,7 @@ export function AppDesignSystemShowcase() {
           <p className="app-ds-ph__sub">
             Mini-Storybook · composants chargés depuis{' '}
             <code className="font-ui text-v-fg-muted">/app-ds/preview</code> (handoff App
-            Vancelian + Webapp3). Fondations · composants atomiques · shell & patterns produit.
+            Vancelian + Webapp3 + Webapp4). Fondations · atomiques · shell · patterns · DS reconstruit.
           </p>
         </div>
         <div className="app-ds-ph__meta">
@@ -67,7 +71,7 @@ export function AppDesignSystemShowcase() {
       ))}
 
       <footer className="app-ds-footer">
-        <div>Vancelian · App design system · v2.3</div>
+        <div>Vancelian · App design system · v2.4</div>
         <div>Aman · Hermès · Cereal</div>
       </footer>
     </div>

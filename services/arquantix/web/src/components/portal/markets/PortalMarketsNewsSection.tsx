@@ -36,7 +36,7 @@ function mapNewsItem(item: PortalMarketsNewsItem): AppNewsStackedListItem {
 
 export function PortalMarketsNewsSection({
   items,
-  title = 'Latest News',
+  title = 'Actualités',
   maxItems = 5,
   showFilters = true,
 }: Props) {
@@ -74,7 +74,7 @@ export function PortalMarketsNewsSection({
       <AppSectionHeader
         title={title}
         moreHref={PORTAL_ROUTES.academy}
-        moreLabel="View all articles"
+        moreLabel="Voir toutes les publications"
       />
 
       <AppNewsStackedList
