@@ -17,7 +17,7 @@ export type BundleHoldingsSplit = {
 }
 
 export type BundleWithdrawReleaseSnapshot = {
-  released: boolean
+  released?: boolean
   amount?: number
   reason?: string
 }
