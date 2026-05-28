@@ -85,8 +85,8 @@ export type PortalCryptoWalletHubPayload = {
   positions: PortalCryptoPositionsSummary
   bundles: PortalMyBundleSummary[]
   historyPoints: number[]
-  /** Source des positions affichées (hub = soldes wallet Privy). */
-  source?: 'privy'
+  /** Source des positions affichées (hub = direct_portfolio PE / Mon Trading). */
+  source?: 'direct' | 'privy'
   partial?: boolean
 }
 

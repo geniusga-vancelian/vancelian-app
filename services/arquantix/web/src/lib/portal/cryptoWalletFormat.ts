@@ -88,6 +88,75 @@ export function parseCryptoPositionsPayload(raw: unknown): PortalCryptoPositions
   }
 }
 
+const BUNDLE_PORTFOLIO_SCOPES = new Set(['bundle', 'bundle_portfolio', 'bundle_cash'])
+
+/** Solde affiché en self-trading : atomes direct_portfolio PE, pas le total custody Privy. */
+export function resolveSelfTradingPositionBalance(position: PortalCryptoPosition): number {
+  const platform = position.platformBalance
+  if (platform != null && platform > 0) return platform
+  return position.balance
+}
+
+function scaleSelfTradingEstimatedValues(
+  position: PortalCryptoPosition,
+  selfTradingBalance: number,
+): Pick<PortalCryptoPosition, 'estimatedValueEur' | 'estimatedValueUsd' | 'priceEur' | 'priceUsd'> {
+  if (selfTradingBalance === position.balance || position.balance <= 0) {
+    return {}
+  }
+  if (position.priceEur != null || position.priceUsd != null) {
+    return {
+      priceEur: position.priceEur,
+      priceUsd: position.priceUsd,
+      estimatedValueEur:
+        position.priceEur != null ? position.priceEur * selfTradingBalance : undefined,
+      estimatedValueUsd:
+        position.priceUsd != null ? position.priceUsd * selfTradingBalance : undefined,
+    }
+  }
+  const ratio = selfTradingBalance / position.balance
+  return {
+    estimatedValueEur:
+      position.estimatedValueEur != null ? position.estimatedValueEur * ratio : undefined,
+    estimatedValueUsd:
+      position.estimatedValueUsd != null ? position.estimatedValueUsd * ratio : undefined,
+  }
+}
+
+/** Parse `/api/app/crypto-positions/direct` — vue « Mon Trading » (direct_portfolio uniquement). */
+export function parseSelfTradingCryptoPositionsPayload(
+  raw: unknown,
+): PortalCryptoPositionsSummary {
+  const parsed = parseCryptoPositionsPayload(raw)
+  const positions = parsed.positions
+    .filter((position) => {
+      const scope = position.portfolioScope?.trim().toLowerCase()
+      return !scope || !BUNDLE_PORTFOLIO_SCOPES.has(scope)
+    })
+    .map((position) => {
+      const balance = resolveSelfTradingPositionBalance(position)
+      const scaled = scaleSelfTradingEstimatedValues(position, balance)
+      return {
+        ...position,
+        ...scaled,
+        balance,
+        availableBalance: balance,
+        portfolioScope: 'direct',
+      }
+    })
+    .filter((position) => position.balance > 0 || position.dedicatedWallet)
+
+  const totalValueEur = positions.reduce((sum, position) => sum + (position.estimatedValueEur ?? 0), 0)
+  const totalValueUsd = positions.reduce((sum, position) => sum + (position.estimatedValueUsd ?? 0), 0)
+
+  return {
+    totalValueEur,
+    totalValueUsd: totalValueUsd > 0 ? totalValueUsd : undefined,
+    positionsCount: positions.length,
+    positions,
+  }
+}
+
 function parseBundlePosition(item: Record<string, unknown>): PortalBundlePosition {
   return {
     asset: String(item.asset ?? '').trim().toUpperCase(),
@@ -665,9 +734,12 @@ export function resolveHubTotalValue(
 export function resolveHubCountLabel(
   positions: PortalCryptoPositionsSummary,
   bundles: PortalMyBundleSummary[],
-  options?: { privyOnly?: boolean },
+  options?: { privyOnly?: boolean; selfTradingDirect?: boolean },
 ): string {
   const count = positions.positionsCount || positions.positions.length
+  if (options?.selfTradingDirect) {
+    return count === 1 ? '1 actif · Mon Trading' : `${count} actifs · Mon Trading`
+  }
   if (options?.privyOnly) {
     return count === 1 ? '1 actif · wallet Privy' : `${count} actifs · wallet Privy`
   }

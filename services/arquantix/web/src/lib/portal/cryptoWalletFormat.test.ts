@@ -4,11 +4,15 @@ import {
   alignCryptoWalletDetailWithScopedPosition,
   buildCryptoWalletDetailFromScopedPosition,
   buildPrivyWalletPositionsSummary,
+  buildUnifiedWalletRows,
   formatCryptoTransactionAmount,
   formatDetailVolumeAmount,
   isIncomingCryptoTransaction,
   mergeCryptoWalletTransactions,
+  parseMyBundles,
   parsePrivyWalletDeposits,
+  parseSelfTradingCryptoPositionsPayload,
+  resolveHubTotalValue,
   resolvePositionSubtitle,
   resolveScopedPrivyPositionForAsset,
 } from './cryptoWalletFormat'
@@ -250,5 +254,91 @@ describe('alignCryptoWalletDetailWithScopedPosition', () => {
     const detail = buildCryptoWalletDetailFromScopedPosition(scoped!)
     assert.equal(detail.volume, formatDetailVolumeAmount(0.00857064, 'ETH'))
     assert.equal(detail.asset, 'ETH')
+  })
+})
+
+describe('parseSelfTradingCryptoPositionsPayload', () => {
+  it('uses platform_balance to avoid double counting privy custody', () => {
+    const summary = parseSelfTradingCryptoPositionsPayload({
+      summary: { total_value_eur: 50, positions_count: 1 },
+      positions: [
+        {
+          asset: 'USDC',
+          balance: 50,
+          available_balance: 50,
+          platform_balance: 13.33,
+          privy_balance: 50,
+          estimated_value_eur: 50,
+          price_eur: 1,
+          portfolio_scope: 'merged',
+        },
+      ],
+    })
+
+    assert.equal(summary.positions.length, 1)
+    assert.equal(summary.positions[0]?.balance, 13.33)
+    assert.equal(summary.positions[0]?.portfolioScope, 'direct')
+    assert.ok(Math.abs((summary.positions[0]?.estimatedValueEur ?? 0) - 13.33) < 0.01)
+  })
+
+  it('excludes bundle portfolio scopes from self-trading', () => {
+    const summary = parseSelfTradingCryptoPositionsPayload({
+      summary: { total_value_eur: 100, positions_count: 2 },
+      positions: [
+        {
+          asset: 'USDC',
+          balance: 20,
+          available_balance: 20,
+          platform_balance: 20,
+          estimated_value_eur: 20,
+        },
+        {
+          asset: 'BTC',
+          balance: 0.5,
+          available_balance: 0.5,
+          portfolio_scope: 'bundle',
+          estimated_value_eur: 80,
+        },
+      ],
+    })
+
+    assert.equal(summary.positions.length, 1)
+    assert.equal(summary.positions[0]?.asset, 'USDC')
+  })
+
+  it('hub total adds direct self-trading and bundle holdings without overlap', () => {
+    const direct = parseSelfTradingCryptoPositionsPayload({
+      summary: { total_value_eur: 13.33, positions_count: 1 },
+      positions: [
+        {
+          asset: 'USDC',
+          balance: 50,
+          platform_balance: 13.33,
+          estimated_value_eur: 50,
+          price_eur: 1,
+          portfolio_scope: 'merged',
+        },
+      ],
+    })
+    const bundles = parseMyBundles([
+      {
+        portfolio_id: 'bundle-1',
+        name: 'Crypto Majors',
+        has_holdings: true,
+        total_market_value: 36.67,
+        positions: [
+          { asset: 'BTC', quantity: 0.001, cost_basis: 36.67, position_type: 'spot' },
+        ],
+      },
+    ])
+
+    const hubTotal = resolveHubTotalValue(direct, bundles, 'EUR')
+    assert.ok(Math.abs(hubTotal - 50) < 0.01)
+
+    const rows = buildUnifiedWalletRows(direct.positions, bundles, 'EUR')
+    const assets = rows.map((row) =>
+      row.kind === 'position' ? row.position.asset : `bundle:${row.bundle.portfolioId}`,
+    )
+    assert.deepEqual(assets, ['bundle:bundle-1', 'USDC'])
   })
 })

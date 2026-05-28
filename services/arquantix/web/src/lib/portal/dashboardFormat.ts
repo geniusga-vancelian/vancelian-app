@@ -11,7 +11,7 @@ import type {
 import type { PortalSavingsPosition, PortalSavingsSummary } from '@/lib/portal/portalSavingsTypes'
 import {
   buildPrivyWalletPositionsSummary,
-  parseCryptoPositionsPayload,
+  parseSelfTradingCryptoPositionsPayload,
 } from '@/lib/portal/cryptoWalletFormat'
 import type { PortalCryptoPositionsSummary } from '@/lib/portal/cryptoWalletTypes'
 
@@ -229,37 +229,22 @@ function toPortalCryptoSummary(parsed: PortalCryptoPositionsSummary): PortalCryp
   }
 }
 
-/** Agrège crypto-positions API + soldes Privy réels pour le dashboard (aligné hub crypto). */
+/** Vue crypto dashboard — self-trading via `/crypto-positions/direct` (PE direct_portfolio). */
 export function resolveDashboardCryptoSummary(
-  cryptoPositionsRaw: unknown,
+  directPositionsRaw: unknown,
   privyRaw: unknown,
   marketRaw: unknown,
   currency: string,
 ): PortalCryptoSummary | null {
-  let crypto: PortalCryptoSummary | null = null
-
-  if (cryptoPositionsRaw) {
-    crypto = toPortalCryptoSummary(parseCryptoPositionsPayload(cryptoPositionsRaw))
+  if (directPositionsRaw) {
+    return toPortalCryptoSummary(parseSelfTradingCryptoPositionsPayload(directPositionsRaw))
   }
 
   if (privyRaw) {
-    const privyBuilt = buildPrivyWalletPositionsSummary(privyRaw, marketRaw, currency)
-    if (privyBuilt.positions.length > 0) {
-      const usesPlatformCustody =
-        crypto?.positions?.some((position) => {
-          const scope = position.portfolio_scope?.trim().toLowerCase()
-          if (scope === 'merged') return true
-          return Boolean(scope && scope !== 'privy')
-        }) ?? false
-
-      // Portefeuille 100 % Privy : mêmes soldes / valorisation que le hub crypto.
-      if (!usesPlatformCustody) {
-        crypto = toPortalCryptoSummary(privyBuilt)
-      }
-    }
+    return toPortalCryptoSummary(buildPrivyWalletPositionsSummary(privyRaw, marketRaw, currency))
   }
 
-  return crypto
+  return null
 }
 
 export function buildWalletRows(

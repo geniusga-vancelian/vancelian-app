@@ -69,6 +69,7 @@ function CryptoWalletCachedPreview({
     data.currency,
   )
   const countLabel = resolveHubCountLabel(data.positions, data.bundles, {
+    selfTradingDirect: data.source === 'direct',
     privyOnly: data.source === 'privy',
   })
 

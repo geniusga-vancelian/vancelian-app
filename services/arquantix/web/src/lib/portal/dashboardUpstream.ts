@@ -79,7 +79,7 @@ export async function loadPortalDashboardPortfolioPayload(
 
   const [bootstrap, cryptoPositions, privyBalances, placements, savingsResult] = await Promise.all([
     currencyHint ? Promise.resolve({ ok: true, data: null }) : fetchPortalUpstreamJson('/api/app/bootstrap'),
-    fetchPortalUpstreamJson('/api/app/crypto-positions'),
+    fetchPortalUpstreamJson('/api/app/crypto-positions/direct'),
     fetchPortalUpstreamJson('/api/app/privy-wallet/balances'),
     fetchPortalUpstreamJson('/api/app/lending/earn/positions'),
     loadPortalSavingsSummary({ personId, live: true, walletAddress }),
@@ -89,12 +89,12 @@ export async function loadPortalDashboardPortfolioPayload(
     currencyHint?.trim().toUpperCase() ||
     resolveDashboardReferenceCurrency(bootstrap.ok ? bootstrap.data : null)
 
-  const privyList = Array.isArray(
-    (privyBalances.data as { balances?: unknown } | null)?.balances,
+  const directList = Array.isArray(
+    (cryptoPositions.data as { positions?: unknown } | null)?.positions,
   )
-    ? ((privyBalances.data as { balances: { asset?: string }[] }).balances ?? [])
+    ? ((cryptoPositions.data as { positions: { asset?: string }[] }).positions ?? [])
     : []
-  const symbols = [...new Set(privyList.map((b) => assetToMarketProviderSymbol(String(b.asset ?? ''))))]
+  const symbols = [...new Set(directList.map((p) => assetToMarketProviderSymbol(String(p.asset ?? ''))))]
     .filter(Boolean)
     .join(',')
 
@@ -107,12 +107,12 @@ export async function loadPortalDashboardPortfolioPayload(
 
   const crypto = resolveDashboardCryptoSummary(
     cryptoPositions.ok ? cryptoPositions.data : null,
-    privyBalances.ok ? privyBalances.data : null,
+    !cryptoPositions.ok && privyBalances.ok ? privyBalances.data : null,
     marketRes.ok ? marketRes.data : null,
     currency,
   )
 
-  const partial = !cryptoPositions.ok || !privyBalances.ok || !placements.ok || savingsResult.partial
+  const partial = !cryptoPositions.ok || !placements.ok || savingsResult.partial
 
   return {
     crypto,

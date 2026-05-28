@@ -138,38 +138,52 @@ describe('resolveDashboardCryptoSummary', () => {
     ],
   }
 
-  it('uses privy hub valuation for privy-only wallets', () => {
-    const cryptoPositionsRaw = {
-      summary: { total_value_eur: 99, positions_count: 1 },
+  it('uses direct portfolio balance when merged with privy custody', () => {
+    const directPositionsRaw = {
+      summary: { total_value_eur: 50, positions_count: 1, scope: 'direct' },
       positions: [
         {
           asset: 'USDC',
-          estimated_value_eur: 99,
-          portfolio_scope: 'privy',
-          chain_id: 8453,
-        },
-      ],
-    }
-
-    const summary = resolveDashboardCryptoSummary(cryptoPositionsRaw, privyRaw, null, 'EUR')
-    assert.ok(Math.abs((summary?.positions?.[0]?.estimated_value_eur as number) - 11.04) < 0.01)
-  })
-
-  it('keeps merged platform+privy totals from crypto-positions', () => {
-    const cryptoPositionsRaw = {
-      summary: { total_value_eur: 150, positions_count: 1 },
-      positions: [
-        {
-          asset: 'USDC',
-          estimated_value_eur: 150,
+          balance: 50,
+          available_balance: 50,
+          platform_balance: 13.33,
+          privy_balance: 50,
+          estimated_value_eur: 50,
+          price_eur: 1,
           portfolio_scope: 'merged',
           chain_id: 8453,
         },
       ],
     }
 
-    const summary = resolveDashboardCryptoSummary(cryptoPositionsRaw, privyRaw, null, 'EUR')
+    const summary = resolveDashboardCryptoSummary(directPositionsRaw, privyRaw, null, 'EUR')
+    assert.equal(summary?.positions?.[0]?.portfolio_scope, 'direct')
+    assert.ok(Math.abs((summary?.positions?.[0]?.estimated_value_eur as number) - 13.33) < 0.01)
+  })
+
+  it('falls back to privy when direct endpoint is unavailable', () => {
+    const summary = resolveDashboardCryptoSummary(null, privyRaw, null, 'EUR')
+    assert.ok(Math.abs((summary?.positions?.[0]?.estimated_value_eur as number) - 11.04) < 0.01)
+  })
+
+  it('keeps privy-only bootstrap balance when direct has no platform split yet', () => {
+    const directPositionsRaw = {
+      summary: { total_value_eur: 150, positions_count: 1, scope: 'direct' },
+      positions: [
+        {
+          asset: 'USDC',
+          balance: 150,
+          available_balance: 150,
+          estimated_value_eur: 150,
+          portfolio_scope: 'privy',
+          chain_id: 8453,
+        },
+      ],
+    }
+
+    const summary = resolveDashboardCryptoSummary(directPositionsRaw, privyRaw, null, 'EUR')
     assert.equal(summary?.positions?.[0]?.estimated_value_eur, 150)
+    assert.equal(summary?.positions?.[0]?.portfolio_scope, 'direct')
   })
 })
 

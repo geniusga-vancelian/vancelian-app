@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { buildBackendUrl } from '@/lib/backend'
-import { assetToMarketProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 import {
-  buildPrivyWalletPositionsSummary,
   parseMyBundles,
+  parseSelfTradingCryptoPositionsPayload,
   parseWalletHistoryPoints,
 } from '@/lib/portal/cryptoWalletFormat'
 import {
@@ -21,16 +19,7 @@ async function fetchUpstreamJson(path: string) {
   return { ok: res.ok, data }
 }
 
-async function fetchBackendJson(path: string) {
-  const res = await fetch(buildBackendUrl(path), {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(15000),
-  })
-  const data = await res.json().catch(() => null)
-  return { ok: res.ok, data }
-}
-
-/** Hub wallet crypto — soldes Privy enrichis Lombard (locked / USDC empruntés). */
+/** Hub wallet crypto — self-trading (direct_portfolio PE), bundles séparés via my-bundles. */
 export async function GET(request: NextRequest) {
   const token = await readPortalAccessToken()
   if (!token) {
@@ -52,8 +41,8 @@ export async function GET(request: NextRequest) {
     walletFromQuery,
   })
 
-  const [privyRes, history, bootstrap, bundlesRes] = await Promise.all([
-    fetchUpstreamJson('/api/app/privy-wallet/balances'),
+  const [directRes, history, bootstrap, bundlesRes] = await Promise.all([
+    fetchUpstreamJson('/api/app/crypto-positions/direct'),
     fetchUpstreamJson(
       '/api/app/wallet/history?period=ALL&mode=performance_value&scope=crypto',
     ),
@@ -61,8 +50,8 @@ export async function GET(request: NextRequest) {
     fetchUpstreamJson('/api/app/bundle/my-bundles'),
   ])
 
-  if (!privyRes.ok || !privyRes.data) {
-    return NextResponse.json({ error: 'privy_balances_unavailable' }, { status: 502 })
+  if (!directRes.ok || !directRes.data) {
+    return NextResponse.json({ error: 'direct_positions_unavailable' }, { status: 502 })
   }
 
   const currency =
@@ -78,25 +67,7 @@ export async function GET(request: NextRequest) {
           .toUpperCase()
       : 'EUR'
 
-  const balances = Array.isArray((privyRes.data as { balances?: unknown }).balances)
-    ? ((privyRes.data as { balances: unknown[] }).balances as { asset?: string }[])
-    : []
-  const symbols = [...new Set(balances.map((b) => assetToMarketProviderSymbol(String(b.asset ?? ''))))]
-    .filter(Boolean)
-    .join(',')
-
-  const marketRes =
-    symbols.length > 0
-      ? await fetchBackendJson(
-          `/api/market-data/market-summary?symbols=${encodeURIComponent(symbols)}`,
-        )
-      : { ok: false, data: null }
-
-  let positions = buildPrivyWalletPositionsSummary(
-    privyRes.data,
-    marketRes.ok ? marketRes.data : null,
-    currency,
-  )
+  let positions = parseSelfTradingCryptoPositionsPayload(directRes.data)
   try {
     positions = await maybeApplyLombardWalletOverlay({
       personId,
@@ -115,7 +86,7 @@ export async function GET(request: NextRequest) {
     positions,
     bundles,
     historyPoints,
-    source: 'privy',
-    partial: !marketRes.ok || !history.ok || !bundlesRes.ok,
+    source: 'direct',
+    partial: !history.ok || !bundlesRes.ok,
   })
 }

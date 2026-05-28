@@ -4,11 +4,11 @@ import { buildBackendUrl } from '@/lib/backend'
 import {
   alignCryptoWalletDetailWithScopedPosition,
   buildCryptoWalletDetailFromScopedPosition,
-  buildPrivyWalletPositionsSummary,
   extractUpstreamDetailPayload,
   mergeCryptoWalletTransactions,
   mergeLombardBorrowWalletTransactions,
   parseCryptoWalletDetail,
+  parseSelfTradingCryptoPositionsPayload,
   parseWalletHistoryPoints,
   resolveScopedPrivyPositionForAsset,
 } from '@/lib/portal/cryptoWalletFormat'
@@ -84,10 +84,10 @@ export async function GET(
     walletScope,
   )
 
-  const [detailRes, privyBalancesRes, txRes, privyDepRes, historyRes, bootstrapRes, marketRes] =
+  const [detailRes, directRes, txRes, privyDepRes, historyRes, bootstrapRes, marketRes] =
     await Promise.all([
       fetchUpstreamJson(scopedDetailUrl),
-      fetchUpstreamJson('/api/app/privy-wallet/balances'),
+      fetchUpstreamJson('/api/app/crypto-positions/direct'),
       fetchUpstreamJson(
         `/api/app/crypto-positions/${encodeURIComponent(asset)}/transactions`,
       ),
@@ -117,27 +117,23 @@ export async function GET(
       : 'EUR'
 
   let scopedPosition = undefined
-  if (privyBalancesRes.ok && privyBalancesRes.data) {
-    let privySummary = buildPrivyWalletPositionsSummary(
-      privyBalancesRes.data,
-      marketRes.ok ? marketRes.data : null,
-      currency,
-    )
+  if (directRes.ok && directRes.data) {
+    let directSummary = parseSelfTradingCryptoPositionsPayload(directRes.data)
     try {
-      privySummary = await maybeApplyLombardWalletOverlay({
+      directSummary = await maybeApplyLombardWalletOverlay({
         personId,
         portalChain,
         walletAddress: await resolveLombardOverlayWalletAddress({
           request,
           walletFromQuery: walletScope?.address ?? null,
         }),
-        summary: privySummary,
+        summary: directSummary,
       })
     } catch (error) {
       console.warn('[api/portal/crypto-wallet/[asset] GET] Lombard overlay skipped:', error)
     }
     scopedPosition = resolveScopedPrivyPositionForAsset(
-      privySummary,
+      directSummary,
       asset,
       portalChain,
       walletScope,
@@ -213,6 +209,6 @@ export async function GET(
     change24hPct,
     providerSymbol,
     logoUrl,
-    partial: !detailRes.ok || !txRes.ok || !privyDepRes.ok || !historyRes.ok || !privyBalancesRes.ok,
+    partial: !detailRes.ok || !txRes.ok || !privyDepRes.ok || !historyRes.ok || !directRes.ok,
   })
 }
