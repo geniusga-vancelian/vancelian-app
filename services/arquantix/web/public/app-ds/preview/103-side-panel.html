@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/components/icon/icon.css"/>
+<link rel="stylesheet" href="/app-ds/components/side-panel/side-panel.css"/>
+<link rel="stylesheet" href="/app-ds/components/side-panel/side-panel.css"/>
+<style>
+  body { margin: 0; padding: 32px; background: var(--v-bg); font-family: var(--v-font-ui); color: var(--v-fg); min-height: 100vh; }
+  .stage { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--v-fg-light); margin: 0 0 12px; }
+</style></head>
+<body><div class="stage"><p class="lbl">Side panel · drawer</p>
+<div class="side-panel is-open" style="position:relative;height:320px;overflow:hidden;border:1px solid var(--v-fg-10);border-radius:var(--v-radius-lg);">
+  <div class="side-panel__scrim"></div>
+  <div class="side-panel__drawer" style="--side-panel-width:280px;position:absolute;">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--v-fg-10);">
+      <span class="v-eyebrow">Fiche placement</span>
+    </div>
+    <div style="padding:24px;">
+      <p class="v-body" style="margin:0">Contenu drawer — pattern canonique app produit.</p>
+    </div>
+  </div>
+</div>
+</div></body></html>

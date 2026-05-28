@@ -1,0 +1,26 @@
+.side-panel {
+  position: fixed; inset: 0; z-index: 100;
+  pointer-events: none;
+}
+.side-panel.is-open { pointer-events: auto; }
+.side-panel__scrim {
+  position: absolute; inset: 0;
+  background: rgba(20, 18, 8, 0.32);
+  opacity: 0;
+  transition: opacity 320ms var(--v-ease-out);
+}
+.side-panel.is-open .side-panel__scrim { opacity: 1; }
+.side-panel__drawer {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: var(--side-panel-width, 540px);
+  max-width: 94vw;
+  background: var(--v-bg);
+  box-shadow: var(--v-elev-medium);
+  transform: translateX(100%);
+  transition: transform 380ms var(--v-ease-out);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.side-panel.is-open .side-panel__drawer { transform: translateX(0); }
