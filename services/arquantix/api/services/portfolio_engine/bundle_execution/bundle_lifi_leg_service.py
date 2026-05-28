@@ -16,6 +16,7 @@ from services.lifi.lifi_swap_settlement import apply_swap_settlement, swap_settl
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.swap_repository import PersonWalletSwapRepository
 from services.portfolio_engine.clients.models import Client
+from services.transaction_intents.bundle_intent_sync import sync_bundle_leg_from_swap
 
 from .bundle_cost_basis import reference_cost_basis_eur
 from .bundle_lifi_quote_service import BundleLifiQuoteService
@@ -91,6 +92,7 @@ class BundleLifiLegService:
             from_asset=from_sym,
             to_asset=to_sym,
             amount=str(leg.amount_from),
+            leg_action=leg.action,
         )
         return ExecutionQuote(
             leg_id=leg.leg_id,
@@ -127,6 +129,7 @@ class BundleLifiLegService:
             from_asset=from_sym,
             to_asset=to_sym,
             amount=str(leg.amount_from),
+            leg_action=leg.action,
         )
         swap = self._swap_repo.get_for_person(db, swap_id=quote_resp.swap_id, person_id=person_id)
         if swap is None:

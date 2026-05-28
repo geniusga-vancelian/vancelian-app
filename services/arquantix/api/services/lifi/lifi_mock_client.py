@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from typing import Any, Union
 
 from config.supported_swap_assets import (
@@ -52,7 +52,9 @@ class LifiMockClient:
         if estimated_out <= 0:
             estimated_out = Decimal("0.00000001")
 
-        min_out = (estimated_out * Decimal("0.995")).quantize(Decimal("0.00000001"))
+        to_quant = Decimal(10) ** -int(to_meta.decimals)
+        estimated_out = estimated_out.quantize(to_quant, rounding=ROUND_DOWN)
+        min_out = (estimated_out * Decimal("0.995")).quantize(to_quant, rounding=ROUND_DOWN)
         to_amount_atomic = human_amount_to_atomic(estimated_out, to_meta.decimals)
         to_min_atomic = human_amount_to_atomic(min_out, to_meta.decimals)
 

@@ -19,7 +19,10 @@ from services.portfolio_engine.bundle_execution.bundle_funding import (
     release_bundle_cash_leg_to_self_trading,
     resolve_bundle_cash_leg_available,
 )
-from services.portfolio_engine.bundle_execution.lifi_base_config import normalize_bundle_asset
+from services.portfolio_engine.bundle_execution.lifi_base_config import (
+    normalize_bundle_asset,
+    resolve_bundle_base_token,
+)
 from services.portfolio_engine.bundle_execution.types import ExecutionLeg
 from services.portfolio_engine.assets.models import Asset
 from services.portfolio_engine.hardening.audit_service import AuditService
@@ -528,6 +531,13 @@ class BundleWithdrawOrchestrator:
         actor: ActorContext,
     ) -> dict:
         lifi_spot = normalize_bundle_asset(spot_asset)
+        token = resolve_bundle_base_token(lifi_spot)
+        sell_qty = sell_qty.quantize(
+            Decimal(10) ** -token.decimals,
+            rounding=ROUND_DOWN,
+        )
+        if sell_qty <= TOLERANCE:
+            raise BundleWithdrawOrchestratorError(f"sell_qty_too_small:{spot_asset}")
         leg = ExecutionLeg(
             leg_id=ext_ref,
             portfolio_id=portfolio_id,

@@ -114,6 +114,20 @@ def test_validate_rejects_non_base_chain():
         )
 
 
+def test_validate_bundle_exit_quote_allows_spot_sources():
+    from services.portfolio_engine.bundle_execution.bundle_lifi_validation import (
+        validate_bundle_exit_quote_request,
+    )
+
+    amount, slippage = validate_bundle_exit_quote_request(
+        from_asset="LINK",
+        to_asset="USDC",
+        amount="0.22",
+    )
+    assert amount == Decimal("0.22")
+    assert slippage >= 1
+
+
 def test_lifi_provider_name_from_env(monkeypatch):
     monkeypatch.setenv("BUNDLE_EXECUTION_PROVIDER", "lifi_base")
     assert get_bundle_execution_provider_name() == "lifi_base"

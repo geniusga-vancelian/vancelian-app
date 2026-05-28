@@ -88,6 +88,15 @@ DEFAULT_BUNDLE_MIN: dict[str, Decimal] = {
     "UNI": Decimal("0.1"),
 }
 
+# Seuils plus bas pour les ventes bundle (spot → entry) — positions réelles souvent < min achat.
+DEFAULT_BUNDLE_EXIT_MIN: dict[str, Decimal] = {
+    "CBBTC": Decimal("0.00000001"),
+    "CBETH": Decimal("0.000000000000000001"),
+    "LINK": Decimal("0.0001"),
+    "AAVE": Decimal("0.0001"),
+    "UNI": Decimal("0.0001"),
+}
+
 # Mapping symboles PE / Exchange → symbole swap Base
 PE_ASSET_TO_BUNDLE_LIFI: dict[str, str] = {
     "BTC": "CBBTC",

@@ -8,7 +8,10 @@ from services.lifi.config import MAX_SLIPPAGE_BPS, default_slippage_bps
 from .lifi_base_config import (
     BUNDLE_LIFI_CHAIN_KEY,
     BUNDLE_LIFI_DESTINATION_ASSETS,
+    BUNDLE_LIFI_EXIT_DESTINATION_ASSETS,
+    BUNDLE_LIFI_EXIT_SOURCE_ASSETS,
     BUNDLE_LIFI_SOURCE_ASSETS,
+    DEFAULT_BUNDLE_EXIT_MIN,
     DEFAULT_BUNDLE_MIN,
     is_bundle_lifi_asset,
     normalize_bundle_asset,
@@ -53,7 +56,11 @@ def validate_bundle_lifi_leg(
         raise BundleLifiValidationError("bundle.lifi.amount", "Montant invalide")
 
     from_sym = normalize_bundle_asset(from_asset)
-    minimum = DEFAULT_BUNDLE_MIN.get(from_sym, Decimal("1"))
+    minimum = (
+        DEFAULT_BUNDLE_EXIT_MIN.get(from_sym, Decimal("0.00000001"))
+        if leg_action in ("withdraw_sell", "rebalance_sell")
+        else DEFAULT_BUNDLE_MIN.get(from_sym, Decimal("1"))
+    )
     if amount_from < minimum:
         raise BundleLifiValidationError(
             "bundle.lifi.min_amount",
@@ -133,6 +140,54 @@ def validate_bundle_quote_request(
 
     parsed_amount = _parse_bundle_human_amount(amount)
     minimum = DEFAULT_BUNDLE_MIN.get(from_sym, Decimal("1"))
+    if parsed_amount < minimum:
+        raise BundleLifiValidationError(
+            "bundle.lifi.min_amount",
+            f"Montant minimum {from_sym}: {minimum}",
+        )
+
+    resolve_bundle_base_token(from_sym)
+    resolve_bundle_base_token(to_sym)
+
+    slippage = _validate_bundle_slippage_bps(slippage_bps)
+    return parsed_amount, slippage
+
+
+def validate_bundle_exit_quote_request(
+    *,
+    from_asset: str,
+    to_asset: str,
+    amount: str,
+    slippage_bps: int | None = None,
+) -> tuple[Decimal, int]:
+    """Validation quote bundle exit — spot → USDC/EURC (retrait / rebalance sell)."""
+    from_sym = normalize_bundle_asset(from_asset)
+    to_sym = normalize_bundle_asset(to_asset)
+
+    parsed_amount = _parse_bundle_human_amount(amount)
+    validate_bundle_lifi_leg(
+        from_asset=from_sym,
+        to_asset=to_sym,
+        amount_from=parsed_amount,
+        chain=BUNDLE_LIFI_CHAIN_KEY,
+        leg_action="withdraw_sell",
+    )
+
+    if from_sym not in BUNDLE_LIFI_EXIT_SOURCE_ASSETS:
+        raise BundleLifiValidationError(
+            "bundle.lifi.exit_source_not_allowed",
+            f"Source exit bundle non autorisée: {from_sym}",
+        )
+    if to_sym not in BUNDLE_LIFI_EXIT_DESTINATION_ASSETS:
+        raise BundleLifiValidationError(
+            "bundle.lifi.exit_destination_not_allowed",
+            f"Destination exit bundle non autorisée: {to_sym}",
+        )
+
+    if not is_bundle_lifi_asset(from_sym) or not is_bundle_lifi_asset(to_sym):
+        raise BundleLifiValidationError("bundle.lifi.asset", "Actif non autorisé (bundle Base)")
+
+    minimum = DEFAULT_BUNDLE_EXIT_MIN.get(from_sym, Decimal("0.00000001"))
     if parsed_amount < minimum:
         raise BundleLifiValidationError(
             "bundle.lifi.min_amount",

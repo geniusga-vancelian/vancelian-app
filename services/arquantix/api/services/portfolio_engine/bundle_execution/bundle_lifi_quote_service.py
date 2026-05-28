@@ -18,6 +18,7 @@ from services.lifi.swap_repository import PersonWalletSwapRepository
 from .bundle_lifi_wallet import resolve_bundle_lifi_signing_wallet
 from .bundle_lifi_validation import (
     BundleLifiValidationError,
+    validate_bundle_exit_quote_request,
     validate_bundle_quote_request,
 )
 from .lifi_base_config import BUNDLE_LIFI_CHAIN_KEY, resolve_bundle_base_token
@@ -45,13 +46,22 @@ class BundleLifiQuoteService:
         to_asset: str,
         amount: str,
         slippage_bps: int | None = None,
+        leg_action: str | None = None,
     ) -> SwapQuoteResponse:
-        parsed_amount, slippage = validate_bundle_quote_request(
-            from_asset=from_asset,
-            to_asset=to_asset,
-            amount=amount,
-            slippage_bps=slippage_bps,
-        )
+        if leg_action in ("withdraw_sell", "rebalance_sell"):
+            parsed_amount, slippage = validate_bundle_exit_quote_request(
+                from_asset=from_asset,
+                to_asset=to_asset,
+                amount=amount,
+                slippage_bps=slippage_bps,
+            )
+        else:
+            parsed_amount, slippage = validate_bundle_quote_request(
+                from_asset=from_asset,
+                to_asset=to_asset,
+                amount=amount,
+                slippage_bps=slippage_bps,
+            )
         from_token = resolve_bundle_base_token(from_asset)
         to_token = resolve_bundle_base_token(to_asset)
         chain_key = BUNDLE_LIFI_CHAIN_KEY
