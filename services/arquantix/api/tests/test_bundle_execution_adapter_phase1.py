@@ -24,9 +24,20 @@ from services.portfolio_engine.invariants.invariant_g import check_invariant_g
 
 def test_default_provider_is_exchange(monkeypatch):
     monkeypatch.delenv("BUNDLE_EXECUTION_PROVIDER", raising=False)
+    monkeypatch.delenv("LIFI_API_KEY", raising=False)
+    monkeypatch.setenv("LIFI_SWAPS_ENABLED", "0")
+    monkeypatch.setenv("LIFI_SWAPS_MOCK", "0")
     assert get_bundle_execution_provider_name() == "exchange"
     provider = get_execution_provider()
     assert provider.name == "exchange"
+
+
+def test_auto_defaults_to_lifi_when_configured(monkeypatch):
+    monkeypatch.delenv("BUNDLE_EXECUTION_PROVIDER", raising=False)
+    monkeypatch.setenv("LIFI_SWAPS_ENABLED", "1")
+    monkeypatch.setenv("LIFI_API_KEY", "test-key")
+    monkeypatch.setenv("LIFI_SWAPS_MOCK", "0")
+    assert get_bundle_execution_provider_name() == "lifi_base"
 
 
 def test_lifi_provider_resolves(monkeypatch):
