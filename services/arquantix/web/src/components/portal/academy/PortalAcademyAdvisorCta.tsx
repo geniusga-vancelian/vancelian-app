@@ -16,7 +16,7 @@ export function PortalAcademyAdvisorCta() {
         </p>
       </div>
       <PortalNavLink href={PORTAL_ROUTES.profile} className="btn btn--primary no-underline">
-        <KalaiIcon name="calendar" size={14} />
+        <KalaiIcon name="calendar" size={16} />
         Prendre rendez-vous
       </PortalNavLink>
     </section>

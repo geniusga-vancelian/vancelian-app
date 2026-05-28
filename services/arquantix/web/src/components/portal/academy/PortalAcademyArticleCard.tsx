@@ -28,7 +28,7 @@ export function PortalAcademyArticleCard({ article }: Props) {
         <span className="acd-rc__title">{article.title}</span>
         {article.standfirst ? <span className="acd-rc__excerpt">{article.standfirst}</span> : null}
         <span className="acd-rc__meta">
-          <KalaiIcon name="clock" size={12} />
+          <KalaiIcon name="clock" size={16} />
           {formatAcademyReadTime(article.readingTime)}
         </span>
       </span>

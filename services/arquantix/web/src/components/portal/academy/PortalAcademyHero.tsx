@@ -37,7 +37,7 @@ export function PortalAcademyHero({ article }: Props) {
             ·
           </span>
           <span className="acd-hero__meta-time">
-            <KalaiIcon name="clock" size={13} />
+            <KalaiIcon name="clock" size={16} />
             {formatAcademyReadTime(article.readingTime)}
           </span>
         </div>

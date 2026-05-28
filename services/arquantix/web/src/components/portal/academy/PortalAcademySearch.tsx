@@ -17,7 +17,7 @@ export function PortalAcademySearch({
   return (
     <div className="faq-search acd-search">
       <span className="faq-search__ic" aria-hidden>
-        <KalaiIcon name="search" size={18} />
+        <KalaiIcon name="search" size={16} />
       </span>
       <input
         type="search"
@@ -34,7 +34,7 @@ export function PortalAcademySearch({
           onClick={() => onChange('')}
           aria-label="Effacer la recherche"
         >
-          <KalaiIcon name="close" size={14} />
+          <KalaiIcon name="close" size={16} />
         </button>
       ) : null}
     </div>

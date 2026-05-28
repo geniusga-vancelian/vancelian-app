@@ -31,7 +31,7 @@ export function PortalAcademyFeaturedList({
             <span className="acd-feat__body">
               <span className="acd-feat__title">{article.title}</span>
               <span className="acd-feat__meta">
-                <KalaiIcon name="clock" size={11} />
+                <KalaiIcon name="clock" size={16} />
                 {formatAcademyReadTime(article.readingTime)}
               </span>
             </span>
