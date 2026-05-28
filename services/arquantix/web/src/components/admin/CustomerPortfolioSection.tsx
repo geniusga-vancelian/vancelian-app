@@ -4,6 +4,13 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { RefreshCw, Wallet } from 'lucide-react'
 import { toastError, toastSuccess } from '@/lib/admin/toast'
 
@@ -14,6 +21,8 @@ type PortfolioSummary = {
   privy_value_eur: string
   exclusive_offers_value_eur: string
   bundles_value_eur: string
+  crypto_direct_value_eur?: string
+  breakdown_bundles_eur?: string
   positions_count: number
   exclusive_offers_count: number
   bundles_count: number
@@ -29,6 +38,8 @@ type CryptoRow = {
   privy_balance: string
   source: 'platform' | 'privy' | 'merged'
   portfolio_scope: string
+  chain_id?: number | null
+  network?: string | null
   price_eur?: string | null
   estimated_value_eur?: string | null
 }
@@ -102,10 +113,45 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id']
 
+const PRIVY_SIM_NETWORKS = [
+  { id: '8453', label: 'Base' },
+  { id: '1', label: 'Ethereum' },
+] as const
+
+type PrivySimNetworkId = (typeof PRIVY_SIM_NETWORKS)[number]['id']
+
+function networkBadge(network?: string | null) {
+  if (!network) return <span className="text-slate-400">—</span>
+  if (network === 'Base') {
+    return <Badge className="bg-blue-700 text-white hover:bg-blue-700">{network}</Badge>
+  }
+  if (network === 'Ethereum') {
+    return <Badge variant="secondary">{network}</Badge>
+  }
+  return <Badge variant="outline">{network}</Badge>
+}
+
 function sourceBadge(source: CryptoRow['source']) {
   if (source === 'merged') return <Badge className="bg-indigo-700 text-white hover:bg-indigo-700">PE + Privy</Badge>
   if (source === 'privy') return <Badge variant="secondary">Privy</Badge>
   return <Badge variant="outline">Plateforme</Badge>
+}
+
+function scopeBadge(scope: string) {
+  if (scope === 'bundle') return <Badge className="bg-violet-700 text-white hover:bg-violet-700">Bundle</Badge>
+  if (scope === 'direct') return <Badge variant="outline">Mon Trading</Badge>
+  if (scope === 'privy') return <Badge variant="secondary">Privy</Badge>
+  return <Badge variant="outline">{scope}</Badge>
+}
+
+function positionTypeBadge(positionType: string) {
+  if (positionType === 'cash') {
+    return <Badge className="bg-emerald-700 text-white hover:bg-emerald-700">Cash leg</Badge>
+  }
+  if (positionType === 'spot') {
+    return <Badge variant="outline">Spot</Badge>
+  }
+  return <Badge variant="outline">{positionType}</Badge>
 }
 
 function fmtEur(value?: string | null) {
@@ -134,6 +180,7 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
   const [data, setData] = useState<PortfolioPayload | null>(null)
   const [simAmount, setSimAmount] = useState('100')
   const [simAsset, setSimAsset] = useState('USDC')
+  const [simNetwork, setSimNetwork] = useState<PrivySimNetworkId>('8453')
   const [simulating, setSimulating] = useState(false)
   const [syncingWallets, setSyncingWallets] = useState(false)
   const [reconcilingBalances, setReconcilingBalances] = useState(false)
@@ -175,6 +222,7 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
           person_id: personId,
           amount: simAmount.trim(),
           asset: simAsset.trim().toUpperCase(),
+          chain_id: Number(simNetwork),
         }),
       })
       if (!res.ok) throw new Error(await parseErrorMessage(res))
@@ -314,13 +362,20 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
       </div>
 
       {tab === 'overview' ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <SummaryCard label="Patrimoine total (EUR)" value={fmtEur(s.total_value_eur)} highlight />
-          <SummaryCard label="Cash / fiat" value={fmtEur(s.fiat_value_eur)} />
-          <SummaryCard label="Crypto (PE + Privy)" value={fmtEur(s.crypto_value_eur)} />
-          <SummaryCard label="Dont Privy on-chain" value={fmtEur(s.privy_value_eur)} />
-          <SummaryCard label="Offres exclusives" value={fmtEur(s.exclusive_offers_value_eur)} />
-          <SummaryCard label="Bundles" value={fmtEur(s.bundles_value_eur)} />
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SummaryCard label="Patrimoine total (EUR)" value={fmtEur(s.total_value_eur)} highlight />
+            <SummaryCard label="Cash / fiat" value={fmtEur(s.fiat_value_eur)} />
+            <SummaryCard label="Crypto (PE + Privy)" value={fmtEur(s.crypto_value_eur)} />
+            <SummaryCard label="Mon Trading — PE direct" value={fmtEur(s.crypto_direct_value_eur)} />
+            <SummaryCard label="Bundles — PE valorisé" value={fmtEur(s.breakdown_bundles_eur ?? s.bundles_value_eur)} />
+            <SummaryCard label="Dont Privy on-chain" value={fmtEur(s.privy_value_eur)} />
+            <SummaryCard label="Offres exclusives" value={fmtEur(s.exclusive_offers_value_eur)} />
+          </div>
+          <p className="text-xs text-slate-500">
+            Audit comptable : Mon Trading = <code className="text-[11px]">direct_portfolio</code> · Bundles =
+            cash leg + spots · Privy = custody physique (peut diverger pendant un batch Li.FI).
+          </p>
         </div>
       ) : null}
 
@@ -328,9 +383,11 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
         <div className="space-y-4">
           <DataTable
             empty="Aucun actif crypto."
-            headers={['Actif', 'Solde total', 'Plateforme', 'Privy', 'Valorisation EUR', 'Source']}
+            headers={['Actif', 'Réseau', 'Scope PE', 'Solde total', 'Plateforme', 'Privy', 'Valorisation EUR', 'Source']}
             rows={data.crypto.map((row) => [
               <span key="a" className="font-medium">{row.asset} <span className="text-slate-400">{row.name}</span></span>,
+              networkBadge(row.network),
+              scopeBadge(row.portfolio_scope),
               `${row.total_balance} (dispo. ${row.total_available})`,
               row.platform_balance,
               row.privy_balance,
@@ -350,6 +407,21 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
                 <div>
                   <label className="text-xs text-slate-500">Actif</label>
                   <Input value={simAsset} onChange={(e) => setSimAsset(e.target.value)} className="w-24" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500">Réseau</label>
+                  <Select value={simNetwork} onValueChange={(v) => setSimNetwork(v as PrivySimNetworkId)}>
+                    <SelectTrigger className="w-[132px]" size="sm">
+                      <SelectValue placeholder="Réseau" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRIVY_SIM_NETWORKS.map((network) => (
+                        <SelectItem key={network.id} value={network.id}>
+                          {network.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button size="sm" onClick={() => void handleSimulate()} disabled={simulating}>
                   Simuler dépôt
@@ -424,38 +496,58 @@ export function CustomerPortfolioSection({ personId }: { personId: string }) {
           {data.bundles.length === 0 ? (
             <p className="text-sm text-slate-500">Aucun bundle actif.</p>
           ) : (
-            data.bundles.map((bundle) => (
+            data.bundles.map((bundle) => {
+              const cashPositions = bundle.positions.filter((p) => p.position_type === 'cash')
+              const spotPositions = bundle.positions.filter((p) => p.position_type !== 'cash')
+              const cashEur = cashPositions.reduce(
+                (sum, p) => sum + (Number(p.market_value_eur ?? 0) || 0),
+                0,
+              )
+              const spotEur = spotPositions.reduce(
+                (sum, p) => sum + (Number(p.market_value_eur ?? 0) || 0),
+                0,
+              )
+              const sortedPositions = [...cashPositions, ...spotPositions]
+
+              return (
               <div key={bundle.portfolio_id} className="rounded-lg border border-slate-200 overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3">
                   <div>
                     <p className="font-medium text-slate-900">{bundle.name}</p>
                     <p className="text-xs text-slate-500">
-                      {bundle.status} · {bundle.positions_count} actif(s) · {fmtEur(bundle.total_value_eur)}
+                      {bundle.status} · {bundle.positions_count} spot(s) · {fmtEur(bundle.total_value_eur)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Cash leg {fmtEur(String(cashEur))} · Spots {fmtEur(String(spotEur))}
                     </p>
                   </div>
+                  <Badge variant="outline" className="font-mono text-[10px]">
+                    {bundle.portfolio_id.slice(0, 8)}…
+                  </Badge>
                 </div>
                 <table className="min-w-full text-xs">
                   <thead className="bg-white text-left text-slate-600">
                     <tr>
                       <th className="px-4 py-2 font-medium">Actif</th>
                       <th className="px-4 py-2 font-medium">Quantité</th>
-                      <th className="px-4 py-2 font-medium">Type</th>
+                      <th className="px-4 py-2 font-medium">Couche PE</th>
                       <th className="px-4 py-2 font-medium">Valeur EUR</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {bundle.positions.map((p, idx) => (
+                    {sortedPositions.map((p, idx) => (
                       <tr key={`${bundle.portfolio_id}-${idx}`} className="border-t border-slate-100">
                         <td className="px-4 py-2">{p.asset}</td>
-                        <td className="px-4 py-2">{p.quantity}</td>
-                        <td className="px-4 py-2">{p.position_type}</td>
+                        <td className="px-4 py-2 font-mono">{p.quantity}</td>
+                        <td className="px-4 py-2">{positionTypeBadge(p.position_type)}</td>
                         <td className="px-4 py-2">{fmtEur(p.market_value_eur)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            ))
+              )
+            })
           )}
         </div>
       ) : null}

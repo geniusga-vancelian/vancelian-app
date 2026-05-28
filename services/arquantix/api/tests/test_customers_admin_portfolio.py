@@ -51,7 +51,12 @@ def test_portfolio_includes_merged_privy_crypto(client: TestClient, db: Session)
     svc = PrivyWalletAdminService()
     svc.simulate_deposit(
         db,
-        PrivySimulateDepositRequest(person_id=c.person_id, amount="50", asset="USDC"),
+        PrivySimulateDepositRequest(
+            person_id=c.person_id,
+            amount="50",
+            asset="USDC",
+            chain_id=8453,
+        ),
     )
     db.commit()
 
@@ -67,6 +72,8 @@ def test_portfolio_includes_merged_privy_crypto(client: TestClient, db: Session)
     usdc = next((row for row in data["crypto"] if row["asset"] == "USDC"), None)
     assert usdc is not None
     assert usdc["privy_balance"] == "50"
+    assert usdc["network"] == "Base"
+    assert usdc["chain_id"] == 8453
     assert usdc["source"] in ("privy", "merged")
     assert len(data["transactions"]) >= 1
     assert data["privy_admin"]["availability"] in ("available", "not_available")

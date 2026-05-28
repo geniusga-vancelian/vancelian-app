@@ -49,6 +49,14 @@ class PrivySimulateDepositError(ValueError):
     pass
 
 
+def _network_label(chain_id: int) -> str:
+    if chain_id == 8453:
+        return "Base"
+    if chain_id == 1:
+        return "Ethereum"
+    return f"chain {chain_id}"
+
+
 class PrivyWalletAdminService:
 
     def __init__(self) -> None:
@@ -71,7 +79,12 @@ class PrivyWalletAdminService:
         if person is None:
             raise PrivyWalletNotFoundError("Person not found")
 
-        wallet = self._resolve_wallet(db, person_id=payload.person_id, wallet_address=payload.wallet_address)
+        wallet = self._resolve_wallet(
+            db,
+            person_id=payload.person_id,
+            wallet_address=payload.wallet_address,
+            chain_id=payload.chain_id,
+        )
         asset = payload.asset.strip().upper()
         amount = self._parse_human_amount(payload.amount)
         chain_id = payload.chain_id if payload.chain_id is not None else (wallet.chain_id or 1)
@@ -135,11 +148,20 @@ class PrivyWalletAdminService:
             amount=_format_decimal(amount),
             new_balance=new_balance,
             tx_hash=tx_hash,
-            message=f"Dépôt simulé : {_format_decimal(amount)} {asset} crédité sur le wallet Privy.",
+            message=(
+                f"Dépôt simulé : {_format_decimal(amount)} {asset} crédité sur "
+                f"{_network_label(chain_id)} (chain_id={chain_id})."
+            ),
         )
 
     @staticmethod
-    def _resolve_wallet(db: Session, *, person_id: UUID, wallet_address: str | None):
+    def _resolve_wallet(
+        db: Session,
+        *,
+        person_id: UUID,
+        wallet_address: str | None,
+        chain_id: int | None = None,
+    ):
         wallets = PersonCryptoWalletRepository.list_active_for_person(db, person_id)
         if not wallets:
             raise PrivyWalletNotFoundError("Aucun wallet Privy actif pour cette personne")
@@ -149,6 +171,16 @@ class PrivyWalletAdminService:
             if wallet is None or wallet.person_id != person_id:
                 raise PrivyWalletNotFoundError("Wallet Privy introuvable pour cette personne")
             return wallet
+
+        if chain_id is not None:
+            for wallet in wallets:
+                if (wallet.provider or "").strip().lower() != "privy":
+                    continue
+                stored = (wallet.chain_type or "").strip().lower()
+                if stored in {"evm", "ethereum"}:
+                    return wallet
+                if wallet.chain_id is not None and int(wallet.chain_id) == int(chain_id):
+                    return wallet
 
         return wallets[0]
 

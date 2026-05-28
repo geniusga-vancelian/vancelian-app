@@ -38,6 +38,66 @@ from .schemas import (
 from .service import _build_privy_wallets_section, _pe_client_for_person
 
 
+def _source_from_row(row: dict[str, Any]) -> str:
+    scope = row.get("portfolio_scope") or "direct"
+    if scope == "merged":
+        return "merged"
+    if scope == "privy":
+        return "privy"
+    return "platform"
+
+
+def _network_label_for_crypto_row(row: dict[str, Any]) -> str | None:
+    chain_id = row.get("chain_id")
+    chain_type = str(row.get("chain_type") or "").strip().lower()
+    if chain_id is not None:
+        try:
+            cid = int(chain_id)
+        except (TypeError, ValueError):
+            cid = None
+        if cid == 8453:
+            return "Base"
+        if cid == 1:
+            return "Ethereum"
+        if cid == 0 or chain_type == "solana":
+            return "Solana"
+        if cid is not None:
+            return f"Chain {cid}"
+    if chain_type == "solana":
+        return "Solana"
+    return None
+
+
+def _crypto_item_from_row(row: dict[str, Any], *, force_source: str | None = None) -> CustomerPortfolioCryptoItem:
+    chain_id = row.get("chain_id")
+    parsed_chain_id: int | None
+    try:
+        parsed_chain_id = int(chain_id) if chain_id is not None else None
+    except (TypeError, ValueError):
+        parsed_chain_id = None
+    source = force_source or _source_from_row(row)
+    privy_balance = row.get("privy_balance") or ("0" if source != "privy" else row["balance"])
+    privy_available = row.get("privy_available") or (
+        row.get("available_balance") or "0" if source != "privy" else row["available_balance"]
+    )
+    return CustomerPortfolioCryptoItem(
+        asset=row["asset"],
+        name=row["name"],
+        total_balance=row["balance"],
+        total_available=row["available_balance"],
+        platform_balance=row.get("platform_balance") or "0",
+        platform_available=row.get("platform_available") or row.get("available_balance") or "0",
+        privy_balance=privy_balance,
+        privy_available=privy_available,
+        source=source,  # type: ignore[arg-type]
+        portfolio_scope=row.get("portfolio_scope") or ("privy" if source == "privy" else "direct"),
+        chain_id=parsed_chain_id,
+        network=_network_label_for_crypto_row(row),
+        price_eur=row.get("price_eur"),
+        estimated_value_eur=row.get("estimated_value_eur"),
+    )
+
+
 def get_customer_portfolio(
     db: Session,
     person_id: UUID,
@@ -53,20 +113,7 @@ def get_customer_portfolio(
 
     if pe is None:
         crypto_items = [
-            CustomerPortfolioCryptoItem(
-                asset=row["asset"],
-                name=row["name"],
-                total_balance=row["balance"],
-                total_available=row["available_balance"],
-                platform_balance=row.get("platform_balance") or "0",
-                platform_available=row.get("platform_available") or "0",
-                privy_balance=row.get("privy_balance") or row["balance"],
-                privy_available=row.get("privy_available") or row["available_balance"],
-                source="privy",
-                portfolio_scope=row.get("portfolio_scope") or "privy",
-                price_eur=row.get("price_eur"),
-                estimated_value_eur=row.get("estimated_value_eur"),
-            )
+            _crypto_item_from_row(row, force_source="privy")
             for row in merge_app_crypto_positions([], db, person_id=person.id)
         ]
         return CustomerPortfolioResponse(
@@ -89,23 +136,7 @@ def get_customer_portfolio(
     svc = TestClientService()
     crypto_raw = svc.get_crypto_positions(db, client=pe)
     merged_dicts = crypto_raw.get("positions") or []
-    crypto_items = [
-        CustomerPortfolioCryptoItem(
-            asset=row["asset"],
-            name=row["name"],
-            total_balance=row["balance"],
-            total_available=row["available_balance"],
-            platform_balance=row.get("platform_balance") or "0",
-            platform_available=row.get("platform_available") or row.get("available_balance") or "0",
-            privy_balance=row.get("privy_balance") or "0",
-            privy_available=row.get("privy_available") or "0",
-            source=_source_from_row(row),
-            portfolio_scope=row.get("portfolio_scope") or "direct",
-            price_eur=row.get("price_eur"),
-            estimated_value_eur=row.get("estimated_value_eur"),
-        )
-        for row in merged_dicts
-    ]
+    crypto_items = [_crypto_item_from_row(row) for row in merged_dicts]
 
     breakdown = _safe_breakdown(db, pe.id)
     earn = get_earn_positions(db, pe.id)
@@ -156,15 +187,6 @@ def _safe_breakdown(db: Session, pe_client_id: UUID) -> dict[str, Any]:
         return get_portfolio_breakdown(db, pe_client_id)
     except Exception:
         return {}
-
-
-def _source_from_row(row: dict[str, Any]) -> str:
-    scope = row.get("portfolio_scope") or "direct"
-    if scope == "merged":
-        return "merged"
-    if scope == "privy":
-        return "privy"
-    return "platform"
 
 
 def _map_exclusive_offers(db: Session, earn: dict[str, Any]) -> list[CustomerPortfolioExclusiveOfferItem]:

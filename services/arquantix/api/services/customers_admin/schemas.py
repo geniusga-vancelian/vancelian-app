@@ -305,6 +305,8 @@ class CustomerPortfolioCryptoItem(BaseModel):
     privy_available: str
     source: Literal["platform", "privy", "merged"]
     portfolio_scope: str
+    chain_id: Optional[int] = None
+    network: Optional[str] = None
     price_eur: Optional[str] = None
     estimated_value_eur: Optional[str] = None
 
