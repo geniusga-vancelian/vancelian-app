@@ -585,9 +585,10 @@ export function bundleMoneyValue(
 }
 
 export function bundleSummaryMarketValue(
-  bundle: PortalMyBundleSummary,
+  bundle: PortalMyBundleSummary | undefined | null,
   currency: string,
 ): number {
+  if (!bundle) return 0
   return (
     bundleMoneyValue(currency, bundle.totalMarketValue, bundle.totalMarketValueUsd) ??
     bundleMoneyValue(currency, bundle.totalCostBasis, bundle.totalCostBasisUsd) ??

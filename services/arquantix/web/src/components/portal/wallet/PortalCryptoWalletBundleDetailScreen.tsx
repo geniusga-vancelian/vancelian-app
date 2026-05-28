@@ -83,10 +83,11 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
   }, [bundle, currency])
 
   const unrealizedGain = useMemo(() => {
-    const market = bundleSummaryMarketValue(bundle!, currency)
+    if (!bundle) return undefined
+    const market = bundleSummaryMarketValue(bundle, currency)
     const invested =
-      selectMoneyValue(currency, bundle?.totalCostBasis, bundle?.totalCostBasisUsd) ?? 0
-    if (!bundle || invested <= 0) return undefined
+      selectMoneyValue(currency, bundle.totalCostBasis, bundle.totalCostBasisUsd) ?? 0
+    if (invested <= 0) return undefined
     return market - invested
   }, [bundle, currency])
 
