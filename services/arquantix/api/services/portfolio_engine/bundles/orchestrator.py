@@ -1,12 +1,18 @@
 """BundleOrchestrator — Phase 2: True entry-asset cash leg.
 
-Flow:
-    EUR → BUY entry_asset (USDC) → credit cash leg → SWAP to each target → debit cash leg
+Flow (modèle Vancelian — fund PE first, allocate on-chain ensuite)::
+
+    1. Fund comptable : direct_portfolio(entry) → bundle cash leg (Privy inchangé)
+    2. Allocation   : cash leg → bundle spot via swap (Privy bouge à confirmation LI.FI)
+
+Legacy Exchange::
+
+    EUR → BUY entry_asset → fund cash leg → SWAP to each target → debit cash leg
 
 The cash leg is a ``PositionAtom`` with ``position_type='cash'``.  Allocation
 positions use ``position_type='spot'``.  Both live in the same PE portfolio,
 giving a complete overlay view of the bundle without modifying
-``crypto_positions``.
+``crypto_positions`` until on-chain execution.
 """
 from __future__ import annotations
 
@@ -21,7 +27,11 @@ from sqlalchemy.orm import Session
 from services.exchange.models import CryptoPosition, ExchangeOrder
 from services.exchange.service import ExchangeError, ExchangeService
 from services.portfolio_engine.bundle_execution import BundleExecutionAdapter
-from services.portfolio_engine.bundle_execution.lifi_base_config import normalize_bundle_asset
+from services.portfolio_engine.bundle_execution.bundle_cost_basis import reference_cost_basis_eur
+from services.portfolio_engine.bundle_execution.lifi_base_config import (
+    display_bundle_asset,
+    normalize_bundle_asset,
+)
 from services.portfolio_engine.bundle_execution.types import ExecutionLeg
 from services.portfolio_engine.invariants.invariant_g import check_invariant_g
 from services.portfolio_engine.allocations.models import TargetAllocation
@@ -125,13 +135,21 @@ class BundleOrchestrator:
         )
         batch_id = str(uuid_mod.uuid4())
 
+        from services.portfolio_engine.bundle_execution.bundle_funding import (
+            BundleFundingError,
+            fund_bundle_cash_leg_from_self_trading,
+        )
+        from services.portfolio_engine.clients.models import Client as _Client
+
+        _client_row = db.query(_Client).filter(_Client.id == client_id).first()
+        person_id = _client_row.person_id if _client_row is not None else None
+
         # ── Step 1: Funding — acquire entry asset ────────────────────────
         is_fiat_funding = funding_asset.upper() in ("EUR", "USD")
         is_direct_entry = funding_asset.upper() == entry_asset.upper()
 
         funding_result: dict = {}
         entry_qty_received = Decimal("0")
-        funding_cost_basis = Decimal("0")
 
         if is_fiat_funding:
             ext_ref = f"bundle-fund-{batch_id}"
@@ -140,7 +158,6 @@ class BundleOrchestrator:
                 funding_asset, ext_ref, portfolio_id, batch_id, actor,
             )
             entry_qty_received = Decimal(str(buy_result.get("amount_crypto", 0)))
-            funding_cost_basis = funding_amount
             funding_result = {
                 "action": "buy_entry_asset",
                 "from": funding_asset,
@@ -151,7 +168,6 @@ class BundleOrchestrator:
             }
         elif is_direct_entry:
             entry_qty_received = funding_amount
-            funding_cost_basis = funding_amount
             funding_result = {
                 "action": "direct_entry_asset",
                 "entry_asset": entry_asset,
@@ -162,11 +178,23 @@ class BundleOrchestrator:
                 f"unsupported_funding_path: {funding_asset} → {entry_asset}"
             )
 
-        # Credit cash leg
-        self._credit_cash_leg(
-            db, portfolio_id, entry_instrument.id,
-            entry_qty_received, funding_cost_basis,
-        )
+        if entry_qty_received <= 0:
+            raise BundleOrchestratorError("entry_asset_quantity_zero")
+
+        try:
+            pe_funding = fund_bundle_cash_leg_from_self_trading(
+                db,
+                client_id=client_id,
+                person_id=person_id,
+                portfolio_id=portfolio_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                amount=entry_qty_received,
+                batch_id=batch_id,
+            )
+            funding_result = {**funding_result, **pe_funding, "funding_path": funding_result.get("action")}
+        except BundleFundingError as exc:
+            raise BundleOrchestratorError(str(exc)) from exc
 
         # ── Step 2: Allocate from cash leg ───────────────────────────────
         cash_available = entry_qty_received
@@ -290,8 +318,17 @@ class BundleOrchestrator:
         funding_amount: Decimal,
         allocations: list[TargetAllocation],
     ) -> dict:
-        """Investissement Base LI.FI — pas d'atoms avant confirmation swap."""
+        """Investissement Base LI.FI — fund PE first, allocate on-chain ensuite.
+
+        1. Transfert comptable self-trading → cash leg (Privy inchangé).
+        2. Legs Li.FI : à confirmation, débit cash leg + crédit spot + settlement Privy.
+        """
         import uuid as _uuid
+
+        from services.portfolio_engine.bundle_execution.bundle_funding import (
+            BundleFundingError,
+            fund_bundle_cash_leg_from_self_trading,
+        )
 
         portfolio_locked = load_portfolio_for_invest_lock(
             db, client_id=client_id, portfolio_id=portfolio_id,
@@ -314,13 +351,35 @@ class BundleOrchestrator:
         from services.transaction_intents.bundle_intent_sync import ensure_bundle_parent_intent
 
         _client_row = db.query(_Client).filter(_Client.id == client_id).first()
-        if _client_row is not None and _client_row.person_id is not None:
+        person_id = _client_row.person_id if _client_row is not None else None
+        if person_id is not None:
             ensure_bundle_parent_intent(
                 db,
-                person_id=_client_row.person_id,
+                person_id=person_id,
                 bundle_id=str(portfolio_id),
                 batch_id=batch_id,
             )
+
+        try:
+            funding_result = fund_bundle_cash_leg_from_self_trading(
+                db,
+                client_id=client_id,
+                person_id=person_id,
+                portfolio_id=portfolio_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                amount=funding_amount,
+                batch_id=batch_id,
+            )
+        except BundleFundingError as exc:
+            release_invest_lock(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                terminal_status="failed",
+            )
+            raise BundleOrchestratorError(str(exc)) from exc
 
         actor = ActorContext(
             actor_type="system",
@@ -388,17 +447,6 @@ class BundleOrchestrator:
 
         cash_leg_remaining = cash_available
         if succeeded > 0 and pending == 0 and failed == 0:
-            from services.portfolio_engine.bundle_execution.pe_settlement import (
-                credit_initial_cash_leg,
-            )
-
-            credit_initial_cash_leg(
-                db,
-                portfolio_id=portfolio_id,
-                entry_instrument_id=entry_instrument.id,
-                quantity=cash_leg_remaining,
-                cost_basis=cash_leg_remaining,
-            )
             status = "completed"
         elif pending > 0:
             status = "pending_signature" if succeeded == 0 else "partial_pending"
@@ -462,7 +510,8 @@ class BundleOrchestrator:
             "entry_asset": entry_asset,
             "entry_instrument_id": str(entry_instrument.id),
             "funding": {
-                "action": "direct_entry_asset_lifi",
+                **funding_result,
+                "funding_path": "direct_entry_asset_lifi",
                 "entry_asset": entry_asset,
                 "amount": float(funding_amount),
             },
@@ -570,9 +619,7 @@ class BundleOrchestrator:
         planned_entry_total: Decimal,
         entry_consumed: Decimal,
     ) -> dict:
-        """Crédite le cash leg résiduel après legs LI.FI confirmés + invariant G."""
-        from services.portfolio_engine.bundle_execution.pe_settlement import credit_initial_cash_leg
-
+        """Finalise un batch LI.FI après legs confirmés (cash leg déjà alimenté au fund)."""
         update_invest_lock_status(
             db,
             client_id=client_id,
@@ -582,14 +629,6 @@ class BundleOrchestrator:
         )
 
         remaining = planned_entry_total - entry_consumed
-        if remaining > 0:
-            credit_initial_cash_leg(
-                db,
-                portfolio_id=portfolio_id,
-                entry_instrument_id=entry_instrument_id,
-                quantity=remaining,
-                cost_basis=remaining,
-            )
         invariant_g = check_invariant_g(db, client_id, dry_run=True)
         from services.portfolio_engine.clients.models import Client as _Client
         from services.transaction_intents.bundle_intent_sync import recompute_bundle_parent_intent
@@ -611,7 +650,8 @@ class BundleOrchestrator:
         )
         return {
             "batch_id": batch_id,
-            "cash_leg_credited": float(remaining),
+            "cash_leg_remaining": float(remaining),
+            "cash_leg_credited": 0.0,
             "invariant_g": invariant_g,
         }
 
@@ -631,11 +671,9 @@ class BundleOrchestrator:
     ) -> dict:
         """Estimate a bundle investment without executing anything.
 
-        Uses the same pricing / fee logic as the real flow but creates no
-        orders, no atoms, and no audit entries.
+        Uses Li.FI quotes when ``BUNDLE_EXECUTION_PROVIDER=lifi_base``, otherwise
+        ExchangeService pricing.  Creates no orders, atoms, or audit entries.
         """
-        from services.exchange.schemas import SwapPreviewRequest
-
         warnings: list[str] = []
 
         try:
@@ -688,6 +726,8 @@ class BundleOrchestrator:
         total_consumed = Decimal("0")
         legs_ok = 0
         legs_warn = 0
+        use_lifi_preview = self._execution.provider_name == "lifi_base"
+        person_id = self._resolve_person_id(db, client_id) if use_lifi_preview else None
 
         for alloc in allocations:
             instrument = alloc.instrument
@@ -698,7 +738,9 @@ class BundleOrchestrator:
             asset_obj = db.query(Asset).filter(
                 Asset.id == instrument.asset_id
             ).first()
-            target_asset = self._normalize_asset_symbol(asset_obj.symbol.upper())
+            raw_symbol = self._normalize_asset_symbol(asset_obj.symbol.upper())
+            lifi_target = normalize_bundle_asset(raw_symbol)
+            display_asset = display_bundle_asset(lifi_target)
 
             alloc_input = (
                 estimated_entry_amount * alloc.target_weight
@@ -706,7 +748,8 @@ class BundleOrchestrator:
 
             if alloc_input <= 0:
                 alloc_previews.append({
-                    "asset": target_asset,
+                    "asset": lifi_target,
+                    "asset_display": display_asset,
                     "target_weight": str(alloc.target_weight),
                     "estimated_input_amount": "0",
                     "estimated_output_quantity": "0",
@@ -714,36 +757,25 @@ class BundleOrchestrator:
                 })
                 continue
 
-            try:
-                swap_preview = self._exchange.preview_swap(
-                    db,
-                    SwapPreviewRequest(
-                        from_asset=entry_asset,
-                        to_asset=target_asset,
-                        amount_from=alloc_input,
-                    ),
-                    currency=reference_currency,
-                )
-                estimated_out = Decimal(str(swap_preview.get("estimated_to_amount", 0)))
+            leg_preview = self._preview_allocation_leg(
+                db,
+                entry_asset=entry_asset,
+                lifi_target=lifi_target,
+                display_asset=display_asset,
+                alloc_input=alloc_input,
+                target_weight=alloc.target_weight,
+                reference_currency=reference_currency,
+                use_lifi_preview=use_lifi_preview,
+                person_id=person_id,
+            )
+            alloc_previews.append(leg_preview["row"])
+            if leg_preview["status"] == "ok":
                 total_consumed += alloc_input
                 legs_ok += 1
-                alloc_previews.append({
-                    "asset": target_asset,
-                    "target_weight": str(alloc.target_weight),
-                    "estimated_input_amount": str(alloc_input),
-                    "estimated_output_quantity": str(estimated_out),
-                    "status": "ok",
-                })
-            except Exception as exc:
+            else:
                 legs_warn += 1
-                warnings.append(f"swap_preview_failed:{target_asset}: {exc}")
-                alloc_previews.append({
-                    "asset": target_asset,
-                    "target_weight": str(alloc.target_weight),
-                    "estimated_input_amount": str(alloc_input),
-                    "estimated_output_quantity": "0",
-                    "status": "unavailable",
-                })
+                if leg_preview.get("warning"):
+                    warnings.append(leg_preview["warning"])
 
         remaining = estimated_entry_amount - total_consumed
         if remaining < 0:
@@ -765,6 +797,96 @@ class BundleOrchestrator:
             "allocations": alloc_previews,
             "warnings": warnings,
         }
+
+    def _preview_allocation_leg(
+        self,
+        db: Session,
+        *,
+        entry_asset: str,
+        lifi_target: str,
+        display_asset: str,
+        alloc_input: Decimal,
+        target_weight: Decimal,
+        reference_currency: str,
+        use_lifi_preview: bool,
+        person_id: UUID | None,
+    ) -> dict:
+        """Estimate one allocation leg — Li.FI when bundle provider is lifi_base."""
+        base_row = {
+            "asset": lifi_target,
+            "asset_display": display_asset,
+            "target_weight": str(target_weight),
+            "estimated_input_amount": str(alloc_input),
+            "estimated_output_quantity": "0",
+            "status": "unavailable",
+        }
+
+        if use_lifi_preview and person_id is not None:
+            try:
+                from services.portfolio_engine.bundle_execution.bundle_lifi_quote_service import (
+                    BundleLifiQuoteService,
+                )
+
+                quote_svc = BundleLifiQuoteService()
+                estimated_out = quote_svc.preview_bundle_quote(
+                    db,
+                    person_id=person_id,
+                    from_asset=entry_asset,
+                    to_asset=lifi_target,
+                    amount=str(alloc_input),
+                )
+                return {
+                    "status": "ok",
+                    "row": {
+                        **base_row,
+                        "estimated_output_quantity": str(estimated_out),
+                        "status": "ok",
+                    },
+                }
+            except Exception as exc:
+                logger.info(
+                    "Li.FI preview failed for %s → %s, falling back to exchange: %s",
+                    entry_asset,
+                    lifi_target,
+                    exc,
+                )
+
+        from services.exchange.schemas import SwapPreviewRequest
+
+        try:
+            swap_preview = self._exchange.preview_swap(
+                db,
+                SwapPreviewRequest(
+                    from_asset=entry_asset,
+                    to_asset=lifi_target,
+                    amount_from=alloc_input,
+                ),
+                currency=reference_currency,
+            )
+            estimated_out = Decimal(str(swap_preview.get("estimated_to_amount", 0)))
+            return {
+                "status": "ok",
+                "row": {
+                    **base_row,
+                    "estimated_output_quantity": str(estimated_out),
+                    "status": "ok",
+                },
+            }
+        except Exception as exc:
+            return {
+                "status": "unavailable",
+                "warning": f"swap_preview_failed:{lifi_target}: {exc}",
+                "row": {**base_row, "status": "unavailable"},
+            }
+
+    @staticmethod
+    def _resolve_person_id(db: Session, client_id: UUID) -> UUID | None:
+        from services.portfolio_engine.clients.models import Client
+
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if client is None or client.person_id is None:
+            return None
+        return client.person_id
 
     @staticmethod
     def _invalid_preview(reason: str, funding_asset: str, funding_amount: Decimal) -> dict:
@@ -1094,6 +1216,16 @@ class BundleOrchestrator:
             .order_by(TargetAllocation.rebalance_priority.asc())
             .all()
         )
+
+    @staticmethod
+    def _asset_symbol_for_instrument(db: Session, instrument_id: UUID) -> str:
+        instrument = db.query(Instrument).filter(Instrument.id == instrument_id).first()
+        if instrument is None:
+            raise BundleOrchestratorError(f"instrument_not_found:{instrument_id}")
+        asset = db.query(Asset).filter(Asset.id == instrument.asset_id).first()
+        if asset is None:
+            raise BundleOrchestratorError(f"asset_not_found_for_instrument:{instrument_id}")
+        return asset.symbol.upper()
 
     @staticmethod
     def _resolve_or_create_instrument(db: Session, asset_symbol: str) -> Instrument:

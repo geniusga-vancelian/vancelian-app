@@ -2589,7 +2589,7 @@ def mobile_bundle_batch_finalize(
     db: Session = Depends(get_db),
     client: PeClient = Depends(mobile_app_client),
 ):
-    """Crédite le cash leg résiduel après legs LI.FI confirmés + invariant G dry-run."""
+    """Finalise un batch LI.FI après legs confirmés + invariant G dry-run."""
     from decimal import Decimal as _Dec
     from uuid import UUID as _UUID
 

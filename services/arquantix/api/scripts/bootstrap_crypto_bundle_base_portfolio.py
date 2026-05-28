@@ -51,7 +51,7 @@ BUNDLES: tuple[dict, ...] = (
         "template_description": "70% Bitcoin (cbBTC) / 30% Ethereum (cbETH).",
         "sort_hint": 10,
         "allocations": [
-            {"instrument_code": "BTC-SPOT", "target_weight": Decimal("0.700000")},
+            {"instrument_code": "CBBTC-SPOT", "target_weight": Decimal("0.700000")},
             {"instrument_code": "CBETH-SPOT", "target_weight": Decimal("0.300000")},
         ],
     },
@@ -73,7 +73,7 @@ BUNDLES: tuple[dict, ...] = (
         "template_description": "50% Bitcoin (cbBTC) / 30% Ethereum (cbETH) / ~6.7% each on Chainlink, Aave, Uniswap.",
         "sort_hint": 20,
         "allocations": [
-            {"instrument_code": "BTC-SPOT", "target_weight": Decimal("0.500000")},
+            {"instrument_code": "CBBTC-SPOT", "target_weight": Decimal("0.500000")},
             {"instrument_code": "CBETH-SPOT", "target_weight": Decimal("0.300000")},
             {"instrument_code": "LINK-SPOT", "target_weight": Decimal("0.066667")},
             {"instrument_code": "AAVE-SPOT", "target_weight": Decimal("0.066667")},

@@ -8,6 +8,7 @@ import type {
 import { portalAcademyHubRoute, resolvePortalArticleHref } from '@/lib/portal/portalArticleRouting'
 
 import { BASE_MARKET_PROVIDER_SYMBOLS } from '@/lib/portal/baseAllowedAssets'
+import { normalizeBundleAssetSymbol } from '@/lib/portal/bundleFormat'
 
 export const PORTAL_DEFAULT_CRYPTO_SYMBOLS = BASE_MARKET_PROVIDER_SYMBOLS
 
@@ -355,9 +356,9 @@ function parseBundleAllocationTickers(item: BundleCatalogItem, code: string): st
   if (Array.isArray(raw) && raw.length > 0) {
     const rows = raw
       .map((row) => {
-        const assetSymbol = String(row.asset_symbol ?? row.assetSymbol ?? '')
-          .trim()
-          .toUpperCase()
+        const assetSymbol = normalizeBundleAssetSymbol(
+          String(row.asset_symbol ?? row.assetSymbol ?? ''),
+        )
         const weight = Number(row.target_weight ?? row.targetWeight ?? 0)
         if (!assetSymbol || assetSymbol === 'USDC') return null
         return { assetSymbol, weight: Number.isFinite(weight) ? weight : 0 }

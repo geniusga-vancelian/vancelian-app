@@ -17,12 +17,13 @@ from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.swap_repository import PersonWalletSwapRepository
 from services.portfolio_engine.clients.models import Client
 
+from .bundle_cost_basis import reference_cost_basis_eur
 from .bundle_lifi_quote_service import BundleLifiQuoteService
 from .bundle_lifi_validation import BundleLifiValidationError, validate_bundle_lifi_leg
 from .lifi_base_config import BUNDLE_LIFI_CHAIN_KEY, normalize_bundle_asset
 from .pe_settlement import (
     BundlePeSettlementError,
-    apply_allocation_leg_atoms_lifi_spot_only,
+    apply_allocation_leg_atoms,
     apply_rebalance_buy_atoms,
     apply_rebalance_sell_atoms,
     swap_confirmed,
@@ -95,7 +96,7 @@ class BundleLifiLegService:
             to_asset=to_sym,
             amount_from=leg.amount_from,
             estimated_amount_to=Decimal(str(quote.estimated_receive or 0)),
-            reference_value_net=leg.amount_from,
+            reference_value_net=reference_cost_basis_eur(db, from_sym, leg.amount_from),
             fees={"swap_fee_bps": quote.swap_fee_bps},
             raw={"swap_id": str(quote.swap_id), "quote": quote.model_dump()},
         )
@@ -369,13 +370,15 @@ class BundleLifiLegService:
         target_inst = UUID(str(target_instrument_id))
         amount_in = Decimal(str(swap.amount_in))
         amount_out = Decimal(str(swap.estimated_receive or 0))
-        cost_basis = amount_in
+        cost_basis = reference_cost_basis_eur(db, str(swap.from_asset), amount_in)
 
         if leg.action == "allocation":
-            apply_allocation_leg_atoms_lifi_spot_only(
+            apply_allocation_leg_atoms(
                 db,
                 portfolio_id=leg.portfolio_id,
+                entry_instrument_id=entry_inst,
                 target_instrument_id=target_inst,
+                entry_asset_consumed=amount_in,
                 crypto_received=amount_out,
                 cost_basis_eur=cost_basis,
             )

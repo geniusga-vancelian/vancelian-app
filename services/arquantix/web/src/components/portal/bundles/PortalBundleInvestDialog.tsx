@@ -21,6 +21,11 @@ import {
   type BundleInvestPreviewPayload,
 } from '@/lib/portal/bundleClient'
 import {
+  displayBundleAssetSymbol,
+  formatBundleTargetWeight,
+  formatBundleUsdcAmount,
+} from '@/lib/portal/bundleFormat'
+import {
   bundleExecutionPhaseLabel,
   bundleLockStatusLabel,
 } from '@/lib/portal/bundleInvestLabels'
@@ -239,7 +244,21 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
     previewLoading ||
     batchInProgress ||
     inFlightRef.current ||
-    step === 'blocked'
+    step === 'blocked' ||
+    (step === 'preview' && preview?.preview_status === 'invalid')
+
+  const entryAssetLabel = preview?.entry_asset_used ?? fundingAsset
+
+  const previewWarning = useMemo(() => {
+    if (!preview || preview.preview_status === 'ok') return null
+    if (preview.preview_status === 'partial') {
+      return 'Certains actifs ne sont pas disponibles pour la cotation — l’allocation pourrait être partielle.'
+    }
+    if (preview.warnings?.length) {
+      return preview.warnings[0]
+    }
+    return 'Prévisualisation indisponible pour ce montant.'
+  }, [preview])
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -323,21 +342,37 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
         {step === 'preview' && preview ? (
           <div className="flex max-h-[40vh] flex-col gap-2 overflow-y-auto">
             <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-              Entrée estimée : {preview.estimated_entry_asset_amount}{' '}
-              {preview.entry_asset_used ?? fundingAsset}
+              Entrée estimée : {formatBundleUsdcAmount(preview.estimated_entry_asset_amount)}{' '}
+              {entryAssetLabel}
             </p>
+            {previewWarning ? (
+              <p className="m-0 rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[12px] text-amber-900">
+                {previewWarning}
+              </p>
+            ) : null}
             <ul className="m-0 list-none space-y-1 p-0">
-              {(preview.allocations ?? []).map((row) => (
-                <li
-                  key={`${row.asset}-${row.target_weight}`}
-                  className="flex justify-between font-ui text-[12px] text-v-fg-body"
-                >
-                  <span>
-                    {row.asset} ({row.target_weight})
-                  </span>
-                  <span>{row.estimated_output_quantity}</span>
-                </li>
-              ))}
+              {(preview.allocations ?? []).map((row) => {
+                const label =
+                  row.asset_display?.trim() ||
+                  displayBundleAssetSymbol(row.asset)
+                const inputUsdc = formatBundleUsdcAmount(row.estimated_input_amount)
+                return (
+                  <li
+                    key={`${row.asset}-${row.target_weight}`}
+                    className="flex justify-between gap-3 font-ui text-[12px] text-v-fg-body"
+                  >
+                    <span>
+                      {label}{' '}
+                      <span className="text-v-fg-muted">
+                        ({formatBundleTargetWeight(row.target_weight)})
+                      </span>
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      {inputUsdc} {entryAssetLabel}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         ) : null}

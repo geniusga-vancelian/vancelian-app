@@ -11,16 +11,7 @@ from config.supported_swap_assets import (
     human_amount_to_atomic,
     resolve_swap_token,
 )
-
-# Taux indicatifs pour quotes mock (pas de prix marché réel).
-_MOCK_RATES: dict[tuple[str, str], Decimal] = {
-    ("USDC", "ETH"): Decimal("0.000433"),
-    ("USDT", "ETH"): Decimal("0.000433"),
-    ("ETH", "USDC"): Decimal("2300"),
-    ("ETH", "USDT"): Decimal("2300"),
-    ("USDC", "USDT"): Decimal("0.9995"),
-    ("USDT", "USDC"): Decimal("0.9995"),
-}
+from services.lifi.lifi_mock_pricing import estimate_mock_swap_output
 
 
 def _chain_key_from_lifi_id(chain_id: Union[int, str]) -> str:
@@ -53,8 +44,11 @@ class LifiMockClient:
         to_meta = resolve_swap_token(_token_symbol_from_address(to_token, to_key), to_key)
 
         amount_in = atomic_amount_to_human(from_amount, from_meta.decimals)
-        rate = _MOCK_RATES.get((from_meta.asset, to_meta.asset), Decimal("1"))
-        estimated_out = (amount_in * rate).quantize(Decimal("0.00000001"))
+        estimated_out = estimate_mock_swap_output(
+            from_asset=from_meta.asset,
+            to_asset=to_meta.asset,
+            amount_in=amount_in,
+        )
         if estimated_out <= 0:
             estimated_out = Decimal("0.00000001")
 

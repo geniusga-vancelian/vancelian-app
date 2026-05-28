@@ -31,10 +31,16 @@ def test_bundle_lifi_allows_cbbtc_base():
     assert normalize_bundle_asset("ETH") == "CBETH"
     assert "CBBTC" in BUNDLE_LIFI_DESTINATION_ASSETS
     assert "CBETH" in BUNDLE_LIFI_DESTINATION_ASSETS
+    assert "LINK" in BUNDLE_LIFI_DESTINATION_ASSETS
+    assert "AAVE" in BUNDLE_LIFI_DESTINATION_ASSETS
+    assert "UNI" in BUNDLE_LIFI_DESTINATION_ASSETS
     assert "USDC" in BUNDLE_LIFI_SOURCE_ASSETS
 
     validate_bundle_leg_assets("USDC", "CBBTC")
     validate_bundle_leg_assets("USDC", "CBETH")
+    validate_bundle_leg_assets("USDC", "LINK")
+    validate_bundle_leg_assets("USDC", "AAVE")
+    validate_bundle_leg_assets("USDC", "UNI")
     validate_bundle_quote_request(
         from_asset="USDC",
         to_asset="CBBTC",

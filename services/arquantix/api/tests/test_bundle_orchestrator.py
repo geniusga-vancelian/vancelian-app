@@ -49,6 +49,12 @@ ADMIN_HEADERS = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _force_exchange_bundle_provider(monkeypatch):
+    """Phase 2 orchestrator tests ciblent le backend Exchange (pas LI.FI)."""
+    monkeypatch.setenv("BUNDLE_EXECUTION_PROVIDER", "exchange")
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -287,7 +293,8 @@ class TestBundleOrchestratorPhase2:
 
         assert result["status"] == "completed"
         assert result["entry_asset"] == "USDC"
-        assert result["funding"]["action"] == "buy_entry_asset"
+        assert result["funding"]["funding_path"] == "buy_entry_asset"
+        assert result["funding"]["action"] == "fund_cash_leg_from_self_trading"
         assert result["funding"]["to"] == "USDC"
         assert result["total_entry_asset_received"] > 0
 
@@ -443,7 +450,8 @@ class TestBundleOrchestratorPhase2:
         )
 
         assert result["status"] == "completed"
-        assert result["funding"]["action"] == "direct_entry_asset"
+        assert result["funding"]["funding_path"] == "direct_entry_asset"
+        assert result["funding"]["action"] == "fund_cash_leg_from_self_trading"
         assert result["legs_succeeded"] == 2
 
     # ── Test 5: Sync — cash leg + pe_atoms + exchange_orders ──

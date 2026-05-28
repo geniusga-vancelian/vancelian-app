@@ -24,6 +24,7 @@ export type BundleInvestPreviewPayload = {
   estimated_remaining_entry_asset?: string
   allocations?: Array<{
     asset: string
+    asset_display?: string
     target_weight: string
     estimated_input_amount: string
     estimated_output_quantity: string

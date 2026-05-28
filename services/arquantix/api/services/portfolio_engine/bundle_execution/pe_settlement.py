@@ -29,7 +29,7 @@ def apply_allocation_leg_atoms_lifi_spot_only(
     crypto_received: Decimal,
     cost_basis_eur: Decimal,
 ) -> None:
-    """Crédite uniquement le spot — cash leg finalisé en fin de batch LI.FI."""
+    """DEPRECATED — préférer ``apply_allocation_leg_atoms`` (fund-first + débit cash leg)."""
     if crypto_received <= 0:
         raise BundlePeSettlementError("crypto_received_must_be_positive")
     _orchestrator()._sync_pe_position(

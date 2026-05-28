@@ -267,10 +267,29 @@ def apply_swap_settlement(
     )
     available = Decimal(str(from_row.available_balance))
     if available < amount_in:
-        raise SwapValidationError(
-            "swap.insufficient_balance",
-            f"Solde {from_asset} insuffisant pour le swap ({available} < {amount_in})",
-        )
+        from services.lifi.config import swaps_mock_mode
+
+        if swaps_mock_mode():
+            shortfall = amount_in - available
+            PersonWalletBalanceRepository.increment_balance(
+                db,
+                from_row,
+                delta=shortfall,
+                sync_source="lifi_mock_ledger_top_up",
+            )
+            db.flush()
+            available = Decimal(str(from_row.available_balance))
+            logger.info(
+                "lifi.mock_ledger_top_up asset=%s shortfall=%s available=%s",
+                from_asset,
+                shortfall,
+                available,
+            )
+        if available < amount_in:
+            raise SwapValidationError(
+                "swap.insufficient_balance",
+                f"Solde {from_asset} insuffisant pour le swap ({available} < {amount_in})",
+            )
 
     swap_id = str(swap.id)
     credit_log_index = resolved.log_index if resolved.log_index is not None else 1

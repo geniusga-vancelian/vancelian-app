@@ -14,11 +14,16 @@ from config.supported_swap_assets import SUPPORTED_SWAP_CHAINS
 BUNDLE_LIFI_CHAIN_KEY = "base"
 
 BUNDLE_LIFI_SOURCE_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "CBETH"})
-BUNDLE_LIFI_DESTINATION_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "CBETH", "CBBTC"})
+BUNDLE_LIFI_DESTINATION_ASSETS: frozenset[str] = frozenset({
+    "USDC", "EURC", "CBETH", "CBBTC", "LINK", "AAVE", "UNI",
+})
 
 # Coinbase Wrapped BTC on Base mainnet (canonical).
 CBBTC_BASE_ADDRESS = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"
 CBETH_BASE_ADDRESS = "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22"
+LINK_BASE_ADDRESS = "0x88fb150bdc53a65fe94dea0c9ba0a6daf8c6e196"
+AAVE_BASE_ADDRESS = "0x63706e401c06ac8513145b7687a14804d17f814b"
+UNI_BASE_ADDRESS = "0xc3de830ea07524a0761646a6a4e4be0e114a3c83"
 
 # Circle EURC on Base.
 EURC_BASE_ADDRESS = "0x60a3E35Cc106573386850dcfc71F6a032A550f1"
@@ -48,13 +53,34 @@ BUNDLE_BASE_ASSETS: dict[str, dict[str, Any]] = {
         "kind": "wrapped_btc",
         "addresses": {"base": CBBTC_BASE_ADDRESS},
     },
+    "LINK": {
+        "display_name": "Chainlink",
+        "decimals": 18,
+        "kind": "token",
+        "addresses": {"base": LINK_BASE_ADDRESS},
+    },
+    "AAVE": {
+        "display_name": "Aave",
+        "decimals": 18,
+        "kind": "token",
+        "addresses": {"base": AAVE_BASE_ADDRESS},
+    },
+    "UNI": {
+        "display_name": "Uniswap",
+        "decimals": 18,
+        "kind": "token",
+        "addresses": {"base": UNI_BASE_ADDRESS},
+    },
 }
 
 DEFAULT_BUNDLE_MIN: dict[str, Decimal] = {
-    "USDC": Decimal("5"),
-    "EURC": Decimal("5"),
+    "USDC": Decimal("1"),
+    "EURC": Decimal("1"),
     "CBETH": Decimal("0.001"),
     "CBBTC": Decimal("0.00001"),
+    "LINK": Decimal("1"),
+    "AAVE": Decimal("0.01"),
+    "UNI": Decimal("0.1"),
 }
 
 # Mapping symboles PE / Exchange → symbole swap Base
@@ -82,6 +108,19 @@ class BundleBaseToken:
 def normalize_bundle_asset(asset: str) -> str:
     upper = (asset or "").strip().upper()
     return PE_ASSET_TO_BUNDLE_LIFI.get(upper, upper)
+
+
+# Symboles affichés portail (cbBTC / cbETH).
+BUNDLE_ASSET_DISPLAY: dict[str, str] = {
+    "CBBTC": "cbBTC",
+    "CBETH": "cbETH",
+}
+
+
+def display_bundle_asset(asset: str) -> str:
+    """Symbole canonique bundle → libellé portail."""
+    sym = normalize_bundle_asset(asset)
+    return BUNDLE_ASSET_DISPLAY.get(sym, sym)
 
 
 def resolve_bundle_base_token(asset: str) -> BundleBaseToken:
