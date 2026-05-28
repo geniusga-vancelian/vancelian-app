@@ -59,6 +59,8 @@ export type BundleInvestAlreadyPendingPayload = {
 
 export type BundleInvestActiveLockPayload = {
   status: 'none' | 'active'
+  reconciled?: boolean
+  resume_available?: boolean
   lock?: {
     batch_id: string
     status: string
@@ -67,6 +69,35 @@ export type BundleInvestActiveLockPayload = {
     funding_asset?: string
     funding_amount?: string
   }
+}
+
+export type BundleRebalancePreviewPayload = {
+  portfolio_id: string
+  status: string
+  entry_asset?: string
+  cash_leg_value_eur?: number
+  buy_plan?: Array<Record<string, unknown>>
+  sell_plan?: Array<Record<string, unknown>>
+  warnings?: string[]
+  message?: string
+}
+
+export type BundleRebalanceLeg = {
+  asset: string
+  status: string
+  swap_id?: string
+  leg_id?: string
+  signing?: Record<string, unknown> | null
+  error?: string
+}
+
+export type BundleRebalancePayload = {
+  portfolio_id: string
+  status: string
+  batch_id?: string
+  buy_results?: BundleRebalanceLeg[]
+  sell_results?: BundleRebalanceLeg[]
+  message?: string
 }
 
 export type BundleInvestResult =
@@ -211,6 +242,50 @@ export async function fetchActiveBundleInvestLock(
     { cache: 'no-store' },
   )
   return parseJson(res)
+}
+
+export async function resumeBundleInvest(portfolioId: string): Promise<BundleInvestPayload> {
+  const res = await fetch('/api/portal/bundles/invest/resume', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ portfolio_id: portfolioId }),
+  })
+  const data = (await res.json()) as BundleInvestPayload & { detail?: string }
+  if (!res.ok) {
+    throw new Error(
+      (typeof data.detail === 'string' ? data.detail : null) ||
+        data.message ||
+        'Reprise investissement impossible',
+    )
+  }
+  return data
+}
+
+export async function previewBundleRebalance(
+  portfolioId: string,
+): Promise<BundleRebalancePreviewPayload> {
+  const res = await fetch(
+    `/api/portal/bundles/rebalance/${encodeURIComponent(portfolioId)}/preview`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+  )
+  return parseJson(res)
+}
+
+export async function executeBundleRebalance(portfolioId: string): Promise<BundleRebalancePayload> {
+  const res = await fetch(`/api/portal/bundles/rebalance/${encodeURIComponent(portfolioId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  const data = (await res.json()) as BundleRebalancePayload & { detail?: string }
+  if (!res.ok) {
+    throw new Error(
+      (typeof data.detail === 'string' ? data.detail : null) ||
+        data.message ||
+        'Réallocation impossible',
+    )
+  }
+  return data
 }
 
 export async function bundleLegPrepareSign(swapId: string): Promise<SwapExecutePayload> {

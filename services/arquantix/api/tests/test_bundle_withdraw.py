@@ -24,8 +24,10 @@ from services.portfolio_engine.bundles.orchestrator import (
 )
 from services.portfolio_engine.bundles.bundle_invest_lock import (
     acquire_invest_lock,
+    assert_no_active_invest_lock,
     get_invest_lock,
     load_portfolio_for_invest_lock,
+    reconcile_idle_invest_lock_for_invest,
 )
 from services.portfolio_engine.bundles.withdraw import (
     BundleWithdrawOrchestrator,
@@ -316,6 +318,89 @@ def test_cash_only_withdraw_blocked_when_invest_swap_still_pending(db: Session):
             full_withdraw=True,
         )
     assert str(exc.value) == "invest_lock_active"
+
+
+def test_stale_invest_lock_cleared_when_swap_expired(db: Session):
+    pe = make_linked_client(db)
+    usdc_instr = _instrument_usdc(db)
+    portfolio = _bundle_portfolio(db, pe.id)
+    BundleOrchestrator._credit_cash_leg(
+        db, portfolio.id, usdc_instr.id, Decimal("20"), Decimal("17.2"),
+    )
+    batch_id = str(uuid.uuid4())
+    portfolio_locked = load_portfolio_for_invest_lock(
+        db, client_id=pe.id, portfolio_id=portfolio.id,
+    )
+    acquire_invest_lock(
+        db,
+        portfolio_locked,
+        client_id=pe.id,
+        batch_id=batch_id,
+        status="partial_pending",
+    )
+
+    from datetime import datetime, timezone
+
+    from services.lifi.enums import SwapSessionStatus
+    from services.lifi.models import PersonWalletSwap
+    from services.transaction_intents.bundle_intent_sync import ensure_bundle_parent_intent
+
+    swap = PersonWalletSwap(
+        person_id=pe.person_id,
+        from_asset="USDC",
+        to_asset="LINK",
+        from_chain="base",
+        to_chain="base",
+        amount_in=Decimal("10"),
+        status=SwapSessionStatus.EXPIRED.value,
+        expires_at=datetime.now(timezone.utc),
+        audit_log=[
+            {
+                "event": "bundle_leg_context",
+                "batch_id": batch_id,
+                "portfolio_id": str(portfolio.id),
+                "bundle_action": "allocation",
+                "leg_id": f"bundle-alloc-{batch_id}-LINK",
+            }
+        ],
+    )
+    db.add(swap)
+    db.flush()
+    ensure_bundle_parent_intent(
+        db,
+        person_id=pe.person_id,
+        bundle_id=str(portfolio.id),
+        batch_id=batch_id,
+    )
+    from services.transaction_intents.repository import TransactionIntentRepository
+
+    parent = TransactionIntentRepository.find_by_bundle_batch(
+        db,
+        person_id=pe.person_id,
+        bundle_id=str(portfolio.id),
+        batch_id=batch_id,
+    )
+    assert parent is not None
+    parent.metadata_json = {
+        **(parent.metadata_json or {}),
+        "legs": [
+            {
+                "leg_id": f"bundle-alloc-{batch_id}-LINK",
+                "swap_id": str(swap.id),
+                "asset": "LINK",
+                "status": "pending",
+            }
+        ],
+    }
+    db.add(parent)
+    db.commit()
+
+    assert reconcile_idle_invest_lock_for_invest(
+        db, client_id=pe.id, portfolio_id=portfolio.id,
+    ) is True
+    db.refresh(portfolio_locked)
+    assert get_invest_lock(portfolio_locked.metadata_) is None
+    assert_no_active_invest_lock(portfolio_locked, pe.id)
 
 
 def test_cash_only_withdraw_releases_to_self_trading(db: Session):

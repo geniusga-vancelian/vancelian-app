@@ -1884,12 +1884,36 @@ def mobile_bundle_invest_active_lock(
 
     from services.portfolio_engine.bundles.bundle_invest_lock import (
         get_active_invest_lock_for_portfolio,
+        load_portfolio_for_invest_lock,
+        reconcile_idle_invest_lock,
     )
 
     try:
         pid = _UUID(str(portfolio_id))
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    portfolio = load_portfolio_for_invest_lock(
+        db, client_id=client.id, portfolio_id=pid,
+    )
+    reconciled = reconcile_idle_invest_lock(
+        db,
+        client_id=client.id,
+        portfolio_id=pid,
+        portfolio=portfolio,
+    )
+    if reconciled:
+        db.commit()
+        lock = get_active_invest_lock_for_portfolio(
+            db, client_id=client.id, portfolio_id=pid,
+        )
+        if lock is None:
+            return {"status": "none", "reconciled": True}
+        return {
+            "status": "active",
+            "lock": lock,
+            "reconciled": True,
+        }
 
     lock = get_active_invest_lock_for_portfolio(
         db, client_id=client.id, portfolio_id=pid,
@@ -1899,6 +1923,7 @@ def mobile_bundle_invest_active_lock(
     return {
         "status": "active",
         "lock": lock,
+        "resume_available": True,
     }
 
 
@@ -1960,6 +1985,45 @@ def mobile_bundle_invest(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except _ExchangeError as exc:
         _raise_exchange_error(exc)
+
+
+@bootstrap_router.post("/bundle/invest/resume")
+def mobile_bundle_invest_resume(
+    payload: dict,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Reprend un batch invest LI.FI en cours (legs pending, cash leg déjà alimenté)."""
+    from services.portfolio_engine.bundles.orchestrator import (
+        BundleOrchestrator,
+        BundleOrchestratorError,
+    )
+
+    portfolio_id = payload.get("portfolio_id")
+    if not portfolio_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="portfolio_id is required",
+        )
+
+    try:
+        from uuid import UUID as _UUID
+        pid = _UUID(str(portfolio_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    orchestrator = BundleOrchestrator()
+    try:
+        result = orchestrator.resume_lifi_invest_batch(
+            db,
+            client_id=client.id,
+            portfolio_id=pid,
+        )
+        db.commit()
+        return result
+    except BundleOrchestratorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 @bootstrap_router.post("/bundle/invest/preview")
@@ -2626,6 +2690,25 @@ def mobile_bundle_rebalance_execute(
         pid = _UUID(portfolio_id)
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    from services.portfolio_engine.bundles.bundle_invest_lock import (
+        load_portfolio_for_invest_lock,
+        reconcile_idle_invest_lock,
+    )
+
+    portfolio = load_portfolio_for_invest_lock(
+        db, client_id=client.id, portfolio_id=pid,
+    )
+    if not reconcile_idle_invest_lock(
+        db,
+        client_id=client.id,
+        portfolio_id=pid,
+        portfolio=portfolio,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="invest_lock_active",
+        )
 
     try:
         orchestrator = BundleRebalanceOrchestrator()

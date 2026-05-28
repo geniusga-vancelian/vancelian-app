@@ -222,6 +222,86 @@ def _resolve_person_id(db: Session, client_id: UUID) -> Optional[UUID]:
     return row.person_id if row is not None else None
 
 
+def _reconcile_stale_intent_legs_for_batch(
+    db: Session,
+    *,
+    person_id: UUID,
+    bundle_id: str,
+    batch_id: str,
+) -> None:
+    """Aligne les legs intent sur l'état réel des swaps (EXPIRED/FAILED → leg failed)."""
+    from services.lifi.enums import SwapSessionStatus
+    from services.lifi.models import PersonWalletSwap
+    from services.transaction_intents.bundle_intent_sync import (
+        LEG_CONFIRMED,
+        LEG_FAILED,
+        _normalize_legs,
+    )
+    from services.transaction_intents.repository import TransactionIntentRepository
+
+    row = TransactionIntentRepository.find_by_bundle_batch(
+        db,
+        person_id=person_id,
+        bundle_id=bundle_id,
+        batch_id=batch_id,
+    )
+    if row is None:
+        return
+
+    legs = _normalize_legs((row.metadata_json or {}).get("legs"))
+    if not legs:
+        return
+
+    terminal_swap = {
+        SwapSessionStatus.CONFIRMED.value,
+        SwapSessionStatus.FAILED.value,
+        SwapSessionStatus.EXPIRED.value,
+    }
+    changed = False
+    for leg in legs:
+        leg_status = str(leg.get("status") or "pending")
+        if leg_status in (LEG_CONFIRMED, LEG_FAILED):
+            continue
+        swap_id_raw = str(leg.get("swap_id") or "").strip()
+        if not swap_id_raw:
+            leg["status"] = LEG_FAILED
+            changed = True
+            continue
+        try:
+            swap_uuid = UUID(swap_id_raw)
+        except ValueError:
+            leg["status"] = LEG_FAILED
+            changed = True
+            continue
+        swap = (
+            db.query(PersonWalletSwap)
+            .filter(
+                PersonWalletSwap.id == swap_uuid,
+                PersonWalletSwap.person_id == person_id,
+            )
+            .first()
+        )
+        if swap is None:
+            leg["status"] = LEG_FAILED
+            changed = True
+            continue
+        if swap.status == SwapSessionStatus.CONFIRMED.value:
+            leg["status"] = LEG_CONFIRMED
+            changed = True
+        elif swap.status in terminal_swap:
+            leg["status"] = LEG_FAILED
+            changed = True
+
+    if not changed:
+        return
+
+    meta = dict(row.metadata_json or {})
+    meta["legs"] = legs
+    row.metadata_json = meta
+    db.add(row)
+    db.flush()
+
+
 def _intent_batch_has_pending_legs(
     db: Session,
     *,
@@ -296,6 +376,12 @@ def _batch_has_blocking_invest_work(
     person_id = _resolve_person_id(db, client_id)
     if person_id is None:
         return False
+    _reconcile_stale_intent_legs_for_batch(
+        db,
+        person_id=person_id,
+        bundle_id=str(portfolio_id),
+        batch_id=batch_id,
+    )
     if _intent_batch_has_pending_legs(
         db,
         person_id=person_id,
@@ -310,17 +396,16 @@ def _batch_has_blocking_invest_work(
     )
 
 
-def reconcile_idle_invest_lock_for_withdraw(
+def reconcile_idle_invest_lock(
     db: Session,
     *,
     client_id: UUID,
     portfolio_id: UUID,
     portfolio: Portfolio,
 ) -> bool:
-    """Autorise le retrait si le verrou invest est absent ou sans travail en cours.
+    """Retire un verrou invest obsolète (fund OK, plus de travail LI.FI actif).
 
-    Un verrou obsolète (fund-first terminé, legs d'allocation jamais signés) est
-    retiré automatiquement avant le retrait cash-only.
+    Returns True when no blocking invest lock remains.
     """
     lock = get_invest_lock(portfolio.metadata_)
     if lock is None:
@@ -354,6 +439,40 @@ def reconcile_idle_invest_lock_for_withdraw(
     )
     db.refresh(portfolio)
     return True
+
+
+def reconcile_idle_invest_lock_for_withdraw(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    portfolio: Portfolio,
+) -> bool:
+    """Autorise le retrait si le verrou invest est absent ou sans travail en cours."""
+    return reconcile_idle_invest_lock(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        portfolio=portfolio,
+    )
+
+
+def reconcile_idle_invest_lock_for_invest(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> bool:
+    """Nettoie un verrou invest stale avant un nouvel investissement ou rebalance."""
+    portfolio = load_portfolio_for_invest_lock(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    return reconcile_idle_invest_lock(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        portfolio=portfolio,
+    )
 
 
 def get_active_invest_lock_for_portfolio(
