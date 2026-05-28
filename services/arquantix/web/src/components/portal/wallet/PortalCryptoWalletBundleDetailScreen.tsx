@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { ArrowLeft, PieChart } from 'lucide-react'
 import {
   AppBalanceCardVariantB,
+  type AppBalanceCardFab,
 } from '@/components/design-system/app/AppBalanceCardVariantB'
 import {
   AppAccountSummaryList,
@@ -97,6 +98,21 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
 
   const canWithdraw = holdingsSplit.totalWithdrawableEstimate > 0.001
 
+  const bundleFabs = useMemo((): AppBalanceCardFab[] => {
+    return [
+      { id: 'deposit', label: 'Déposer', icon: 'add', href: PORTAL_ROUTES.walletDeposit },
+      {
+        id: 'withdraw',
+        label: 'Retirer',
+        icon: 'send-1',
+        disabled: !canWithdraw || refreshing,
+        onClick: () => setWithdrawOpen(true),
+      },
+      { id: 'swap', label: 'Échanger', icon: 'exchange', disabled: true },
+      { id: 'invest', label: 'Investir', icon: 'trending-up', href: PORTAL_ROUTES.invest },
+    ]
+  }, [canWithdraw, refreshing])
+
   if (loading && !data) {
     return <PortalDashboardSkeleton />
   }
@@ -146,6 +162,7 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
               chartValues={data.historyPoints}
               showChart
               balancePending={refreshing}
+              fabs={bundleFabs}
               className="pt-0"
             />
           </div>
