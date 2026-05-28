@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/components/icon/icon.css"/>
+<link rel="stylesheet" href="/app-ds/components/search-overlay/search-overlay.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+
+</style></head><body><div class="stage"><p class="lbl">Search overlay · plein écran</p>
+<div style="position:relative;height:360px;border:1px solid var(--v-fg-10);border-radius:var(--v-radius-lg);overflow:hidden;">
+  <div class="search-scrim" style="position:absolute;inset:0;"></div>
+  <div class="search-shell" style="position:absolute;inset:0;">
+    <div class="search-bar" style="position:relative;padding:0 24px;">
+      <div class="search-bar__inner">
+        <span class="ic search-bar__ic" style="width:18px;height:18px;-webkit-mask-image:url('/icons/kalai/search.svg');mask-image:url('/icons/kalai/search.svg');"></span>
+        <input class="search-bar__input" type="search" placeholder="Rechercher un actif, un placement…" value="bitcoin"/>
+        <button type="button" class="search-bar__close">Fermer</button>
+      </div>
+    </div>
+    <div class="search-results" style="position:relative;flex:1;overflow:auto;background:var(--v-bg);">
+      <div class="search-results__inner" style="padding:24px;">
+        <p class="search-group__title">Crypto</p>
+        <ul class="search-list">
+          <li><button type="button" class="search-row"><span class="search-row__body"><span class="search-row__title">Bitcoin</span><span class="search-row__sub">BTC · Wallet crypto</span></span></button></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+</div></body></html>
