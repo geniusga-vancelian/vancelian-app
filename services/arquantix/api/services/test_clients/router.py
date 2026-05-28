@@ -2093,6 +2093,35 @@ def mobile_bundle_withdraw_finalize(
     return result
 
 
+@bootstrap_router.get("/bundle/withdraw/active-lock")
+def mobile_bundle_withdraw_active_lock(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Verrou retrait bundle en cours (reprise Portal après refresh)."""
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundles.bundle_withdraw_lock import (
+        get_active_withdraw_lock_for_portfolio,
+    )
+
+    try:
+        pid = _UUID(str(portfolio_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    lock = get_active_withdraw_lock_for_portfolio(
+        db, client_id=client.id, portfolio_id=pid,
+    )
+    if lock is None:
+        return {"status": "none"}
+    return {
+        "status": "active",
+        "lock": lock,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Direct Portfolio Overlay: backfill + invariant F + scoped positions
 # ---------------------------------------------------------------------------

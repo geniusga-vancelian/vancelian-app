@@ -1,0 +1,182 @@
+'use client'
+
+import { useCallback, useRef } from 'react'
+
+import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
+import {
+  bundleLegPrepareSign,
+  finalizeBundleWithdraw,
+  mapBundleSigningToExecute,
+  pendingWithdrawLegs,
+  submitBundleLegTx,
+  withdrawBundle,
+  type BundleWithdrawFinalizePayload,
+  type BundleWithdrawPayload,
+  type BundleWithdrawResult,
+} from '@/lib/portal/bundleClient'
+import {
+  clearBundleWithdrawSession,
+  saveBundleWithdrawSession,
+  type BundleWithdrawSession,
+} from '@/lib/portal/bundleWithdrawSession'
+import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
+
+export type BundleWithdrawRunResult = {
+  withdraw: BundleWithdrawPayload
+  finalize?: BundleWithdrawFinalizePayload
+}
+
+async function executePendingSellLegs(
+  withdraw: BundleWithdrawPayload,
+  deps: {
+    signAndSubmit: ReturnType<typeof useLifiSwapExecution>['signAndSubmit']
+    pollUntilTerminal: ReturnType<typeof useLifiSwapExecution>['pollUntilTerminal']
+    onLegProgress?: (current: number, total: number, asset: string) => void
+    onPhaseChange?: (phase: SwapExecutionPhase) => void
+  },
+): Promise<{ finalize?: BundleWithdrawFinalizePayload }> {
+  const pending = pendingWithdrawLegs(withdraw)
+  if (pending.length === 0) {
+    if (withdraw.release?.released) {
+      return {}
+    }
+    deps.onPhaseChange?.('bridging')
+    const finalize = await finalizeBundleWithdraw({
+      portfolio_id: withdraw.portfolio_id,
+      batch_id: withdraw.batch_id,
+    })
+    deps.onPhaseChange?.('completed')
+    return { finalize }
+  }
+
+  const total = pending.length
+  for (let i = 0; i < pending.length; i += 1) {
+    const leg = pending[i]!
+    const swapId = leg.swap_id!
+    deps.onLegProgress?.(i + 1, total, leg.asset)
+
+    const mapped = mapBundleSigningToExecute(leg.signing, swapId)
+    const exec = mapped ?? (await bundleLegPrepareSign(swapId))
+    deps.onPhaseChange?.('signing')
+    await deps.signAndSubmit(exec)
+    deps.onPhaseChange?.('submitting')
+    await deps.pollUntilTerminal(swapId)
+  }
+
+  deps.onPhaseChange?.('bridging')
+  const finalize = await finalizeBundleWithdraw({
+    portfolio_id: withdraw.portfolio_id,
+    batch_id: withdraw.batch_id,
+  })
+  deps.onPhaseChange?.('completed')
+  return { finalize }
+}
+
+export function useBundleLifiWithdraw(
+  swapMockMode = false,
+  entryAsset?: string,
+  onPhaseChange?: (phase: SwapExecutionPhase) => void,
+  onLegProgress?: (current: number, total: number, asset: string) => void,
+) {
+  const inFlightRef = useRef(false)
+  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
+    swapMockMode,
+    onPhaseChange,
+    entryAsset,
+    { submitTx: submitBundleLegTx },
+  )
+
+  const runFromWithdrawPayload = useCallback(
+    async (
+      withdraw: BundleWithdrawPayload,
+      sessionMeta?: Pick<
+        BundleWithdrawSession,
+        'portfolioId' | 'fullWithdraw' | 'withdrawAmount'
+      >,
+    ): Promise<BundleWithdrawRunResult> => {
+      if (sessionMeta) {
+        saveBundleWithdrawSession({
+          portfolioId: sessionMeta.portfolioId,
+          batchId: withdraw.batch_id,
+          fullWithdraw: sessionMeta.fullWithdraw,
+          withdrawAmount: sessionMeta.withdrawAmount,
+          withdraw,
+          savedAt: new Date().toISOString(),
+        })
+      }
+
+      const { finalize } = await executePendingSellLegs(withdraw, {
+        signAndSubmit,
+        pollUntilTerminal,
+        onLegProgress,
+        onPhaseChange,
+      })
+
+      clearBundleWithdrawSession(withdraw.portfolio_id)
+      return { withdraw, finalize }
+    },
+    [onLegProgress, onPhaseChange, pollUntilTerminal, signAndSubmit],
+  )
+
+  const runWithdraw = useCallback(
+    async (body: {
+      portfolio_id: string
+      withdraw_amount?: number
+      full_withdraw?: boolean
+    }): Promise<BundleWithdrawResult | BundleWithdrawRunResult> => {
+      if (inFlightRef.current) {
+        throw new Error('Un retrait est déjà en cours sur cet appareil.')
+      }
+      inFlightRef.current = true
+      try {
+        const outcome = await withdrawBundle(body)
+        if (outcome.kind === 'already_pending') {
+          return outcome
+        }
+
+        const withdraw = outcome.payload
+        if (withdraw.status === 'released' && withdraw.release?.released) {
+          clearBundleWithdrawSession(body.portfolio_id)
+          return { withdraw }
+        }
+
+        const pending = pendingWithdrawLegs(withdraw)
+        if (pending.length === 0 && withdraw.status !== 'ready_to_release') {
+          clearBundleWithdrawSession(body.portfolio_id)
+          return { withdraw }
+        }
+
+        const result = await runFromWithdrawPayload(withdraw, {
+          portfolioId: body.portfolio_id,
+          fullWithdraw: Boolean(body.full_withdraw),
+          withdrawAmount: body.full_withdraw ? null : (body.withdraw_amount ?? null),
+        })
+        return result
+      } finally {
+        inFlightRef.current = false
+      }
+    },
+    [runFromWithdrawPayload],
+  )
+
+  const resumeSession = useCallback(
+    async (session: BundleWithdrawSession): Promise<BundleWithdrawRunResult> => {
+      if (inFlightRef.current) {
+        throw new Error('Reprise déjà en cours.')
+      }
+      inFlightRef.current = true
+      try {
+        return await runFromWithdrawPayload(session.withdraw, {
+          portfolioId: session.portfolioId,
+          fullWithdraw: session.fullWithdraw,
+          withdrawAmount: session.withdrawAmount,
+        })
+      } finally {
+        inFlightRef.current = false
+      }
+    },
+    [runFromWithdrawPayload],
+  )
+
+  return { runWithdraw, resumeSession, inFlightRef }
+}

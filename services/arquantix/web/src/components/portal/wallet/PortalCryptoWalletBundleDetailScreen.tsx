@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeft, PieChart } from 'lucide-react'
 import {
   AppBalanceCardVariantB,
@@ -11,9 +11,11 @@ import {
 import {
   AppAccountSummaryRow,
 } from '@/components/design-system/app/AppAccountSummaryRow'
+import { AppButton } from '@/components/design-system/app/AppButton'
 import { AppMetricsList } from '@/components/design-system/app/AppMetricsList'
 import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
+import { PortalBundleWithdrawDialog } from '@/components/portal/bundles/PortalBundleWithdrawDialog'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
@@ -28,6 +30,7 @@ import {
   formatPerfPct,
   perfToneClass,
 } from '@/lib/portal/cryptoWalletFormat'
+import { splitBundleHoldings } from '@/lib/portal/bundleWithdrawFormat'
 import type { PortalBundlePosition, PortalCryptoWalletBundleDetailPayload } from '@/lib/portal/cryptoWalletTypes'
 import {
   PORTAL_ROUTES,
@@ -58,6 +61,7 @@ function bundlePositionValue(position: PortalBundlePosition): number {
 
 export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
   const id = portfolioId.trim()
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletBundleDetailPayload>({
       cacheKey: `portal:crypto-wallet:bundle:${id}`,
@@ -85,6 +89,13 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
       .filter((p) => p.positionType !== 'cash' || p.quantity > 0.001)
       .sort((a, b) => bundlePositionValue(b) - bundlePositionValue(a))
   }, [bundle?.positions])
+
+  const holdingsSplit = useMemo(
+    () => splitBundleHoldings(bundle?.positions),
+    [bundle?.positions],
+  )
+
+  const canWithdraw = holdingsSplit.totalWithdrawableEstimate > 0.001
 
   if (loading && !data) {
     return <PortalDashboardSkeleton />
@@ -149,6 +160,14 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
                 value={formatCryptoMoney(bundle.totalMarketValue ?? bundle.totalCostBasis, currency)}
               />
               <AppMetricsRow
+                label="Cash leg (USDC)"
+                value={formatCryptoMoney(holdingsSplit.cashLegQuantity, currency)}
+              />
+              <AppMetricsRow
+                label="Allocated assets"
+                value={formatCryptoMoney(holdingsSplit.spotNotional, currency)}
+              />
+              <AppMetricsRow
                 label="Total invested"
                 value={formatCryptoMoney(bundle.totalCostBasis, currency)}
               />
@@ -207,6 +226,24 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
           </PortalReveal>
         ) : null}
 
+        <PortalReveal index={3}>
+          <section className="flex w-full flex-col gap-3">
+            <AppSectionHeader title="Withdraw" />
+            <p className="m-0 font-ui text-[13px] text-v-fg-muted">
+              Transférez la valeur du bundle vers Mon Trading. Les fonds ne sont crédités qu’après
+              release comptable (RELEASED).
+            </p>
+            <AppButton
+              type="button"
+              variant="secondary"
+              disabled={!canWithdraw || refreshing}
+              onClick={() => setWithdrawOpen(true)}
+            >
+              Retirer vers Mon Trading
+            </AppButton>
+          </section>
+        </PortalReveal>
+
         <button
           type="button"
           disabled={refreshing}
@@ -215,6 +252,15 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
         >
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
+
+        <PortalBundleWithdrawDialog
+          portfolioId={id}
+          portfolioName={bundle.portfolioName}
+          positions={bundle.positions}
+          currency={currency}
+          open={withdrawOpen}
+          onOpenChange={setWithdrawOpen}
+        />
       </PortalDashboardLayout>
     </PortalPageContainer>
   )

@@ -79,6 +79,72 @@ export type BundleFinalizePayload = {
   invariant_g?: Record<string, unknown>
 }
 
+export type BundleWithdrawSellLeg = {
+  asset: string
+  instrument_id?: string
+  quantity_sold?: number
+  entry_asset_received?: number
+  status: string
+  swap_id?: string
+  leg_id?: string
+  signing?: Record<string, unknown> | null
+  error?: string
+}
+
+export type BundleWithdrawRelease = {
+  released?: boolean
+  amount?: number
+  reason?: string
+  release?: Record<string, unknown>
+}
+
+export type BundleWithdrawPayload = {
+  status: string
+  batch_id: string
+  portfolio_id: string
+  entry_asset: string
+  requested_release_amount: number
+  full_withdraw: boolean
+  cash_leg_before: number
+  needed_from_sells: number
+  sell_results: BundleWithdrawSellLeg[]
+  release?: BundleWithdrawRelease | null
+  execution_provider?: string
+}
+
+export type BundleWithdrawAlreadyPendingPayload = {
+  status: 'already_pending'
+  batch_id: string
+  lock_status?: string
+  message: string
+}
+
+export type BundleWithdrawActiveLockPayload = {
+  status: 'none' | 'active'
+  lock?: {
+    batch_id: string
+    status: string
+    withdraw_phase?: string
+    portfolio_id?: string
+    entry_instrument_id?: string
+    entry_asset?: string
+    requested_release_amount?: string
+    full_withdraw?: boolean
+  }
+}
+
+export type BundleWithdrawFinalizePayload = {
+  batch_id: string
+  released?: boolean
+  amount?: number
+  reason?: string
+  release?: Record<string, unknown>
+}
+
+export type BundleWithdrawResult =
+  | { kind: 'success'; payload: BundleWithdrawPayload }
+  | { kind: 'already_pending'; payload: BundleWithdrawAlreadyPendingPayload }
+
 async function parseJson<T>(res: Response): Promise<T> {
   const data = (await res.json()) as T & { detail?: string | { message?: string } }
   if (!res.ok) {
@@ -186,6 +252,56 @@ export async function finalizeBundleBatch(body: {
   return parseJson(res)
 }
 
+export async function withdrawBundle(body: {
+  portfolio_id: string
+  withdraw_amount?: number
+  full_withdraw?: boolean
+}): Promise<BundleWithdrawResult> {
+  const res = await fetch('/api/portal/bundles/withdraw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = (await res.json()) as BundleWithdrawPayload &
+    BundleWithdrawAlreadyPendingPayload & { detail?: string }
+  if (res.status === 409 && data.status === 'already_pending') {
+    return { kind: 'already_pending', payload: data as BundleWithdrawAlreadyPendingPayload }
+  }
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error('Session expirée — reconnectez-vous pour continuer.')
+    }
+    const message =
+      (typeof data.detail === 'string' ? data.detail : null) ||
+      data.message ||
+      'Requête retrait impossible'
+    throw new Error(message)
+  }
+  return { kind: 'success', payload: data as BundleWithdrawPayload }
+}
+
+export async function fetchActiveBundleWithdrawLock(
+  portfolioId: string,
+): Promise<BundleWithdrawActiveLockPayload> {
+  const res = await fetch(
+    `/api/portal/bundles/withdraw/active-lock?portfolio_id=${encodeURIComponent(portfolioId)}`,
+    { cache: 'no-store' },
+  )
+  return parseJson(res)
+}
+
+export async function finalizeBundleWithdraw(body: {
+  portfolio_id: string
+  batch_id: string
+}): Promise<BundleWithdrawFinalizePayload> {
+  const res = await fetch('/api/portal/bundles/withdraw/finalize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return parseJson(res)
+}
+
 export function mapBundleSigningToExecute(
   signing: Record<string, unknown> | null | undefined,
   swapId: string,
@@ -209,6 +325,12 @@ export function mapBundleSigningToExecute(
 
 export function pendingBundleLegs(invest: BundleInvestPayload): BundleAllocationLeg[] {
   return (invest.allocation_details ?? []).filter(
+    (leg) => leg.status === 'pending' && Boolean(leg.swap_id),
+  )
+}
+
+export function pendingWithdrawLegs(withdraw: BundleWithdrawPayload): BundleWithdrawSellLeg[] {
+  return (withdraw.sell_results ?? []).filter(
     (leg) => leg.status === 'pending' && Boolean(leg.swap_id),
   )
 }

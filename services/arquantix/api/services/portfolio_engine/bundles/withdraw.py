@@ -555,6 +555,7 @@ class BundleWithdrawOrchestrator:
                 "status": "pending",
                 "swap_id": result.provider_order_id,
                 "leg_id": ext_ref,
+                "signing": result.raw.get("prepare") if isinstance(result.raw, dict) else None,
             }
             return {"status": "pending", "record": record}
 

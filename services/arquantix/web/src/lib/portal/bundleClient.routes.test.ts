@@ -7,6 +7,9 @@ import { submitBundleLegTx } from '@/lib/portal/bundleClient'
 test('bundleClient uses portal bundle BFF routes (not generic swap submit)', () => {
   const clientSrc = readFileSync(new URL('./bundleClient.ts', import.meta.url), 'utf8')
   assert.match(clientSrc, /\/api\/portal\/bundles\/invest/)
+  assert.match(clientSrc, /\/api\/portal\/bundles\/withdraw/)
+  assert.match(clientSrc, /\/api\/portal\/bundles\/withdraw\/finalize/)
+  assert.match(clientSrc, /\/api\/portal\/bundles\/withdraw\/active-lock/)
   assert.match(clientSrc, /\/api\/portal\/bundles\/leg\//)
   assert.match(clientSrc, /\/api\/portal\/bundles\/batch\/finalize/)
   assert.doesNotMatch(clientSrc, /\/api\/portal\/swaps\/.*submit/)
@@ -17,6 +20,14 @@ test('bundleClient uses portal bundle BFF routes (not generic swap submit)', () 
   )
   assert.match(hookSrc, /submitBundleLegTx/)
   assert.doesNotMatch(hookSrc, /submitSwapTx/)
+
+  const withdrawHookSrc = readFileSync(
+    new URL('../../components/portal/bundles/useBundleLifiWithdraw.ts', import.meta.url),
+    'utf8',
+  )
+  assert.match(withdrawHookSrc, /finalizeBundleWithdraw/)
+  assert.match(withdrawHookSrc, /withdrawBundle/)
+  assert.match(withdrawHookSrc, /submitBundleLegTx/)
 })
 
 test('submitBundleLegTx targets bundle leg submit-tx route', async () => {

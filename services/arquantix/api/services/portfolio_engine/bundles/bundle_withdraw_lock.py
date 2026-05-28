@@ -213,3 +213,25 @@ def _write_lock(portfolio: Portfolio, lock: dict[str, Any]) -> None:
     meta = deepcopy(portfolio.metadata_) if isinstance(portfolio.metadata_, dict) else {}
     meta[BUNDLE_WITHDRAW_LOCK_KEY] = lock
     portfolio.metadata_ = meta
+
+
+def get_active_withdraw_lock_for_portfolio(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> Optional[dict[str, Any]]:
+    portfolio = (
+        db.query(Portfolio)
+        .filter(
+            Portfolio.id == portfolio_id,
+            Portfolio.client_id == client_id,
+        )
+        .first()
+    )
+    if portfolio is None:
+        return None
+    lock = get_withdraw_lock(portfolio.metadata_)
+    if lock is None:
+        return None
+    return dict(lock)
