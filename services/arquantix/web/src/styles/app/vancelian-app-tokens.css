@@ -242,4 +242,48 @@
   text-transform: uppercase;
   color: var(--v-fg-light);}
 
+/* Amount typography — see colors_and_type.css .v-amount-* */
+.v-amount-hero {
+  font-family: var(--v-font-display);
+  font-weight: 300;
+  font-size: clamp(56px, 6vw, 80px);
+  line-height: 1.0;
+  letter-spacing: -0.015em;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-amount-lg {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.0;
+  letter-spacing: -0.015em;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-amount-md {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.2;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-amount-sm {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+
 }

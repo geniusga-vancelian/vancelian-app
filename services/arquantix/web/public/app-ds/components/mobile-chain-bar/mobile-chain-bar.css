@@ -1,0 +1,8 @@
+.mchain { display: none; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 960px) {
+  .mchain { display: flex; }
+  .mchain .topnav__pill {
+    flex: 1 1 0; min-width: 0; justify-content: center;
+    height: 40px; background: #FFFFFF; border: 1px solid var(--v-fg-10);
+  }
+}

@@ -479,6 +479,54 @@ html, body {
 }
 
 /* ======================================================================
+   AMOUNT TYPOGRAPHY — sémantique montants (webapp produit)
+   Newsreader uniquement sur .v-amount-hero (exception bilan).
+   Tous les autres montants : Inter SemiBold + tabular-nums.
+   ====================================================================== */
+.v-amount-hero {
+  font-family: var(--v-font-display);
+  font-weight: 300;
+  font-size: clamp(56px, 6vw, 80px);
+  line-height: 1.0;
+  letter-spacing: -0.015em;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-amount-lg {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.0;
+  letter-spacing: -0.015em;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-amount-md {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.2;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-amount-sm {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--v-fg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+.v-tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+
+/* ======================================================================
    COMPONENT PRIMITIVES — promoted from preview/ to DS global
    ----------------------------------------------------------------------
    Each primitive is the canonical implementation. Component files MAY

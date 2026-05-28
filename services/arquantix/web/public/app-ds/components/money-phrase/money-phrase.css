@@ -1,0 +1,16 @@
+/* Signature éditoriale — usage strict revenu quotidien / phrase patrimoniale */
+.money-phrase {
+  font-family: var(--v-font-editorial);
+  font-weight: 300;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--v-fg-body);
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+.money-phrase__amount {
+  font-weight: 500;
+  color: var(--v-green);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on;
+}

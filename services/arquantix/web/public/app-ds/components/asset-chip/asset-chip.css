@@ -1,0 +1,37 @@
+.achip {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--v-white);
+  border: 1px solid var(--v-fg-10);
+  border-radius: var(--v-radius-pill);
+  padding: 6px 16px 6px 6px;
+  cursor: pointer;
+  transition: background var(--v-motion-fast) var(--v-ease-out),
+              border-color var(--v-motion-fast) var(--v-ease-out);
+  font-family: var(--v-font-ui);
+}
+.achip:hover { background: var(--v-fg-05); border-color: var(--v-fg-20); }
+.achip__body {
+  display: flex; flex-direction: column; gap: 0;
+  line-height: 1.15;
+  text-align: left;
+}
+.achip__name {
+  font-family: var(--v-font-ui); font-weight: 500; font-size: 14px;
+  color: var(--v-fg);
+}
+.achip__sub {
+  font-family: var(--v-font-ui); font-weight: 400; font-size: 12px;
+  color: var(--v-fg-light);
+}
+.achip__chv {
+  color: var(--v-fg-muted);
+  margin-left: 4px;
+}
+.achip--pop { animation: chipPop 500ms var(--v-ease-out); }
+@keyframes chipPop {
+  0%   { transform: scale(0.94); }
+  40%  { transform: scale(1.04); }
+  100% { transform: scale(1.00); }
+}

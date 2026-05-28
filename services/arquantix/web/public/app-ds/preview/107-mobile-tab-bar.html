@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/components/icon/icon.css"/>
+<link rel="stylesheet" href="/app-ds/components/mobile-tab-bar/mobile-tab-bar.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+.mtab{display:grid!important;max-width:420px;border-radius:var(--v-radius-lg);overflow:hidden;}
+</style></head><body><div class="stage"><p class="lbl">Mobile tab bar · 5 onglets</p>
+<nav class="mtab" aria-label="Navigation mobile">
+  <a class="mtab__item is-active" href="#"><span class="mtab__ic"><span class="ic" style="width:22px;height:22px;-webkit-mask-image:url('/icons/kalai/home-1.svg');mask-image:url('/icons/kalai/home-1.svg');"></span></span><span class="mtab__lbl">Portefeuille</span></a>
+  <a class="mtab__item" href="#"><span class="mtab__ic"><span class="ic" style="width:22px;height:22px;-webkit-mask-image:url('/icons/kalai/graph.svg');mask-image:url('/icons/kalai/graph.svg');"></span></span><span class="mtab__lbl">Marchés</span></a>
+  <a class="mtab__item" href="#"><span class="mtab__ic"><span class="ic" style="width:22px;height:22px;-webkit-mask-image:url('/icons/kalai/bookmark.svg');mask-image:url('/icons/kalai/bookmark.svg');"></span></span><span class="mtab__lbl">Académie</span></a>
+  <a class="mtab__item" href="#"><span class="mtab__ic"><span class="ic" style="width:22px;height:22px;-webkit-mask-image:url('/icons/kalai/exchange.svg');mask-image:url('/icons/kalai/exchange.svg');"></span></span><span class="mtab__lbl">Échanger</span></a>
+  <a class="mtab__item" href="#"><span class="mtab__ic"><span class="mtab__avt">GM</span></span><span class="mtab__lbl">Profil</span></a>
+</nav>
+</div></body></html>

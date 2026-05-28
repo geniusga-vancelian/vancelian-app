@@ -1,0 +1,51 @@
+.perf-chart__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; margin-bottom: 16px;
+}
+.perf-chart__title {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-weight: 600; font-size: 17px;
+  color: var(--v-fg);
+}
+.perf-chart__now {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  font-family: var(--v-font-ui); font-size: 14px;
+}
+.perf-chart__now-k { color: var(--v-fg-muted); font-weight: 500; }
+.perf-chart__now-v { font-weight: 600; font-variant-numeric: tabular-nums; }
+.perf-chart__svg {
+  display: block; width: 100%; height: 200px;
+  border-radius: var(--v-radius-md);
+}
+.perf-chart__xaxis {
+  display: flex; justify-content: space-between;
+  margin-top: 8px;
+  font-family: var(--v-font-ui); font-size: 11px;
+  color: var(--v-fg-light);
+}
+.perf-tabs {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 16px;
+}
+.perf-tabs__tab {
+  height: 32px; padding: 0 12px;
+  border: 1px solid var(--v-fg-10);
+  border-radius: var(--v-radius-pill);
+  background: var(--v-white);
+  font-family: var(--v-font-ui);
+  font-size: 13px; font-weight: 500;
+  color: var(--v-fg-muted);
+  cursor: pointer;
+  transition: background var(--v-motion-fast) var(--v-ease-out),
+              color var(--v-motion-fast) var(--v-ease-out),
+              border-color var(--v-motion-fast) var(--v-ease-out);
+}
+.perf-tabs__tab:hover { background: var(--v-fg-05); color: var(--v-fg); }
+.perf-tabs__tab.is-active {
+  background: var(--v-fg); color: #FFFFFF; border-color: var(--v-fg);
+}
+.perf-tabs__tab:focus-visible {
+  outline: 2px solid var(--v-terracotta);
+  outline-offset: 2px;
+}

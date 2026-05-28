@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/components/icon/icon.css"/>
+<link rel="stylesheet" href="/app-ds/components/app-topnav/app-topnav.css,mobile-chain-bar/mobile-chain-bar.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+.mchain{display:flex!important;max-width:420px;}
+</style></head><body><div class="stage"><p class="lbl">Mobile chain bar · wallet + réseau</p>
+<div class="mchain">
+  <button type="button" class="topnav__pill">
+    <span class="ic" style="width:16px;height:16px;-webkit-mask-image:url('/icons/kalai/wallet.svg');mask-image:url('/icons/kalai/wallet.svg');"></span>
+    Wallet principal
+    <span class="ic ic--chv" style="width:12px;height:12px;-webkit-mask-image:url('/icons/kalai/chevron-down.svg');mask-image:url('/icons/kalai/chevron-down.svg');"></span>
+  </button>
+  <button type="button" class="topnav__pill">
+    <span class="net-dot net-dot--base net-dot--lg"></span>
+    Base
+    <span class="ic ic--chv" style="width:12px;height:12px;-webkit-mask-image:url('/icons/kalai/chevron-down.svg');mask-image:url('/icons/kalai/chevron-down.svg');"></span>
+  </button>
+</div>
+</div></body></html>
