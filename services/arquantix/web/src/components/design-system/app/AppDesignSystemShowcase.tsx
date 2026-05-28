@@ -10,9 +10,10 @@ import { AppDsShowcaseSection } from './AppDsShowcaseSection'
 const TOC_GROUPS: { head: string; sectionIds: string[] }[] = [
   { head: 'Foundations', sectionIds: ['brand', 'colors', 'type', 'spacing'] },
   { head: 'Components', sectionIds: ['simple', 'ui', 'cards', 'misc'] },
+  { head: 'App product', sectionIds: ['app-primitives', 'app-shell', 'app-patterns'] },
 ]
 
-/** Showcase complet — calqué sur `ui_kits/vancelian-app/index.html` v2.1. */
+/** Showcase complet — handoff App Vancelian + Webapp3 (mai 2026). */
 export function AppDesignSystemShowcase() {
   return (
     <div className="app-ds-page">
@@ -27,10 +28,9 @@ export function AppDesignSystemShowcase() {
           />
           <h1 className="app-ds-ph__title">App design system</h1>
           <p className="app-ds-ph__sub">
-            Mini-Storybook · chaque composant chargé depuis le handoff{' '}
-            <code className="font-ui text-v-fg-muted">App Vancelian.zip</code> (
-            <code className="font-ui text-v-fg-muted">/app-ds/preview</code>). Aligné pixel
-            avec la dernière version du zip.
+            Mini-Storybook · composants chargés depuis{' '}
+            <code className="font-ui text-v-fg-muted">/app-ds/preview</code> (handoff App
+            Vancelian + Webapp3). Fondations · composants atomiques · shell & patterns produit.
           </p>
         </div>
         <div className="app-ds-ph__meta">
@@ -67,7 +67,7 @@ export function AppDesignSystemShowcase() {
       ))}
 
       <footer className="app-ds-footer">
-        <div>Vancelian · App design system · v2.2</div>
+        <div>Vancelian · App design system · v2.3</div>
         <div>Aman · Hermès · Cereal</div>
       </footer>
     </div>
