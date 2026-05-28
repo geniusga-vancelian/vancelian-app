@@ -250,7 +250,7 @@ export async function resumeBundleInvest(portfolioId: string): Promise<BundleInv
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ portfolio_id: portfolioId }),
   })
-  const data = (await res.json()) as BundleInvestPayload & { detail?: string }
+  const data = (await res.json()) as BundleInvestPayload & { detail?: string; message?: string }
   if (!res.ok) {
     throw new Error(
       (typeof data.detail === 'string' ? data.detail : null) ||
@@ -277,7 +277,7 @@ export async function executeBundleRebalance(portfolioId: string): Promise<Bundl
     headers: { 'Content-Type': 'application/json' },
     body: '{}',
   })
-  const data = (await res.json()) as BundleRebalancePayload & { detail?: string }
+  const data = (await res.json()) as BundleRebalancePayload & { detail?: string; message?: string }
   if (!res.ok) {
     throw new Error(
       (typeof data.detail === 'string' ? data.detail : null) ||
