@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react'
 import type { ConnectedWallet, User } from '@privy-io/react-auth'
-import { useAuthorizationSignature, useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useAuthorizationSignature, useCreateWallet } from '@privy-io/react-auth'
 import { useAccount, useSendTransaction as useWagmiSendTransaction, useSwitchChain } from 'wagmi'
 
 import { getPrivyAppId } from '@/lib/portal/privyConfig'
@@ -14,6 +14,7 @@ import { resolvePortalSwapSigningWallet } from '@/lib/portal/resolvePortalSwapSi
 import { resolvePrivyEmbeddedWalletId } from '@/lib/portal/resolvePrivyEmbeddedWalletId'
 import { sendPortalPrivySponsoredTransaction } from '@/lib/portal/privySponsoredTxClient'
 import { normalizeTxHash } from '@/lib/portal/swapTxFormat'
+import { usePrivyLiveSession } from '@/lib/portal/usePrivyLiveSession'
 import type { ExecutionWallet } from '@/lib/wallet/executionWalletTypes'
 import {
   generateMockExternalWalletTxHash,
@@ -59,9 +60,8 @@ function isAlreadyOnTargetChainError(error: unknown): boolean {
 }
 
 export function usePortalTxSigner() {
-  const { ready, authenticated, user } = usePrivy()
+  const privyLive = usePrivyLiveSession()
   const { generateAuthorizationSignature } = useAuthorizationSignature()
-  const { wallets } = useWallets()
   const { createWallet } = useCreateWallet()
   const { sendTransactionAsync: sendWagmiTransaction } = useWagmiSendTransaction()
   const { switchChainAsync } = useSwitchChain()
@@ -82,11 +82,12 @@ export function usePortalTxSigner() {
         )
       }
 
+      const session = privyLive.current
       const privyWallet = await resolvePortalSwapSigningWallet({
-        ready,
-        authenticated,
-        user,
-        wallets,
+        ready: session.ready,
+        authenticated: session.authenticated,
+        user: session.user,
+        wallets: session.wallets,
         expectedAddress: options?.expectedAddress,
         createWallet: async () => {
           const created = await createWallet()
@@ -98,13 +99,13 @@ export function usePortalTxSigner() {
         type: 'privy_embedded',
         address: privyWallet.address,
         privyWalletId: resolvePrivyEmbeddedWalletId({
-          user,
-          wallets,
+          user: privyLive.current.user,
+          wallets: privyLive.current.wallets,
           walletAddress: privyWallet.address,
         }),
       }
     },
-    [authenticated, createWallet, mode, ready, resolveExecutionWallet, user, wallets],
+    [createWallet, mode, privyLive, resolveExecutionWallet],
   )
 
   const switchToChain = useCallback(
@@ -120,6 +121,7 @@ export function usePortalTxSigner() {
         return
       }
 
+      const wallets = privyLive.current.wallets
       const connected = wallets.find(
         (row) => row.address.toLowerCase() === wallet.address.toLowerCase(),
       ) as ConnectedWallet | undefined
@@ -135,7 +137,7 @@ export function usePortalTxSigner() {
         }
       }
     },
-    [switchChainAsync, wallets],
+    [privyLive, switchChainAsync],
   )
 
   const sendExternalWalletTransaction = useCallback(

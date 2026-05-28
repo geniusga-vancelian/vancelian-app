@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
+import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import { useBundleLifiInvest } from '@/components/portal/bundles/useBundleLifiInvest'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,6 +40,7 @@ import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
+import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 
 const PILOT_ENTRY_ASSETS = ['USDC', 'EURC'] as const
 
@@ -51,6 +53,8 @@ type Props = {
 type Step = 'form' | 'preview' | 'executing' | 'done' | 'error' | 'blocked'
 
 export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) {
+  const { privyReady } = usePortalAuthPrivy()
+  const privyReadyRef = useRef(privyReady)
   const [step, setStep] = useState<Step>('form')
   const [fundingAsset, setFundingAsset] = useState<string>(bundle.entryAssetDefault ?? 'USDC')
   const [amount, setAmount] = useState('')
@@ -100,6 +104,10 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
   )
 
   const portfolioReady = Boolean(bundle.portfolioId?.trim())
+
+  useEffect(() => {
+    privyReadyRef.current = privyReady
+  }, [privyReady])
 
   const refreshLockState = useCallback(async () => {
     if (!portfolioReady) return
@@ -190,6 +198,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
     setExecutionPhase('preparing')
     submitGuardRef.current = true
     try {
+      await waitForPrivyClientReady(() => privyReadyRef.current, { timeoutMs: 30_000 })
       await runner()
       invalidatePortalCache('portal:markets')
       invalidatePortalCache('portal:crypto-wallet')
@@ -242,6 +251,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
 
   const investDisabled =
     !portfolioReady ||
+    !privyReady ||
     previewLoading ||
     batchInProgress ||
     inFlightRef.current ||
@@ -278,6 +288,11 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
             {!portfolioReady ? (
               <p className="m-0 font-ui text-[13px] text-v-error">
                 Ce bundle n’est pas encore provisionné sur votre compte. Rechargez la page Marchés.
+              </p>
+            ) : null}
+            {!privyReady ? (
+              <p className="m-0 font-ui text-[13px] text-v-fg-muted">
+                Initialisation du wallet Privy…
               </p>
             ) : null}
             {resumeSession ? (
