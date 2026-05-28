@@ -358,3 +358,124 @@ def fund_bundle_cash_leg_from_self_trading(
         "cash_leg_atom_id": str(cash_atom.id),
         "privy_ledger_touched": False,
     }
+
+
+def _cost_basis_for_cash_leg_debit(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    instrument_id: UUID,
+    quantity: Decimal,
+) -> Decimal:
+    cash = (
+        db.query(PositionAtom)
+        .filter(
+            PositionAtom.portfolio_id == portfolio_id,
+            PositionAtom.instrument_id == instrument_id,
+            PositionAtom.position_type == PositionType.CASH,
+            PositionAtom.status == "open",
+        )
+        .first()
+    )
+    if cash is None:
+        entry_asset = _asset_symbol_for_instrument(db, instrument_id)
+        return reference_cost_basis_eur(db, entry_asset, quantity)
+
+    cash_qty = Decimal(str(cash.quantity or 0))
+    cash_cost = Decimal(str(cash.cost_basis or 0))
+    if cash_qty <= 0 or cash_cost <= 0:
+        entry_asset = _asset_symbol_for_instrument(db, instrument_id)
+        return reference_cost_basis_eur(db, entry_asset, quantity)
+
+    ratio = min(Decimal("1"), quantity / cash_qty)
+    return (cash_cost * ratio).quantize(Decimal("0.01"))
+
+
+def resolve_bundle_cash_leg_available(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    entry_instrument_id: UUID,
+) -> Decimal:
+    cash = (
+        db.query(PositionAtom)
+        .filter(
+            PositionAtom.portfolio_id == portfolio_id,
+            PositionAtom.instrument_id == entry_instrument_id,
+            PositionAtom.position_type == PositionType.CASH,
+            PositionAtom.status == "open",
+        )
+        .first()
+    )
+    if cash is None:
+        return Decimal("0")
+    return Decimal(str(cash.quantity or 0))
+
+
+def release_bundle_cash_leg_to_self_trading(
+    db: Session,
+    *,
+    client_id: UUID,
+    person_id: UUID | None,
+    portfolio_id: UUID,
+    entry_asset: str,
+    entry_instrument_id: UUID,
+    amount: Decimal,
+    batch_id: str,
+) -> dict:
+    """Étape finale retrait : cash leg bundle → self-trading, Privy inchangé."""
+    from services.portfolio_engine.bundles.orchestrator import BundleOrchestrator
+
+    if amount <= 0:
+        raise BundleFundingError("bundle.release.invalid_amount", "Montant de release invalide")
+
+    available = resolve_bundle_cash_leg_available(
+        db,
+        portfolio_id=portfolio_id,
+        entry_instrument_id=entry_instrument_id,
+    )
+    if available + TOLERANCE < amount:
+        raise BundleFundingError(
+            "bundle.release.insufficient_cash_leg",
+            f"Cash leg {entry_asset} insuffisant ({available} < {amount})",
+        )
+
+    cost_basis = _cost_basis_for_cash_leg_debit(
+        db,
+        portfolio_id=portfolio_id,
+        instrument_id=entry_instrument_id,
+        quantity=amount,
+    )
+    BundleOrchestrator._debit_cash_leg(
+        db,
+        portfolio_id,
+        entry_instrument_id,
+        amount,
+        cost_basis,
+    )
+    direct_pf = ensure_direct_portfolio(db, client_id)
+    sync_direct_atom(
+        db,
+        direct_pf.id,
+        entry_instrument_id,
+        amount,
+        cost_basis,
+    )
+
+    logger.info(
+        "bundle_funding.released batch=%s client=%s portfolio=%s amount=%s %s cost_basis=%s",
+        batch_id,
+        client_id,
+        portfolio_id,
+        amount,
+        entry_asset,
+        cost_basis,
+    )
+    return {
+        "action": "release_cash_leg_to_self_trading",
+        "batch_id": batch_id,
+        "entry_asset": entry_asset.upper(),
+        "amount": float(amount),
+        "cost_basis_eur": float(cost_basis),
+        "privy_ledger_touched": False,
+    }

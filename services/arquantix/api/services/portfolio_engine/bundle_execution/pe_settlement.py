@@ -108,6 +108,55 @@ def apply_rebalance_buy_atoms(
     )
 
 
+def apply_withdraw_sell_atoms(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    instrument_id: UUID,
+    entry_instrument_id: UUID,
+    sell_qty: Decimal,
+    entry_received: Decimal,
+    cost_basis_eur: Decimal,
+) -> None:
+    """Vente bundle confirmée : spot → cash leg (+ settlement Privy en amont)."""
+    apply_rebalance_sell_atoms(
+        db,
+        portfolio_id=portfolio_id,
+        instrument_id=instrument_id,
+        entry_instrument_id=entry_instrument_id,
+        sell_qty=sell_qty,
+        entry_received=entry_received,
+        cost_basis_eur=cost_basis_eur,
+    )
+
+
+def apply_withdraw_release_atoms(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    entry_instrument_id: UUID,
+    entry_asset: str,
+    amount: Decimal,
+    batch_id: str,
+) -> None:
+    """Release comptable cash leg → direct_portfolio (Privy inchangé)."""
+    from services.portfolio_engine.bundle_execution.bundle_funding import (
+        release_bundle_cash_leg_to_self_trading,
+    )
+
+    release_bundle_cash_leg_to_self_trading(
+        db,
+        client_id=client_id,
+        person_id=None,
+        portfolio_id=portfolio_id,
+        entry_asset=entry_asset,
+        entry_instrument_id=entry_instrument_id,
+        amount=amount,
+        batch_id=batch_id,
+    )
+
+
 def credit_initial_cash_leg(
     db: Session,
     *,

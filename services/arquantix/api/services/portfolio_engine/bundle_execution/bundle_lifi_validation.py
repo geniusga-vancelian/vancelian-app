@@ -13,6 +13,7 @@ from .lifi_base_config import (
     is_bundle_lifi_asset,
     normalize_bundle_asset,
     resolve_bundle_base_token,
+    validate_bundle_exit_leg_assets,
     validate_bundle_leg_assets,
 )
 
@@ -32,6 +33,7 @@ def validate_bundle_lifi_leg(
     to_asset: str,
     amount_from: Decimal,
     chain: str | None = None,
+    leg_action: str | None = None,
 ) -> None:
     chain_key = (chain or BUNDLE_LIFI_CHAIN_KEY).strip().lower()
     if chain_key != BUNDLE_LIFI_CHAIN_KEY:
@@ -40,7 +42,10 @@ def validate_bundle_lifi_leg(
             f"Bundles LI.FI limités à Base (reçu: {chain_key})",
         )
     try:
-        validate_bundle_leg_assets(from_asset, to_asset)
+        if leg_action in ("withdraw_sell", "rebalance_sell"):
+            validate_bundle_exit_leg_assets(from_asset, to_asset)
+        else:
+            validate_bundle_leg_assets(from_asset, to_asset)
     except ValueError as exc:
         raise BundleLifiValidationError("bundle.lifi.asset", str(exc)) from exc
 

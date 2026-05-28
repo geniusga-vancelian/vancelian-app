@@ -437,6 +437,22 @@ def sync_bundle_leg_from_swap(
     bundle_id = str((ctx or {}).get("portfolio_id") or getattr(leg, "portfolio_id", ""))
     leg_id = str((ctx or {}).get("leg_id") or getattr(leg, "leg_id", ""))
     asset = str(getattr(swap, "to_asset", "") or "")
+    bundle_action = str(getattr(leg, "bundle_action", "") or (ctx or {}).get("bundle_action") or "")
+
+    if bundle_action == "withdraw":
+        from .bundle_withdraw_intent_sync import register_bundle_withdraw_leg
+
+        register_bundle_withdraw_leg(
+            db,
+            person_id=person_id,
+            bundle_id=bundle_id,
+            batch_id=str(batch_id),
+            leg_id=leg_id,
+            swap_id=str(swap.id),
+            asset=asset,
+        )
+        return
+
     register_bundle_leg(
         db,
         person_id=person_id,

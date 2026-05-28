@@ -17,6 +17,11 @@ BUNDLE_LIFI_SOURCE_ASSETS: frozenset[str] = frozenset({"USDC", "EURC", "CBETH"})
 BUNDLE_LIFI_DESTINATION_ASSETS: frozenset[str] = frozenset({
     "USDC", "EURC", "CBETH", "CBBTC", "LINK", "AAVE", "UNI",
 })
+# Ventes bundle (spot → entry) — miroir des allocations.
+BUNDLE_LIFI_EXIT_SOURCE_ASSETS: frozenset[str] = frozenset({
+    "CBBTC", "CBETH", "LINK", "AAVE", "UNI",
+})
+BUNDLE_LIFI_EXIT_DESTINATION_ASSETS: frozenset[str] = frozenset({"USDC", "EURC"})
 
 # Coinbase Wrapped BTC on Base mainnet (canonical).
 CBBTC_BASE_ADDRESS = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"
@@ -153,3 +158,15 @@ def validate_bundle_leg_assets(from_asset: str, to_asset: str) -> None:
         raise ValueError(f"source_not_allowed:{from_sym}")
     if to_sym not in BUNDLE_LIFI_DESTINATION_ASSETS:
         raise ValueError(f"destination_not_allowed:{to_sym}")
+
+
+def validate_bundle_exit_leg_assets(from_asset: str, to_asset: str) -> None:
+    """Validation legs de sortie bundle : spot → entry (USDC/EURC)."""
+    from_sym = normalize_bundle_asset(from_asset)
+    to_sym = normalize_bundle_asset(to_asset)
+    if from_sym == to_sym:
+        raise ValueError("same_asset")
+    if from_sym not in BUNDLE_LIFI_EXIT_SOURCE_ASSETS:
+        raise ValueError(f"exit_source_not_allowed:{from_sym}")
+    if to_sym not in BUNDLE_LIFI_EXIT_DESTINATION_ASSETS:
+        raise ValueError(f"exit_destination_not_allowed:{to_sym}")

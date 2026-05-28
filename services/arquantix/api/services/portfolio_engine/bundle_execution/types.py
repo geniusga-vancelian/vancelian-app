@@ -11,6 +11,7 @@ ExecutionAction = Literal[
     "allocation",
     "rebalance_sell",
     "rebalance_buy",
+    "withdraw_sell",
 ]
 
 ExecutionStatus = Literal["completed", "partial", "failed", "pending"]

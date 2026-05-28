@@ -1996,6 +1996,103 @@ def mobile_bundle_invest_preview(
     )
 
 
+@bootstrap_router.post("/bundle/withdraw")
+def mobile_bundle_withdraw(
+    payload: dict,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Retrait bundle — unwind spot → cash leg puis release vers self-trading.
+
+    Payload::
+
+        {
+            "portfolio_id": "uuid",
+            "withdraw_amount": 50.0,
+            "full_withdraw": false
+        }
+    """
+    from decimal import Decimal as _Dec
+    from services.portfolio_engine.bundles.withdraw import (
+        BundleWithdrawOrchestrator,
+        BundleWithdrawOrchestratorError,
+    )
+    from services.portfolio_engine.bundles.bundle_withdraw_lock import (
+        BundleWithdrawAlreadyPendingError,
+    )
+
+    portfolio_id = payload.get("portfolio_id")
+    withdraw_amount = payload.get("withdraw_amount")
+    full_withdraw = payload.get("full_withdraw") is True
+
+    if not portfolio_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="portfolio_id is required",
+        )
+    if not full_withdraw and not withdraw_amount:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="withdraw_amount is required unless full_withdraw=true",
+        )
+
+    try:
+        from uuid import UUID as _UUID
+        pid = _UUID(str(portfolio_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    orchestrator = BundleWithdrawOrchestrator()
+    try:
+        result = orchestrator.withdraw_from_bundle(
+            db,
+            client_id=client.id,
+            portfolio_id=pid,
+            withdraw_amount=_Dec(str(withdraw_amount)) if withdraw_amount is not None else None,
+            full_withdraw=full_withdraw,
+        )
+        db.commit()
+        return result
+    except BundleWithdrawAlreadyPendingError as exc:
+        db.rollback()
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.to_response())
+    except BundleWithdrawOrchestratorError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@bootstrap_router.post("/bundle/withdraw/finalize")
+def mobile_bundle_withdraw_finalize(
+    payload: dict,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Finalise un batch retrait après confirmation des legs Li.FI."""
+    from services.portfolio_engine.bundles.withdraw import BundleWithdrawOrchestrator
+
+    portfolio_id = payload.get("portfolio_id")
+    batch_id = payload.get("batch_id")
+    if not portfolio_id or not batch_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="portfolio_id and batch_id are required",
+        )
+    try:
+        from uuid import UUID as _UUID
+        pid = _UUID(str(portfolio_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    orchestrator = BundleWithdrawOrchestrator()
+    result = orchestrator.finalize_withdraw_batch(
+        db,
+        client_id=client.id,
+        portfolio_id=pid,
+        batch_id=str(batch_id),
+    )
+    db.commit()
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Direct Portfolio Overlay: backfill + invariant F + scoped positions
 # ---------------------------------------------------------------------------

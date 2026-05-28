@@ -26,6 +26,7 @@ from .pe_settlement import (
     apply_allocation_leg_atoms,
     apply_rebalance_buy_atoms,
     apply_rebalance_sell_atoms,
+    apply_withdraw_sell_atoms,
     swap_confirmed,
 )
 from .types import ExecutionLeg, ExecutionQuote, ExecutionResult
@@ -81,6 +82,7 @@ class BundleLifiLegService:
             to_asset=to_sym,
             amount_from=leg.amount_from,
             chain=leg.chain or BUNDLE_LIFI_CHAIN_KEY,
+            leg_action=leg.action,
         )
         person_id = self._person_id_for_client(db, leg.client_id)
         quote = self._quote.create_bundle_quote(
@@ -115,6 +117,7 @@ class BundleLifiLegService:
             to_asset=to_sym,
             amount_from=leg.amount_from,
             chain=leg.chain or BUNDLE_LIFI_CHAIN_KEY,
+            leg_action=leg.action,
         )
         person_id = self._person_id_for_client(db, leg.client_id)
 
@@ -130,8 +133,6 @@ class BundleLifiLegService:
             raise BundleLifiValidationError("bundle.lifi.swap_missing", "Swap introuvable après quote")
 
         self._attach_bundle_context(swap, leg)
-        from services.transaction_intents.bundle_intent_sync import sync_bundle_leg_from_swap
-
         sync_bundle_leg_from_swap(db, person_id=person_id, swap=swap, leg=leg)
         db.commit()
         db.refresh(swap)
@@ -316,6 +317,16 @@ class BundleLifiLegService:
                 bundle_id=str(ctx.get("portfolio_id") or leg.portfolio_id),
                 batch_id=str(ctx["batch_id"]),
             )
+            if leg.bundle_action == "withdraw" and leg.batch_id:
+                from services.portfolio_engine.bundles.withdraw import BundleWithdrawOrchestrator
+
+                BundleWithdrawOrchestrator.on_sell_leg_confirmed(
+                    db,
+                    client_id=leg.client_id,
+                    portfolio_id=leg.portfolio_id,
+                    batch_id=str(leg.batch_id),
+                    failed=False,
+                )
         amount_out = Decimal(str(swap.estimated_receive or 0))
         return ExecutionResult(
             leg_id=leg.leg_id,
@@ -362,7 +373,7 @@ class BundleLifiLegService:
         entry_instrument_id = meta.get("entry_instrument_id")
         target_instrument_id = meta.get("target_instrument_id")
         if not entry_instrument_id or not target_instrument_id:
-            if leg.action in ("allocation", "rebalance_buy", "rebalance_sell"):
+            if leg.action in ("allocation", "rebalance_buy", "rebalance_sell", "withdraw_sell"):
                 raise BundlePeSettlementError("missing_instrument_ids_in_leg_metadata")
             return
 
@@ -384,6 +395,16 @@ class BundleLifiLegService:
             )
         elif leg.action == "rebalance_sell":
             apply_rebalance_sell_atoms(
+                db,
+                portfolio_id=leg.portfolio_id,
+                instrument_id=target_inst,
+                entry_instrument_id=entry_inst,
+                sell_qty=amount_in,
+                entry_received=amount_out,
+                cost_basis_eur=cost_basis,
+            )
+        elif leg.action == "withdraw_sell":
+            apply_withdraw_sell_atoms(
                 db,
                 portfolio_id=leg.portfolio_id,
                 instrument_id=target_inst,
@@ -455,6 +476,16 @@ class BundleLifiLegService:
                     bundle_id=str(ctx.get("portfolio_id") or leg.portfolio_id),
                     batch_id=str(ctx["batch_id"]),
                 )
+                if leg.bundle_action == "withdraw" and leg.batch_id:
+                    from services.portfolio_engine.bundles.withdraw import BundleWithdrawOrchestrator
+
+                    BundleWithdrawOrchestrator.on_sell_leg_confirmed(
+                        db,
+                        client_id=leg.client_id,
+                        portfolio_id=leg.portfolio_id,
+                        batch_id=str(leg.batch_id),
+                        failed=True,
+                    )
         return ExecutionResult(
             leg_id=leg.leg_id,
             status="pending" if swap.status != SwapSessionStatus.FAILED.value else "failed",

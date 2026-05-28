@@ -9,6 +9,7 @@ class IntentProductType(str, Enum):
     MORPHO_EARN = "morpho_earn"
     LOMBARD_BORROW = "lombard_borrow"
     BUNDLE_INVEST = "bundle_invest"
+    BUNDLE_WITHDRAW = "bundle_withdraw"
     PRIVY_DEPOSIT = "privy_deposit"
 
 
