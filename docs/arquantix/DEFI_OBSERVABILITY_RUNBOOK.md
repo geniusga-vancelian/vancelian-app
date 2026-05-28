@@ -38,14 +38,15 @@ Codes de sortie :
 - `2` — degraded / `timeout_degraded` / alertes ops
 - `1` — error fatal
 
-Runbook prod détaillé : [`DEFI_OBSERVABILITY_PROD_RUNBOOK.md`](DEFI_OBSERVABILITY_PROD_RUNBOOK.md).
+Runbook prod détaillé : [`DEFI_OBSERVABILITY_PROD_RUNBOOK.md`](DEFI_OBSERVABILITY_PROD_RUNBOOK.md).  
+Go-live cron / premier run : [`DEFI_OBSERVABILITY_OPS_GO_LIVE.md`](DEFI_OBSERVABILITY_OPS_GO_LIVE.md).
 
 ## Cron externe (exemple)
 
 **Ne pas** intégrer de daemon dans l’API. Exemple crontab ops :
 
 ```cron
-*/10 * * * * cd /path/to/vancelian-app/services/arquantix/api && /usr/bin/python3 -m scripts.defi_observability_tick --no-dry-run >> /var/log/arquantix-defi-obs.log 2>&1
+*/10 * * * * /path/to/vancelian-app/scripts/run_defi_observability_tick_prod.sh --execute >> /var/log/arquantix-defi-obs.log 2>&1
 ```
 
 Prérequis :

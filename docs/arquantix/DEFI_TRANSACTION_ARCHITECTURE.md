@@ -6,14 +6,17 @@
 
 **Documents liés :**
 
-| Document | Rôle |
-| --- | --- |
-| `TRANSACTION_INTENTS_DEFI.md` | Intents par produit (phases 7–10) |
-| `DEFI_OBSERVABILITY_RUNBOOK.md` | Tick observabilité |
-| `DEFI_OBSERVABILITY_PROD_RUNBOOK.md` | Prod readiness, lock, cron |
-| `ONCHAIN_INDEXER_BASE.md` | Indexer Base |
-| `BASE_RPC_RECONCILIATION_SETUP.md` | RPC réconciliation |
+
+| Document                                | Rôle                                                                |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| `TRANSACTION_INTENTS_DEFI.md`           | Intents par produit (phases 7–10)                                   |
+| `DEFI_OBSERVABILITY_RUNBOOK.md`         | Tick observabilité                                                  |
+| `DEFI_OBSERVABILITY_PROD_RUNBOOK.md`    | Prod readiness, lock, cron                                          |
+| `DEFI_OBSERVABILITY_OPS_GO_LIVE.md`     | Mise en service cron, premier run, incidents                          |
+| `ONCHAIN_INDEXER_BASE.md`               | Indexer Base                                                        |
+| `BASE_RPC_RECONCILIATION_SETUP.md`      | RPC réconciliation                                                  |
 | `AUDIT_DEFI_TRANSACTIONAL_INTEGRITY.md` | Audit intégrité (certaines sections pré-indexer sont **obsolètes**) |
+
 
 ---
 
@@ -21,14 +24,16 @@
 
 Le système DeFi Vancelian maintient **plusieurs couches** qui ne doivent jamais être confondues :
 
-| Couche | Rôle | Source de vérité |
-| --- | --- | --- |
-| **Blockchain (Base)** | État final des transferts, swaps, vault txs | Chaîne + receipts RPC |
-| **raw_onchain_events** | Preuve indexée, immuable, consommable une fois | Indexer / replay |
-| **transaction_intents** | Cycle de vie **métier** produit (LI.FI, Morpho, Lombard, Bundle) | Application (upsert idempotent) |
-| **Ledger applicatif** | `person_wallet_*`, `pe_*`, vault Prisma | Écritures contrôlées (settlement, webhook, PE) |
-| **reconciliation_discrepancies** | Écarts détectés (pas de correction auto) | Scripts / tick / health |
-| **reconciliation_corrections** | Workflow humain preview → apply whitelisté | Admin |
+
+| Couche                           | Rôle                                                             | Source de vérité                               |
+| -------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| **Blockchain (Base)**            | État final des transferts, swaps, vault txs                      | Chaîne + receipts RPC                          |
+| **raw_onchain_events**           | Preuve indexée, immuable, consommable une fois                   | Indexer / replay                               |
+| **transaction_intents**          | Cycle de vie **métier** produit (LI.FI, Morpho, Lombard, Bundle) | Application (upsert idempotent)                |
+| **Ledger applicatif**            | `person_wallet_`*, `pe_*`, vault Prisma                          | Écritures contrôlées (settlement, webhook, PE) |
+| **reconciliation_discrepancies** | Écarts détectés (pas de correction auto)                         | Scripts / tick / health                        |
+| **reconciliation_corrections**   | Workflow humain preview → apply whitelisté                       | Admin                                          |
+
 
 **Principe directeur :**
 
@@ -113,23 +118,27 @@ flowchart TB
   PORTAL --> RPC
 ```
 
+
+
 **To verify (déploiement `main` commit `ec4344d2`) :** seul `defi_observability_admin_router` est monté dans `main.py` (endpoints `/jobs`). Le router complet `onchain_reconciliation_admin_router` et les routers internes Morpho/Lombard intents existent dans le code mais **peuvent ne pas être inclus** au boot API prod tant qu’ils ne sont pas commités + branchés dans `main.py`.
 
 ---
 
 ## 3. Golden rules transactionnelles
 
-| Règle | Implémentation / référence |
-| --- | --- |
-| **Jamais de balance update « direct » hors chemins connus** | Settlement LI.FI : `lifi_swap_settlement.apply_swap_settlement` ; dépôts Privy : webhook ; apply correction : whitelist uniquement |
-| **Pas d’apply sans preuve raw vérifiée** (apply financier) | `correction_policy.discrepancy_has_verified_raw_event`, `ALLOWED_RAW_EVENT_TYPES`, `consumed_by_correction_id` |
-| **Pas de correction automatique** | `reconcile_*`, `reconcile_stale_intents`, tick : `persist_discrepancies` seulement ; pas d’appel `apply_correction` |
-| **Pas de mock en prod** | `productionSandboxGuard.ts` (web boot) ; `production_mock_guard.py` (`LIFI_SWAPS_MOCK`, `BUNDLE_LIFI_SYNC_MOCK`) — **To verify** appel au boot API |
-| **Idempotence obligatoire** | UQ DB + clés métier (voir §15) |
-| **Preuve on-chain : `tx_hash` + `log_index` (+ `chain_id`)** | `raw_onchain_events`, `person_wallet_deposits` |
-| **Admin apply = double validation** | `request_correction` → `approve_correction` (requester ≠ approver en prod) → `apply_correction` |
-| **Raw event consommable une seule fois** | `raw_event_consumption.mark_raw_event_consumed` |
-| **Cron observe, n’applique jamais** | `defi_observability_tick` : écritures limitées (§13) |
+
+| Règle                                                        | Implémentation / référence                                                                                                                         |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Jamais de balance update « direct » hors chemins connus**  | Settlement LI.FI : `lifi_swap_settlement.apply_swap_settlement` ; dépôts Privy : webhook ; apply correction : whitelist uniquement                 |
+| **Pas d’apply sans preuve raw vérifiée** (apply financier)   | `correction_policy.discrepancy_has_verified_raw_event`, `ALLOWED_RAW_EVENT_TYPES`, `consumed_by_correction_id`                                     |
+| **Pas de correction automatique**                            | `reconcile_`*, `reconcile_stale_intents`, tick : `persist_discrepancies` seulement ; pas d’appel `apply_correction`                                |
+| **Pas de mock en prod**                                      | `productionSandboxGuard.ts` (web boot) ; `production_mock_guard.py` (`LIFI_SWAPS_MOCK`, `BUNDLE_LIFI_SYNC_MOCK`) — **To verify** appel au boot API |
+| **Idempotence obligatoire**                                  | UQ DB + clés métier (voir §15)                                                                                                                     |
+| **Preuve on-chain : `tx_hash` + `log_index` (+ `chain_id`)** | `raw_onchain_events`, `person_wallet_deposits`                                                                                                     |
+| **Admin apply = double validation**                          | `request_correction` → `approve_correction` (requester ≠ approver en prod) → `apply_correction`                                                    |
+| **Raw event consommable une seule fois**                     | `raw_event_consumption.mark_raw_event_consumed`                                                                                                    |
+| **Cron observe, n’applique jamais**                          | `defi_observability_tick` : écritures limitées (§13)                                                                                               |
+
 
 ---
 
@@ -137,156 +146,180 @@ flowchart TB
 
 ### 4.1 `person_wallet_deposits`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Entrées ledger crédit/débit tracées (dépôts Privy, settlement LI.FI, correction apply) |
-| **Source** | Webhook Privy, `apply_swap_settlement`, `create_missing_deposit_from_raw_event` |
-| **Mutabilité** | Insert ; pas de void/delete via apply (interdit) |
-| **Idempotence** | `UNIQUE (chain_id, tx_hash, log_index)` ; `idempotency_key` unique optionnel |
-| **Consommateurs** | Balances, réconciliation, export admin |
-| **Risques** | `admin_simulate_deposit` ; dépôt sans preuve on-chain si webhook seul |
+
+| Attribut          | Détail                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| **Rôle**          | Entrées ledger crédit/débit tracées (dépôts Privy, settlement LI.FI, correction apply) |
+| **Source**        | Webhook Privy, `apply_swap_settlement`, `create_missing_deposit_from_raw_event`        |
+| **Mutabilité**    | Insert ; pas de void/delete via apply (interdit)                                       |
+| **Idempotence**   | `UNIQUE (chain_id, tx_hash, log_index)` ; `idempotency_key` unique optionnel           |
+| **Consommateurs** | Balances, réconciliation, export admin                                                 |
+| **Risques**       | `admin_simulate_deposit` ; dépôt sans preuve on-chain si webhook seul                  |
+
 
 **Modèle :** `services/arquantix/api/services/privy_wallet/models.py` — `PersonWalletDeposit`  
 **Migration :** antérieure à 161 (table préexistante) ; réconciliation runs : `160_person_wallet_reconciliation.py`
 
 ### 4.2 `person_wallet_balances`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Agrégat soldes par wallet + asset |
-| **Source** | `PersonWalletBalanceRepository.increment_balance` |
-| **Mutabilité** | Update incrémental |
-| **Idempotence** | `UNIQUE (person_crypto_wallet_id, asset)` |
+
+| Attribut          | Détail                                                 |
+| ----------------- | ------------------------------------------------------ |
+| **Rôle**          | Agrégat soldes par wallet + asset                      |
+| **Source**        | `PersonWalletBalanceRepository.increment_balance`      |
+| **Mutabilité**    | Update incrémental                                     |
+| **Idempotence**   | `UNIQUE (person_crypto_wallet_id, asset)`              |
 | **Consommateurs** | API wallet, réconciliation `balance_ledger_vs_onchain` |
-| **Risques** | Désalignement vs on-chain si settlement partiel LI.FI |
+| **Risques**       | Désalignement vs on-chain si settlement partiel LI.FI  |
+
 
 ### 4.3 `person_wallet_swaps`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Session swap LI.FI (quote → confirm → settle) |
-| **Source** | `LifiQuoteService`, `LifiExecuteService` |
-| **Mutabilité** | Status, `tx_hash`, `audit_log`, montants |
-| **Idempotence** | Intent : `lifi_swap:{swap_id}` ; settlement : `lifi-swap:{swap_id}:debit/credit` |
-| **Consommateurs** | LI.FI API, intents, bundle legs |
-| **Risques** | `CONFIRMED` sans settlement ; partial LI.FI |
+
+| Attribut          | Détail                                                                           |
+| ----------------- | -------------------------------------------------------------------------------- |
+| **Rôle**          | Session swap LI.FI (quote → confirm → settle)                                    |
+| **Source**        | `LifiQuoteService`, `LifiExecuteService`                                         |
+| **Mutabilité**    | Status, `tx_hash`, `audit_log`, montants                                         |
+| **Idempotence**   | Intent : `lifi_swap:{swap_id}` ; settlement : `lifi-swap:{swap_id}:debit/credit` |
+| **Consommateurs** | LI.FI API, intents, bundle legs                                                  |
+| **Risques**       | `CONFIRMED` sans settlement ; partial LI.FI                                      |
+
 
 **Modèle :** `services/arquantix/api/services/lifi/models.py`
 
 ### 4.4 `raw_onchain_events`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Preuve on-chain normalisée (ERC-20 Transfer, native optionnel) |
-| **Source** | `replay_onchain`, `run_base_indexer_once` |
-| **Mutabilité** | Insert ; `consumed_by_correction_id` set une fois |
-| **Idempotence** | `UNIQUE (chain_id, tx_hash, log_index)` |
-| **Consommateurs** | Réconciliation, link intent, apply correction |
-| **Risques** | Indexer incomplet ; wallet non surveillé |
+
+| Attribut          | Détail                                                         |
+| ----------------- | -------------------------------------------------------------- |
+| **Rôle**          | Preuve on-chain normalisée (ERC-20 Transfer, native optionnel) |
+| **Source**        | `replay_onchain`, `run_base_indexer_once`                      |
+| **Mutabilité**    | Insert ; `consumed_by_correction_id` set une fois              |
+| **Idempotence**   | `UNIQUE (chain_id, tx_hash, log_index)`                        |
+| **Consommateurs** | Réconciliation, link intent, apply correction                  |
+| **Risques**       | Indexer incomplet ; wallet non surveillé                       |
+
 
 **Migration :** `161_raw_onchain_events.py`  
 **Modèle :** `services/onchain_indexer/models.py` — `RawOnChainEvent`
 
 ### 4.5 `transaction_intents`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Intent métier par produit/opération |
-| **Source** | `*_intent_sync.py`, `TransactionIntentRepository.upsert` |
-| **Mutabilité** | Upsert status/metadata ; **pas** de mutation ledger |
-| **Idempotence** | `UNIQUE (person_id, product_type, operation_type, idempotency_key)` |
-| **Consommateurs** | Health, réconciliation intent, admin |
-| **Risques** | Drift vs swap/vault ; stale sans TTL auto-fix |
+
+| Attribut          | Détail                                                              |
+| ----------------- | ------------------------------------------------------------------- |
+| **Rôle**          | Intent métier par produit/opération                                 |
+| **Source**        | `*_intent_sync.py`, `TransactionIntentRepository.upsert`            |
+| **Mutabilité**    | Upsert status/metadata ; **pas** de mutation ledger                 |
+| **Idempotence**   | `UNIQUE (person_id, product_type, operation_type, idempotency_key)` |
+| **Consommateurs** | Health, réconciliation intent, admin                                |
+| **Risques**       | Drift vs swap/vault ; stale sans TTL auto-fix                       |
+
 
 **Migrations :** `166`, `167` (`linked_reference_id`)  
 **Enums :** `services/transaction_intents/enums.py`
 
 ### 4.6 `reconciliation_discrepancies`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Écart détecté, priorisé, workflow humain |
-| **Source** | `user_reconcile`, `wallet_dry_run`, `persist_intent_discrepancies`, stale health |
-| **Mutabilité** | Status : open → acknowledged/ignored/resolved |
-| **Idempotence** | `fingerprint` SHA256 unique |
-| **Consommateurs** | Admin, CSV export, alertes tick |
-| **Risques** | Flood P0 ; faux positifs balance-only |
+
+| Attribut          | Détail                                                                           |
+| ----------------- | -------------------------------------------------------------------------------- |
+| **Rôle**          | Écart détecté, priorisé, workflow humain                                         |
+| **Source**        | `user_reconcile`, `wallet_dry_run`, `persist_intent_discrepancies`, stale health |
+| **Mutabilité**    | Status : open → acknowledged/ignored/resolved                                    |
+| **Idempotence**   | `fingerprint` SHA256 unique                                                      |
+| **Consommateurs** | Admin, CSV export, alertes tick                                                  |
+| **Risques**       | Flood P0 ; faux positifs balance-only                                            |
+
 
 **Migration :** `162_reconciliation_discrepancies.py`  
 **Modèle :** `discrepancy_models.py`
 
 ### 4.7 `reconciliation_corrections`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Audit trail preview/request/approve/apply |
-| **Source** | `correction_workflow`, `correction_apply` |
-| **Mutabilité** | Transitions de statut ; `applied_at` |
-| **Idempotence** | Une correction appliquée par discrepancy + action (policy) |
-| **Consommateurs** | Admin, consommation raw event |
-| **Risques** | Double apply ; approver = requester en dev |
+
+| Attribut          | Détail                                                     |
+| ----------------- | ---------------------------------------------------------- |
+| **Rôle**          | Audit trail preview/request/approve/apply                  |
+| **Source**        | `correction_workflow`, `correction_apply`                  |
+| **Mutabilité**    | Transitions de statut ; `applied_at`                       |
+| **Idempotence**   | Une correction appliquée par discrepancy + action (policy) |
+| **Consommateurs** | Admin, consommation raw event                              |
+| **Risques**       | Double apply ; approver = requester en dev                 |
+
 
 **Migrations :** `162`, `163` (status default `preview`)
 
 ### 4.8 `onchain_indexer_checkpoints`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Curseur bloc indexer continu Base |
-| **Source** | `CheckpointRepository.advance_after_chunk` |
-| **Mutabilité** | `last_scanned_block`, `status`, `metadata_json` |
-| **Idempotence** | `UNIQUE (chain_id, indexer_name)` — `base_continuous` |
-| **Consommateurs** | `run_base_indexer_once` |
-| **Risques** | Checkpoint avancé si crash mid-chunk — **To verify** atomicité chunk |
+
+| Attribut          | Détail                                                               |
+| ----------------- | -------------------------------------------------------------------- |
+| **Rôle**          | Curseur bloc indexer continu Base                                    |
+| **Source**        | `CheckpointRepository.advance_after_chunk`                           |
+| **Mutabilité**    | `last_scanned_block`, `status`, `metadata_json`                      |
+| **Idempotence**   | `UNIQUE (chain_id, indexer_name)` — `base_continuous`                |
+| **Consommateurs** | `run_base_indexer_once`                                              |
+| **Risques**       | Checkpoint avancé si crash mid-chunk — **To verify** atomicité chunk |
+
 
 **Migration :** `165_onchain_indexer_checkpoints.py`
 
 ### 4.9 `defi_observability_job_runs`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Historique ticks cron `defi_observability_tick` |
-| **Source** | `DefiJobRunRepository` |
-| **Mutabilité** | Insert + finish |
-| **Idempotence** | N/A (un run = une ligne) |
-| **Consommateurs** | Admin `/jobs` |
-| **Risques** | Aucun impact financier |
+
+| Attribut          | Détail                                          |
+| ----------------- | ----------------------------------------------- |
+| **Rôle**          | Historique ticks cron `defi_observability_tick` |
+| **Source**        | `DefiJobRunRepository`                          |
+| **Mutabilité**    | Insert + finish                                 |
+| **Idempotence**   | N/A (un run = une ligne)                        |
+| **Consommateurs** | Admin `/jobs`                                   |
+| **Risques**       | Aucun impact financier                          |
+
 
 **Migration :** `168_defi_observability_job_runs.py`
 
 ### 4.10 `onchain_vault_transactions`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Opérations vault Morpho / Lombard / Ledgity (web Prisma) |
-| **Source** | BFF prepare / confirm, receipts RPC |
-| **Mutabilité** | `pending` → `success` / `reverted` / `failed` |
-| **Idempotence** | Clés métier côté app (group_key Lombard, vault tx id) — **To verify** UQ Prisma |
-| **Consommateurs** | Intents Morpho/Lombard, réconciliation SQL brute |
-| **Risques** | Table hors SQLAlchemy API — lectures via SQL text |
+
+| Attribut          | Détail                                                                          |
+| ----------------- | ------------------------------------------------------------------------------- |
+| **Rôle**          | Opérations vault Morpho / Lombard / Ledgity (web Prisma)                        |
+| **Source**        | BFF prepare / confirm, receipts RPC                                             |
+| **Mutabilité**    | `pending` → `success` / `reverted` / `failed`                                   |
+| **Idempotence**   | Clés métier côté app (group_key Lombard, vault tx id) — **To verify** UQ Prisma |
+| **Consommateurs** | Intents Morpho/Lombard, réconciliation SQL brute                                |
+| **Risques**       | Table hors SQLAlchemy API — lectures via SQL text                               |
+
 
 **Schéma :** `services/arquantix/web/prisma/schema.prisma` — `OnchainVaultTransaction`
 
 ### 4.11 `user_vault_positions`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Position agrégée utilisateur / vault (affichage / sync) |
-| **Source** | `syncUserVaultPositionFromLedger` (web) |
-| **Mutabilité** | Update depuis ledger vault |
-| **Consommateurs** | Portal savings / Morpho UI |
-| **Risques** | Désync vs `onchain_vault_transactions` |
+
+| Attribut          | Détail                                                  |
+| ----------------- | ------------------------------------------------------- |
+| **Rôle**          | Position agrégée utilisateur / vault (affichage / sync) |
+| **Source**        | `syncUserVaultPositionFromLedger` (web)                 |
+| **Mutabilité**    | Update depuis ledger vault                              |
+| **Consommateurs** | Portal savings / Morpho UI                              |
+| **Risques**       | Désync vs `onchain_vault_transactions`                  |
+
 
 ### 4.12 `pe_position_atoms` / `pe_ledger_entries`
 
-| Attribut | Détail |
-| --- | --- |
-| **Rôle** | Portfolio Engine — positions et écritures append-only |
-| **Source** | Bundle orchestrator, PE settlement |
-| **Mutabilité** | `pe_ledger_entries` **append-only** |
-| **Idempotence** | Clés PE métier (bundle batch, legs) — **To verify** par opération |
-| **Consommateurs** | Bundles, réconciliation `bundle_*` gaps |
-| **Risques** | Triple comptabilité wallet / PE / vault |
+
+| Attribut          | Détail                                                            |
+| ----------------- | ----------------------------------------------------------------- |
+| **Rôle**          | Portfolio Engine — positions et écritures append-only             |
+| **Source**        | Bundle orchestrator, PE settlement                                |
+| **Mutabilité**    | `pe_ledger_entries` **append-only**                               |
+| **Idempotence**   | Clés PE métier (bundle batch, legs) — **To verify** par opération |
+| **Consommateurs** | Bundles, réconciliation `bundle_`* gaps                           |
+| **Risques**       | Triple comptabilité wallet / PE / vault                           |
+
 
 **Modèles :** `portfolio_engine/positions/models.py`, `portfolio_engine/ledger_entries/models.py`
 
@@ -325,16 +358,18 @@ Intent created (upsert produit)
 
 ### 6.1 Pipeline
 
-| Étape | Service / fonction | Effet DB |
-| --- | --- | --- |
-| Quote | `LifiQuoteService` → `on_swap_created` | `person_wallet_swaps` + intent `created` |
-| Prepare execute | `LifiExecuteService.prepare_execute` → `on_swap_awaiting_signature` | status `AWAITING_SIGNATURE` |
-| Submit | `submit_signed_tx` → `on_swap_submitted` | `tx_hash`, intent `submitted` |
-| Poll LI.FI | `refresh_swap_status` → `on_swap_lifi_poll` | `confirming` / `partial` / `failed` |
-| Done + montant | `resolve_lifi_actual_receive_amount` (`lifi_actual_receive.py`) | audit `actual_receive` |
-| Settlement | `apply_swap_settlement` (`lifi_swap_settlement.py`) | debit/credit deposits + balances |
-| Blocked settlement | `SwapSettlementBlocked` → `on_swap_settlement_blocked` | intent `reconciliation_required` |
-| Confirmed | `on_swap_confirmed` | intent `confirmed` si settlement OK |
+
+| Étape              | Service / fonction                                                  | Effet DB                                 |
+| ------------------ | ------------------------------------------------------------------- | ---------------------------------------- |
+| Quote              | `LifiQuoteService` → `on_swap_created`                              | `person_wallet_swaps` + intent `created` |
+| Prepare execute    | `LifiExecuteService.prepare_execute` → `on_swap_awaiting_signature` | status `AWAITING_SIGNATURE`              |
+| Submit             | `submit_signed_tx` → `on_swap_submitted`                            | `tx_hash`, intent `submitted`            |
+| Poll LI.FI         | `refresh_swap_status` → `on_swap_lifi_poll`                         | `confirming` / `partial` / `failed`      |
+| Done + montant     | `resolve_lifi_actual_receive_amount` (`lifi_actual_receive.py`)     | audit `actual_receive`                   |
+| Settlement         | `apply_swap_settlement` (`lifi_swap_settlement.py`)                 | debit/credit deposits + balances         |
+| Blocked settlement | `SwapSettlementBlocked` → `on_swap_settlement_blocked`              | intent `reconciliation_required`         |
+| Confirmed          | `on_swap_confirmed`                                                 | intent `confirmed` si settlement OK      |
+
 
 ### 6.2 Mapping intent
 
@@ -355,11 +390,13 @@ Prefix : `/api/swaps` — `services/lifi/routes.py`
 
 ### 6.4 Risques restants
 
-| Risque | Détection | Fichiers |
-| --- | --- | --- |
-| CONFIRMED sans settlement | intent `reconciliation_required`, discrepancy `swap_confirmed_without_settlement` | `lifi_intent_sync`, `user_reconcile` |
-| Partial LI.FI | `is_lifi_partial_substatus`, intent `partial` | `lifi_actual_receive.py` |
-| Montant estimé vs on-chain | `resolve_lifi_actual_receive_amount` | `lifi_execute_service.py` |
+
+| Risque                     | Détection                                                                         | Fichiers                             |
+| -------------------------- | --------------------------------------------------------------------------------- | ------------------------------------ |
+| CONFIRMED sans settlement  | intent `reconciliation_required`, discrepancy `swap_confirmed_without_settlement` | `lifi_intent_sync`, `user_reconcile` |
+| Partial LI.FI              | `is_lifi_partial_substatus`, intent `partial`                                     | `lifi_actual_receive.py`             |
+| Montant estimé vs on-chain | `resolve_lifi_actual_receive_amount`                                              | `lifi_execute_service.py`            |
+
 
 ### 6.5 Tests
 
@@ -414,18 +451,20 @@ Prefix : `/api/swaps` — `services/lifi/routes.py`
 
 ### 8.2 Pipeline
 
-| Moment | Fichier |
-| --- | --- |
-| Prepare | `lombardLedger.ts` → `lombard_intent_router` prepare |
-| Confirm | `api/portal/lombard/confirm/route.ts` → `syncLombardIntentAfterConfirm` |
-| Receipt sync | `lombard_intent_sync.sync_lombard_step_from_ledger_receipt` |
+
+| Moment       | Fichier                                                                 |
+| ------------ | ----------------------------------------------------------------------- |
+| Prepare      | `lombardLedger.ts` → `lombard_intent_router` prepare                    |
+| Confirm      | `api/portal/lombard/confirm/route.ts` → `syncLombardIntentAfterConfirm` |
+| Receipt sync | `lombard_intent_sync.sync_lombard_step_from_ledger_receipt`             |
+
 
 **Linked :** `onchain_vault_transactions_group`, `linked_reference_id=group_key`
 
 ### 8.3 Partial / mock
 
 - Parent `partial` si mix steps confirmed/pending/failed
-- Mock : `lombardMockPrivyLedgerCredit` — bloqué prod via sandbox guard + discrepancies `lombard_mock_*`
+- Mock : `lombardMockPrivyLedgerCredit` — bloqué prod via sandbox guard + discrepancies `lombard_mock_`*
 
 ### 8.4 Gaps réconciliation
 
@@ -452,12 +491,14 @@ Prefix : `/api/swaps` — `services/lifi/routes.py`
 
 ### 9.2 Hooks orchestration
 
-| Moment | Fichier |
-| --- | --- |
-| Lock invest | `orchestrator._invest_via_lifi` → `ensure_bundle_parent_intent` |
-| Leg quote/swap | `bundle_lifi_leg_service.py` → `register_bundle_leg` |
-| Submit / confirm leg | `mark_bundle_leg_submitted/confirmed/failed` |
-| Fin batch | `sync_bundle_parent_from_batch_status` |
+
+| Moment               | Fichier                                                         |
+| -------------------- | --------------------------------------------------------------- |
+| Lock invest          | `orchestrator._invest_via_lifi` → `ensure_bundle_parent_intent` |
+| Leg quote/swap       | `bundle_lifi_leg_service.py` → `register_bundle_leg`            |
+| Submit / confirm leg | `mark_bundle_leg_submitted/confirmed/failed`                    |
+| Fin batch            | `sync_bundle_parent_from_batch_status`                          |
+
 
 ### 9.3 Coexistence LI.FI
 
@@ -482,10 +523,12 @@ Chaque leg crée aussi un intent `lifi_swap` (via `LifiExecuteService`) ; le par
 
 ### 10.1 Scripts
 
-| Script | Module | Args principaux |
-| --- | --- | --- |
-| `scripts/replay_onchain.py` | `block_range_replay.replay_block_range` | `--chain base`, `--from-block`, `--to-block`, `--dry-run` |
-| `scripts/run_onchain_indexer.py` | `run_base_indexer_once` | `--once` (requis), `--dry-run`, `--force` |
+
+| Script                           | Module                                  | Args principaux                                           |
+| -------------------------------- | --------------------------------------- | --------------------------------------------------------- |
+| `scripts/replay_onchain.py`      | `block_range_replay.replay_block_range` | `--chain base`, `--from-block`, `--to-block`, `--dry-run` |
+| `scripts/run_onchain_indexer.py` | `run_base_indexer_once`                 | `--once` (requis), `--dry-run`, `--force`                 |
+
 
 ### 10.2 Indexer continu (`--once`)
 
@@ -518,21 +561,25 @@ Chaque leg crée aussi un intent `lifi_swap` (via `LifiExecuteService`) ; le par
 
 ### 11.1 Scripts / services
 
-| Outil | Fichier | CLI / API |
-| --- | --- | --- |
-| Wallet | `wallet_dry_run.build_wallet_reconcile_report` | `scripts/reconcile_wallet.py` |
-| User | `user_reconcile.build_user_reconcile_report` | `scripts/reconcile_user.py` |
-| Intent health | `transaction_intent_health.py` | `scripts/transaction_intent_health.py` |
-| Intent gaps | `transaction_intent_reconciliation.scan_intent_gaps_for_person` | appelé par user reconcile |
+
+| Outil         | Fichier                                                         | CLI / API                              |
+| ------------- | --------------------------------------------------------------- | -------------------------------------- |
+| Wallet        | `wallet_dry_run.build_wallet_reconcile_report`                  | `scripts/reconcile_wallet.py`          |
+| User          | `user_reconcile.build_user_reconcile_report`                    | `scripts/reconcile_user.py`            |
+| Intent health | `transaction_intent_health.py`                                  | `scripts/transaction_intent_health.py` |
+| Intent gaps   | `transaction_intent_reconciliation.scan_intent_gaps_for_person` | appelé par user reconcile              |
+
 
 ### 11.2 Layers & severities
 
-| Layer | Exemples `discrepancy_type` |
-| --- | --- |
-| `privy` | `balance_ledger_vs_onchain`, `onchain_event_without_db_ledger`, `db_ledger_without_onchain_proof`, `admin_sim_deposit` |
-| `lifi` | `swap_confirmed_without_settlement`, `swap_pending_stale` |
-| `morpho` / `lombard` / `ledgity` | `vault_tx_pending_stale`, gaps intent |
-| `intent` | `intent_{status}_stale`, `swap_without_intent`, `raw_event_without_intent` |
+
+| Layer                            | Exemples `discrepancy_type`                                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `privy`                          | `balance_ledger_vs_onchain`, `onchain_event_without_db_ledger`, `db_ledger_without_onchain_proof`, `admin_sim_deposit` |
+| `lifi`                           | `swap_confirmed_without_settlement`, `swap_pending_stale`                                                              |
+| `morpho` / `lombard` / `ledgity` | `vault_tx_pending_stale`, gaps intent                                                                                  |
+| `intent`                         | `intent_{status}_stale`, `swap_without_intent`, `raw_event_without_intent`                                             |
+
 
 **Severity :** `P0`, `P1`, `P2` — seuils alertes tick : `DEFI_OPS_OPEN_P0_THRESHOLD`, `DEFI_OPS_OPEN_P1_THRESHOLD`
 
@@ -553,10 +600,12 @@ Chaque leg crée aussi un intent `lifi_swap` (via `LifiExecuteService`) ; le par
 
 ### 12.1 Statuts
 
-| Entité | Valeurs |
-| --- | --- |
-| Discrepancy | `open`, `acknowledged`, `ignored`, `resolved` |
-| Correction | `preview`, `requested`, `approved`, `applied`, `rejected` |
+
+| Entité      | Valeurs                                                   |
+| ----------- | --------------------------------------------------------- |
+| Discrepancy | `open`, `acknowledged`, `ignored`, `resolved`             |
+| Correction  | `preview`, `requested`, `approved`, `applied`, `rejected` |
+
 
 ### 12.2 Workflow
 
@@ -602,10 +651,12 @@ Inclut `mark_admin_sim_as_phantom_candidate`, `mark_swap_settlement_missing_actu
 
 `python3 -m scripts.defi_observability_tick`
 
-| Mode | Écritures |
-| --- | --- |
-| `--dry-run` (défaut) | Aucune (rollback) |
-| `--no-dry-run` | `raw_onchain_events`, `onchain_indexer_checkpoints`, `reconciliation_discrepancies`, `defi_observability_job_runs` |
+
+| Mode                 | Écritures                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--dry-run` (défaut) | Aucune (rollback)                                                                                                  |
+| `--no-dry-run`       | `raw_onchain_events`, `onchain_indexer_checkpoints`, `reconciliation_discrepancies`, `defi_observability_job_runs` |
+
 
 **Jamais :** balances, deposits, `apply_correction`, rebuild.
 
@@ -617,12 +668,14 @@ Inclut `mark_admin_sim_as_phantom_candidate`, `mark_swap_settlement_missing_actu
 
 ### 13.3 Prod readiness (Phase 10)
 
-| Mécanisme | Fichier |
-| --- | --- |
-| Advisory lock | `lock.py` — `pg_try_advisory_lock(0xDEF1, 0x0909)` |
-| `skipped_locked` | `record_skipped_locked_tick` — exit 0 |
-| `timeout_degraded` | `--max-duration-seconds` — arrêt entre étapes |
-| Job runs | table `defi_observability_job_runs` |
+
+| Mécanisme          | Fichier                                            |
+| ------------------ | -------------------------------------------------- |
+| Advisory lock      | `lock.py` — `pg_try_advisory_lock(0xDEF1, 0x0909)` |
+| `skipped_locked`   | `record_skipped_locked_tick` — exit 0              |
+| `timeout_degraded` | `--max-duration-seconds` — arrêt entre étapes      |
+| Job runs           | table `defi_observability_job_runs`                |
+
 
 ### 13.4 Alertes (UI / logs / JSON)
 
@@ -630,7 +683,7 @@ Inclut `mark_admin_sim_as_phantom_candidate`, `mark_swap_settlement_missing_actu
 
 ### 13.5 Cron
 
-Externe uniquement — voir `DEFI_OBSERVABILITY_PROD_RUNBOOK.md`
+Externe uniquement — voir `DEFI_OBSERVABILITY_PROD_RUNBOOK.md` et `DEFI_OBSERVABILITY_OPS_GO_LIVE.md`
 
 ### 13.6 Tests
 
@@ -659,7 +712,7 @@ Flags interdits en `NODE_ENV=production` :
 - `LIFI_SWAPS_MOCK`
 - `BUNDLE_LIFI_SYNC_MOCK`
 
-**To verify :** `enforce_production_mock_guard` **non appelé** dans `main.py` commit `ec4344d2` (présent en working tree local seulement).
+`enforce_production_mock_guard` est appelé au boot dans `main.py` (fail fast si mocks LI.FI actifs en production).
 
 ### 14.3 Admin simulate deposit
 
@@ -679,41 +732,45 @@ Flags interdits en `NODE_ENV=production` :
 
 ## 15. Idempotence matrix
 
-| Domaine | Clé idempotence | Fichier / contrainte | Replay | Risque |
-| --- | --- | --- | --- | --- |
-| Raw event | `(chain_id, tx_hash, log_index)` | UQ `uq_raw_onchain_events_chain_tx_log` | Skip insert | Doublon indexer |
-| Deposit | idem + `idempotency_key` | `PersonWalletDeposit` | Skip / erreur UQ | Double webhook |
-| LI.FI settlement debit/credit | `lifi-swap:{swap_id}:debit/credit` | `lifi_swap_settlement.py` | `swap_settlement_already_applied` | Double crédit |
-| Intent | `(person_id, product_type, operation_type, idempotency_key)` | `repository.upsert` | Update même row | Écrasement status |
-| LI.FI intent | `lifi_swap:{swap_id}` | `lifi_intent_sync.py` | Upsert | — |
-| Morpho intent | `morpho_earn:…` | `morpho_intent_sync.py` | Upsert | — |
-| Lombard parent | `lombard_borrow:…` | `lombard_intent_sync.py` | Upsert | — |
-| Bundle parent | `bundle_invest:…` | `bundle_intent_sync.py` | Upsert | — |
-| Discrepancy | `fingerprint` SHA256 | `discrepancy_repository` | Skip si existe | Flood si logique change |
-| Checkpoint | `(chain_id, indexer_name)` | migration 165 | Advance | Gap blocs si crash |
-| Correction apply | raw `consumed_by_correction_id` | `raw_event_consumption.py` | Block si consommé | Double apply |
-| Privy webhook | `svix_id` / `idempotency_key` | `privy_webhook_events` | Skip | — |
-| Job run tick | N/A (1 run = 1 UUID) | `job_run_repository` | — | Concurrence : advisory lock |
+
+| Domaine                       | Clé idempotence                                              | Fichier / contrainte                    | Replay                            | Risque                      |
+| ----------------------------- | ------------------------------------------------------------ | --------------------------------------- | --------------------------------- | --------------------------- |
+| Raw event                     | `(chain_id, tx_hash, log_index)`                             | UQ `uq_raw_onchain_events_chain_tx_log` | Skip insert                       | Doublon indexer             |
+| Deposit                       | idem + `idempotency_key`                                     | `PersonWalletDeposit`                   | Skip / erreur UQ                  | Double webhook              |
+| LI.FI settlement debit/credit | `lifi-swap:{swap_id}:debit/credit`                           | `lifi_swap_settlement.py`               | `swap_settlement_already_applied` | Double crédit               |
+| Intent                        | `(person_id, product_type, operation_type, idempotency_key)` | `repository.upsert`                     | Update même row                   | Écrasement status           |
+| LI.FI intent                  | `lifi_swap:{swap_id}`                                        | `lifi_intent_sync.py`                   | Upsert                            | —                           |
+| Morpho intent                 | `morpho_earn:…`                                              | `morpho_intent_sync.py`                 | Upsert                            | —                           |
+| Lombard parent                | `lombard_borrow:…`                                           | `lombard_intent_sync.py`                | Upsert                            | —                           |
+| Bundle parent                 | `bundle_invest:…`                                            | `bundle_intent_sync.py`                 | Upsert                            | —                           |
+| Discrepancy                   | `fingerprint` SHA256                                         | `discrepancy_repository`                | Skip si existe                    | Flood si logique change     |
+| Checkpoint                    | `(chain_id, indexer_name)`                                   | migration 165                           | Advance                           | Gap blocs si crash          |
+| Correction apply              | raw `consumed_by_correction_id`                              | `raw_event_consumption.py`              | Block si consommé                 | Double apply                |
+| Privy webhook                 | `svix_id` / `idempotency_key`                                | `privy_webhook_events`                  | Skip                              | —                           |
+| Job run tick                  | N/A (1 run = 1 UUID)                                         | `job_run_repository`                    | —                                 | Concurrence : advisory lock |
+
 
 ---
 
 ## 16. Failure scenarios
 
-| Scénario | État attendu | Détection | Correction possible | Fichiers |
-| --- | --- | --- | --- | --- |
-| Crash API après submit, avant DB | Tx on-chain, DB `submitted` manquant | Intent/submitted sans tx ou inverse | Réconciliation manuelle | `LifiExecuteService`, intents |
-| Tx fail après DB pending | Swap FAILED, intent failed | Poll LI.FI | Aucune apply auto | `lifi_execute_service` |
-| Tx success, DB non updated | On-chain OK, swap SUBMITTED | `refresh_swap_status`, reconcile | Settlement manuel / ops | `lifi_swap_settlement` |
-| Webhook Privy duplicate | 2e insert bloqué UQ | `privy_webhook_events` | — | `webhook_service` |
-| Worker duplicate settlement | 2e apply ignoré | `swap_settlement_already_applied` | — | `lifi_swap_settlement.py` |
-| LI.FI partial | intent `partial`, audit event | `is_lifi_partial_substatus` | Discrepancy + ops | `lifi_actual_receive` |
-| Morpho receipt reverted | vault `reverted`, intent failed | `vault_tx_reverted_intent_not_failed` | Admin | `transaction_intent_reconciliation` |
-| Lombard step partial | parent `partial` | `recompute_lombard_parent_status` | Admin step par step | `lombard_intent_sync` |
-| Bundle leg partial | parent `partial` | `recompute_bundle_parent_intent` | Admin | `bundle_intent_sync` |
-| RPC down | Indexer errors, tick degraded | `summary.indexer.errors`, alertes | Retry cron | `continuous_base_indexer` |
-| Indexer double run `--no-dry-run` | 2e tick `skipped_locked` | job_run status | — | `lock.py` |
-| Correction double apply | 2e apply erreur policy | `consumed_by_correction_id` | — | `correction_apply` |
-| Stale intents | discrepancy `intent_*_stale` | `transaction_intent_health` | Pas auto ; admin | TTL env |
+
+| Scénario                          | État attendu                         | Détection                             | Correction possible     | Fichiers                            |
+| --------------------------------- | ------------------------------------ | ------------------------------------- | ----------------------- | ----------------------------------- |
+| Crash API après submit, avant DB  | Tx on-chain, DB `submitted` manquant | Intent/submitted sans tx ou inverse   | Réconciliation manuelle | `LifiExecuteService`, intents       |
+| Tx fail après DB pending          | Swap FAILED, intent failed           | Poll LI.FI                            | Aucune apply auto       | `lifi_execute_service`              |
+| Tx success, DB non updated        | On-chain OK, swap SUBMITTED          | `refresh_swap_status`, reconcile      | Settlement manuel / ops | `lifi_swap_settlement`              |
+| Webhook Privy duplicate           | 2e insert bloqué UQ                  | `privy_webhook_events`                | —                       | `webhook_service`                   |
+| Worker duplicate settlement       | 2e apply ignoré                      | `swap_settlement_already_applied`     | —                       | `lifi_swap_settlement.py`           |
+| LI.FI partial                     | intent `partial`, audit event        | `is_lifi_partial_substatus`           | Discrepancy + ops       | `lifi_actual_receive`               |
+| Morpho receipt reverted           | vault `reverted`, intent failed      | `vault_tx_reverted_intent_not_failed` | Admin                   | `transaction_intent_reconciliation` |
+| Lombard step partial              | parent `partial`                     | `recompute_lombard_parent_status`     | Admin step par step     | `lombard_intent_sync`               |
+| Bundle leg partial                | parent `partial`                     | `recompute_bundle_parent_intent`      | Admin                   | `bundle_intent_sync`                |
+| RPC down                          | Indexer errors, tick degraded        | `summary.indexer.errors`, alertes     | Retry cron              | `continuous_base_indexer`           |
+| Indexer double run `--no-dry-run` | 2e tick `skipped_locked`             | job_run status                        | —                       | `lock.py`                           |
+| Correction double apply           | 2e apply erreur policy               | `consumed_by_correction_id`           | —                       | `correction_apply`                  |
+| Stale intents                     | discrepancy `intent_*_stale`         | `transaction_intent_health`           | Pas auto ; admin        | TTL env                             |
+
 
 ---
 
@@ -749,13 +806,15 @@ Voir `DEFI_OBSERVABILITY_PROD_RUNBOOK.md` — job_runs, P0/P1 ouverts, intents s
 
 ### Admin URLs (web)
 
-| Page | Chemin |
-| --- | --- |
-| Discrepancies | `/admin/onchain-reconciliation` |
-| Détail | `/admin/onchain-reconciliation/[id]` |
-| Health | `/admin/onchain-reconciliation/health` |
-| Intents | `/admin/onchain-reconciliation/intents` |
-| Jobs tick | `/admin/onchain-reconciliation/jobs` |
+
+| Page          | Chemin                                  |
+| ------------- | --------------------------------------- |
+| Discrepancies | `/admin/onchain-reconciliation`         |
+| Détail        | `/admin/onchain-reconciliation/[id]`    |
+| Health        | `/admin/onchain-reconciliation/health`  |
+| Intents       | `/admin/onchain-reconciliation/intents` |
+| Jobs tick     | `/admin/onchain-reconciliation/jobs`    |
+
 
 **To verify :** pages hors `/jobs` nécessitent BFF + router API complet déployés.
 
@@ -763,52 +822,56 @@ Voir `DEFI_OBSERVABILITY_PROD_RUNBOOK.md` — job_runs, P0/P1 ouverts, intents s
 
 ## 18. Production readiness checklist
 
-- [ ] `DATABASE_URL` prod aligné Alembic
-- [ ] `alembic upgrade head` ≥ 168 (et chaîne 161–167 si première install)
-- [ ] RPC Base : `BASE_RPC_URL` / `ONCHAIN_INDEXER_BASE_*`
-- [ ] `ONCHAIN_INDEXER_BASE_ENABLED=true` si indexation prod souhaitée
-- [ ] Mocks désactivés : `LIFI_SWAPS_MOCK`, `BUNDLE_LIFI_SYNC_MOCK`, sandbox web flags
-- [ ] **To verify** `enforce_production_mock_guard` au boot API
-- [ ] Cron externe `defi_observability_tick --no-dry-run` + `--max-duration-seconds`
-- [ ] Lock vérifié (2 crons → `skipped_locked`)
-- [ ] Admin RBAC : `require_admin_or_ops`
-- [ ] Router `onchain_reconciliation_admin_router` monté — **To verify prod**
-- [ ] Routers internal Morpho/Lombard montés — **To verify prod**
-- [ ] CSV export testé
-- [ ] Tests Phase 7–10 passent en CI/staging
-- [ ] Pas d’apply auto (tick, reconcile, stale)
-- [ ] Workflow correction : double approbation prod testée
-- [ ] Backup DB avant première correction apply financière
+- `DATABASE_URL` prod aligné Alembic
+- `alembic upgrade head` ≥ 168 (et chaîne 161–167 si première install)
+- RPC Base : `BASE_RPC_URL` / `ONCHAIN_INDEXER_BASE_`*
+- `ONCHAIN_INDEXER_BASE_ENABLED=true` si indexation prod souhaitée
+- Mocks désactivés : `LIFI_SWAPS_MOCK`, `BUNDLE_LIFI_SYNC_MOCK`, sandbox web flags
+- **To verify** `enforce_production_mock_guard` au boot API
+- Cron externe `defi_observability_tick --no-dry-run` + `--max-duration-seconds`
+- Lock vérifié (2 crons → `skipped_locked`)
+- Admin RBAC : `require_admin_or_ops`
+- Router `onchain_reconciliation_admin_router` monté — **To verify prod**
+- Routers internal Morpho/Lombard montés — **To verify prod**
+- CSV export testé
+- Tests Phase 7–10 passent en CI/staging
+- Pas d’apply auto (tick, reconcile, stale)
+- Workflow correction : double approbation prod testée
+- Backup DB avant première correction apply financière
 
 ---
 
 ## 19. Known limitations
 
-| Limitation | Détail |
-| --- | --- |
-| Indexer | `--once` par cron, **pas de daemon** intégré |
-| Chaîne | **Base only** pour indexer continu |
-| ETH native | Optionnel, coûteux (`ONCHAIN_INDEXER_BASE_NATIVE_ENABLED`) |
-| Apply auto | **Aucun** sur tick / reconcile / stale |
-| Rebuild global | `scripts/rebuild_balances.py` hors pipeline observabilité — pas apply auto |
-| Lombard | Repay / withdraw / close : **non couverts** par intents documentés |
-| Bundle | Sync exchange hors LI.FI : **To verify** |
-| Balance historique | Discrepancies balance-only sans plage blocs : preuve limitée |
-| Admin API prod | Seuls endpoints `/jobs` garantis sur `main` poussé (mai 2026) |
-| `onchain_vault_transactions` | Prisma/web ; API lit en SQL ad hoc |
-| Audit doc §2 | `AUDIT_DEFI_TRANSACTIONAL_INTEGRITY.md` : mention « pas d’indexer » **obsolète** post-161 |
+
+| Limitation                   | Détail                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------- |
+| Indexer                      | `--once` par cron, **pas de daemon** intégré                                              |
+| Chaîne                       | **Base only** pour indexer continu                                                        |
+| ETH native                   | Optionnel, coûteux (`ONCHAIN_INDEXER_BASE_NATIVE_ENABLED`)                                |
+| Apply auto                   | **Aucun** sur tick / reconcile / stale                                                    |
+| Rebuild global               | `scripts/rebuild_balances.py` hors pipeline observabilité — pas apply auto                |
+| Lombard                      | Repay / withdraw / close : **non couverts** par intents documentés                        |
+| Bundle                       | Sync exchange hors LI.FI : **To verify**                                                  |
+| Balance historique           | Discrepancies balance-only sans plage blocs : preuve limitée                              |
+| Admin API prod               | Seuls endpoints `/jobs` garantis sur `main` poussé (mai 2026)                             |
+| `onchain_vault_transactions` | Prisma/web ; API lit en SQL ad hoc                                                        |
+| Audit doc §2                 | `AUDIT_DEFI_TRANSACTIONAL_INTEGRITY.md` : mention « pas d’indexer » **obsolète** post-161 |
+
 
 ---
 
 ## 20. Future roadmap
 
-| Phase | Contenu |
-| --- | --- |
+
+| Phase  | Contenu                                                                     |
+| ------ | --------------------------------------------------------------------------- |
 | **11** | Alerting Slack/email optionnel (`DEFI_OPS_ALERT_WEBHOOK_URL`), feature-flag |
-| **12** | SLO dashboard : % ticks degraded, latence indexer, MTTR discrepancies |
-| **13** | Intents Morpho/Lombard repay/withdraw/close |
-| **14** | Multi-chain indexer (au-delà Base) |
-| **15** | Pack audit externe (exports CSV + chaîne intents/raw/ledger) |
+| **12** | SLO dashboard : % ticks degraded, latence indexer, MTTR discrepancies       |
+| **13** | Intents Morpho/Lombard repay/withdraw/close                                 |
+| **14** | Multi-chain indexer (au-delà Base)                                          |
+| **15** | Pack audit externe (exports CSV + chaîne intents/raw/ledger)                |
+
 
 ---
 
@@ -839,56 +902,64 @@ Voir `DEFI_OBSERVABILITY_PROD_RUNBOOK.md` — job_runs, P0/P1 ouverts, intents s
 
 ### 21.2 Scripts CLI
 
-| Script | Module |
-| --- | --- |
-| `replay_onchain.py` | `block_range_replay` |
-| `run_onchain_indexer.py` | `continuous_base_indexer` |
-| `reconcile_user.py` | `user_reconcile` |
-| `reconcile_wallet.py` | `wallet_dry_run` |
-| `transaction_intent_health.py` | `transaction_intent_health` |
-| `defi_observability_tick.py` | `tick_service` |
-| `rebuild_balances.py` | **To verify** — hors observabilité |
+
+| Script                         | Module                             |
+| ------------------------------ | ---------------------------------- |
+| `replay_onchain.py`            | `block_range_replay`               |
+| `run_onchain_indexer.py`       | `continuous_base_indexer`          |
+| `reconcile_user.py`            | `user_reconcile`                   |
+| `reconcile_wallet.py`          | `wallet_dry_run`                   |
+| `transaction_intent_health.py` | `transaction_intent_health`        |
+| `defi_observability_tick.py`   | `tick_service`                     |
+| `rebuild_balances.py`          | **To verify** — hors observabilité |
+
 
 ### 21.3 Variables d'environnement (extrait)
 
-| Variable | Usage |
-| --- | --- |
-| `DATABASE_URL` | PostgreSQL |
-| `APP_ENV` / `ENV` | `is_production_env()` |
-| `ONCHAIN_INDEXER_BASE_*` | Indexer |
-| `BASE_RPC_URL` | RPC |
-| `INTENT_TTL_*_MINUTES` | Stale TTL |
-| `DEFI_OPS_OPEN_P0/P1_THRESHOLD` | Alertes tick |
-| `TRANSACTION_INTENTS_INTERNAL_KEY` | Routes internal Morpho/Lombard |
-| `ONCHAIN_RECONCILIATION_ALLOW_SINGLE_APPROVER_DEV` | Dev only |
-| `LIFI_SWAPS_MOCK`, `BUNDLE_LIFI_SYNC_MOCK` | Interdits prod |
-| `LIFI_API_KEY`, `SWAPS_ENABLED` | LI.FI |
+
+| Variable                                           | Usage                          |
+| -------------------------------------------------- | ------------------------------ |
+| `DATABASE_URL`                                     | PostgreSQL                     |
+| `APP_ENV` / `ENV`                                  | `is_production_env()`          |
+| `ONCHAIN_INDEXER_BASE_`*                           | Indexer                        |
+| `BASE_RPC_URL`                                     | RPC                            |
+| `INTENT_TTL_*_MINUTES`                             | Stale TTL                      |
+| `DEFI_OPS_OPEN_P0/P1_THRESHOLD`                    | Alertes tick                   |
+| `TRANSACTION_INTENTS_INTERNAL_KEY`                 | Routes internal Morpho/Lombard |
+| `ONCHAIN_RECONCILIATION_ALLOW_SINGLE_APPROVER_DEV` | Dev only                       |
+| `LIFI_SWAPS_MOCK`, `BUNDLE_LIFI_SYNC_MOCK`         | Interdits prod                 |
+| `LIFI_API_KEY`, `SWAPS_ENABLED`                    | LI.FI                          |
+
 
 ### 21.4 Glossaire
 
-| Terme | Définition |
-| --- | --- |
-| **Intent** | Enregistrement `transaction_intents` = cycle de vie métier produit |
-| **Raw event** | Ligne `raw_onchain_events` = preuve indexée on-chain |
-| **Discrepancy** | Écart détecté, statut workflow humain |
-| **Correction** | Proposition/apply auditée liée à une discrepancy |
-| **Settlement** | Application ledger LI.FI post-confirmation |
-| **Tick** | Exécution unique `defi_observability_tick` (observe) |
-| **Layer** | Catégorie discrepancy : `privy`, `lifi`, `intent`, `morpho`, etc. |
+
+| Terme           | Définition                                                         |
+| --------------- | ------------------------------------------------------------------ |
+| **Intent**      | Enregistrement `transaction_intents` = cycle de vie métier produit |
+| **Raw event**   | Ligne `raw_onchain_events` = preuve indexée on-chain               |
+| **Discrepancy** | Écart détecté, statut workflow humain                              |
+| **Correction**  | Proposition/apply auditée liée à une discrepancy                   |
+| **Settlement**  | Application ledger LI.FI post-confirmation                         |
+| **Tick**        | Exécution unique `defi_observability_tick` (observe)               |
+| **Layer**       | Catégorie discrepancy : `privy`, `lifi`, `intent`, `morpho`, etc.  |
+
 
 ### 21.5 Migrations Alembic (chaîne DeFi)
 
-| Rev | Fichier |
-| --- | --- |
-| 160 | `160_person_wallet_reconciliation.py` |
-| 161 | `161_raw_onchain_events.py` |
-| 162 | `162_reconciliation_discrepancies.py` |
-| 163 | `163_reconciliation_correction_status.py` |
-| 164 | `164_raw_onchain_event_consumed.py` |
-| 165 | `165_onchain_indexer_checkpoints.py` |
-| 166 | `166_transaction_intents_phase7.py` |
+
+| Rev | Fichier                                       |
+| --- | --------------------------------------------- |
+| 160 | `160_person_wallet_reconciliation.py`         |
+| 161 | `161_raw_onchain_events.py`                   |
+| 162 | `162_reconciliation_discrepancies.py`         |
+| 163 | `163_reconciliation_correction_status.py`     |
+| 164 | `164_raw_onchain_event_consumed.py`           |
+| 165 | `165_onchain_indexer_checkpoints.py`          |
+| 166 | `166_transaction_intents_phase7.py`           |
 | 167 | `167_transaction_intents_linked_reference.py` |
-| 168 | `168_defi_observability_job_runs.py` |
+| 168 | `168_defi_observability_job_runs.py`          |
+
 
 ### 21.6 Tests (suite DeFi transactionnelle)
 
@@ -935,9 +1006,12 @@ python3 -m pytest \
 
 ## Document control
 
-| Champ | Valeur |
-| --- | --- |
-| Version | 1.0 |
-| Date | 2026-05-28 |
-| Auteur | Documentation générée depuis codebase Arquantix |
+
+| Champ           | Valeur                                                 |
+| --------------- | ------------------------------------------------------ |
+| Version         | 1.0                                                    |
+| Date            | 2026-05-28                                             |
+| Auteur          | Documentation générée depuis codebase Arquantix        |
 | Prochaine revue | Après montage complet routers admin + internal en prod |
+
+

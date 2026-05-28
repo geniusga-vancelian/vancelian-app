@@ -2,6 +2,8 @@
 
 Complète le runbook opérationnel : [`DEFI_OBSERVABILITY_RUNBOOK.md`](DEFI_OBSERVABILITY_RUNBOOK.md).
 
+**Mise en service cron / premier run prod :** [`DEFI_OBSERVABILITY_OPS_GO_LIVE.md`](DEFI_OBSERVABILITY_OPS_GO_LIVE.md) (checklist, incidents, wrapper `scripts/run_defi_observability_tick_prod.sh`).
+
 ## Principes prod
 
 - **Pas de daemon** applicatif — cron externe uniquement.
@@ -11,36 +13,44 @@ Complète le runbook opérationnel : [`DEFI_OBSERVABILITY_RUNBOOK.md`](DEFI_OBSE
 
 ## Variables d’environnement obligatoires
 
-| Variable | Rôle |
-| --- | --- |
+
+| Variable       | Rôle                                       |
+| -------------- | ------------------------------------------ |
 | `DATABASE_URL` | Connexion PostgreSQL (même base que l’API) |
+
 
 ## Variables optionnelles (indexer)
 
-| Variable | Défaut / note |
-| --- | --- |
+
+| Variable                       | Défaut / note                                  |
+| ------------------------------ | ---------------------------------------------- |
 | `ONCHAIN_INDEXER_BASE_ENABLED` | `true` en prod pour écrire events + checkpoint |
-| `ONCHAIN_INDEXER_BASE_RPC_URL` | RPC Base (ou équivalent config indexer) |
-| `ONCHAIN_INDEXER_BASE_*` | Voir config `BaseIndexerConfig` |
+| `ONCHAIN_INDEXER_BASE_RPC_URL` | RPC Base (ou équivalent config indexer)        |
+| `ONCHAIN_INDEXER_BASE_*`       | Voir config `BaseIndexerConfig`                |
+
 
 ## Variables optionnelles (tick / alertes)
 
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `DEFI_OPS_OPEN_P0_THRESHOLD` | `3` | Alerte si P0 ouverts ≥ seuil |
-| `DEFI_OPS_OPEN_P1_THRESHOLD` | `10` | Alerte si P1 ouverts ≥ seuil |
-| `INTENT_TTL_*_MINUTES` | (voir Phase 8) | TTL stale par statut intent |
+
+| Variable                     | Défaut         | Rôle                         |
+| ---------------------------- | -------------- | ---------------------------- |
+| `DEFI_OPS_OPEN_P0_THRESHOLD` | `3`            | Alerte si P0 ouverts ≥ seuil |
+| `DEFI_OPS_OPEN_P1_THRESHOLD` | `10`           | Alerte si P1 ouverts ≥ seuil |
+| `INTENT_TTL_*_MINUTES`       | (voir Phase 8) | TTL stale par statut intent  |
+
 
 ## Seuils recommandés (prod)
 
-| Paramètre | Recommandation |
-| --- | --- |
-| Cron | `*/10 * * * *` (10 min) |
-| `--max-duration-seconds` | `480` (8 min) si cron 10 min |
-| `--max-users` | `25` |
-| `--user-hours` | `48` |
+
+| Paramètre                    | Recommandation                |
+| ---------------------------- | ----------------------------- |
+| Cron                         | `*/10 * * * *` (10 min)       |
+| `--max-duration-seconds`     | `480` (8 min) si cron 10 min  |
+| `--max-users`                | `25`                          |
+| `--user-hours`               | `48`                          |
 | `DEFI_OPS_OPEN_P0_THRESHOLD` | `3` (ajuster si volume élevé) |
-| `DEFI_OPS_OPEN_P1_THRESHOLD` | `10` |
+| `DEFI_OPS_OPEN_P1_THRESHOLD` | `10`                          |
+
 
 ## Commandes prod
 
@@ -56,13 +66,23 @@ python3 -m scripts.defi_observability_tick --no-dry-run --max-duration-seconds 4
 
 ### Codes de sortie
 
-| Code | Signification |
-| --- | --- |
-| `0` | success, ou **skipped_locked** (autre tick en cours — pas d’erreur cron) |
-| `2` | degraded / **timeout_degraded** / alertes ops |
-| `1` | error fatal |
+
+| Code | Signification                                                            |
+| ---- | ------------------------------------------------------------------------ |
+| `0`  | success, ou **skipped_locked** (autre tick en cours — pas d’erreur cron) |
+| `2`  | degraded / **timeout_degraded** / alertes ops                            |
+| `1`  | error fatal                                                              |
+
 
 ## Exemple cron externe
+
+Recommandé (pré-vols env + mocks) :
+
+```cron
+*/10 * * * * /path/to/vancelian-app/scripts/run_defi_observability_tick_prod.sh --execute >> /var/log/arquantix-defi-obs.log 2>&1
+```
+
+Équivalent direct :
 
 ```cron
 */10 * * * * cd /path/to/vancelian-app/services/arquantix/api && /usr/bin/python3 -m scripts.defi_observability_tick --no-dry-run --max-duration-seconds 480 >> /var/log/arquantix-defi-obs.log 2>&1
@@ -72,10 +92,16 @@ Si le tick précédent est encore en cours, le run suivant enregistre `skipped_l
 
 ## Admin
 
-| Page | URL |
-| --- | --- |
-| Jobs | `/admin/onchain-reconciliation/jobs` |
+
+| Page          | URL                                    |
+| ------------- | -------------------------------------- |
+| Jobs          | `/admin/onchain-reconciliation/jobs`   |
 | Santé intents | `/admin/onchain-reconciliation/health` |
+| Intents       | `/admin/onchain-reconciliation/intents` |
+| Discrepancies | `/admin/onchain-reconciliation`        |
+
+Incidents détaillés (tick failed, timeout, DB/RPC, schema, flood P0) : [`DEFI_OBSERVABILITY_OPS_GO_LIVE.md` §6](DEFI_OBSERVABILITY_OPS_GO_LIVE.md#6-runbook-incident-minimal).
+
 
 Statuts job : `success`, `degraded`, `error`, `skipped_locked`, `timeout_degraded`, `running`.
 
@@ -87,9 +113,9 @@ Statuts job : `success`, `degraded`, `error`, `skipped_locked`, `timeout_degrade
 2. `python3 -m scripts.defi_observability_tick --dry-run` — inspecter `summary.indexer`.
 3. Admin jobs : runs récents `degraded` + alerte `indexer_step_failed` / `indexer_rpc_error`.
 4. **Ne pas** activer apply auto — indexer peut être relancé manuellement :
-   ```bash
+  ```bash
    python3 -m scripts.run_onchain_indexer --once
-   ```
+  ```
 5. Une fois RPC OK, relancer `--no-dry-run` (un seul à la fois).
 
 ### RPC degraded (latence / erreurs sporadiques)
@@ -152,14 +178,14 @@ GROUP BY 1, 2;
 ## Verrou anti-concurrence
 
 - Mécanisme : `pg_try_advisory_lock` (session PostgreSQL).
-- Deux ticks `--no-dry-run` simultanés : le second crée `job_run` **`skipped_locked`**, exit **`0`**.
+- Deux ticks `--no-dry-run` simultanés : le second crée `job_run` `**skipped_locked**`, exit `**0**`.
 - Le verrou est libéré à la fin du script (succès, degraded, timeout ou exception).
 
 ## Timeout (`--max-duration-seconds`)
 
 - Arrêt **entre les étapes** (indexer → health → reconcile users).
-- Statut : **`timeout_degraded`** — pas d’interruption au milieu d’un appel indexer (checkpoint cohérent).
-- Exit code **`2`** (comme degraded).
+- Statut : `**timeout_degraded`** — pas d’interruption au milieu d’un appel indexer (checkpoint cohérent).
+- Exit code `**2**` (comme degraded).
 
 ## Rappel absolu
 

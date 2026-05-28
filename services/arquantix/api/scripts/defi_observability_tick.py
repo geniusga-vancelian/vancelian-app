@@ -8,7 +8,7 @@ Usage (depuis ``services/arquantix/api``)::
     python3 -m scripts.defi_observability_tick --no-dry-run
     python3 -m scripts.defi_observability_tick --no-dry-run --max-duration-seconds 480
 
-Cron externe — voir docs/arquantix/DEFI_OBSERVABILITY_PROD_RUNBOOK.md
+Cron externe — voir docs/arquantix/DEFI_OBSERVABILITY_OPS_GO_LIVE.md
 """
 from __future__ import annotations
 
