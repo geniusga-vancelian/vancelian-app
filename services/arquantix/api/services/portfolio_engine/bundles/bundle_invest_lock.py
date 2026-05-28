@@ -215,6 +215,147 @@ def clear_invest_lock(
     db.flush()
 
 
+def _resolve_person_id(db: Session, client_id: UUID) -> Optional[UUID]:
+    from services.portfolio_engine.clients.models import Client
+
+    row = db.query(Client).filter(Client.id == client_id).first()
+    return row.person_id if row is not None else None
+
+
+def _intent_batch_has_pending_legs(
+    db: Session,
+    *,
+    person_id: UUID,
+    bundle_id: str,
+    batch_id: str,
+) -> bool:
+    from services.transaction_intents.bundle_intent_sync import (
+        LEG_CONFIRMED,
+        LEG_FAILED,
+        _normalize_legs,
+    )
+    from services.transaction_intents.repository import TransactionIntentRepository
+
+    row = TransactionIntentRepository.find_by_bundle_batch(
+        db,
+        person_id=person_id,
+        bundle_id=bundle_id,
+        batch_id=batch_id,
+    )
+    if row is None:
+        return False
+    legs = _normalize_legs((row.metadata_json or {}).get("legs"))
+    if not legs:
+        return False
+    terminal = {LEG_CONFIRMED, LEG_FAILED}
+    return any(str(leg.get("status") or "pending") not in terminal for leg in legs)
+
+
+def _swap_batch_has_pending_allocation(
+    db: Session,
+    *,
+    person_id: UUID,
+    batch_id: str,
+) -> bool:
+    from services.lifi.enums import SwapSessionStatus
+    from services.lifi.models import PersonWalletSwap
+    from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
+
+    pending_statuses = {
+        SwapSessionStatus.PENDING.value,
+        SwapSessionStatus.QUOTE_RECEIVED.value,
+        SwapSessionStatus.AWAITING_SIGNATURE.value,
+        SwapSessionStatus.SUBMITTED.value,
+    }
+    swaps = (
+        db.query(PersonWalletSwap)
+        .filter(
+            PersonWalletSwap.person_id == person_id,
+            PersonWalletSwap.status.in_(list(pending_statuses)),
+        )
+        .all()
+    )
+    blocking_actions = {"allocation", "invest", ""}
+    for swap in swaps:
+        ctx = bundle_context_from_swap_audit(swap)
+        if not ctx or str(ctx.get("batch_id")) != batch_id:
+            continue
+        action = str(ctx.get("bundle_action") or "")
+        if action in blocking_actions:
+            return True
+    return False
+
+
+def _batch_has_blocking_invest_work(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    batch_id: str,
+) -> bool:
+    person_id = _resolve_person_id(db, client_id)
+    if person_id is None:
+        return False
+    if _intent_batch_has_pending_legs(
+        db,
+        person_id=person_id,
+        bundle_id=str(portfolio_id),
+        batch_id=batch_id,
+    ):
+        return True
+    return _swap_batch_has_pending_allocation(
+        db,
+        person_id=person_id,
+        batch_id=batch_id,
+    )
+
+
+def reconcile_idle_invest_lock_for_withdraw(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    portfolio: Portfolio,
+) -> bool:
+    """Autorise le retrait si le verrou invest est absent ou sans travail en cours.
+
+    Un verrou obsolète (fund-first terminé, legs d'allocation jamais signés) est
+    retiré automatiquement avant le retrait cash-only.
+    """
+    lock = get_invest_lock(portfolio.metadata_)
+    if lock is None:
+        return True
+    lock_client = str(lock.get("client_id") or "")
+    if lock_client and lock_client != str(client_id):
+        return False
+
+    batch_id = str(lock.get("batch_id") or "").strip()
+    if not batch_id:
+        meta = dict(portfolio.metadata_ or {})
+        meta.pop(BUNDLE_INVEST_LOCK_KEY, None)
+        portfolio.metadata_ = meta
+        db.add(portfolio)
+        db.flush()
+        return True
+
+    if _batch_has_blocking_invest_work(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        batch_id=batch_id,
+    ):
+        return False
+
+    clear_invest_lock(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        batch_id=batch_id,
+    )
+    db.refresh(portfolio)
+    return True
+
+
 def get_active_invest_lock_for_portfolio(
     db: Session,
     *,

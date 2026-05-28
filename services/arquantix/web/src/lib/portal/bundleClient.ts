@@ -252,6 +252,11 @@ export async function finalizeBundleBatch(body: {
   return parseJson(res)
 }
 
+const BUNDLE_WITHDRAW_ERROR_MESSAGES: Record<string, string> = {
+  invest_lock_active:
+    'Un investissement bundle est encore en cours sur ce portefeuille. Attendez la fin des échanges Li.FI ou réessayez dans quelques instants.',
+}
+
 export async function withdrawBundle(body: {
   portfolio_id: string
   withdraw_amount?: number
@@ -271,8 +276,10 @@ export async function withdrawBundle(body: {
     if (res.status === 401) {
       throw new Error('Session expirée — reconnectez-vous pour continuer.')
     }
+    const detail = typeof data.detail === 'string' ? data.detail : null
     const message =
-      (typeof data.detail === 'string' ? data.detail : null) ||
+      (detail && BUNDLE_WITHDRAW_ERROR_MESSAGES[detail]) ||
+      detail ||
       data.message ||
       'Requête retrait impossible'
     throw new Error(message)
