@@ -75,9 +75,9 @@ export const APP_DS_SHOWCASE_SECTIONS: AppDsShowcaseSection[] = [
         "height": 380
       },
       {
-        "title": "Amounts — Inter SemiBold + tabular-nums",
+        "title": "Amounts — Inter SemiBold + tabular-nums · échelle .v-amount-*",
         "file": "06-type-amount.html",
-        "height": 280
+        "height": 480
       }
     ]
   },
@@ -645,7 +645,151 @@ export const APP_DS_SHOWCASE_SECTIONS: AppDsShowcaseSection[] = [
         "openHref": "preview/84-success-failure-screen.html"
       }
     ]
+  },
+  {
+    "id": "app-primitives",
+    "num": "09",
+    "title": "App product — shared primitives",
+    "count": "7 assets · Webapp3",
+    "items": [
+      {
+        "title": "Icon — Kalai CSS mask (currentColor tint)",
+        "file": "99-icon.html",
+        "height": 200,
+        "openHref": "preview/99-icon.html"
+      },
+      {
+        "title": "Eyebrow — default · sm · tagged",
+        "file": "100-eyebrow.html",
+        "height": 220,
+        "openHref": "preview/100-eyebrow.html"
+      },
+      {
+        "title": "Account dot — typed avatar + Kalai glyph slot",
+        "file": "101-account-dot.html",
+        "height": 200,
+        "openHref": "preview/101-account-dot.html"
+      },
+      {
+        "title": "Asset chip — sélecteur actif (dot + label + chevron)",
+        "file": "102-asset-chip.html",
+        "height": 240,
+        "openHref": "preview/102-asset-chip.html"
+      },
+      {
+        "title": "Side panel — drawer droite + scrim",
+        "file": "103-side-panel.html",
+        "height": 380,
+        "openHref": "preview/103-side-panel.html"
+      },
+      {
+        "title": "Money phrase — signature éditoriale revenu",
+        "file": "104-money-phrase.html",
+        "height": 220,
+        "openHref": "preview/104-money-phrase.html"
+      },
+      {
+        "title": "Perf chart — multi-plage SVG inline",
+        "file": "105-perf-chart.html",
+        "height": 420,
+        "openHref": "preview/105-perf-chart.html"
+      }
+    ]
+  },
+  {
+    "id": "app-shell",
+    "num": "10",
+    "title": "App product — shell",
+    "count": "6 assets · Webapp3",
+    "items": [
+      {
+        "title": "Top nav produit — wallet · réseau · search · profil",
+        "file": "106-app-topnav.html",
+        "height": 120,
+        "openHref": "preview/106-app-topnav.html"
+      },
+      {
+        "title": "Mobile tab bar — 5 onglets · safe area",
+        "file": "107-mobile-tab-bar.html",
+        "height": 120,
+        "openHref": "preview/107-mobile-tab-bar.html"
+      },
+      {
+        "title": "Mobile chain bar — wallet + réseau (≤960px)",
+        "file": "108-mobile-chain-bar.html",
+        "height": 120,
+        "openHref": "preview/108-mobile-chain-bar.html"
+      },
+      {
+        "title": "Pill dropdown — déclencheur + panneau .dd",
+        "file": "109-pill-dropdown.html",
+        "height": 320,
+        "openHref": "preview/109-pill-dropdown.html"
+      },
+      {
+        "title": "Search overlay — plein écran · résultats groupés",
+        "file": "110-search-overlay.html",
+        "height": 420,
+        "openHref": "preview/110-search-overlay.html"
+      },
+      {
+        "title": "Footer slim — copyright + liens utiles",
+        "file": "111-app-footer-slim.html",
+        "height": 120,
+        "openHref": "preview/111-app-footer-slim.html"
+      }
+    ]
+  },
+  {
+    "id": "app-patterns",
+    "num": "11",
+    "title": "App product — page patterns",
+    "count": "7 assets · Webapp3",
+    "items": [
+      {
+        "title": "Section head — titre canonique + voir tout",
+        "file": "112-section-head-product.html",
+        "height": 220,
+        "openHref": "preview/112-section-head-product.html"
+      },
+      {
+        "title": "Balance card produit — solde héro Newsreader",
+        "file": "113-balance-card-product.html",
+        "height": 420,
+        "openHref": "preview/113-balance-card-product.html"
+      },
+      {
+        "title": "Accounts list — .v-card--list + .acc-row",
+        "file": "114-accounts-list.html",
+        "height": 360,
+        "openHref": "preview/114-accounts-list.html"
+      },
+      {
+        "title": "News section — grille actu cards",
+        "file": "115-news-section-product.html",
+        "height": 520,
+        "openHref": "preview/115-news-section-product.html"
+      },
+      {
+        "title": "Advisor card — portrait · banner · multi-channel",
+        "file": "116-advisor-card-product.html",
+        "height": 520,
+        "openHref": "preview/116-advisor-card-product.html"
+      },
+      {
+        "title": "Featured card — offre du mois full bleed",
+        "file": "117-featured-card.html",
+        "height": 400,
+        "openHref": "preview/117-featured-card.html"
+      },
+      {
+        "title": "Support card — sidebar compacte",
+        "file": "118-support-card.html",
+        "height": 280,
+        "openHref": "preview/118-support-card.html"
+      }
+    ]
   }
 ] as const
 
-export const APP_DS_SHOWCASE_VERSION = 'v2.2 · 26 mai 2026' as const
+export const APP_DS_SHOWCASE_VERSION = 'v2.3 · 28 mai 2026 · 114 modules' as const

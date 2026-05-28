@@ -32,7 +32,7 @@ Les variables `--v-*` et les classes composants (`.btn`, `.card-simple`, `.v-eye
 
 ## Showcase
 
-`/app/design` — `AppDesignSystemShowcase` : **94 modules** en iframes (`public/app-ds/preview/*.html`), structure identique à `ui_kits/vancelian-app/index.html` v2.1 (Brand · Colors · Type · Spacing · Simple · UI · Cards · Misc).
+`/app/design` — `AppDesignSystemShowcase` : **114 modules** en iframes (`public/app-ds/preview/*.html`), structure App Vancelian v2.2 + Webapp3 (sections 09–11 : primitives · shell · patterns produit).
 
 ## Composants React portail (wrappers)
 
