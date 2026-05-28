@@ -44,6 +44,11 @@ from services.portfolio_engine.positions.enums import PositionType
 from services.portfolio_engine.positions.models import PositionAtom
 from services.portfolio_engine.products.models import ProductDefinition
 
+from .preview_warnings import (
+    build_exchange_preview_warning,
+    build_lifi_preview_warning,
+    build_lifi_preview_warning_from_exc,
+)
 from .bundle_invest_lock import (
     acquire_invest_lock,
     assert_no_active_invest_lock,
@@ -671,8 +676,9 @@ class BundleOrchestrator:
     ) -> dict:
         """Estimate a bundle investment without executing anything.
 
-        Uses Li.FI quotes when ``BUNDLE_EXECUTION_PROVIDER=lifi_base``, otherwise
-        ExchangeService pricing.  Creates no orders, atoms, or audit entries.
+        Uses Li.FI on-chain quotes when ``BUNDLE_EXECUTION_PROVIDER=lifi_base`` (no Binance
+        fallback). Legacy ``exchange`` provider uses ExchangeService pricing only.
+        Creates no orders, atoms, or audit entries.
         """
         warnings: list[str] = []
 
@@ -811,7 +817,11 @@ class BundleOrchestrator:
         use_lifi_preview: bool,
         person_id: UUID | None,
     ) -> dict:
-        """Estimate one allocation leg — Li.FI when bundle provider is lifi_base."""
+        """Estimate one allocation leg.
+
+        ``lifi_base`` : quote LI.FI on-chain (même modèle que le swap portail) — pas de repli
+        Exchange/Binance. ``exchange`` (legacy) : ``ExchangeService.preview_swap`` uniquement.
+        """
         base_row = {
             "asset": lifi_target,
             "asset_display": display_asset,
@@ -821,7 +831,18 @@ class BundleOrchestrator:
             "status": "unavailable",
         }
 
-        if use_lifi_preview and person_id is not None:
+        if use_lifi_preview:
+            if person_id is None:
+                return {
+                    "status": "unavailable",
+                    "warning": build_lifi_preview_warning(
+                        asset=lifi_target,
+                        display=display_asset,
+                        code="bundle.lifi.no_person_id",
+                        detail="Client sans person_id — wallet Privy requis",
+                    ),
+                    "row": {**base_row, "status": "unavailable"},
+                }
             try:
                 from services.portfolio_engine.bundle_execution.bundle_lifi_quote_service import (
                     BundleLifiQuoteService,
@@ -844,12 +865,21 @@ class BundleOrchestrator:
                     },
                 }
             except Exception as exc:
-                logger.info(
-                    "Li.FI preview failed for %s → %s, falling back to exchange: %s",
+                logger.warning(
+                    "Li.FI bundle preview failed for %s → %s: %s",
                     entry_asset,
                     lifi_target,
                     exc,
                 )
+                return {
+                    "status": "unavailable",
+                    "warning": build_lifi_preview_warning_from_exc(
+                        asset=lifi_target,
+                        display=display_asset,
+                        exc=exc,
+                    ),
+                    "row": {**base_row, "status": "unavailable"},
+                }
 
         from services.exchange.schemas import SwapPreviewRequest
 
@@ -875,7 +905,11 @@ class BundleOrchestrator:
         except Exception as exc:
             return {
                 "status": "unavailable",
-                "warning": f"swap_preview_failed:{lifi_target}: {exc}",
+                "warning": build_exchange_preview_warning(
+                    asset=lifi_target,
+                    display=display_asset,
+                    detail=str(exc),
+                ),
                 "row": {**base_row, "status": "unavailable"},
             }
 

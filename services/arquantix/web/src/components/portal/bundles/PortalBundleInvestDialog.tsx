@@ -25,6 +25,7 @@ import {
   formatBundleTargetWeight,
   formatBundleUsdcAmount,
 } from '@/lib/portal/bundleFormat'
+import { formatBundleInvestPreviewWarnings } from '@/lib/portal/bundleInvestPreviewFormat'
 import {
   bundleExecutionPhaseLabel,
   bundleLockStatusLabel,
@@ -252,12 +253,14 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
   const previewWarning = useMemo(() => {
     if (!preview || preview.preview_status === 'ok') return null
     if (preview.preview_status === 'partial') {
-      return 'Certains actifs ne sont pas disponibles pour la cotation — l’allocation pourrait être partielle.'
+      const structured = formatBundleInvestPreviewWarnings(preview.warnings)
+      if (structured) return structured
+      return 'Certains actifs ne sont pas disponibles pour la cotation Li.FI — l’allocation pourrait être partielle.'
     }
-    if (preview.warnings?.length) {
-      return preview.warnings[0]
-    }
-    return 'Prévisualisation indisponible pour ce montant.'
+    return (
+      formatBundleInvestPreviewWarnings(preview.warnings) ??
+      'Prévisualisation indisponible pour ce montant.'
+    )
   }, [preview])
 
   return (
@@ -346,7 +349,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
               {entryAssetLabel}
             </p>
             {previewWarning ? (
-              <p className="m-0 rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[12px] text-amber-900">
+              <p className="m-0 whitespace-pre-line rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[12px] text-amber-900">
                 {previewWarning}
               </p>
             ) : null}

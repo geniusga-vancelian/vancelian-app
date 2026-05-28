@@ -5,12 +5,16 @@ import uuid
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+from services.portfolio_engine.bundle_execution.bundle_lifi_validation import (
+    BundleLifiValidationError,
+)
 from services.portfolio_engine.bundle_execution.lifi_base_config import (
     BUNDLE_LIFI_DESTINATION_ASSETS,
     display_bundle_asset,
     normalize_bundle_asset,
 )
 from services.portfolio_engine.bundles.orchestrator import BundleOrchestrator
+from services.portfolio_engine.bundles.preview_warnings import parse_preview_warning
 
 
 def test_normalize_and_display_bundle_assets():
@@ -48,6 +52,86 @@ def test_preview_allocation_leg_exchange_fallback():
     assert row["estimated_input_amount"] == "25"
     assert row["estimated_output_quantity"] == "0.00012"
     assert row["status"] == "ok"
+
+
+@patch(
+    "services.portfolio_engine.bundle_execution.bundle_lifi_quote_service.BundleLifiQuoteService.preview_bundle_quote"
+)
+def test_preview_allocation_leg_lifi_success(mock_preview_quote):
+    mock_preview_quote.return_value = Decimal("0.00031")
+    orch = BundleOrchestrator()
+    orch._exchange = MagicMock()
+    person_id = uuid.uuid4()
+
+    result = orch._preview_allocation_leg(
+        MagicMock(),
+        entry_asset="USDC",
+        lifi_target="CBBTC",
+        display_asset="cbBTC",
+        alloc_input=Decimal("21"),
+        target_weight=Decimal("0.7"),
+        reference_currency="EUR",
+        use_lifi_preview=True,
+        person_id=person_id,
+    )
+
+    assert result["status"] == "ok"
+    assert result["row"]["estimated_output_quantity"] == "0.00031"
+    orch._exchange.preview_swap.assert_not_called()
+    mock_preview_quote.assert_called_once()
+
+
+@patch(
+    "services.portfolio_engine.bundle_execution.bundle_lifi_quote_service.BundleLifiQuoteService.preview_bundle_quote"
+)
+def test_preview_allocation_leg_lifi_failure_does_not_fallback_to_exchange(mock_preview_quote):
+    mock_preview_quote.side_effect = BundleLifiValidationError(
+        "bundle.lifi.quote_failed",
+        "LI.FI route unavailable",
+    )
+    orch = BundleOrchestrator()
+    orch._exchange = MagicMock()
+
+    result = orch._preview_allocation_leg(
+        MagicMock(),
+        entry_asset="USDC",
+        lifi_target="CBBTC",
+        display_asset="cbBTC",
+        alloc_input=Decimal("21"),
+        target_weight=Decimal("0.7"),
+        reference_currency="EUR",
+        use_lifi_preview=True,
+        person_id=uuid.uuid4(),
+    )
+
+    assert result["status"] == "unavailable"
+    parsed = parse_preview_warning(result["warning"])
+    assert parsed["kind"] == "lifi_preview_failed"
+    assert parsed["code"] == "bundle.lifi.quote_failed"
+    assert parsed["detail"] == "LI.FI route unavailable"
+    orch._exchange.preview_swap.assert_not_called()
+
+
+def test_preview_allocation_leg_lifi_requires_person_id():
+    orch = BundleOrchestrator()
+    orch._exchange = MagicMock()
+
+    result = orch._preview_allocation_leg(
+        MagicMock(),
+        entry_asset="USDC",
+        lifi_target="CBETH",
+        display_asset="cbETH",
+        alloc_input=Decimal("9"),
+        target_weight=Decimal("0.3"),
+        reference_currency="EUR",
+        use_lifi_preview=True,
+        person_id=None,
+    )
+
+    assert result["status"] == "unavailable"
+    parsed = parse_preview_warning(result["warning"])
+    assert parsed["code"] == "bundle.lifi.no_person_id"
+    orch._exchange.preview_swap.assert_not_called()
 
 
 @patch(
