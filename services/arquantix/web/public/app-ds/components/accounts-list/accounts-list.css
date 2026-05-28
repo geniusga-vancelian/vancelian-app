@@ -1,0 +1,111 @@
+/* --- Card shells used in this page ------------------------------ */
+.v-card {
+  background: var(--v-white);
+  border: 1px solid var(--v-fg-10);
+  border-radius: var(--v-radius-lg);
+  padding: 24px;
+}
+.v-card--warm {
+  background: var(--v-fg-05);
+  border-color: transparent;
+}
+.v-card--grey {
+  background: var(--v-card);
+  border: 1px solid var(--v-fg-10);
+}
+.v-card--list {
+  padding: 0;
+  overflow: hidden;
+}
+/* --- Account groups list rows ------------------------------------ */
+.acc-row {
+  width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 20px;
+  padding: 18px 24px;
+  background: transparent; border: 0; cursor: pointer;
+  font-family: var(--v-font-ui);
+  transition: background var(--v-motion-fast) var(--v-ease-out);
+}
+.acc-row:hover { background: var(--v-fg-05); }
+.acc-row__body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.acc-row__title { margin: 0; }
+.acc-row__sub {
+  color: var(--v-fg-light);
+  font-feature-settings: "tnum" on;
+}
+.acc-row__right {
+  text-align: right;
+  display: flex; flex-direction: column; gap: 4px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.acc-row__daily {
+  font-family: var(--v-font-ui); font-weight: 500; font-size: 13px;
+  color: var(--v-green);
+  font-feature-settings: "tnum" on;
+}
+
+/* Pending state — Compte euro */
+.acc-row--pending { background: var(--v-fg-05); }
+.acc-row--pending:hover { background: var(--v-fg-10); }
+.acc-row--pending .avt {
+  opacity: 0.55;
+  filter: saturate(0.4);
+}
+.acc-row--pending .acc-row__title { color: var(--v-fg-light); }
+.acc-row--pending .acc-row__sub { color: var(--v-fg-muted); }
+.acc-row__progress {
+  margin-top: 10px;
+  display: flex; flex-direction: column; gap: 6px;
+  max-width: 320px;
+}
+.acc-row__progress-track {
+  height: 4px; border-radius: 999px;
+  background: var(--v-fg-10);
+  overflow: hidden;
+}
+.acc-row__progress-fill {
+  height: 100%;
+  background: var(--v-fg);
+  border-radius: inherit;
+  transition: width var(--v-motion-base) var(--v-ease-out);
+}
+.acc-row__progress-lbl {
+  font-family: var(--v-font-ui);
+  font-size: 12px;
+  color: var(--v-fg-muted);
+  font-feature-settings: "tnum" on;
+}
+.acc-row__progress-lbl b {
+  color: var(--v-fg);
+  font-weight: 600;
+}
+.acc-row__cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--v-font-ui);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--v-terracotta);
+  white-space: nowrap;
+}
+.acc-row--pending:hover .acc-row__cta { color: var(--v-terracotta-pressed); }
+
+.hr-thin { height: 1px; background: var(--v-fg-10); margin: 0; border: 0; }
+
+/* Responsive — tighten avatar, gap and padding on small screens */
+@media (max-width: 640px) {
+  .acc-row { gap: 12px; padding: 14px 16px; }
+  .acc-row .avt { --avt-size: 36px !important; }
+  .acc-row__title { font-size: 15px; }
+  .acc-row__sub { font-size: 12px; }
+  .acc-row__right .v-amount-md { font-size: 15px; }
+  .acc-row__daily { font-size: 12px; }
+  .acc-row > .ic { display: none; }
+}
+@media (max-width: 420px) {
+  .acc-row { gap: 10px; padding: 12px 14px; }
+  .acc-row .avt { --avt-size: 32px !important; }
+}

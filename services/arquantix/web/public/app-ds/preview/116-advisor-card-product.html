@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/components/icon/icon.css"/>
+<link rel="stylesheet" href="/app-ds/components/advisor-card/advisor-card.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+
+</style></head><body><div class="stage"><p class="lbl">Advisor card · 3 variantes</p>
+<div style="display:flex;flex-direction:column;gap:16px;max-width:400px;">
+  <div class="adv-A">
+    <div class="adv-A__head">
+      <img class="adv-A__portrait" src="/app-ds/assets/photos/advisor-helene.jpg" alt="Hélène Marchand"/>
+      <div class="adv-A__title-block">
+        <div class="v-eyebrow adv-A__eyebrow">Votre advisor</div>
+        <h3 class="adv-A__name">Hélène Marchand</h3>
+      </div>
+    </div>
+    <p class="adv-A__desc">Dédiée à votre patrimoine depuis 3 ans.</p>
+    <div class="adv-A__actions">
+      <button type="button" class="btn btn--primary btn--sm">Prendre rendez-vous</button>
+      <button type="button" class="btn btn--secondary btn--sm">Message</button>
+    </div>
+  </div>
+  <a href="#" class="adv-C">
+    <span class="adv-C__ic"><span class="ic" style="width:18px;height:18px;-webkit-mask-image:url('/icons/kalai/info.svg');mask-image:url('/icons/kalai/info.svg');"></span></span>
+    <span class="adv-C__body"><span class="adv-C__title">Une question ?</span><span class="adv-C__sub">Consultez la FAQ ou contactez votre advisor.</span></span>
+    <span class="adv-C__cta">Voir la FAQ</span>
+  </a>
+</div>
+</div></body></html>

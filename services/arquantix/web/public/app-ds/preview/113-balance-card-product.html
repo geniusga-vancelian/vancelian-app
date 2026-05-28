@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/components/icon/icon.css"/>
+<link rel="stylesheet" href="/app-ds/components/balance-card/balance-card.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+
+</style></head><body><div class="stage"><p class="lbl">Balance card · solde héro produit</p>
+<article class="bal bal--dark" style="max-width:420px;">
+  <button type="button" class="bal__toggle" aria-label="Afficher allocation"><span class="ic" style="width:16px;height:16px;-webkit-mask-image:url('/icons/kalai/bar-chart-2.svg');mask-image:url('/icons/kalai/bar-chart-2.svg');"></span></button>
+  <div class="bal__solde">
+    <span class="bal__lbl">Solde total <button type="button" class="ic-btn" style="width:28px;height:28px;border:0;background:none;padding:0;"><span class="ic" style="width:16px;height:16px;-webkit-mask-image:url('/icons/kalai/eye.svg');mask-image:url('/icons/kalai/eye.svg');"></span></button></span>
+    <span class="v-amount-hero bal__amt" style="font-size:clamp(40px,8vw,56px);color:var(--v-white);">48 920,00 €</span>
+    <span class="bal__chg"><span class="ic" style="width:14px;height:14px;-webkit-mask-image:url('/icons/kalai/trending-up.svg');mask-image:url('/icons/kalai/trending-up.svg');"></span> + 842 € <span class="bal__chg-pct">(+ 1,8 %)</span></span>
+  </div>
+  <div class="bal__actions">
+    <button type="button" class="btn btn--lg">Investir</button>
+    <button type="button" class="btn btn--lg">Échanger</button>
+    <button type="button" class="btn btn--lg">Déposer</button>
+  </div>
+</article>
+</div></body></html>

@@ -1,0 +1,162 @@
+/* --- Balance card (comp 19) ------------------------------------- */
+.bal {
+  border-radius: var(--v-radius-lg);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.bal--light {
+  background: var(--v-card);
+  color: var(--v-fg);
+  border: 1px solid var(--v-fg-10);
+}
+.bal--dark {
+  background: var(--v-dark-bg);
+  color: #EDECEC;
+}
+
+.bal__solde { display: flex; flex-direction: column; gap: 10px; }
+.bal__lbl {
+  font-family: var(--v-font-ui);
+  font-size: 13px; font-weight: 500;
+  color: var(--v-fg-muted);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.bal--dark .bal__lbl { color: rgba(237,236,236,0.7); }
+.bal__amt {
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 44px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--v-fg);
+  font-feature-settings: "tnum" on, "lnum" on;
+  font-variant-numeric: tabular-nums;
+}
+.bal--dark .bal__amt { color: var(--v-white); }
+.bal--dark .bal__actions .btn {
+  background: #FFFFFF;
+  color: var(--v-fg);
+}
+.bal--dark .bal__actions .btn:hover { background: #F1EEE8; }
+.bal__chg {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--v-font-ui);
+  font-weight: 600; font-size: 13px;
+  font-feature-settings: "tnum" on;
+  color: var(--v-green);
+}
+.bal__chg-pct { font-weight: 500; opacity: 0.65; }
+
+/* Mini chart */
+.bal__chart { height: 96px; margin: 0 -4px; position: relative; }
+.bal__chart svg { display: block; width: 100%; height: 100%; }
+.bal__chart path { stroke: var(--v-green); }
+.bal__chart-hi {
+  position: absolute; right: 0; top: 17.57%;
+  width: 10px; height: 10px; border-radius: 999px;
+  transform: translate(50%, -50%);
+  background: var(--v-green);
+  box-shadow: 0 0 0 4px rgba(51,97,77,0.18);
+}
+
+.bal__actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--v-fg-10);
+  margin-left: -24px;
+  margin-right: -24px;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* --- Toggle button (top-right of balance card) ------------------- */
+.bal__toggle {
+  position: absolute;
+  top: 16px; right: 16px;
+  width: 36px; height: 36px;
+  border-radius: var(--v-radius-pill);
+  background: #FFFFFF;
+  border: 1px solid var(--v-fg-10);
+  box-shadow: 0 1px 2px rgba(26, 24, 21, 0.06);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--v-fg);
+  cursor: pointer;
+  z-index: 2;
+  transition: background var(--v-motion-fast) var(--v-ease-out),
+              box-shadow var(--v-motion-fast) var(--v-ease-out),
+              color var(--v-motion-fast) var(--v-ease-out);
+}
+.bal__toggle:hover {
+  background: #F6F3EC;
+  box-shadow: 0 2px 6px rgba(26, 24, 21, 0.08);
+}
+.bal__toggle.is-active {
+  background: var(--v-fg);
+  color: #FFFFFF;
+  border-color: transparent;
+}
+.bal__toggle.is-active:hover { background: var(--v-fg-hover, #2a2722); }
+
+/* --- Allocation view --------------------------------------------- */
+.alloc {
+  display: flex; flex-direction: column;
+  gap: 24px;
+  animation: allocIn 220ms var(--v-ease-out);
+}
+@keyframes allocIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.alloc__split {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 28px;
+  align-items: center;
+}
+.alloc__donut {
+  width: 160px; height: 160px;
+  flex-shrink: 0;
+}
+.alloc__legend {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column;
+  min-width: 0;
+}
+@media (max-width: 520px) {
+  .alloc__split { grid-template-columns: 1fr; justify-items: center; }
+  .alloc__legend { width: 100%; }
+}
+.alloc__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--v-fg-10);
+}
+.alloc__row:last-child { border-bottom: 0; }
+.alloc__dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.alloc__label {
+  font-family: var(--v-font-ui);
+  font-weight: 500; font-size: 14px;
+  color: var(--v-fg);
+}
+.alloc__amount {
+  font-family: var(--v-font-ui);
+  font-weight: 600; font-size: 14px;
+  color: var(--v-fg);
+}
+.alloc__pct {
+  font-family: var(--v-font-ui);
+  font-weight: 500; font-size: 13px;
+  color: var(--v-fg-muted);
+  min-width: 52px; text-align: right;
+}

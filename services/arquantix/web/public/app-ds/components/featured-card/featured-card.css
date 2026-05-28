@@ -1,0 +1,24 @@
+.featured-card {
+  position: relative; width: 100%; aspect-ratio: 4 / 3;
+  border-radius: var(--v-radius-lg); overflow: hidden;
+  border: 1px solid var(--v-fg-10);
+  background-size: cover; background-position: center;
+  color: #fff; display: block; padding: 0; text-align: left;
+  cursor: pointer; border: 0;
+  transition: background var(--v-motion-fast) var(--v-ease-out);
+}
+.featured-card:hover { filter: brightness(1.02); }
+.featured-card__overlay {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 70%;
+  background: linear-gradient(180deg, rgba(20,18,8,0) 0%, rgba(20,18,8,0.75) 100%);
+  pointer-events: none;
+}
+.featured-card__body {
+  position: absolute; left: 20px; right: 20px; bottom: 18px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.featured-card__title { margin: 0; line-height: 1.05; letter-spacing: -0.01em; color: #fff; text-wrap: balance; }
+.featured-card__title-ui { font-family: var(--v-font-ui); font-weight: 500; font-size: 30px; }
+.featured-card__title-ed { font-family: var(--v-font-editorial); font-weight: 300; font-style: italic; font-size: 34px; }
+.featured-card .btn { background: #FFFFFF; color: var(--v-fg); align-self: flex-start; }
+.featured-card .btn:hover { background: #F1EEE8; }
