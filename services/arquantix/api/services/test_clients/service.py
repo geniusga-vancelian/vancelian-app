@@ -611,6 +611,9 @@ class TestClientService:
         from services.exchange.repository import ExchangeOrderRepository
         from services.privy_wallet.repository import PersonWalletDepositRepository
         from services.lifi.swap_repository import PersonWalletSwapRepository
+        from services.portfolio_engine.bundle_execution.bundle_pe_transactions import (
+            list_bundle_pe_asset_transactions,
+        )
         from services.privy_wallet.transaction_merge import (
             exchange_order_to_crypto_tx,
             list_orphan_webhook_crypto_txs,
@@ -643,10 +646,18 @@ class TestClientService:
                 if mapped is not None:
                     swap_txs.append(mapped)
 
+        bundle_pe_txs = list_bundle_pe_asset_transactions(
+            db,
+            client_id=client.id,
+            person_id=person_id,
+            asset=asset,
+            limit=200,
+        )
+
         txs = merge_crypto_transactions(
             exchange_txs,
             privy_rows,
-            extra_txs=[*orphan_txs, *swap_txs],
+            extra_txs=[*orphan_txs, *swap_txs, *bundle_pe_txs],
         )
 
         return {

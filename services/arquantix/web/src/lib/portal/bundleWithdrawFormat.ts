@@ -1,4 +1,5 @@
 import type { PortalBundlePosition } from '@/lib/portal/cryptoWalletTypes'
+import { selectMoneyValue } from '@/lib/portal/cryptoWalletFormat'
 
 export type BundleWithdrawDisplayPhase =
   | 'WITHDRAW_REQUESTED'
@@ -11,6 +12,8 @@ export type BundleWithdrawDisplayPhase =
 export type BundleHoldingsSplit = {
   cashLeg: PortalBundlePosition | null
   cashLegQuantity: number
+  /** Valorisation cash leg dans la devise de référence (pas la quantité brute USDC). */
+  cashLegDisplayValue: number
   spotAssets: PortalBundlePosition[]
   spotNotional: number
   totalWithdrawableEstimate: number
@@ -26,28 +29,46 @@ export type DirectTradingSnapshot = {
   usdcBalance: number
 }
 
-function positionNotional(position: PortalBundlePosition): number {
-  if (position.marketValue != null && position.marketValue > 0) {
-    return position.marketValue
-  }
-  if (position.asset.toUpperCase() === 'USDC' || position.asset.toUpperCase() === 'EURC') {
+function positionNotional(position: PortalBundlePosition, currency = 'EUR'): number {
+  const asset = position.asset.toUpperCase()
+  if ((asset === 'USDC' || asset === 'USDT') && currency === 'USD' && position.quantity > 0) {
     return position.quantity
   }
-  return position.costBasis
+  if ((asset === 'EUR' || asset === 'EURC') && currency === 'EUR' && position.quantity > 0) {
+    return position.quantity
+  }
+
+  const fromMarket = selectMoneyValue(
+    currency,
+    position.marketValue,
+    position.marketValueUsd,
+  )
+  if (fromMarket != null && fromMarket > 0) {
+    return fromMarket
+  }
+  if (asset === 'USDC' || asset === 'USDT' || asset === 'EURC') {
+    return selectMoneyValue(currency, position.costBasis, position.costBasisUsd) ?? position.quantity
+  }
+  return selectMoneyValue(currency, position.costBasis, position.costBasisUsd) ?? position.costBasis
 }
 
 /** Répartit la vue bundle : cash leg USDC vs actifs alloués (spots). */
-export function splitBundleHoldings(positions: PortalBundlePosition[] | undefined): BundleHoldingsSplit {
+export function splitBundleHoldings(
+  positions: PortalBundlePosition[] | undefined,
+  currency = 'EUR',
+): BundleHoldingsSplit {
   const list = positions ?? []
   const cashCandidates = list.filter((p) => p.positionType === 'cash' && p.quantity > 0)
   const cashLeg = cashCandidates[0] ?? null
   const cashLegQuantity = cashLeg?.quantity ?? 0
   const spotAssets = list.filter((p) => p.positionType === 'spot' && p.quantity > 0)
-  const spotNotional = spotAssets.reduce((sum, p) => sum + positionNotional(p), 0)
+  const spotNotional = spotAssets.reduce((sum, p) => sum + positionNotional(p, currency), 0)
+  const cashLegDisplayValue = cashLeg ? positionNotional(cashLeg, currency) : 0
   const totalWithdrawableEstimate = cashLegQuantity + spotNotional
   return {
     cashLeg,
     cashLegQuantity,
+    cashLegDisplayValue,
     spotAssets,
     spotNotional,
     totalWithdrawableEstimate,
@@ -165,10 +186,12 @@ export function applyConfirmedSellToBundleHoldings(
     }
   }
 
-  const spotNotional = spotAssets.reduce((sum, p) => sum + positionNotional(p), 0)
+  const spotNotional = spotAssets.reduce((sum, p) => sum + positionNotional(p, 'EUR'), 0)
+  const cashLegDisplayValue = cashLeg ? positionNotional(cashLeg, 'EUR') : 0
   return {
     cashLeg,
     cashLegQuantity,
+    cashLegDisplayValue,
     spotAssets,
     spotNotional,
     totalWithdrawableEstimate: cashLegQuantity + spotNotional,

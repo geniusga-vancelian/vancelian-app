@@ -340,6 +340,28 @@ def fund_bundle_cash_leg_from_self_trading(
         cost_basis,
     )
 
+    portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+    portfolio_name = portfolio.name if portfolio is not None else "Bundle"
+    from services.portfolio_engine.hardening.audit_service import AuditService
+
+    AuditService.log_success(
+        db,
+        entity_type="portfolio",
+        entity_id=str(portfolio_id),
+        action="bundle.fund_cash_leg",
+        actor_id=f"bundle-funding:{batch_id}",
+        metadata={
+            "client_id": str(client_id),
+            "portfolio_id": str(portfolio_id),
+            "portfolio_name": portfolio_name,
+            "batch_id": batch_id,
+            "entry_asset": entry_asset.upper(),
+            "amount": float(amount),
+            "cost_basis_eur": float(cost_basis),
+            "cash_leg_atom_id": str(cash_atom.id),
+        },
+    )
+
     logger.info(
         "bundle_funding.funded batch=%s client=%s portfolio=%s amount=%s %s cost_basis=%s",
         batch_id,
@@ -460,6 +482,27 @@ def release_bundle_cash_leg_to_self_trading(
         entry_instrument_id,
         amount,
         cost_basis,
+    )
+
+    portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+    portfolio_name = portfolio.name if portfolio is not None else "Bundle"
+    from services.portfolio_engine.hardening.audit_service import AuditService
+
+    AuditService.log_success(
+        db,
+        entity_type="portfolio",
+        entity_id=str(portfolio_id),
+        action="bundle.release_cash_leg",
+        actor_id=f"bundle-funding:{batch_id}",
+        metadata={
+            "client_id": str(client_id),
+            "portfolio_id": str(portfolio_id),
+            "portfolio_name": portfolio_name,
+            "batch_id": batch_id,
+            "entry_asset": entry_asset.upper(),
+            "amount": float(amount),
+            "cost_basis_eur": float(cost_basis),
+        },
     )
 
     logger.info(

@@ -363,6 +363,11 @@ class BundleOrchestrator:
                 person_id=person_id,
                 bundle_id=str(portfolio_id),
                 batch_id=batch_id,
+                extra_metadata={
+                    "funding_asset": entry_asset.upper(),
+                    "funding_amount": str(funding_amount),
+                    "portfolio_name": portfolio.name,
+                },
             )
 
         try:

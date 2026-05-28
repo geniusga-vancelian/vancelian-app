@@ -263,4 +263,27 @@ describe('mapCryptoTransactionToHistoryItem', () => {
     assert.match(row.amount, /USDC/)
     assert.match(row.meta ?? '', /Garantie · 0,017857 CBBTC/)
   })
+
+  it('renders bundle PE fund transfer as outgoing USDC flow', () => {
+    const row = mapCryptoTransactionToHistoryItem(
+      {
+        ...baseTx,
+        id: 'bundle-fund-1',
+        side: 'transfer',
+        direction: 'debit',
+        amountCrypto: '15',
+        title: 'Transfert vers Two Crypto Kings',
+        subtitle: '-15 USDC · Mon Trading → Bundle',
+        transactionKind: 'bundle_pe_transfer',
+        sourceSystem: 'bundle_pe',
+      },
+      'USD',
+    )
+    assert.equal(row.variant, 'flow')
+    assert.equal(row.flowDirection, 'out')
+    assert.match(row.amount, /−/)
+    assert.match(row.amount, /15/)
+    assert.match(row.amount, /USDC/)
+    assert.equal(row.title, 'Transfert vers Two Crypto Kings')
+  })
 })

@@ -5,6 +5,7 @@ import {
   buildCryptoWalletDetailFromScopedPosition,
   buildPrivyWalletPositionsSummary,
   buildUnifiedWalletRows,
+  bundlePositionDisplayValue,
   formatCryptoTransactionAmount,
   formatDetailVolumeAmount,
   isIncomingCryptoTransaction,
@@ -340,5 +341,37 @@ describe('parseSelfTradingCryptoPositionsPayload', () => {
       row.kind === 'position' ? row.position.asset : `bundle:${row.bundle.portfolioId}`,
     )
     assert.deepEqual(assets, ['bundle:bundle-1', 'USDC'])
+  })
+})
+
+describe('bundlePositionDisplayValue', () => {
+  it('uses USDC quantity for USD users even when market value is EUR-converted', () => {
+    const value = bundlePositionDisplayValue(
+      {
+        asset: 'USDC',
+        quantity: 15,
+        costBasis: 13.89,
+        marketValue: 12.91,
+        marketValueUsd: 12.91,
+        positionType: 'cash',
+      },
+      'USD',
+    )
+    assert.equal(value, 15)
+  })
+
+  it('uses EUR market value for EUR users', () => {
+    const value = bundlePositionDisplayValue(
+      {
+        asset: 'USDC',
+        quantity: 15,
+        costBasis: 13.89,
+        marketValue: 13.89,
+        marketValueUsd: 15,
+        positionType: 'cash',
+      },
+      'EUR',
+    )
+    assert.equal(value, 13.89)
   })
 })

@@ -1721,11 +1721,12 @@ def mobile_my_bundles(
     from services.portfolio_engine.positions.models import PositionAtom
     from services.portfolio_engine.instruments.models import Instrument
     from services.portfolio_engine.assets.models import Asset
-    from services.portfolio_engine.instruments.price_bridge import (
-        get_instrument_price,
-    )
     from services.portfolio_engine.allocations.models import TargetAllocation
-    from services.market_data.fx import get_eurusdt_rate, usdt_to_eur
+    from services.portfolio_engine.bundle_execution.bundle_position_valuation import (
+        eur_cost_basis_to_usd,
+        resolve_bundle_position_market_values,
+    )
+    from services.market_data.fx import get_eurusdt_rate
 
     eurusdt_rate = get_eurusdt_rate(db, strict=False)
 
@@ -1760,7 +1761,9 @@ def mobile_my_bundles(
         }
 
         total_cost = D("0")
+        total_cost_usd = D("0")
         total_market = D("0")
+        total_market_usd = D("0")
         positions = []
         assets_count = 0
         seen_instrument_ids: set = set()
@@ -1777,20 +1780,23 @@ def mobile_my_bundles(
             qty = D(str(atom.quantity or 0))
             cost = D(str(atom.cost_basis or 0))
             total_cost += cost
+            total_cost_usd += eur_cost_basis_to_usd(cost, eurusdt_rate)
 
-            price_usdt = None
-            price_eur = None
-            market_value = None
-            try:
-                price_info = get_instrument_price(db, atom.instrument_id)
-                price_usdt = D(price_info["price"]) if price_info.get("price") else None
-                if price_usdt is not None:
-                    price_eur = usdt_to_eur(price_usdt, eurusdt_rate)
-                    if qty > 0:
-                        market_value = (qty * price_eur).quantize(D("0.01"), rounding=RHU)
-                        total_market += market_value
-            except Exception:
-                pass
+            valuation = resolve_bundle_position_market_values(
+                db,
+                symbol=symbol,
+                quantity=qty,
+                instrument_id=atom.instrument_id,
+                eurusdt_rate=eurusdt_rate,
+            )
+            price_eur = valuation["price_eur"]
+            price_usd = valuation["price_usd"]
+            market_value = valuation["market_value"]
+            market_value_usd = valuation["market_value_usd"]
+            if market_value is not None:
+                total_market += market_value
+            if market_value_usd is not None:
+                total_market_usd += market_value_usd
 
             if atom.position_type == "spot":
                 assets_count += 1
@@ -1802,8 +1808,11 @@ def mobile_my_bundles(
                 "asset": symbol,
                 "quantity": float(qty),
                 "cost_basis": float(cost),
+                "cost_basis_usd": float(eur_cost_basis_to_usd(cost, eurusdt_rate)),
                 "market_value": float(market_value) if market_value is not None else None,
+                "market_value_usd": float(market_value_usd) if market_value_usd is not None else None,
                 "price_eur": float(price_eur) if price_eur is not None else None,
+                "price_usd": float(price_usd) if price_usd is not None else None,
                 "position_type": atom.position_type,
                 "target_weight": tw,
             })
@@ -1824,8 +1833,11 @@ def mobile_my_bundles(
                 "asset": symbol,
                 "quantity": 0.0,
                 "cost_basis": 0.0,
+                "cost_basis_usd": 0.0,
                 "market_value": 0.0,
+                "market_value_usd": 0.0,
                 "price_eur": None,
+                "price_usd": None,
                 "position_type": "spot",
                 "target_weight": float(ta.target_weight),
             })
@@ -1846,7 +1858,9 @@ def mobile_my_bundles(
             "status": portfolio.status,
             "assets_count": assets_count,
             "total_cost_basis": float(total_cost),
+            "total_cost_basis_usd": float(total_cost_usd.quantize(D("0.01"), rounding=RHU)),
             "total_market_value": float(total_market) if total_market > 0 else None,
+            "total_market_value_usd": float(total_market_usd) if total_market_usd > 0 else None,
             "performance_pct": perf_pct,
             "has_holdings": has_holdings,
             "positions": positions,

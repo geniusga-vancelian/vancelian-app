@@ -162,9 +162,12 @@ function parseBundlePosition(item: Record<string, unknown>): PortalBundlePositio
     asset: String(item.asset ?? '').trim().toUpperCase(),
     quantity: toNumber(item.quantity),
     costBasis: toNumber(item.cost_basis),
+    costBasisUsd: toOptionalNumber(item.cost_basis_usd),
     positionType: String(item.position_type ?? ''),
     marketValue: toOptionalNumber(item.market_value),
+    marketValueUsd: toOptionalNumber(item.market_value_usd),
     priceEur: toOptionalNumber(item.price_eur),
+    priceUsd: toOptionalNumber(item.price_usd),
     targetWeight: toOptionalNumber(item.target_weight),
   }
 }
@@ -192,7 +195,9 @@ export function parseMyBundles(raw: unknown): PortalMyBundleSummary[] {
         status: String(item.status ?? ''),
         assetsCount: toNumber(item.assets_count),
         totalCostBasis: toNumber(item.total_cost_basis),
+        totalCostBasisUsd: toOptionalNumber(item.total_cost_basis_usd),
         totalMarketValue: toOptionalNumber(item.total_market_value),
+        totalMarketValueUsd: toOptionalNumber(item.total_market_value_usd),
         performancePct: toOptionalNumber(item.performance_pct),
         hasHoldings: item.has_holdings === true,
         positions: positions.length > 0 ? positions : undefined,
@@ -570,6 +575,52 @@ export function selectMoneyValue(
   return eur ?? usd
 }
 
+/** Valorisation bundle dans la devise de référence client (API renvoie EUR + USD). */
+export function bundleMoneyValue(
+  currency: string,
+  eur?: number,
+  usd?: number,
+): number | undefined {
+  return selectMoneyValue(currency, eur, usd)
+}
+
+export function bundleSummaryMarketValue(
+  bundle: PortalMyBundleSummary,
+  currency: string,
+): number {
+  return (
+    bundleMoneyValue(currency, bundle.totalMarketValue, bundle.totalMarketValueUsd) ??
+    bundleMoneyValue(currency, bundle.totalCostBasis, bundle.totalCostBasisUsd) ??
+    0
+  )
+}
+
+export function bundlePositionDisplayValue(
+  position: PortalBundlePosition,
+  currency: string,
+): number {
+  const asset = position.asset.toUpperCase()
+  if ((asset === 'USDC' || asset === 'USDT') && currency === 'USD' && position.quantity > 0) {
+    return position.quantity
+  }
+  if ((asset === 'EUR' || asset === 'EURC') && currency === 'EUR' && position.quantity > 0) {
+    return position.quantity
+  }
+
+  const fromMarket = bundleMoneyValue(
+    currency,
+    position.marketValue,
+    position.marketValueUsd,
+  )
+  if (fromMarket != null && fromMarket > 0) return fromMarket
+  const fromCost = bundleMoneyValue(currency, position.costBasis, position.costBasisUsd)
+  if (fromCost != null && fromCost > 0) return fromCost
+  if (asset === 'USDC' || asset === 'USDT') {
+    return position.quantity
+  }
+  return 0
+}
+
 export function formatCryptoMoney(amount: number | undefined, currency: string): string {
   if (amount == null || Number.isNaN(amount)) return '—'
   return formatPortalMoney(amount, currency)
@@ -710,7 +761,7 @@ export function buildUnifiedWalletRows(
   }
 
   for (const bundle of bundles.filter((b) => b.hasHoldings)) {
-    const value = bundle.totalMarketValue ?? bundle.totalCostBasis
+    const value = bundleSummaryMarketValue(bundle, currency)
     rows.push({ kind: 'bundle', value, bundle })
   }
 
@@ -727,7 +778,7 @@ export function resolveHubTotalValue(
     selectMoneyValue(currency, positions.totalValueEur, positions.totalValueUsd) ?? 0
   const bundleSum = bundles
     .filter((b) => b.hasHoldings)
-    .reduce((sum, b) => sum + (b.totalMarketValue ?? b.totalCostBasis), 0)
+    .reduce((sum, b) => sum + bundleSummaryMarketValue(b, currency), 0)
   return direct + bundleSum
 }
 

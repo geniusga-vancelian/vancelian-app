@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
+import { usePrivy } from '@privy-io/react-auth'
 
 import {
   fetchSwapStatus,
@@ -13,6 +14,7 @@ import {
   parseSwapGasLimit,
 } from '@/lib/portal/swapTxFormat'
 import { ensureSwapTokenApproval, assertSwapTokenApprovalPayload } from '@/lib/portal/swapTokenApproval'
+import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 import { generateMockExternalWalletTxHash, isLocalMockExternalWallet } from '@/lib/wallet/externalWalletMock'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
@@ -45,6 +47,7 @@ export function useLifiSwapExecution(
   fromAsset?: string,
   options?: LifiSwapExecutionOptions,
 ) {
+  const { ready, authenticated } = usePrivy()
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
   const submitTxFn = options?.submitTx ?? submitSwapTx
 
@@ -62,7 +65,15 @@ export function useLifiSwapExecution(
       }
 
       const chainId = parseSwapChainId(tx.chain_id)
-      const wallet = await resolveWallet()
+      const isExternalSigning = exec.signing_wallet_mode === 'external_evm'
+
+      if (!isExternalSigning) {
+        await waitForPrivyClientReady(() => ready && authenticated, { timeoutMs: 30_000 })
+      }
+
+      const wallet = await resolveWallet(null, {
+        expectedAddress: exec.signing_wallet_address ?? undefined,
+      })
 
       if (
         exec.signing_wallet_address &&
@@ -111,7 +122,7 @@ export function useLifiSwapExecution(
       await submitTxFn(exec.swap_id, hash)
       return hash
     },
-    [fromAsset, onPhaseChange, resolveWallet, sendPortalTransaction, submitTxFn, swapMockMode],
+    [authenticated, fromAsset, onPhaseChange, ready, resolveWallet, sendPortalTransaction, submitTxFn, swapMockMode],
   )
 
   const pollUntilTerminal = useCallback(async (swapId: string) => {

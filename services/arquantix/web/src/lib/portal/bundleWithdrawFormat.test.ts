@@ -34,8 +34,9 @@ const samplePositions: PortalBundlePosition[] = [
 ]
 
 test('splitBundleHoldings separates cash leg and spot assets', () => {
-  const split = splitBundleHoldings(samplePositions)
+  const split = splitBundleHoldings(samplePositions, 'USD')
   assert.equal(split.cashLegQuantity, 40)
+  assert.equal(split.cashLegDisplayValue, 40)
   assert.equal(split.spotAssets.length, 2)
   assert.equal(split.spotNotional, 145)
   assert.equal(split.totalWithdrawableEstimate, 185)

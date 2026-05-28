@@ -27,9 +27,12 @@ import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
 import { cryptoPositionHeaderTitle } from '@/lib/portal/instrumentDetailFormat'
 import {
+  bundlePositionDisplayValue,
+  bundleSummaryMarketValue,
   formatCryptoMoney,
   formatPerfPct,
   perfToneClass,
+  selectMoneyValue,
 } from '@/lib/portal/cryptoWalletFormat'
 import { splitBundleHoldings } from '@/lib/portal/bundleWithdrawFormat'
 import type { PortalBundlePosition, PortalCryptoWalletBundleDetailPayload } from '@/lib/portal/cryptoWalletTypes'
@@ -56,8 +59,8 @@ function formatBundlePositionSubtitle(position: PortalBundlePosition): string {
   return 'Pending allocation'
 }
 
-function bundlePositionValue(position: PortalBundlePosition): number {
-  return position.marketValue ?? position.costBasis
+function bundlePositionValue(position: PortalBundlePosition, currency: string): number {
+  return bundlePositionDisplayValue(position, currency)
 }
 
 export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
@@ -76,24 +79,27 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
 
   const totalValue = useMemo(() => {
     if (!bundle) return 0
-    return bundle.totalMarketValue ?? bundle.totalCostBasis
-  }, [bundle])
+    return bundleSummaryMarketValue(bundle, currency)
+  }, [bundle, currency])
 
   const unrealizedGain = useMemo(() => {
-    if (!bundle?.totalMarketValue || bundle.totalCostBasis <= 0) return undefined
-    return bundle.totalMarketValue - bundle.totalCostBasis
-  }, [bundle])
+    const market = bundleSummaryMarketValue(bundle!, currency)
+    const invested =
+      selectMoneyValue(currency, bundle?.totalCostBasis, bundle?.totalCostBasisUsd) ?? 0
+    if (!bundle || invested <= 0) return undefined
+    return market - invested
+  }, [bundle, currency])
 
   const allocationRows = useMemo(() => {
     if (!bundle?.positions?.length) return []
     return [...bundle.positions]
       .filter((p) => p.positionType !== 'cash' || p.quantity > 0.001)
-      .sort((a, b) => bundlePositionValue(b) - bundlePositionValue(a))
-  }, [bundle?.positions])
+      .sort((a, b) => bundlePositionValue(b, currency) - bundlePositionValue(a, currency))
+  }, [bundle?.positions, currency])
 
   const holdingsSplit = useMemo(
-    () => splitBundleHoldings(bundle?.positions),
-    [bundle?.positions],
+    () => splitBundleHoldings(bundle?.positions, currency),
+    [bundle?.positions, currency],
   )
 
   const canWithdraw = holdingsSplit.totalWithdrawableEstimate > 0.001
@@ -174,11 +180,11 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
             <AppMetricsList variant="plain">
               <AppMetricsRow
                 label="Market value"
-                value={formatCryptoMoney(bundle.totalMarketValue ?? bundle.totalCostBasis, currency)}
+                value={formatCryptoMoney(bundleSummaryMarketValue(bundle, currency), currency)}
               />
               <AppMetricsRow
                 label="Cash leg (USDC)"
-                value={formatCryptoMoney(holdingsSplit.cashLegQuantity, currency)}
+                value={formatCryptoMoney(holdingsSplit.cashLegDisplayValue, currency)}
               />
               <AppMetricsRow
                 label="Allocated assets"
@@ -186,7 +192,11 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
               />
               <AppMetricsRow
                 label="Total invested"
-                value={formatCryptoMoney(bundle.totalCostBasis, currency)}
+                value={formatCryptoMoney(
+                  selectMoneyValue(currency, bundle.totalCostBasis, bundle.totalCostBasisUsd) ??
+                    bundle.totalCostBasis,
+                  currency,
+                )}
               />
               <AppMetricsRow
                 label="Unrealized P&L"
@@ -211,7 +221,10 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
               <AppSectionHeader title="Allocation" />
               <AppAccountSummaryList>
                 {allocationRows.map((position) => {
-                  const valueLabel = formatCryptoMoney(bundlePositionValue(position), currency)
+                  const valueLabel = formatCryptoMoney(
+                    bundlePositionValue(position, currency),
+                    currency,
+                  )
                   const href =
                     position.positionType === 'spot' && position.quantity > 0
                       ? portalCryptoWalletAssetRoute(position.asset)

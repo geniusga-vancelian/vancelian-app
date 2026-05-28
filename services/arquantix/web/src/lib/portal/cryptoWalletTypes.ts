@@ -43,9 +43,12 @@ export type PortalBundlePosition = {
   asset: string
   quantity: number
   costBasis: number
+  costBasisUsd?: number
   positionType: string
   marketValue?: number
+  marketValueUsd?: number
   priceEur?: number
+  priceUsd?: number
   targetWeight?: number
 }
 
@@ -55,7 +58,9 @@ export type PortalMyBundleSummary = {
   status: string
   assetsCount: number
   totalCostBasis: number
+  totalCostBasisUsd?: number
   totalMarketValue?: number
+  totalMarketValueUsd?: number
   performancePct?: number
   hasHoldings: boolean
   positions?: PortalBundlePosition[]
