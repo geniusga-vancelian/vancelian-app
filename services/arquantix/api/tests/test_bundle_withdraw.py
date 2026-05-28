@@ -22,7 +22,15 @@ from services.portfolio_engine.bundles.orchestrator import (
     POSITION_TYPE_SPOT,
     BundleOrchestrator,
 )
-from services.portfolio_engine.bundles.withdraw import BundleWithdrawOrchestrator
+from services.portfolio_engine.bundles.bundle_invest_lock import (
+    acquire_invest_lock,
+    get_invest_lock,
+    load_portfolio_for_invest_lock,
+)
+from services.portfolio_engine.bundles.withdraw import (
+    BundleWithdrawOrchestrator,
+    BundleWithdrawOrchestratorError,
+)
 from services.portfolio_engine.direct_overlay import ensure_direct_portfolio, sync_direct_atom
 from services.portfolio_engine.instruments.models import Instrument
 from services.portfolio_engine.portfolios.models import Portfolio
@@ -209,6 +217,105 @@ def test_withdraw_sell_atoms_debits_spot_and_credits_cash_leg(db: Session):
     assert Decimal(str(spot.quantity)) == Decimal("3")
     assert cash is not None
     assert Decimal(str(cash.quantity)) == Decimal("20")
+
+
+def test_cash_only_withdraw_clears_stale_invest_lock(db: Session):
+    pe = make_linked_client(db)
+    usdc_instr = _instrument_usdc(db)
+    portfolio = _bundle_portfolio(db, pe.id)
+    direct_pf = ensure_direct_portfolio(db, pe.id)
+    sync_direct_atom(db, direct_pf.id, usdc_instr.id, Decimal("13"), Decimal("11"))
+    BundleOrchestrator._credit_cash_leg(
+        db, portfolio.id, usdc_instr.id, Decimal("20"), Decimal("17.2"),
+    )
+    portfolio_locked = load_portfolio_for_invest_lock(
+        db, client_id=pe.id, portfolio_id=portfolio.id,
+    )
+    acquire_invest_lock(
+        db,
+        portfolio_locked,
+        client_id=pe.id,
+        batch_id=str(uuid.uuid4()),
+        status="partial_pending",
+    )
+    db.commit()
+
+    mock_adapter = MagicMock()
+    mock_adapter.provider_name = "exchange"
+    mock_adapter.execute_leg = _MockSyncSellProvider().execute_leg
+
+    orch = BundleWithdrawOrchestrator(execution_adapter=mock_adapter)
+    result = orch.withdraw_from_bundle(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        full_withdraw=True,
+    )
+    db.commit()
+
+    db.refresh(portfolio_locked)
+    assert result["release"]["released"] is True
+    assert get_invest_lock(portfolio_locked.metadata_) is None
+
+
+def test_cash_only_withdraw_blocked_when_invest_swap_still_pending(db: Session):
+    pe = make_linked_client(db)
+    usdc_instr = _instrument_usdc(db)
+    portfolio = _bundle_portfolio(db, pe.id)
+    BundleOrchestrator._credit_cash_leg(
+        db, portfolio.id, usdc_instr.id, Decimal("20"), Decimal("17.2"),
+    )
+    batch_id = str(uuid.uuid4())
+    portfolio_locked = load_portfolio_for_invest_lock(
+        db, client_id=pe.id, portfolio_id=portfolio.id,
+    )
+    acquire_invest_lock(
+        db,
+        portfolio_locked,
+        client_id=pe.id,
+        batch_id=batch_id,
+        status="pending_signature",
+    )
+    db.commit()
+
+    from datetime import datetime, timezone
+
+    from services.lifi.enums import SwapSessionStatus
+    from services.lifi.models import PersonWalletSwap
+
+    db.add(
+        PersonWalletSwap(
+            person_id=pe.person_id,
+            from_asset="USDC",
+            to_asset="LINK",
+            from_chain="base",
+            to_chain="base",
+            amount_in=Decimal("10"),
+            status=SwapSessionStatus.AWAITING_SIGNATURE.value,
+            expires_at=datetime.now(timezone.utc),
+            audit_log=[
+                {
+                    "event": "bundle_leg_context",
+                    "batch_id": batch_id,
+                    "portfolio_id": str(portfolio.id),
+                    "bundle_action": "allocation",
+                }
+            ],
+        )
+    )
+    db.commit()
+
+    mock_adapter = MagicMock()
+    mock_adapter.provider_name = "exchange"
+    orch = BundleWithdrawOrchestrator(execution_adapter=mock_adapter)
+    with pytest.raises(BundleWithdrawOrchestratorError) as exc:
+        orch.withdraw_from_bundle(
+            db,
+            client_id=pe.id,
+            portfolio_id=portfolio.id,
+            full_withdraw=True,
+        )
+    assert str(exc.value) == "invest_lock_active"
 
 
 def test_cash_only_withdraw_releases_to_self_trading(db: Session):

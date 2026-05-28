@@ -32,7 +32,7 @@ from services.portfolio_engine.portfolios.models import Portfolio
 from services.portfolio_engine.positions.enums import PositionType
 from services.portfolio_engine.positions.models import PositionAtom
 
-from .bundle_invest_lock import assert_no_active_invest_lock, get_invest_lock
+from .bundle_invest_lock import reconcile_idle_invest_lock_for_withdraw
 from .bundle_withdraw_lock import (
     WITHDRAW_PHASE_FAILED_PARTIAL,
     WITHDRAW_PHASE_PARTIALLY_UNWOUND,
@@ -90,10 +90,14 @@ class BundleWithdrawOrchestrator:
         portfolio_locked = load_portfolio_for_withdraw_lock(
             db, client_id=client_id, portfolio_id=portfolio_id,
         )
-        if get_invest_lock(portfolio_locked.metadata_):
+        if not reconcile_idle_invest_lock_for_withdraw(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            portfolio=portfolio_locked,
+        ):
             raise BundleWithdrawOrchestratorError("invest_lock_active")
         assert_no_active_withdraw_lock(portfolio_locked, client_id)
-        assert_no_active_invest_lock(portfolio_locked, client_id)
 
         status = BundleOrchestrator.get_bundle_status(db, portfolio_id, client_id)
         cash_leg_qty = resolve_bundle_cash_leg_available(
