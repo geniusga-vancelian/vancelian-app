@@ -16,6 +16,7 @@ import { AppButton } from '@/components/design-system/app/AppButton'
 import { AppMetricsList } from '@/components/design-system/app/AppMetricsList'
 import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
+import { PortalBundleAllocationPanel } from '@/components/portal/bundles/PortalBundleAllocationPanel'
 import { PortalBundleWithdrawDialog } from '@/components/portal/bundles/PortalBundleWithdrawDialog'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
@@ -258,6 +259,17 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
         ) : null}
 
         <PortalReveal index={3}>
+          <PortalBundleAllocationPanel
+            portfolioId={id}
+            portfolioName={bundle.portfolioName}
+            positions={bundle.positions}
+            currency={currency}
+            cashLegDisplayValue={holdingsSplit.cashLegDisplayValue}
+            onRefresh={() => void refresh()}
+          />
+        </PortalReveal>
+
+        <PortalReveal index={4}>
           <section className="flex w-full flex-col gap-3">
             <AppSectionHeader title="Withdraw" />
             <p className="m-0 font-ui text-[13px] text-v-fg-muted">

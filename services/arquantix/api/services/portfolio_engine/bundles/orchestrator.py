@@ -53,7 +53,9 @@ from .bundle_invest_lock import (
     acquire_invest_lock,
     assert_no_active_invest_lock,
     clear_invest_lock,
+    get_invest_lock,
     load_portfolio_for_invest_lock,
+    reconcile_idle_invest_lock_for_invest,
     release_invest_lock,
     update_invest_lock_status,
 )
@@ -338,6 +340,10 @@ class BundleOrchestrator:
         portfolio_locked = load_portfolio_for_invest_lock(
             db, client_id=client_id, portfolio_id=portfolio_id,
         )
+        reconcile_idle_invest_lock_for_invest(
+            db, client_id=client_id, portfolio_id=portfolio_id,
+        )
+        db.refresh(portfolio_locked)
         assert_no_active_invest_lock(portfolio_locked, client_id)
 
         batch_id = str(_uuid.uuid4())
@@ -663,6 +669,122 @@ class BundleOrchestrator:
             "cash_leg_remaining": float(remaining),
             "cash_leg_credited": 0.0,
             "invariant_g": invariant_g,
+        }
+
+    def resume_lifi_invest_batch(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: UUID,
+    ) -> dict:
+        """Reconstruit le payload invest pour reprendre les legs LI.FI pending d'un batch."""
+        from uuid import UUID as _UUID
+
+        from services.lifi.enums import SwapSessionStatus
+        from services.lifi.models import PersonWalletSwap
+        from services.portfolio_engine.bundle_execution.bundle_funding import (
+            resolve_bundle_cash_leg_available,
+        )
+        from services.portfolio_engine.bundle_execution.bundle_lifi_leg_service import (
+            BundleLifiLegService,
+        )
+        from services.portfolio_engine.clients.models import Client as _Client
+        from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
+
+        portfolio = self._load_and_validate_portfolio(db, portfolio_id, client_id)
+        portfolio_locked = load_portfolio_for_invest_lock(
+            db, client_id=client_id, portfolio_id=portfolio_id,
+        )
+        lock = get_invest_lock(portfolio_locked.metadata_)
+        if lock is None:
+            raise BundleOrchestratorError("no_active_invest_lock")
+
+        batch_id = str(lock.get("batch_id") or "").strip()
+        if not batch_id:
+            raise BundleOrchestratorError("invalid_invest_lock_batch")
+
+        product = self._load_product(db, portfolio)
+        entry_config = self._resolve_entry_config(product)
+        entry_asset = entry_config["entry_asset_default"]
+        entry_instrument = self._resolve_or_create_instrument(db, entry_asset)
+
+        _client_row = db.query(_Client).filter(_Client.id == client_id).first()
+        person_id = _client_row.person_id if _client_row is not None else None
+        if person_id is None:
+            raise BundleOrchestratorError("client_has_no_person_id")
+
+        pending_statuses = {
+            SwapSessionStatus.PENDING.value,
+            SwapSessionStatus.QUOTE_RECEIVED.value,
+            SwapSessionStatus.AWAITING_SIGNATURE.value,
+            SwapSessionStatus.SUBMITTED.value,
+        }
+        swaps = (
+            db.query(PersonWalletSwap)
+            .filter(
+                PersonWalletSwap.person_id == person_id,
+                PersonWalletSwap.status.in_(list(pending_statuses)),
+            )
+            .all()
+        )
+        leg_svc = BundleLifiLegService()
+        alloc_results: list[dict] = []
+        pending = 0
+        for swap in swaps:
+            ctx = bundle_context_from_swap_audit(swap)
+            if not ctx or str(ctx.get("batch_id")) != batch_id:
+                continue
+            action = str(ctx.get("bundle_action") or "")
+            if action not in ("allocation", "invest", ""):
+                continue
+            leg_id = str(ctx.get("leg_id") or "")
+            asset = str(swap.to_asset or "")
+            signing = None
+            try:
+                signing = leg_svc.prepare_signing(
+                    db, person_id=person_id, swap_id=swap.id,
+                ).model_dump()
+            except Exception:
+                signing = None
+            alloc_results.append({
+                "asset": asset,
+                "instrument_id": str(ctx.get("target_instrument_id") or ""),
+                "entry_asset_consumed": float(swap.amount_in or 0),
+                "crypto_received": 0,
+                "status": "pending",
+                "swap_id": str(swap.id),
+                "leg_id": leg_id,
+                "signing": signing,
+            })
+            pending += 1
+
+        if pending == 0:
+            raise BundleOrchestratorError("no_pending_invest_legs")
+
+        cash_leg_remaining = resolve_bundle_cash_leg_available(
+            db,
+            portfolio_id=portfolio_id,
+            entry_instrument_id=entry_instrument.id,
+        )
+        funding_amount = lock.get("funding_amount")
+        total_received = float(funding_amount) if funding_amount is not None else float(cash_leg_remaining)
+
+        return {
+            "status": str(lock.get("status") or "pending_signature"),
+            "batch_id": batch_id,
+            "portfolio_id": str(portfolio_id),
+            "entry_asset": entry_asset,
+            "entry_instrument_id": str(entry_instrument.id),
+            "total_entry_asset_received": total_received,
+            "total_entry_asset_consumed": 0.0,
+            "cash_leg_remaining": float(cash_leg_remaining),
+            "legs_succeeded": 0,
+            "legs_failed": 0,
+            "legs_pending": pending,
+            "allocation_details": alloc_results,
+            "execution_provider": "lifi_base",
+            "resumed": True,
         }
 
     # ------------------------------------------------------------------
