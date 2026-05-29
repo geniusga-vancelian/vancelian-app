@@ -21,7 +21,7 @@ export function PortalArticleAuthorBlock({ authorName, authorRole }: Props) {
         {authorRole ? <div className="art-author__role">{authorRole}</div> : null}
       </div>
       <button type="button" className="btn btn--secondary btn--sm">
-        Suivre
+        Follow
       </button>
     </div>
   )

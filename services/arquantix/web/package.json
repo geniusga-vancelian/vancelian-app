@@ -104,6 +104,7 @@
     "ds:hermes:pdf": "tsx scripts/generate-hermes-ds-pdf.ts"
   },
   "dependencies": {
+    "@alloc/quick-lru": "^5.2.0",
     "@aws-sdk/client-s3": "^3.738.0",
     "@aws-sdk/s3-request-presigner": "^3.738.0",
     "@morpho-org/morpho-sdk": "^2.1.1",

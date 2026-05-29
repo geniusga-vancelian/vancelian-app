@@ -9,15 +9,15 @@ export function PortalAcademyAdvisorCta() {
   return (
     <section className="acd-cta">
       <div className="acd-cta__body">
-        <span className="v-eyebrow">Conseil personnalisé</span>
-        <h3 className="acd-cta__title">Une question sur votre situation ?</h3>
+        <span className="v-eyebrow">Personal advice</span>
+        <h3 className="acd-cta__title">Questions about your situation?</h3>
         <p className="acd-cta__lede">
-          Nos conseillers patrimoniaux répondent en visio ou par message — sur rendez-vous, sans frais.
+          Our wealth advisors reply by video or message — by appointment, at no charge.
         </p>
       </div>
       <PortalNavLink href={PORTAL_ROUTES.profile} className="btn btn--primary no-underline">
         <KalaiIcon name="calendar" size={16} />
-        Prendre rendez-vous
+        Book a meeting
       </PortalNavLink>
     </section>
   )

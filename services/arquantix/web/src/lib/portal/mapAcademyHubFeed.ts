@@ -1,9 +1,5 @@
-import type {
-  PortalAcademyArticle,
-  PortalAcademyCategory,
-} from '@/lib/portal/academyHubTypes'
+import type { PortalAcademyArticle } from '@/lib/portal/academyHubTypes'
 import { academyCategoryTone } from '@/lib/portal/academyFormat'
-import type { PortalResearchItem } from '@/lib/portal/marketsTypes'
 import { resolvePortalArticleHref } from '@/lib/portal/portalArticleRouting'
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -35,43 +31,21 @@ function parseCategorySlugs(raw: unknown): string[] {
   return []
 }
 
-function mapArticleCategories(payload: unknown): PortalAcademyCategory[] {
-  const root = payload as Record<string, unknown> | null
-  if (!root || !Array.isArray(root.articleCategories)) return []
-  const out: PortalAcademyCategory[] = []
-  for (const raw of root.articleCategories) {
-    const row = raw as Record<string, unknown>
-    const slug = String(row.slug ?? '').trim()
-    const label = String(row.label ?? '').trim()
-    const id = String(row.id ?? slug).trim()
-    if (!slug || !label) continue
-    out.push({ id, slug, label })
-  }
-  return out
-}
-
-function resolveArticleCategory(
-  categorySlugs: string[],
-  categories: PortalAcademyCategory[],
-): { slug: string | null; label: string | null } {
-  for (const slug of categorySlugs) {
-    const match = categories.find((category) => category.slug === slug)
-    if (match) return { slug: match.slug, label: match.label }
-  }
-  const fallbackSlug = categorySlugs[0] ?? null
-  return { slug: fallbackSlug, label: fallbackSlug }
-}
-
 function normalizeArticleType(raw: unknown): PortalAcademyArticle['articleType'] {
   const value = String(raw ?? 'NEWS').toUpperCase()
   if (value === 'ANALYSIS') return 'ANALYSIS'
+  if (value === 'ACADEMY') return 'ACADEMY'
   if (value === 'RESEARCH') return 'RESEARCH'
   return 'NEWS'
 }
 
-function mapAcademyArticle(
+function normalizeIsCompanyNews(raw: unknown): boolean {
+  return raw === true
+}
+
+function mapBlogArticle(
   raw: unknown,
-  options?: { origin?: string; categories?: PortalAcademyCategory[] },
+  options?: { origin?: string; forceCompanyNews?: boolean },
 ): PortalAcademyArticle | null {
   const row = raw as Record<string, unknown> | null
   if (!row) return null
@@ -80,10 +54,13 @@ function mapAcademyArticle(
   const title = String(row.title ?? '').trim()
   if (!title) return null
 
-  const categories = options?.categories ?? []
   const categorySlugs = parseCategorySlugs(row.categorySlugs ?? row.category_slugs)
-  const { slug: categorySlug, label: categoryLabel } = resolveArticleCategory(categorySlugs, categories)
+  const categorySlug = categorySlugs[0] ?? null
   const articleType = normalizeArticleType(row.articleType ?? row.article_type)
+  const isCompanyNews =
+    options?.forceCompanyNews === true
+      ? true
+      : normalizeIsCompanyNews(row.isCompanyNews ?? row.is_company_news)
 
   const id = String(row.id ?? slug).trim() || slug
   return {
@@ -102,9 +79,10 @@ function mapAcademyArticle(
     readingTime: toNumber(row.readingTime ?? row.reading_time, 3),
     href: articleHref(slug, options?.origin),
     categorySlug,
-    categoryLabel,
+    categoryLabel: categorySlug,
     categoryTone: academyCategoryTone(categorySlug),
     articleType,
+    isCompanyNews,
   }
 }
 
@@ -114,34 +92,99 @@ function isNewsArticle(raw: unknown): boolean {
   return articleType === 'NEWS'
 }
 
-function isResearchArticle(raw: unknown): boolean {
+function isAnalysisArticle(raw: unknown): boolean {
   const row = raw as Record<string, unknown>
   const articleType = String(row.articleType ?? row.article_type ?? '').toUpperCase()
-  return articleType === 'ANALYSIS' || articleType === 'RESEARCH'
+  return articleType === 'ANALYSIS'
 }
 
-/** Feed blog (segment market) → hero + grille news portail. */
+function collectNewsArticles(
+  root: Record<string, unknown>,
+  options?: { origin?: string; companyOnly?: boolean },
+): PortalAcademyArticle[] {
+  const origin = options?.origin
+  const companyOnly = options?.companyOnly === true
+  const mapArticle = (raw: unknown) =>
+    mapBlogArticle(raw, { origin, forceCompanyNews: companyOnly })
+
+  const out: PortalAcademyArticle[] = []
+  const excludeIds = new Set<string>()
+
+  const push = (raw: unknown) => {
+    if (!isNewsArticle(raw)) return
+    const mapped = mapArticle(raw)
+    if (!mapped) return
+    if (!companyOnly && mapped.isCompanyNews) return
+    if (excludeIds.has(mapped.id)) return
+    excludeIds.add(mapped.id)
+    out.push(mapped)
+  }
+
+  if (root.featured) push(root.featured)
+  if (Array.isArray(root.highlighted)) {
+    for (const raw of root.highlighted) push(raw)
+  }
+  if (Array.isArray(root.companyNews)) {
+    for (const raw of root.companyNews) push(raw)
+  }
+  if (Array.isArray(root.articles)) {
+    for (const raw of root.articles) push(raw)
+  }
+
+  return out
+}
+
+function collectAnalysisArticles(
+  root: Record<string, unknown>,
+  options?: { origin?: string },
+): PortalAcademyArticle[] {
+  const origin = options?.origin
+  const out: PortalAcademyArticle[] = []
+  const excludeIds = new Set<string>()
+
+  const push = (raw: unknown) => {
+    if (!isAnalysisArticle(raw)) return
+    const mapped = mapBlogArticle(raw, { origin })
+    if (!mapped || excludeIds.has(mapped.id)) return
+    excludeIds.add(mapped.id)
+    mapped.categoryLabel = 'Analysis'
+    mapped.categorySlug = 'analysis'
+    mapped.categoryTone = 'blue'
+    out.push(mapped)
+  }
+
+  if (root.featured) push(root.featured)
+  if (Array.isArray(root.highlighted)) {
+    for (const raw of root.highlighted) push(raw)
+  }
+  if (Array.isArray(root.articles)) {
+    for (const raw of root.articles) push(raw)
+  }
+
+  return out
+}
+
+/** Feed blog (segment market) → hero + market news. */
 export function mapAcademyHubFromBlogFeed(
   payload: unknown,
   options?: { origin?: string },
 ): {
   featured: PortalAcademyArticle | null
   highlighted: PortalAcademyArticle[]
-  news: PortalAcademyArticle[]
-  categories: PortalAcademyCategory[]
+  marketNews: PortalAcademyArticle[]
 } {
   const root = payload as Record<string, unknown> | null
   if (!root) {
-    return { featured: null, highlighted: [], news: [], categories: [] }
+    return { featured: null, highlighted: [], marketNews: [] }
   }
 
   const origin = options?.origin
-  const categories = mapArticleCategories(root)
-  const mapArticle = (raw: unknown) => mapAcademyArticle(raw, { origin, categories })
+  const mapArticle = (raw: unknown) => mapBlogArticle(raw, { origin })
 
   const featuredRaw = root.featured
+  const featuredCandidate = featuredRaw && isNewsArticle(featuredRaw) ? mapArticle(featuredRaw) : null
   const featured =
-    featuredRaw && isNewsArticle(featuredRaw) ? mapArticle(featuredRaw) : null
+    featuredCandidate && !featuredCandidate.isCompanyNews ? featuredCandidate : null
 
   const highlighted: PortalAcademyArticle[] = []
   const excludeIds = new Set<string>()
@@ -151,64 +194,44 @@ export function mapAcademyHubFromBlogFeed(
     for (const raw of root.highlighted) {
       if (!isNewsArticle(raw)) continue
       const mapped = mapArticle(raw)
-      if (!mapped || excludeIds.has(mapped.id)) continue
+      if (!mapped || mapped.isCompanyNews || excludeIds.has(mapped.id)) continue
       excludeIds.add(mapped.id)
       highlighted.push(mapped)
     }
   }
 
-  const news: PortalAcademyArticle[] = []
-  const pushNews = (raw: unknown) => {
+  const marketNews: PortalAcademyArticle[] = []
+  const pushMarket = (raw: unknown) => {
     if (!isNewsArticle(raw)) return
     const mapped = mapArticle(raw)
-    if (!mapped || excludeIds.has(mapped.id)) return
+    if (!mapped || mapped.isCompanyNews || excludeIds.has(mapped.id)) return
     excludeIds.add(mapped.id)
-    news.push(mapped)
+    marketNews.push(mapped)
   }
 
   if (Array.isArray(root.articles)) {
-    for (const raw of root.articles) pushNews(raw)
+    for (const raw of root.articles) pushMarket(raw)
   }
 
-  return { featured, highlighted, news, categories }
+  return { featured, highlighted, marketNews }
 }
 
-/** Feed blog (segment analysis) → section research portail. */
-export function mapAcademyResearchFromBlogFeed(
+/** Feed blog (segment company) → actualités Vancelian. */
+export function mapVancelianNewsFromBlogFeed(
   payload: unknown,
-  options?: { origin?: string; maxItems?: number },
-): PortalResearchItem[] {
+  options?: { origin?: string },
+): PortalAcademyArticle[] {
   const root = payload as Record<string, unknown> | null
   if (!root) return []
+  return collectNewsArticles(root, { origin: options?.origin, companyOnly: true })
+}
 
-  const origin = options?.origin
-  const maxItems = Math.min(Math.max(options?.maxItems ?? 8, 1), 16)
-  const byId = new Map<string, PortalResearchItem>()
-
-  const pushResearch = (raw: unknown) => {
-    if (!isResearchArticle(raw)) return
-    const row = raw as Record<string, unknown>
-    const slug = String(row.slug ?? '').trim()
-    const title = String(row.title ?? '').trim()
-    if (!title) return
-    const id = String(row.id ?? slug).trim() || slug
-    if (byId.has(id)) return
-    byId.set(id, {
-      id,
-      title,
-      coverUrl: String(row.coverUrl ?? row.cover_url ?? '').trim(),
-      readingTime: toNumber(row.readingTime ?? row.reading_time, 5),
-      href: articleHref(slug, origin),
-    })
-  }
-
-  if (root.featured) pushResearch(root.featured)
-  if (Array.isArray(root.highlighted)) {
-    for (const raw of root.highlighted) pushResearch(raw)
-  }
-  if (Array.isArray(root.articles)) {
-    for (const raw of root.articles) pushResearch(raw)
-  }
-
-  return [...byId.values()].slice(0, maxItems)
+/** Feed blog (segment analysis) → analyses (type ANALYSIS uniquement). */
+export function mapAnalysisFromBlogFeed(
+  payload: unknown,
+  options?: { origin?: string },
+): PortalAcademyArticle[] {
+  const root = payload as Record<string, unknown> | null
+  if (!root) return []
+  return collectAnalysisArticles(root, options)
 }

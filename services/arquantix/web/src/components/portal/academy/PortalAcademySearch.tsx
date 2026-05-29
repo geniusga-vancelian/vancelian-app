@@ -12,7 +12,7 @@ type Props = {
 export function PortalAcademySearch({
   value,
   onChange,
-  placeholder = 'Rechercher un article, une catégorie, un auteur…',
+  placeholder = 'Search articles, categories, authors…',
 }: Props) {
   return (
     <div className="faq-search acd-search">
@@ -25,14 +25,14 @@ export function PortalAcademySearch({
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        aria-label="Rechercher dans l'Académie"
+        aria-label="Search Academy"
       />
       {value ? (
         <button
           type="button"
           className="faq-search__clear"
           onClick={() => onChange('')}
-          aria-label="Effacer la recherche"
+          aria-label="Clear search"
         >
           <KalaiIcon name="close" size={16} />
         </button>

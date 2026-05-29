@@ -32,7 +32,7 @@ export function PortalAcademyHero({ article }: Props) {
         <h1 className="acd-hero__title">{article.title}</h1>
         {article.standfirst ? <p className="acd-hero__excerpt">{article.standfirst}</p> : null}
         <div className="acd-hero__meta">
-          <span>Par {article.authorName}</span>
+          <span>By {article.authorName}</span>
           <span className="acd-hero__meta-sep" aria-hidden>
             ·
           </span>

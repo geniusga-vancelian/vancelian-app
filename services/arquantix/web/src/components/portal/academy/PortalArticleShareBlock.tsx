@@ -23,7 +23,7 @@ function WhatsAppIcon({ size = 16 }: { size?: number }) {
   )
 }
 
-/** Bloc partage — handoff `.art-share`. */
+/** Share block — handoff `.art-share`. */
 export function PortalArticleShareBlock({ title }: Props) {
   const [copied, setCopied] = useState(false)
 
@@ -40,7 +40,7 @@ export function PortalArticleShareBlock({ title }: Props) {
 
   const mailHref = useMemo(() => {
     if (!pageUrl) return 'mailto:'
-    const subject = title.trim() || 'Article Vancelian'
+    const subject = title.trim() || 'Vancelian article'
     const body = pageUrl
     return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   }, [pageUrl, title])
@@ -56,7 +56,7 @@ export function PortalArticleShareBlock({ title }: Props) {
   const shareNative = useCallback(async () => {
     if (typeof navigator === 'undefined' || !navigator.share || !pageUrl) return
     try {
-      await navigator.share({ title: title.trim() || 'Article Vancelian', url: pageUrl })
+      await navigator.share({ title: title.trim() || 'Vancelian article', url: pageUrl })
     } catch {
       // User cancelled or share unavailable.
     }
@@ -64,9 +64,9 @@ export function PortalArticleShareBlock({ title }: Props) {
 
   return (
     <div className="art-share">
-      <div className="art-share__eyebrow">Partager l&apos;article</div>
+      <div className="art-share__eyebrow">Share article</div>
       <div className="art-share__row">
-        <a className="art-share__btn" href={mailHref} aria-label="Partager par email">
+        <a className="art-share__btn" href={mailHref} aria-label="Share by email">
           <KalaiIcon name="mail" size={16} />
         </a>
         <a
@@ -74,27 +74,27 @@ export function PortalArticleShareBlock({ title }: Props) {
           href={waHref}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Partager sur WhatsApp"
+          aria-label="Share on WhatsApp"
         >
           <WhatsAppIcon size={16} />
         </a>
-        <button type="button" className="art-share__btn" aria-label="Partager" onClick={shareNative}>
+        <button type="button" className="art-share__btn" aria-label="Share" onClick={shareNative}>
           <KalaiIcon name="share" size={16} />
         </button>
         <button
           type="button"
           className={copied ? 'art-share__btn is-on' : 'art-share__btn'}
-          aria-label="Copier le lien"
+          aria-label="Copy link"
           onClick={copyLink}
         >
           <KalaiIcon name="link" size={16} />
         </button>
-        <button type="button" className="art-share__btn" aria-label="Mettre en favori">
+        <button type="button" className="art-share__btn" aria-label="Bookmark">
           <KalaiIcon name="bookmark" size={16} />
         </button>
         {copied ? (
           <span className="art-share__toast" role="status">
-            Lien copié
+            Link copied
           </span>
         ) : null}
       </div>

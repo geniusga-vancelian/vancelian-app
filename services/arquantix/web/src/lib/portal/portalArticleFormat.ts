@@ -24,7 +24,7 @@ export function resolveArticleHeroTags(view: PortalArticleView): {
   if (view.kind === 'academy') {
     return {
       categoryLabel: view.categoryTitle,
-      sectionLabel: view.collectionTitle || 'Académie',
+      sectionLabel: view.collectionTitle || 'Academy',
       categoryTone: academyCategoryTone(view.categoryTitle.toLowerCase()),
     }
   }

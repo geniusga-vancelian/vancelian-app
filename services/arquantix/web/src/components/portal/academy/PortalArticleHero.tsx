@@ -46,7 +46,7 @@ export function PortalArticleHero({
           <span className="art-hero__author-avt" aria-hidden>
             <span className="art-hero__author-mono">{authorInitials(authorName)}</span>
           </span>
-          Par {authorName}
+          By {authorName}
         </span>
         <span className="art-hero__meta-sep" aria-hidden>
           ·

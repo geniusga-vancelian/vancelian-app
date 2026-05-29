@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+
 import {
   mapAcademyHubFromBlogFeed,
-  mapAcademyResearchFromBlogFeed,
+  mapAnalysisFromBlogFeed,
+  mapVancelianNewsFromBlogFeed,
 } from '@/lib/portal/mapAcademyHubFeed'
 import type { PortalAcademyHubPayload } from '@/lib/portal/academyHubTypes'
+import { listPortalAcademyTypeArticles } from '@/lib/portal/listPortalAcademyArticles'
 import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
@@ -24,22 +27,27 @@ export async function GET(request: NextRequest) {
     const bffOrigin = resolvePortalBffOrigin(request.nextUrl.origin)
     const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
 
-    const [newsRes, researchRes] = await Promise.all([
-      fetchJson(
-        `${bffOrigin}/api/blog?locale=${encodeURIComponent(locale)}&page=1&pageSize=24&segment=market`,
-      ),
-      fetchJson(
-        `${bffOrigin}/api/blog?locale=${encodeURIComponent(locale)}&page=1&pageSize=12&segment=analysis`,
-      ),
+    const blogQuery = (segment: string, pageSize: number) =>
+      `${bffOrigin}/api/blog?locale=${encodeURIComponent(locale)}&page=1&pageSize=${pageSize}&segment=${segment}`
+
+    const [marketRes, companyRes, analysisRes, academyArticles] = await Promise.all([
+      fetchJson(blogQuery('market', 24)),
+      fetchJson(blogQuery('company', 24)),
+      fetchJson(blogQuery('analysis', 24)),
+      listPortalAcademyTypeArticles(locale, { origin: bffOrigin, limit: 48 }),
     ])
 
-    const newsHub = mapAcademyHubFromBlogFeed(newsRes.data)
-    const research = mapAcademyResearchFromBlogFeed(researchRes.data, { maxItems: 8 })
+    const marketHub = mapAcademyHubFromBlogFeed(marketRes.data, { origin: bffOrigin })
+    const vancelianNews = mapVancelianNewsFromBlogFeed(companyRes.data, { origin: bffOrigin })
+    const analysis = mapAnalysisFromBlogFeed(analysisRes.data, { origin: bffOrigin })
 
     const payload: PortalAcademyHubPayload = {
-      ...newsHub,
-      research,
-      categories: newsHub.categories,
+      featured: marketHub.featured,
+      highlighted: marketHub.highlighted,
+      marketNews: marketHub.marketNews,
+      vancelianNews,
+      analysis,
+      academy: academyArticles,
     }
 
     return NextResponse.json(payload)

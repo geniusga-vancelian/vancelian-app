@@ -5,10 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
 import { PortalAcademyAdvisorCta } from '@/components/portal/academy/PortalAcademyAdvisorCta'
 import { PortalAcademyArticleCard } from '@/components/portal/academy/PortalAcademyArticleCard'
-import {
-  PortalAcademyCategoryTabs,
-  type PortalAcademyTab,
-} from '@/components/portal/academy/PortalAcademyCategoryTabs'
+import { PortalAcademyCategoryTabs } from '@/components/portal/academy/PortalAcademyCategoryTabs'
 import { PortalAcademyHero } from '@/components/portal/academy/PortalAcademyHero'
 import { PortalAcademyPagination } from '@/components/portal/academy/PortalAcademyPagination'
 import { PortalAcademySearch } from '@/components/portal/academy/PortalAcademySearch'
@@ -19,32 +16,20 @@ import { PortalAcademySkeleton } from '@/components/portal/PortalRouteSkeleton'
 import {
   academyArticleMatchesSearch,
   normalizeAcademySearch,
-  researchToAcademyArticle,
 } from '@/lib/portal/academyFormat'
 import type { PortalAcademyArticle, PortalAcademyHubPayload } from '@/lib/portal/academyHubTypes'
+import {
+  articleMatchesAcademyEditorialTab,
+  buildAcademyHubCatalog,
+  PORTAL_ACADEMY_DEFAULT_TAB,
+  PORTAL_ACADEMY_EDITORIAL_TABS,
+  type PortalAcademyEditorialTabId,
+} from '@/lib/portal/academyHubTabs'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { Container } from '@/components/ui/Container'
 
-const ACADEMY_CACHE_KEY = 'portal:academy:v2'
+const ACADEMY_CACHE_KEY = 'portal:academy:v3'
 const ARTICLES_PER_PAGE = 6
-
-function buildCategoryTabs(
-  categories: PortalAcademyHubPayload['categories'],
-  articles: PortalAcademyArticle[],
-): PortalAcademyTab[] {
-  const usedSlugs = new Set(
-    articles.map((article) => article.categorySlug).filter((slug): slug is string => Boolean(slug)),
-  )
-  const dynamicTabs = categories
-    .filter((category) => usedSlugs.has(category.slug))
-    .map((category) => ({ id: category.slug, label: category.label }))
-
-  if (dynamicTabs.length === 0) {
-    return [{ id: 'all', label: 'Tous' }]
-  }
-
-  return [{ id: 'all', label: 'Tous' }, ...dynamicTabs]
-}
 
 function resolveSidebarHighlighted(
   highlighted: PortalAcademyArticle[],
@@ -60,46 +45,35 @@ export function PortalAcademyScreen() {
     cacheKey: ACADEMY_CACHE_KEY,
     url: '/api/portal/academy',
     ttlMs: 120_000,
-    errorMessage: "Impossible de charger l'Académie.",
+    errorMessage: 'Unable to load Academy.',
   })
 
   const [query, setQuery] = useState('')
-  const [activeTab, setActiveTab] = useState('all')
+  const [activeTab, setActiveTab] = useState<PortalAcademyEditorialTabId>(PORTAL_ACADEMY_DEFAULT_TAB)
   const [page, setPage] = useState(1)
 
-  const catalog = useMemo(() => {
-    if (!data) return [] as PortalAcademyArticle[]
-    const researchArticles = data.research.map(researchToAcademyArticle)
-    const byId = new Map<string, PortalAcademyArticle>()
-    for (const article of [...data.news, ...researchArticles]) {
-      if (!byId.has(article.id)) byId.set(article.id, article)
-    }
-    return [...byId.values()]
-  }, [data])
-
-  const tabs = useMemo(() => (data ? buildCategoryTabs(data.categories, catalog) : []), [catalog, data])
+  const catalog = useMemo(() => (data ? buildAcademyHubCatalog(data) : []), [data])
 
   useEffect(() => {
     setPage(1)
   }, [activeTab, query])
 
   const hasSearch = normalizeAcademySearch(query).trim().length > 0
+  const showMarketHero = !hasSearch && activeTab === 'market-news'
 
   const filtered = useMemo(() => {
     if (!data) return [] as PortalAcademyArticle[]
 
-    let pool = catalog
-    if (!hasSearch && data.featured) {
+    let pool = catalog.filter((article) => articleMatchesAcademyEditorialTab(article, activeTab))
+
+    if (showMarketHero && data.featured) {
       pool = pool.filter((article) => article.id !== data.featured?.id)
-    }
-    if (!hasSearch && activeTab !== 'all') {
-      pool = pool.filter((article) => article.categorySlug === activeTab)
     }
     if (hasSearch) {
       pool = pool.filter((article) => academyArticleMatchesSearch(article, query))
     }
     return pool
-  }, [activeTab, catalog, data, hasSearch, query])
+  }, [activeTab, catalog, data, hasSearch, query, showMarketHero])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / ARTICLES_PER_PAGE))
   const safePage = Math.min(page, pageCount)
@@ -121,7 +95,7 @@ export function PortalAcademyScreen() {
           onClick={() => void refresh()}
           className="v-text-link border-0 bg-transparent p-0 font-ui text-[14px]"
         >
-          Réessayer
+          Try again
         </button>
       </Container>
     )
@@ -130,8 +104,8 @@ export function PortalAcademyScreen() {
   if (!data) return null
 
   const emptyMessage = hasSearch
-    ? 'Aucun article ne correspond à votre recherche.'
-    : 'Aucun article dans cette catégorie pour le moment.'
+    ? 'No articles match your search.'
+    : 'No articles in this category yet.'
 
   return (
     <PortalPageContainer>
@@ -142,17 +116,21 @@ export function PortalAcademyScreen() {
               <PortalAcademySearch value={query} onChange={setQuery} />
             </PortalReveal>
 
-            {!hasSearch && data.featured ? (
+            {showMarketHero && data.featured ? (
               <PortalReveal index={1}>
                 <PortalAcademyHero article={data.featured} />
               </PortalReveal>
             ) : null}
 
-            <PortalReveal index={hasSearch || !data.featured ? 1 : 2}>
-              <PortalAcademyCategoryTabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+            <PortalReveal index={showMarketHero && data.featured ? 2 : 1}>
+              <PortalAcademyCategoryTabs
+                tabs={PORTAL_ACADEMY_EDITORIAL_TABS}
+                activeTab={activeTab}
+                onTabChange={(tabId) => setActiveTab(tabId as PortalAcademyEditorialTabId)}
+              />
             </PortalReveal>
 
-            <PortalReveal index={hasSearch || !data.featured ? 2 : 3}>
+            <PortalReveal index={showMarketHero && data.featured ? 3 : 2}>
               <section className="acd-sec">
                 {visible.length > 0 ? (
                   <div className="acd-grid acd-grid--3">
@@ -166,11 +144,11 @@ export function PortalAcademyScreen() {
               </section>
             </PortalReveal>
 
-            <PortalReveal index={hasSearch || !data.featured ? 3 : 4}>
+            <PortalReveal index={showMarketHero && data.featured ? 4 : 3}>
               <PortalAcademyPagination page={safePage} pageCount={pageCount} onChange={setPage} />
             </PortalReveal>
 
-            <PortalReveal index={hasSearch || !data.featured ? 4 : 5}>
+            <PortalReveal index={showMarketHero && data.featured ? 5 : 4}>
               <PortalAcademyAdvisorCta />
             </PortalReveal>
           </div>

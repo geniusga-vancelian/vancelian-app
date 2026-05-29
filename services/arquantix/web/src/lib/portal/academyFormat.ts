@@ -13,7 +13,7 @@ export function normalizeAcademySearch(value: string): string {
 
 export function formatAcademyReadTime(minutes: number): string {
   const m = Math.max(1, Math.round(minutes))
-  return `${m} min de lecture`
+  return `${m} min read`
 }
 
 export function academyCategoryTone(slug: string | null | undefined): AppNewsCategoryDot {
@@ -27,8 +27,10 @@ export function academyCategoryTone(slug: string | null | undefined): AppNewsCat
 }
 
 export function academySectionLabel(article: PortalAcademyArticle): string {
-  if (article.articleType === 'ANALYSIS' || article.articleType === 'RESEARCH') return 'Analyse'
-  return 'Actualités'
+  if (article.articleType === 'ACADEMY') return 'Academy'
+  if (article.articleType === 'ANALYSIS' || article.articleType === 'RESEARCH') return 'Analysis'
+  if (article.isCompanyNews) return 'Vancelian News'
+  return 'Market News'
 }
 
 export function academyArticleMatchesSearch(article: PortalAcademyArticle, query: string): boolean {
@@ -66,7 +68,7 @@ export function researchToAcademyArticle(item: PortalResearchItem): PortalAcadem
     readingTime: item.readingTime,
     href: item.href,
     categorySlug: 'analysis',
-    categoryLabel: item.tag?.trim() || 'Analyse',
+    categoryLabel: item.tag?.trim() || 'Analysis',
     categoryTone: 'blue',
     articleType: 'ANALYSIS',
   }

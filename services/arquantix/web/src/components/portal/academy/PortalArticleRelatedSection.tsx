@@ -6,16 +6,13 @@ import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeade
 import { PortalAcademyCategoryChip } from '@/components/portal/academy/PortalAcademyCategoryChip'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
-import {
-  academySectionLabel,
-  formatAcademyReadTime,
-  researchToAcademyArticle,
-} from '@/lib/portal/academyFormat'
+import { academySectionLabel, formatAcademyReadTime } from '@/lib/portal/academyFormat'
 import type { PortalAcademyArticle, PortalAcademyHubPayload } from '@/lib/portal/academyHubTypes'
+import { buildAcademyHubCatalog } from '@/lib/portal/academyHubTabs'
 import { portalAcademyHubRoute } from '@/lib/portal/portalArticleRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
-const ACADEMY_CACHE_KEY = 'portal:academy:v2'
+const ACADEMY_CACHE_KEY = 'portal:academy:v3'
 
 type Props = {
   currentSlug: string
@@ -28,8 +25,7 @@ function collectRelatedArticles(
   const candidates = [
     ...(payload.featured ? [payload.featured] : []),
     ...payload.highlighted,
-    ...payload.news,
-    ...payload.research.map(researchToAcademyArticle),
+    ...buildAcademyHubCatalog(payload),
   ]
 
   const seen = new Set<string>()
@@ -52,7 +48,7 @@ export function PortalArticleRelatedSection({ currentSlug }: Props) {
     cacheKey: ACADEMY_CACHE_KEY,
     url: '/api/portal/academy',
     ttlMs: 120_000,
-    errorMessage: "Impossible de charger les articles similaires.",
+    errorMessage: 'Unable to load related articles.',
   })
 
   const items = useMemo(
@@ -65,10 +61,10 @@ export function PortalArticleRelatedSection({ currentSlug }: Props) {
   return (
     <section className="art-rel">
       <AppSectionHeader
-        title="À lire aussi"
+        title="Read more"
         size="md"
         moreHref={portalAcademyHubRoute()}
-        moreLabel="Tous les articles"
+        moreLabel="All articles"
       />
       <div className="art-rel__grid">
         {items.map((article) => {

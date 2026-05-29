@@ -70,7 +70,7 @@ export function PortalArticleScreen({ view }: Props) {
       <PortalPortfolioLayout
         main={
           <div className="art-page">
-            <PortalDetailBackLink href={portalAcademyHubRoute()} label="Retour à l'Académie" />
+            <PortalDetailBackLink href={portalAcademyHubRoute()} label="Back to Academy" />
 
             <PortalArticleHero
               title={meta.title}

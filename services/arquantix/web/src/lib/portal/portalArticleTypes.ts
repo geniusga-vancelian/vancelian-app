@@ -27,9 +27,9 @@ export type PortalEditorialArticleView = {
 export type PortalArticleView = PortalEditorialArticleView | PortalAcademyArticleView
 
 export function portalArticleTypeLabel(view: PortalArticleView): string {
-  if (view.kind === 'academy') return 'Académie'
+  if (view.kind === 'academy') return 'Academy'
   const type = (view.article.articleType || 'NEWS').toUpperCase()
-  if (type === 'ANALYSIS' || type === 'RESEARCH') return 'Analyse'
-  if (view.article.isCompanyNews) return 'Actualités'
-  return 'Actualités'
+  if (type === 'ANALYSIS' || type === 'RESEARCH') return 'Analysis'
+  if (view.article.isCompanyNews) return 'Vancelian News'
+  return 'Market News'
 }

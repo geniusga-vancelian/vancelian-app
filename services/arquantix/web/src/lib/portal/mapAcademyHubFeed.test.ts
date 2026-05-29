@@ -3,21 +3,19 @@ import { test } from 'node:test'
 
 import {
   mapAcademyHubFromBlogFeed,
-  mapAcademyResearchFromBlogFeed,
+  mapAnalysisFromBlogFeed,
+  mapVancelianNewsFromBlogFeed,
 } from '@/lib/portal/mapAcademyHubFeed'
 
-test('mapAcademyHubFromBlogFeed maps featured, highlighted and news with portal hrefs', () => {
+test('mapAcademyHubFromBlogFeed maps market news and excludes company news', () => {
   const payload = {
     featured: {
       id: 'f1',
       slug: 'featured-slug',
       title: 'Featured',
-      standfirst: 'Lead',
-      coverUrl: 'https://cdn.example/cover.jpg',
-      authorName: 'Editor',
-      publishedAt: '2026-01-01T00:00:00.000Z',
-      readingTime: 4,
       articleType: 'NEWS',
+      isCompanyNews: false,
+      readingTime: 4,
     },
     highlighted: [
       {
@@ -25,7 +23,16 @@ test('mapAcademyHubFromBlogFeed maps featured, highlighted and news with portal 
         slug: 'highlighted-slug',
         title: 'Highlighted',
         articleType: 'NEWS',
-        readingTime: 3,
+        isCompanyNews: false,
+      },
+    ],
+    companyNews: [
+      {
+        id: 'c1',
+        slug: 'company-slug',
+        title: 'Company',
+        articleType: 'NEWS',
+        isCompanyNews: true,
       },
     ],
     articles: [
@@ -34,13 +41,7 @@ test('mapAcademyHubFromBlogFeed maps featured, highlighted and news with portal 
         slug: 'news-one',
         title: 'News one',
         articleType: 'NEWS',
-        readingTime: 2,
-      },
-      {
-        id: 'f1',
-        slug: 'featured-slug',
-        title: 'Duplicate featured',
-        articleType: 'NEWS',
+        isCompanyNews: false,
       },
       {
         id: 'r1',
@@ -54,19 +55,50 @@ test('mapAcademyHubFromBlogFeed maps featured, highlighted and news with portal 
   const mapped = mapAcademyHubFromBlogFeed(payload, { origin: 'https://app.example' })
 
   assert.equal(mapped.featured?.title, 'Featured')
-  assert.equal(mapped.featured?.href, 'https://app.example/app/academy/featured-slug')
   assert.equal(mapped.highlighted.length, 1)
-  assert.equal(mapped.highlighted[0]?.href, 'https://app.example/app/academy/highlighted-slug')
-  assert.equal(mapped.news.length, 1)
-  assert.equal(mapped.news[0]?.slug, 'news-one')
+  assert.equal(mapped.marketNews.length, 1)
+  assert.equal(mapped.marketNews[0]?.slug, 'news-one')
 })
 
-test('mapAcademyResearchFromBlogFeed keeps analysis articles only', () => {
+test('mapVancelianNewsFromBlogFeed keeps company news only', () => {
   const payload = {
     featured: {
-      id: 'r1',
-      slug: 'research-featured',
-      title: 'Research featured',
+      id: 'c1',
+      slug: 'company-featured',
+      title: 'Company featured',
+      articleType: 'NEWS',
+      isCompanyNews: true,
+    },
+    articles: [
+      {
+        id: 'n1',
+        slug: 'market-slug',
+        title: 'Market',
+        articleType: 'NEWS',
+        isCompanyNews: false,
+      },
+      {
+        id: 'c2',
+        slug: 'company-two',
+        title: 'Company two',
+        articleType: 'NEWS',
+        isCompanyNews: true,
+      },
+    ],
+  }
+
+  const mapped = mapVancelianNewsFromBlogFeed(payload)
+
+  assert.equal(mapped.length, 3)
+  assert.ok(mapped.every((item) => item.isCompanyNews))
+})
+
+test('mapAnalysisFromBlogFeed keeps ANALYSIS articles only', () => {
+  const payload = {
+    featured: {
+      id: 'a1',
+      slug: 'analysis-featured',
+      title: 'Analysis featured',
       articleType: 'ANALYSIS',
       readingTime: 8,
     },
@@ -78,21 +110,17 @@ test('mapAcademyResearchFromBlogFeed keeps analysis articles only', () => {
         articleType: 'NEWS',
       },
       {
-        id: 'r2',
+        id: 'r1',
         slug: 'research-two',
-        title: 'Research two',
+        title: 'Research legacy',
         articleType: 'RESEARCH',
         readingTime: 6,
       },
     ],
   }
 
-  const mapped = mapAcademyResearchFromBlogFeed(payload)
+  const mapped = mapAnalysisFromBlogFeed(payload)
 
-  assert.equal(mapped.length, 2)
-  assert.ok(mapped.every((item) => item.href.startsWith('/app/academy/')))
-  assert.deepEqual(
-    mapped.map((item) => item.title),
-    ['Research featured', 'Research two'],
-  )
+  assert.equal(mapped.length, 1)
+  assert.equal(mapped[0]?.articleType, 'ANALYSIS')
 })

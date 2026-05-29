@@ -13,7 +13,7 @@ type Props = {
 /** Sidebar highlighted — handoff `.acd-feat`. */
 export function PortalAcademyFeaturedList({
   items,
-  title = 'À la une',
+  title = 'Featured',
 }: Props) {
   if (items.length === 0) return null
 

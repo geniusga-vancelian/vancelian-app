@@ -41,8 +41,8 @@ export function PortalArticleTableOfContents({ headings }: Props) {
   if (headings.length === 0) return null
 
   return (
-    <nav className="art-toc" aria-label="Sommaire de l'article">
-      <div className="art-toc__eyebrow">Sommaire</div>
+    <nav className="art-toc" aria-label="Article table of contents">
+      <div className="art-toc__eyebrow">Contents</div>
       <ol className="art-toc__list">
         {headings.map((heading) => (
           <li

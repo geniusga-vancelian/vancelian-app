@@ -16,6 +16,7 @@ import {
 import { toastError, toastSuccess } from '@/lib/admin/toast'
 import CreateHelpArticleModal from '@/components/admin/CreateHelpArticleModal'
 import { messageFromAdminApiError } from '@/lib/admin/messageFromAdminApiError'
+import { sortArticlesEditorialOrder } from '@/lib/admin/articleEditorialSort'
 
 /**
  * Hub `/admin/content` : vue transverse de tous les contenus éditoriaux
@@ -39,8 +40,11 @@ interface UnifiedRow {
   title: string
   status: ContentStatus
   publishedAt: string | null
+  createdAt: string
   updatedAt: string
   authorName: string | null
+  isFeatured: boolean
+  isHighlighted: boolean
   typeKey: UnifiedTypeKey
   /** Lien éditeur unifié. */
   editHref: string
@@ -62,6 +66,7 @@ export default function AdminContentHubPage() {
   const [typeFilter, setTypeFilter] = useState<UnifiedTypeKey | 'ALL'>('ALL')
   const [helpCreateOpen, setHelpCreateOpen] = useState(false)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
+  const [flagSavingId, setFlagSavingId] = useState<string | null>(null)
   const createMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -85,7 +90,7 @@ export default function AdminContentHubPage() {
     setLoading(true)
     try {
       const data = await fetchArticles()
-      setRows(data.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+      setRows(sortArticlesEditorialOrder(data))
     } catch (e: any) {
       console.error(e)
       toastError('Erreur de chargement du hub contenus')
@@ -125,13 +130,75 @@ export default function AdminContentHubPage() {
         title: a.title ?? a.slug,
         status: a.status,
         publishedAt: a.publishedAt ?? null,
+        createdAt: a.createdAt ?? a.updatedAt ?? '',
         updatedAt: a.updatedAt ?? a.createdAt ?? '',
         authorName: a.authorName ?? null,
+        isFeatured: !!a.isFeatured,
+        isHighlighted: !!a.isHighlighted,
         typeKey: tk,
         editHref: `/admin/articles/${encodeURIComponent(a.id)}`,
         hierarchyLabel,
       }
     })
+  }
+
+  const applyEditorialFlagLocally = (
+    rowsIn: UnifiedRow[],
+    articleId: string,
+    field: 'isFeatured' | 'isHighlighted',
+    checked: boolean
+  ): UnifiedRow[] => {
+    const next = rowsIn.map((row) => {
+      if (row.id === articleId) {
+        return { ...row, [field]: checked }
+      }
+      if (field === 'isFeatured' && checked) {
+        return { ...row, isFeatured: false }
+      }
+      return row
+    })
+    return sortArticlesEditorialOrder(next)
+  }
+
+  const handleEditorialFlag = async (
+    articleId: string,
+    field: 'isFeatured' | 'isHighlighted',
+    checked: boolean
+  ) => {
+    const previous = rows
+    setFlagSavingId(articleId)
+    setRows(applyEditorialFlagLocally(rows, articleId, field, checked))
+    try {
+      const res = await fetch(`/api/admin/articles/${encodeURIComponent(articleId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: checked }),
+      })
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push('/admin/login')
+          return
+        }
+        const error = await res.json().catch(() => ({}))
+        throw new Error(messageFromAdminApiError(error, 'Échec de la mise à jour'))
+      }
+      toastSuccess(
+        field === 'isFeatured'
+          ? checked
+            ? 'Article mis en une une (Featured)'
+            : 'Featured retiré'
+          : checked
+            ? 'Article mis en Highlighted'
+            : 'Highlighted retiré'
+      )
+      const data = await fetchArticles()
+      setRows(sortArticlesEditorialOrder(data))
+    } catch (e: any) {
+      setRows(previous)
+      toastError(e?.message || 'Échec de la mise à jour')
+    } finally {
+      setFlagSavingId(null)
+    }
   }
 
   const handleCreateArticle = async (articleType: UnifiedTypeKey) => {
@@ -310,6 +377,8 @@ export default function AdminContentHubPage() {
               <th className="px-4 py-2 text-left">Type</th>
               <th className="px-4 py-2 text-left">Titre / Slug</th>
               <th className="px-4 py-2 text-left">Hiérarchie / Auteur</th>
+              <th className="px-4 py-2 text-center">Featured</th>
+              <th className="px-4 py-2 text-center">Highlighted</th>
               <th className="px-4 py-2 text-left">Statut</th>
               <th className="px-4 py-2 text-left">Mis à jour</th>
               <th className="px-4 py-2 text-right">Actions</th>
@@ -318,13 +387,13 @@ export default function AdminContentHubPage() {
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                   Chargement…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                   Aucun contenu pour ces filtres.
                 </td>
               </tr>
@@ -345,6 +414,32 @@ export default function AdminContentHubPage() {
                     <td className="px-4 py-2 text-xs text-gray-600">
                       {r.hierarchyLabel ? <div>{r.hierarchyLabel}</div> : null}
                       {r.authorName ? <div>{r.authorName}</div> : null}
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={r.isFeatured}
+                        disabled={flagSavingId === r.id}
+                        title="Une seule une à la fois — visible sur le blog et l’Academy"
+                        aria-label={`Featured — ${r.title}`}
+                        onChange={(e) =>
+                          void handleEditorialFlag(r.id, 'isFeatured', e.target.checked)
+                        }
+                        className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 disabled:opacity-50"
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={r.isHighlighted}
+                        disabled={flagSavingId === r.id}
+                        title="Mosaïque blog / sidebar Academy — plusieurs autorisés"
+                        aria-label={`Highlighted — ${r.title}`}
+                        onChange={(e) =>
+                          void handleEditorialFlag(r.id, 'isHighlighted', e.target.checked)
+                        }
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                      />
                     </td>
                     <td className="px-4 py-2">
                       {r.status === 'PUBLISHED' ? (
@@ -381,7 +476,9 @@ export default function AdminContentHubPage() {
         Astuce : la création passe par le bouton « Nouveau » ci-dessus (HELP ouvre une
         modale dédiée avec collection / catégorie / slug). L'édition de tous les contenus
         — y compris HELP — se fait via l'éditeur unifié{' '}
-        <code className="rounded bg-gray-100 px-1">/admin/articles/[id]</code>.
+        <code className="rounded bg-gray-100 px-1">/admin/articles/[id]</code>. Featured
+        et Highlighted s’appliquent immédiatement sur le site blog et l’Academy (articles
+        publiés).
       </div>
 
       <CreateHelpArticleModal

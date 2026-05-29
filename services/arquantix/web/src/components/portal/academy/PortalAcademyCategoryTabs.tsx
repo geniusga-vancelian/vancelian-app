@@ -18,7 +18,7 @@ export function PortalAcademyCategoryTabs({ tabs, activeTab, onTabChange }: Prop
   if (tabs.length <= 1) return null
 
   return (
-    <div className="acd-tabs" role="tablist" aria-label="Catégories d'articles">
+    <div className="acd-tabs" role="tablist" aria-label="Article categories">
       {tabs.map((tab) => {
         const active = activeTab === tab.id
         return (

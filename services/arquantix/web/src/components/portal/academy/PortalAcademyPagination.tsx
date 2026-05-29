@@ -23,7 +23,7 @@ export function PortalAcademyPagination({ page, pageCount, onChange }: Props) {
         className="acd-pager__nav"
         onClick={() => onChange(Math.max(1, page - 1))}
         disabled={page === 1}
-        aria-label="Page précédente"
+        aria-label="Previous page"
       >
         <KalaiIcon name="chevron-left" size={16} />
       </button>
@@ -51,7 +51,7 @@ export function PortalAcademyPagination({ page, pageCount, onChange }: Props) {
         className="acd-pager__nav"
         onClick={() => onChange(Math.min(pageCount, page + 1))}
         disabled={page === pageCount}
-        aria-label="Page suivante"
+        aria-label="Next page"
       >
         <KalaiIcon name="chevron-right" size={16} />
       </button>
