@@ -45,7 +45,7 @@ export type PortalCryptoTransactionDetailViewModel = {
   timeline: PortalTransactionDetailTimelineItem[]
   counterparty?: { label: string; sub: string }
   flowDirection: 'in' | 'out'
-  variant: 'flow' | 'swap' | 'borrow'
+  variant: 'flow' | 'swap' | 'borrow' | 'allocation'
   fromAsset?: string
   toAsset?: string
 }

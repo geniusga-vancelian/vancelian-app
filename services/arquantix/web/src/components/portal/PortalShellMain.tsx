@@ -1,8 +1,14 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { PortalRouteCachedPreview } from '@/components/portal/PortalRouteCachedPreview'
+import dynamic from 'next/dynamic'
 import { PortalRouteSkeleton } from '@/components/portal/PortalRouteSkeleton'
+
+const PortalRouteCachedPreview = dynamic(
+  () =>
+    import('@/components/portal/PortalRouteCachedPreview').then((m) => m.PortalRouteCachedPreview),
+  { loading: () => null },
+)
 import { useNavPending } from '@/components/site/NavPendingContext'
 import { hasPortalRouteCachedPreview } from '@/lib/portal/portalRouteCachePreview'
 import { cn } from '@/lib/utils'

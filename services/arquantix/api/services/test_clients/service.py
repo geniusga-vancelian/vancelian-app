@@ -618,13 +618,20 @@ class TestClientService:
             exchange_order_to_crypto_tx,
             list_orphan_webhook_crypto_txs,
             merge_crypto_transactions,
-            person_wallet_swap_to_crypto_tx,
+        )
+
+        from services.portfolio_engine.bundle_execution.self_trading_transactions import (
+            build_self_trading_lifi_swap_txs,
+            filter_self_trading_exchange_orders,
+            filter_self_trading_privy_deposits,
         )
 
         asset = asset.upper()
         orders = ExchangeOrderRepository.list_by_client_asset(db, client.id, asset)
+
         exchange_txs = [
-            exchange_order_to_crypto_tx(o, asset=asset) for o in orders
+            exchange_order_to_crypto_tx(o, asset=asset)
+            for o in filter_self_trading_exchange_orders(orders)
         ]
 
         person_id = getattr(client, "person_id", None)
@@ -632,8 +639,11 @@ class TestClientService:
         orphan_txs: list = []
         swap_txs: list = []
         if person_id is not None:
-            privy_rows = PersonWalletDepositRepository().list_for_person(
-                db, person_id, asset=asset, limit=200
+            privy_rows = filter_self_trading_privy_deposits(
+                db,
+                PersonWalletDepositRepository().list_for_person(
+                    db, person_id, asset=asset, limit=200
+                ),
             )
             orphan_txs = list_orphan_webhook_crypto_txs(
                 db, person_id=person_id, asset=asset, limit=200
@@ -641,10 +651,12 @@ class TestClientService:
             swap_rows = PersonWalletSwapRepository.list_confirmed_for_person_asset(
                 db, person_id=person_id, asset=asset, limit=200
             )
-            for swap in swap_rows:
-                mapped = person_wallet_swap_to_crypto_tx(swap, asset=asset)
-                if mapped is not None:
-                    swap_txs.append(mapped)
+            swap_txs = build_self_trading_lifi_swap_txs(
+                db,
+                person_id=person_id,
+                asset=asset,
+                swap_rows=swap_rows,
+            )
 
         bundle_pe_txs = list_bundle_pe_asset_transactions(
             db,
@@ -659,6 +671,12 @@ class TestClientService:
             privy_rows,
             extra_txs=[*orphan_txs, *swap_txs, *bundle_pe_txs],
         )
+
+        from services.portfolio_engine.bundle_execution.self_trading_projection import (
+            project_self_trading_transactions,
+        )
+
+        txs = project_self_trading_transactions(txs)
 
         return {
             "client": client,

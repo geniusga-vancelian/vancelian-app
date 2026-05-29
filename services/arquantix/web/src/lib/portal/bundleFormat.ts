@@ -1,3 +1,7 @@
+import { bundleTargetWeightToPct } from '@/lib/portal/bundleProductFormat'
+
+export { bundleTargetWeightToPct } from '@/lib/portal/bundleProductFormat'
+
 /** Symboles bundle Base — aligné backend ``display_bundle_asset`` / portail Lombard. */
 const BUNDLE_ASSET_DISPLAY: Record<string, string> = {
   CBBTC: 'cbBTC',
@@ -24,9 +28,8 @@ export function displayBundleAssetSymbol(raw: string): string {
 
 /** Poids décimal PE (0.5) → « 50 % ». */
 export function formatBundleTargetWeight(weight: string | number | null | undefined): string {
-  const n = typeof weight === 'number' ? weight : Number(weight)
-  if (!Number.isFinite(n) || n <= 0) return '—'
-  const pct = n <= 1 ? n * 100 : n
+  const pct = bundleTargetWeightToPct(weight)
+  if (pct <= 0) return '—'
   const rounded = Math.round(pct * 10) / 10
   return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)} %`
 }

@@ -150,6 +150,22 @@ export type PortalCryptoWalletTransaction = {
   swapAmountFrom?: string
   swapAmountTo?: string
   txHash?: string
+  portfolioScope?: string
+  bundleBatchId?: string
+  legsCount?: number
+  successfulLegsCount?: number
+  failedLegsCount?: number
+  expandableLegs?: PortalBundleAllocationLeg[]
+}
+
+export type PortalBundleAllocationLeg = {
+  fromAsset: string
+  toAsset: string
+  amountIn: string
+  amountOut: string
+  status: string
+  legId?: string
+  txHash?: string
 }
 
 /** Aperçu historique sur la page détail position crypto (preview/17). */

@@ -59,6 +59,37 @@ logger = logging.getLogger(__name__)
 TOLERANCE = Decimal("0.000001")
 
 
+def _record_withdraw_finalize_ledger(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    batch_id: str,
+    released: bool,
+    reason: str | None = None,
+    cash_available: float | None = None,
+    requested: float | None = None,
+    released_amount: float | None = None,
+) -> None:
+    from services.portfolio_engine.clients.models import Client
+    from services.portfolio_engine.bundle_ledger.service import record_withdraw_finalize_info
+
+    row = db.query(Client.person_id).filter(Client.id == client_id).first()
+    if row is None or row[0] is None:
+        return
+    record_withdraw_finalize_info(
+        db,
+        person_id=row[0],
+        bundle_portfolio_id=portfolio_id,
+        batch_id=batch_id,
+        released=released,
+        reason=reason,
+        cash_available=cash_available,
+        requested=requested,
+        released_amount=released_amount,
+    )
+
+
 class BundleWithdrawOrchestratorError(Exception):
     pass
 
@@ -377,6 +408,16 @@ class BundleWithdrawOrchestrator:
                 withdraw_phase=WITHDRAW_PHASE_PARTIALLY_UNWOUND,
                 status="partially_unwound",
             )
+            _record_withdraw_finalize_ledger(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                released=False,
+                reason="insufficient_cash_leg_for_requested_amount",
+                cash_available=float(cash_available),
+                requested=float(requested),
+            )
             return {
                 "released": False,
                 "reason": "insufficient_cash_leg_for_requested_amount",
@@ -430,6 +471,19 @@ class BundleWithdrawOrchestrator:
             batch_id=batch_id,
         )
 
+        partial = not full_withdraw and release_amount + TOLERANCE < requested
+        _record_withdraw_finalize_ledger(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+            released=True,
+            reason="partial_release" if partial else "full_release",
+            released_amount=float(release_amount),
+            requested=float(requested) if not full_withdraw else None,
+            cash_available=float(cash_available),
+        )
+
         return {
             "released": True,
             "release": release,
@@ -444,7 +498,36 @@ class BundleWithdrawOrchestrator:
         portfolio_id: UUID,
         batch_id: str,
     ) -> dict:
-        """Point d'entrée explicite après confirmation des legs de vente."""
+        """Point d'entrée explicite après confirmation des legs de vente.
+
+        Release uniquement le cash leg confirmé disponible — jamais de crédit
+        self-trading si les sells ne sont pas terminés.
+        """
+        from .bundle_withdraw_lock import (
+            get_withdraw_lock,
+            load_portfolio_for_withdraw_lock,
+            reconcile_or_expire_idle_withdraw_lock,
+        )
+
+        portfolio = load_portfolio_for_withdraw_lock(
+            db, client_id=client_id, portfolio_id=portfolio_id,
+        )
+        reconcile_or_expire_idle_withdraw_lock(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            portfolio=portfolio,
+        )
+        db.refresh(portfolio)
+
+        lock = get_withdraw_lock(portfolio.metadata_)
+        if lock is None or str(lock.get("batch_id")) != batch_id:
+            return {
+                "batch_id": batch_id,
+                "released": False,
+                "reason": "lock_not_active",
+            }
+
         update_withdraw_lock(
             db,
             client_id=client_id,

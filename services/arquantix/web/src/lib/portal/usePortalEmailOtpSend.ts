@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react'
 import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
-import { recoverPrivyEmailLoginSession } from '@/components/portal/PortalAuthPrivySessionHygiene'
+import { recoverPrivyEmailLoginSession } from '@/lib/portal/portalAuthPrivySessionStorage'
 import { useCaptcha, usePrivyInternal } from '@/lib/portal/privyInternals'
 import { obtainPrivyCaptchaTokenForSend } from '@/lib/portal/preparePrivyCaptchaForSend'
 import {

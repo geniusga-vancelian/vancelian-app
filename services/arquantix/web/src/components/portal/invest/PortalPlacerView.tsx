@@ -11,9 +11,9 @@ import {
   PortalPlacerSeeAll,
   resolveCurrencyIcon,
 } from '@/components/portal/bundles/PortalPlacerBundleCards'
-import { PortalBundleInvestDialog } from '@/components/portal/bundles/PortalBundleInvestDialog'
-import { PortalEarnVaultModal } from '@/components/portal/invest/PortalEarnVaultModal'
-import { PortalLedgityVaultModal } from '@/components/portal/invest/PortalLedgityVaultModal'
+import { PortalLazyBundleInvestDialog } from '@/components/portal/bundles/PortalLazyBundleInvestDialog'
+import { PortalLazyEarnVaultModal } from '@/components/portal/invest/PortalLazyEarnVaultModal'
+import { PortalLazyLedgityVaultModal } from '@/components/portal/invest/PortalLazyLedgityVaultModal'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
 import { resolveExclusiveOfferCoverUrl } from '@/lib/portal/exclusiveOfferPlaceholderImages'
@@ -288,7 +288,7 @@ export function PortalPlacerView({
       </div>
 
       {investBundle ? (
-        <PortalBundleInvestDialog
+        <PortalLazyBundleInvestDialog
           bundle={investBundle}
           open
           onOpenChange={(open) => {
@@ -298,11 +298,11 @@ export function PortalPlacerView({
       ) : null}
 
       {morphoVault ? (
-        <PortalEarnVaultModal vault={morphoVault} onClose={() => setMorphoVault(null)} />
+        <PortalLazyEarnVaultModal vault={morphoVault} onClose={() => setMorphoVault(null)} />
       ) : null}
 
       {ledgityVault ? (
-        <PortalLedgityVaultModal vault={ledgityVault} onClose={() => setLedgityVault(null)} />
+        <PortalLazyLedgityVaultModal vault={ledgityVault} onClose={() => setLedgityVault(null)} />
       ) : null}
     </>
   )

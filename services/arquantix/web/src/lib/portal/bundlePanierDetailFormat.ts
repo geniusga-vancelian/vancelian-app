@@ -1,5 +1,6 @@
 import { appDsCryptoSvgPath } from '@/components/design-system/app/AppProductBasketCard'
 import {
+  bundleTargetWeightToPct,
   normalizeVaultModuleType,
   readAllocationSlices,
 } from '@/lib/portal/bundleProductFormat'
@@ -261,7 +262,7 @@ function buildComposition(
     return allocations.map((a) => ({
       sym: a.assetSymbol,
       name: a.name || a.assetSymbol,
-      pct: a.targetWeight,
+      pct: bundleTargetWeightToPct(a.targetWeight),
       icon: appDsCryptoSvgPath(a.assetSymbol) ?? '/app-ds/assets/crypto/btc.svg',
       color: cryptoBrandColor(a.assetSymbol),
     }))

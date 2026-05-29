@@ -107,6 +107,8 @@ export type BundleInvestResult =
 export type BundleFinalizePayload = {
   batch_id: string
   cash_leg_credited: number
+  cash_leg_remaining?: number
+  recoverable_cash_in_bundle?: number
   invariant_g?: Record<string, unknown>
 }
 

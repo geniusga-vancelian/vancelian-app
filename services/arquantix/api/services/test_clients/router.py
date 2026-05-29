@@ -1885,7 +1885,7 @@ def mobile_bundle_invest_active_lock(
     from services.portfolio_engine.bundles.bundle_invest_lock import (
         get_active_invest_lock_for_portfolio,
         load_portfolio_for_invest_lock,
-        reconcile_idle_invest_lock,
+        reconcile_or_expire_idle_invest_lock,
     )
 
     try:
@@ -1896,7 +1896,7 @@ def mobile_bundle_invest_active_lock(
     portfolio = load_portfolio_for_invest_lock(
         db, client_id=client.id, portfolio_id=pid,
     )
-    reconciled = reconcile_idle_invest_lock(
+    reconciled = reconcile_or_expire_idle_invest_lock(
         db,
         client_id=client.id,
         portfolio_id=pid,
@@ -2602,55 +2602,73 @@ def mobile_bundle_transactions(
     db: Session = Depends(get_db),
     client: PeClient = Depends(mobile_app_client),
 ):
-    """Return exchange orders attached to a specific bundle portfolio."""
+    """Historique bundle : swaps internes (allocation, rebalance, retrait) + entrées/sorties jambe."""
     from uuid import UUID as _UUID
-    from services.exchange.models import ExchangeOrder
-    from .schemas import ASSET_NAMES
+    from services.portfolio_engine.bundle_execution.bundle_portfolio_transactions import (
+        list_bundle_portfolio_transactions,
+    )
 
     try:
-        _UUID(portfolio_id)
+        pid = _UUID(portfolio_id)
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
 
-    orders = (
-        db.query(ExchangeOrder)
-        .filter(
-            ExchangeOrder.client_id == client.id,
-            ExchangeOrder.status == "completed",
-            ExchangeOrder.metadata_["portfolio_scope"].astext == "bundle",
-            ExchangeOrder.metadata_["portfolio_id"].astext == portfolio_id,
-        )
-        .order_by(ExchangeOrder.created_at.desc())
-        .all()
+    txs = list_bundle_portfolio_transactions(
+        db,
+        client_id=client.id,
+        person_id=getattr(client, "person_id", None),
+        portfolio_id=pid,
+        limit=100,
     )
 
-    txs = []
-    for o in orders:
-        asset = o.asset
-        side_label = "Achat" if o.side == "buy" else "Vente"
-        title = f"{side_label} {ASSET_NAMES.get(asset, asset)}"
-        subtitle = f"{o.amount_fiat:.2f} EUR" if o.side == "buy" else f"{o.amount_crypto} {asset}"
-        direction = "credit" if o.side == "buy" else "debit"
+    serialized = []
+    for tx in txs:
+        created = tx.get("created_at")
+        serialized.append(
+            {
+                **tx,
+                "id": str(tx.get("id")),
+                "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
+            }
+        )
 
-        txs.append({
-            "id": str(o.id),
-            "side": o.side,
-            "asset": asset,
-            "amount_crypto": f"{o.amount_crypto}",
-            "amount_fiat": f"{o.amount_fiat:.2f}",
-            "price": f"{o.price:.2f}",
-            "currency": o.currency,
-            "status": o.status,
-            "fee_amount": f"{o.fee_amount}" if o.fee_amount else None,
-            "fee_asset": o.fee_asset,
-            "external_reference": o.external_reference,
-            "created_at": o.created_at.isoformat() if o.created_at else None,
-            "title": title,
-            "subtitle": subtitle,
-            "direction": direction,
-        })
+    return {"portfolio_id": portfolio_id, "transactions": serialized}
 
-    return {"portfolio_id": portfolio_id, "transactions": txs}
+
+@bootstrap_router.get("/bundle/{portfolio_id}/ledger")
+def mobile_bundle_ledger(
+    portfolio_id: str,
+    batch_id: Optional[str] = Query(None),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Journal bundle shadow (Phase 4A) — lecture seule, n remplace pas l'historique existant."""
+    from uuid import UUID as _UUID
+    from services.portfolio_engine.bundle_ledger.service import list_bundle_ledger_entries
+    from services.portfolio_engine.portfolios.models import Portfolio
+
+    try:
+        pid = _UUID(portfolio_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    portfolio = (
+        db.query(Portfolio)
+        .filter(Portfolio.id == pid, Portfolio.client_id == client.id)
+        .first()
+    )
+    if portfolio is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="portfolio_not_found")
+
+    person_id = getattr(client, "person_id", None)
+    return list_bundle_ledger_entries(
+        db,
+        bundle_portfolio_id=pid,
+        person_id=person_id,
+        batch_id=batch_id,
+        limit=limit,
+    )
 
 
 @bootstrap_router.post("/bundle/{portfolio_id}/rebalance/preview")
@@ -2693,13 +2711,13 @@ def mobile_bundle_rebalance_execute(
 
     from services.portfolio_engine.bundles.bundle_invest_lock import (
         load_portfolio_for_invest_lock,
-        reconcile_idle_invest_lock,
+        reconcile_or_expire_idle_invest_lock,
     )
 
     portfolio = load_portfolio_for_invest_lock(
         db, client_id=client.id, portfolio_id=pid,
     )
-    if not reconcile_idle_invest_lock(
+    if not reconcile_or_expire_idle_invest_lock(
         db,
         client_id=client.id,
         portfolio_id=pid,

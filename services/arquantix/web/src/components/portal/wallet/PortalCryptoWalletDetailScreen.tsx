@@ -313,7 +313,10 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
                   title=""
                   seamless
               items={previewTransactions.map((tx) =>
-                mapCryptoTransactionToHistoryItem(tx, currency, { assetTicker: ticker }),
+                mapCryptoTransactionToHistoryItem(tx, currency, {
+                  assetTicker: ticker,
+                  projectionContext: 'self_trading',
+                }),
               )}
                 />
               </section>

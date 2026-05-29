@@ -100,6 +100,7 @@ from services.assistance.admin_agent_action_options_router import (
 from services.migrations.routes import router as migrations_router
 from services.portfolio_engine import router as portfolio_engine_router
 from services.customers_admin import customers_admin_router
+from services.portfolio_engine.bundle_ledger.admin_router import bundle_ledger_admin_router
 from services.test_clients import (
     bootstrap_router as test_clients_bootstrap_router,
     mobile_flutter_router as test_clients_mobile_flutter_router,
@@ -234,6 +235,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(migrations_router)
     app.include_router(portfolio_engine_router)
     app.include_router(customers_admin_router)
+    app.include_router(bundle_ledger_admin_router)
     app.include_router(test_clients_bootstrap_router)
     app.include_router(test_clients_mobile_flutter_router)
     app.include_router(custody_admin_router)

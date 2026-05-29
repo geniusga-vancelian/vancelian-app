@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -19,6 +20,12 @@ def _orchestrator():
 
 class BundlePeSettlementError(Exception):
     pass
+
+
+def _ledger_context(
+    ledger: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return ledger if isinstance(ledger, dict) else {}
 
 
 def apply_allocation_leg_atoms_lifi_spot_only(
@@ -50,6 +57,7 @@ def apply_allocation_leg_atoms(
     entry_asset_consumed: Decimal,
     crypto_received: Decimal,
     cost_basis_eur: Decimal,
+    ledger: dict[str, Any] | None = None,
 ) -> None:
     """Crédite spot + débite cash leg après confirmation on-chain."""
     if crypto_received <= 0:
@@ -69,6 +77,37 @@ def apply_allocation_leg_atoms(
         cost_basis_eur,
     )
 
+    ctx = _ledger_context(ledger)
+    person_id = ctx.get("person_id")
+    if person_id is not None:
+        from services.portfolio_engine.bundle_ledger.service import record_allocation_buy
+
+        record_allocation_buy(
+            db,
+            person_id=UUID(str(person_id)),
+            bundle_portfolio_id=portfolio_id,
+            target_instrument_id=target_instrument_id,
+            target_asset_symbol=str(ctx.get("target_asset_symbol") or ctx.get("to_asset") or ""),
+            crypto_received=crypto_received,
+            entry_asset_consumed=entry_asset_consumed,
+            entry_instrument_id=entry_instrument_id,
+            entry_asset_symbol=str(ctx.get("entry_asset_symbol") or ctx.get("from_asset") or ""),
+            batch_id=ctx.get("batch_id"),
+            leg_id=ctx.get("leg_id"),
+            swap_id=UUID(str(ctx["swap_id"])) if ctx.get("swap_id") else None,
+            cost_basis_eur=cost_basis_eur,
+            planned_entry_consumed=(
+                Decimal(str(ctx["planned_amount_in"]))
+                if ctx.get("planned_amount_in") is not None
+                else None
+            ),
+            planned_crypto_received=(
+                Decimal(str(ctx["planned_amount_out"]))
+                if ctx.get("planned_amount_out") is not None
+                else None
+            ),
+        )
+
 
 def apply_rebalance_sell_atoms(
     db: Session,
@@ -79,6 +118,7 @@ def apply_rebalance_sell_atoms(
     sell_qty: Decimal,
     entry_received: Decimal,
     cost_basis_eur: Decimal,
+    ledger: dict[str, Any] | None = None,
 ) -> None:
     from services.portfolio_engine.bundles.rebalance import BundleRebalanceOrchestrator as _Rebal
 
@@ -88,6 +128,28 @@ def apply_rebalance_sell_atoms(
     _orchestrator()._credit_cash_leg(
         db, portfolio_id, entry_instrument_id, entry_received, cost_basis_eur,
     )
+
+    ctx = _ledger_context(ledger)
+    person_id = ctx.get("person_id")
+    if person_id is not None:
+        from services.portfolio_engine.bundle_ledger.service import record_rebalance
+
+        record_rebalance(
+            db,
+            person_id=UUID(str(person_id)),
+            bundle_portfolio_id=portfolio_id,
+            side="sell",
+            instrument_id=instrument_id,
+            asset_symbol=str(ctx.get("from_asset") or ctx.get("asset_symbol") or ""),
+            quantity=sell_qty,
+            entry_instrument_id=entry_instrument_id,
+            entry_asset_symbol=str(ctx.get("to_asset") or ctx.get("entry_asset_symbol") or ""),
+            entry_amount=entry_received,
+            batch_id=ctx.get("batch_id"),
+            leg_id=ctx.get("leg_id"),
+            swap_id=UUID(str(ctx["swap_id"])) if ctx.get("swap_id") else None,
+            cost_basis_eur=cost_basis_eur,
+        )
 
 
 def apply_rebalance_buy_atoms(
@@ -99,6 +161,7 @@ def apply_rebalance_buy_atoms(
     entry_spent: Decimal,
     crypto_received: Decimal,
     cost_basis_eur: Decimal,
+    ledger: dict[str, Any] | None = None,
 ) -> None:
     _orchestrator()._sync_pe_position(
         db, portfolio_id, instrument_id, crypto_received, cost_basis_eur,
@@ -106,6 +169,28 @@ def apply_rebalance_buy_atoms(
     _orchestrator()._debit_cash_leg(
         db, portfolio_id, entry_instrument_id, entry_spent, cost_basis_eur,
     )
+
+    ctx = _ledger_context(ledger)
+    person_id = ctx.get("person_id")
+    if person_id is not None:
+        from services.portfolio_engine.bundle_ledger.service import record_rebalance
+
+        record_rebalance(
+            db,
+            person_id=UUID(str(person_id)),
+            bundle_portfolio_id=portfolio_id,
+            side="buy",
+            instrument_id=instrument_id,
+            asset_symbol=str(ctx.get("to_asset") or ctx.get("asset_symbol") or ""),
+            quantity=crypto_received,
+            entry_instrument_id=entry_instrument_id,
+            entry_asset_symbol=str(ctx.get("from_asset") or ctx.get("entry_asset_symbol") or ""),
+            entry_amount=entry_spent,
+            batch_id=ctx.get("batch_id"),
+            leg_id=ctx.get("leg_id"),
+            swap_id=UUID(str(ctx["swap_id"])) if ctx.get("swap_id") else None,
+            cost_basis_eur=cost_basis_eur,
+        )
 
 
 def apply_withdraw_sell_atoms(
@@ -117,17 +202,39 @@ def apply_withdraw_sell_atoms(
     sell_qty: Decimal,
     entry_received: Decimal,
     cost_basis_eur: Decimal,
+    ledger: dict[str, Any] | None = None,
 ) -> None:
     """Vente bundle confirmée : spot → cash leg (+ settlement Privy en amont)."""
-    apply_rebalance_sell_atoms(
-        db,
-        portfolio_id=portfolio_id,
-        instrument_id=instrument_id,
-        entry_instrument_id=entry_instrument_id,
-        sell_qty=sell_qty,
-        entry_received=entry_received,
-        cost_basis_eur=cost_basis_eur,
+    from services.portfolio_engine.bundles.rebalance import BundleRebalanceOrchestrator as _Rebal
+
+    _Rebal._debit_spot_atom(
+        db, portfolio_id, instrument_id, sell_qty, cost_basis_eur,
     )
+    _orchestrator()._credit_cash_leg(
+        db, portfolio_id, entry_instrument_id, entry_received, cost_basis_eur,
+    )
+
+    ctx = _ledger_context(ledger)
+    person_id = ctx.get("person_id")
+    if person_id is not None:
+        from services.portfolio_engine.bundle_ledger.service import record_allocation_sell
+
+        record_allocation_sell(
+            db,
+            person_id=UUID(str(person_id)),
+            bundle_portfolio_id=portfolio_id,
+            instrument_id=instrument_id,
+            asset_symbol=str(ctx.get("from_asset") or ""),
+            sell_qty=sell_qty,
+            entry_received=entry_received,
+            entry_instrument_id=entry_instrument_id,
+            entry_asset_symbol=str(ctx.get("to_asset") or ctx.get("entry_asset_symbol") or ""),
+            batch_id=ctx.get("batch_id"),
+            leg_id=ctx.get("leg_id"),
+            swap_id=UUID(str(ctx["swap_id"])) if ctx.get("swap_id") else None,
+            withdraw_sell=True,
+            cost_basis_eur=cost_basis_eur,
+        )
 
 
 def apply_withdraw_release_atoms(

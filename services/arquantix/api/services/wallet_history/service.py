@@ -30,6 +30,9 @@ from database import (
 )
 from services.exchange.assets import ASSET_PROVIDER_SYMBOL_MAP
 from services.exchange.models import ExchangeOrder
+from services.portfolio_engine.bundle_execution.self_trading_transactions import (
+    filter_self_trading_exchange_orders,
+)
 from services.market_data.fx import get_eurusdt_rate, usdt_to_eur
 
 logger = logging.getLogger(__name__)
@@ -334,6 +337,9 @@ def build_wallet_history(
         q = q.filter(ExchangeOrder.asset == asset.upper())
     q = _apply_history_scope_filter(q, portfolio_scope, portfolio_id)
     orders = q.order_by(ExchangeOrder.created_at.asc()).all()
+
+    if portfolio_scope in (None, "global", "direct"):
+        orders = filter_self_trading_exchange_orders(orders)
 
     if not orders:
         return {"currency": reference_currency.upper(), "points": []}

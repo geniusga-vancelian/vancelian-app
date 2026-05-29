@@ -17,6 +17,7 @@ from database import SessionLocal, Base, engine, get_db, Person
 from services.portfolio_engine.clients.models import Client as _Client  # noqa: F401 — force mapper init
 import services.presentations.models as _PresentationDeckModels  # noqa: F401 — presentation ORM
 import services.test_clients.operation_statement_snapshot_model as _OperationStatementSnapshots  # noqa: F401 — PR5 ORM
+import services.portfolio_engine.bundle_ledger.models as _BundleLedgerModels  # noqa: F401 — Phase 4A ORM
 
 
 @pytest.fixture(scope="session", autouse=True)

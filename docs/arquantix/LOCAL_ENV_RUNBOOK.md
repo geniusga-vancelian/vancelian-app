@@ -16,6 +16,7 @@
 |--------|------------------------|
 | Ports, `COMPOSE_PROJECT_NAME`, `DB_*`, secrets partagés API | `.env.arquantix` (racine du dépôt) |
 | API Python lancée **hors** Docker | `services/arquantix/api/.env.local` |
+| RPC Base (replay / réconciliation on-chain) | `.env.arquantix` (Docker) + `api/.env.local` (scripts host) — voir [BASE_RPC_RECONCILIATION_SETUP.md](./BASE_RPC_RECONCILIATION_SETUP.md) |
 | Next / Prisma / BFF lancés **hors** Docker | `services/arquantix/web/.env.local` |
 | Variables chargées par Next **dans** Docker (ex. vidéo admin) | `.env` racine (aligner `DATABASE_URL` sur la même base que ci‑dessus) |
 | Compose | Dans ce dépôt : **`docker-compose.arquantix-recovery.yml`** (via `ARQUANTIX_COMPOSE_FILE`) — le fichier `docker-compose.arquantix.yml` est **legacy** / référence |

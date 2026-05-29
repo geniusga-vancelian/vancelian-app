@@ -20,7 +20,7 @@ import {
   fetchPortalSolanaWalletStatus,
   type SolanaWalletStatusPayload,
 } from '@/lib/portal/solanaWalletClient'
-import { ConnectExternalWalletButton } from '@/components/wallet/ConnectExternalWalletButton'
+import { PortalProfileExternalWalletConnect } from '@/components/portal/profile/PortalProfileExternalWalletConnect'
 
 function formatWalletAddress(address: string): string {
   const trimmed = address.trim()
@@ -204,7 +204,7 @@ export function PortalProfileWalletsSection() {
         </p>
         <PortalSettingsCard>
           <div className="px-4 py-4 sm:px-5">
-            <ConnectExternalWalletButton compact />
+            <PortalProfileExternalWalletConnect />
           </div>
         </PortalSettingsCard>
       </div>
