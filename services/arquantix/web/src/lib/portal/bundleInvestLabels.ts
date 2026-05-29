@@ -13,7 +13,13 @@ export function bundleLockStatusLabel(status: string | undefined): string {
     case 'finalizing':
       return 'Finalisation…'
     case 'partial_pending':
-      return 'Investissement en cours…'
+      return 'Allocation en cours…'
+    case 'partial':
+      return 'Allocation partielle — cash leg disponible'
+    case 'failed':
+      return 'Allocation échouée — USDC toujours dans le bundle'
+    case 'expired':
+      return 'Session expirée — USDC conservés dans le bundle'
     default:
       return 'Investissement en cours…'
   }

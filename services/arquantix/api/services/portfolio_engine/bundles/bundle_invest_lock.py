@@ -5,6 +5,8 @@ Préfigure reserved balances / operation lock.
 """
 from __future__ import annotations
 
+import logging
+import os
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -13,6 +15,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.portfolio_engine.portfolios.models import Portfolio
+
+logger = logging.getLogger(__name__)
 
 BUNDLE_INVEST_LOCK_KEY = "bundle_invest_lock"
 BUNDLE_ACTION_INVEST = "invest"
@@ -31,6 +35,21 @@ TERMINAL_INVEST_LOCK_STATUSES = frozenset({
     "failed",
     "expired",
 })
+
+# Statuts récupérables — ne bloquent pas un nouvel invest (non listés dans ACTIVE).
+RECOVERABLE_INVEST_LOCK_STATUSES = frozenset({
+    "partial",
+    "failed",
+    "expired",
+})
+
+
+def invest_lock_ttl_minutes() -> int:
+    raw = (os.environ.get("BUNDLE_INVEST_LOCK_TTL_MINUTES") or "120").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 120
 
 
 class BundleInvestAlreadyPendingError(Exception):
@@ -396,6 +415,178 @@ def _batch_has_blocking_invest_work(
     )
 
 
+def _parse_lock_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
+
+
+def _lock_age_minutes(lock: dict[str, Any]) -> float:
+    ref = lock.get("updated_at") or lock.get("created_at")
+    dt = _parse_lock_datetime(str(ref) if ref else None)
+    if dt is None:
+        return 0.0
+    return (datetime.now(timezone.utc) - dt).total_seconds() / 60.0
+
+
+def _swap_batch_has_live_invest_work(
+    db: Session,
+    *,
+    person_id: UUID,
+    batch_id: str,
+) -> bool:
+    """Swap bundle encore en attente signature ou confirmation on-chain."""
+    from services.lifi.enums import SwapSessionStatus
+    from services.lifi.models import PersonWalletSwap
+    from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
+
+    live_statuses = {
+        SwapSessionStatus.SUBMITTED.value,
+        SwapSessionStatus.AWAITING_SIGNATURE.value,
+    }
+    swaps = (
+        db.query(PersonWalletSwap)
+        .filter(
+            PersonWalletSwap.person_id == person_id,
+            PersonWalletSwap.status.in_(list(live_statuses)),
+        )
+        .all()
+    )
+    for swap in swaps:
+        ctx = bundle_context_from_swap_audit(swap)
+        if not ctx or str(ctx.get("batch_id")) != batch_id:
+            continue
+        if ctx.get("bundle_execution"):
+            return True
+    return False
+
+
+def expire_stale_invest_lock_if_safe(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    portfolio: Portfolio,
+) -> bool:
+    """Marque un verrou invest stale comme ``expired`` si aucun swap vivant ne le justifie.
+
+    La cash leg reste intacte — état récupérable via rebalance / nouvel invest.
+    """
+    lock = get_invest_lock(portfolio.metadata_)
+    if lock is None:
+        return False
+
+    lock_client = str(lock.get("client_id") or "")
+    if lock_client and lock_client != str(client_id):
+        return False
+
+    age = _lock_age_minutes(lock)
+    if age < invest_lock_ttl_minutes():
+        return False
+
+    batch_id = str(lock.get("batch_id") or "").strip()
+    if not batch_id:
+        return False
+
+    person_id = _resolve_person_id(db, client_id)
+    if person_id is not None and _swap_batch_has_live_invest_work(
+        db,
+        person_id=person_id,
+        batch_id=batch_id,
+    ):
+        return False
+
+    if _batch_has_blocking_invest_work(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        batch_id=batch_id,
+    ):
+        return False
+
+    release_invest_lock(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        batch_id=batch_id,
+        terminal_status="expired",
+    )
+
+    from services.portfolio_engine.hardening.audit_service import AuditService
+
+    AuditService.log_success(
+        db,
+        entity_type="portfolio",
+        entity_id=str(portfolio_id),
+        action="bundle.invest_lock_expired",
+        actor_id=f"bundle-invest-lock:{batch_id}",
+        metadata={
+            "client_id": str(client_id),
+            "portfolio_id": str(portfolio_id),
+            "batch_id": batch_id,
+            "previous_status": str(lock.get("status") or ""),
+            "lock_age_minutes": round(age, 2),
+            "ttl_minutes": invest_lock_ttl_minutes(),
+            "cash_leg_preserved": True,
+        },
+    )
+    db.refresh(portfolio)
+    logger.info(
+        "bundle_invest_lock.expired batch=%s portfolio=%s age_min=%.1f",
+        batch_id,
+        portfolio_id,
+        age,
+    )
+    person_id = _resolve_person_id(db, client_id)
+    if person_id is not None:
+        from services.portfolio_engine.bundle_ledger.service import record_recovery_event
+
+        record_recovery_event(
+            db,
+            person_id=person_id,
+            bundle_portfolio_id=portfolio_id,
+            batch_id=batch_id,
+            reason="invest_lock_ttl_expired",
+            lock_type="invest",
+            previous_status=str(lock.get("status") or ""),
+            metadata={
+                "lock_age_minutes": round(age, 2),
+                "ttl_minutes": invest_lock_ttl_minutes(),
+            },
+        )
+    return True
+
+
+def reconcile_or_expire_idle_invest_lock(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    portfolio: Portfolio,
+) -> bool:
+    """Expire un lock stale puis nettoie un lock sans travail LI.FI actif."""
+    expired = expire_stale_invest_lock_if_safe(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        portfolio=portfolio,
+    )
+    if expired:
+        return True
+    return reconcile_idle_invest_lock(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        portfolio=portfolio,
+    )
+
+
 def reconcile_idle_invest_lock(
     db: Session,
     *,
@@ -448,8 +639,8 @@ def reconcile_idle_invest_lock_for_withdraw(
     portfolio_id: UUID,
     portfolio: Portfolio,
 ) -> bool:
-    """Autorise le retrait si le verrou invest est absent ou sans travail en cours."""
-    return reconcile_idle_invest_lock(
+    """Autorise le retrait si le verrou invest est absent, expiré ou sans travail en cours."""
+    return reconcile_or_expire_idle_invest_lock(
         db,
         client_id=client_id,
         portfolio_id=portfolio_id,
@@ -463,11 +654,11 @@ def reconcile_idle_invest_lock_for_invest(
     client_id: UUID,
     portfolio_id: UUID,
 ) -> bool:
-    """Nettoie un verrou invest stale avant un nouvel investissement ou rebalance."""
+    """Nettoie ou expire un verrou invest stale avant un nouvel investissement ou rebalance."""
     portfolio = load_portfolio_for_invest_lock(
         db, client_id=client_id, portfolio_id=portfolio_id,
     )
-    return reconcile_idle_invest_lock(
+    return reconcile_or_expire_idle_invest_lock(
         db,
         client_id=client_id,
         portfolio_id=portfolio_id,

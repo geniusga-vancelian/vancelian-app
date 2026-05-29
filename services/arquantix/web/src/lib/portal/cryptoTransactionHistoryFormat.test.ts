@@ -278,6 +278,7 @@ describe('mapCryptoTransactionToHistoryItem', () => {
         sourceSystem: 'bundle_pe',
       },
       'USD',
+      { projectionContext: 'self_trading' },
     )
     assert.equal(row.variant, 'flow')
     assert.equal(row.flowDirection, 'out')
@@ -285,5 +286,126 @@ describe('mapCryptoTransactionToHistoryItem', () => {
     assert.match(row.amount, /15/)
     assert.match(row.amount, /USDC/)
     assert.equal(row.title, 'Transfert vers Two Crypto Kings')
+  })
+
+  it('renders bundle deposit positive in bundle context', () => {
+    const row = mapCryptoTransactionToHistoryItem(
+      {
+        ...baseTx,
+        id: 'bundle-deposit-1',
+        side: 'deposit',
+        direction: 'credit',
+        amountCrypto: '80',
+        title: 'Dépôt · Crypto Majors',
+        subtitle: '+80 USDC',
+        transactionKind: 'bundle_deposit',
+        portfolioScope: 'bundle',
+      },
+      'EUR',
+      { projectionContext: 'bundle' },
+    )
+    assert.equal(row.variant, 'flow')
+    assert.equal(row.flowDirection, 'in')
+    assert.match(row.amount, /\+/)
+    assert.match(row.amount, /80/)
+    assert.match(row.title, /Dépôt · Crypto Majors/)
+  })
+
+  it('renders allocation aggregate in bundle activity', () => {
+    const row = mapCryptoTransactionToHistoryItem(
+      {
+        ...baseTx,
+        id: 'bundle-alloc-1',
+        side: 'allocation',
+        direction: 'info',
+        amountCrypto: '64',
+        asset: 'USDC',
+        status: 'completed',
+        title: 'Allocation · Crypto Majors',
+        subtitle: '4/4 legs · completed',
+        transactionKind: 'bundle_allocation_aggregate',
+        legsCount: 4,
+        successfulLegsCount: 4,
+        expandableLegs: [
+          { fromAsset: 'USDC', toAsset: 'LINK', amountIn: '16', amountOut: '0.5', status: 'confirmed' },
+        ],
+      },
+      'EUR',
+      { projectionContext: 'bundle', bundlePortfolioId: '5607e764-dec3-427e-8a88-0c41ff38d61c' },
+    )
+    assert.equal(row.variant, 'allocation')
+    assert.match(row.amount, /\+/)
+    assert.match(row.amount, /64/)
+    assert.match(row.title, /Allocation · Crypto Majors/)
+    assert.match(row.meta ?? '', /completed/)
+    assert.match(row.href ?? '', /bundle\/5607e764/)
+    assert.match(row.href ?? '', /bundle-alloc-1/)
+  })
+
+  it('renders allocation aggregate amount ending in zero correctly', () => {
+    const row = mapCryptoTransactionToHistoryItem(
+      {
+        ...baseTx,
+        id: 'bundle-alloc-80',
+        amountCrypto: '80',
+        transactionKind: 'bundle_allocation_aggregate',
+        title: 'Allocation · Crypto Majors',
+      },
+      'EUR',
+      { projectionContext: 'bundle' },
+    )
+    assert.match(row.amount, /80/)
+    assert.doesNotMatch(row.amount, /\+ 8 USDC/)
+  })
+
+  it('does not format raw USDC→LINK bundle internal swap as exchange in self-trading', () => {
+    assert.equal(
+      isCryptoSwapTransaction(
+        {
+          ...baseTx,
+          side: 'swap',
+          transactionKind: 'bundle_internal_swap',
+          fromAsset: 'USDC',
+          toAsset: 'LINK',
+          title: 'Allocation · USDC → LINK',
+          portfolioScope: 'bundle',
+        },
+        'self_trading',
+      ),
+      false,
+    )
+
+    const row = mapCryptoTransactionToHistoryItem(
+      {
+        ...baseTx,
+        side: 'swap',
+        transactionKind: 'crypto_swap',
+        fromAsset: 'USDC',
+        toAsset: 'LINK',
+        title: 'Échange USDC → LINK',
+        portfolioScope: 'bundle',
+        bundleBatchId: 'batch-1',
+      },
+      'EUR',
+      { projectionContext: 'self_trading' },
+    )
+    assert.notEqual(row.variant, 'swap')
+  })
+
+  it('never formats bundle_internal_swap as regular exchange', () => {
+    assert.equal(
+      isCryptoSwapTransaction(
+        {
+          ...baseTx,
+          side: 'swap',
+          transactionKind: 'bundle_internal_swap',
+          fromAsset: 'USDC',
+          toAsset: 'BTC',
+          title: 'Allocation · USDC → BTC',
+        },
+        'bundle',
+      ),
+      false,
+    )
   })
 })

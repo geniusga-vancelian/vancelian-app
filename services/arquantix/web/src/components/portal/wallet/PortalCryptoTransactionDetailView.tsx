@@ -18,6 +18,9 @@ type Props = {
 }
 
 function TxHeroLeading({ detail }: { detail: PortalCryptoTransactionDetailViewModel }) {
+  if (detail.variant === 'allocation') {
+    return <AppTxFlowAvatar direction="in" />
+  }
   if (
     (detail.variant === 'swap' || detail.variant === 'borrow') &&
     detail.fromAsset &&

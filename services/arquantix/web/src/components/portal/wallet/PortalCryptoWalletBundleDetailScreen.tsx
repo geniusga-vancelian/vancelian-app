@@ -111,7 +111,12 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
     const txs = data?.transactions ?? []
     return txs
       .slice(0, CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW)
-      .map((tx) => mapCryptoTransactionToHistoryItem(tx, currency))
+      .map((tx) =>
+        mapCryptoTransactionToHistoryItem(tx, currency, {
+          projectionContext: 'bundle',
+          bundlePortfolioId: id,
+        }),
+      )
   }, [currency, data?.transactions])
 
   const hasMoreTransactions =

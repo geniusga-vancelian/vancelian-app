@@ -6,6 +6,13 @@ const PERF_MODULE_TYPES = new Set([
   'bundleperformancechart',
 ])
 
+/** Poids décimal PE (0.5) → pourcentage affichable (50). Valeurs déjà en % passent telles quelles. */
+export function bundleTargetWeightToPct(weight: string | number | null | undefined): number {
+  const n = typeof weight === 'number' ? weight : Number(weight)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return n <= 1 ? n * 100 : n
+}
+
 export function normalizeVaultModuleType(type: string): string {
   return type.trim().toLowerCase()
 }
@@ -82,6 +89,18 @@ export function parseBundleChartPoints(raw: unknown): {
   historyPoints: number[]
 } {
   const root = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+
+  // Réponse déjà normalisée par /api/portal/bundles/product/.../chart-history
+  if (Array.isArray(root.historyPoints)) {
+    const historyPoints = root.historyPoints
+      .map((v) => Number(v))
+      .filter((v) => Number.isFinite(v))
+    const perfRaw = root.performancePct ?? root.performance_pct
+    const performancePct =
+      typeof perfRaw === 'number' && Number.isFinite(perfRaw) ? perfRaw : null
+    return { performancePct, historyPoints }
+  }
+
   const points = Array.isArray(root.points) ? root.points : []
   const historyPoints = points
     .map((p) => {
@@ -90,7 +109,7 @@ export function parseBundleChartPoints(raw: unknown): {
     })
     .filter((v) => Number.isFinite(v))
 
-  const perfRaw = root.performance_pct
+  const perfRaw = root.performance_pct ?? root.performancePct
   const performancePct =
     typeof perfRaw === 'number' && Number.isFinite(perfRaw) ? perfRaw : null
 

@@ -17,7 +17,7 @@ export type PortalTransactionHistoryItem = {
   amountTone?: AppTxAmountTone
   meta?: string
   incoming?: boolean
-  variant?: 'flow' | 'swap' | 'borrow'
+  variant?: 'flow' | 'swap' | 'borrow' | 'allocation'
   flowDirection?: 'in' | 'out'
   fromAsset?: string
   toAsset?: string
@@ -39,6 +39,9 @@ type Props = {
 function resolveLeading(item: PortalTransactionHistoryItem): ReactNode {
   const fromAsset = item.fromAsset?.trim()
   const toAsset = item.toAsset?.trim()
+  if (item.variant === 'allocation') {
+    return <AppTxFlowAvatar direction="in" />
+  }
   if ((item.variant === 'swap' || item.variant === 'borrow' || (fromAsset && toAsset)) && fromAsset && toAsset) {
     return <AppTxExchangeAvatar fromAsset={fromAsset} toAsset={toAsset} />
   }

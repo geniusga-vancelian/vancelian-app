@@ -138,6 +138,11 @@ class PrivyWalletLedgerService:
         rows = self._deposit_repo.list_for_person(
             db, person_id, asset=asset, limit=limit
         )
+        from services.portfolio_engine.bundle_execution.self_trading_transactions import (
+            filter_self_trading_privy_deposits,
+        )
+
+        rows = filter_self_trading_privy_deposits(db, rows)
 
         deposits = [
             PrivyWalletDepositPayload(

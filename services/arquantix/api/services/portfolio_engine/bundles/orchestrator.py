@@ -204,69 +204,36 @@ class BundleOrchestrator:
             raise BundleOrchestratorError(str(exc)) from exc
 
         # ── Step 2: Allocate from cash leg ───────────────────────────────
-        cash_available = entry_qty_received
-        alloc_results: list[dict] = []
-        succeeded = 0
-        failed = 0
-        total_entry_consumed = Decimal("0")
+        from services.portfolio_engine.bundle_execution.allocation_planner import (
+            plan_allocation_legs,
+        )
+        from services.portfolio_engine.bundle_execution.allocation_parallel import (
+            run_allocation_legs_sequential,
+        )
 
-        for alloc in allocations:
-            instrument = alloc.instrument
-            if instrument is None:
-                instrument = db.query(Instrument).filter(
-                    Instrument.id == alloc.instrument_id
-                ).first()
-            asset_obj = db.query(Asset).filter(
-                Asset.id == instrument.asset_id
-            ).first()
-            target_asset = self._normalize_asset_symbol(asset_obj.symbol.upper())
-
-            alloc_entry_amount = (entry_qty_received * alloc.target_weight).quantize(
-                Decimal("0.000001"), rounding=ROUND_DOWN,
-            )
-            if alloc_entry_amount <= 0 or alloc_entry_amount > cash_available:
-                continue
-
-            ext_ref = f"bundle-alloc-{batch_id}-{target_asset}"
-
-            try:
-                exec_result = self._run_allocation_leg(
-                    db,
-                    client_id=client_id,
-                    portfolio_id=portfolio_id,
-                    entry_asset=entry_asset,
-                    entry_instrument_id=entry_instrument.id,
-                    target_asset=target_asset,
-                    target_instrument_id=alloc.instrument_id,
-                    alloc_entry_amount=alloc_entry_amount,
-                    ext_ref=ext_ref,
-                    batch_id=batch_id,
-                    actor=actor,
-                )
-                if exec_result["status"] == "pending":
-                    alloc_results.append(exec_result["record"])
-                    continue
-                if exec_result["status"] == "completed":
-                    cash_available -= alloc_entry_amount
-                    total_entry_consumed += alloc_entry_amount
-                    succeeded += 1
-                    alloc_results.append(exec_result["record"])
-            except (ExchangeError, Exception) as exc:
-                failed += 1
-                logger.warning(
-                    "Bundle allocation leg failed: asset=%s err=%s",
-                    target_asset, exc,
-                )
-                alloc_results.append({
-                    "asset": target_asset,
-                    "instrument_id": str(alloc.instrument_id),
-                    "target_weight": float(alloc.target_weight),
-                    "entry_asset_consumed": 0,
-                    "crypto_received": 0,
-                    "status": "failed",
-                    "error": str(exc),
-                })
-
+        planned_legs, allocatable, execution_buffer, plan_cash_remaining = plan_allocation_legs(
+            db,
+            allocations=allocations,
+            fund_amount=entry_qty_received,
+            batch_id=batch_id,
+            normalize_asset_fn=self._normalize_asset_symbol,
+        )
+        cash_available = plan_cash_remaining + execution_buffer
+        alloc_results, leg_stats = run_allocation_legs_sequential(
+            self,
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            entry_asset=entry_asset,
+            entry_instrument_id=entry_instrument.id,
+            batch_id=batch_id,
+            actor=actor,
+            planned_legs=planned_legs,
+            initial_cash_available=allocatable,
+        )
+        succeeded = leg_stats.succeeded
+        failed = leg_stats.failed
+        total_entry_consumed = leg_stats.total_entry_consumed
         cash_leg_remaining = cash_available
         status = (
             "completed" if failed == 0
@@ -304,6 +271,8 @@ class BundleOrchestrator:
             "total_entry_asset_received": float(entry_qty_received),
             "total_entry_asset_consumed": float(total_entry_consumed),
             "cash_leg_remaining": float(cash_leg_remaining),
+            "execution_buffer": float(execution_buffer),
+            "allocatable_amount": float(allocatable),
             "legs_succeeded": succeeded,
             "legs_failed": failed,
             "allocation_details": alloc_results,
@@ -402,66 +371,101 @@ class BundleOrchestrator:
             actor_id=f"bundle-orchestrator-lifi-{portfolio_id}",
         )
         entry_qty_received = funding_amount
-        cash_available = funding_amount
+        from services.portfolio_engine.bundle_execution.allocation_config import (
+            bundle_alloc_parallel_quotes_enabled,
+        )
+        from services.portfolio_engine.bundle_execution.allocation_parallel import (
+            run_allocation_legs_parallel,
+            run_allocation_legs_sequential,
+        )
+        from services.portfolio_engine.bundle_execution.allocation_planner import (
+            plan_allocation_legs,
+        )
+
+        planned_legs, allocatable, execution_buffer, plan_cash_remaining = plan_allocation_legs(
+            db,
+            allocations=allocations,
+            fund_amount=funding_amount,
+            batch_id=batch_id,
+            normalize_asset_fn=self._normalize_asset_symbol,
+        )
+        cash_available = plan_cash_remaining + execution_buffer
         alloc_results: list[dict] = []
-        succeeded = 0
-        failed = 0
-        pending = 0
-        total_entry_consumed = Decimal("0")
 
-        for alloc in allocations:
-            instrument = alloc.instrument
-            if instrument is None:
-                instrument = db.query(Instrument).filter(
-                    Instrument.id == alloc.instrument_id
-                ).first()
-            asset_obj = db.query(Asset).filter(
-                Asset.id == instrument.asset_id
-            ).first()
-            target_asset = self._normalize_asset_symbol(asset_obj.symbol.upper())
-            lifi_target = normalize_bundle_asset(target_asset)
+        from services.portfolio_engine.bundle_execution.allocation_observability import (
+            log_allocation_event,
+        )
 
-            alloc_entry_amount = (entry_qty_received * alloc.target_weight).quantize(
-                Decimal("0.000001"), rounding=ROUND_DOWN,
+        person_id_str = str(person_id) if person_id is not None else None
+        log_allocation_event(
+            "plan_created",
+            person_id=person_id_str,
+            portfolio_id=str(portfolio_id),
+            batch_id=batch_id,
+            fund_amount=float(funding_amount),
+            buffer_amount=float(execution_buffer),
+            allocatable_amount=float(allocatable),
+            legs_count=len(planned_legs),
+            parallel_enabled=bundle_alloc_parallel_quotes_enabled(),
+        )
+
+        use_parallel = (
+            bundle_alloc_parallel_quotes_enabled()
+            and self._execution.provider_name == "lifi_base"
+            and len(planned_legs) > 1
+        )
+        if use_parallel:
+            alloc_results, leg_stats = run_allocation_legs_parallel(
+                self,
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                batch_id=batch_id,
+                actor=actor,
+                planned_legs=planned_legs,
+                initial_cash_available=allocatable,
+                person_id=person_id_str,
+                fund_amount=funding_amount,
+                buffer_amount=execution_buffer,
+                allocatable_amount=allocatable,
             )
-            if alloc_entry_amount <= 0 or alloc_entry_amount > cash_available:
-                continue
+        else:
+            alloc_results, leg_stats = run_allocation_legs_sequential(
+                self,
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                batch_id=batch_id,
+                actor=actor,
+                planned_legs=planned_legs,
+                initial_cash_available=allocatable,
+                execution_asset_from_planned=True,
+            )
 
-            ext_ref = f"bundle-alloc-{batch_id}-{lifi_target}"
-            try:
-                exec_result = self._run_allocation_leg(
-                    db,
-                    client_id=client_id,
-                    portfolio_id=portfolio_id,
-                    entry_asset=entry_asset,
-                    entry_instrument_id=entry_instrument.id,
-                    target_asset=lifi_target,
-                    target_instrument_id=alloc.instrument_id,
-                    alloc_entry_amount=alloc_entry_amount,
-                    ext_ref=ext_ref,
-                    batch_id=batch_id,
-                    actor=actor,
-                )
-                if exec_result["status"] == "pending":
-                    pending += 1
-                    alloc_results.append(exec_result["record"])
-                    continue
-                if exec_result["status"] == "completed":
-                    total_entry_consumed += alloc_entry_amount
-                    cash_available -= alloc_entry_amount
-                    succeeded += 1
-                    alloc_results.append(exec_result["record"])
-            except Exception as exc:
-                failed += 1
-                alloc_results.append({
-                    "asset": lifi_target,
-                    "instrument_id": str(alloc.instrument_id),
-                    "target_weight": float(alloc.target_weight),
-                    "status": "failed",
-                    "error": str(exc),
-                })
-
+        succeeded = leg_stats.succeeded
+        failed = leg_stats.failed
+        pending = leg_stats.pending
+        total_entry_consumed = leg_stats.total_entry_consumed
         cash_leg_remaining = cash_available
+        log_allocation_event(
+            "residual_cash",
+            person_id=person_id_str,
+            portfolio_id=str(portfolio_id),
+            batch_id=batch_id,
+            fund_amount=float(funding_amount),
+            buffer_amount=float(execution_buffer),
+            allocatable_amount=float(allocatable),
+            legs_count=len(planned_legs),
+            parallel_enabled=use_parallel,
+            residual_cash=float(cash_leg_remaining),
+            legs_succeeded=succeeded,
+            legs_failed=failed,
+            legs_pending=pending,
+        )
         if succeeded > 0 and pending == 0 and failed == 0:
             status = "completed"
         elif pending > 0:
@@ -486,6 +490,23 @@ class BundleOrchestrator:
                 batch_id=batch_id,
                 terminal_status="failed",
             )
+        elif pending == 0:
+            # État récupérable — partial ou échec sans legs en attente (cash leg intacte).
+            if status == "partial" and succeeded > 0:
+                clear_invest_lock(
+                    db,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    batch_id=batch_id,
+                )
+            else:
+                release_invest_lock(
+                    db,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    batch_id=batch_id,
+                    terminal_status="failed",
+                )
         else:
             update_invest_lock_status(
                 db,
@@ -534,6 +555,9 @@ class BundleOrchestrator:
             "total_entry_asset_received": float(entry_qty_received),
             "total_entry_asset_consumed": float(total_entry_consumed),
             "cash_leg_remaining": float(cash_leg_remaining),
+            "execution_buffer": float(execution_buffer),
+            "allocatable_amount": float(allocatable),
+            "parallel_quotes": use_parallel,
             "legs_succeeded": succeeded,
             "legs_failed": failed,
             "legs_pending": pending,
@@ -571,6 +595,7 @@ class BundleOrchestrator:
             metadata={
                 "entry_instrument_id": str(entry_instrument_id),
                 "target_instrument_id": str(target_instrument_id),
+                "planned_amount_in": str(alloc_entry_amount),
             },
         )
         result = self._execution.execute_leg(db, leg, actor)
@@ -635,14 +660,28 @@ class BundleOrchestrator:
         planned_entry_total: Decimal,
         entry_consumed: Decimal,
     ) -> dict:
-        """Finalise un batch LI.FI après legs confirmés (cash leg déjà alimenté au fund)."""
-        update_invest_lock_status(
-            db,
-            client_id=client_id,
-            portfolio_id=portfolio_id,
-            batch_id=batch_id,
-            status="finalizing",
+        """Finalise un batch LI.FI après legs confirmés (cash leg déjà alimenté au fund).
+
+        Les USDC non alloués restent en cash leg — état récupérable, non bloquant.
+        """
+        from services.portfolio_engine.bundles.bundle_invest_lock import (
+            get_invest_lock,
+            load_portfolio_for_invest_lock,
+            reconcile_or_expire_idle_invest_lock,
         )
+
+        portfolio_locked = load_portfolio_for_invest_lock(
+            db, client_id=client_id, portfolio_id=portfolio_id,
+        )
+        lock = get_invest_lock(portfolio_locked.metadata_)
+        if lock is not None and str(lock.get("batch_id")) == batch_id:
+            update_invest_lock_status(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                status="finalizing",
+            )
 
         remaining = planned_entry_total - entry_consumed
         invariant_g = check_invariant_g(db, client_id, dry_run=True)
@@ -664,10 +703,17 @@ class BundleOrchestrator:
             portfolio_id=portfolio_id,
             batch_id=batch_id,
         )
+        reconcile_or_expire_idle_invest_lock(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            portfolio=portfolio_locked,
+        )
         return {
             "batch_id": batch_id,
             "cash_leg_remaining": float(remaining),
             "cash_leg_credited": 0.0,
+            "recoverable_cash_in_bundle": float(remaining) if remaining > 0 else 0.0,
             "invariant_g": invariant_g,
         }
 
@@ -855,6 +901,12 @@ class BundleOrchestrator:
                 f"unsupported_funding_path: {funding_asset}", funding_asset, funding_amount,
             )
 
+        from services.portfolio_engine.bundle_execution.allocation_config import (
+            compute_allocatable_amount,
+        )
+
+        allocatable_amount, execution_buffer = compute_allocatable_amount(estimated_entry_amount)
+
         alloc_previews: list[dict] = []
         total_consumed = Decimal("0")
         legs_ok = 0
@@ -876,7 +928,7 @@ class BundleOrchestrator:
             display_asset = display_bundle_asset(lifi_target)
 
             alloc_input = (
-                estimated_entry_amount * alloc.target_weight
+                allocatable_amount * alloc.target_weight
             ).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
 
             if alloc_input <= 0:
@@ -926,6 +978,8 @@ class BundleOrchestrator:
             "funding_amount": str(funding_amount),
             "entry_asset_used": entry_asset,
             "estimated_entry_asset_amount": str(estimated_entry_amount),
+            "execution_buffer": str(execution_buffer),
+            "allocatable_amount": str(allocatable_amount),
             "estimated_remaining_entry_asset": str(remaining),
             "allocations": alloc_previews,
             "warnings": warnings,

@@ -279,6 +279,30 @@ def _tx_from_portfolio_lock(
     return None
 
 
+def _pe_transfer_canonical_key(mapped: dict[str, Any]) -> str | None:
+    batch = str(mapped.get("external_reference") or "").strip()
+    direction = str(mapped.get("direction") or "").strip()
+    if not batch or not direction:
+        return None
+    return f"{batch}:{direction}"
+
+
+def _store_pe_transfer(
+    store: dict[str, tuple[int, dict[str, Any]]],
+    mapped: dict[str, Any],
+    *,
+    priority: int,
+) -> None:
+    """Une seule ligne par batch+direction — audit > intent > lock."""
+    key = _pe_transfer_canonical_key(mapped)
+    if key is None:
+        store[f"orphan:{mapped.get('id')}"] = (priority, mapped)
+        return
+    existing = store.get(key)
+    if existing is None or priority > existing[0]:
+        store[key] = (priority, mapped)
+
+
 def list_bundle_pe_asset_transactions(
     db: Session,
     *,
@@ -286,12 +310,19 @@ def list_bundle_pe_asset_transactions(
     person_id: UUID | None,
     asset: str,
     limit: int = 100,
+    portfolio_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Liste les transferts PE bundle ↔ self-trading pour un actif (ex. USDC)."""
     asset_u = asset.strip().upper()
     portfolio_names = _portfolio_name_map(db, client_id=client_id)
     portfolio_ids = list(portfolio_names.keys())
-    by_key: dict[str, dict[str, Any]] = {}
+    portfolio_filter = str(portfolio_id or "").strip()
+    by_key: dict[str, tuple[int, dict[str, Any]]] = {}
+
+    def _portfolio_allowed(pid: str) -> bool:
+        if not portfolio_filter:
+            return True
+        return pid == portfolio_filter
 
     audit_filters = [AuditEvent.action.in_([AUDIT_ACTION_FUND, AUDIT_ACTION_RELEASE])]
     client_match = AuditEvent.metadata_["client_id"].astext == str(client_id)
@@ -313,7 +344,11 @@ def list_bundle_pe_asset_transactions(
         mapped = _tx_from_audit(row, asset_u=asset_u, portfolio_names=portfolio_names)
         if mapped is None:
             continue
-        by_key[f"audit:{mapped['id']}"] = mapped
+        meta = row.metadata_ if isinstance(row.metadata_, dict) else {}
+        pid = str(meta.get("portfolio_id") or row.entity_id or "")
+        if not _portfolio_allowed(pid):
+            continue
+        _store_pe_transfer(by_key, mapped, priority=3)
 
     if person_id is not None:
         intents = (
@@ -335,9 +370,11 @@ def list_bundle_pe_asset_transactions(
             mapped = _tx_from_intent(row, asset_u=asset_u, portfolio_names=portfolio_names)
             if mapped is None:
                 continue
-            batch = str(mapped.get("external_reference") or "")
-            direction = mapped.get("direction")
-            by_key[f"intent:{batch}:{direction}"] = mapped
+            meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+            pid = str(meta.get("bundle_id") or "")
+            if not _portfolio_allowed(pid):
+                continue
+            _store_pe_transfer(by_key, mapped, priority=2)
 
     portfolios = (
         db.query(Portfolio)
@@ -348,15 +385,15 @@ def list_bundle_pe_asset_transactions(
         .all()
     )
     for portfolio in portfolios:
+        if not _portfolio_allowed(str(portfolio.id)):
+            continue
         for lock_key in (BUNDLE_INVEST_LOCK_KEY, BUNDLE_WITHDRAW_LOCK_KEY):
             mapped = _tx_from_portfolio_lock(portfolio, lock_key, asset_u=asset_u)
             if mapped is None:
                 continue
-            batch = str(mapped.get("external_reference") or "")
-            direction = mapped.get("direction")
-            by_key[f"lock:{batch}:{direction}"] = mapped
+            _store_pe_transfer(by_key, mapped, priority=1)
 
-    txs = list(by_key.values())
+    txs = [item[1] for item in by_key.values()]
     txs.sort(
         key=lambda tx: _parse_iso_dt(tx.get("created_at")) or datetime.min.replace(tzinfo=None),
         reverse=True,

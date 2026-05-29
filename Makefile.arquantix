@@ -169,9 +169,15 @@ dev-stop:
 	@bash scripts/dev-reset.sh --stop
 
 # Nettoyage large (compose down ×2 projets, ports API/Next/DB/Redis) puis stack complète.
+# Note : sans --build, Docker réutilise les images en cache (code API/web figé au dernier build).
 dev-restart:
 	@bash scripts/dev-reset.sh --stop
 	@bash scripts/dev-reset.sh
+
+# Comme dev-restart, mais rebuild les images arquantix-api + arquantix-web avant le up.
+dev-restart-build:
+	@bash scripts/dev-reset.sh --stop
+	@bash scripts/dev-reset.sh --build
 
 # Diagnostic rapide si « connection refused » sur 3000 / 8000 (Docker, ports, curl).
 dev-status:

@@ -20,6 +20,7 @@ import type {
   PortalCryptoWalletDetail,
   PortalCryptoWalletRow,
   PortalCryptoWalletTransaction,
+  PortalBundleAllocationLeg,
   PortalBundlePosition,
   PortalMyBundleSummary,
 } from '@/lib/portal/cryptoWalletTypes'
@@ -535,6 +536,23 @@ export function parseCryptoWalletDetail(raw: unknown): PortalCryptoWalletDetail 
   }
 }
 
+function parseExpandableLegs(raw: unknown): PortalBundleAllocationLeg[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const legs = raw
+    .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
+    .map((item) => ({
+      fromAsset: String(item.from_asset ?? '').trim().toUpperCase(),
+      toAsset: String(item.to_asset ?? '').trim().toUpperCase(),
+      amountIn: String(item.amount_in ?? ''),
+      amountOut: String(item.amount_out ?? ''),
+      status: String(item.status ?? 'confirmed'),
+      legId: typeof item.leg_id === 'string' ? item.leg_id : undefined,
+      txHash: typeof item.tx_hash === 'string' ? item.tx_hash : undefined,
+    }))
+    .filter((leg) => leg.fromAsset && leg.toAsset)
+  return legs.length > 0 ? legs : undefined
+}
+
 export function parseCryptoWalletTransactions(raw: unknown): PortalCryptoWalletTransaction[] {
   const root = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const list = Array.isArray(root.transactions) ? root.transactions : []
@@ -562,6 +580,16 @@ export function parseCryptoWalletTransactions(raw: unknown): PortalCryptoWalletT
         typeof item.swap_amount_from === 'string' ? item.swap_amount_from : undefined,
       swapAmountTo: typeof item.swap_amount_to === 'string' ? item.swap_amount_to : undefined,
       txHash: typeof item.tx_hash === 'string' ? item.tx_hash : undefined,
+      portfolioScope:
+        typeof item.portfolio_scope === 'string' ? item.portfolio_scope : undefined,
+      bundleBatchId:
+        typeof item.bundle_batch_id === 'string' ? item.bundle_batch_id : undefined,
+      legsCount: typeof item.legs_count === 'number' ? item.legs_count : undefined,
+      successfulLegsCount:
+        typeof item.successful_legs_count === 'number' ? item.successful_legs_count : undefined,
+      failedLegsCount:
+        typeof item.failed_legs_count === 'number' ? item.failed_legs_count : undefined,
+      expandableLegs: parseExpandableLegs(item.expandable_legs),
     }))
     .filter((tx) => tx.id)
 }

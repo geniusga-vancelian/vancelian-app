@@ -5,7 +5,6 @@ import {
   parseMyBundles,
   parseWalletHistoryPoints,
 } from '@/lib/portal/cryptoWalletFormat'
-import { consolidateSwapTransactions } from '@/lib/portal/cryptoTransactionHistoryFormat'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 
@@ -65,9 +64,7 @@ export async function GET(
       : 'EUR'
 
   const historyPoints = historyRes.ok ? parseWalletHistoryPoints(historyRes.data) : []
-  const transactions = consolidateSwapTransactions(
-    txRes.ok ? parseCryptoWalletTransactions(txRes.data) : [],
-  )
+  const transactions = txRes.ok ? parseCryptoWalletTransactions(txRes.data) : []
 
   return NextResponse.json({
     currency,

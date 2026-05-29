@@ -171,7 +171,48 @@ def privy_deposit_to_crypto_tx(row: PersonWalletDeposit) -> dict[str, Any]:
         "source_system": "privy",
         "tx_hash": row.tx_hash,
         "custody_provider": "privy",
+        "metadata_json": meta if meta else None,
     }
+
+
+def _tx_dedupe_keys(tx: dict[str, Any]) -> set[str]:
+    keys: set[str] = set()
+    tx_id = tx.get("id")
+    if tx_id is not None:
+        keys.add(f"id:{tx_id}")
+
+    tx_hash = tx.get("tx_hash")
+    if tx_hash:
+        keys.add(f"hash:{str(tx_hash).strip().lower()}")
+
+    kind = str(tx.get("transaction_kind") or "").strip().lower()
+    if kind == "bundle_pe_transfer":
+        batch = str(tx.get("external_reference") or "").strip()
+        direction = str(tx.get("direction") or "").strip()
+        if batch and direction:
+            keys.add(f"bundle_pe:{batch}:{direction}")
+
+    meta = tx.get("metadata_json")
+    if isinstance(meta, dict):
+        swap_id = meta.get("swap_id")
+        if swap_id:
+            keys.add(f"swap:{swap_id}")
+
+    return keys
+
+
+def _source_priority(tx: dict[str, Any]) -> int:
+    source = str(tx.get("source_system") or "").strip().lower()
+    kind = str(tx.get("transaction_kind") or "").strip().lower()
+    if source == "bundle_pe" or kind == "bundle_pe_transfer":
+        return 40
+    if source == "lifi_swap":
+        return 30
+    if source == "exchange":
+        return 20
+    if source == "privy":
+        return 10
+    return 0
 
 
 def merge_crypto_transactions(
@@ -181,17 +222,37 @@ def merge_crypto_transactions(
     limit: int = 200,
     extra_txs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Fusionne et trie par date décroissante."""
-    merged = list(exchange_txs) + [privy_deposit_to_crypto_tx(row) for row in privy_rows]
-    if extra_txs:
-        seen = {str(tx.get("id")) for tx in merged if tx.get("id") is not None}
-        for tx in extra_txs:
-            tx_id = tx.get("id")
-            if tx_id is not None and str(tx_id) in seen:
-                continue
+    """Fusionne et trie par date décroissante (dédup id, tx_hash, batch PE, swap_id)."""
+    merged: list[dict[str, Any]] = []
+    index_by_key: dict[str, int] = {}
+
+    def _consider(tx: dict[str, Any]) -> None:
+        keys = _tx_dedupe_keys(tx)
+        existing_idx: int | None = None
+        for key in keys:
+            if key in index_by_key:
+                existing_idx = index_by_key[key]
+                break
+        if existing_idx is None:
+            index_by_key.update({key: len(merged) for key in keys})
             merged.append(tx)
-            if tx_id is not None:
-                seen.add(str(tx_id))
+            return
+
+        existing = merged[existing_idx]
+        if _source_priority(tx) > _source_priority(existing):
+            for old_key in _tx_dedupe_keys(existing):
+                index_by_key.pop(old_key, None)
+            merged[existing_idx] = tx
+            index_by_key.update({key: existing_idx for key in keys})
+
+    for tx in exchange_txs:
+        _consider(tx)
+    for row in privy_rows:
+        _consider(privy_deposit_to_crypto_tx(row))
+    if extra_txs:
+        for tx in extra_txs:
+            _consider(tx)
+
     merged.sort(key=_tx_sort_key, reverse=True)
     return merged[:limit]
 

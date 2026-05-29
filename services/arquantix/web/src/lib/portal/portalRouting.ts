@@ -129,6 +129,16 @@ export function portalCryptoWalletTransactionRoute(asset: string, txId: string):
   return `${portalCryptoWalletTransactionsRoute(ticker)}/${id}`
 }
 
+/** Détail d'une transaction bundle wallet. */
+export function portalCryptoWalletBundleTransactionRoute(
+  portfolioId: string,
+  txId: string,
+): string {
+  const id = portfolioId.trim()
+  const tx = encodeURIComponent(txId.trim())
+  return `${portalCryptoWalletBundleRoute(id)}/transactions/${tx}`
+}
+
 /** Détail vault épargne — `/app/wallet/savings/0x…`. */
 export function portalSavingsVaultRoute(vaultAddress: string): string {
   const normalized = vaultAddress.trim().toLowerCase()

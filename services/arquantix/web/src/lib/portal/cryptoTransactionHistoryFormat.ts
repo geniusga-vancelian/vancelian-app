@@ -1,14 +1,16 @@
 import type { AppTxAmountTone } from '@/components/design-system/app/AppTxRow'
 import { formatPortalMoney } from '@/lib/portal/dashboardFormat'
 import type { PortalCryptoWalletTransaction } from '@/lib/portal/cryptoWalletTypes'
-import { portalCryptoWalletTransactionRoute } from '@/lib/portal/portalRouting'
+import { portalCryptoWalletTransactionRoute, portalCryptoWalletBundleTransactionRoute } from '@/lib/portal/portalRouting'
 
 const FIAT_CURRENCIES = new Set(['EUR', 'USD', 'GBP', 'CHF'])
 const SWAP_TITLE_RE = /(?:Échange|Exchange)\s+([A-Z0-9]+)\s*(?:→|->)\s*([A-Z0-9]+)/i
 
+export type TransactionProjectionContext = 'self_trading' | 'bundle'
+
 export type PortalCryptoTransactionHistoryItem = {
   id: string
-  variant: 'flow' | 'swap' | 'borrow'
+  variant: 'flow' | 'swap' | 'borrow' | 'allocation'
   title: string
   subtitle?: string
   amount: string
@@ -103,9 +105,40 @@ export function isLombardBorrowTransaction(tx: PortalCryptoWalletTransaction): b
   return tx.sourceSystem === 'lombard_v1'
 }
 
-export function isCryptoSwapTransaction(tx: PortalCryptoWalletTransaction): boolean {
-  if (isLombardBorrowTransaction(tx)) return false
+export function isBundleInternalTransaction(tx: PortalCryptoWalletTransaction): boolean {
   const kind = tx.transactionKind?.trim().toLowerCase()
+  if (kind === 'bundle_internal_swap') return true
+  if (kind === 'bundle_allocation_aggregate' || kind === 'bundle_deallocation_aggregate') {
+    return true
+  }
+  if (tx.portfolioScope?.trim().toLowerCase() === 'bundle' && tx.side?.trim().toLowerCase() === 'swap') {
+    return true
+  }
+  const title = tx.title?.trim().toLowerCase() ?? ''
+  if (
+    (title.startsWith('allocation ·') || title.startsWith('allocation ')) &&
+    kind !== 'bundle_allocation_aggregate'
+  ) {
+    return true
+  }
+  return false
+}
+
+export function isBundleAllocationAggregate(tx: PortalCryptoWalletTransaction): boolean {
+  const kind = tx.transactionKind?.trim().toLowerCase()
+  return kind === 'bundle_allocation_aggregate' || kind === 'bundle_deallocation_aggregate'
+}
+
+export function isCryptoSwapTransaction(
+  tx: PortalCryptoWalletTransaction,
+  context: TransactionProjectionContext = 'self_trading',
+): boolean {
+  if (isLombardBorrowTransaction(tx)) return false
+  if (context === 'self_trading' && isBundleInternalTransaction(tx)) return false
+  if (isBundleAllocationAggregate(tx)) return false
+
+  const kind = tx.transactionKind?.trim().toLowerCase()
+  if (kind === 'bundle_internal_swap') return false
   if (kind === 'crypto_swap') return true
   if (tx.side?.trim().toLowerCase() === 'swap') return true
   if (parseSwapAssetsFromTitle(tx.title)) return true
@@ -193,12 +226,13 @@ function mergeSwapGroup(group: PortalCryptoWalletTransaction[]): PortalCryptoWal
 /** Fusionne les jambes swap (Privy debit/credit) en une ligne avec from/to + montants. */
 export function consolidateSwapTransactions(
   txs: PortalCryptoWalletTransaction[],
+  context: TransactionProjectionContext = 'self_trading',
 ): PortalCryptoWalletTransaction[] {
   const passthrough: PortalCryptoWalletTransaction[] = []
   const swapGroups = new Map<string, PortalCryptoWalletTransaction[]>()
 
   for (const tx of txs) {
-    if (!isCryptoSwapTransaction(tx)) {
+    if (!isCryptoSwapTransaction(tx, context)) {
       passthrough.push(tx)
       continue
     }
@@ -231,14 +265,60 @@ function formatLombardBorrowMeta(collateralAmount: string | undefined, collatera
   return `Garantie · ${formatCryptoAmountDisplay(amount)} ${asset}`
 }
 
+function formatAllocationMeta(tx: PortalCryptoWalletTransaction): string | undefined {
+  const parts: string[] = []
+  const status = tx.status?.trim()
+  if (status) parts.push(status)
+  if (tx.legsCount != null) {
+    parts.push(`${tx.successfulLegsCount ?? tx.legsCount}/${tx.legsCount} legs`)
+  }
+  const legs = tx.expandableLegs ?? []
+  if (legs.length > 0) {
+    const assets = [...new Set(legs.map((leg) => leg.toAsset).filter(Boolean))]
+    if (assets.length > 0) parts.push(assets.join(', '))
+  }
+  const dateLabel = formatTransactionDateLabel(tx)
+  if (dateLabel) parts.push(dateLabel)
+  return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
 export function mapCryptoTransactionToHistoryItem(
   tx: PortalCryptoWalletTransaction,
   currency: string,
-  options?: { assetTicker?: string },
+  options?: { assetTicker?: string; projectionContext?: TransactionProjectionContext; bundlePortfolioId?: string },
 ): PortalCryptoTransactionHistoryItem {
-  const href = options?.assetTicker
-    ? portalCryptoWalletTransactionRoute(options.assetTicker, tx.id)
-    : undefined
+  const projectionContext = options?.projectionContext ?? 'self_trading'
+  const href = options?.bundlePortfolioId
+    ? portalCryptoWalletBundleTransactionRoute(options.bundlePortfolioId, tx.id)
+    : options?.assetTicker
+      ? portalCryptoWalletTransactionRoute(options.assetTicker, tx.id)
+      : undefined
+
+  if (isBundleAllocationAggregate(tx)) {
+    const asset = normalizeAsset(tx.asset) || 'USDC'
+    const amount = tx.amountCrypto?.trim() || '0'
+    return {
+      id: tx.id,
+      variant: 'allocation',
+      title: tx.title?.trim() || 'Allocation · Bundle',
+      subtitle: tx.subtitle?.trim() || undefined,
+      amount: formatSignedCryptoAmount(amount, asset, '+'),
+      amountTone: 'in',
+      meta: formatAllocationMeta(tx),
+      href,
+    }
+  }
+
+  if (projectionContext === 'self_trading' && isBundleInternalTransaction(tx)) {
+    return {
+      id: tx.id,
+      variant: 'flow',
+      title: tx.title?.trim() || 'Opération bundle',
+      subtitle: tx.subtitle?.trim(),
+      amount: '—',
+      href,
+    }
+  }
 
   if (isLombardBorrowTransaction(tx)) {
     const collateral = normalizeAsset(tx.fromAsset) || 'COLLATERAL'
@@ -260,7 +340,7 @@ export function mapCryptoTransactionToHistoryItem(
     }
   }
 
-  if (isCryptoSwapTransaction(tx)) {
+  if (isCryptoSwapTransaction(tx, projectionContext)) {
     const assets = resolveSwapAssets(tx)
     if (assets) {
       const amounts = resolveSwapAmounts(tx, assets)
@@ -372,6 +452,7 @@ export function groupCryptoTransactionsByDay(
   currency: string,
   monthKey: string | null,
   assetTicker?: string,
+  projectionContext: TransactionProjectionContext = 'self_trading',
 ): PortalCryptoTransactionDaySection[] {
   const filtered = monthKey
     ? txs.filter((tx) => {
@@ -395,7 +476,9 @@ export function groupCryptoTransactionsByDay(
       byDay.set(dayKey, [])
       dayLabels.set(dayKey, formatCryptoTransactionDayLabel(date))
     }
-    byDay.get(dayKey)!.push(mapCryptoTransactionToHistoryItem(tx, currency, { assetTicker }))
+    byDay.get(dayKey)!.push(
+      mapCryptoTransactionToHistoryItem(tx, currency, { assetTicker, projectionContext }),
+    )
   }
 
   return [...byDay.entries()]

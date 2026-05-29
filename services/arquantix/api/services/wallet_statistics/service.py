@@ -249,6 +249,13 @@ def build_wallet_statistics(
     q = _apply_scope_filter(q, portfolio_scope, portfolio_id)
     orders = q.order_by(ExchangeOrder.created_at.asc()).all()
 
+    if portfolio_scope in (None, "global", "direct"):
+        from services.portfolio_engine.bundle_execution.self_trading_transactions import (
+            filter_self_trading_exchange_orders,
+        )
+
+        orders = filter_self_trading_exchange_orders(orders)
+
     provider_symbol = ASSET_PROVIDER_SYMBOL_MAP.get(asset.upper(), f"{asset.upper()}USDT")
     instrument_id = _resolve_instrument_id(db, provider_symbol)
 

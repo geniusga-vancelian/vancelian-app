@@ -62,6 +62,17 @@ def sync_lifi_swap_intent(
     if swap is None or not swap.person_id:
         return
 
+    from services.portfolio_engine.bundle_execution.bundle_transaction_scope import (
+        is_bundle_internal_swap,
+    )
+
+    if is_bundle_internal_swap(swap):
+        logger.info(
+            "skip_lifi_swap_intent_for_bundle_internal_swap",
+            extra={"swap_id": str(swap.id), "person_id": str(swap.person_id)},
+        )
+        return
+
     mapped_status = status or _map_swap_status_to_intent(swap)
     wallet = _wallet_for_swap(db, swap)
     chain_id = _chain_id_for_swap(swap)

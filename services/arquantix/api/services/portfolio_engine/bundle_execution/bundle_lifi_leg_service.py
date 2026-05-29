@@ -372,6 +372,10 @@ class BundleLifiLegService:
         db.commit()
 
     def _apply_pe_atoms_for_leg(self, db: Session, *, leg: ExecutionLeg, swap) -> None:
+        from services.lifi.config import swaps_mock_mode
+
+        from .allocation_settlement import resolve_allocation_leg_settlement_amounts
+
         meta = leg.metadata or {}
         entry_instrument_id = meta.get("entry_instrument_id")
         target_instrument_id = meta.get("target_instrument_id")
@@ -382,9 +386,50 @@ class BundleLifiLegService:
 
         entry_inst = UUID(str(entry_instrument_id))
         target_inst = UUID(str(target_instrument_id))
-        amount_in = Decimal(str(swap.amount_in))
-        amount_out = Decimal(str(swap.estimated_receive or 0))
+
+        planned_in_raw = meta.get("planned_amount_in")
+        planned_in = (
+            Decimal(str(planned_in_raw)) if planned_in_raw is not None else Decimal(str(swap.amount_in))
+        )
+        settlement = resolve_allocation_leg_settlement_amounts(
+            db,
+            swap,
+            planned_amount_in=planned_in,
+            allow_mock_quote_amount=swaps_mock_mode(),
+        )
+        amount_in = settlement.amount_in
+        amount_out = settlement.amount_out
         cost_basis = reference_cost_basis_eur(db, str(swap.from_asset), amount_in)
+
+        from .allocation_observability import log_allocation_event
+
+        log_allocation_event(
+            "settlement_real_amounts",
+            person_id=str(swap.person_id),
+            portfolio_id=str(leg.portfolio_id),
+            batch_id=leg.batch_id,
+            leg_id=leg.leg_id,
+            swap_id=str(swap.id),
+            planned_amount_in=float(settlement.planned_amount_in),
+            actual_amount_in=float(settlement.amount_in),
+            planned_amount_out=float(settlement.planned_amount_out),
+            actual_amount_out=float(settlement.amount_out),
+            amount_in_source=settlement.amount_in_source,
+            amount_out_source=settlement.amount_out_source,
+        )
+
+        ledger_ctx = {
+            "person_id": str(swap.person_id),
+            "batch_id": leg.batch_id,
+            "leg_id": leg.leg_id,
+            "swap_id": str(swap.id),
+            "from_asset": str(swap.from_asset),
+            "to_asset": str(swap.to_asset),
+            "planned_amount_in": str(settlement.planned_amount_in),
+            "planned_amount_out": str(settlement.planned_amount_out),
+            "actual_amount_in_source": settlement.amount_in_source,
+            "actual_amount_out_source": settlement.amount_out_source,
+        }
 
         if leg.action == "allocation":
             apply_allocation_leg_atoms(
@@ -395,6 +440,11 @@ class BundleLifiLegService:
                 entry_asset_consumed=amount_in,
                 crypto_received=amount_out,
                 cost_basis_eur=cost_basis,
+                ledger={
+                    **ledger_ctx,
+                    "entry_asset_symbol": str(swap.from_asset),
+                    "target_asset_symbol": str(swap.to_asset),
+                },
             )
         elif leg.action == "rebalance_sell":
             apply_rebalance_sell_atoms(
@@ -405,6 +455,11 @@ class BundleLifiLegService:
                 sell_qty=amount_in,
                 entry_received=amount_out,
                 cost_basis_eur=cost_basis,
+                ledger={
+                    **ledger_ctx,
+                    "asset_symbol": str(swap.from_asset),
+                    "entry_asset_symbol": str(swap.to_asset),
+                },
             )
         elif leg.action == "withdraw_sell":
             apply_withdraw_sell_atoms(
@@ -415,6 +470,10 @@ class BundleLifiLegService:
                 sell_qty=amount_in,
                 entry_received=amount_out,
                 cost_basis_eur=cost_basis,
+                ledger={
+                    **ledger_ctx,
+                    "entry_asset_symbol": str(swap.to_asset),
+                },
             )
         elif leg.action == "rebalance_buy":
             apply_rebalance_buy_atoms(
@@ -425,6 +484,11 @@ class BundleLifiLegService:
                 entry_spent=amount_in,
                 crypto_received=amount_out,
                 cost_basis_eur=cost_basis,
+                ledger={
+                    **ledger_ctx,
+                    "asset_symbol": str(swap.to_asset),
+                    "entry_asset_symbol": str(swap.from_asset),
+                },
             )
 
     def refresh_and_settle(

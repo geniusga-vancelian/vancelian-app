@@ -371,6 +371,20 @@ def fund_bundle_cash_leg_from_self_trading(
         entry_asset,
         cost_basis,
     )
+    from services.portfolio_engine.bundle_ledger.service import record_bundle_deposit
+
+    record_bundle_deposit(
+        db,
+        person_id=person_id,
+        client_id=client_id,
+        bundle_portfolio_id=portfolio_id,
+        entry_asset=entry_asset,
+        entry_instrument_id=entry_instrument_id,
+        amount=amount,
+        batch_id=batch_id,
+        cost_basis_eur=cost_basis,
+        cash_leg_atom_id=str(cash_atom.id),
+    )
     return {
         "action": "fund_cash_leg_from_self_trading",
         "batch_id": batch_id,
@@ -513,6 +527,19 @@ def release_bundle_cash_leg_to_self_trading(
         amount,
         entry_asset,
         cost_basis,
+    )
+    from services.portfolio_engine.bundle_ledger.service import record_bundle_withdrawal
+
+    record_bundle_withdrawal(
+        db,
+        person_id=person_id,
+        client_id=client_id,
+        bundle_portfolio_id=portfolio_id,
+        entry_asset=entry_asset,
+        entry_instrument_id=entry_instrument_id,
+        amount=amount,
+        batch_id=batch_id,
+        cost_basis_eur=cost_basis,
     )
     return {
         "action": "release_cash_leg_to_self_trading",
