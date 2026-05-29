@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
 
+    // BFF loopback for server-side fetch only — never use it in article hrefs (would expose 127.0.0.1).
     const bffOrigin = resolvePortalBffOrigin(request.nextUrl.origin)
     const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
 
@@ -34,12 +35,12 @@ export async function GET(request: NextRequest) {
       fetchJson(blogQuery('market', 24)),
       fetchJson(blogQuery('company', 24)),
       fetchJson(blogQuery('analysis', 24)),
-      listPortalAcademyTypeArticles(locale, { origin: bffOrigin, limit: 48 }),
+      listPortalAcademyTypeArticles(locale, { limit: 48 }),
     ])
 
-    const marketHub = mapAcademyHubFromBlogFeed(marketRes.data, { origin: bffOrigin })
-    const vancelianNews = mapVancelianNewsFromBlogFeed(companyRes.data, { origin: bffOrigin })
-    const analysis = mapAnalysisFromBlogFeed(analysisRes.data, { origin: bffOrigin })
+    const marketHub = mapAcademyHubFromBlogFeed(marketRes.data)
+    const vancelianNews = mapVancelianNewsFromBlogFeed(companyRes.data)
+    const analysis = mapAnalysisFromBlogFeed(analysisRes.data)
 
     const payload: PortalAcademyHubPayload = {
       featured: marketHub.featured,

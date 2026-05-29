@@ -60,6 +60,21 @@ test('mapAcademyHubFromBlogFeed maps market news and excludes company news', () 
   assert.equal(mapped.marketNews[0]?.slug, 'news-one')
 })
 
+test('mapAcademyHubFromBlogFeed uses relative portal hrefs without origin', () => {
+  const mapped = mapAcademyHubFromBlogFeed({
+    articles: [
+      {
+        id: 'a1',
+        slug: 'my-article',
+        title: 'My article',
+        articleType: 'NEWS',
+      },
+    ],
+  })
+
+  assert.equal(mapped.marketNews[0]?.href, '/app/academy/my-article')
+})
+
 test('mapVancelianNewsFromBlogFeed keeps company news only', () => {
   const payload = {
     featured: {
