@@ -11,7 +11,7 @@ Le code Next.js sous `services/arquantix/web/` alimente plusieurs cibles (portai
 | **Arquantix Web - Deploy to ECS** | `workflow_dispatch` | ECS `arquantix-web` · `console.vancelian.finance` | Deploy console **manuel** |
 | **Arquantix Coming Soon** | `workflow_dispatch` | ECS `arquantix-coming-soon` · me-central-1 | Legacy **manuel** |
 | **Arquantix - Push to ECR** | `workflow_dispatch` | ECR `arquantix-coming-soon` | Legacy **manuel** |
-| **Arquantix API - Deploy** | `push` → paths `api/**` | API FastAPI | Indépendant du web |
+| **Arquantix API (FastAPI) - Build & push ECR** | `push` → paths `api/**` | ECS `arquantix-api` + **`arquantix-market-ws`** (Binance quotes WS) | Deploy auto API + worker marché |
 
 ## Pourquoi plusieurs workflows existaient
 

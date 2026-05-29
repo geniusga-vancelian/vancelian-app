@@ -7,13 +7,22 @@ import os
 MARKET_DATA_PROVIDER = os.getenv("MARKET_DATA_PROVIDER", "binance")
 
 # Binance (latest quote ingestion)
-BINANCE_REST_BASE_URL = os.getenv("BINANCE_REST_BASE_URL", "https://api.binance.com")
+# En prod ECS us-east-1, api.binance.com est souvent bloqué (451) : utiliser data-api.binance.vision
+# (BINANCE_USE_VISION_ENDPOINTS=true ou BINANCE_REST_BASE_URL / BINANCE_WS_BASE_URL explicites).
+_use_vision = os.getenv("BINANCE_USE_VISION_ENDPOINTS", "").lower() in ("true", "1", "yes")
+BINANCE_REST_BASE_URL = os.getenv(
+    "BINANCE_REST_BASE_URL",
+    "https://data-api.binance.vision" if _use_vision else "https://api.binance.com",
+)
 _t = os.getenv("BINANCE_TIMEOUT_SECONDS", "10")
 BINANCE_TIMEOUT_SECONDS = int(_t) if (_t and _t.strip()) else 10
 BINANCE_INGESTION_ENABLED = (os.getenv("BINANCE_INGESTION_ENABLED", "true").lower() in ("true", "1", "yes"))
 
 # Binance WebSocket (Spot combined stream)
-BINANCE_WS_BASE_URL = os.getenv("BINANCE_WS_BASE_URL", "wss://stream.binance.com:9443")
+BINANCE_WS_BASE_URL = os.getenv(
+    "BINANCE_WS_BASE_URL",
+    "wss://data-stream.binance.vision" if _use_vision else "wss://stream.binance.com:9443",
+)
 BINANCE_WS_INGESTION_COMMIT_BATCH_SIZE = int(os.getenv("BINANCE_WS_INGESTION_COMMIT_BATCH_SIZE", "20") or "20")
 BINANCE_WS_INGESTION_COMMIT_INTERVAL_SEC = float(os.getenv("BINANCE_WS_INGESTION_COMMIT_INTERVAL_SEC", "2.0") or "2.0")
 BINANCE_WS_RECONNECT_BASE_DELAY_SEC = float(os.getenv("BINANCE_WS_RECONNECT_BASE_DELAY_SEC", "1.0") or "1.0")

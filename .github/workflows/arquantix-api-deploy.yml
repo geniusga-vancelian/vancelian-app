@@ -7,6 +7,8 @@ on:
     paths:
       - "services/arquantix/api/**"
       - ".github/workflows/arquantix-api-deploy.yml"
+      - "scripts/arquantix-provision-market-ws-service.sh"
+      - "scripts/arquantix-sync-api-binance-vision-env-prod.sh"
   workflow_dispatch:
     inputs:
       tag:
@@ -25,6 +27,9 @@ env:
   ECS_CLUSTER: arquantix-cluster
   ECS_SERVICE: arquantix-api
   ECS_TASKDEF_FAMILY: arquantix-api
+  ECS_MARKET_WS_SERVICE: arquantix-market-ws
+  ECS_MARKET_WS_TASKDEF_FAMILY: arquantix-market-ws
+  ECS_MARKET_WS_CONTAINER: arquantix-market-ws
 
 jobs:
   build-and-push:
@@ -90,11 +95,35 @@ jobs:
           container-name: arquantix-api
           image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.set-tag.outputs.tag }}
 
-      - name: Deploy to ECS (force-new-deployment + wait stable)
+      - name: Deploy API to ECS (force-new-deployment + wait stable)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render-taskdef.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          wait-for-minutes: 10
+
+      - name: Ensure Binance market WS worker service exists
+        run: |
+          set -euo pipefail
+          chmod +x scripts/arquantix-provision-market-ws-service.sh
+          WAIT_STABLE=0 IMAGE_TAG="${{ steps.set-tag.outputs.tag }}" \
+            ./scripts/arquantix-provision-market-ws-service.sh
+
+      - name: Render market-ws task definition (same image as API)
+        id: render-market-ws-taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition-family: ${{ env.ECS_MARKET_WS_TASKDEF_FAMILY }}
+          container-name: ${{ env.ECS_MARKET_WS_CONTAINER }}
+          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.set-tag.outputs.tag }}
+
+      - name: Deploy market-ws worker to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-market-ws-taskdef.outputs.task-definition }}
+          service: ${{ env.ECS_MARKET_WS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           wait-for-minutes: 10

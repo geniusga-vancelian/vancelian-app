@@ -8,6 +8,7 @@ import json
 import logging
 import signal
 import time
+from sqlalchemy.exc import OperationalError
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -92,22 +93,32 @@ def _flush_pending(
         return 0
     db = SessionLocal()
     try:
-        for symbol_upper, row in pending.items():
-            instrument_id = symbol_to_id.get(symbol_upper)
-            if instrument_id is None:
-                continue
-            upsert_latest_quote(
-                db,
-                instrument_id=instrument_id,
-                provider=PROVIDER,
-                provider_symbol=symbol_upper,
-                last_price=row["last_price"],
-                bid_price=row["bid_price"],
-                ask_price=row["ask_price"],
-                volume=None,
-                quote_time=row["quote_time"],
-            )
-        db.commit()
+        for attempt in range(3):
+            try:
+                for symbol_upper, row in pending.items():
+                    instrument_id = symbol_to_id.get(symbol_upper)
+                    if instrument_id is None:
+                        continue
+                    upsert_latest_quote(
+                        db,
+                        instrument_id=instrument_id,
+                        provider=PROVIDER,
+                        provider_symbol=symbol_upper,
+                        last_price=row["last_price"],
+                        bid_price=row["bid_price"],
+                        ask_price=row["ask_price"],
+                        volume=None,
+                        quote_time=row["quote_time"],
+                    )
+                db.commit()
+                break
+            except OperationalError as e:
+                db.rollback()
+                err = str(e).lower()
+                if "deadlock" in err and attempt < 2:
+                    time.sleep(0.05 * (attempt + 1))
+                    continue
+                raise
 
         _check_price_alerts(pending)
 
