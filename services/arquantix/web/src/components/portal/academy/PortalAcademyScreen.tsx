@@ -28,7 +28,7 @@ import {
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { Container } from '@/components/ui/Container'
 
-const ACADEMY_CACHE_KEY = 'portal:academy:v4'
+const ACADEMY_CACHE_KEY = 'portal:academy:v5'
 const ARTICLES_PER_PAGE = 6
 
 function resolveSidebarHighlighted(

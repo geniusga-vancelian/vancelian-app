@@ -60,6 +60,24 @@ test('mapAcademyHubFromBlogFeed maps market news and excludes company news', () 
   assert.equal(mapped.marketNews[0]?.slug, 'news-one')
 })
 
+test('mapAcademyHubFromBlogFeed strips loopback origin from hrefs', () => {
+  const mapped = mapAcademyHubFromBlogFeed(
+    {
+      articles: [
+        {
+          id: 'a1',
+          slug: 'loopback-article',
+          title: 'Loopback',
+          articleType: 'NEWS',
+        },
+      ],
+    },
+    { origin: 'http://127.0.0.1:3000' },
+  )
+
+  assert.equal(mapped.marketNews[0]?.href, '/app/academy/loopback-article')
+})
+
 test('mapAcademyHubFromBlogFeed uses relative portal hrefs without origin', () => {
   const mapped = mapAcademyHubFromBlogFeed({
     articles: [

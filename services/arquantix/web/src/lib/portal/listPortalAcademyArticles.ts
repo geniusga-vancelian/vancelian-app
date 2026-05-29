@@ -5,7 +5,10 @@ import { getPresignedUrl } from '@/lib/storage/storageClient'
 import { prisma } from '@/lib/prisma'
 import { academyCategoryTone } from '@/lib/portal/academyFormat'
 import type { PortalAcademyArticle } from '@/lib/portal/academyHubTypes'
-import { resolvePortalArticleHref } from '@/lib/portal/portalArticleRouting'
+import {
+  resolvePortalArticleHref,
+  sanitizePortalArticleClientHref,
+} from '@/lib/portal/portalArticleRouting'
 
 /**
  * Articles `articleType=ACADEMY` publiés pour la grille hub portail Académie.
@@ -59,9 +62,7 @@ export async function listPortalAcademyTypeArticles(
       article.academyCategory?.i18n[0]?.title?.trim() ||
       (categorySlug ? categorySlug : 'Academy')
 
-    const path = resolvePortalArticleHref(slug, origin)
-    const href =
-      origin && !path.startsWith('http') ? `${origin.replace(/\/$/, '')}${path}` : path
+    const href = sanitizePortalArticleClientHref(resolvePortalArticleHref(slug, origin))
 
     out.push({
       id: article.id,

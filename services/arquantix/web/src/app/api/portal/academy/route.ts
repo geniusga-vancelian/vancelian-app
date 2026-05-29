@@ -10,6 +10,7 @@ import { listPortalAcademyTypeArticles } from '@/lib/portal/listPortalAcademyArt
 import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
+import { sanitizeAcademyHubPayload } from '@/lib/portal/sanitizeAcademyHubPayload'
 
 async function fetchJson(url: string) {
   const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       academy: academyArticles,
     }
 
-    return NextResponse.json(payload)
+    return NextResponse.json(sanitizeAcademyHubPayload(payload))
   } catch (err) {
     console.error('[api/portal/academy] GET failed', err)
     return NextResponse.json({ error: 'internal_error' }, { status: 500 })

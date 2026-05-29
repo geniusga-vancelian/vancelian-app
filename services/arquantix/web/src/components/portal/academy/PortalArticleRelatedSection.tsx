@@ -12,7 +12,7 @@ import { buildAcademyHubCatalog } from '@/lib/portal/academyHubTabs'
 import { portalAcademyHubRoute } from '@/lib/portal/portalArticleRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
-const ACADEMY_CACHE_KEY = 'portal:academy:v4'
+const ACADEMY_CACHE_KEY = 'portal:academy:v5'
 
 type Props = {
   currentSlug: string

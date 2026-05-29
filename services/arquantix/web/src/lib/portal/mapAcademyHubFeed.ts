@@ -1,6 +1,9 @@
 import type { PortalAcademyArticle } from '@/lib/portal/academyHubTypes'
 import { academyCategoryTone } from '@/lib/portal/academyFormat'
-import { resolvePortalArticleHref } from '@/lib/portal/portalArticleRouting'
+import {
+  resolvePortalArticleHref,
+  sanitizePortalArticleClientHref,
+} from '@/lib/portal/portalArticleRouting'
 
 function toNumber(value: unknown, fallback = 0): number {
   const n = Number(value)
@@ -8,11 +11,7 @@ function toNumber(value: unknown, fallback = 0): number {
 }
 
 function articleHref(slug: string, origin?: string): string {
-  const path = resolvePortalArticleHref(slug)
-  if (origin && !path.startsWith('http')) {
-    return `${origin.replace(/\/$/, '')}${path}`
-  }
-  return path
+  return sanitizePortalArticleClientHref(resolvePortalArticleHref(slug, origin))
 }
 
 function parseCategorySlugs(raw: unknown): string[] {
