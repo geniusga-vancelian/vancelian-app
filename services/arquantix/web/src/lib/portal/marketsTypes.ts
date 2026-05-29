@@ -14,6 +14,8 @@ export type PortalCryptoAsset = {
   /** Valeur numérique USD/USDT — source WS + REST. */
   priceUsd: number
   changePct: number
+  /** Closes horaires sur 24 h (24 points) — source API `sparkline_24h`. */
+  sparkline24h: number[]
   logoUrl: string | null
 }
 

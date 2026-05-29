@@ -9,6 +9,7 @@ import { portalAcademyHubRoute, resolvePortalArticleHref } from '@/lib/portal/po
 
 import { BASE_MARKET_PROVIDER_SYMBOLS } from '@/lib/portal/baseAllowedAssets'
 import { normalizeBundleAssetSymbol } from '@/lib/portal/bundleFormat'
+import { mapSparkline24hFromRow } from '@/lib/portal/marketsSparkline'
 
 export const PORTAL_DEFAULT_CRYPTO_SYMBOLS = BASE_MARKET_PROVIDER_SYMBOLS
 
@@ -88,6 +89,8 @@ type MarketSummaryRow = {
   change_24h_pct?: number | string | null
   change24h_pct?: number | string | null
   change24hPct?: number | string | null
+  sparkline_24h?: unknown
+  sparkline24h?: unknown
   logo_url?: string | null
   logoUrl?: string | null
 }
@@ -122,6 +125,7 @@ export function mapMarketSummaryRow(
     priceUsd,
     priceLabel: formatCryptoPrice(price, currency),
     changePct: toNumber(row.change_24h_pct ?? row.change24h_pct ?? row.change24hPct),
+    sparkline24h: mapSparkline24hFromRow(row.sparkline_24h ?? row.sparkline24h),
     logoUrl: rawLogo,
   }
 }
@@ -188,6 +192,34 @@ function mapAllCryptoSummaryRow(
     symbol: quoteSymbol,
     marketCapRank,
   }
+}
+
+/** Duplique les lignes produit (CBETH) si absentes — fallback quand l’API ne les renvoie pas encore. */
+export function mergeAllCryptoSparklines(rows: unknown, summaryRows: unknown): unknown[] {
+  if (!Array.isArray(rows)) return []
+
+  const sparkByProvider = new Map<string, unknown[]>()
+  if (Array.isArray(summaryRows)) {
+    for (const raw of summaryRows) {
+      const row = raw as MarketSummaryRow & { symbol?: string }
+      const provider = String(row.symbol ?? '').trim().toUpperCase()
+      const sparkline = row.sparkline_24h ?? row.sparkline24h
+      if (!provider || !Array.isArray(sparkline) || sparkline.length === 0) continue
+      sparkByProvider.set(provider, sparkline)
+    }
+  }
+
+  return rows.map((raw) => {
+    const row = raw as MarketSummaryRow & { provider_symbol?: string | null }
+    const existing = row.sparkline_24h ?? row.sparkline24h
+    if (Array.isArray(existing) && existing.length > 0) return row
+    const provider = String(row.provider_symbol ?? row.symbol ?? '')
+      .trim()
+      .toUpperCase()
+    const sparkline = provider ? sparkByProvider.get(provider) : undefined
+    if (!sparkline) return row
+    return { ...row, sparkline_24h: sparkline }
+  })
 }
 
 /** Duplique les lignes produit (CBETH) si absentes — fallback quand l’API ne les renvoie pas encore. */
@@ -268,6 +300,7 @@ function fallbackFavoriteAsset(entityId: string, currency: 'USD' | 'EUR' = 'USD'
     priceUsd: 0,
     priceLabel: '—',
     changePct: 0,
+    sparkline24h: [],
     logoUrl: null,
   }
 }
@@ -313,10 +346,15 @@ export function applyQuoteUpdates(
     const update = bySymbol.get(asset.symbol.toUpperCase())
     if (!update || update.price <= 0) return asset
     changed = true
+    const sparkline24h =
+      asset.sparkline24h.length >= 2
+        ? [...asset.sparkline24h.slice(0, -1), update.price]
+        : asset.sparkline24h
     return {
       ...asset,
       priceUsd: update.price,
       priceLabel: formatCryptoPrice(update.price, currency),
+      sparkline24h,
     }
   })
 

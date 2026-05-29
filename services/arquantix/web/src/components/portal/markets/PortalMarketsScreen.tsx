@@ -17,7 +17,7 @@ import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { useMarketDataQuotesWs } from '@/lib/portal/useMarketDataQuotesWs'
 import { cn } from '@/lib/utils'
 
-const MARKETS_CACHE_KEY = 'portal:markets:v2'
+const MARKETS_CACHE_KEY = 'portal:markets:v3'
 
 function symbolsForTab(
   tab: TopCryptoTabId,

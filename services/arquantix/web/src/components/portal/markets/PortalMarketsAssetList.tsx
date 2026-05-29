@@ -43,7 +43,12 @@ function MarketAssetRow({ asset, rank }: { asset: PortalCryptoAsset; rank: numbe
         <span className="mk-row__sym">{asset.ticker}</span>
       </span>
       <span className="mk-row__spark">
-        <PortalMarketsSparkline ticker={asset.ticker} changePct={asset.changePct} positive={positive} />
+        <PortalMarketsSparkline
+          ticker={asset.ticker}
+          changePct={asset.changePct}
+          sparkline24h={asset.sparkline24h ?? []}
+          positive={positive}
+        />
       </span>
       <span className="mk-row__nums">
         <span className="mk-row__price">{asset.priceLabel}</span>

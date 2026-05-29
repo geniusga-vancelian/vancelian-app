@@ -20,7 +20,7 @@ import {
 import { useMarketDataQuotesWs } from '@/lib/portal/useMarketDataQuotesWs'
 import { cn } from '@/lib/utils'
 
-const ALL_CRYPTO_CACHE_KEY = 'portal:all-crypto:v2'
+const ALL_CRYPTO_CACHE_KEY = 'portal:all-crypto:v3'
 
 export function PortalAllCryptoScreen() {
   const router = useRouter()

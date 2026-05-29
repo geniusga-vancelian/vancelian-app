@@ -537,6 +537,8 @@ def get_all_crypto(db: Session = Depends(get_db)):
             "price_eur": s.get("price_eur"),
             "change_24h_pct": s.get("change_24h_pct"),
             "change_24h_abs": s.get("change_24h_abs"),
+            "volume_24h": s.get("volume_24h"),
+            "sparkline_24h": s.get("sparkline_24h") or [],
             "market_cap_rank": rank,
             "logo_url": logo_url,
         })
