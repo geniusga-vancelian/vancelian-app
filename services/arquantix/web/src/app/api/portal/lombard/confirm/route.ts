@@ -12,10 +12,8 @@ import { creditLombardMockBorrowToPrivyLedger } from '@/lib/portal/lombard/lomba
 import { syncLombardIntentAfterConfirm } from '@/lib/portal/lombard/lombardIntentSync'
 import { updateLedgerAfterReceipt } from '@/lib/portal/morphoVaultLedger'
 import { idempotencyKeySchema } from '@/lib/portal/lombard/lombardValidation'
-import {
-  morphoLedgerErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoLedgerErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 const confirmSchema = z.object({
   groupKey: z.string().trim().min(8).max(128),

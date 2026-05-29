@@ -5,7 +5,7 @@ import {
   morphoSandboxDevErrorResponse,
   resetMorphoSandboxForPerson,
 } from '@/lib/portal/morphoLocalSandboxDev'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Supprime les données sandbox Morpho de l’utilisateur connecté. */
 export async function POST() {

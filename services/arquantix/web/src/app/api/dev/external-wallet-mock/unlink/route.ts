@@ -5,7 +5,7 @@ import {
   externalWalletMockDevErrorResponse,
   unlinkLocalMockExternalWallet,
 } from '@/lib/wallet/externalWalletMockDev'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Dissocie le wallet externe mock local de la session portail courante. */
 export async function DELETE() {

@@ -10,9 +10,9 @@ import {
   scanMarketsReadOnlyBundleDialogImports,
   scanPortalGlobalShellImports,
   scanPortalReadOnlyWeb3Imports,
+  scanDeprecatedPortalWalletRouteHelpersImports,
   scanPortalSessionRouteHelpersImports,
   scanPortalShellMountWarmup,
-  scanPortalWalletRouteHelpersShim,
 } from '@/lib/portal/portalPerformanceGuard'
 
 const PHASE1_BUILD_SNIPPET = `
@@ -54,8 +54,8 @@ describe('portalPerformanceGuard — détection synthétique', () => {
     assert.deepEqual(scanPortalSessionRouteHelpersImports(), [])
   })
 
-  it('portalWalletRouteHelpers reste un shim re-export only', () => {
-    assert.deepEqual(scanPortalWalletRouteHelpersShim(), [])
+  it('aucun import portalWalletRouteHelpers dans portal/api/components/lib', () => {
+    assert.deepEqual(scanDeprecatedPortalWalletRouteHelpersImports(), [])
   })
 
   it('signale un import statique PortalBundleInvestDialog en markets', () => {

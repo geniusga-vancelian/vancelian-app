@@ -95,7 +95,16 @@ const PORTAL_SHELL_LAYOUT_PATH = 'src/app/app/(shell)/layout.tsx'
 const PORTAL_SHELL_PATH = 'src/components/portal/PortalShell.tsx'
 const NAVIGATE_TO_LOGIN_PATH = 'src/lib/portal/navigateToPortalLogin.ts'
 const PORTAL_SESSION_ROUTE_HELPERS_PATH = 'src/lib/portal/portalSessionRouteHelpers.ts'
-const PORTAL_WALLET_ROUTE_HELPERS_PATH = 'src/lib/portal/portalWalletRouteHelpers.ts'
+
+/** Chemins scannés pour interdire le shim supprimé portalWalletRouteHelpers (Phase 3C). */
+const PORTAL_WALLET_HELPER_FORBIDDEN_SCAN_DIRS = [
+  'src/app/api/portal',
+  'src/components',
+  'src/lib/portal',
+] as const
+
+const PORTAL_WALLET_ROUTE_HELPERS_IMPORT_PATTERN =
+  /from\s+['"]@\/lib\/portal\/portalWalletRouteHelpers['"]/
 
 /** Imports vault/Web3 interdits dans les helpers session purs (Phase 3B). */
 const PORTAL_SESSION_HELPER_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
@@ -108,12 +117,30 @@ const PORTAL_SESSION_HELPER_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
   { rule: 'session-no-base-rpc', pattern: /from\s+['"]@\/lib\/blockchain\/baseRpc/ },
 ]
 
-/** Imports lourds interdits dans le shim deprecated portalWalletRouteHelpers. */
-const PORTAL_WALLET_SHIM_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
-  ...PORTAL_SESSION_HELPER_FORBIDDEN_IMPORTS,
-  { rule: 'shim-no-morpho-ledger', pattern: /from\s+['"]@\/lib\/portal\/morphoVaultLedger/ },
-  { rule: 'shim-no-ledgity-liquidity', pattern: /from\s+['"]@\/lib\/portal\/ledgity\/ledgityVaultLiquidity['"]/ },
-]
+function listSourceFilesUnder(webRoot: string, relativeDir: string): string[] {
+  const absoluteDir = path.join(webRoot, relativeDir)
+  if (!fs.existsSync(absoluteDir)) return []
+
+  const files: string[] = []
+  const stack = [absoluteDir]
+
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current) continue
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        stack.push(absolute)
+        continue
+      }
+      if (/\.(tsx?|jsx?|mjs|cjs)$/.test(entry.name)) {
+        files.push(path.relative(webRoot, absolute).split(path.sep).join('/'))
+      }
+    }
+  }
+
+  return files
+}
 
 function resolveWebRoot(webRoot?: string): string {
   return webRoot ?? path.join(__dirname, '..', '..', '..')
@@ -224,42 +251,23 @@ export function scanPortalSessionRouteHelpersImports(
   return violations
 }
 
-export function scanPortalWalletRouteHelpersShim(webRoot?: string): PortalPerformanceViolation[] {
+export function scanDeprecatedPortalWalletRouteHelpersImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
   const root = resolveWebRoot(webRoot)
-  const source = readRelativeFile(root, PORTAL_WALLET_ROUTE_HELPERS_PATH)
   const violations: PortalPerformanceViolation[] = []
 
-  if (/^import\s/m.test(source)) {
-    violations.push({
-      rule: 'shim-no-imports',
-      file: PORTAL_WALLET_ROUTE_HELPERS_PATH,
-      detail: 'portalWalletRouteHelpers must be re-export-only (no import statements)',
-    })
-  }
-
-  for (const { rule, pattern } of PORTAL_WALLET_SHIM_FORBIDDEN_IMPORTS) {
-    if (pattern.test(source)) {
-      violations.push({
-        rule,
-        file: PORTAL_WALLET_ROUTE_HELPERS_PATH,
-        detail: 'portalWalletRouteHelpers shim must not import vault/Web3 dependencies directly',
-      })
-    }
-  }
-
-  const allowedReexportSources = [
-    '@/lib/portal/portalSessionRouteHelpers',
-    '@/lib/portal/portalVaultRouteHelpers',
-  ]
-  const reexportFromPattern = /from\s+['"]([^'"]+)['"]/g
-  for (const match of source.matchAll(reexportFromPattern)) {
-    const fromPath = match[1]
-    if (fromPath && !allowedReexportSources.includes(fromPath)) {
-      violations.push({
-        rule: 'shim-unexpected-reexport',
-        file: PORTAL_WALLET_ROUTE_HELPERS_PATH,
-        detail: `Unexpected re-export source: ${fromPath}`,
-      })
+  for (const relativeDir of PORTAL_WALLET_HELPER_FORBIDDEN_SCAN_DIRS) {
+    for (const relativePath of listSourceFilesUnder(root, relativeDir)) {
+      const source = readRelativeFile(root, relativePath)
+      if (PORTAL_WALLET_ROUTE_HELPERS_IMPORT_PATTERN.test(source)) {
+        violations.push({
+          rule: 'no-portal-wallet-route-helpers',
+          file: relativePath,
+          detail:
+            'portalWalletRouteHelpers was removed in Phase 3C; import portalSessionRouteHelpers or portalVaultRouteHelpers',
+        })
+      }
     }
   }
 
@@ -356,7 +364,7 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanNavigateToPortalLoginImports(webRoot),
     ...scanPortalReadOnlyWeb3Imports(webRoot),
     ...scanPortalSessionRouteHelpersImports(webRoot),
-    ...scanPortalWalletRouteHelpersShim(webRoot),
+    ...scanDeprecatedPortalWalletRouteHelpersImports(webRoot),
   ]
 }
 

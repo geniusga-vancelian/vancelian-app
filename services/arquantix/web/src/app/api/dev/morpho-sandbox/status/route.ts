@@ -5,7 +5,7 @@ import {
   getMorphoSandboxDevStatus,
   morphoSandboxDevErrorResponse,
 } from '@/lib/portal/morphoLocalSandboxDev'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Statut du sandbox Morpho local (dev uniquement). */
 export async function GET() {

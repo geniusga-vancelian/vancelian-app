@@ -17,8 +17,8 @@ import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwn
 import {
   morphoLedgerErrorResponse,
   morphoRpcErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+} from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import type { ExecutionWalletSource, WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 
 function parseWalletSourceMetadata(body: unknown): WalletSourceMetadata {

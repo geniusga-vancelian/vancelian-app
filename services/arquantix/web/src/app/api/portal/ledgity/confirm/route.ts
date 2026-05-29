@@ -4,10 +4,8 @@ import { z } from 'zod'
 import { assertLedgityBetaAccess } from '@/lib/portal/ledgity/ledgityBetaAccess'
 import { idempotencyKeySchema } from '@/lib/portal/ledgity/ledgityVaultValidation'
 import { updateLedgerAfterReceipt } from '@/lib/portal/morphoVaultLedger'
-import {
-  morphoLedgerErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoLedgerErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 const confirmSchema = z.object({
   groupKey: z.string().trim().min(8).max(128),
