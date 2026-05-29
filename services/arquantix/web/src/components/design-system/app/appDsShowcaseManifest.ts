@@ -1109,7 +1109,57 @@ export const APP_DS_SHOWCASE_SECTIONS: AppDsShowcaseSection[] = [
         "desc": "Sidebar compacte"
       }
     ]
+  },
+  {
+    "id": "w-full",
+    "num": "16",
+    "title": "Webapp-full — Patterns produit",
+    "count": "6 composants · Webapp-full (mai 2026)",
+    "items": [
+      {
+        "title": "Account dot — variante safran",
+        "file": "160-avatar-safran.html",
+        "height": 200,
+        "openHref": "preview/160-avatar-safran.html",
+        "desc": "Cryptos · Managed Portfolio = blue · safran"
+      },
+      {
+        "title": "Borrow CTA — avance de liquidité",
+        "file": "161-borrow-cta.html",
+        "height": 320,
+        "openHref": "preview/161-borrow-cta.html",
+        "desc": "Carte CTA page Emprunts · powered by Morpho"
+      },
+      {
+        "title": "Loan card — emprunt actif",
+        "file": "162-loan-card.html",
+        "height": 480,
+        "openHref": "preview/162-loan-card.html",
+        "desc": "Carte cliquable · stats · barre d’utilisation"
+      },
+      {
+        "title": "Mobile sticky bar — .mstick",
+        "file": "163-mobile-sticky-bar.html",
+        "height": 120,
+        "openHref": "preview/163-mobile-sticky-bar.html",
+        "desc": "CTA fixe au-dessus du tab bar · gain % + bouton"
+      },
+      {
+        "title": "Borrow explainer — 3 points",
+        "file": "164-borrow-explainer.html",
+        "height": 420,
+        "openHref": "preview/164-borrow-explainer.html",
+        "desc": "Garantie · intérêt · remboursement libre"
+      },
+      {
+        "title": "Actu card — zoom photo au survol",
+        "file": "165-actu-photo-zoom.html",
+        "height": 360,
+        "openHref": "preview/165-actu-photo-zoom.html",
+        "desc": "Image scale 1.05 · chip texte fixe"
+      }
+    ]
   }
 ] as const
 
-export const APP_DS_SHOWCASE_VERSION = 'v2.4 · 28 mai 2026 · 114 + 41 Webapp4' as const
+export const APP_DS_SHOWCASE_VERSION = 'v2.5 · 29 mai 2026 · 114 + 41 Webapp4 + 6 Webapp-full' as const

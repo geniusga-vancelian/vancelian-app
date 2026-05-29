@@ -6,7 +6,7 @@ import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 function PortalBorrowFallback() {
   return (
     <PortalPageContainer>
-      <p className="m-0 font-ui text-[15px] text-v-muted">Loading…</p>
+      <p className="m-0 font-ui text-[15px] text-v-muted">Chargement…</p>
     </PortalPageContainer>
   )
 }

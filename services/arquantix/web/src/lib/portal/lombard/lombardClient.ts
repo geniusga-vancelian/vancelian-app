@@ -7,7 +7,8 @@ import type {
 } from '@/lib/portal/lombard/lombardTypes'
 import type { LombardPositionsPayload } from '@/lib/portal/lombard/lombardPositionTypes'
 import { formatBaseRpcUserMessage, isBaseRpcTransientError } from '@/lib/blockchain/baseRpcErrors'
-import { parsePortalExchangeError } from '@/lib/portal/parsePortalExchangeError'
+import { normalizeLombardBorrowAmountForApi } from '@/lib/portal/lombard/lombardBorrowUi'
+import { parseLombardApiError } from '@/lib/portal/lombard/parseLombardApiError'
 import type { WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 
 async function lombardFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -23,14 +24,14 @@ async function lombardFetch<T>(url: string, init?: RequestInit): Promise<T> {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const err = parsePortalExchangeError(data)
+    const message = parseLombardApiError(data, res.status)
     if (
       (typeof data === 'object' && data && (data as { code?: string }).code === 'lombard.base_rpc_busy') ||
-      isBaseRpcTransientError(err.message)
+      isBaseRpcTransientError(message)
     ) {
-      throw new Error(formatBaseRpcUserMessage(err.message))
+      throw new Error(formatBaseRpcUserMessage(message))
     }
-    throw new Error(err.message)
+    throw new Error(message)
   }
   return data as T
 }
@@ -68,9 +69,13 @@ export async function fetchPortalLombardQuote(args: {
   walletAddress: string
   targetLtvPercent: number
 }): Promise<LombardQuoteResult> {
+  const borrowAmount = normalizeLombardBorrowAmountForApi(args.borrowAmount)
+  if (!borrowAmount) {
+    throw new Error('Montant emprunté invalide.')
+  }
   const params = new URLSearchParams({
     collateral: args.collateral,
-    borrow_amount: args.borrowAmount,
+    borrow_amount: borrowAmount,
     wallet_address: args.walletAddress,
     target_ltv_percent: String(args.targetLtvPercent),
   })
@@ -88,11 +93,15 @@ export async function preparePortalLombardOpenLoan(args: {
   externalWalletId?: string | null
   privyWalletId?: string | null
 }): Promise<LombardPreparePayload> {
+  const borrowAmount = normalizeLombardBorrowAmountForApi(args.borrowAmount)
+  if (!borrowAmount) {
+    throw new Error('Montant emprunté invalide.')
+  }
   return lombardFetch('/api/portal/lombard/prepare', {
     method: 'POST',
     body: JSON.stringify({
       collateral: args.collateral,
-      borrow_amount: args.borrowAmount,
+      borrow_amount: borrowAmount,
       wallet_address: args.walletAddress,
       target_ltv_percent: args.targetLtvPercent,
       idempotency_key: args.idempotencyKey,

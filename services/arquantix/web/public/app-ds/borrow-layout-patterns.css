@@ -1,0 +1,363 @@
+/* Synced from Webapp-full — category-detail.css (L219–580) */
+/* =====================================================================
+   Emprunts (borrow category) — CTA + loan cards
+   ===================================================================== */
+
+/* Hero variant for borrow — slightly muted editorial tagline */
+.bal--borrow .bal__chart path { stroke: rgba(255,255,255,0.55); }
+.bal--borrow .bal__chart-hi   { opacity: 0; }
+
+/* "Avance de liquidité" CTA card */
+.brw-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 28px 22px;
+}
+.brw-cta__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.brw-cta__title {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  color: var(--v-fg);
+}
+.brw-cta__lead {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--v-fg-body);
+  text-wrap: pretty;
+  max-width: 56ch;
+}
+.brw-cta__powered {
+  margin: 4px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--v-font-ui);
+  font-size: 12px;
+  color: var(--v-fg-light);
+}
+.brw-cta__powered-lbl { letter-spacing: 0; }
+.brw-cta__powered-name {
+  font-weight: 600;
+  color: var(--v-fg);
+  letter-spacing: -0.005em;
+}
+.brw-cta__btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Loan card list */
+.loan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.loan-footnote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 4px 0;
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--v-fg-light);
+  text-wrap: pretty;
+}
+.loan-footnote .ic { margin-top: 2px; color: var(--v-fg-muted); flex-shrink: 0; }
+
+/* Single loan card */
+.loan {
+  padding: 22px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--v-motion-fast) var(--v-ease-out),
+              border-color var(--v-motion-fast) var(--v-ease-out);
+}
+/* DS rule: cards darken on hover, they do not float. */
+.loan:hover { background: var(--v-fg-05); border-color: var(--v-fg-20); }
+.loan:active { background: var(--v-fg-10); }
+.loan__head {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 14px;
+}
+.loan__coin {
+  width: 40px; height: 40px;
+  border-radius: 999px;
+  background: var(--v-fg-05);
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.loan__coin img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.loan__title-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.loan__title {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.005em;
+  color: var(--v-fg);
+}
+.loan__sub {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  color: var(--v-fg-light);
+}
+.loan__chv {
+  color: var(--v-fg-light);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color var(--v-motion-fast) var(--v-ease-out),
+              transform var(--v-motion-fast) var(--v-ease-out);
+}
+.loan:hover .loan__chv { color: var(--v-fg); transform: translateX(2px); }
+
+.loan__stats {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.loan__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--v-fg-10);
+}
+.loan__row:first-child { border-top: 0; padding-top: 4px; }
+.loan__row dt {
+  font-family: var(--v-font-ui);
+  font-size: 13px;
+  color: var(--v-fg-light);
+  margin: 0;
+}
+.loan__alert-ic {
+  vertical-align: -2px;
+  margin-right: 5px;
+  color: var(--v-fg-muted);
+}
+.loan__row dd {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--v-fg);
+  text-align: right;
+}
+
+/* Safety tag (warn / error / ok) */
+.loan__safety {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.loan__safety-dot {
+  width: 6px; height: 6px;
+  border-radius: 999px;
+}
+
+/* Usage bar inline with the percent */
+.loan__usage {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-feature-settings: "tnum" on;
+}
+.loan__usage-bar {
+  display: inline-block;
+  width: 96px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--v-fg-10);
+  overflow: hidden;
+}
+.loan__usage-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width var(--v-motion-base) var(--v-ease-out);
+}
+
+@media (max-width: 560px) {
+  .brw-cta { padding: 20px 20px 18px; }
+  .brw-cta__title { font-size: 17px; }
+  .loan { padding: 18px 18px 16px; gap: 16px; }
+  .loan__head { gap: 12px; grid-template-columns: 36px 1fr auto; }
+  .loan__coin { width: 36px; height: 36px; }
+  .loan__title { font-size: 15px; }
+  .loan__row dt, .loan__row dd { font-size: 13px; }
+  .loan__usage-bar { width: 64px; }
+}
+
+/* =====================================================================
+   Borrow explainer + risk warning (Emprunts page)
+   ===================================================================== */
+.brw-explain {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.brw-explain__title {
+  margin: 4px 0 0;
+  font-family: var(--v-font-ui);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--v-fg);
+}
+.brw-explain__points {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.brw-explain__point {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 14px;
+  align-items: start;
+  padding: 16px 18px;
+  background: var(--v-bg);
+  border: 1px solid var(--v-fg-10);
+  border-radius: 8px;
+}
+.brw-explain__ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--v-fg-05);
+  color: var(--v-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.brw-explain__text { min-width: 0; }
+.brw-explain__pt-title {
+  margin: 2px 0 4px;
+  font-family: var(--v-font-ui);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  color: var(--v-fg);
+}
+.brw-explain__pt-body {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--v-fg-body);
+  text-wrap: pretty;
+}
+
+/* Risk warning — same bordered container, error-tinted to stand out */
+.brw-risk {
+  padding: 18px 20px 16px;
+  background: var(--v-bg);
+  border: 1px solid var(--v-error);
+  border-radius: 8px;
+}
+.brw-risk__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.brw-risk__ico {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--v-error-bg);
+  color: var(--v-error);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.brw-risk__title {
+  margin: 0;
+  font-family: var(--v-font-ui);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  color: var(--v-error);
+}
+.brw-risk__lead {
+  margin: 0 0 10px;
+  font-family: var(--v-font-ui);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--v-fg-body);
+  text-wrap: pretty;
+}
+.brw-risk__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.brw-risk__list li {
+  position: relative;
+  padding-left: 18px;
+  font-family: var(--v-font-ui);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--v-fg-body);
+  text-wrap: pretty;
+}
+.brw-risk__list li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--v-error);
+}
+.brw-risk__list b { font-weight: 700; color: var(--v-fg); }
+.brw-risk__foot {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--v-fg-10);
+  font-family: var(--v-font-ui);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--v-fg-muted);
+  text-wrap: pretty;
+}
+
+@media (max-width: 560px) {
+  .brw-explain__point { padding: 14px; gap: 12px; grid-template-columns: 36px 1fr; }
+  .brw-explain__ico { width: 36px; height: 36px; }
+}

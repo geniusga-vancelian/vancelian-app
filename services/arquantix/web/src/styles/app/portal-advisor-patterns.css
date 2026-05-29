@@ -1,0 +1,69 @@
+/* Advisor sidebar — handoff layout.css `.adv-A` (variant portrait) */
+
+@scope ([data-v-ds='app']) {
+  .adv-A {
+    background: var(--v-white);
+    border: 1px solid var(--v-fg-10);
+    border-radius: var(--v-radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .adv-A__head {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .adv-A__portrait {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    background: var(--v-fg-05);
+    flex-shrink: 0;
+  }
+
+  .adv-A__title-block {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .adv-A__eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--v-fg-muted);
+  }
+
+  .adv-A__name {
+    margin: 4px 0 0;
+    font-family: var(--v-font-ui);
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--v-fg);
+    letter-spacing: -0.005em;
+  }
+
+  .adv-A__desc {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--v-fg-body);
+  }
+
+  .adv-A__actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .adv-A__actions .btn {
+    flex: 1 1 auto;
+  }
+}

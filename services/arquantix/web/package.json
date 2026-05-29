@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "postinstall": "prisma generate",
+    "handoff:build-preview": "node scripts/build-ds-handoff-static.mjs",
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
     "dev:fast": "NEXT_WEBPACK_MEMORY_CACHE=1 next dev",

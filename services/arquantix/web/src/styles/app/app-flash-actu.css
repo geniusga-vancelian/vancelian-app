@@ -110,6 +110,7 @@
     border-radius: 14px 14px 8px 8px;
     background: var(--v-fg-05);
     overflow: hidden;
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -122,6 +123,21 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    transition: transform 320ms var(--v-ease-out);
+    will-change: transform;
+  }
+
+  .actu-card:hover .actu-card__img img {
+    transform: scale(1.05);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .actu-card__img img {
+      transition: none;
+    }
+    .actu-card:hover .actu-card__img img {
+      transform: none;
+    }
   }
 
   .actu-card__title {

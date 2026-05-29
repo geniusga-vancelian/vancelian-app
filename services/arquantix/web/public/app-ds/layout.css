@@ -304,31 +304,17 @@ body { font-family: var(--v-font-ui); color: var(--v-fg); }
   gap: 40px;
   align-items: start;
 }
+/* Mobile-only chrome defaults (overridden in the breakpoints below) */
+.mtab { display: none; }
+.mchain { display: none; }
 @media (max-width: 960px) {
   .grid { grid-template-columns: 1fr; }
   .page { padding: 32px 24px 64px; }
   .topnav { padding: 0 24px; gap: 16px; grid-template-columns: auto 1fr; }
   .topnav__nav { display: none; }
-  .col-side { display: none !important; }
+  /* col-side now flows below col-main on mobile (continuation of content) */
 
-  /* Move wallet + chain controls inline above the balance card */
-  .mchain {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .mchain .topnav__pill {
-    flex: 1 1 0;
-    min-width: 0;
-    justify-content: center;
-    height: 40px;
-    background: #FFFFFF;
-    border: 1px solid var(--v-fg-10);
-  }
-  .mchain .topnav__pill:hover,
-  .mchain .topnav__pill.is-open { background: var(--v-fg-05); }
-
-  /* Balance card — shrink action buttons so the 3 fit one row */
+  /* Balance card — action buttons stay on one row down to ~640px */
   .bal__actions { gap: 8px; flex-wrap: nowrap; }
   .bal__actions .btn--lg {
     height: 44px;
@@ -344,8 +330,6 @@ body { font-family: var(--v-font-ui); color: var(--v-fg); }
    MOBILE TAB BAR — fixed bottom, native-app pattern
    Visible only ≤640px. 5 tabs equally distributed.
    ============================================================ */
-.mtab { display: none; }
-.mchain { display: none; }
 @media (max-width: 640px) {
   /* Hide desktop chrome that no longer fits */
   .topnav__pillwrap,
@@ -354,8 +338,36 @@ body { font-family: var(--v-font-ui); color: var(--v-fg); }
   .topnav { grid-template-columns: 1fr auto; padding: 0 16px; }
   .topnav__right { gap: 4px; }
 
-  /* Stack the bal action buttons icon-only labels when truly tight */
-  .bal__actions .btn--lg { padding: 0 10px; font-size: 12px; gap: 6px; }
+  /* Wallet + chain controls move to a second bar (only once they're hidden
+     from the top nav above — avoids showing them twice). Scrolls with page. */
+  .mchain {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--v-bg);
+    border-bottom: 1px solid var(--v-fg-10);
+  }
+  .mchain .topnav__pillwrap { flex: 1 1 0; min-width: 0; display: flex; }
+  .mchain .topnav__pill {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    height: 40px;
+    background: #FFFFFF;
+    border: 1px solid var(--v-fg-10);
+  }
+  .mchain .topnav__pill:hover,
+  .mchain .topnav__pill.is-open { background: var(--v-fg-05); }
+
+  /* Action buttons: 2×2 grid when a single row gets too cramped */
+  .bal__actions { flex-wrap: wrap; gap: 8px; }
+  .bal__actions .btn--lg {
+    flex: 1 1 calc(50% - 4px);
+    padding: 0 10px;
+    font-size: 12px;
+    gap: 6px;
+  }
 
   /* Leave room for the bottom tab bar */
   .page { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
@@ -427,6 +439,52 @@ body { font-family: var(--v-font-ui); color: var(--v-fg); }
 @media (max-width: 960px) {
   .col-side { position: static; flex-direction: row; flex-wrap: wrap; }
   .col-side > * { flex: 1 1 320px; }
+}
+
+/* ============================================================
+   MOBILE STICKY ACTION BAR (.mstick)
+   Generic buy/invest bar shown only on mobile, pinned just above
+   the bottom tab bar (.mtab, 72px). Left = key figure / % gain,
+   right = the primary CTA(s). Reused across asset / invest pages.
+   ============================================================ */
+.mstick { display: none; }
+@media (max-width: 640px) {
+  .mstick {
+    display: block;
+    position: fixed; left: 0; right: 0;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    z-index: 60;
+    background: var(--v-bg);
+    border-top: 1px solid var(--v-fg-10);
+    box-shadow: 0 -4px 16px rgba(26,24,21,0.04);
+    font-family: var(--v-font-ui);
+  }
+  .mstick__inner {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    max-width: 720px; margin: 0 auto;
+  }
+  .mstick__meta {
+    flex: 1 1 auto; min-width: 0;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .mstick__k {
+    font-weight: 700; font-size: 16px;
+    color: var(--v-fg);
+    font-feature-settings: "tnum" on;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mstick__k--gain { color: var(--v-green); }
+  .mstick__k--loss { color: var(--v-error); }
+  .mstick__sub {
+    font-size: 11px; color: var(--v-fg-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mstick__cta {
+    flex-shrink: 0;
+    display: flex; gap: 8px;
+  }
+  .mstick__cta .btn { white-space: nowrap; }
 }
 
 /* --- Card shells used in this page ------------------------------ */
@@ -608,9 +666,28 @@ body { font-family: var(--v-font-ui); color: var(--v-fg); }
   aspect-ratio: 16 / 10;
   border-radius: 14px 14px 8px 8px;
   position: relative;
+  overflow: hidden;
+}
+/* Clickable card: photo zooms on hover (only the image layer, not the chip). */
+.actu__img::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: url('/app-ds/assets/photos/placeholder.jpg');
+  background-size: cover;
+  background-position: center;
+  border-radius: inherit;
+  z-index: 0;
+  transition: transform 320ms var(--v-ease-out);
+  will-change: transform;
+}
+.actu:hover .actu__img::before { transform: scale(1.05); }
+@media (prefers-reduced-motion: reduce) {
+  .actu__img::before { transition: none; }
+  .actu:hover .actu__img::before { transform: none; }
 }
 .actu__cat {
   position: absolute; top: 12px; left: 12px;
+  z-index: 1;
 }
 /* Category chip — DS atom (preview/15-tags.html) */
 .cchip {

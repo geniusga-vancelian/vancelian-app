@@ -716,6 +716,7 @@
 .avt--blue  { background: var(--v-blue);        color: #FFFFFF; }
 .avt--dark  { background: var(--v-fg);          color: #FFFFFF; }
 .avt--warm  { background: var(--v-card-warm);   color: var(--v-fg); }
+.avt--safran { background: var(--v-yellow);      color: #FFFFFF; }
 
 /* Kalai-icon glyph inside an avatar — set mask-image per usage */
 .avt__ic {
@@ -739,7 +740,7 @@ img.avt__ic {
 /* Warm / white / 20 avt backgrounds keep the icon dark */
 .avt--warm > img.avt__ic,
 .avt--white > img.avt__ic,
-.avt:not(.avt--terra):not(.avt--green):not(.avt--blue):not(.avt--dark) > img.avt__ic {
+.avt:not(.avt--terra):not(.avt--green):not(.avt--blue):not(.avt--dark):not(.avt--safran) > img.avt__ic {
   filter: brightness(0);
 }
 /* Common glyph mask-image modifiers — Kalai icon set */

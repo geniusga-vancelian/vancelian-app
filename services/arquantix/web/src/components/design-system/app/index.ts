@@ -56,6 +56,10 @@ export {
   type AppNewsStackedFilter,
   type AppNewsStackedListItem,
 } from './AppNewsStackedList'
+export { AppAccountDot, type AppAccountDotVariant } from './AppAccountDot'
+export { AppBorrowCtaCard } from './AppBorrowCtaCard'
+export { AppLoanCard, type AppLoanCardStat, type AppLoanSafety } from './AppLoanCard'
+export { AppMobileStickyBar } from './AppMobileStickyBar'
 export { AppDesignSystemShowcase } from './AppDesignSystemShowcase'
 export { APP_DS_SHOWCASE_SECTIONS, APP_DS_SHOWCASE_VERSION } from './appDsShowcaseManifest'
 export { vancelianAppColors, vancelianAppRadius, vancelianAppSpacing } from './tokens'

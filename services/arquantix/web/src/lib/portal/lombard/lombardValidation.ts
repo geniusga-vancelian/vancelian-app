@@ -1,7 +1,14 @@
 import { z } from 'zod'
 
+import { normalizeLombardBorrowAmountForApi } from '@/lib/portal/lombard/lombardBorrowUi'
 import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
 import { idempotencyKeySchema } from '@/lib/portal/morphoVaultValidation'
+
+const lombardBorrowAmountSchema = z
+  .string()
+  .trim()
+  .transform((value) => normalizeLombardBorrowAmountForApi(value) ?? '')
+  .pipe(z.string().min(1, 'Invalid borrow amount.'))
 
 export const lombardCollateralSchema = z.enum(['cbBTC', 'cbETH'])
 
@@ -13,12 +20,7 @@ export const lombardTargetLtvPercentSchema = z.coerce
 
 export const lombardQuoteSchema = z.object({
   collateral: lombardCollateralSchema,
-  borrowAmount: z
-    .string()
-    .trim()
-    .refine((value) => /^\d+(\.\d+)?$/.test(value.replace(',', '.')) && Number(value.replace(',', '.')) > 0, {
-      message: 'Invalid borrow amount.',
-    }),
+  borrowAmount: lombardBorrowAmountSchema,
   walletAddress: z.string().trim().refine(isValidEvmAddress, 'Invalid wallet address.'),
   targetLtvPercent: lombardTargetLtvPercentSchema,
 })

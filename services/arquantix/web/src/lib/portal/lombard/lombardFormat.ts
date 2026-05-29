@@ -1,5 +1,5 @@
 export function parseLombardHumanAmountToRaw(value: string, decimals: number): bigint {
-  const normalized = value.trim().replace(',', '.')
+  const normalized = value.trim().replace(/[\s\u00A0\u202F]/g, '').replace(',', '.')
   if (!/^\d+(\.\d+)?$/.test(normalized)) {
     throw new Error('Invalid amount.')
   }

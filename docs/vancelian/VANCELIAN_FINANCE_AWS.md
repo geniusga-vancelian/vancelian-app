@@ -74,8 +74,11 @@ Validation DNS : enregistrements CNAME `_618148f90…` et `_f1a7e672…` dans la
 # Déploiement / mise à jour infra + ECS
 ./scripts/vancelian-finance-private-launch.sh
 
-# Ajouter une IP à la allowlist WAF (app + console)
-VANCELIAN_WAF_ALLOW_CIDRS="91.73.77.140/32,VOTRE_IP/32" ./scripts/vancelian-finance-private-launch.sh
+# Ajouter une IP à la allowlist WAF (app + console) — fusionne sans écraser les IPs existantes
+./scripts/vancelian-waf-add-ip.sh 176.204.158.33
+
+# Alternative (remplace toute la liste — attention) :
+# VANCELIAN_WAF_ALLOW_CIDRS="91.73.77.140/32,VOTRE_IP/32" ./scripts/vancelian-finance-private-launch.sh
 
 # Secrets Privy API (ECS arquantix-api)
 ./scripts/arquantix-sync-privy-secrets.sh

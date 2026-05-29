@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="/app-ds/colors_and_type.css"/>
+<link rel="stylesheet" href="/app-ds/layout.css"/>
+<link rel="stylesheet" href="/app-ds/borrow-layout-patterns.css"/>
+<style>
+body{margin:0;padding:32px;background:var(--v-bg);font-family:var(--v-font-ui);color:var(--v-fg);min-height:100vh;}
+.stage{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
+.lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-light);margin:0 0 12px;}
+</style></head>
+<body><div class="stage"><p class="lbl">Loan card — emprunt actif · Webapp-full</p>
+<a class="v-card loan" href="#">
+      <header class="loan__head">
+        <span class="loan__coin"><img src="/app-ds/assets/crypto/btc.svg" alt="" /></span>
+        <div class="loan__title-block">
+          <h4 class="loan__title">Garantie Bitcoin</h4>
+          <p class="loan__sub v-tnum">0,42 cbBTC en garantie</p>
+        </div>
+        <span class="loan__chv" aria-hidden="true">›</span>
+      </header>
+      <dl class="loan__stats">
+        <div class="loan__row"><dt>Montant emprunté</dt><dd class="v-tnum">12 480,00 USDC</dd></div>
+        <div class="loan__row"><dt>Niveau de sécurité</dt><dd><span class="loan__safety" style="color:var(--v-green);background:var(--v-success-bg)"><span class="loan__safety-dot" style="background:var(--v-green)"></span>Sain</span></dd></div>
+        <div class="loan__row"><dt>Utilisation actuelle</dt><dd class="v-tnum"><span class="loan__usage"><span class="loan__usage-bar"><span class="loan__usage-fill" style="width:42%;background:var(--v-green)"></span></span><span>42 %</span></span></dd></div>
+        <div class="loan__row"><dt>Taux d'intérêt</dt><dd class="v-tnum">4,2 % variable</dd></div>
+      </dl>
+    </a>
+</div></body></html>
