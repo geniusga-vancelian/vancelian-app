@@ -19,7 +19,22 @@ export const PORTAL_GLOBAL_SHELL_RELATIVE_PATHS = [
   'src/components/portal/PortalTopnav.tsx',
 ] as const
 
-/** Sections markets read-only — pas d’import statique du dialog invest. */
+/** Écrans portail read-only — pas de SDK Web3 / modales d’exécution statiques. */
+export const PORTAL_READ_ONLY_GUARD_PATHS = [
+  'src/components/portal/academy/PortalAcademyScreen.tsx',
+  'src/components/portal/academy/PortalArticleScreen.tsx',
+  'src/components/portal/dashboard/PortalDashboardScreen.tsx',
+  'src/components/portal/markets/PortalMarketsScreen.tsx',
+  'src/components/portal/markets/PortalCryptoBundlesSection.tsx',
+  'src/components/portal/markets/PortalAllCryptoScreen.tsx',
+  'src/components/portal/profile/PortalProfileScreen.tsx',
+  'src/components/portal/profile/PortalProfileWalletsSection.tsx',
+  'src/components/portal/invest/PortalInvestScreen.tsx',
+  'src/components/portal/invest/PortalPlacerView.tsx',
+  'src/lib/portal/usePortalCachedScreen.ts',
+] as const
+
+/** @deprecated alias — préférer PORTAL_READ_ONLY_GUARD_PATHS */
 export const MARKETS_READ_ONLY_GUARD_PATHS = [
   'src/components/portal/markets/PortalCryptoBundlesSection.tsx',
   'src/components/portal/markets/PortalMarketsScreen.tsx',
@@ -36,18 +51,45 @@ type ForbiddenPattern = {
   pattern: RegExp
 }
 
-const SHELL_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
-  { rule: 'shell-no-privy-sdk', pattern: /from\s+['"]@privy-io\/react-auth['"]/ },
-  { rule: 'shell-no-wagmi', pattern: /from\s+['"]wagmi['"]/ },
-  { rule: 'shell-no-rainbowkit', pattern: /from\s+['"]@rainbow-me\/rainbowkit['"]/ },
-  { rule: 'shell-no-portal-web3-providers', pattern: /PortalWeb3Providers/ },
-  { rule: 'shell-no-portal-auth-privy-gate', pattern: /PortalAuthPrivyGate/ },
-  { rule: 'shell-no-privy-portal-provider', pattern: /PrivyPortalProvider/ },
-  { rule: 'shell-no-external-wallet-provider', pattern: /ExternalWalletProvider/ },
+/** SDK / providers Web3 interdits dans le shell global et les écrans read-only. */
+export const PORTAL_WEB3_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  { rule: 'no-privy-sdk', pattern: /from\s+['"]@privy-io\/react-auth['"]/ },
+  { rule: 'no-wagmi', pattern: /from\s+['"]wagmi['"]/ },
+  { rule: 'no-rainbowkit', pattern: /from\s+['"]@rainbow-me\/rainbowkit['"]/ },
+  { rule: 'no-viem', pattern: /from\s+['"]viem['"]/ },
+  { rule: 'no-lifi-sdk', pattern: /from\s+['"]@lifi\// },
+  { rule: 'no-portal-web3-providers', pattern: /PortalWeb3Providers/ },
+  { rule: 'no-portal-auth-privy-gate', pattern: /PortalAuthPrivyGate/ },
+  { rule: 'no-privy-portal-provider', pattern: /PrivyPortalProvider/ },
+  { rule: 'no-external-wallet-provider', pattern: /ExternalWalletProvider/ },
+  { rule: 'no-connect-external-wallet-button', pattern: /ConnectExternalWalletButton/ },
 ]
 
-const STATIC_BUNDLE_INVEST_DIALOG_IMPORT =
-  /import\s+(?:type\s+)?(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]*PortalBundleInvestDialog['"]/
+const SHELL_FORBIDDEN_IMPORTS = PORTAL_WEB3_FORBIDDEN_IMPORTS.map(({ rule, pattern }) => ({
+  rule: `shell-${rule}`,
+  pattern,
+}))
+
+const STATIC_EXECUTION_DIALOG_IMPORTS: Array<{ rule: string; pattern: RegExp; hint: string }> = [
+  {
+    rule: 'no-static-bundle-invest-dialog',
+    pattern:
+      /import\s+(?:type\s+)?(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]*PortalBundleInvestDialog['"]/,
+    hint: 'Use PortalLazyBundleInvestDialog',
+  },
+  {
+    rule: 'no-static-earn-vault-modal',
+    pattern:
+      /import\s+(?:type\s+)?(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]*PortalEarnVaultModal['"]/,
+    hint: 'Use PortalLazyEarnVaultModal',
+  },
+  {
+    rule: 'no-static-ledgity-vault-modal',
+    pattern:
+      /import\s+(?:type\s+)?(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]*PortalLedgityVaultModal['"]/,
+    hint: 'Use PortalLazyLedgityVaultModal',
+  },
+]
 
 const PORTAL_SHELL_LAYOUT_PATH = 'src/app/app/(shell)/layout.tsx'
 const PORTAL_SHELL_PATH = 'src/components/portal/PortalShell.tsx'
@@ -142,24 +184,49 @@ export function scanNavigateToPortalLoginImports(webRoot?: string): PortalPerfor
   return violations
 }
 
-export function scanMarketsReadOnlyBundleDialogImports(
-  webRoot?: string,
+function scanReadOnlyPaths(
+  webRoot: string,
+  relativePaths: readonly string[],
+  rulePrefix: string,
 ): PortalPerformanceViolation[] {
-  const root = resolveWebRoot(webRoot)
   const violations: PortalPerformanceViolation[] = []
 
-  for (const relativePath of MARKETS_READ_ONLY_GUARD_PATHS) {
-    const source = readRelativeFile(root, relativePath)
-    if (STATIC_BUNDLE_INVEST_DIALOG_IMPORT.test(source)) {
-      violations.push({
-        rule: 'markets-no-static-bundle-invest-dialog',
-        file: relativePath,
-        detail: 'Use PortalLazyBundleInvestDialog instead of static PortalBundleInvestDialog',
-      })
+  for (const relativePath of relativePaths) {
+    const source = readRelativeFile(webRoot, relativePath)
+    for (const { rule, pattern } of PORTAL_WEB3_FORBIDDEN_IMPORTS) {
+      if (pattern.test(source)) {
+        violations.push({
+          rule: `${rulePrefix}-${rule}`,
+          file: relativePath,
+          detail: `Forbidden Web3 import in read-only portal surface`,
+        })
+      }
+    }
+    for (const { rule, pattern, hint } of STATIC_EXECUTION_DIALOG_IMPORTS) {
+      if (pattern.test(source)) {
+        violations.push({
+          rule: `${rulePrefix}-${rule}`,
+          file: relativePath,
+          detail: hint,
+        })
+      }
     }
   }
 
   return violations
+}
+
+export function scanPortalReadOnlyWeb3Imports(webRoot?: string): PortalPerformanceViolation[] {
+  return scanReadOnlyPaths(resolveWebRoot(webRoot), PORTAL_READ_ONLY_GUARD_PATHS, 'readonly')
+}
+
+/** @deprecated alias — préférer scanPortalReadOnlyWeb3Imports */
+export function scanMarketsReadOnlyBundleDialogImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  return scanPortalReadOnlyWeb3Imports(webRoot).filter((v) =>
+    MARKETS_READ_ONLY_GUARD_PATHS.some((p) => v.file === p),
+  )
 }
 
 /** Parse la table `Route (app)` d’un log `next build` (First Load JS en kB). */
@@ -205,7 +272,7 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanPortalShellLayoutWeb3Imports(webRoot),
     ...scanPortalShellMountWarmup(webRoot),
     ...scanNavigateToPortalLoginImports(webRoot),
-    ...scanMarketsReadOnlyBundleDialogImports(webRoot),
+    ...scanPortalReadOnlyWeb3Imports(webRoot),
   ]
 }
 

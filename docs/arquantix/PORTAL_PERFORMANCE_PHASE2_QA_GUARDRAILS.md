@@ -23,26 +23,71 @@ npm run test:portal-performance-guard
 
 | Règle | Fichiers surveillés | Échec si |
 |-------|---------------------|----------|
-| `shell-no-privy-sdk` | shell global | `from '@privy-io/react-auth'` |
-| `shell-no-wagmi` | shell global | `from 'wagmi'` |
-| `shell-no-rainbowkit` | shell global | `from '@rainbow-me/rainbowkit'` |
-| `shell-no-portal-web3-providers` | shell global + layout | `PortalWeb3Providers` |
-| `shell-no-portal-auth-privy-gate` | shell global | `PortalAuthPrivyGate` |
+| `shell-no-*` / `readonly-no-*` | shell + écrans read-only | `@privy-io/react-auth`, `wagmi`, `@rainbow-me/rainbowkit`, `viem`, `@lifi/*` |
+| `*-no-portal-web3-providers` | shell + read-only | `PortalWeb3Providers`, `PortalAuthPrivyGate`, `ExternalWalletProvider` |
+| `readonly-no-connect-external-wallet-button` | profil / invest list | import direct RainbowKit (utiliser `PortalProfileExternalWalletConnect`) |
+| `readonly-no-static-*-dialog` | markets / invest list | modales statiques (`PortalBundleInvestDialog`, `PortalEarnVaultModal`, `PortalLedgityVaultModal`) |
+
+**Shell global** = `(shell)/layout.tsx`, `PortalShell.tsx`, `PortalShellMain.tsx`, `PortalTopnav.tsx`.
+
+**Read-only surveillés** = academy, dashboard, markets, profile, invest list (`PortalInvestScreen`, `PortalPlacerView`), `usePortalCachedScreen.ts`.
+
+| Règle additionnelle | Fichier | Échec si |
+|---------------------|---------|----------|
 | `layout-no-portal-web3-providers` | `(shell)/layout.tsx` | import Web3 layout |
 | `shell-no-idle-warmup` | `PortalShell.tsx` | appel `warmAllPortalMainRoutes()` |
 | `shell-no-privy-preload` | `PortalShell.tsx` | appel `preloadPrivyPortalProvider()` |
 | `login-nav-no-privy-hygiene-import` | `navigateToPortalLogin.ts` | import `PortalAuthPrivySessionHygiene` |
-| `markets-no-static-bundle-invest-dialog` | sections markets read-only | import statique `PortalBundleInvestDialog` |
-
-**Shell global** = `(shell)/layout.tsx`, `PortalShell.tsx`, `PortalShellMain.tsx`, `PortalTopnav.tsx`.
 
 **Implémentation** : `src/lib/portal/portalPerformanceGuard.ts` + `portalPerformanceGuard.test.ts`.
 
 ### Statut (2026-05-29)
 
 ```
-npm run test:portal-performance-guard → 9/9 pass
+npm run test:portal-performance-guard → 10/10 pass
 ```
+
+---
+
+## 2b. Runtime production (Phase 2b — mesure humaine)
+
+Le build First Load JS ne suffit pas : mesurer en prod ou staging authentifié.
+
+| Métrique | Outil | Routes prioritaires |
+|----------|-------|---------------------|
+| TTFB | DevTools Network / WebPageTest | `/app/markets`, `/app/invest`, `/app/profile` |
+| LCP | Lighthouse / CrUX | idem |
+| TTI | Performance panel | idem + `/app/wallet/swap` |
+| Navigation inter-pages | DevTools Network (Disable cache off) | dashboard → markets → academy |
+| Hard refresh | Cmd+Shift+R + filtre JS | vérifier absence `55500-*` (Privy) sur read-only |
+| Li.FI | Network filter `lifi` | markets : **0 requête** jusqu’à ouverture dialog invest |
+
+**Template session QA runtime** (à remplir en prod/staging) :
+
+```
+Date / env :
+Session authentifiée : oui/non
+
+/app/markets     TTFB ___ ms  LCP ___ s  Privy chunk : oui/non  Li.FI : oui/non
+/app/invest      TTFB ___ ms  LCP ___ s  modales lazy OK : oui/non
+/app/profile     TTFB ___ ms  LCP ___ s  RainbowKit au load : oui/non (attendu non)
+/app/wallet/swap TTFB ___ ms  TTI ___ s  Web3 présent : oui (attendu)
+```
+
+---
+
+## 2c. Roadmap post-Phase 2 (accord équipe)
+
+| Phase | Scope | Statut |
+|-------|-------|--------|
+| **1** | Retrait Web3 shell + lazy modales | ✅ `1722c881e` |
+| **2** | QA + guardrails statiques + budgets doc | ✅ `b77dacf79` (+ extension read-only/viem) |
+| **2b** | Mesures runtime prod (TTFB/LCP/TTI) | ⬜ checklist §2b |
+| **3** | Split `portalSessionRouteHelpers`, `portalVaultRouteHelpers` | ⬜ prochaine |
+| **4** | Budgets bundle automatisés en CI (`next build` + parser) | ⬜ |
+| **5** | Optimisation ciblée `/app/invest`, `/app/profile` | ⬜ après verrou |
+
+**Ne pas toucher au métier** tant que Phase 2b QA runtime + checklist §3 ne sont pas signées.
 
 ---
 
@@ -142,4 +187,6 @@ Légende : ✅ validé · ⬜ à valider humain · 🔶 smoke HTTP partiel
 
 ## 6. Prochaine étape recommandée
 
-**Phase 3 — Split API helpers** (`portalSessionRouteHelpers`) pour réduire le cold start des routes read-only API, une fois la checklist QA manuelle (§3) validée par l’équipe.
+1. **Signer checklist §3 + §2b** (login, swap, borrow, profile wallet, runtime prod).
+2. **Phase 3** — split `portalSessionRouteHelpers` / `portalVaultRouteHelpers` (cold start API read-only, graphe viem/Ledgity/Morpho/Lombard côté serveur).
+3. **Phase 4** — brancher `scanFirstLoadJsBudgetViolations` dans CI après `next build`.

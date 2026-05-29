@@ -9,6 +9,7 @@ import {
   scanFirstLoadJsBudgetViolations,
   scanMarketsReadOnlyBundleDialogImports,
   scanPortalGlobalShellImports,
+  scanPortalReadOnlyWeb3Imports,
   scanPortalShellMountWarmup,
 } from '@/lib/portal/portalPerformanceGuard'
 
@@ -43,10 +44,14 @@ describe('portalPerformanceGuard — détection synthétique', () => {
     )
   })
 
+  it('read-only screens sans Web3 / modales statiques', () => {
+    assert.deepEqual(scanPortalReadOnlyWeb3Imports(), [])
+  })
+
   it('signale un import statique PortalBundleInvestDialog en markets', () => {
     const violations = scanMarketsReadOnlyBundleDialogImports()
     assert.equal(
-      violations.some((v) => v.rule === 'markets-no-static-bundle-invest-dialog'),
+      violations.some((v) => v.rule.includes('no-static-bundle-invest-dialog')),
       false,
     )
   })
