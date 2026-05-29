@@ -119,6 +119,15 @@ class AccountNotFoundError(ExchangeError):
     pass
 
 
+def _ingest_order_cost_basis(db: Session, order) -> None:
+    try:
+        from services.cost_basis.ingest_exchange import ingest_exchange_order
+
+        ingest_exchange_order(db, order)
+    except Exception:
+        logger.exception("cost_basis.exchange_ingest_failed order_id=%s", getattr(order, "id", None))
+
+
 class ExchangeService:
 
     def __init__(self) -> None:
@@ -390,6 +399,7 @@ class ExchangeService:
 
             # --- 13. Finalize order ---
             self._order_repo.update_status(db, order, new_status="completed")
+            _ingest_order_cost_basis(db, order)
 
         except Exception as exc:
             logger.error("Exchange buy failed: %s", exc, exc_info=True)
@@ -670,6 +680,7 @@ class ExchangeService:
 
             # --- H6. Finalize order ---
             self._order_repo.update_status(db, order, new_status="completed")
+            _ingest_order_cost_basis(db, order)
 
         except Exception as exc:
             logger.error("Exchange sell failed: %s", exc, exc_info=True)
@@ -966,6 +977,8 @@ class ExchangeService:
 
             self._order_repo.update_status(db, sell_order, new_status="completed")
             self._order_repo.update_status(db, buy_order, new_status="completed")
+            _ingest_order_cost_basis(db, sell_order)
+            _ingest_order_cost_basis(db, buy_order)
 
         except Exception as exc:
             logger.error("Swap failed: %s", exc, exc_info=True)

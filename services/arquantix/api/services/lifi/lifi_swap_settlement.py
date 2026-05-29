@@ -320,3 +320,14 @@ def apply_swap_settlement(
         sync_source=sync_source,
         settlement_meta=settlement_meta,
     )
+
+    try:
+        from services.cost_basis.ingest_lifi import ingest_lifi_swap_settlement
+
+        ingest_lifi_swap_settlement(db, swap, wallet=wallet, amount_out=amount_out)
+    except Exception:
+        logger.exception(
+            "cost_basis.lifi_ingest_failed swap_id=%s person_id=%s",
+            swap_id,
+            wallet.person_id,
+        )

@@ -15,6 +15,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -201,10 +202,7 @@ def _build_performance_value(
                     if net_eur_sell is not None and use_eur:
                         realized_pnl += net_eur_sell - cost_basis_consumed
                     elif net_eur_sell is not None and not use_eur:
-                        fx = _interpolate_price(fx_candles, ts) if fx_candles else None
-                        rate = Decimal(str(fx)) if fx and fx > 0 else Decimal("1.08")
-                        net_usd = net_eur_sell * rate
-                        realized_pnl += net_usd - cost_basis_consumed
+                        realized_pnl += net_eur_sell - cost_basis_consumed
                     else:
                         realized_pnl += amount * (trade_price_ref - avg_cost)
                     cost_basis[t_asset] -= cost_basis_consumed
@@ -328,6 +326,26 @@ def build_wallet_history(
     Returns {"currency": …, "points": [{"timestamp": …, "wallet_value": …}]}
     """
     use_eur = reference_currency.upper() == "EUR"
+    pid_uuid: Optional[UUID] = None
+    if portfolio_id:
+        try:
+            pid_uuid = UUID(str(portfolio_id))
+        except (ValueError, TypeError):
+            pid_uuid = None
+
+    from services.cost_basis.history_events import (
+        executions_to_trade_events,
+        has_execution_history,
+        list_executions_for_history,
+    )
+
+    use_cost_basis_events = has_execution_history(
+        db,
+        client_id,
+        portfolio_scope=portfolio_scope,
+        portfolio_id=pid_uuid,
+        asset=asset,
+    )
 
     q = db.query(ExchangeOrder).filter(
         ExchangeOrder.client_id == client_id,
@@ -341,10 +359,26 @@ def build_wallet_history(
     if portfolio_scope in (None, "global", "direct"):
         orders = filter_self_trading_exchange_orders(orders)
 
-    if not orders:
-        return {"currency": reference_currency.upper(), "points": []}
+    if use_cost_basis_events:
+        executions = list_executions_for_history(
+            db,
+            client_id,
+            portfolio_scope=portfolio_scope,
+            portfolio_id=pid_uuid,
+            asset=asset,
+        )
+        trade_events = executions_to_trade_events(executions, use_eur=use_eur)
+        if not trade_events and not orders:
+            return {"currency": reference_currency.upper(), "points": []}
+    else:
+        if not orders:
+            return {"currency": reference_currency.upper(), "points": []}
+        trade_events = None
 
     traded_assets: set[str] = set()
+    if trade_events is not None:
+        for te in trade_events:
+            traded_assets.add(te[2])
     for o in orders:
         traded_assets.add(o.asset)
 
@@ -359,9 +393,12 @@ def build_wallet_history(
 
     instrument_map = _resolve_instrument_ids(db, provider_symbols)
 
-    first_trade_ts = orders[0].created_at
-    if first_trade_ts.tzinfo is None:
-        first_trade_ts = first_trade_ts.replace(tzinfo=timezone.utc)
+    if trade_events:
+        first_trade_ts = trade_events[0][0]
+    else:
+        first_trade_ts = orders[0].created_at
+        if first_trade_ts.tzinfo is None:
+            first_trade_ts = first_trade_ts.replace(tzinfo=timezone.utc)
     now = datetime.now(timezone.utc)
     span_hours = (now - first_trade_ts).total_seconds() / 3600
 
@@ -411,22 +448,23 @@ def build_wallet_history(
         if fx_iid is None:
             logger.warning("EURUSDT instrument not found for FX history")
 
-    trade_events: list[tuple[datetime, str, str, Decimal, Decimal, Optional[Decimal]]] = []
-    for o in orders:
-        ts = o.created_at
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        amt = Decimal(str(o.amount_crypto))
-        price = Decimal(str(o.price))
-        net_eur_sell: Optional[Decimal] = None
-        if o.side == "sell":
-            if o.amount_to is not None:
-                net_eur_sell = Decimal(str(o.amount_to))
-            else:
-                gross = Decimal(str(o.amount_fiat))
-                fee = Decimal(str(o.fee_amount)) if o.fee_amount else Decimal("0")
-                net_eur_sell = gross - fee
-        trade_events.append((ts, o.side, o.asset, amt, price, net_eur_sell))
+    if trade_events is None:
+        trade_events = []
+        for o in orders:
+            ts = o.created_at
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            amt = Decimal(str(o.amount_crypto))
+            price = Decimal(str(o.price))
+            net_eur_sell: Optional[Decimal] = None
+            if o.side == "sell":
+                if o.amount_to is not None:
+                    net_eur_sell = Decimal(str(o.amount_to))
+                else:
+                    gross = Decimal(str(o.amount_fiat))
+                    fee = Decimal(str(o.fee_amount)) if o.fee_amount else Decimal("0")
+                    net_eur_sell = gross - fee
+            trade_events.append((ts, o.side, o.asset, amt, price, net_eur_sell))
 
     # O(1) lookup for "is this (timestamp, asset) a trade execution?"
     trade_ts_pairs: set[tuple[datetime, str]] = set()

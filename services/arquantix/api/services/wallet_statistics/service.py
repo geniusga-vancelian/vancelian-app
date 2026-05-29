@@ -1,7 +1,7 @@
 """Wallet Statistics service.
 
-Computes per-asset statistics from exchange_orders, crypto_positions,
-market data candles and latest quotes.
+Computes per-asset statistics from normalized cost_basis_executions (V2),
+with lazy backfill from exchange_orders, plus crypto_positions and market quotes.
 
 Supports optional portfolio scoping:
   - None / "global"  → all orders + crypto_positions  (backward compatible)
@@ -279,64 +279,54 @@ def build_wallet_statistics(
         db, client_id, asset, portfolio_scope, portfolio_id,
     )
 
-    # ── Trade aggregation ────────────────────────────────────────────
-    total_bought = Decimal("0")
-    total_sold = Decimal("0")
-    total_buy_cost = Decimal("0")
-    total_sell_revenue = Decimal("0")
-    trade_count = len(orders)
-    buy_count = 0
-    sell_count = 0
-    first_trade_at: Optional[datetime] = None
-    last_trade_at: Optional[datetime] = None
+    # ── Cost basis V2 (exécutions normalisées, FX figé) ───────────────
+    from services.cost_basis.ingest_exchange import backfill_exchange_orders_for_client_asset
+    from services.cost_basis.wac import compute_wac_from_executions
 
-    for o in orders:
-        amt = _dec(o.amount_crypto)
-        price = _dec(o.price)  # execution price in EUR
-        if first_trade_at is None:
-            first_trade_at = o.created_at
-        last_trade_at = o.created_at
+    backfill_exchange_orders_for_client_asset(db, client_id, asset)
 
-        if o.side == "buy":
-            buy_count += 1
-            total_bought += amt
-            total_buy_cost += amt * price
-        else:
-            sell_count += 1
-            total_sold += amt
-            # Realized P&L uses net received (amount_to), not gross (amt * price)
-            if o.amount_to is not None:
-                total_sell_revenue += _dec(o.amount_to)
-            else:
-                gross = _dec(o.amount_fiat)
-                fee = _dec(o.fee_amount) if o.fee_amount else Decimal("0")
-                total_sell_revenue += gross - fee
+    if portfolio_scope == "bundle" and portfolio_id:
+        from services.cost_basis.backfill_bundle_lifi import run_bundle_lifi_cost_basis_backfill
 
-    # ── PRU / Average prices ─────────────────────────────────────────
-    avg_buy_price = (total_buy_cost / total_bought) if total_bought > 0 else Decimal("0")
-    avg_sell_price = (total_sell_revenue / total_sold) if total_sold > 0 else None
+        run_bundle_lifi_cost_basis_backfill(
+            db,
+            dry_run=False,
+            client_id=client_id,
+            portfolio_id=UUID(str(portfolio_id)),
+            asset=asset,
+            limit=200,
+        )
 
-    # execution prices are stored in EUR; convert if user wants USD
-    if not use_eur and eurusdt_rate > 0:
-        avg_buy_price = avg_buy_price * eurusdt_rate
-        if avg_sell_price is not None:
-            avg_sell_price = avg_sell_price * eurusdt_rate
-        total_buy_cost = total_buy_cost * eurusdt_rate
-        total_sell_revenue = total_sell_revenue * eurusdt_rate
+    current_price_eur = usdt_to_eur(current_price_usdt, eurusdt_rate) if current_price_usdt > 0 else Decimal("0")
+    current_price_usd = current_price_usdt
 
-    # ── P&L ──────────────────────────────────────────────────────────
+    wac = compute_wac_from_executions(
+        db,
+        client_id,
+        asset,
+        position_size=position_size,
+        current_price_eur=current_price_eur,
+        current_price_usd=current_price_usd,
+        portfolio_scope=portfolio_scope,
+        portfolio_id=portfolio_id,
+    )
+
+    avg_buy_price = wac.avg_buy_price_eur if use_eur else wac.avg_buy_price_usd
+    cost_basis = wac.cost_basis_eur if use_eur else wac.cost_basis_usd
+    unrealized_pnl = wac.unrealized_pnl_eur if use_eur else wac.unrealized_pnl_usd
+    realized_pnl = wac.realized_pnl_eur if use_eur else wac.realized_pnl_usd
+    total_pnl = wac.total_pnl_eur if use_eur else wac.total_pnl_usd
+    trade_count = wac.trade_count
+    buy_count = wac.buy_count
+    sell_count = wac.sell_count
+    first_trade_at = wac.first_trade_at
+    last_trade_at = wac.last_trade_at
+    total_bought = wac.total_bought
+    total_sold = wac.total_sold
+
+    avg_sell_price = wac.avg_sell_price_eur if use_eur else wac.avg_sell_price_usd
+
     current_value = position_size * current_price
-    cost_basis = position_size * avg_buy_price if avg_buy_price > 0 else Decimal("0")
-    unrealized_pnl = current_value - cost_basis
-
-    # realized = sell revenue - proportional cost
-    if total_sold > 0 and total_bought > 0:
-        cost_per_unit = total_buy_cost / total_bought
-        realized_pnl = total_sell_revenue - (total_sold * cost_per_unit)
-    else:
-        realized_pnl = Decimal("0")
-
-    total_pnl = unrealized_pnl + realized_pnl
 
     # ── Position Quality ─────────────────────────────────────────────
     now = datetime.now(timezone.utc)
