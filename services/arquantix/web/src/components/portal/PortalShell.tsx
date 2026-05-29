@@ -1,13 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { PortalTopnav } from '@/components/portal/PortalTopnav'
 import { PersistentSiteFooter } from '@/components/site/PersistentSiteFooter'
 import { PortalShellMain } from '@/components/portal/PortalShellMain'
 import { NavPendingProvider } from '@/components/site/NavPendingContext'
-import { warmAllPortalMainRoutes } from '@/lib/portal/portalNavWarmup'
 import type { SiteBrandLogo } from '@/components/ui/BrandLogo'
 import type { SiteFooterData } from '@/lib/cms/site-footer'
 import type { PortalSupportContent } from '@/lib/cms/portal-support'
@@ -16,8 +13,6 @@ import { PortalSupportContentProvider } from '@/components/portal/PortalSupportC
 import { PortalChainProvider } from '@/lib/portal/portalChainContext'
 import { PortalWalletScopeProvider } from '@/lib/portal/portalWalletScopeContext'
 import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-import { preloadPrivyPortalProvider } from '@/lib/portal/preloadPrivyPortalProvider'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -38,20 +33,6 @@ export function PortalShell({
   initialFooterData,
   initialSupportContent,
 }: Props) {
-  const router = useRouter()
-
-  useEffect(() => {
-    router.prefetch(PORTAL_ROUTES.login)
-    preloadPrivyPortalProvider()
-
-    const warm = () => warmAllPortalMainRoutes(router)
-    if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(warm, { timeout: 4000 })
-    } else {
-      window.setTimeout(warm, 800)
-    }
-  }, [router])
-
   return (
     <PortalSupportContentProvider
       content={initialSupportContent ?? getDefaultPortalSupportContent()}

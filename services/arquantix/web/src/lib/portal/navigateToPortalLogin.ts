@@ -1,4 +1,7 @@
-import { markPortalPrivySessionReset, clearPrivyBrowserStorage } from '@/components/portal/PortalAuthPrivySessionHygiene'
+import {
+  clearPrivyBrowserStorage,
+  markPortalPrivySessionReset,
+} from '@/lib/portal/portalAuthPrivySessionStorage'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 

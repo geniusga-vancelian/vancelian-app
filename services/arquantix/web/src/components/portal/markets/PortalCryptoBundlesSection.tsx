@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
-import { PortalBundleInvestDialog } from '@/components/portal/bundles/PortalBundleInvestDialog'
+import { PortalLazyBundleInvestDialog } from '@/components/portal/bundles/PortalLazyBundleInvestDialog'
 import {
   isPlacerCoffreBundle,
   PortalPlacerBasketCard,
@@ -66,7 +66,7 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
       ) : null}
 
       {investBundle ? (
-        <PortalBundleInvestDialog
+        <PortalLazyBundleInvestDialog
           bundle={investBundle}
           open
           onOpenChange={(open) => {

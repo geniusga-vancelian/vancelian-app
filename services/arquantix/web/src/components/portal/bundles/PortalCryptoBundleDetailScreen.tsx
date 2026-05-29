@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-import { PortalBundleInvestDialog } from '@/components/portal/bundles/PortalBundleInvestDialog'
+import { PortalLazyBundleInvestDialog } from '@/components/portal/bundles/PortalLazyBundleInvestDialog'
 import {
   PortalPanierAside,
   PortalPanierCompositionSection,
@@ -236,7 +236,7 @@ export function PortalCryptoBundleDetailScreen({ productCode }: Props) {
       ) : null}
 
       {investBundle && canInvest ? (
-        <PortalBundleInvestDialog
+        <PortalLazyBundleInvestDialog
           bundle={investBundle}
           open={investOpen}
           onOpenChange={setInvestOpen}

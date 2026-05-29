@@ -2,15 +2,15 @@
 
 import * as React from 'react'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
 import { Container } from '@/components/ui/Container'
 import { buildTopnavPalettes } from '@/lib/cms/site-menu-theme'
 import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { PORTAL_PATH_PREFIX, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { readPortalCache } from '@/lib/portal/portalClientCache'
-import { warmPortalRoute } from '@/lib/portal/portalNavWarmup'
 import {
   PORTAL_MAIN_NAV_TABS,
   PORTAL_SEARCH_NAV,
@@ -119,7 +119,6 @@ type PortalTopnavProps = {
  */
 export function PortalTopnav({ initials: initialsProp, brand: brandProp, className }: PortalTopnavProps) {
   const pathname = usePathname() ?? ''
-  const router = useRouter()
   const { effectivePath } = useNavPending()
   const palette = buildTopnavPalettes(null).solid
   const [mobileOpen, setMobileOpen] = React.useState(false)
@@ -127,10 +126,6 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
     resolveInitialProfileState(initialsProp),
   )
   const [brand, setBrand] = React.useState<SiteBrandLogo | null | undefined>(brandProp)
-
-  React.useEffect(() => {
-    warmPortalRoute(PORTAL_ROUTES.profile, router)
-  }, [router])
 
   React.useEffect(() => {
     if (initialsProp?.trim()) {
@@ -178,7 +173,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/site/brand-logo?locale=fr')
+        const res = await fetch(`/api/site/brand-logo?locale=${PORTAL_CONTENT_LOCALE}`)
         if (!res.ok) return
         const json = (await res.json()) as SiteBrandLogo
         if (!cancelled) setBrand(json)
