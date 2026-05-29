@@ -7,6 +7,7 @@ import { mergePortalDashboardPayload } from '@/lib/portal/dashboardMerge'
 import { readPortalPersonIdFromToken, PortalAuthError } from '@/lib/portal/portalJwt'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import { loadPortalTop10NewsWidget } from '@/lib/portal/loadTop10NewsWidget'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 
 /** Agrégateur legacy — préférer core + portfolio + news-widget côté client. */
 export async function GET(request: NextRequest) {
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     throw error
   }
 
-  const locale = request.nextUrl.searchParams.get('locale')?.trim() || 'fr'
+  const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
   const origin = request.nextUrl.origin
 
   const [core, portfolio, newsWidget] = await Promise.all([

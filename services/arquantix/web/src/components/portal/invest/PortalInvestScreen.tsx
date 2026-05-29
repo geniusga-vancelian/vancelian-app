@@ -14,6 +14,7 @@ import { fetchPortalMorphoVaults } from '@/lib/portal/morphoVaultClient'
 import type { PortalLedgityVaultDetails } from '@/lib/portal/ledgity/ledgityVaultTypes'
 import type { PortalMorphoVaultDetails } from '@/lib/portal/morphoVaultTypes'
 import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import { isPortalChainDeFiEnabled } from '@/lib/portal/portalChainFilter'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -35,7 +36,7 @@ export function PortalInvestScreen() {
     refresh: refreshInvest,
   } = usePortalCachedScreen<PortalInvestPayload>({
     cacheKey: INVEST_CACHE_KEY,
-    url: '/api/portal/invest?locale=fr',
+    url: `/api/portal/invest?locale=${PORTAL_CONTENT_LOCALE}`,
     ttlMs: 120_000,
     errorMessage: 'Impossible de charger les offres.',
   })
@@ -46,7 +47,7 @@ export function PortalInvestScreen() {
     refresh: refreshMarkets,
   } = usePortalCachedScreen<PortalMarketsPayload>({
     cacheKey: MARKETS_CACHE_KEY,
-    url: '/api/portal/markets?locale=fr',
+    url: `/api/portal/markets?locale=${PORTAL_CONTENT_LOCALE}`,
     ttlMs: 120_000,
     errorMessage: 'Impossible de charger les paniers.',
   })

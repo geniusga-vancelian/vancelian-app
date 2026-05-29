@@ -204,11 +204,19 @@ export type ResolveExclusiveOfferVaultContentOptions = {
   previewDraftFirst: boolean
 }
 
+function shouldPreferRicherLocaleFallback(requestedCount: number, bestCount: number): boolean {
+  if (bestCount <= 0 || requestedCount >= bestCount) return false
+  if (requestedCount <= 0) return true
+  if (requestedCount <= 1) return true
+  return requestedCount < bestCount * 0.5
+}
+
 /**
  * Page détail offre (`getExclusiveOfferVaultPayload`) — public et aperçu CMS.
  *
  * Aligné catalogue mobile : intra-locale **pub puis repli brouillon si modules vides**, plus
- * **repli inter-locales** si la ligne locale demandée a `modules.length === 0`.
+ * **repli inter-locales** si la ligne locale demandée a `modules.length === 0` ou un contenu
+ * manifestement incomplet (ex. FAQ auto seule) face à une autre locale plus riche.
  */
 export function resolveVaultSectionContentForExclusiveOfferPayload<
   T extends VaultSectionContentLike & { data: unknown },
@@ -217,10 +225,32 @@ export function resolveVaultSectionContentForExclusiveOfferPayload<
   const { requestedLocale, defaultLocale, previewDraftFirst } = options
   const pick = previewDraftFirst ? pickExclusiveOfferPreviewVaultRowForLocale<T> : pickCatalogVaultRowForLocale<T>
   const order = localeOrderForCatalog(contents, requestedLocale, defaultLocale)
+
+  let requestedHit: T | null = null
+  let requestedCount = 0
+  let bestHit: T | null = null
+  let bestCount = 0
+
   for (const loc of order) {
     const hit = pick(contents, loc)
-    if (hit && rawVaultModulesLength(hit.data) > 0) return hit
+    if (!hit) continue
+    const count = rawVaultModulesLength(hit.data)
+    if (count <= 0) continue
+    if (loc === order[0]) {
+      requestedHit = hit
+      requestedCount = count
+    }
+    if (count > bestCount) {
+      bestCount = count
+      bestHit = hit
+    }
   }
+
+  if (requestedHit && !shouldPreferRicherLocaleFallback(requestedCount, bestCount)) {
+    return requestedHit
+  }
+  if (bestHit) return bestHit
+
   return pick(contents, requestedLocale.trim() || defaultLocale.trim())
 }
 

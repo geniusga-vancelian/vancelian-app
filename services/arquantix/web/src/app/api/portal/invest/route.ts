@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import { buildPortalInvestPayload } from '@/lib/portal/investFormat'
 import type { PortalInvestPayload } from '@/lib/portal/investTypes'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 
 export async function GET(request: NextRequest) {
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest) {
     }
 
     const origin = resolvePortalBffOrigin(request.nextUrl.origin)
-    const locale = request.nextUrl.searchParams.get('locale')?.trim() || 'fr'
+    const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
     const url = `${origin}/api/mobile/flutter/catalog/products?type=exclusive_offer&locale=${encodeURIComponent(locale)}&include_engine_data=true&limit=50`
 
     const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(20000) })

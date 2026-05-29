@@ -4,34 +4,33 @@ import { useMemo, useState } from 'react'
 
 import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
 import {
-  PortalOfferAdvisorCard,
-  PortalOfferExtraModules,
-  PortalOfferFaqSection,
+  PortalOfferAside,
   PortalOfferHero,
   PortalOfferInvestPanel,
-  PortalOfferLocationSection,
-  PortalOfferMetricsSection,
-  PortalOfferNarrativeSection,
-  PortalOfferOverviewSection,
-  PortalOfferResourcesSection,
   PortalOfferStickyCta,
-  PortalOfferTimelineSection,
-  PortalOfferWhySection,
-  PortalOfferAside,
+  PortalOfferVaultModules,
 } from '@/components/portal/invest/PortalOfferDetailSections'
 import { PortalDetailBackLink } from '@/components/portal/PortalDetailBackLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import type { ExclusiveOfferVaultPayload } from '@/lib/cms/exclusiveOfferVaultPage'
-import { buildPortalOfferDetailView } from '@/lib/portal/offerDetailFormat'
+import {
+  buildPortalOfferAsideView,
+  buildPortalOfferHeroView,
+} from '@/lib/portal/offerDetailFormat'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 
 type Props = {
   payload: ExclusiveOfferVaultPayload
 }
 
-/** Détail offre exclusive — handoff Offre.html (`ofd-*` · `portal-placer-grid`). */
+/** Détail offre exclusive — layout portail (`ofd-*`) + contenu Vault Builder + aside invest (temporaire). */
 export function PortalOfferDetailScreen({ payload }: Props) {
-  const view = useMemo(() => buildPortalOfferDetailView(payload), [payload])
+  const hero = useMemo(() => buildPortalOfferHeroView(payload), [payload])
+  const aside = useMemo(() => buildPortalOfferAsideView(payload), [payload])
+  const contentModules = useMemo(() => {
+    if (!hero.heroCarouselModuleId) return payload.contentModules
+    return payload.contentModules.filter((mod) => mod.id !== hero.heroCarouselModuleId)
+  }, [payload.contentModules, hero.heroCarouselModuleId])
   const [investOpen, setInvestOpen] = useState(false)
 
   return (
@@ -55,28 +54,19 @@ export function PortalOfferDetailScreen({ payload }: Props) {
             <PortalOfferInvestPanel onClose={() => setInvestOpen(false)} />
           ) : (
             <>
-              <PortalOfferHero view={view} />
-              {view.advisorText ? <PortalOfferAdvisorCard text={view.advisorText} /> : null}
-              <PortalOfferMetricsSection view={view} />
-              <PortalOfferWhySection view={view} />
-              <PortalOfferOverviewSection view={view} />
-              <PortalOfferLocationSection view={view} />
-              <PortalOfferNarrativeSection view={view} />
-              <PortalOfferTimelineSection view={view} />
-              <PortalOfferExtraModules view={view} />
-              <PortalOfferFaqSection view={view} />
-              <PortalOfferResourcesSection view={view} />
-              <p className="ofd-note">
-                Si vous souhaitez en savoir plus, contactez votre advisor — il est joignable en moins
-                d&apos;une minute.
-              </p>
+              <PortalOfferHero hero={hero} />
+              <PortalOfferVaultModules
+                modules={contentModules}
+                headerImageUrl={hero.photos[0] ?? payload.headerImageUrl}
+                lending={payload.lending}
+              />
             </>
           )
         }
-        side={!investOpen ? <PortalOfferAside view={view} onInvest={() => setInvestOpen(true)} /> : undefined}
+        side={!investOpen ? <PortalOfferAside aside={aside} onInvest={() => setInvestOpen(true)} /> : undefined}
       />
 
-      {!investOpen ? <PortalOfferStickyCta view={view} onInvest={() => setInvestOpen(true)} /> : null}
+      {!investOpen ? <PortalOfferStickyCta aside={aside} onInvest={() => setInvestOpen(true)} /> : null}
     </PortalPageContainer>
   )
 }

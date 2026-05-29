@@ -43,8 +43,8 @@ export const VAULT_SECTION_KEY = 'vault_builder_v1'
 export const EXCLUSIVE_OFFER_GABARIT_SLUG = 'exclusive-offer'
 export const EXCLUSIVE_OFFER_GABARIT_TEMPLATE = 'exclusive_offer'
 
-/** Locale par défaut pour section_contents (aligné vaults/route.ts). */
-export const CATALOG_DEFAULT_LOCALE = 'fr'
+/** Locale par défaut pour section_contents (contenu CMS unique EN pour l'instant). */
+export const CATALOG_DEFAULT_LOCALE = 'en'
 
 export function parseProductTypeParam(
   raw: string | null,

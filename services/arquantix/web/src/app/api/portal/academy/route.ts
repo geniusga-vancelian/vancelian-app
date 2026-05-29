@@ -4,6 +4,7 @@ import {
   mapAcademyResearchFromBlogFeed,
 } from '@/lib/portal/mapAcademyHubFeed'
 import type { PortalAcademyHubPayload } from '@/lib/portal/academyHubTypes'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const publicOrigin = request.nextUrl.origin
     const bffOrigin = resolvePortalBffOrigin(publicOrigin)
-    const locale = request.nextUrl.searchParams.get('locale')?.trim() || 'fr'
+    const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
 
     const [newsRes, researchRes] = await Promise.all([
       fetchJson(

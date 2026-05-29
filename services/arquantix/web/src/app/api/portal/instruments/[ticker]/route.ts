@@ -13,6 +13,7 @@ import {
   mapWidgetResearchItems,
 } from '@/lib/portal/marketsFormat'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 
 async function fetchJson(url: string) {
@@ -44,10 +45,10 @@ export async function GET(
   const [summaryRes, blogWidgetRes, researchWidgetRes] = await Promise.all([
     fetchJson(buildBackendUrl(`/api/market-data/market-summary?symbols=${encodeURIComponent(symbol)}`)),
     fetchJson(
-      `${bffOrigin}/api/mobile/flutter/widgets/blog-a-la-une?locale=fr&assetSlug=${encodeURIComponent(assetSlug)}`,
+      `${bffOrigin}/api/mobile/flutter/widgets/blog-a-la-une?locale=${PORTAL_CONTENT_LOCALE}&assetSlug=${encodeURIComponent(assetSlug)}`,
     ),
     fetchJson(
-      `${bffOrigin}/api/mobile/flutter/widgets/research-a-la-une?locale=fr&assetSlug=${encodeURIComponent(assetSlug)}`,
+      `${bffOrigin}/api/mobile/flutter/widgets/research-a-la-une?locale=${PORTAL_CONTENT_LOCALE}&assetSlug=${encodeURIComponent(assetSlug)}`,
     ),
   ])
 

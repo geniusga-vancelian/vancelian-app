@@ -2,6 +2,7 @@ import type { AppNewsCategoryDot } from '@/components/design-system/app/AppNewsS
 import type { PortalAcademyArticle } from '@/lib/portal/academyHubTypes'
 import type { PortalResearchItem } from '@/lib/portal/marketsTypes'
 import { formatArticleDateShort } from '@/lib/blog/formatDates'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 
 export function normalizeAcademySearch(value: string): string {
   return value
@@ -45,7 +46,10 @@ export function academyArticleMatchesSearch(article: PortalAcademyArticle, query
   return haystack.includes(q)
 }
 
-export function academyArticlePublishedLabel(article: PortalAcademyArticle, locale = 'fr'): string | null {
+export function academyArticlePublishedLabel(
+  article: PortalAcademyArticle,
+  locale = PORTAL_CONTENT_LOCALE,
+): string | null {
   if (!article.publishedAt) return null
   return formatArticleDateShort(new Date(article.publishedAt), locale)
 }

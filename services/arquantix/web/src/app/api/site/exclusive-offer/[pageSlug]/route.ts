@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { getLocaleOrDefault } from '@/config/locales'
+import { defaultLocale, getLocaleOrDefault } from '@/config/locales'
 import { getExclusiveOfferVaultPayload } from '@/lib/cms/exclusiveOfferVaultPage'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/site/exclusive-offer/[pageSlug]?locale=fr
+ * GET /api/site/exclusive-offer/[pageSlug]?locale=en
  * Données publiques détail offre (Vault Builder + lending), même source que la page `[slug]`.
  */
 export async function GET(
@@ -18,7 +18,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid slug' }, { status: 400 })
   }
   const locale = getLocaleOrDefault(
-    request.nextUrl.searchParams.get('locale') || 'fr',
+    request.nextUrl.searchParams.get('locale') || defaultLocale,
   )
   const payload = await getExclusiveOfferVaultPayload(slug, locale)
   if (!payload) {

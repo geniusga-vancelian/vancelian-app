@@ -96,6 +96,19 @@
     background: linear-gradient(to right, var(--v-white) 65%, rgba(255, 255, 255, 0.45) 65%);
   }
 
+  /* Galerie in-page — preview/30-image-carousel (16:9, sans overlay hero) */
+  .carousel--gallery {
+    aspect-ratio: 16 / 9;
+    color: inherit;
+    background-color: #c9d1dd;
+  }
+
+  @media (max-width: 720px) {
+    .carousel--gallery {
+      aspect-ratio: 16 / 10;
+    }
+  }
+
   .dh-article__body {
     position: absolute;
     left: 24px;

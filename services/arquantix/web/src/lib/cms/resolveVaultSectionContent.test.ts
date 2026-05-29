@@ -170,6 +170,35 @@ describe('resolveVaultSectionContentForExclusiveOfferPayload', () => {
     assert.equal(r?.id, 'en-pub')
   })
 
+  it('public : FR stub (1 module) + EN rempli → sert EN', () => {
+    const contents = [
+      {
+        locale: 'fr',
+        status: ContentStatus.PUBLISHED,
+        id: 'fr-pub',
+        data: { modules: [{ type: 'FaqAccordionModule' }] },
+      },
+      {
+        locale: 'en',
+        status: ContentStatus.PUBLISHED,
+        id: 'en-pub',
+        data: {
+          modules: [
+            { type: 'TitlePage' },
+            { type: 'KeyInformationModule' },
+            { type: 'StepsModule' },
+          ],
+        },
+      },
+    ]
+    const r = resolveVaultSectionContentForExclusiveOfferPayload(contents, {
+      requestedLocale: 'fr',
+      defaultLocale: 'en',
+      previewDraftFirst: false,
+    })
+    assert.equal(r?.id, 'en-pub')
+  })
+
   it('preview draft-first : préfère EN brouillon lorsque FR totalement vide', () => {
     const contents = [
       {

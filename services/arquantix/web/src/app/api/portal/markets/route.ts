@@ -12,6 +12,7 @@ import {
   PORTAL_DEFAULT_CRYPTO_SYMBOLS,
 } from '@/lib/portal/marketsFormat'
 import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 
 /** Agrégation BFF (7 upstreams parallèles + fallback Binance API) — 15s provoquait des timeouts prod. */
 const PORTAL_MARKETS_FETCH_TIMEOUT_MS = 30_000
@@ -47,9 +48,9 @@ export async function GET(request: NextRequest) {
           `/api/market-data/top-movers?limit=10&symbols=${encodeURIComponent(symbols)}`,
         ),
       ),
-      fetchJson(`${bffOrigin}/api/blog?articleType=NEWS&page=1&pageSize=5&locale=fr`),
+      fetchJson(`${bffOrigin}/api/blog?articleType=NEWS&page=1&pageSize=5&locale=${PORTAL_CONTENT_LOCALE}`),
       fetchJson(`${bffOrigin}/api/mobile/flutter/portfolio-products/configs`),
-      fetchJson(`${bffOrigin}/api/mobile/flutter/widgets/top10research?locale=fr`),
+      fetchJson(`${bffOrigin}/api/mobile/flutter/widgets/top10research?locale=${PORTAL_CONTENT_LOCALE}`),
       portalUpstreamFetch('/api/app/bundle/catalog', {
         signal: AbortSignal.timeout(PORTAL_MARKETS_FETCH_TIMEOUT_MS),
       }),
