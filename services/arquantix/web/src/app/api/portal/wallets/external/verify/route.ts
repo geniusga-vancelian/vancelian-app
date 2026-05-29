@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
 import { externalWalletErrorResponse } from '@/lib/wallet/externalWalletRouteHelpers'
 import { verifyAndLinkExternalWallet } from '@/lib/wallet/externalWalletVerification'

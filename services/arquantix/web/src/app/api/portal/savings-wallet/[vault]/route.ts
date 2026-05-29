@@ -5,7 +5,7 @@ import { resolveDashboardReferenceCurrency } from '@/lib/portal/dashboardMerge'
 import { isValidEvmAddress, normalizeVaultAddress } from '@/lib/portal/morphoConstants'
 import { mapPortalSavingsVaultTransactions } from '@/lib/portal/portalSavingsFormat'
 import { loadPortalSavingsVaultDetail } from '@/lib/portal/portalSavingsService'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Détail vault épargne — position, APY, historique ledger (aligné crypto wallet detail). */
 export async function GET(

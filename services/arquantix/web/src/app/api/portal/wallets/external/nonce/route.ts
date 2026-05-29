@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { externalWalletErrorResponse } from '@/lib/wallet/externalWalletRouteHelpers'
 import { createExternalWalletNonce } from '@/lib/wallet/externalWalletVerification'
 

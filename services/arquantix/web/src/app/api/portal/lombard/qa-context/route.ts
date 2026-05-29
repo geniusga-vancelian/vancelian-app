@@ -9,7 +9,7 @@ import { isLombardV1Enabled, VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/l
 import { buildLombardBetaCapSnapshot } from '@/lib/portal/lombard/lombardQaContext'
 import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** QA debug context — only returned when debug panel is allowed (non-prod or admin-linked person). */
 export async function GET(request: NextRequest) {

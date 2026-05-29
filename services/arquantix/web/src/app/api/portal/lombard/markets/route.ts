@@ -9,7 +9,7 @@ import {
 import { isLombardMockEnabled } from '@/lib/portal/lombard/lombardMockConfig'
 import { buildLombardMarketSummary, resolveLombardMarket } from '@/lib/portal/lombard/lombardMarket'
 import { getLombardMockMarketSummaries } from '@/lib/portal/lombard/mocks/lombardLocalMock'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Liste des marchés Lombard V1 (cbBTC/USDC, cbETH/USDC) avec données Morpho live. */
 export async function GET(_request: NextRequest) {

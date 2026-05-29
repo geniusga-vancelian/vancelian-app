@@ -5,7 +5,7 @@ import { fetchLedgityVaultCatalog } from '@/lib/portal/ledgity/ledgityVaultAdapt
 import { resolvePortalLedgityVaultConfigs } from '@/lib/portal/ledgity/ledgityVaultConfigStore'
 import { mergeLedgityVaultConfigWithCatalog } from '@/lib/portal/ledgity/ledgityVaultFormat'
 import type { PortalLedgityVaultsPayload } from '@/lib/portal/ledgity/ledgityVaultTypes'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Vaults Ledgity publiés (ERC4626 direct) + enrichissement on-chain (PPS, TVL). */
 export async function GET() {

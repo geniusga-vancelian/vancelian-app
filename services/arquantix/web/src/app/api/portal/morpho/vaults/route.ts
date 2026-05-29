@@ -5,7 +5,7 @@ import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConf
 import { listSandboxMockVaultCatalogs } from '@/lib/portal/mocks/morphoLocalSandbox'
 import { mergeMorphoVaultConfigWithGraphql } from '@/lib/portal/morphoVaultFormat'
 import { resolvePortalMorphoVaultConfigs } from '@/lib/portal/morphoVaultConfigStore'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { getMorphoBetaPortalFlags } from '@/lib/portal/morphoUsdcBetaAccess'
 import type { PortalMorphoVaultsPayload } from '@/lib/portal/morphoVaultTypes'
 

@@ -22,7 +22,7 @@ import { fetchLombardBorrowWalletTransactions } from '@/lib/portal/lombard/lomba
 import { appendPortalScopeQuery } from '@/lib/portal/portalScopeQuery'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import type { PortalWalletScope } from '@/lib/portal/portalWalletScopeTypes'
 
 async function fetchUpstreamJson(path: string) {
