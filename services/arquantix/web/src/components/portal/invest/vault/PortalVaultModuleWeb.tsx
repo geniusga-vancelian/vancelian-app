@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { VaultModuleWeb } from '@/components/exclusive-offer/VaultModuleWeb'
 import { PortalOfferAdvisorCard } from '@/components/portal/invest/PortalOfferDetailSections'
+import { PortalVaultMarkdownContent } from '@/components/portal/invest/vault/PortalVaultMarkdownContent'
 import {
   PortalVaultAllocation,
   PortalVaultBlogALaUne,
@@ -448,7 +449,7 @@ function PortalVaultMarkdown({ mod }: { mod: VaultModulePublic }) {
     return (
       <div className="ofd-narrative">
         {moduleTitle ? <SectionTitle title={moduleTitle} /> : null}
-        <p className="ofd-narrative__prose">{markdown}</p>
+        <PortalVaultMarkdownContent markdown={markdown} variant="narrative" />
         <div className="ofd-narrative__actions">
           {links.map((l, i) =>
             l?.label && l?.url ? (
@@ -466,7 +467,7 @@ function PortalVaultMarkdown({ mod }: { mod: VaultModulePublic }) {
     <>
       {moduleTitle ? <SectionTitle title={moduleTitle} /> : null}
       <div className="overview">
-        <p className="overview__body">{markdown}</p>
+        <PortalVaultMarkdownContent markdown={markdown} variant="overview" />
       </div>
     </>
   )
@@ -477,7 +478,7 @@ function PortalVaultParagraph({ mod }: { mod: VaultModulePublic }) {
   if (!text) return null
   return (
     <div className="overview">
-      <p className="overview__body">{text}</p>
+      <PortalVaultMarkdownContent markdown={text} variant="overview" />
     </div>
   )
 }
@@ -491,7 +492,7 @@ function PortalVaultHeading({ mod }: { mod: VaultModulePublic }) {
 function PortalVaultLegalFooter({ mod }: { mod: VaultModulePublic }) {
   const markdown = typeof mod.content.markdown === 'string' ? mod.content.markdown.trim() : ''
   if (!markdown) return null
-  return <p className="ofd-narrative__prose">{markdown}</p>
+  return <PortalVaultMarkdownContent markdown={markdown} variant="narrative" />
 }
 
 /** Types rendus avec le DS portail (`ofd-*` / App DS). Fallback site uniquement pour types inconnus. */

@@ -3,6 +3,7 @@
 import { PortalDsImageCarousel } from '@/components/portal/invest/PortalDsImageCarousel'
 import { PortalVaultModuleWeb } from '@/components/portal/invest/vault/PortalVaultModuleWeb'
 import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
+import { PortalVaultMarkdownContent } from '@/components/portal/invest/vault/PortalVaultMarkdownContent'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import type { ExclusiveOfferVaultPayload, VaultModulePublic } from '@/lib/cms/exclusiveOfferVaultPage'
 import type { PortalOfferAsideView, PortalOfferHeroView } from '@/lib/portal/offerDetailFormat'
@@ -41,7 +42,7 @@ export function PortalOfferAdvisorCard({ text }: { text: string }) {
       </div>
       <div className="ai-tip__body">
         <h3 className="ai-tip__title">Le conseil de votre advisor</h3>
-        <p className="ai-tip__text">{text}</p>
+        <PortalVaultMarkdownContent markdown={text} variant="advisor" />
       </div>
     </section>
   )
