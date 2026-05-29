@@ -120,7 +120,7 @@ export function PortalLombardBorrowSuccess({ recap, onViewLoans, onClose }: Prop
       </section>
 
       <p className="brw-succ__note">
-        <KalaiIcon name="info" size={14} className="ic" />
+        <KalaiIcon name="info" size={16} className="ic" />
         Vous remboursez à votre rythme. Une alerte est envoyée si votre garantie approche du seuil de
         liquidation.
       </p>
