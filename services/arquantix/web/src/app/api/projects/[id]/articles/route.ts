@@ -5,6 +5,7 @@ import { defaultLocale, getLocaleOrDefault } from '@/config/locales'
 import { calculateReadingTime } from '@/lib/blog/readingTime'
 import { absolutizeArticlePreviewForMobile } from '@/lib/blog/absolutizeBlogApiForMobile'
 import { getArticlesByProject } from '@/lib/blog/articleService'
+import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 
 /**
  * GET /api/projects/[id]/articles
@@ -38,7 +39,7 @@ export async function GET(
       calculateReadingTime
     )
 
-    const origin = request.nextUrl.origin
+    const origin = resolveRequestPublicOrigin(request)
     return NextResponse.json({
       articles: articles.map((a) => absolutizeArticlePreviewForMobile(a, origin)),
     })

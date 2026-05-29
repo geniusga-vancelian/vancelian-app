@@ -21,8 +21,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
 
-    const publicOrigin = request.nextUrl.origin
-    const bffOrigin = resolvePortalBffOrigin(publicOrigin)
+    const bffOrigin = resolvePortalBffOrigin(request.nextUrl.origin)
     const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
 
     const [newsRes, researchRes] = await Promise.all([
@@ -34,11 +33,8 @@ export async function GET(request: NextRequest) {
       ),
     ])
 
-    const newsHub = mapAcademyHubFromBlogFeed(newsRes.data, { origin: publicOrigin })
-    const research = mapAcademyResearchFromBlogFeed(researchRes.data, {
-      origin: publicOrigin,
-      maxItems: 8,
-    })
+    const newsHub = mapAcademyHubFromBlogFeed(newsRes.data)
+    const research = mapAcademyResearchFromBlogFeed(researchRes.data, { maxItems: 8 })
 
     const payload: PortalAcademyHubPayload = {
       ...newsHub,

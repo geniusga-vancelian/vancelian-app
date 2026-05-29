@@ -38,8 +38,7 @@ export async function GET(
 
   const symbol = tickerToProviderSymbol(ticker)
   const assetSlug = ticker.toLowerCase()
-  const publicOrigin = request.nextUrl.origin
-  const bffOrigin = resolvePortalBffOrigin(publicOrigin)
+  const bffOrigin = resolvePortalBffOrigin(request.nextUrl.origin)
   const marketDataPublicBaseUrl = getMarketDataPublicBaseUrl()
 
   const [summaryRes, blogWidgetRes, researchWidgetRes] = await Promise.all([
@@ -91,8 +90,8 @@ export async function GET(
     change24hAbs,
     logoUrl: mapped?.logoUrl ?? null,
     instrumentId,
-    news: mapWidgetNewsItems(blogFeed, publicOrigin),
-    research: mapWidgetResearchItems(researchFeed, publicOrigin),
+    news: mapWidgetNewsItems(blogFeed),
+    research: mapWidgetResearchItems(researchFeed),
     marketDataPublicBaseUrl,
     partial: !summaryRes.ok,
   }

@@ -34,8 +34,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const publicOrigin = request.nextUrl.origin
-  const bffOrigin = resolvePortalBffOrigin(publicOrigin)
+  const bffOrigin = resolvePortalBffOrigin(request.nextUrl.origin)
   const symbols = PORTAL_DEFAULT_CRYPTO_SYMBOLS.join(',')
 
   const [popularRes, moversRes, newsRes, configsRes, researchRes, bundleRes, favoritesRes] =
@@ -72,7 +71,7 @@ export async function GET(request: NextRequest) {
   const topGainers = mapMarketSummaryList(movers?.top_gainers ?? movers?.topGainers, mapOptions)
   const topLosers = mapMarketSummaryList(movers?.top_losers ?? movers?.topLosers, mapOptions)
 
-  const newsItems = mapMarketsNewsFeed(newsRes.data, { maxItems: 5, origin: publicOrigin })
+  const newsItems = mapMarketsNewsFeed(newsRes.data, { maxItems: 5 })
   const configs = ((configsRes.data as { configs?: Record<string, unknown> })?.configs ?? {}) as Record<
     string,
     {

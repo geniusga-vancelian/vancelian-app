@@ -10,6 +10,7 @@ import {
 import { effectiveIsCompanyNews, getCompanyNewsArticleIds } from '@/lib/blog/articleService'
 import { pickArticleI18n } from '@/lib/blog/articleI18nFallback'
 import { absolutizeMediaUrlForApiClient } from '@/lib/catalog/packagedCatalogHelpers'
+import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 
 type JsonRecord = Record<string, unknown>
 
@@ -711,7 +712,7 @@ export async function GET(
     const { searchParams } = reqUrl
     const locale = searchParams.get('locale')?.trim() || 'fr'
     const assetSlug = searchParams.get('assetSlug')?.trim()?.toLowerCase() ?? undefined
-    const publicOrigin = reqUrl.origin
+    const publicOrigin = resolveRequestPublicOrigin({ headers: request.headers, nextUrl: reqUrl })
     const context: FeedContext = { ...(assetSlug ? { assetSlug } : {}), publicOrigin }
 
     const widget = await prisma.dsComponent.findFirst({

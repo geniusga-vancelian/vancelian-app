@@ -5,6 +5,7 @@ import { getLocaleOrDefault } from '@/config/locales'
 import { calculateReadingTime } from '@/lib/blog/readingTime'
 import { absolutizeArticleDetailApiForMobile } from '@/lib/blog/absolutizeBlogApiForMobile'
 import { getArticleBySlug } from '@/lib/blog/articleService'
+import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 
 export async function GET(
   request: NextRequest,
@@ -21,7 +22,9 @@ export async function GET(
       return NextResponse.json({ error: 'Article not found' }, { status: 404 })
     }
 
-    return NextResponse.json(absolutizeArticleDetailApiForMobile(article, request.nextUrl.origin))
+    return NextResponse.json(
+      absolutizeArticleDetailApiForMobile(article, resolveRequestPublicOrigin(request)),
+    )
   } catch (error) {
     logMobileApiFailure('[api/blog/[slug]] GET', error)
     return mobileApiJsonError(500, safeApiMessageForClient(error))

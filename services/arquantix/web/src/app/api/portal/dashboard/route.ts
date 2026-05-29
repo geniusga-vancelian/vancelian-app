@@ -8,6 +8,7 @@ import { readPortalPersonIdFromToken, PortalAuthError } from '@/lib/portal/porta
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import { loadPortalTop10NewsWidget } from '@/lib/portal/loadTop10NewsWidget'
 import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
+import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 
 /** Agrégateur legacy — préférer core + portfolio + news-widget côté client. */
 export async function GET(request: NextRequest) {
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   }
 
   const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
-  const origin = request.nextUrl.origin
+  const origin = resolveRequestPublicOrigin(request)
 
   const [core, portfolio, newsWidget] = await Promise.all([
     loadPortalDashboardCorePayload(),

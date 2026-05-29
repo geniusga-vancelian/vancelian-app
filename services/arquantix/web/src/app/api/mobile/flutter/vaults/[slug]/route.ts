@@ -18,6 +18,7 @@ import {
 } from '@/lib/cms/exclusiveOfferVaultPage'
 import { normalizeVaultBuilderSectionDataRoot } from '@/lib/vault/normalizeVaultModules'
 import { ensureBlogALaUneFromDraftWhenRelatedNews } from '@/lib/catalog/ensureBlogALaUneVaultModuleForRelatedNews'
+import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 
 const VAULT_TEMPLATE_DB = 'vault_builder'
 const VAULT_SECTION_KEY = 'vault_builder_v1'
@@ -42,7 +43,7 @@ export async function GET(
 
     const reqUrl = new URL(request.url)
     const { searchParams } = reqUrl
-    const publicOrigin = reqUrl.origin
+    const publicOrigin = resolveRequestPublicOrigin({ headers: request.headers, nextUrl: reqUrl })
     const locale = getLocaleOrDefault(searchParams.get('locale') ?? undefined)
     const requestedStatus = (searchParams.get('status') || 'published').toLowerCase()
     const mode =

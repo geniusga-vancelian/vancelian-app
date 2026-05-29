@@ -10,9 +10,27 @@ import type {
 
 import { getBackendBaseUrl } from '@/lib/backend'
 import { getSiteOrigin } from '@/lib/metadata/siteOrigin'
+import { resolvePortalAppUrl } from '@/lib/wallet/externalWalletConstants'
 import { resolveVaultSectionContentForCatalog } from '@/lib/cms/resolveVaultSectionContent'
 import { getPresignedUrl } from '@/lib/storage/storageClient'
 import type { PrismaClient } from '@prisma/client'
+
+function isInternalBindHost(host: string): boolean {
+  const hostname = host.split(':')[0]?.trim().toLowerCase() ?? ''
+  return hostname === '0.0.0.0' || hostname === '127.0.0.1' || hostname === 'localhost'
+}
+
+function normalizePublicOrigin(origin: string | null | undefined): string | null {
+  const trimmed = origin?.trim()
+  if (!trimmed) return null
+  try {
+    const u = new URL(trimmed)
+    if (isInternalBindHost(u.hostname)) return null
+    return `${u.protocol}//${u.host}`
+  } catch {
+    return null
+  }
+}
 
 /**
  * Le client mobile (Flutter) ne peut pas charger une URL relative (`/media/...`) :
@@ -28,7 +46,10 @@ export function absolutizeMediaUrlForApiClient(
   if (!s) return null
   if (/^https?:\/\//i.test(s)) return s
   if (s.startsWith('//')) return `https:${s}`
-  const base = (requestOrigin && requestOrigin.trim()) || getSiteOrigin()
+  const base =
+    normalizePublicOrigin(requestOrigin) ??
+    normalizePublicOrigin(getSiteOrigin()) ??
+    normalizePublicOrigin(resolvePortalAppUrl())
   const path = s.startsWith('/') ? s : `/${s}`
   if (!base) {
     return `http://127.0.0.1:3000${path}`

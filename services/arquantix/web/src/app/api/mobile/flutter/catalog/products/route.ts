@@ -14,6 +14,7 @@ import {
   visibilityToApi,
 } from '@/lib/catalog/packagedCatalogHelpers'
 import { galleryExclusiveOfferCommercialStatuses } from '@/lib/cms/exclusiveOfferGallery'
+import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 
 /**
  * GET /api/mobile/flutter/catalog/products
@@ -27,7 +28,10 @@ import { galleryExclusiveOfferCommercialStatuses } from '@/lib/cms/exclusiveOffe
  */
 export async function GET(request: NextRequest) {
   try {
-    const publicOrigin = request.nextUrl.origin
+    const publicOrigin = resolveRequestPublicOrigin({
+      headers: request.headers,
+      nextUrl: request.nextUrl,
+    })
     const { searchParams } = new URL(request.url)
     const typeFilter = parseProductTypeParam(searchParams.get('type'))
     const visibilityFilter =

@@ -8,6 +8,7 @@ import { calculateReadingTime } from '@/lib/blog/readingTime'
 import { absolutizeBlogFeedResultForMobile } from '@/lib/blog/absolutizeBlogApiForMobile'
 import { getBlogFeed, type BlogFeedSegment } from '@/lib/blog/articleService'
 import { formatDatabaseUrlTarget } from '@/lib/db/diagnostics'
+import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 import { resolveLabelWithFallback } from '@/lib/i18n/resolveLabel'
 
 export async function GET(request: NextRequest) {
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest) {
         },
         calculateReadingTime,
       ),
-      request.nextUrl.origin,
+      resolveRequestPublicOrigin(request),
     )
     console.info('[api/blog] getBlogFeed ok', {
       ms: Date.now() - feedStarted,

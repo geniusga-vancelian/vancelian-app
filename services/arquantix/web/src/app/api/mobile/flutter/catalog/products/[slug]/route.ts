@@ -25,6 +25,7 @@ import {
   fetchPortfolioModulesRawForMerge,
 } from '@/lib/catalog/mergePortfolioProductVaultModules'
 import { ensureBlogALaUneFromDraftWhenRelatedNews } from '@/lib/catalog/ensureBlogALaUneVaultModuleForRelatedNews'
+import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 
 /**
  * GET /api/mobile/flutter/catalog/products/{slug}
@@ -38,7 +39,10 @@ export async function GET(
   }: { params: Promise<{ slug: string }> | { slug: string } },
 ) {
   try {
-    const publicOrigin = _request.nextUrl.origin
+    const publicOrigin = resolveRequestPublicOrigin({
+      headers: _request.headers,
+      nextUrl: _request.nextUrl,
+    })
     const resolved = await Promise.resolve(params)
     const slug = (resolved?.slug ?? '').trim()
     if (!slug) {

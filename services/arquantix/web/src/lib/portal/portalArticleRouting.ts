@@ -1,3 +1,5 @@
+import { resolvePortalAppUrl } from '@/lib/wallet/externalWalletConstants'
+
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 
 /** Hub Academy portail — liste / filtres éditoriaux. */
@@ -24,10 +26,7 @@ export function resolvePortalArticleHref(slug: string, origin?: string): string 
 /** Canonical share URL côté webapp (Open Graph portail). */
 export function portalArticlePublicUrl(slug: string, baseUrl?: string): string {
   const path = portalArticleRoute(slug)
-  const base = (baseUrl ?? process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000').replace(
-    /\/$/,
-    '',
-  )
+  const base = (baseUrl ?? resolvePortalAppUrl()).replace(/\/$/, '')
   try {
     return new URL(path, base).href
   } catch {
