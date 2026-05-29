@@ -50,26 +50,30 @@ export function PortalInstrumentHoldingCard({ ticker, priceUsd, buyHref, sellHre
     const currency = walletData?.currency ?? 'EUR'
     const totalValue =
       selectMoneyValue(currency, detail.totalValueEur, detail.totalValueUsd) ?? qty * priceUsd
-    const costBasis =
+    const avgUnitPrice =
       selectMoneyValue(currency, detail.avgBuyPriceEur, detail.avgBuyPriceUsd) ??
       detail.averagePurchasePrice ??
-      detail.costBasis ??
-      0
+      undefined
     const pl =
       selectMoneyValue(currency, detail.unrealizedGainEur, detail.unrealizedGainUsd) ??
       detail.unrealizedGains ??
-      totalValue - costBasis * qty
+      undefined
+    const livePrice =
+      selectMoneyValue(currency, detail.currentPriceEur, detail.currentPriceUsd) ?? priceUsd
     const plPct =
       detail.unrealizedGainsPct ??
-      (costBasis > 0 ? ((priceUsd - costBasis) / costBasis) * 100 : 0)
+      (avgUnitPrice != null && avgUnitPrice > 0 && livePrice != null
+        ? ((livePrice - avgUnitPrice) / avgUnitPrice) * 100
+        : undefined)
 
     return {
       qty,
       totalValue,
-      costBasis,
+      avgUnitPrice,
       pl,
       plPct,
       currency,
+      livePrice,
       volumeLabel: detail.volume,
     }
   }, [priceUsd, walletData])
@@ -92,7 +96,8 @@ export function PortalInstrumentHoldingCard({ ticker, priceUsd, buyHref, sellHre
     )
   }
 
-  const up = holding.pl >= 0
+  const up = (holding.pl ?? 0) >= 0
+  const priceCurrency = holding.currency === 'EUR' ? 'EUR' : 'USD'
 
   return (
     <div className="ast-pos">
@@ -107,25 +112,37 @@ export function PortalInstrumentHoldingCard({ ticker, priceUsd, buyHref, sellHre
         </span>
       </div>
 
-      <div className={cn('ast-pos__pl', up ? 'ast-pos__pl--up' : 'ast-pos__pl--down')}>
-        <span className="v-tnum">
-          {up ? '+ ' : '− '}
-          {formatCryptoMoney(Math.abs(holding.pl), holding.currency)}
-        </span>
-        <span className="ast-pos__pl-pct v-tnum">
-          ({up ? '+ ' : '− '}
-          {Math.abs(holding.plPct).toFixed(2).replace('.', ',')} %)
-        </span>
-      </div>
+      {holding.pl != null ? (
+        <div className={cn('ast-pos__pl', up ? 'ast-pos__pl--up' : 'ast-pos__pl--down')}>
+          <span className="v-tnum">
+            {up ? '+ ' : '− '}
+            {formatCryptoMoney(Math.abs(holding.pl), holding.currency)}
+          </span>
+          {holding.plPct != null ? (
+            <span className="ast-pos__pl-pct v-tnum">
+              ({up ? '+ ' : '− '}
+              {Math.abs(holding.plPct).toFixed(2).replace('.', ',')} %)
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="ast-pos__grid">
         <div className="ast-pos__cell">
           <span className="ast-pos__k">Prix de revient</span>
-          <span className="ast-pos__v v-tnum">{formatCryptoPrice(holding.costBasis, 'USD')}</span>
+          <span className="ast-pos__v v-tnum">
+            {holding.avgUnitPrice != null
+              ? formatCryptoPrice(holding.avgUnitPrice, priceCurrency)
+              : '—'}
+          </span>
         </div>
         <div className="ast-pos__cell">
           <span className="ast-pos__k">Cours actuel</span>
-          <span className="ast-pos__v v-tnum">{formatCryptoPrice(priceUsd, 'USD')}</span>
+          <span className="ast-pos__v v-tnum">
+            {holding.livePrice != null
+              ? formatCryptoPrice(holding.livePrice, priceCurrency)
+              : formatCryptoPrice(priceUsd, priceCurrency)}
+          </span>
         </div>
       </div>
 

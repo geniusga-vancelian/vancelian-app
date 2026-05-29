@@ -18,6 +18,7 @@ from services.portfolio_engine.clients.models import Client as _Client  # noqa: 
 import services.presentations.models as _PresentationDeckModels  # noqa: F401 — presentation ORM
 import services.test_clients.operation_statement_snapshot_model as _OperationStatementSnapshots  # noqa: F401 — PR5 ORM
 import services.portfolio_engine.bundle_ledger.models as _BundleLedgerModels  # noqa: F401 — Phase 4A ORM
+import services.cost_basis.models as _CostBasisModels  # noqa: F401 — Cost basis V2 ORM
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -57,6 +58,10 @@ def db():
             connection.begin_nested()
 
     connection.begin_nested()
+
+    from services.cost_basis.models import CostBasisExecution
+
+    CostBasisExecution.__table__.create(bind=connection, checkfirst=True)
 
     try:
         yield session

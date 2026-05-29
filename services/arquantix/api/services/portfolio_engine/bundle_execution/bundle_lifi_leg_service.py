@@ -369,7 +369,39 @@ class BundleLifiLegService:
 
         self._apply_pe_atoms_for_leg(db, leg=leg, swap=swap)
         self._swap_repo.append_audit(swap, {"event": "bundle_pe_atoms_applied", "leg_id": leg.leg_id})
+        self._ingest_bundle_cost_basis(db, leg=leg, swap=swap)
         db.commit()
+
+    def _ingest_bundle_cost_basis(self, db: Session, *, leg: ExecutionLeg, swap) -> None:
+        """PRU scoped bundle pour charts / statistics (idempotent)."""
+        from services.cost_basis.ingest_bundle_lifi import ingest_bundle_lifi_swap_settlement
+        from services.cost_basis.lifi_swap_amounts import resolve_lifi_swap_amount_out
+        from services.lifi.config import swaps_mock_mode
+        from services.lifi.lifi_actual_receive import _resolve_swap_wallet
+
+        try:
+            wallet = _resolve_swap_wallet(db, swap)
+            amount_out, _ = resolve_lifi_swap_amount_out(
+                db,
+                swap,
+                allow_onchain_resolve=False,
+                allow_mock_quote_amount=swaps_mock_mode(),
+            )
+            ingest_bundle_lifi_swap_settlement(
+                db,
+                swap,
+                wallet=wallet,
+                amount_out=amount_out,
+                portfolio_id=leg.portfolio_id,
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "bundle_lifi cost_basis ingest failed swap=%s leg=%s",
+                swap.id,
+                leg.leg_id,
+            )
 
     def _apply_pe_atoms_for_leg(self, db: Session, *, leg: ExecutionLeg, swap) -> None:
         from services.lifi.config import swaps_mock_mode
