@@ -94,6 +94,26 @@ const STATIC_EXECUTION_DIALOG_IMPORTS: Array<{ rule: string; pattern: RegExp; hi
 const PORTAL_SHELL_LAYOUT_PATH = 'src/app/app/(shell)/layout.tsx'
 const PORTAL_SHELL_PATH = 'src/components/portal/PortalShell.tsx'
 const NAVIGATE_TO_LOGIN_PATH = 'src/lib/portal/navigateToPortalLogin.ts'
+const PORTAL_SESSION_ROUTE_HELPERS_PATH = 'src/lib/portal/portalSessionRouteHelpers.ts'
+const PORTAL_WALLET_ROUTE_HELPERS_PATH = 'src/lib/portal/portalWalletRouteHelpers.ts'
+
+/** Imports vault/Web3 interdits dans les helpers session purs (Phase 3B). */
+const PORTAL_SESSION_HELPER_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  { rule: 'session-no-viem', pattern: /from\s+['"]viem/ },
+  { rule: 'session-no-viem-chains', pattern: /from\s+['"]viem\/chains/ },
+  { rule: 'session-no-morpho', pattern: /from\s+['"]@\/lib\/portal\/morpho/ },
+  { rule: 'session-no-ledgity', pattern: /from\s+['"]@\/lib\/portal\/ledgity/ },
+  { rule: 'session-no-lombard', pattern: /from\s+['"]@\/lib\/portal\/lombard/ },
+  { rule: 'session-no-privy', pattern: /from\s+['"]@privy-io/ },
+  { rule: 'session-no-base-rpc', pattern: /from\s+['"]@\/lib\/blockchain\/baseRpc/ },
+]
+
+/** Imports lourds interdits dans le shim deprecated portalWalletRouteHelpers. */
+const PORTAL_WALLET_SHIM_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  ...PORTAL_SESSION_HELPER_FORBIDDEN_IMPORTS,
+  { rule: 'shim-no-morpho-ledger', pattern: /from\s+['"]@\/lib\/portal\/morphoVaultLedger/ },
+  { rule: 'shim-no-ledgity-liquidity', pattern: /from\s+['"]@\/lib\/portal\/ledgity\/ledgityVaultLiquidity['"]/ },
+]
 
 function resolveWebRoot(webRoot?: string): string {
   return webRoot ?? path.join(__dirname, '..', '..', '..')
@@ -179,6 +199,68 @@ export function scanNavigateToPortalLoginImports(webRoot?: string): PortalPerfor
       detail:
         'navigateToPortalLogin must import storage helpers only (portalAuthPrivySessionStorage), not PortalAuthPrivySessionHygiene',
     })
+  }
+
+  return violations
+}
+
+export function scanPortalSessionRouteHelpersImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const source = readRelativeFile(root, PORTAL_SESSION_ROUTE_HELPERS_PATH)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const { rule, pattern } of PORTAL_SESSION_HELPER_FORBIDDEN_IMPORTS) {
+    if (pattern.test(source)) {
+      violations.push({
+        rule,
+        file: PORTAL_SESSION_ROUTE_HELPERS_PATH,
+        detail: 'portalSessionRouteHelpers must not import vault/Web3 dependencies',
+      })
+    }
+  }
+
+  return violations
+}
+
+export function scanPortalWalletRouteHelpersShim(webRoot?: string): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const source = readRelativeFile(root, PORTAL_WALLET_ROUTE_HELPERS_PATH)
+  const violations: PortalPerformanceViolation[] = []
+
+  if (/^import\s/m.test(source)) {
+    violations.push({
+      rule: 'shim-no-imports',
+      file: PORTAL_WALLET_ROUTE_HELPERS_PATH,
+      detail: 'portalWalletRouteHelpers must be re-export-only (no import statements)',
+    })
+  }
+
+  for (const { rule, pattern } of PORTAL_WALLET_SHIM_FORBIDDEN_IMPORTS) {
+    if (pattern.test(source)) {
+      violations.push({
+        rule,
+        file: PORTAL_WALLET_ROUTE_HELPERS_PATH,
+        detail: 'portalWalletRouteHelpers shim must not import vault/Web3 dependencies directly',
+      })
+    }
+  }
+
+  const allowedReexportSources = [
+    '@/lib/portal/portalSessionRouteHelpers',
+    '@/lib/portal/portalVaultRouteHelpers',
+  ]
+  const reexportFromPattern = /from\s+['"]([^'"]+)['"]/g
+  for (const match of source.matchAll(reexportFromPattern)) {
+    const fromPath = match[1]
+    if (fromPath && !allowedReexportSources.includes(fromPath)) {
+      violations.push({
+        rule: 'shim-unexpected-reexport',
+        file: PORTAL_WALLET_ROUTE_HELPERS_PATH,
+        detail: `Unexpected re-export source: ${fromPath}`,
+      })
+    }
   }
 
   return violations
@@ -273,6 +355,8 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanPortalShellMountWarmup(webRoot),
     ...scanNavigateToPortalLoginImports(webRoot),
     ...scanPortalReadOnlyWeb3Imports(webRoot),
+    ...scanPortalSessionRouteHelpersImports(webRoot),
+    ...scanPortalWalletRouteHelpersShim(webRoot),
   ]
 }
 

@@ -56,11 +56,7 @@ export const prepareMorphoTxSchema = z.object({
     .max(128, 'idempotency_key trop long.'),
 })
 
-export const idempotencyKeySchema = z
-  .string()
-  .trim()
-  .min(8, 'idempotency_key requis (min. 8 caractères).')
-  .max(128, 'idempotency_key trop long.')
+export { idempotencyKeySchema } from '@/lib/portal/portalRequestValidation'
 
 export function normalizeCreateMorphoVaultInput(input: z.infer<typeof createMorphoVaultSchema>) {
   return {
