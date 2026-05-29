@@ -71,6 +71,7 @@ export function researchToAcademyArticle(item: PortalResearchItem): PortalAcadem
     categoryLabel: item.tag?.trim() || 'Analysis',
     categoryTone: 'blue',
     articleType: 'ANALYSIS',
+    isCompanyNews: false,
   }
 }
 
