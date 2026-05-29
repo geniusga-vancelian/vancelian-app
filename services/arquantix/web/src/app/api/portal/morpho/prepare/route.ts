@@ -6,8 +6,8 @@ import { isValidEvmAddress, MORPHO_CHAIN_ID } from '@/lib/portal/morphoConstants
 import {
   morphoLedgerErrorResponse,
   morphoRpcErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+} from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { fetchMorphoVaultPosition, fetchMorphoVaultsByAddresses } from '@/lib/portal/morphoGraphql'
 import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
 import {

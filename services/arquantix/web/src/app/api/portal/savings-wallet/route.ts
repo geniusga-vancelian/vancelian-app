@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { fetchPortalUpstreamJson } from '@/lib/portal/dashboardUpstream'
 import { resolveDashboardReferenceCurrency } from '@/lib/portal/dashboardMerge'
 import { loadPortalSavingsSummary } from '@/lib/portal/portalSavingsService'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Hub épargne DeFi — positions vault Morpho agrégées (aligné hub crypto). */
 export async function GET(request: NextRequest) {

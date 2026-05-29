@@ -6,7 +6,7 @@ import {
   assertMorphoSandboxDevRouteAvailable,
   morphoSandboxDevErrorResponse,
 } from '@/lib/portal/morphoLocalSandboxDev'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 const bodySchema = z.object({
   amountUsdc: z.string().trim().min(1),

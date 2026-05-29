@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { PortalForbiddenError } from '@/lib/portal/portalWalletOwnership'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { PrivyServerApiError, privyServerApiConfigured, sendPrivySponsoredEthereumTransaction } from '@/lib/portal/privyServerApi'
 import { resolvePrivyWalletIdForPerson } from '@/lib/portal/resolvePrivyWalletIdForPerson'
 

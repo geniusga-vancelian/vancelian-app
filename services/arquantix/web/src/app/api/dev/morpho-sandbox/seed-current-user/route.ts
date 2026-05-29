@@ -5,7 +5,7 @@ import {
   morphoSandboxDevErrorResponse,
   seedMorphoSandboxForPerson,
 } from '@/lib/portal/morphoLocalSandboxDev'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Seed sandbox Morpho pour l’utilisateur portail connecté. */
 export async function POST() {

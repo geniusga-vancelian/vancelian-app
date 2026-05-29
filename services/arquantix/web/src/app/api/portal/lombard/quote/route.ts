@@ -9,10 +9,8 @@ import { logLombardQuoteBlocked, logLombardOpsEvent } from '@/lib/portal/lombard
 import { runLombardPreBorrowSafetyChecks } from '@/lib/portal/lombard/lombardSafetyChecks'
 import { lombardQuoteSchema } from '@/lib/portal/lombard/lombardValidation'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
-import {
-  morphoRpcErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoRpcErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 function parseQuoteQuery(request: NextRequest) {
   const params = request.nextUrl.searchParams

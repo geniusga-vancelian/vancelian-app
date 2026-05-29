@@ -8,10 +8,8 @@ import {
 } from '@/lib/portal/lombard/lombardPositionService'
 import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
-import {
-  morphoRpcErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoRpcErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Positions Lombard actives (cbBTC/USDC, cbETH/USDC) pour le wallet connecté. */
 export async function GET(request: NextRequest) {

@@ -5,7 +5,7 @@ import {
   externalWalletMockDevErrorResponse,
   linkLocalMockExternalWallet,
 } from '@/lib/wallet/externalWalletMockDev'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Lie le wallet externe mock local à la session portail courante. */
 export async function POST() {

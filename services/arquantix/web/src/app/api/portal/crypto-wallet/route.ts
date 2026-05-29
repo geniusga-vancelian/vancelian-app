@@ -11,7 +11,7 @@ import {
 } from '@/lib/portal/lombard/resolveLombardWalletOverlayForApi'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 async function fetchUpstreamJson(path: string) {
   const res = await portalUpstreamFetch(path, { signal: AbortSignal.timeout(15000) })

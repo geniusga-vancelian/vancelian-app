@@ -10,6 +10,8 @@ import {
   scanMarketsReadOnlyBundleDialogImports,
   scanPortalGlobalShellImports,
   scanPortalReadOnlyWeb3Imports,
+  scanDeprecatedPortalWalletRouteHelpersImports,
+  scanPortalSessionRouteHelpersImports,
   scanPortalShellMountWarmup,
 } from '@/lib/portal/portalPerformanceGuard'
 
@@ -46,6 +48,14 @@ describe('portalPerformanceGuard — détection synthétique', () => {
 
   it('read-only screens sans Web3 / modales statiques', () => {
     assert.deepEqual(scanPortalReadOnlyWeb3Imports(), [])
+  })
+
+  it('portalSessionRouteHelpers sans dépendances vault/Web3', () => {
+    assert.deepEqual(scanPortalSessionRouteHelpersImports(), [])
+  })
+
+  it('aucun import portalWalletRouteHelpers dans portal/api/components/lib', () => {
+    assert.deepEqual(scanDeprecatedPortalWalletRouteHelpersImports(), [])
   })
 
   it('signale un import statique PortalBundleInvestDialog en markets', () => {

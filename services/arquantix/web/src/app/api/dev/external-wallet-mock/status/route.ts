@@ -5,7 +5,7 @@ import {
   externalWalletMockDevErrorResponse,
   getLocalMockExternalWalletStatus,
 } from '@/lib/wallet/externalWalletMockDev'
-import { requirePortalPersonId } from '@/lib/portal/portalWalletRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 /** Statut du wallet externe mock local (dev sandbox uniquement). */
 export async function GET() {

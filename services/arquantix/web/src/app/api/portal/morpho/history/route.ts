@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
-import {
-  morphoLedgerErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoLedgerErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
 import { assertMorphoUsdcBetaAccess } from '@/lib/portal/morphoUsdcBetaAccess'
 import { prisma } from '@/lib/prisma'

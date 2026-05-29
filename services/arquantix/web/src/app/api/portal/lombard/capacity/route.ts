@@ -8,10 +8,8 @@ import { LombardQuoteError } from '@/lib/portal/lombard/lombardQuote'
 import { lombardCollateralSchema, lombardTargetLtvPercentSchema } from '@/lib/portal/lombard/lombardValidation'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
 import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
-import {
-  morphoRpcErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoRpcErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
 const capacityQuerySchema = z.object({
   collateral: lombardCollateralSchema,

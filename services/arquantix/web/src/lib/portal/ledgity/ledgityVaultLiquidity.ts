@@ -5,18 +5,9 @@ import { LEDGITY_CHAIN_ID } from '@/lib/portal/ledgity/ledgityConstants'
 import { isLedgityLocalSandboxEnabled } from '@/lib/portal/ledgity/ledgityLocalSandboxConfig'
 import { getLedgityLocalSandboxPricePerShare } from '@/lib/portal/ledgity/ledgityLocalSandboxConfig'
 import { LEDGITY_ERC4626_ABI } from '@/lib/portal/ledgity/ledgityVaultAbi'
+import { LedgityVaultLiquidityError } from '@/lib/portal/ledgity/ledgityVaultLiquidityErrors'
 
-export class LedgityVaultLiquidityError extends Error {
-  readonly code = 'ledgity.withdraw_liquidity_insufficient'
-  readonly status = 422
-
-  constructor(
-    message = 'La liquidité disponible du vault ne permet pas un retrait instantané complet. Veuillez réessayer plus tard.',
-  ) {
-    super(message)
-    this.name = 'LedgityVaultLiquidityError'
-  }
-}
+export { LedgityVaultLiquidityError } from '@/lib/portal/ledgity/ledgityVaultLiquidityErrors'
 
 export type LedgityWithdrawLiquiditySnapshot = {
   maxWithdrawRaw: bigint

@@ -94,6 +94,53 @@ const STATIC_EXECUTION_DIALOG_IMPORTS: Array<{ rule: string; pattern: RegExp; hi
 const PORTAL_SHELL_LAYOUT_PATH = 'src/app/app/(shell)/layout.tsx'
 const PORTAL_SHELL_PATH = 'src/components/portal/PortalShell.tsx'
 const NAVIGATE_TO_LOGIN_PATH = 'src/lib/portal/navigateToPortalLogin.ts'
+const PORTAL_SESSION_ROUTE_HELPERS_PATH = 'src/lib/portal/portalSessionRouteHelpers.ts'
+
+/** Chemins scannés pour interdire le shim supprimé portalWalletRouteHelpers (Phase 3C). */
+const PORTAL_WALLET_HELPER_FORBIDDEN_SCAN_DIRS = [
+  'src/app/api/portal',
+  'src/components',
+  'src/lib/portal',
+] as const
+
+const PORTAL_WALLET_ROUTE_HELPERS_IMPORT_PATTERN =
+  /from\s+['"]@\/lib\/portal\/portalWalletRouteHelpers['"]/
+
+/** Imports vault/Web3 interdits dans les helpers session purs (Phase 3B). */
+const PORTAL_SESSION_HELPER_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  { rule: 'session-no-viem', pattern: /from\s+['"]viem/ },
+  { rule: 'session-no-viem-chains', pattern: /from\s+['"]viem\/chains/ },
+  { rule: 'session-no-morpho', pattern: /from\s+['"]@\/lib\/portal\/morpho/ },
+  { rule: 'session-no-ledgity', pattern: /from\s+['"]@\/lib\/portal\/ledgity/ },
+  { rule: 'session-no-lombard', pattern: /from\s+['"]@\/lib\/portal\/lombard/ },
+  { rule: 'session-no-privy', pattern: /from\s+['"]@privy-io/ },
+  { rule: 'session-no-base-rpc', pattern: /from\s+['"]@\/lib\/blockchain\/baseRpc/ },
+]
+
+function listSourceFilesUnder(webRoot: string, relativeDir: string): string[] {
+  const absoluteDir = path.join(webRoot, relativeDir)
+  if (!fs.existsSync(absoluteDir)) return []
+
+  const files: string[] = []
+  const stack = [absoluteDir]
+
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current) continue
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        stack.push(absolute)
+        continue
+      }
+      if (/\.(tsx?|jsx?|mjs|cjs)$/.test(entry.name)) {
+        files.push(path.relative(webRoot, absolute).split(path.sep).join('/'))
+      }
+    }
+  }
+
+  return files
+}
 
 function resolveWebRoot(webRoot?: string): string {
   return webRoot ?? path.join(__dirname, '..', '..', '..')
@@ -179,6 +226,49 @@ export function scanNavigateToPortalLoginImports(webRoot?: string): PortalPerfor
       detail:
         'navigateToPortalLogin must import storage helpers only (portalAuthPrivySessionStorage), not PortalAuthPrivySessionHygiene',
     })
+  }
+
+  return violations
+}
+
+export function scanPortalSessionRouteHelpersImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const source = readRelativeFile(root, PORTAL_SESSION_ROUTE_HELPERS_PATH)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const { rule, pattern } of PORTAL_SESSION_HELPER_FORBIDDEN_IMPORTS) {
+    if (pattern.test(source)) {
+      violations.push({
+        rule,
+        file: PORTAL_SESSION_ROUTE_HELPERS_PATH,
+        detail: 'portalSessionRouteHelpers must not import vault/Web3 dependencies',
+      })
+    }
+  }
+
+  return violations
+}
+
+export function scanDeprecatedPortalWalletRouteHelpersImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const relativeDir of PORTAL_WALLET_HELPER_FORBIDDEN_SCAN_DIRS) {
+    for (const relativePath of listSourceFilesUnder(root, relativeDir)) {
+      const source = readRelativeFile(root, relativePath)
+      if (PORTAL_WALLET_ROUTE_HELPERS_IMPORT_PATTERN.test(source)) {
+        violations.push({
+          rule: 'no-portal-wallet-route-helpers',
+          file: relativePath,
+          detail:
+            'portalWalletRouteHelpers was removed in Phase 3C; import portalSessionRouteHelpers or portalVaultRouteHelpers',
+        })
+      }
+    }
   }
 
   return violations
@@ -273,6 +363,8 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanPortalShellMountWarmup(webRoot),
     ...scanNavigateToPortalLoginImports(webRoot),
     ...scanPortalReadOnlyWeb3Imports(webRoot),
+    ...scanPortalSessionRouteHelpersImports(webRoot),
+    ...scanDeprecatedPortalWalletRouteHelpersImports(webRoot),
   ]
 }
 

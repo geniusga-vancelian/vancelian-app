@@ -33,8 +33,8 @@ import {
 import {
   ledgityRpcErrorResponse,
   morphoLedgerErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+} from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
 import type { ExecutionWalletSource, WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 

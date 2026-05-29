@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
-import {
-  morphoLedgerErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoLedgerErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { updateLedgerAfterReceipt } from '@/lib/portal/morphoVaultLedger'
 import { assertMorphoUsdcBetaAccess } from '@/lib/portal/morphoUsdcBetaAccess'
 import { idempotencyKeySchema } from '@/lib/portal/morphoVaultValidation'

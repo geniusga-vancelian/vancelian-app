@@ -8,10 +8,8 @@ import { fetchLedgityVaultPosition } from '@/lib/portal/ledgity/ledgityVaultAdap
 import { mapLedgityVaultPosition } from '@/lib/portal/ledgity/ledgityVaultFormat'
 import { fetchSandboxLedgityVaultPosition } from '@/lib/portal/ledgity/mocks/ledgityLocalSandbox'
 import { loadPrincipalNetRaw, syncUserVaultPositionFromLedger } from '@/lib/portal/morphoVaultLedger'
-import {
-  morphoLedgerErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoLedgerErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
 
 export async function GET(request: NextRequest) {

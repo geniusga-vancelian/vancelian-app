@@ -3,10 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { assertLedgityBetaAccess } from '@/lib/portal/ledgity/ledgityBetaAccess'
 import { isValidEvmAddress } from '@/lib/portal/ledgity/ledgityConstants'
-import {
-  morphoLedgerErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoLedgerErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
 
 /** Historique ledger Ledgity d’un utilisateur pour un vault/wallet. */
