@@ -5,10 +5,8 @@ import { fetchMorphoVaultPosition } from '@/lib/portal/morphoGraphql'
 import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
 import { fetchSandboxMorphoVaultPosition } from '@/lib/portal/mocks/morphoLocalSandbox'
 import { mapMorphoVaultPosition } from '@/lib/portal/morphoVaultFormat'
-import {
-  morphoLedgerErrorResponse,
-  requirePortalPersonId,
-} from '@/lib/portal/portalWalletRouteHelpers'
+import { morphoLedgerErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
+import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { isValidEvmAddress, MORPHO_CHAIN_ID } from '@/lib/portal/morphoConstants'
 import { loadPrincipalNetRaw, syncUserVaultPositionFromLedger } from '@/lib/portal/morphoVaultLedger'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
