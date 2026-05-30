@@ -52,7 +52,7 @@ def main() -> int:
             FROM onchain_vault_transactions o
             LEFT JOIN onchain_transaction_attempts a
               ON a.linked_reference_id = o.id
-             AND a.step_type = o.operation
+             AND a.step_type = o.operation::text
             WHERE o.status = 'success'
               AND o.tx_hash IS NOT NULL
               AND o.integration_mode IN ('direct_morpho', 'ledgity_vault')
