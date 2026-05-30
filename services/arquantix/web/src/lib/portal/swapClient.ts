@@ -134,6 +134,18 @@ export async function submitSwapTx(swapId: string, txHash: string): Promise<Swap
   return parseJson(res)
 }
 
+export async function submitSwapApproval(
+  swapId: string,
+  approvalTxHash: string,
+): Promise<SwapStatusPayload> {
+  const res = await fetch(`/api/portal/swaps/${swapId}/approval`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tx_hash: approvalTxHash }),
+  })
+  return parseJson(res)
+}
+
 export async function fetchSwapStatus(swapId: string): Promise<SwapStatusPayload> {
   const res = await fetch(`/api/portal/swaps/${swapId}`, { cache: 'no-store' })
   return parseJson(res)

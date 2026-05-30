@@ -77,6 +77,11 @@ export function buildSwapApproveTransaction(args: {
   }
 }
 
+export type SwapTokenApprovalResult = {
+  submitted: boolean
+  approvalTxHash?: string
+}
+
 export async function ensureSwapTokenApproval(args: {
   chainId: number
   walletAddress: Address
@@ -86,10 +91,10 @@ export async function ensureSwapTokenApproval(args: {
     tx: PortalTxRequest,
     errorContext?: { phase?: 'approve' | 'swap'; assetSymbol?: string },
   ) => Promise<{ hash: string }>
-}): Promise<boolean> {
+}): Promise<SwapTokenApprovalResult> {
   assertSwapTokenApprovalPayload(args.approval)
   if (!isSwapTokenApprovalRequired(args.approval)) {
-    return false
+    return { submitted: false }
   }
 
   const tokenAddress = args.approval.token_address as Address
@@ -105,7 +110,7 @@ export async function ensureSwapTokenApproval(args: {
   })
 
   if (allowance >= requiredAmount) {
-    return false
+    return { submitted: false }
   }
 
   const { hash } = await args.sendTransaction(
@@ -127,7 +132,7 @@ export async function ensureSwapTokenApproval(args: {
           `Approbation ${args.assetSymbol ?? 'ERC-20'} échouée on-chain sur ${chainLabel} — réessayez.`,
         )
       }
-      return true
+      return { submitted: true, approvalTxHash: hash }
     }
     await sleep(3_000)
   }

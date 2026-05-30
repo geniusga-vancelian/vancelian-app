@@ -21,8 +21,55 @@ import { lombardMockUpdateLedgerSuccess } from '@/lib/portal/lombard/mocks/lomba
 import { verifyMorphoTransactionReceipt } from '@/lib/portal/morphoReceiptVerification'
 import { emitMorphoLedgerTerminalSupportLog } from '@/lib/portal/morphoBetaSupportEmit'
 import { syncMorphoIntentAfterReceipt, syncMorphoIntentPending } from '@/lib/portal/morphoIntentSync'
+import { syncLedgityIntentAfterReceipt, syncLedgityIntentPending } from '@/lib/portal/ledgityIntentSync'
 
 const ACTIVE_PENDING_STATUSES: OnchainVaultTransactionStatus[] = ['pending']
+
+function shouldSyncVaultIntent(integrationMode: string, operation: string): boolean {
+  if (operation !== 'deposit' && operation !== 'withdraw') return false
+  return integrationMode === 'direct_morpho' || integrationMode === 'ledgity_vault'
+}
+
+function syncVaultIntentPending(
+  integrationMode: string,
+  input: {
+    personId: string
+    vaultTransactionId: string
+    vaultAddress: string
+    chainId: number
+    walletAddress: string
+    operation: string
+    idempotencyKey: string
+    txIndex: number
+    vaultStatus?: string
+  },
+): void {
+  if (integrationMode === 'direct_morpho') {
+    void syncMorphoIntentPending({ ...input, vaultStatus: input.vaultStatus ?? 'pending' })
+    return
+  }
+  if (integrationMode === 'ledgity_vault') {
+    void syncLedgityIntentPending({ ...input, vaultStatus: input.vaultStatus ?? 'pending' })
+  }
+}
+
+function syncVaultIntentAfterReceipt(
+  integrationMode: string,
+  input: {
+    personId: string
+    vaultTransactionId: string
+    txHash?: string | null
+    vaultStatus: string
+  },
+): void {
+  if (integrationMode === 'direct_morpho') {
+    void syncMorphoIntentAfterReceipt(input)
+    return
+  }
+  if (integrationMode === 'ledgity_vault') {
+    void syncLedgityIntentAfterReceipt(input)
+  }
+}
 
 export class MorphoVaultLedgerError extends Error {
   readonly httpStatus: number
@@ -179,11 +226,8 @@ export async function createMorphoLedgerEntries(
         },
       })
       created.push(row)
-      if (
-        entry.integrationMode === 'direct_morpho' &&
-        (entry.operation === 'deposit' || entry.operation === 'withdraw')
-      ) {
-        void syncMorphoIntentPending({
+      if (shouldSyncVaultIntent(entry.integrationMode, entry.operation)) {
+        syncVaultIntentPending(entry.integrationMode, {
           personId: entry.personId,
           vaultTransactionId: row.id,
           vaultAddress: entry.vaultAddress,
@@ -269,11 +313,8 @@ export async function updateLedgerAfterReceipt(args: {
         errorMessage: message,
       },
     }).then((updated) => {
-      if (
-        updated.integrationMode === 'direct_morpho' &&
-        (updated.operation === 'deposit' || updated.operation === 'withdraw')
-      ) {
-        void syncMorphoIntentAfterReceipt({
+      if (shouldSyncVaultIntent(updated.integrationMode, updated.operation)) {
+        syncVaultIntentAfterReceipt(updated.integrationMode, {
           personId: updated.personId,
           vaultTransactionId: updated.id,
           txHash: updated.txHash,
@@ -309,11 +350,8 @@ export async function updateLedgerAfterReceipt(args: {
     })
   }
 
-  if (
-    updated.integrationMode === 'direct_morpho' &&
-    (updated.operation === 'deposit' || updated.operation === 'withdraw')
-  ) {
-    void syncMorphoIntentAfterReceipt({
+  if (shouldSyncVaultIntent(updated.integrationMode, updated.operation)) {
+    syncVaultIntentAfterReceipt(updated.integrationMode, {
       personId: updated.personId,
       vaultTransactionId: updated.id,
       txHash: updated.txHash,

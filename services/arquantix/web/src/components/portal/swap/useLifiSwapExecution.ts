@@ -4,6 +4,7 @@ import { useCallback } from 'react'
 
 import {
   fetchSwapStatus,
+  submitSwapApproval,
   submitSwapTx,
   type SwapExecutePayload,
 } from '@/lib/portal/swapClient'
@@ -99,7 +100,7 @@ export function useLifiSwapExecution(
       if (exec.token_approval?.required) {
         assertSwapTokenApprovalPayload(exec.token_approval)
         onPhaseChange?.('approving')
-        await ensureSwapTokenApproval({
+        const approvalResult = await ensureSwapTokenApproval({
           chainId,
           walletAddress: wallet.address as `0x${string}`,
           approval: exec.token_approval,
@@ -107,6 +108,9 @@ export function useLifiSwapExecution(
           sendTransaction: (approveTx, errorContext) =>
             sendPortalTransaction(approveTx, wallet, errorContext),
         })
+        if (approvalResult.submitted && approvalResult.approvalTxHash) {
+          await submitSwapApproval(exec.swap_id, approvalResult.approvalTxHash)
+        }
       }
 
       onPhaseChange?.('signing')
