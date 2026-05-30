@@ -915,6 +915,49 @@ def scan_attempt_gaps_for_person(
             )
         )
 
+    for row in vault_rows:
+        if str(row.get("status") or "").strip().lower() != "success":
+            continue
+        legacy_tx = str(row.get("tx_hash") or "").strip().lower()
+        if not legacy_tx:
+            continue
+        operation = str(row["operation"] or "").strip().lower()
+        if operation not in {
+            AttemptStepType.APPROVE.value,
+            AttemptStepType.DEPOSIT.value,
+            AttemptStepType.WITHDRAW.value,
+            AttemptStepType.AUTHORIZE.value,
+            AttemptStepType.OPEN_LOAN.value,
+        }:
+            continue
+        attempt = (
+            db.query(OnchainTransactionAttempt)
+            .filter(
+                OnchainTransactionAttempt.linked_reference_id == row["id"],
+                OnchainTransactionAttempt.step_type == operation,
+            )
+            .first()
+        )
+        if attempt is None:
+            continue
+        att_status = (attempt.status or "").strip().lower()
+        att_tx = (attempt.tx_hash or "").strip().lower()
+        if att_status != "confirmed" or att_tx != legacy_tx:
+            gaps.append(
+                _anomaly(
+                    "vault_attempt_inconsistent_with_legacy",
+                    person_id=str(person_id),
+                    reference_id=str(row["id"]),
+                    metadata={
+                        "operation": operation,
+                        "legacy_tx_hash": legacy_tx,
+                        "attempt_id": str(attempt.id),
+                        "attempt_status": attempt.status,
+                        "attempt_tx_hash": attempt.tx_hash,
+                    },
+                )
+            )
+
     attempts = (
         db.query(OnchainTransactionAttempt)
         .filter(OnchainTransactionAttempt.person_id == person_id)

@@ -403,7 +403,6 @@ def sync_morpho_vault_approve_attempt(
 
     from services.transaction_attempts.dual_write import dual_write_vault_step
     from services.transaction_attempts.enums import AttemptStepType
-    from services.transaction_attempts.models import OnchainTransactionAttempt
     from services.transaction_attempts.repository import OnchainTransactionAttemptRepository
 
     step_type = (
@@ -411,22 +410,6 @@ def sync_morpho_vault_approve_attempt(
         if operation == "approve"
         else AttemptStepType.AUTHORIZE.value
     )
-
-    existing_ref = (
-        db.query(OnchainTransactionAttempt)
-        .filter(
-            OnchainTransactionAttempt.linked_reference_id == vault_transaction_id,
-            OnchainTransactionAttempt.step_type == step_type,
-        )
-        .first()
-    )
-    if existing_ref is not None:
-        return {
-            "attempt_id": str(existing_ref.id),
-            "intent_id": None,
-            "vault_operation": operation,
-            "already_exists": True,
-        }
 
     dual_write_vault_step(
         db,

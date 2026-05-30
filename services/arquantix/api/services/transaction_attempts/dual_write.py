@@ -340,6 +340,108 @@ def _vault_operation_type(operation: str) -> str:
     return AttemptOperationType.DEPOSIT.value
 
 
+def _apply_vault_attempt_status(
+    db: Session,
+    attempt: OnchainTransactionAttempt,
+    *,
+    vault_status: str,
+    tx_hash: str | None,
+    intent_id: UUID | None = None,
+) -> None:
+    """Met à jour un attempt vault existant (pending → receipt success/failed)."""
+    from .enums import AttemptStatus
+
+    if intent_id is not None and attempt.intent_id is None:
+        attempt.intent_id = intent_id
+        db.add(attempt)
+        db.flush()
+
+    status_norm = (vault_status or "").strip().lower()
+    norm_tx = tx_hash.strip().lower() if tx_hash else None
+    current = (attempt.status or AttemptStatus.PREPARED.value).strip().lower()
+    idem = attempt.idempotency_key
+    step_type = attempt.step_type
+    transition = AttemptTransitionInput(tx_hash=norm_tx) if norm_tx else AttemptTransitionInput()
+
+    if status_norm == "success":
+        if (
+            current == AttemptStatus.CONFIRMED.value
+            and attempt.tx_hash
+            and (norm_tx is None or attempt.tx_hash == norm_tx)
+        ):
+            return
+        OnchainTransactionAttemptService.mark_confirmed(
+            db,
+            idempotency_key=idem,
+            step_type=step_type,
+            transition=transition,
+        )
+        return
+
+    if status_norm in ("failed", "reverted"):
+        if current in (AttemptStatus.FAILED.value, AttemptStatus.REVERTED.value):
+            return
+        OnchainTransactionAttemptService.mark_failed(
+            db,
+            idempotency_key=idem,
+            step_type=step_type,
+            transition=transition,
+            reverted=status_norm == "reverted",
+        )
+        return
+
+    if norm_tx and status_norm in ("pending", "submitted", ""):
+        if current in (AttemptStatus.CONFIRMED.value, AttemptStatus.SUBMITTED.value):
+            return
+        OnchainTransactionAttemptService.mark_submitted(
+            db,
+            idempotency_key=idem,
+            step_type=step_type,
+            transition=transition,
+        )
+
+
+def _find_existing_vault_attempt(
+    db: Session,
+    *,
+    vault_transaction_id: str,
+    step_type: str,
+    idempotency_key: str,
+    chain_id: int,
+    tx_hash: str | None,
+) -> OnchainTransactionAttempt | None:
+    existing_ref = (
+        db.query(OnchainTransactionAttempt)
+        .filter(
+            OnchainTransactionAttempt.linked_reference_id == vault_transaction_id,
+            OnchainTransactionAttempt.step_type == step_type,
+        )
+        .first()
+    )
+    if existing_ref is not None:
+        return existing_ref
+
+    by_idem = OnchainTransactionAttemptRepository.find_by_composite_key(
+        db,
+        idempotency_key=idempotency_key,
+        step_type=step_type,
+    )
+    if by_idem is not None:
+        return by_idem
+
+    if tx_hash:
+        norm_tx = tx_hash.strip().lower()
+        by_tx = find_attempt_by_chain_tx(
+            db,
+            chain_id=chain_id,
+            tx_hash=norm_tx,
+            step_type=step_type,
+        )
+        if by_tx is not None and by_tx.linked_reference_id == vault_transaction_id:
+            return by_tx
+    return None
+
+
 def dual_write_vault_step(
     db: Session,
     *,
@@ -366,15 +468,22 @@ def dual_write_vault_step(
         idem = f"{protocol}:{person_id}:{group_key}:{step_type}:{step_index}"
         status_norm = (vault_status or "").strip().lower()
 
-        existing_ref = (
-            db.query(OnchainTransactionAttempt)
-            .filter(
-                OnchainTransactionAttempt.linked_reference_id == vault_transaction_id,
-                OnchainTransactionAttempt.step_type == step_type,
-            )
-            .first()
+        existing = _find_existing_vault_attempt(
+            db,
+            vault_transaction_id=vault_transaction_id,
+            step_type=step_type,
+            idempotency_key=idem,
+            chain_id=chain_id,
+            tx_hash=tx_hash,
         )
-        if existing_ref is not None:
+        if existing is not None:
+            _apply_vault_attempt_status(
+                db,
+                existing,
+                vault_status=status_norm,
+                tx_hash=tx_hash,
+                intent_id=intent_id,
+            )
             return
 
         if tx_hash:

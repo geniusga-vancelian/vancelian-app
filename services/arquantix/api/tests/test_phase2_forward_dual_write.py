@@ -590,6 +590,241 @@ def test_forward_morpho_vault_approve_sync_idempotent(db: Session):
     ) == 1
 
 
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
+def test_forward_morpho_vault_deposit_pending_then_receipt_confirms_attempt(db: Session):
+    """Repro prod: prepared au pending, confirmed au receipt (même attempt)."""
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    group_key = f"morpho-rcpt-{uuid.uuid4().hex[:10]}"
+    deposit_ovt = f"cl{uuid.uuid4().hex[:22]}"
+    tx_deposit = _unique_tx("mrcpt")
+    vault = f"0x{uuid.uuid4().hex[:40]}"
+
+    _insert_morpho_ovt(
+        db,
+        ovt_id=deposit_ovt,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="deposit",
+        group_key=group_key,
+        tx_hash=None,
+        status="pending",
+        tx_index=1,
+    )
+
+    ensure_morpho_intent_for_vault_transaction(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=deposit_ovt,
+        vault_address=vault,
+        chain_id=8453,
+        wallet_address=wallet.address,
+        operation="deposit",
+        idempotency_key=group_key,
+        tx_index=1,
+        vault_status="pending",
+    )
+    db.flush()
+
+    prepared = (
+        db.query(OnchainTransactionAttempt)
+        .filter(OnchainTransactionAttempt.linked_reference_id == deposit_ovt)
+        .one()
+    )
+    assert prepared.status == "prepared"
+    assert prepared.tx_hash is None
+
+    mark_morpho_intent_confirmed(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=deposit_ovt,
+        tx_hash=tx_deposit,
+    )
+    mark_morpho_intent_confirmed(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=deposit_ovt,
+        tx_hash=tx_deposit,
+    )
+    db.commit()
+
+    attempts = (
+        db.query(OnchainTransactionAttempt)
+        .filter(OnchainTransactionAttempt.linked_reference_id == deposit_ovt)
+        .all()
+    )
+    assert len(attempts) == 1
+    att = attempts[0]
+    assert att.status == "confirmed"
+    assert att.tx_hash == tx_deposit.lower()
+    assert att.linked_reference_id == deposit_ovt
+    assert att.intent_id is not None
+
+    trace_confirmed = db.execute(
+        sa.text(
+            """
+            SELECT COUNT(*) FROM transaction_trace_events
+            WHERE attempt_id = :aid
+              AND event_type = 'attempt_confirmed'
+            """
+        ),
+        {"aid": att.id},
+    ).scalar()
+    assert trace_confirmed >= 1
+
+    gaps = scan_attempt_gaps_for_person(db, pe.person_id)
+    stale = [
+        g
+        for g in gaps
+        if g.get("reference_id") == deposit_ovt
+        and g.get("gap_type") in (
+            "vault_tx_missing_attempt",
+            "vault_attempt_inconsistent_with_legacy",
+        )
+    ]
+    assert stale == []
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
+def test_forward_ledgity_vault_deposit_pending_then_receipt_confirms_attempt(db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    group_key = f"ledgity-rcpt-{uuid.uuid4().hex[:10]}"
+    ovt_id = f"cl{uuid.uuid4().hex[:22]}"
+    tx = _unique_tx("lrcpt")
+    vault = f"0x{uuid.uuid4().hex[:40]}"
+
+    _insert_morpho_ovt(
+        db,
+        ovt_id=ovt_id,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="deposit",
+        group_key=group_key,
+        tx_hash=None,
+        status="pending",
+        tx_index=0,
+    )
+    db.execute(
+        sa.text(
+            "UPDATE onchain_vault_transactions SET integration_mode = 'ledgity_vault' WHERE id = :id"
+        ),
+        {"id": ovt_id},
+    )
+
+    ensure_ledgity_intent_for_vault_transaction(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=ovt_id,
+        vault_address=vault,
+        chain_id=8453,
+        wallet_address=wallet.address,
+        operation="deposit",
+        idempotency_key=group_key,
+        tx_index=0,
+        vault_status="pending",
+    )
+    db.flush()
+
+    prepared = (
+        db.query(OnchainTransactionAttempt)
+        .filter(OnchainTransactionAttempt.linked_reference_id == ovt_id)
+        .one()
+    )
+    assert prepared.status == "prepared"
+    assert prepared.protocol == AttemptProtocol.LEDGITY.value
+
+    mark_ledgity_intent_confirmed(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=ovt_id,
+        tx_hash=tx,
+    )
+    db.commit()
+
+    att = (
+        db.query(OnchainTransactionAttempt)
+        .filter(OnchainTransactionAttempt.linked_reference_id == ovt_id)
+        .one()
+    )
+    assert att.status == "confirmed"
+    assert att.tx_hash == tx.lower()
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
+def test_gap_report_detects_stale_vault_attempt_then_clears_after_receipt(db: Session):
+    """OVT success + attempt prepared → gap ; receipt → gap disparu."""
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    group_key = f"morpho-gap-{uuid.uuid4().hex[:10]}"
+    deposit_ovt = f"cl{uuid.uuid4().hex[:22]}"
+    tx_deposit = _unique_tx("mgap")
+    vault = f"0x{uuid.uuid4().hex[:40]}"
+
+    _insert_morpho_ovt(
+        db,
+        ovt_id=deposit_ovt,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="deposit",
+        group_key=group_key,
+        tx_hash=None,
+        status="pending",
+        tx_index=1,
+    )
+    ensure_morpho_intent_for_vault_transaction(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=deposit_ovt,
+        vault_address=vault,
+        chain_id=8453,
+        wallet_address=wallet.address,
+        operation="deposit",
+        idempotency_key=group_key,
+        tx_index=1,
+        vault_status="pending",
+    )
+    db.execute(
+        sa.text(
+            """
+            UPDATE onchain_vault_transactions
+            SET status = 'success', tx_hash = :tx
+            WHERE id = :id
+            """
+        ),
+        {"id": deposit_ovt, "tx": tx_deposit},
+    )
+    db.flush()
+
+    gaps_before = scan_attempt_gaps_for_person(db, pe.person_id)
+    inconsistent = [
+        g
+        for g in gaps_before
+        if g.get("gap_type") == "vault_attempt_inconsistent_with_legacy"
+        and g.get("reference_id") == deposit_ovt
+    ]
+    assert len(inconsistent) == 1
+
+    mark_morpho_intent_confirmed(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=deposit_ovt,
+        tx_hash=tx_deposit,
+    )
+    db.commit()
+
+    gaps_after = scan_attempt_gaps_for_person(db, pe.person_id)
+    assert [
+        g
+        for g in gaps_after
+        if g.get("reference_id") == deposit_ovt
+        and g.get("gap_type") == "vault_attempt_inconsistent_with_legacy"
+    ] == []
+
+
 def test_forward_ledgity_vault_deposit_lifecycle(db: Session):
     pe = make_linked_client(db)
     wallet = _seed_wallet(db, pe)
