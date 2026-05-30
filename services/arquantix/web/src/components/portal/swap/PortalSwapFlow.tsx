@@ -12,6 +12,7 @@ import { PortalSwapFromStep, type SwapFromOption } from '@/components/portal/swa
 import { PortalSwapProcessingOverlay } from '@/components/portal/swap/PortalSwapProcessingOverlay'
 import { PortalSwapToStep } from '@/components/portal/swap/PortalSwapToStep'
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
+import { PortalSwapLayout } from '@/components/portal/swap/PortalSwapLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/button'
@@ -354,43 +355,59 @@ export function PortalSwapFlow() {
           }}
         />
       ) : step === 'amount' && fromAsset && toAsset && fromChain && toChain ? (
-        <PortalSwapAmountStep
-          fromAsset={fromAsset}
-          toAsset={toAsset}
-          fromChain={fromChain}
-          toChain={toChain}
-          sourceBalance={sourceBalance}
-          fromOptions={swapFromOptions}
-          toOptions={swapToOptions}
-          onChangeFrom={onChangeFromOnAmount}
-          onChangeTo={onChangeToOnAmount}
-          onContinue={onAmountContinue}
-          onBack={() => setStep(urlIntent.mode === 'sell' ? 'to' : urlIntent.mode === 'buy' ? 'from' : 'from')}
-        />
+        <PortalSwapLayout
+          backHref={
+            urlIntent.mode === 'sell'
+              ? portalCryptoWalletAssetRoute(urlIntent.fromAsset)
+              : PORTAL_ROUTES.cryptoWallet
+          }
+          backLabel={urlIntent.mode === 'sell' ? 'Back to asset' : 'Back to wallet'}
+          onBackClick={() =>
+            setStep(urlIntent.mode === 'sell' ? 'to' : urlIntent.mode === 'buy' ? 'from' : 'from')
+          }
+        >
+          <PortalSwapAmountStep
+            fromAsset={fromAsset}
+            toAsset={toAsset}
+            fromChain={fromChain}
+            toChain={toChain}
+            sourceBalance={sourceBalance}
+            fromOptions={swapFromOptions}
+            toOptions={swapToOptions}
+            onChangeFrom={onChangeFromOnAmount}
+            onChangeTo={onChangeToOnAmount}
+            onContinue={onAmountContinue}
+            onBack={() =>
+              setStep(urlIntent.mode === 'sell' ? 'to' : urlIntent.mode === 'buy' ? 'from' : 'from')
+            }
+          />
+        </PortalSwapLayout>
       ) : step === 'confirm' && quote ? (
-        <>
-          <PortalSwapConfirmStep
-            fromAsset={fromAsset}
-            toAsset={toAsset}
-            amount={amount}
-            quote={quote}
-            executionPhase={executionPhase}
-            executing={executing}
-            error={showResultModal ? null : executionError}
-            onConfirm={() => void onConfirm()}
-            onBack={() => setStep('amount')}
-          />
-          <PortalSwapProcessingOverlay
-            open={showResultModal}
-            fromAsset={fromAsset}
-            toAsset={toAsset}
-            quote={quote}
-            phase={executionPhase}
-            error={executionError}
-            onClose={onProcessingClose}
-            onDone={onProcessingDone}
-          />
-        </>
+        <PortalSwapLayout backLabel="Back to amount" onBackClick={() => setStep('amount')}>
+          <>
+            <PortalSwapConfirmStep
+              fromAsset={fromAsset}
+              toAsset={toAsset}
+              amount={amount}
+              quote={quote}
+              executionPhase={executionPhase}
+              executing={executing}
+              error={showResultModal ? null : executionError}
+              onConfirm={() => void onConfirm()}
+              onBack={() => setStep('amount')}
+            />
+            <PortalSwapProcessingOverlay
+              open={showResultModal}
+              fromAsset={fromAsset}
+              toAsset={toAsset}
+              quote={quote}
+              phase={executionPhase}
+              error={executionError}
+              onClose={onProcessingClose}
+              onDone={onProcessingDone}
+            />
+          </>
+        </PortalSwapLayout>
       ) : null}
     </PortalExecutionScopeGate>
   )

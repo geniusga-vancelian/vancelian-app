@@ -73,7 +73,12 @@ export function usePortalTxSigner() {
       override?: ExecutionWallet | null,
       options?: { expectedAddress?: string | null },
     ): Promise<ExecutionWallet> => {
-      if (override) return override
+      if (
+        override &&
+        (override.type !== 'privy_embedded' || Boolean(override.privyWalletId?.trim()))
+      ) {
+        return override
+      }
       if (mode === 'external_evm') {
         const external = await resolveExecutionWallet()
         if (external?.type === 'external_evm') return external

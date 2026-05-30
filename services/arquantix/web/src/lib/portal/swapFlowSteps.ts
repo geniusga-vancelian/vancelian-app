@@ -51,32 +51,45 @@ export function processingPhaseLabel(
   phase: SwapExecutionPhase,
   quote?: Pick<SwapQuotePayload, 'from_chain' | 'from_asset' | 'signing_wallet_mode'> | null,
 ): string {
-  const chainLabel = quote ? (SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain) : 'le réseau sélectionné'
-  const asset = quote?.from_asset ?? 'jeton'
+  const chainLabel = quote ? (SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain) : 'the selected network'
+  const asset = quote?.from_asset ?? 'token'
   const isExternal = quote?.signing_wallet_mode === 'external_evm'
 
   switch (phase) {
     case 'preparing':
-      return 'Préparation de la route...'
+      return 'Preparing route…'
     case 'approving':
       return isExternal
-        ? `Approbation ${asset} sur ${chainLabel} dans MetaMask…`
-        : `Approbation ${asset} sur ${chainLabel} via wallet Vancelian (gas sponsorisé si activé Privy)…`
+        ? `Approve ${asset} on ${chainLabel} in MetaMask…`
+        : `Approving ${asset} on ${chainLabel}…`
     case 'signing':
       return isExternal
-        ? `Signature du swap LI.FI dans MetaMask (${chainLabel})…`
-        : `Signature du swap LI.FI via wallet Vancelian (${chainLabel})…`
+        ? `Sign swap on ${chainLabel} in MetaMask…`
+        : `Signing swap on ${chainLabel}…`
     case 'submitting':
-      return 'Envoi de la transaction...'
+      return 'Submitting transaction…'
     case 'bridging':
-      return 'Finalisation sur la blockchain...'
+      return 'Confirming on-chain…'
     case 'completed':
-      return 'Conversion effectuée'
+      return 'Swap completed'
     case 'failed':
-      return 'Échec de la conversion'
+      return 'Swap failed'
     default:
-      return 'Traitement en cours...'
+      return 'Processing…'
   }
+}
+
+export function swapConfirmCtaLabel(args: {
+  executing: boolean
+  executionPhase: SwapExecutionPhase
+  amount: string
+  fromAsset: string
+  quote?: Pick<SwapQuotePayload, 'from_chain' | 'from_asset' | 'signing_wallet_mode'> | null
+}): string {
+  if (!args.executing || args.executionPhase === 'idle') {
+    return `Confirm swap · ${args.amount} ${args.fromAsset}`
+  }
+  return processingPhaseLabel(args.executionPhase, args.quote)
 }
 
 export function formatSwapFeeLine(quote: SwapQuotePayload): string {
@@ -87,7 +100,7 @@ export function formatSwapFeeLine(quote: SwapQuotePayload): string {
 
   const isPrivySponsored = quote.signing_wallet_mode !== 'external_evm'
   if (isPrivySponsored) {
-    parts.push('0 (réseau · sponsorisé)')
+    parts.push('0 (network · sponsored)')
     return parts.join(' · ')
   }
 
@@ -96,22 +109,22 @@ export function formatSwapFeeLine(quote: SwapQuotePayload): string {
   const maxSaneUsd = Number.isFinite(amountIn) && amountIn > 0 ? Math.max(5, amountIn * 1.5) : 5
 
   if (networkUsd > 0 && networkUsd <= maxSaneUsd) {
-    parts.push(`≈ ${formatSwapFiatAmount(networkUsd)} (réseau)`)
+    parts.push(`≈ ${formatSwapFiatAmount(networkUsd)} (network)`)
   } else if (Number(quote.network_fee) > 0 && quote.network_fee_asset === 'USD') {
     const legacyUsd = Number(quote.network_fee)
     if (legacyUsd > 0 && legacyUsd <= maxSaneUsd) {
-      parts.push(`≈ ${formatSwapFiatAmount(legacyUsd)} (réseau)`)
+      parts.push(`≈ ${formatSwapFiatAmount(legacyUsd)} (network)`)
     }
   } else if (Number(quote.network_fee) > 0) {
     const networkFee = Number(quote.network_fee)
     const asset = quote.network_fee_asset ?? quote.from_asset
     const maxSaneToken = Number.isFinite(amountIn) && amountIn > 0 ? amountIn * 2 : networkFee
     if (networkFee <= maxSaneToken) {
-      parts.push(`${formatSwapCryptoAmount(quote.network_fee)} ${asset} (réseau)`)
+      parts.push(`${formatSwapCryptoAmount(quote.network_fee)} ${asset} (network)`)
     }
   }
 
-  return parts.length > 0 ? parts.join(' · ') : 'Aucun'
+  return parts.length > 0 ? parts.join(' · ') : 'None'
 }
 
 function formatSwapFiatAmount(value: number): string {

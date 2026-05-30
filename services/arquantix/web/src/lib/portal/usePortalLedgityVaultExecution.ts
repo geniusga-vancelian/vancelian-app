@@ -63,7 +63,7 @@ export function usePortalLedgityVaultExecution() {
         return prepared.ledgerEntries[0]?.id ?? null
       }
 
-      const wallet = await resolveWallet(scopeWallet, {
+      const wallet = await resolveWallet(null, {
         expectedAddress: scopeWallet.address,
       })
 

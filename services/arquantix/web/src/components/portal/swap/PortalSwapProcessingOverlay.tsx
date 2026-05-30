@@ -2,7 +2,6 @@
 
 import { Check, X } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
 import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import type { SwapQuotePayload } from '@/lib/portal/swapClient'
@@ -18,7 +17,7 @@ type Props = {
   onDone?: () => void
 }
 
-/** Modale de résultat terminal uniquement (succès ou échec). */
+/** Result modal — success or failure after swap execution. */
 export function PortalSwapProcessingOverlay({
   open,
   fromAsset,
@@ -50,39 +49,38 @@ export function PortalSwapProcessingOverlay({
           <div className="flex flex-col items-center gap-3 text-center">
             <StatusIcon isSuccess={isSuccess} isFailed={isFailed} />
             <h2 id="swap-processing-title" className="m-0 font-ui text-[20px] font-bold text-v-fg">
-              {isSuccess ? 'Conversion effectuée' : 'Conversion échouée'}
+              {isSuccess ? 'Swap completed' : 'Swap failed'}
             </h2>
             <p className="m-0 font-ui text-[14px] text-v-fg-muted">
               {isSuccess
                 ? `+${formatSwapCryptoAmount(quote.estimated_receive)} ${toAsset}`
-                : error ?? 'Une erreur est survenue'}
+                : error ?? 'Something went wrong'}
             </p>
             {isSuccess ? (
               <p className="m-0 font-ui text-[14px] text-v-fg-muted">
-                pour {formatSwapCryptoAmount(quote.amount_in)} {fromAsset}
+                for {formatSwapCryptoAmount(quote.amount_in)} {fromAsset}
               </p>
             ) : null}
           </div>
 
           {isFailed ? (
-            <Button
+            <button
               type="button"
-              variant="outline"
-              className="h-[48px] w-full rounded-full font-ui text-[15px] font-semibold"
+              className="btn btn--secondary btn--lg !w-full"
               onClick={onClose}
             >
-              Fermer
-            </Button>
+              Close
+            </button>
           ) : null}
 
           {isSuccess ? (
-            <Button
+            <button
               type="button"
-              className="h-[48px] w-full rounded-full font-ui text-[15px] font-semibold"
+              className="btn btn--primary btn--lg !w-full"
               onClick={onDone ?? onClose}
             >
-              Voir mon wallet {toAsset}
-            </Button>
+              View {toAsset} wallet
+            </button>
           ) : null}
         </div>
       </div>

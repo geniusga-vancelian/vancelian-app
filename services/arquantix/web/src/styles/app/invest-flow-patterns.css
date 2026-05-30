@@ -338,6 +338,35 @@
 .inv-summary__row .k { color: var(--v-fg-muted); }
 .inv-summary__row .v { color: var(--v-fg); font-weight: 500; }
 .inv-summary__row .v--accent { color: var(--v-green); }
+.inv-summary--progress {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid var(--v-fg-10);
+}
+.inv-summary__row--active .k {
+  color: var(--v-fg);
+  font-weight: 600;
+}
+
+.inv-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--v-radius-md, 12px);
+  border: 1px solid var(--v-fg-10);
+  background: #efede6;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--v-fg-muted);
+  cursor: pointer;
+}
+.inv-ack input {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--v-fg);
+}
 
 /* ----- CTA --------------------------------------------------------- */
 /* ----- CTA — uses .btn .btn--primary .btn--lg from vancelian.css.
