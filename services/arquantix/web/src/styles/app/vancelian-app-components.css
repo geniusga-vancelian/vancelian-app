@@ -915,20 +915,17 @@ img.avt__ic {
 }
 /* Showcase layout — app DS demo */
 @scope ([data-v-ds="app"]) {
-/* ---------- Section ---------- */
-.sec { margin-bottom: 80px; }
-.sec__head { display: flex; align-items: baseline; gap: 12px;
+/* ---------- DS showcase section chrome (≠ in-page `.sec` comp 68) ---------- */
+.app-ds-sec { margin-bottom: 80px; }
+.app-ds-sec__head { display: flex; align-items: baseline; gap: 12px;
              padding-bottom: 16px; margin-bottom: 32px;
              border-bottom: 1px solid var(--v-fg-10); }
-.sec__dot { width: 6px; height: 6px; border-radius: 999px;
+.app-ds-sec__dot { width: 6px; height: 6px; border-radius: 999px;
             background: var(--v-terracotta); align-self: center; flex: 0 0 6px; }
-.sec__num { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+.app-ds-sec__num { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
             color: var(--v-fg-muted); font-weight: 500; }
-.sec__title { font-family: var(--v-font-ui); font-weight: 600; font-size: 22px;
+.app-ds-sec__title { font-family: var(--v-font-ui); font-weight: 600; font-size: 22px;
               margin: 0; flex: 1; color: var(--v-fg); }
-.sec__more { font-family: var(--v-font-ui); font-weight: 500; font-size: 13px;
-             color: var(--v-terracotta); cursor: pointer; }
-.sec__more:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* ---------- Group ---------- */
 .grp { margin-bottom: 32px; }

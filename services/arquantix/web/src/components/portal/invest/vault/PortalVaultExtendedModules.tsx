@@ -9,7 +9,6 @@ import {
   AppPortfolioAllocationDonut,
   type AppPortfolioAllocationSlice,
 } from '@/components/design-system/app/AppPortfolioAllocationDonut'
-import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalFeaturedArticleCard } from '@/components/portal/PortalFeaturedArticleCard'
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
@@ -67,7 +66,14 @@ export function PortalVaultBlogALaUne({ mod }: { mod: VaultModulePublic }) {
 
   return (
     <>
-      <AppSectionHeader title={title} moreHref={PORTAL_ROUTES.academy} moreLabel="View all articles" />
+      <SectionTitle
+        title={title}
+        action={
+          <a href={PORTAL_ROUTES.academy} className="ofd-section__see">
+            View all articles
+          </a>
+        }
+      />
       <AppNewsDeck columns={articles.length > 1 ? 2 : undefined}>
         {articles.map((article) => {
           const slug = extractBlogArticleSlug(article.slug)

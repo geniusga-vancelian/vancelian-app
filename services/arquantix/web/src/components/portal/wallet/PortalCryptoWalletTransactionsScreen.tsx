@@ -31,7 +31,7 @@ export function PortalCryptoWalletTransactionsScreen({ asset }: Props) {
       cacheKey: `portal:crypto-wallet:${ticker}`,
       url: `/api/portal/crypto-wallet/${encodeURIComponent(ticker)}`,
       ttlMs: 45_000,
-      errorMessage: 'Impossible de charger les transactions.',
+      errorMessage: 'Unable to load transactions.',
       scopeAware: true,
     })
 
@@ -55,7 +55,7 @@ export function PortalCryptoWalletTransactionsScreen({ asset }: Props) {
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-error">{error}</p>
         <Button type="button" onClick={() => void refresh()}>
-          Réessayer
+          Retry
         </Button>
       </Container>
     )
@@ -87,7 +87,7 @@ export function PortalCryptoWalletTransactionsScreen({ asset }: Props) {
           <PortalReveal index={1}>
             <div className="chips chips--scroll">
               <AppFilterChip
-                label="Tout"
+                label="All"
                 selected={selectedMonth == null}
                 onClick={() => setSelectedMonth(null)}
               />
@@ -107,7 +107,7 @@ export function PortalCryptoWalletTransactionsScreen({ asset }: Props) {
           {transactions.length === 0 ? (
             <PortalTransactionHistoryRows items={[]} />
           ) : emptyMonth ? (
-            <p className="m-0 px-1 font-ui text-[14px] text-v-fg-muted">Aucune transaction ce mois.</p>
+            <p className="m-0 px-1 font-ui text-[14px] text-v-fg-muted">No transactions this month.</p>
           ) : (
             <div className="flex flex-col gap-6">
               {sections.map((section) => (
@@ -128,7 +128,7 @@ export function PortalCryptoWalletTransactionsScreen({ asset }: Props) {
           onClick={() => void refresh()}
           className="v-text-link w-fit border-0 bg-transparent p-0 font-ui text-[13px] disabled:opacity-50"
         >
-          {refreshing ? 'Actualisation…' : 'Actualiser'}
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </PortalDashboardLayout>
     </PortalPageContainer>

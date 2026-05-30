@@ -1,5 +1,7 @@
 /** Guard + lecture env pour le mode sandbox Morpho local (dev uniquement). */
 
+import { isPortalPrivyOtpDevMockEnabled } from '@/lib/portal/privyOtpDevMockConfig'
+
 function readSandboxEnabledRaw(): boolean {
   return process.env.MORPHO_LOCAL_SANDBOX_ENABLED?.trim().toLowerCase() === 'true'
 }
@@ -13,7 +15,10 @@ export function assertMorphoLocalSandboxProductionGuard(): void {
 /** Sandbox actif (dev/test uniquement). */
 export function isMorphoLocalSandboxEnabled(): boolean {
   assertMorphoLocalSandboxProductionGuard()
-  return readSandboxEnabledRaw() && process.env.NODE_ENV !== 'production'
+  if (process.env.NODE_ENV === 'production') return false
+  if (readSandboxEnabledRaw()) return true
+  // Stack dev OTP mock (111111) : pas de session SDK Privy → ledger sandbox sans signature client.
+  return isPortalPrivyOtpDevMockEnabled()
 }
 
 export function getMorphoLocalSandboxYieldBps(): number {

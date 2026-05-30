@@ -44,6 +44,8 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCompleted?: () => void
+  /** Page dédiée `/app/invest/bundle/...?mode=withdraw` — sans overlay modal. */
+  asPage?: boolean
 }
 
 type Step = 'form' | 'confirm' | 'executing' | 'done' | 'error' | 'blocked'
@@ -56,6 +58,7 @@ export function PortalBundleWithdrawDialog({
   open,
   onOpenChange,
   onCompleted,
+  asPage = false,
 }: Props) {
   const [step, setStep] = useState<Step>('form')
   const [fullWithdraw, setFullWithdraw] = useState(false)
@@ -274,16 +277,64 @@ export function PortalBundleWithdrawDialog({
     ? bundleWithdrawPhaseLabel(lastPhase as ReturnType<typeof mapWithdrawStatusToDisplayPhase>)
     : bundleWithdrawPhaseLabel('RELEASED')
 
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Retirer — {portfolioName}</DialogTitle>
-          <DialogDescription>
-            Transfert comptable vers Mon Trading · Privy inchangé tant que le release n’est pas
-            confirmé.
-          </DialogDescription>
-        </DialogHeader>
+  if (asPage && !open) return null
+
+  const header = asPage ? (
+    <header className="space-y-2">
+      <h1 className="m-0 font-ui text-[22px] font-semibold text-v-fg">Withdraw — {portfolioName}</h1>
+      <p className="m-0 font-ui text-[14px] text-v-fg-muted">
+        Transfer to Self Trading · Privy wallet unchanged until release is confirmed.
+      </p>
+    </header>
+  ) : (
+    <DialogHeader>
+      <DialogTitle>Retirer — {portfolioName}</DialogTitle>
+      <DialogDescription>
+        Transfert comptable vers Mon Trading · Privy inchangé tant que le release n’est pas
+        confirmé.
+      </DialogDescription>
+    </DialogHeader>
+  )
+
+  const actionButtons = (
+    <>
+      {step === 'form' ? (
+        <>
+          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={withdrawDisabled} onClick={handleConfirmStep}>
+            Continue
+          </Button>
+        </>
+      ) : null}
+      {step === 'confirm' ? (
+        <>
+          <Button type="button" variant="outline" onClick={() => setStep('form')}>
+            Back
+          </Button>
+          <Button type="button" disabled={withdrawDisabled} onClick={() => void handleWithdraw()}>
+            Confirm withdrawal
+          </Button>
+        </>
+      ) : null}
+      {(step === 'done' || step === 'error' || step === 'blocked') && (
+        <Button type="button" onClick={() => handleOpenChange(false)}>
+          Close
+        </Button>
+      )}
+    </>
+  )
+
+  const footer = asPage ? (
+    <div className="flex flex-wrap justify-end gap-2 pt-2">{actionButtons}</div>
+  ) : (
+    <DialogFooter className="gap-2 sm:gap-0">{actionButtons}</DialogFooter>
+  )
+
+  const body = (
+    <div className={asPage ? 'flex flex-col gap-4' : undefined}>
+      {header}
 
         {step === 'form' ? (
           <div className="flex flex-col gap-4">
@@ -417,34 +468,15 @@ export function PortalBundleWithdrawDialog({
           <p className="m-0 font-ui text-[13px] text-v-error">{error}</p>
         ) : null}
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          {step === 'form' ? (
-            <>
-              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-                Annuler
-              </Button>
-              <Button type="button" disabled={withdrawDisabled} onClick={handleConfirmStep}>
-                Continuer
-              </Button>
-            </>
-          ) : null}
-          {step === 'confirm' ? (
-            <>
-              <Button type="button" variant="outline" onClick={() => setStep('form')}>
-                Retour
-              </Button>
-              <Button type="button" disabled={withdrawDisabled} onClick={() => void handleWithdraw()}>
-                Confirmer le retrait
-              </Button>
-            </>
-          ) : null}
-          {(step === 'done' || step === 'error' || step === 'blocked') && (
-            <Button type="button" onClick={() => handleOpenChange(false)}>
-              Fermer
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
+      {footer}
+    </div>
+  )
+
+  if (asPage) return body
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-md">{body}</DialogContent>
     </Dialog>
   )
 }

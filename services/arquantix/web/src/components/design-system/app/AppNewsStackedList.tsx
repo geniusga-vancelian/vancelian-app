@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { ComponentProps, ComponentType, ReactNode } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -28,6 +28,12 @@ export type AppNewsStackedFilter = {
   label: string
 }
 
+type NewsLinkComponent = ComponentType<{
+  href: ComponentProps<typeof Link>['href']
+  className?: string
+  children?: ReactNode
+}>
+
 type Props = {
   items: AppNewsStackedListItem[]
   filters?: AppNewsStackedFilter[]
@@ -35,7 +41,7 @@ type Props = {
   onFilterChange?: (id: string) => void
   emptyMessage?: string
   className?: string
-  linkComponent?: typeof Link
+  linkComponent?: NewsLinkComponent
   /** `full` = DS 79 (avatars + chip). `text` = titre + byline seulement. */
   rowVariant?: 'full' | 'text'
   /** Supprime les séparateurs entre les lignes. */
@@ -118,7 +124,7 @@ function NewsRow({
   rowVariant,
 }: {
   item: AppNewsStackedListItem
-  LinkComponent: typeof Link
+  LinkComponent: NewsLinkComponent
   rowVariant: 'full' | 'text'
 }) {
   const content =

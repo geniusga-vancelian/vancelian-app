@@ -115,13 +115,13 @@ export function PortalSavingsWalletScreen() {
               <Button type="button" size="sm" className="gap-1.5" asChild>
                 <PortalNavLink href={`${PORTAL_ROUTES.invest}#earn-vaults`}>
                   <Plus className="h-4 w-4" />
-                  Déposer
+                  Deposit
                 </PortalNavLink>
               </Button>
               <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>
                 <PortalNavLink href={`${PORTAL_ROUTES.invest}#earn-vaults`}>
                   <ArrowUpRight className="h-4 w-4" />
-                  Retirer
+                  Withdraw
                 </PortalNavLink>
               </Button>
               <Button type="button" variant="outline" size="sm" className="gap-1.5" asChild>

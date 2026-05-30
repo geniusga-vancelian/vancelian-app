@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 import { appDsCryptoSvgPath } from '@/components/design-system/app/AppProductBasketCard'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
+import { normalizeCryptoBaseTicker, resolveCryptoAvatarSources } from '@/lib/portal/cryptoInstrumentAssets'
 import { formatChangePctIndicator } from '@/lib/portal/marketsFormat'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { portalCryptoBundleProductRoute } from '@/lib/portal/portalRouting'
@@ -64,11 +65,56 @@ export function resolveCurrencyIcon(symbol: string): string {
   return appDsCryptoSvgPath(symbol) ?? '/app-ds/assets/crypto/usdc.svg'
 }
 
-export function formatBasketPerf(value: number | null): string {
-  if (value == null) return '—'
-  const positive = value >= 0
-  const formatted = formatChangePctIndicator(value)
-  return `${positive ? '+' : '−'} ${formatted} sur 1 an`
+export function resolveBundleCurrency(bundle: PortalCryptoBundle): string {
+  return (
+    bundle.entryAssetDefault?.trim().toUpperCase() ??
+    bundle.entryAssetsAllowed[0]?.trim().toUpperCase() ??
+    'USDC'
+  )
+}
+
+export function formatBundleCardPerf(bundle: PortalCryptoBundle): string {
+  if (bundle.performance1d != null && Number.isFinite(bundle.performance1d)) {
+    const positive = bundle.performance1d >= 0
+    const formatted = formatChangePctIndicator(bundle.performance1d)
+    return `${positive ? '+' : '−'} ${formatted} (24h)`
+  }
+  if (bundle.riskLabel?.trim()) return bundle.riskLabel.trim()
+  return '—'
+}
+
+function resolveCryptoStackIcon(ticker: string): string {
+  return appDsCryptoSvgPath(ticker) ?? resolveCryptoAvatarSources(ticker)[0] ?? ''
+}
+
+export function BundleCryptoStackChip({
+  tickers,
+  maxVisible = 4,
+}: {
+  tickers: string[]
+  maxVisible?: number
+}) {
+  const unique = [...new Set(tickers.map((ticker) => normalizeCryptoBaseTicker(ticker)).filter(Boolean))]
+  const visible = unique.slice(0, maxVisible)
+  const more = Math.max(0, unique.length - visible.length)
+  if (visible.length === 0) return null
+
+  return (
+    <span className="o-chip o-chip--stack">
+      {visible.map((ticker) => {
+        const src = resolveCryptoStackIcon(ticker)
+        return (
+          <span key={ticker} className="o-chip__a">
+            {src ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={src} alt="" />
+            ) : null}
+          </span>
+        )
+      })}
+      {more > 0 ? <span className="o-chip__more">+{more}</span> : null}
+    </span>
+  )
 }
 
 export function PortalPlacerSectionHead({
@@ -116,10 +162,12 @@ function BundleCardBody({
   title,
   description,
   onInvest,
+  onWithdraw,
 }: {
   title: string
   description: string
   onInvest: () => void
+  onWithdraw?: () => void
 }) {
   return (
     <div className="offer__body">
@@ -129,22 +177,37 @@ function BundleCardBody({
           <p className="offer__desc offer__desc--clamp-3">{description}</p>
         ) : null}
       </div>
-      <button
-        type="button"
-        className="btn btn--primary offer__cta"
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          onInvest()
-        }}
-      >
-        Investir
-      </button>
+      <div className="offer__ctas">
+        <button
+          type="button"
+          className="btn btn--primary offer__cta"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onInvest()
+          }}
+        >
+          Invest
+        </button>
+        {onWithdraw ? (
+          <button
+            type="button"
+            className="btn btn--secondary offer__cta"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onWithdraw()
+            }}
+          >
+            Withdraw
+          </button>
+        ) : null}
+      </div>
     </div>
   )
 }
 
-/** Carte coffre catalogue — contenu Vault Builder : visuel, titre, description, CTA. */
+/** Vault catalogue card — handoff CoffreCard (chips on media). */
 export function PortalPlacerBundleCoffreCard({
   bundle,
   onInvest,
@@ -154,6 +217,8 @@ export function PortalPlacerBundleCoffreCard({
 }) {
   const href = portalCryptoBundleProductRoute(bundle.code, { back: 'invest' })
   const categoryIcon = bundle.code.toLowerCase().includes('avenir') ? 'horizon' : 'vault'
+  const currency = resolveBundleCurrency(bundle)
+  const perf = formatBundleCardPerf(bundle)
 
   return (
     <PortalNavLink href={href} className="offer offer--link no-underline">
@@ -162,15 +227,26 @@ export function PortalPlacerBundleCoffreCard({
         <img className="offer__img" src={resolveBundlePhoto(bundle)} alt="" />
         <span className="offer__cat">
           {categoryIcon === 'horizon' ? <HorizonVaultIcon /> : <CoffreVaultIcon />}
-          Coffre
+          Vault
         </span>
+        <div className="offer__chips">
+          <span className="o-chip o-chip--perf">{perf}</span>
+          <span className="o-chip o-chip--liq">—</span>
+          <span className="o-chip o-chip--cur">
+            <span className="o-chip__a">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={resolveCurrencyIcon(currency)} alt="" />
+            </span>
+            {currency}
+          </span>
+        </div>
       </div>
       <BundleCardBody title={bundle.title} description={bundle.description} onInvest={onInvest} />
     </PortalNavLink>
   )
 }
 
-/** Carte panier catalogue — contenu Vault Builder : visuel, titre, description, CTA. */
+/** Crypto basket catalogue card — handoff BasketCard (perf + stacked avatars). */
 export function PortalPlacerBasketCard({
   bundle,
   onInvest,
@@ -179,6 +255,7 @@ export function PortalPlacerBasketCard({
   onInvest: () => void
 }) {
   const href = portalCryptoBundleProductRoute(bundle.code, { back: 'invest' })
+  const perf = formatBundleCardPerf(bundle)
 
   return (
     <PortalNavLink href={href} className="offer offer--link no-underline">
@@ -187,15 +264,19 @@ export function PortalPlacerBasketCard({
         <img className="offer__img" src={resolveBundlePhoto(bundle)} alt="" />
         <span className="offer__cat">
           <BasketCategoryIcon />
-          Panier crypto
+          Crypto basket
         </span>
+        <div className="offer__chips">
+          <span className="o-chip o-chip--perf">{perf}</span>
+          <BundleCryptoStackChip tickers={bundle.allocationTickers} />
+        </div>
       </div>
       <BundleCardBody title={bundle.title} description={bundle.description} onInvest={onInvest} />
     </PortalNavLink>
   )
 }
 
-/** Carte coffre DeFi (Morpho / Ledgity) — conserve les métriques sur le visuel. */
+/** DeFi vault card (Morpho / Ledgity) — keeps metrics on the hero. */
 export function PortalPlacerCoffreCard({
   title,
   description,
@@ -207,6 +288,7 @@ export function PortalPlacerCoffreCard({
   categoryIcon,
   href,
   onInvest,
+  onWithdraw,
 }: {
   title: string
   description: string
@@ -218,6 +300,7 @@ export function PortalPlacerCoffreCard({
   categoryIcon: 'vault' | 'horizon'
   href?: string
   onInvest?: () => void
+  onWithdraw?: () => void
 }) {
   const inner = (
     <>
@@ -226,7 +309,7 @@ export function PortalPlacerCoffreCard({
         <img className="offer__img" src={photo} alt="" />
         <span className="offer__cat">
           {categoryIcon === 'horizon' ? <HorizonVaultIcon /> : <CoffreVaultIcon />}
-          Coffre
+          Vault
         </span>
         <div className="offer__chips">
           <span className="o-chip o-chip--perf">{perf}</span>
@@ -244,6 +327,7 @@ export function PortalPlacerCoffreCard({
         title={title}
         description={description}
         onInvest={() => onInvest?.()}
+        onWithdraw={onWithdraw}
       />
     </>
   )

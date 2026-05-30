@@ -21,7 +21,7 @@ type Props = {
   initialData?: PortalNewsWidgetData | null
 }
 
-export function PortalNewsWidgetSection({ locale = 'fr', initialData }: Props) {
+export function PortalNewsWidgetSection({ locale = 'en', initialData }: Props) {
   const [data, setData] = useState<PortalNewsWidgetData | null>(initialData ?? null)
   const [loading, setLoading] = useState(!initialData?.items?.length)
   const [failed, setFailed] = useState(false)

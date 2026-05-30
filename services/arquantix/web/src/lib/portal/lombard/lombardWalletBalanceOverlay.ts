@@ -45,7 +45,8 @@ function findLombardLoanForAsset(
   return positions.find((row) => row.collateralSymbol === collateral) ?? null
 }
 
-function totalBorrowedUsdc(positions: LombardActivePosition[]): number {
+/** Somme des emprunts USDC dus (positions Morpho Lombard actives). */
+export function totalBorrowedUsdc(positions: LombardActivePosition[]): number {
   return positions.reduce((sum, row) => sum + parseHumanAmount(row.borrowAmount), 0)
 }
 

@@ -193,6 +193,35 @@
     height: 100%;
     object-fit: cover;
     z-index: 0;
+    transition: transform 320ms var(--v-ease-out);
+    will-change: transform;
+  }
+
+  .offer:hover .offer__img,
+  .offer--link:hover .offer__img {
+    transform: scale(1.06);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .offer__img {
+      transition: none;
+    }
+
+    .offer:hover .offer__img,
+    .offer--link:hover .offer__img {
+      transform: none;
+    }
+  }
+
+  .o-chip--liq {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .placer-section {
+    display: flex;
+    flex-direction: column;
   }
 
   .offer__media::after {
@@ -400,6 +429,13 @@
   .offer__cta {
     flex-shrink: 0;
     height: 44px;
+  }
+
+  .offer__ctas {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
   }
 
   @media (max-width: 520px) {

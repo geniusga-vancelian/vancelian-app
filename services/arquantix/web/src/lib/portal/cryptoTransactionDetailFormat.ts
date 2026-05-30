@@ -60,7 +60,7 @@ function formatCryptoAmountDisplay(amount: string, asset: string): string {
   const assetU = normalizeAsset(asset)
   if (Number.isNaN(parsed)) return `${amount.trim()} ${assetU}`
   const decimals = raw.includes('.') ? Math.min(8, raw.split('.')[1]?.length ?? 0) : 0
-  const formatted = new Intl.NumberFormat('fr-FR', {
+  const formatted = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: Math.max(decimals, parsed < 1 ? 4 : 2),
   }).format(parsed)
@@ -92,31 +92,27 @@ function formatSignedAmountLabel(
 function formatTransactionDateLong(createdAt: string): string {
   const date = new Date(createdAt)
   if (Number.isNaN(date.getTime())) return '—'
-  const datePart = new Intl.DateTimeFormat('fr-FR', {
+  const datePart = new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   }).format(date)
-  const timePart = new Intl.DateTimeFormat('fr-FR', {
+  const timePart = new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  })
-    .format(date)
-    .replace(':', ' h ')
+  }).format(date)
   return `${datePart} · ${timePart}`
 }
 
 function formatTransactionTimeShort(createdAt: string): string {
   const date = new Date(createdAt)
   if (Number.isNaN(date.getTime())) return '—'
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  })
-    .format(date)
-    .replace(':', ' h ')
+  }).format(date)
 }
 
 function resolveTransactionStatus(tx: PortalCryptoWalletTransaction): {
@@ -126,7 +122,7 @@ function resolveTransactionStatus(tx: PortalCryptoWalletTransaction): {
 } {
   const raw = tx.status?.trim().toLowerCase() ?? ''
   if (raw.includes('pend') || raw.includes('process')) {
-    return { status: 'pending', label: 'En cours', tone: 'warm' }
+    return { status: 'pending', label: 'In progress', tone: 'warm' }
   }
   if (
     raw.includes('fail') ||
@@ -134,27 +130,27 @@ function resolveTransactionStatus(tx: PortalCryptoWalletTransaction): {
     raw.includes('revert') ||
     raw.includes('cancel')
   ) {
-    return { status: 'failed', label: 'Échouée', tone: 'error' }
+    return { status: 'failed', label: 'Failed', tone: 'error' }
   }
-  return { status: 'success', label: 'Réussie', tone: 'green' }
+  return { status: 'success', label: 'Successful', tone: 'green' }
 }
 
 function resolveKindLabel(tx: PortalCryptoWalletTransaction): string {
-  if (isLombardBorrowTransaction(tx)) return 'Emprunt'
-  if (isCryptoSwapTransaction(tx)) return 'Échange'
+  if (isLombardBorrowTransaction(tx)) return 'Borrow'
+  if (isCryptoSwapTransaction(tx)) return 'Swap'
   const side = tx.side?.trim().toLowerCase()
-  if (side === 'buy' || side === 'deposit') return 'Versement'
-  if (side === 'sell' || side === 'withdraw') return 'Retrait'
-  if (side === 'swap') return 'Échange'
-  return isIncomingLeg(tx) ? 'Versement' : 'Retrait'
+  if (side === 'buy' || side === 'deposit') return 'Deposit'
+  if (side === 'sell' || side === 'withdraw') return 'Withdrawal'
+  if (side === 'swap') return 'Swap'
+  return isIncomingLeg(tx) ? 'Deposit' : 'Withdrawal'
 }
 
 function resolveStepperTitle(kindLabel: string): string {
-  if (kindLabel === 'Échange') return "Étapes de l'échange"
-  if (kindLabel === 'Versement') return 'Étapes du versement'
-  if (kindLabel === 'Retrait') return 'Étapes du retrait'
-  if (kindLabel === 'Emprunt') return "Étapes de l'emprunt"
-  return "Étapes de l'opération"
+  if (kindLabel === 'Swap') return 'Swap steps'
+  if (kindLabel === 'Deposit') return 'Deposit steps'
+  if (kindLabel === 'Withdrawal') return 'Withdrawal steps'
+  if (kindLabel === 'Borrow') return 'Borrow steps'
+  return 'Transaction steps'
 }
 
 function buildTimeline(
@@ -166,20 +162,20 @@ function buildTimeline(
   const pending = status === 'pending'
 
   const steps: PortalTransactionDetailTimelineItem[] = [
-    { label: 'Ordre reçu', time, done: true },
+    { label: 'Order received', time, done: true },
   ]
 
   if (tx.txHash?.trim()) {
     steps.push({
-      label: 'Confirmation on-chain',
-      time: done ? time : pending ? 'En attente' : '—',
+      label: 'On-chain confirmation',
+      time: done ? time : pending ? 'Pending' : '—',
       done,
     })
   }
 
   steps.push({
-    label: 'Fonds disponibles',
-    time: done ? time : pending ? 'En cours' : '—',
+    label: 'Funds available',
+    time: done ? time : pending ? 'In progress' : '—',
     done,
   })
 
@@ -191,20 +187,20 @@ function buildSummaryRows(
   currency: string,
 ): PortalTransactionDetailSummaryRow[] {
   const rows: PortalTransactionDetailSummaryRow[] = [
-    { key: 'Référence', value: tx.id },
+    { key: 'Reference', value: tx.id },
   ]
 
   if (tx.txHash?.trim()) {
-    rows.push({ key: 'Hash blockchain', value: tx.txHash.trim() })
+    rows.push({ key: 'Blockchain hash', value: tx.txHash.trim() })
   }
 
   if (tx.asset?.trim()) {
-    rows.push({ key: 'Actif', value: normalizeAsset(tx.asset) })
+    rows.push({ key: 'Asset', value: normalizeAsset(tx.asset) })
   }
 
   if (tx.amountCrypto?.trim()) {
     rows.push({
-      key: 'Montant crypto',
+      key: 'Crypto amount',
       value: formatCryptoAmountDisplay(tx.amountCrypto, tx.asset),
     })
   }
@@ -214,14 +210,14 @@ function buildSummaryRows(
     const fiatNum = Number(fiatRaw)
     if (!Number.isNaN(fiatNum) && fiatNum > 0) {
       rows.push({
-        key: 'Contre-valeur',
+        key: 'Fiat equivalent',
         value: formatPortalMoney(fiatNum, tx.currency || currency),
       })
     }
   }
 
   if (tx.price?.trim() && tx.price !== '0') {
-    rows.push({ key: "Prix d'exécution", value: tx.price.trim() })
+    rows.push({ key: 'Execution price', value: tx.price.trim() })
   }
 
   if (tx.sourceSystem?.trim()) {
@@ -229,7 +225,7 @@ function buildSummaryRows(
   }
 
   rows.push({
-    key: 'Statut',
+    key: 'Status',
     value: tx.status?.trim() || resolveTransactionStatus(tx).label,
   })
 
@@ -247,16 +243,16 @@ function buildSteps(
     const collateralAmount = tx.swapAmountFrom?.trim()
     return [
       {
-        name: 'Garantie déposée',
+        name: 'Collateral deposited',
         amountLine: collateralAmount
-          ? `${formatCryptoAmountDisplay(collateralAmount, collateral)} bloqués en garantie.`
+          ? `${formatCryptoAmountDisplay(collateralAmount, collateral)} locked as collateral.`
           : undefined,
-        notes: ['La garantie reste verrouillée pendant la durée de l’emprunt.'],
+        notes: ['Collateral remains locked for the duration of the loan.'],
       },
       {
-        name: 'Crédit USDC versé',
-        amountLine: `${formatCryptoAmountDisplay(borrowAmount, 'USDC')} crédités sur votre wallet.`,
-        notes: ['Emprunt Lombard — taux variable selon le marché.'],
+        name: 'USDC credit disbursed',
+        amountLine: `${formatCryptoAmountDisplay(borrowAmount, 'USDC')} credited to your wallet.`,
+        notes: ['Lombard borrow — variable rate based on market conditions.'],
       },
     ]
   }
@@ -276,12 +272,12 @@ function buildSteps(
         {
           name: 'Conversion',
           convert: { from, to },
-          notes: ['Conversion exécutée au prix de marché.'],
+          notes: ['Conversion executed at market price.'],
         },
         {
-          name: 'Réception sur votre portefeuille',
-          amountLine: `${to} crédités sur votre wallet.`,
-          notes: ['Conservation institutionnelle (Fireblocks).'],
+          name: 'Received in your wallet',
+          amountLine: `${to} credited to your wallet.`,
+          notes: ['Institutional custody (Fireblocks).'],
         },
       ]
     }
@@ -299,8 +295,8 @@ function buildSteps(
   if (incoming) {
     return [
       {
-        name: 'Réception sur votre portefeuille',
-        amountLine: `${amountLabel} crédités sur votre wallet crypto.`,
+        name: 'Received in your wallet',
+        amountLine: `${amountLabel} credited to your crypto wallet.`,
         notes: tx.subtitle?.trim() ? [tx.subtitle.trim()] : undefined,
       },
     ]
@@ -308,8 +304,8 @@ function buildSteps(
 
   return [
     {
-      name: 'Envoi depuis votre portefeuille',
-      amountLine: `${amountLabel} débités de votre wallet crypto.`,
+      name: 'Sent from your wallet',
+      amountLine: `${amountLabel} debited from your crypto wallet.`,
       notes: tx.subtitle?.trim() ? [tx.subtitle.trim()] : undefined,
     },
   ]
@@ -319,14 +315,14 @@ function buildCounterparty(
   tx: PortalCryptoWalletTransaction,
 ): { label: string; sub: string } | undefined {
   if (isLombardBorrowTransaction(tx)) {
-    return { label: 'Lombard · Vancelian', sub: 'Crédit USDC contre garantie crypto' }
+    return { label: 'Lombard · Vancelian', sub: 'USDC credit against crypto collateral' }
   }
 
   if (isCryptoSwapTransaction(tx)) {
     const assets = resolveSwapAssets(tx)
     if (assets) {
       return {
-        label: 'Marché spot',
+        label: 'Spot market',
         sub: `${assets.fromAsset} → ${assets.toAsset}`,
       }
     }

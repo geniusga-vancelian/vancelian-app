@@ -3,6 +3,7 @@ import {
   parseMyBundles,
   parseSelfTradingCryptoPositionsPayload,
   parseWalletHistoryPoints,
+  parseWalletHistoryPerformance,
 } from '@/lib/portal/cryptoWalletFormat'
 import {
   maybeApplyLombardWalletOverlay,
@@ -79,6 +80,7 @@ export async function GET(request: NextRequest) {
     console.warn('[api/portal/crypto-wallet GET] Lombard overlay skipped:', error)
   }
   const historyPoints = history.ok ? parseWalletHistoryPoints(history.data) : []
+  const performance = history.ok ? parseWalletHistoryPerformance(history.data) : null
   const bundles = bundlesRes.ok ? parseMyBundles(bundlesRes.data) : []
 
   return NextResponse.json({
@@ -86,6 +88,7 @@ export async function GET(request: NextRequest) {
     positions,
     bundles,
     historyPoints,
+    performance,
     source: 'direct',
     partial: !history.ok || !bundlesRes.ok,
   })

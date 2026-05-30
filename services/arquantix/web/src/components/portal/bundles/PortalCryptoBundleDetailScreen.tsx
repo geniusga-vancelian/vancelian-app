@@ -1,9 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-import { PortalLazyBundleInvestDialog } from '@/components/portal/bundles/PortalLazyBundleInvestDialog'
 import {
   PortalPanierAside,
   PortalPanierCompositionSection,
@@ -34,6 +33,7 @@ import {
 import type { ChartPeriodId } from '@/lib/portal/instrumentDetailFormat'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { resolvePortalBundleFlowRoute } from '@/lib/portal/resolvePortalBundleFlowRoute'
 
 type Props = {
   productCode: string
@@ -77,7 +77,7 @@ export function PortalCryptoBundleDetailScreen({ productCode }: Props) {
   const [perfWindows, setPerfWindows] = useState<Array<{ label: string; pct: number | null }>>(
     [],
   )
-  const [investOpen, setInvestOpen] = useState(false)
+  const router = useRouter()
 
   const loadDetail = useCallback(async () => {
     setLoading(true)
@@ -173,7 +173,7 @@ export function PortalCryptoBundleDetailScreen({ productCode }: Props) {
   )
 
   const investBundle = data ? toInvestBundle(data) : null
-  const investLabel = view?.isCoffre ? 'Déposer dans ce coffre' : 'Investir dans ce panier'
+  const investLabel = view?.isCoffre ? 'Deposit into this vault' : 'Invest in this basket'
   const canInvest = Boolean(data?.portfolioId)
 
   if (loading && !data) {
@@ -194,7 +194,9 @@ export function PortalCryptoBundleDetailScreen({ productCode }: Props) {
   if (!data || !view) return null
 
   const openInvest = () => {
-    if (canInvest) setInvestOpen(true)
+    if (!investBundle || !canInvest) return
+    const href = resolvePortalBundleFlowRoute(investBundle, 'invest')
+    if (href) router.push(href)
   }
 
   return (
@@ -233,14 +235,6 @@ export function PortalCryptoBundleDetailScreen({ productCode }: Props) {
 
       {canInvest ? (
         <PortalPanierMobileCta view={view} onInvest={openInvest} investLabel={investLabel} />
-      ) : null}
-
-      {investBundle && canInvest ? (
-        <PortalLazyBundleInvestDialog
-          bundle={investBundle}
-          open={investOpen}
-          onOpenChange={setInvestOpen}
-        />
       ) : null}
     </PortalPageContainer>
   )

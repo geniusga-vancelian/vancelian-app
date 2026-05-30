@@ -48,11 +48,13 @@ type Props = {
   bundle: PortalCryptoBundle
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Page dédiée `/app/invest/bundle/...` — sans overlay modal. */
+  asPage?: boolean
 }
 
 type Step = 'form' | 'preview' | 'executing' | 'done' | 'error' | 'blocked'
 
-export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) {
+export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = false }: Props) {
   const { privyReady } = usePortalAuthPrivy()
   const privyReadyRef = useRef(privyReady)
   const [step, setStep] = useState<Step>('form')
@@ -273,15 +275,88 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
     )
   }, [preview])
 
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+  if (asPage && !open) return null
+
+  const header = (
+    <>
+      {asPage ? (
+        <header className="space-y-2">
+          <h1 className="m-0 font-ui text-[22px] font-semibold text-v-fg">Invest — {bundle.title}</h1>
+          <p className="m-0 font-ui text-[14px] text-v-fg-muted">
+            Base pilot · LI.FI · sign with your Vancelian wallet in the browser.
+          </p>
+        </header>
+      ) : (
         <DialogHeader>
           <DialogTitle>Investir — {bundle.title}</DialogTitle>
           <DialogDescription>
             Pilote Base · LI.FI · signature Privy dans le navigateur.
           </DialogDescription>
         </DialogHeader>
+      )}
+    </>
+  )
+
+  const actionButtons = (
+    <>
+      {step === 'form' ? (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+            disabled={batchInProgress}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={handlePreview} disabled={investDisabled}>
+            {previewLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Estimating…
+              </>
+            ) : (
+              'Preview'
+            )}
+          </Button>
+        </>
+      ) : null}
+      {step === 'preview' ? (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setStep('form')}
+            disabled={batchInProgress}
+          >
+            Back
+          </Button>
+          <Button type="button" onClick={handleInvest} disabled={investDisabled}>
+            Confirm and invest
+          </Button>
+        </>
+      ) : null}
+      {step === 'done' || step === 'error' || step === 'blocked' ? (
+        <Button
+          type="button"
+          onClick={() => handleOpenChange(false)}
+          disabled={step === 'blocked' && batchInProgress}
+        >
+          Close
+        </Button>
+      ) : null}
+    </>
+  )
+
+  const footer = asPage ? (
+    <div className="flex flex-wrap justify-end gap-2 pt-2">{actionButtons}</div>
+  ) : (
+    <DialogFooter className="gap-2 sm:gap-2">{actionButtons}</DialogFooter>
+  )
+
+  const body = (
+    <div className={asPage ? 'flex flex-col gap-4' : undefined}>
+      {header}
 
         {step === 'form' ? (
           <div className="flex flex-col gap-4">
@@ -409,58 +484,18 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange }: Props) 
         ) : null}
 
         {step === 'error' ? (
-          <p className="m-0 font-ui text-[14px] text-v-error">{error ?? 'Erreur'}</p>
+          <p className="m-0 font-ui text-[14px] text-v-error">{error ?? 'Error'}</p>
         ) : null}
 
-        <DialogFooter className="gap-2 sm:gap-2">
-          {step === 'form' ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleOpenChange(false)}
-                disabled={batchInProgress}
-              >
-                Annuler
-              </Button>
-              <Button type="button" onClick={handlePreview} disabled={investDisabled}>
-                {previewLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Estimation…
-                  </>
-                ) : (
-                  'Prévisualiser'
-                )}
-              </Button>
-            </>
-          ) : null}
-          {step === 'preview' ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setStep('form')}
-                disabled={batchInProgress}
-              >
-                Retour
-              </Button>
-              <Button type="button" onClick={handleInvest} disabled={investDisabled}>
-                Confirmer et investir
-              </Button>
-            </>
-          ) : null}
-          {step === 'done' || step === 'error' || step === 'blocked' ? (
-            <Button
-              type="button"
-              onClick={() => handleOpenChange(false)}
-              disabled={step === 'blocked' && batchInProgress}
-            >
-              Fermer
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
+      {footer}
+    </div>
+  )
+
+  if (asPage) return body
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-md">{body}</DialogContent>
     </Dialog>
   )
 }

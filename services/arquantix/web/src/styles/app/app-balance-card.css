@@ -388,4 +388,156 @@
     max-width: 100%;
     border-radius: 8px;
   }
+
+  /* Portfolio balance card — handoff Portfolio.html / comp 19 `.bal--light` */
+  .bal.bal--light {
+    background: var(--v-card);
+    color: var(--v-fg);
+    border: 1px solid var(--v-fg-10);
+    border-radius: var(--v-radius-lg);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    max-width: none;
+  }
+
+  .bal.bal--light .bal__solde {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .bal.bal--light .bal__lbl {
+    font-family: var(--v-font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--v-fg-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .bal.bal--light .bal__amt {
+    font-family: var(--v-font-ui);
+    font-weight: 600;
+    font-size: 44px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--v-fg);
+    font-feature-settings: 'tnum' on, 'lnum' on;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bal.bal--light .bal__chg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: auto;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    font-family: var(--v-font-ui);
+    font-weight: 600;
+    font-size: 13px;
+    font-feature-settings: 'tnum' on;
+    color: var(--v-green);
+    width: max-content;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .bal.bal--light .bal__chg--neg {
+    color: var(--v-error);
+  }
+
+  .bal.bal--light .bal__chg-pct {
+    font-weight: 500;
+    opacity: 0.65;
+  }
+
+  .bal.bal--light .bal__chart {
+    height: 96px;
+    margin: 0 -4px;
+    position: relative;
+  }
+
+  .bal.bal--light .bal__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 18px;
+    border-top: 1px solid var(--v-fg-10);
+    margin-left: -24px;
+    margin-right: -24px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .bal.bal--light .bal__toggle {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--v-radius-pill);
+    background: #ffffff;
+    border: 1px solid var(--v-fg-10);
+    box-shadow: 0 1px 2px rgba(26, 24, 21, 0.06);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--v-fg);
+    cursor: pointer;
+    z-index: 2;
+    transition:
+      background var(--v-motion-fast) var(--v-ease-out),
+      box-shadow var(--v-motion-fast) var(--v-ease-out),
+      color var(--v-motion-fast) var(--v-ease-out);
+  }
+
+  .bal.bal--light .bal__toggle:hover:not(:disabled) {
+    background: #f6f3ec;
+    box-shadow: 0 2px 6px rgba(26, 24, 21, 0.08);
+  }
+
+  .bal.bal--light .bal__toggle:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .portal-bal-income {
+    font-family: var(--v-font-editorial);
+    font-weight: 300;
+    font-size: 19px;
+    line-height: 1.45;
+    color: var(--v-fg-body);
+    letter-spacing: -0.005em;
+  }
+
+  .portal-bal-income__amt {
+    font-weight: 500;
+    color: var(--v-green);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' on;
+  }
+
+  @media (max-width: 960px) {
+    .bal.bal--light .bal__actions {
+      gap: 8px;
+      flex-wrap: nowrap;
+    }
+
+    .bal.bal--light .bal__actions .btn--lg {
+      height: 44px;
+      padding: 0 14px;
+      font-size: 13px;
+      min-width: 0;
+      flex: 1 1 0;
+      white-space: nowrap;
+    }
+  }
 }

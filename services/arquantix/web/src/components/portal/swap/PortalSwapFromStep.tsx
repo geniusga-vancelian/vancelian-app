@@ -7,21 +7,13 @@ import { AppAccountSummaryRow } from '@/components/design-system/app/AppAccountS
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalPageIntro } from '@/components/portal/PortalPageIntro'
 import { PortalSwapFlowShell } from '@/components/portal/swap/PortalSwapFlowShell'
-import { formatSwapCryptoAmount, resolveSwapSourceChain } from '@/lib/portal/swapFlowFormat'
+import { formatSwapCryptoAmount, buildSwapFromOptions, type SwapFromOption } from '@/lib/portal/swapFlowFormat'
 import type { SwapCatalogAsset } from '@/lib/portal/swapFlowTypes'
 import { SWAP_V1_SAME_CHAIN_ONLY, SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import type { PortalCryptoPosition } from '@/lib/portal/cryptoWalletTypes'
-import { resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
 import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
 
-export type SwapFromOption = {
-  asset: string
-  name: string
-  chain: string
-  balance: number
-  logoUrl?: string | null
-  position?: PortalCryptoPosition
-}
+export type { SwapFromOption } from '@/lib/portal/swapFlowFormat'
 
 type Props = {
   toAsset: string
@@ -45,12 +37,10 @@ export function PortalSwapFromStep({
   stepEyebrow = 'Step 2',
   description,
 }: Props) {
-  const options = useMemo(() => buildFromOptions(catalog, positions, toAsset, toChain), [
-    catalog,
-    positions,
-    toAsset,
-    toChain,
-  ])
+  const options = useMemo(
+    () => buildSwapFromOptions(catalog, positions, toAsset, toChain),
+    [catalog, positions, toAsset, toChain],
+  )
 
   const chainHint = SWAP_CHAIN_LABELS[toChain] ?? toChain
 
@@ -100,49 +90,4 @@ export function PortalSwapFromStep({
       </div>
     </PortalSwapFlowShell>
   )
-}
-
-function buildFromOptions(
-  catalog: SwapCatalogAsset[],
-  positions: PortalCryptoPosition[],
-  toAsset: string,
-  toChain: string,
-): SwapFromOption[] {
-  const catalogBySymbol = new Map(catalog.map((a) => [a.symbol.toUpperCase(), a]))
-  const out: SwapFromOption[] = []
-
-  for (const pos of positions) {
-    const sym = pos.asset.toUpperCase()
-    const meta = catalogBySymbol.get(sym)
-    if (!meta) continue
-    const balance = resolveSpendableSwapBalance(pos)
-    if (balance <= 0) continue
-    const chain = resolveSwapSourceChain(sym, meta.chains, toChain)
-    if (SWAP_V1_SAME_CHAIN_ONLY && chain !== toChain) continue
-    if (sym === toAsset.toUpperCase() && chain === toChain) continue
-    out.push({
-      asset: sym,
-      name: pos.name || sym,
-      chain,
-      balance,
-      logoUrl: pos.logoUrl,
-      position: pos,
-    })
-  }
-
-  if (out.length === 0) {
-    for (const meta of catalog) {
-      const chain = resolveSwapSourceChain(meta.symbol, meta.chains, toChain)
-      if (SWAP_V1_SAME_CHAIN_ONLY && chain !== toChain) continue
-      if (meta.symbol === toAsset && chain === toChain) continue
-      out.push({
-        asset: meta.symbol,
-        name: meta.display_name,
-        chain,
-        balance: 0,
-      })
-    }
-  }
-
-  return out
 }

@@ -4,6 +4,64 @@
    Emprunts (borrow category) — CTA + loan cards
    ===================================================================== */
 
+/* Hero category — colored balance card (Compte.html) */
+.bal--cat {
+  color: #ffffff;
+  border: 0;
+  width: 100%;
+  max-width: none;
+}
+
+.bal--cat .bal__lbl {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.bal--cat .bal__amt {
+  color: #ffffff;
+}
+
+.bal--cat .bal__chart path {
+  stroke: rgba(255, 255, 255, 0.55);
+}
+
+.bal__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  margin-left: -24px;
+  margin-right: -24px;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.bal--cat .btn--primary {
+  background: #ffffff;
+  color: var(--v-fg);
+}
+
+.bal--cat .btn--primary:hover {
+  background: #f4f1eb;
+  color: var(--v-fg);
+}
+
+.bal--cat .btn--secondary {
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+}
+
+.bal--cat .btn--secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.56);
+  color: #ffffff;
+}
+
+.bal--cat .btn--secondary:disabled {
+  opacity: 0.45;
+}
+
 /* Hero variant for borrow — slightly muted editorial tagline */
 .bal--borrow .bal__chart path { stroke: rgba(255,255,255,0.55); }
 .bal--borrow .bal__chart-hi   { opacity: 0; }

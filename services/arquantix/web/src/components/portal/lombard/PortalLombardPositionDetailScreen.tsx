@@ -71,11 +71,11 @@ export function PortalLombardPositionDetailScreen() {
     <PortalPageContainer>
       <PortalDashboardLayout>
         <PortalNavLink
-          href={PORTAL_ROUTES.cryptoWallet}
+          href={PORTAL_ROUTES.creditLine}
           className="inline-flex w-fit items-center gap-1.5 font-ui text-[13px] text-v-fg-muted no-underline transition-colors hover:text-v-fg"
         >
           <ArrowLeft className="h-4 w-4" />
-          Crypto wallet
+          Credit Line
         </PortalNavLink>
 
         <PortalPageIntro

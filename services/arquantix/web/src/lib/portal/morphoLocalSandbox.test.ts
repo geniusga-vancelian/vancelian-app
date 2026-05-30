@@ -28,6 +28,21 @@ describe('morpho local sandbox config', () => {
     assert.equal(isMorphoLocalSandboxEnabled(), true)
   })
 
+  it('sandbox auto-enabled when Privy OTP dev mock is on', () => {
+    const prevMorpho = process.env.MORPHO_LOCAL_SANDBOX_ENABLED
+    const prevMock = process.env.NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED
+    delete process.env.MORPHO_LOCAL_SANDBOX_ENABLED
+    process.env.NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED = 'true'
+    try {
+      assert.equal(isMorphoLocalSandboxEnabled(), true)
+    } finally {
+      if (prevMorpho === undefined) delete process.env.MORPHO_LOCAL_SANDBOX_ENABLED
+      else process.env.MORPHO_LOCAL_SANDBOX_ENABLED = prevMorpho
+      if (prevMock === undefined) delete process.env.NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED
+      else process.env.NEXT_PUBLIC_PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED = prevMock
+    }
+  })
+
   it('production guard blocks sandbox in production', () => {
     const previous = process.env.NODE_ENV
     process.env.NODE_ENV = 'production'

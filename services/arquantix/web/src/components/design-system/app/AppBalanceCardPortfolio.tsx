@@ -1,0 +1,168 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import { KalaiIcon } from '@/components/ui/KalaiIcon'
+import { PortalNavLink } from '@/components/portal/PortalNavLink'
+import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
+import { cn } from '@/lib/utils'
+
+export type AppBalanceCardPortfolioAction = {
+  id: string
+  label: string
+  icon: string
+  href?: string
+  disabled?: boolean
+  variant?: 'primary' | 'secondary'
+  onClick?: () => void
+}
+
+type Props = {
+  balanceLabel: string
+  balancePending?: boolean
+  changeAmountLabel?: string
+  changePercentLabel?: string
+  changePositive?: boolean
+  chartValues?: number[]
+  dailyIncomeLabel?: string
+  actions: AppBalanceCardPortfolioAction[]
+  className?: string
+}
+
+function BarsIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <rect x="2" y="9" width="2.5" height="5" rx="1" />
+      <rect x="6.75" y="5" width="2.5" height="9" rx="1" />
+      <rect x="11.5" y="2" width="2.5" height="12" rx="1" />
+    </svg>
+  )
+}
+
+function BalanceAction({ action }: { action: AppBalanceCardPortfolioAction }) {
+  const variant = action.variant ?? 'secondary'
+  const className = cn(
+    'btn btn--lg',
+    variant === 'primary' ? 'btn--primary' : 'btn--secondary',
+    action.disabled && 'btn--disabled',
+  )
+  const inner = (
+    <>
+      <KalaiIcon name={action.icon} size={16} className={variant === 'primary' ? 'text-white' : ''} />
+      {action.label}
+    </>
+  )
+
+  if (action.href && !action.disabled) {
+    return (
+      <PortalNavLink href={action.href} className={cn(className, 'no-underline')}>
+        {inner}
+      </PortalNavLink>
+    )
+  }
+
+  return (
+    <button type="button" className={className} disabled={action.disabled} onClick={action.onClick}>
+      {inner}
+    </button>
+  )
+}
+
+/** Balance card portfolio — handoff Portfolio.html (`.bal.bal--light` · comp 19). */
+export function AppBalanceCardPortfolio({
+  balanceLabel,
+  balancePending = false,
+  changeAmountLabel,
+  changePercentLabel,
+  changePositive = true,
+  chartValues = [],
+  dailyIncomeLabel,
+  actions,
+  className,
+}: Props) {
+  const [hidden, setHidden] = useState(false)
+  const displayBalance = hidden ? '•\u00a0•\u00a0•\u00a0•\u00a0•\u00a0•' : balanceLabel
+  const displayChangeAmount =
+    hidden && changeAmountLabel ? '••••' : changeAmountLabel
+  const displayChangePercent =
+    hidden && changePercentLabel ? undefined : changePercentLabel
+  const displayIncome = hidden && dailyIncomeLabel ? '••••' : dailyIncomeLabel
+
+  const chartSeries = useMemo(
+    () => (chartValues.length >= 2 ? chartValues : []),
+    [chartValues],
+  )
+
+  return (
+    <section className={cn('bal bal--light w-full max-w-none', className)}>
+      <button
+        type="button"
+        className="bal__toggle"
+        disabled
+        aria-label="View allocation"
+        title="Allocation view — coming soon"
+      >
+        <BarsIcon size={16} />
+      </button>
+
+      <div className="bal__solde">
+        <div className="bal__lbl">
+          Total balance
+          <button
+            type="button"
+            onClick={() => setHidden((value) => !value)}
+            aria-label={hidden ? 'Show amounts' : 'Hide amounts'}
+            className="inline-flex items-center justify-center border-0 bg-transparent p-0.5 text-v-fg-muted"
+          >
+            <KalaiIcon name={hidden ? 'eye-off' : 'eye'} size={16} />
+          </button>
+        </div>
+
+        {balancePending ? (
+          <span className="portal-shimmer h-11 w-48 max-w-full rounded-v-input" aria-hidden />
+        ) : (
+          <div className="bal__amt v-tnum" aria-live="polite">
+            {displayBalance}
+          </div>
+        )}
+
+        {!balancePending && displayChangeAmount ? (
+          <div className={cn('bal__chg', !changePositive && 'bal__chg--neg')}>
+            <KalaiIcon name={changePositive ? 'arrow-up' : 'arrow-down'} size={16} aria-hidden />
+            {displayChangeAmount}
+            {displayChangePercent ? (
+              <span className="bal__chg-pct">{`\u00a0· ${displayChangePercent}`}</span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {!balancePending && chartSeries.length >= 2 ? (
+        <div className="bal__chart" aria-hidden="true">
+          <PortalPerformanceChart
+            values={chartSeries}
+            tone="light"
+            height={96}
+            strokeWidth={1.5}
+            showEndpoint
+          />
+        </div>
+      ) : null}
+
+      {!balancePending && displayIncome ? (
+        <div className="pt-1">
+          <p className="portal-bal-income m-0">
+            You receive{' '}
+            <span className="portal-bal-income__amt">{displayIncome}</span>
+            {' '}each day in your account.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="bal__actions">
+        {actions.map((action) => (
+          <BalanceAction key={action.id} action={action} />
+        ))}
+      </div>
+    </section>
+  )
+}

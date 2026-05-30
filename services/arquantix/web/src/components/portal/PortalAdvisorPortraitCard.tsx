@@ -5,7 +5,7 @@ import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 
 const ADVISOR_PORTRAIT_SRC = '/app-ds/assets/photos/placeholder.jpg'
 
-/** Carte advisor portrait — handoff `.adv-A` (sidebar portail). */
+/** Advisor portrait card — handoff `.adv-A` (portal sidebar). */
 export function PortalAdvisorPortraitCard() {
   return (
     <div className="adv-A">
@@ -18,16 +18,16 @@ export function PortalAdvisorPortraitCard() {
           height={56}
         />
         <div className="adv-A__title-block">
-          <div className="v-eyebrow adv-A__eyebrow">Votre advisor</div>
+          <div className="v-eyebrow adv-A__eyebrow">Your advisor</div>
           <h3 className="adv-A__name">Hélène Marchand</h3>
         </div>
       </div>
       <p className="adv-A__desc">
-        Dédiée à votre patrimoine depuis 3 ans. Disponible du lundi au vendredi, 9 h – 19 h.
+        Dedicated to your wealth for 3 years. Available Monday to Friday, 9 a.m. – 7 p.m.
       </p>
       <div className="adv-A__actions">
         <PortalNavLink href={PORTAL_ROUTES.profile} className="btn btn--primary btn--sm">
-          Prendre rendez-vous
+          Book a call
         </PortalNavLink>
         <PortalNavLink href={PORTAL_ROUTES.profile} className="btn btn--secondary btn--sm">
           Message

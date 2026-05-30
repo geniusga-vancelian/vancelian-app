@@ -91,6 +91,10 @@ export type PortalCryptoWalletHubPayload = {
   positions: PortalCryptoPositionsSummary
   bundles: PortalMyBundleSummary[]
   historyPoints: number[]
+  performance?: {
+    totalPnl: number
+    performancePct: number
+  } | null
   /** Source des positions affichées (hub = direct_portfolio PE / Mon Trading). */
   source?: 'direct' | 'privy'
   partial?: boolean
@@ -171,13 +175,22 @@ export type PortalBundleAllocationLeg = {
 /** Aperçu historique sur la page détail position crypto (preview/17). */
 export const CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW = 10
 
+import type { PortalMarketsNewsItem } from '@/lib/portal/marketsTypes'
+import type { PortalCryptoPositionMarketQuote } from '@/lib/portal/cryptoPositionDetailFormat'
+
 export type PortalCryptoWalletDetailPayload = {
   currency: string
   detail: PortalCryptoWalletDetail
   transactions: PortalCryptoWalletTransaction[]
   historyPoints: number[]
+  performance?: {
+    totalPnl: number
+    performancePct: number
+  } | null
   change24hPct?: number
   providerSymbol?: string
   logoUrl?: string | null
+  marketQuote?: PortalCryptoPositionMarketQuote | null
+  news?: PortalMarketsNewsItem[]
   partial?: boolean
 }

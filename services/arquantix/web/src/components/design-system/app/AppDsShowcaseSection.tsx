@@ -13,11 +13,11 @@ export function AppDsShowcaseSection({ section, columns = 1 }: Props) {
     columns === 3 ? 'app-ds-grid app-ds-grid--3' : columns === 2 ? 'app-ds-grid app-ds-grid--2' : 'app-ds-grid'
 
   return (
-    <section className="app-ds-sec sec" id={section.id}>
-      <header className="sec__head">
-        <span className="sec__dot" aria-hidden />
-        <span className="sec__num">{section.num}</span>
-        <h2 className="sec__title">{section.title}</h2>
+    <section className="app-ds-sec" id={section.id}>
+      <header className="app-ds-sec__head">
+        <span className="app-ds-sec__dot" aria-hidden />
+        <span className="app-ds-sec__num">{section.num}</span>
+        <h2 className="app-ds-sec__title">{section.title}</h2>
         {section.count ? <span className="app-ds-sec__count">{section.count}</span> : null}
       </header>
       <div className={cn(gridClass)}>

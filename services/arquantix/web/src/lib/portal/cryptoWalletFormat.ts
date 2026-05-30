@@ -230,6 +230,81 @@ export function parseWalletHistoryPoints(raw: unknown): number[] {
   )
 }
 
+export function parseWalletHistoryPerformance(raw: unknown): {
+  totalPnl: number
+  performancePct: number
+} | null {
+  const root = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const points = Array.isArray(root.points) ? root.points : []
+  if (points.length < 2) return null
+
+  const values = points
+    .filter((p): p is Record<string, unknown> => p != null && typeof p === 'object')
+    .map((p) =>
+      toNumber(p.wallet_value ?? p.performance_value ?? p.total_value ?? p.value),
+    )
+
+  if (values.length < 2) return null
+  const first = values[0]!
+  const last = values[values.length - 1]!
+  if (!(first > 0)) return null
+
+  const totalPnl = last - first
+  const performancePct = (totalPnl / first) * 100
+  return { totalPnl, performancePct }
+}
+
+export function resolveCryptoHubChangeLabels(
+  performance: { totalPnl: number; performancePct: number } | null | undefined,
+  currency: string,
+  periodLabel = 'YTD',
+): { amountLabel?: string; percentLabel?: string; positive: boolean } {
+  if (!performance) {
+    return { positive: true }
+  }
+
+  const { totalPnl, performancePct } = performance
+  const positive = totalPnl >= 0
+  const amountSign = totalPnl > 0 ? '+ ' : totalPnl < 0 ? '− ' : '+ '
+  const pctSign = performancePct > 0 ? '+ ' : performancePct < 0 ? '− ' : '+ '
+
+  return {
+    amountLabel: `${amountSign}${formatPortalMoney(Math.abs(totalPnl), currency)}`,
+    percentLabel: `${pctSign}${Math.abs(performancePct).toLocaleString('fr-FR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} % ${periodLabel}`,
+    positive,
+  }
+}
+
+function formatPerfSur1An(pct: number | undefined): string | null {
+  if (pct == null || Number.isNaN(pct)) return null
+  const sign = pct >= 0 ? '+ ' : '− '
+  return `${sign}${Math.abs(pct).toLocaleString('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} % over 1 year`
+}
+
+export function resolveCategoryCryptoRowSubtitle(row: PortalCryptoWalletRow): string {
+  if (row.kind === 'bundle') {
+    const bundle = row.bundle
+    const tickers = (bundle.positions ?? [])
+      .map((position) => position.asset.trim().toUpperCase())
+      .filter(Boolean)
+      .slice(0, 2)
+    const label =
+      tickers.length > 0
+        ? tickers.join(' + ')
+        : `${bundle.assetsCount} asset${bundle.assetsCount === 1 ? '' : 's'}`
+    const perf = formatPerfSur1An(bundle.performancePct)
+    return perf ? `${label} · ${perf}` : label
+  }
+
+  return formatCryptoVolume(row.position.balance, row.position.asset)
+}
+
 export function extractUpstreamDetailPayload(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return null
   const root = raw as Record<string, unknown>
@@ -818,16 +893,16 @@ export function resolveHubCountLabel(
 ): string {
   const count = positions.positionsCount || positions.positions.length
   if (options?.selfTradingDirect) {
-    return count === 1 ? '1 actif · Mon Trading' : `${count} actifs · Mon Trading`
+    return count === 1 ? '1 asset · Self Trading' : `${count} assets · Self Trading`
   }
   if (options?.privyOnly) {
-    return count === 1 ? '1 actif · wallet Privy' : `${count} actifs · wallet Privy`
+    return count === 1 ? '1 asset · Privy wallet' : `${count} assets · Privy wallet`
   }
   const activeBundles = bundles.filter((b) => b.hasHoldings).length
   if (activeBundles > 0) {
     return `${count} crypto${count === 1 ? '' : 's'} · ${activeBundles} bundle${activeBundles === 1 ? '' : 's'}`
   }
-  return `${count} crypto-actif${count === 1 ? '' : 's'}`
+  return `${count} crypto asset${count === 1 ? '' : 's'}`
 }
 
 export function resolvePrivyHubTotalValue(

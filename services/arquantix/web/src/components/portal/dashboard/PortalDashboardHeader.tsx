@@ -1,73 +1,75 @@
 'use client'
 
 import {
-  AppBalanceCardProduct,
-  type AppBalanceCardProductAction,
-} from '@/components/design-system/app/AppBalanceCardProduct'
+  AppBalanceCardPortfolio,
+  type AppBalanceCardPortfolioAction,
+} from '@/components/design-system/app/AppBalanceCardPortfolio'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
 type Props = {
   balanceLabel: string
   changeAmountLabel?: string
+  changePercentLabel?: string
   changePositive?: boolean
   depositHref: string
   balancePending?: boolean
-  /** Conservé pour compatibilité appelants — ignoré (Webapp4 n’affiche plus le chart ici). */
   chartValues?: number[]
   className?: string
 }
 
-/** En-tête dashboard — Balance Card Webapp4 (home produit). */
+/** En-tête dashboard — balance card handoff Portfolio.html (`.bal.bal--light`). */
 export function PortalDashboardHeader({
   balanceLabel,
   changeAmountLabel,
+  changePercentLabel,
   changePositive = true,
   depositHref,
   balancePending = false,
+  chartValues = [],
   className,
 }: Props) {
-  const actions: AppBalanceCardProductAction[] = [
+  const actions: AppBalanceCardPortfolioAction[] = [
     {
-      id: 'invest',
-      label: 'Investir',
-      icon: 'arrow-up-right',
-      href: PORTAL_ROUTES.invest,
+      id: 'deposit',
+      label: 'Deposit',
+      icon: 'arrow-up',
+      href: depositHref,
       variant: 'primary',
     },
     {
-      id: 'swap',
-      label: 'Échanger',
-      icon: 'exchange',
-      href: PORTAL_ROUTES.walletSwap,
-      variant: 'secondary',
-    },
-    {
-      id: 'deposit',
-      label: 'Déposer',
-      icon: 'arrow-down',
-      href: depositHref,
-      variant: 'secondary',
-    },
-    {
       id: 'withdraw',
-      label: 'Envoyer',
-      icon: 'arrow-up',
-      disabled: true,
+      label: 'Withdraw',
+      icon: 'arrow-down',
+      href: PORTAL_ROUTES.walletWithdraw,
+      variant: 'secondary',
+    },
+    {
+      id: 'invest',
+      label: 'Invest',
+      icon: 'trending-up',
+      href: PORTAL_ROUTES.invest,
+      variant: 'secondary',
+    },
+    {
+      id: 'borrow',
+      label: 'Borrow',
+      icon: 'money-dollar',
+      href: PORTAL_ROUTES.borrow,
       variant: 'secondary',
     },
   ]
 
   return (
-    <section className={cn('pb-2 pt-5', className)}>
-      <AppBalanceCardProduct
-        balanceLabel={balanceLabel}
-        balancePending={balancePending}
-        revenueAmountLabel={changeAmountLabel}
-        revenuePositive={changePositive}
-        showRevenuePhrase={Boolean(changeAmountLabel)}
-        actions={actions}
-      />
-    </section>
+    <AppBalanceCardPortfolio
+      className={className}
+      balanceLabel={balanceLabel}
+      balancePending={balancePending}
+      changeAmountLabel={changeAmountLabel}
+      changePercentLabel={changePercentLabel}
+      changePositive={changePositive}
+      chartValues={chartValues}
+      actions={actions}
+    />
   )
 }

@@ -15,7 +15,7 @@ type Props = {
   bundles: PortalCryptoBundle[]
 }
 
-/** Coffres + paniers crypto — aligné Vault Builder (titre · description · CTA). */
+/** Vaults + crypto baskets — Placer.html card pattern. */
 export function PortalCryptoBundlesSection({ bundles }: Props) {
   const [investBundle, setInvestBundle] = useState<PortalCryptoBundle | null>(null)
 
@@ -30,10 +30,10 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
   return (
     <div className="flex flex-col gap-10">
       {coffreBundles.length > 0 ? (
-        <section>
+        <div className="placer-section">
           <PortalPlacerSectionHead
-            title="Coffres"
-            desc="Une réserve productive, choisie selon votre horizon."
+            title="Vaults"
+            desc="A productive reserve, matched to your time horizon."
           />
           <div className="placer-grid placer-grid--2">
             {coffreBundles.map((bundle) => (
@@ -44,14 +44,14 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
               />
             ))}
           </div>
-        </section>
+        </div>
       ) : null}
 
       {panierBundles.length > 0 ? (
-        <section>
+        <div className="placer-section">
           <PortalPlacerSectionHead
-            title="Paniers crypto"
-            desc="Des expositions thématiques rééquilibrées chaque mois."
+            title="Crypto baskets"
+            desc="Thematic exposures rebalanced every month."
           />
           <div className="placer-grid placer-grid--2">
             {panierBundles.map((bundle) => (
@@ -62,7 +62,7 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
               />
             ))}
           </div>
-        </section>
+        </div>
       ) : null}
 
       {investBundle ? (

@@ -68,7 +68,7 @@ function readTerm(payload: ExclusiveOfferVaultPayload): string | null {
 
 function readYearlyReturn(payload: ExclusiveOfferVaultPayload): string | null {
   if (payload.lending) {
-    return `${payload.lending.supplyAprPct.toLocaleString('fr-FR', {
+    return `${payload.lending.supplyAprPct.toLocaleString('en-US', {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     })} %`

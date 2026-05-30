@@ -31,6 +31,11 @@ export { AppBanner, type AppBannerVariant } from './AppBanner'
 export { AppSettingsList } from './AppSettingsList'
 export { AppSettingsRow } from './AppSettingsRow'
 export { AppBalanceCardVariantB, type AppBalanceCardFab } from './AppBalanceCardVariantB'
+export { AppCategoryHero, type AppCategoryHeroAction } from './AppCategoryHero'
+export {
+  AppBalanceCardPortfolio,
+  type AppBalanceCardPortfolioAction,
+} from './AppBalanceCardPortfolio'
 export {
   AppBalanceCardProduct,
   type AppBalanceCardProductAction,

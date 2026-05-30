@@ -27,6 +27,8 @@ type Tab = 'deposit' | 'withdraw'
 type Props = {
   vault: PortalMorphoVaultDetails
   beta?: PortalMorphoBetaPortalFlags
+  /** Page dédiée (`/app/invest/vault/...`) — sans overlay modal ni second PrivyProvider. */
+  embedded?: boolean
   onClose: () => void
 }
 
@@ -61,7 +63,7 @@ function createIdempotencyKey(): string {
   return `morpho-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
+export function PortalEarnVaultModal({ vault, beta, embedded = false, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('deposit')
   const [amount, setAmount] = useState('')
   const [position, setPosition] = useState<PortalMorphoVaultPosition | null>(null)
@@ -224,11 +226,22 @@ export function PortalEarnVaultModal({ vault, beta, onClose }: Props) {
   const betaLimits = beta?.limits
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+    <div
+      className={cn(
+        embedded
+          ? 'flex w-full flex-col'
+          : 'fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center',
+      )}
+    >
       <div
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-v-card border border-v-border bg-v-bg shadow-v-subtle"
-        role="dialog"
-        aria-modal="true"
+        className={cn(
+          'flex w-full flex-col overflow-hidden bg-v-bg',
+          embedded
+            ? 'min-h-0'
+            : 'max-h-[90vh] max-w-lg rounded-v-card border border-v-border shadow-v-subtle',
+        )}
+        role={embedded ? undefined : 'dialog'}
+        aria-modal={embedded ? undefined : true}
         aria-labelledby="earn-vault-modal-title"
       >
         <header className="flex items-center justify-between border-b border-v-border/70 px-5 py-4">

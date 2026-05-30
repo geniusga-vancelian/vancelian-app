@@ -1,44 +1,51 @@
 'use client'
 
 import {
-  AppBalanceCardProduct,
-  type AppBalanceCardProductAction,
-} from '@/components/design-system/app/AppBalanceCardProduct'
+  AppCategoryHero,
+  type AppCategoryHeroAction,
+} from '@/components/design-system/app/AppCategoryHero'
 import { portalBorrowRoute, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-import { cn } from '@/lib/utils'
 
 type Props = {
   balanceLabel: string
+  changeAmountLabel?: string
+  changePercentLabel?: string
+  changePositive?: boolean
+  chartValues?: number[]
   depositHref: string
   balancePending?: boolean
   className?: string
 }
 
-/** En-tête wallet crypto — Balance Card Webapp4 (handoff Cryptos · category-detail). */
+/** Crypto wallet header — handoff Compte.html?id=cryptos (`CategoryHero`). */
 export function PortalCryptoWalletHeader({
   balanceLabel,
+  changeAmountLabel,
+  changePercentLabel,
+  changePositive = true,
+  chartValues = [],
   depositHref,
   balancePending = false,
   className,
 }: Props) {
-  const actions: AppBalanceCardProductAction[] = [
+  const actions: AppCategoryHeroAction[] = [
     {
       id: 'buy',
-      label: 'Acheter',
+      label: 'Buy',
       icon: 'arrow-down',
       href: depositHref,
       variant: 'primary',
     },
     {
       id: 'sell',
-      label: 'Vendre',
+      label: 'Sell',
       icon: 'arrow-up',
       href: PORTAL_ROUTES.walletSwap,
       variant: 'secondary',
     },
     {
       id: 'borrow',
-      label: 'Emprunter',
+      label: 'Borrow',
       icon: 'trending-up',
       href: portalBorrowRoute(),
       variant: 'secondary',
@@ -46,14 +53,17 @@ export function PortalCryptoWalletHeader({
   ]
 
   return (
-    <section className={cn('pb-2 pt-5', className)}>
-      <AppBalanceCardProduct
-        balanceLabel={balanceLabel}
-        balanceLabelText="Cryptos"
-        balancePending={balancePending}
-        showRevenuePhrase={false}
-        actions={actions}
-      />
-    </section>
+    <AppCategoryHero
+      categoryTitle="Crypto"
+      balanceLabel={balanceLabel}
+      balancePending={balancePending}
+      changeAmountLabel={changeAmountLabel}
+      changePercentLabel={changePercentLabel}
+      changePositive={changePositive}
+      chartValues={chartValues}
+      accent="var(--v-fg)"
+      actions={actions}
+      className={className}
+    />
   )
 }

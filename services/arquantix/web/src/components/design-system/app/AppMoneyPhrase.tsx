@@ -10,9 +10,9 @@ type Props = {
 
 /** Phrase éditoriale revenu — pattern Webapp4 money-phrase. */
 export function AppMoneyPhrase({
-  prefix = "Vous gagnez aujourd'hui",
+  prefix = "You're earning today",
   amount,
-  suffix = 'de revenus.',
+  suffix = 'in income.',
   positive = true,
   className,
 }: Props) {

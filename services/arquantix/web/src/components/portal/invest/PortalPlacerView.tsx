@@ -1,7 +1,7 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Banknote, Home, Users } from 'lucide-react'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import {
   PortalPlacerBasketCard,
@@ -11,9 +11,6 @@ import {
   PortalPlacerSeeAll,
   resolveCurrencyIcon,
 } from '@/components/portal/bundles/PortalPlacerBundleCards'
-import { PortalLazyBundleInvestDialog } from '@/components/portal/bundles/PortalLazyBundleInvestDialog'
-import { PortalLazyEarnVaultModal } from '@/components/portal/invest/PortalLazyEarnVaultModal'
-import { PortalLazyLedgityVaultModal } from '@/components/portal/invest/PortalLazyLedgityVaultModal'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
 import { resolveExclusiveOfferCoverUrl } from '@/lib/portal/exclusiveOfferPlaceholderImages'
@@ -21,6 +18,12 @@ import { formatEarnApyFromBps as formatLedgityApyFromBps } from '@/lib/portal/le
 import type { PortalLedgityVaultDetails } from '@/lib/portal/ledgity/ledgityVaultTypes'
 import type { PortalExclusiveOffer } from '@/lib/portal/investTypes'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
+import {
+  portalLedgityVaultInvestRoute,
+  portalMorphoVaultInvestRoute,
+  portalVaultInvestRoute,
+} from '@/lib/portal/portalRouting'
+import { resolvePortalBundleFlowRoute } from '@/lib/portal/resolvePortalBundleFlowRoute'
 import { formatEarnApyFromBps, formatEarnUsd } from '@/lib/portal/morphoVaultFormat'
 import type { PortalMorphoVaultDetails } from '@/lib/portal/morphoVaultTypes'
 import { cn } from '@/lib/utils'
@@ -29,10 +32,10 @@ export type PlacerFilterId = 'all' | 'coffres' | 'offres' | 'paniers'
 export { isPlacerCoffreBundle } from '@/components/portal/bundles/PortalPlacerBundleCards'
 
 const PLACER_FILTERS: { id: PlacerFilterId; label: string }[] = [
-  { id: 'all', label: 'Tout' },
-  { id: 'coffres', label: 'Coffres' },
-  { id: 'offres', label: 'Offres exclu.' },
-  { id: 'paniers', label: 'Paniers crypto' },
+  { id: 'all', label: 'All' },
+  { id: 'coffres', label: 'Vaults' },
+  { id: 'offres', label: 'Exclusive' },
+  { id: 'paniers', label: 'Crypto baskets' },
 ]
 
 function formatDurationMonths(months: number | null): string | null {
@@ -55,7 +58,7 @@ export function PortalPlacerFilter({
 }) {
   return (
     <div className="placer-filter">
-      <div className="seg seg--md" role="tablist" aria-label="Filtrer les placements">
+      <div className="seg seg--md" role="tablist" aria-label="Filter investments">
         {PLACER_FILTERS.map((f) => (
           <button
             key={f.id}
@@ -90,20 +93,20 @@ export function PortalPlacerBanner({ offer }: { offer: PortalExclusiveOffer | nu
       <h2 className="mkt__title">
         {isNiseko ? (
           <>
-            <span className="mkt__title-ui">La beauté </span>
-            <span className="mkt__title-ed">du Japon</span>
+            <span className="mkt__title-ui">The beauty of </span>
+            <span className="mkt__title-ed">Japan</span>
           </>
         ) : (
-          <span className="mkt__title-ui">{offer?.title ?? 'Découvrir nos offres'}</span>
+          <span className="mkt__title-ui">{offer?.title ?? 'Discover our offers'}</span>
         )}
       </h2>
       <p className="mkt__sub">
         {isNiseko
-          ? 'Lodge Niseko Hokkaidō · Hôtellerie de montagne, rendement 6,2 %'
-          : offer?.subtitle || offer?.description || 'Sélection d’actifs tokenisés'}
+          ? 'Lodge Niseko Hokkaidō · Mountain hospitality, 6.2% yield'
+          : offer?.subtitle || offer?.description || 'Curated tokenized assets'}
       </p>
       <span className="btn btn--white mkt__cta">
-        Découvrir l&apos;offre
+        View offer
         <KalaiIcon name="arrow-right" size={16} className="text-current" />
       </span>
     </PortalNavLink>
@@ -116,19 +119,21 @@ function PortalPlacerOfferCard({ offer }: { offer: PortalExclusiveOffer }) {
   const ticket =
     formatDurationMonths(offer.durationMonths) ??
     (offer.apyLabel !== '—' ? offer.apyLabel : offer.targetLabel)
+  const investHref = portalVaultInvestRoute(offer.slug)
+  const withdrawHref = portalVaultInvestRoute(offer.slug, 'withdraw')
 
   return (
-    <PortalNavLink href={offer.href} className="offer offer--sq offer--link no-underline">
-      <div className="offer__media offer__media--sq">
+    <article className="offer offer--sq">
+      <PortalNavLink href={offer.href} className="offer__media offer__media--sq offer--link no-underline">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="offer__img" src={cover} alt="" />
         <span className="offer__cat">
-          <Home aria-hidden className="h-3.5 w-3.5" />
+          <KalaiIcon name="home" size={16} aria-hidden />
           {offer.category}
         </span>
         <div className="offer__chips">
           <span className="o-chip">
-            <Users aria-hidden className="h-3.5 w-3.5" />
+            <KalaiIcon name="user-group" size={16} aria-hidden />
             {offer.investorsCount}
           </span>
           <span className="o-chip o-chip--progress">
@@ -138,25 +143,36 @@ function PortalPlacerOfferCard({ offer }: { offer: PortalExclusiveOffer }) {
             </span>
           </span>
           <span className="o-chip">
-            <Banknote aria-hidden className="h-3.5 w-3.5" />
+            <KalaiIcon name="money-dollar" size={16} aria-hidden />
             {ticket}
           </span>
         </div>
-      </div>
+      </PortalNavLink>
       <div className="offer__body">
-        <div className="offer__text">
+        <PortalNavLink href={offer.href} className="offer__text block no-underline">
           <h3 className="offer__title">{offer.title}</h3>
           <p className="offer__desc">{offer.subtitle || offer.description}</p>
-        </div>
-        <span className="btn btn--primary offer__cta">
-          {offer.isFunded ? 'Voir' : 'Investir'}
-        </span>
+        </PortalNavLink>
+        {offer.isFunded ? (
+          <div className="offer__ctas">
+            <PortalNavLink href={offer.href} className="btn btn--primary offer__cta">
+              View
+            </PortalNavLink>
+            <PortalNavLink href={withdrawHref} className="btn btn--secondary offer__cta">
+              Withdraw
+            </PortalNavLink>
+          </div>
+        ) : (
+          <PortalNavLink href={investHref} className="btn btn--primary offer__cta">
+            Invest
+          </PortalNavLink>
+        )}
       </div>
-    </PortalNavLink>
+    </article>
   )
 }
 
-/** @deprecated Utiliser PortalAdvisorBanner depuis @/components/portal/PortalAdvisorBanner */
+/** @deprecated Use PortalAdvisorBanner from @/components/portal/PortalAdvisorBanner */
 export function PortalPlacerAdvisorBanner() {
   return <PortalAdvisorBanner />
 }
@@ -176,10 +192,13 @@ export function PortalPlacerView({
   defiVaults = [],
   showDeFiVaults = false,
 }: Props) {
+  const router = useRouter()
   const [filter, setFilter] = useState<PlacerFilterId>('all')
-  const [investBundle, setInvestBundle] = useState<PortalCryptoBundle | null>(null)
-  const [morphoVault, setMorphoVault] = useState<PortalMorphoVaultDetails | null>(null)
-  const [ledgityVault, setLedgityVault] = useState<PortalLedgityVaultDetails | null>(null)
+
+  const openBundleInvest = (bundle: PortalCryptoBundle) => {
+    const href = resolvePortalBundleFlowRoute(bundle, 'invest')
+    if (href) router.push(href)
+  }
 
   const show = (key: PlacerFilterId) => filter === 'all' || filter === key
 
@@ -208,8 +227,18 @@ export function PortalPlacerView({
           categoryIcon: 'vault' as const,
           href: undefined,
           onInvest: () => {
-            if (isLedgityVault(vault)) setLedgityVault(vault)
-            else setMorphoVault(vault)
+            if (isLedgityVault(vault)) {
+              router.push(portalLedgityVaultInvestRoute(vault.id))
+            } else {
+              router.push(portalMorphoVaultInvestRoute(vault.vaultAddress))
+            }
+          },
+          onWithdraw: () => {
+            if (isLedgityVault(vault)) {
+              router.push(portalLedgityVaultInvestRoute(vault.id, 'withdraw'))
+            } else {
+              router.push(portalMorphoVaultInvestRoute(vault.vaultAddress, 'withdraw'))
+            }
           },
         }))
       : []),
@@ -223,11 +252,13 @@ export function PortalPlacerView({
           <PortalPlacerFilter value={filter} onChange={setFilter} />
 
           {show('coffres') && coffreCards.length > 0 ? (
-            <div id="placer-coffres">
+            <div id="placer-coffres" className="placer-section">
               <PortalPlacerSectionHead
-                title="Coffres"
-                desc="Une réserve productive, choisie selon votre horizon."
-                action={<PortalPlacerSeeAll href="#placer-coffres">Voir tous les coffres</PortalPlacerSeeAll>}
+                title="Vaults"
+                desc="A productive reserve, matched to your time horizon."
+                action={
+                  <PortalPlacerSeeAll href="#placer-coffres">View all vaults</PortalPlacerSeeAll>
+                }
               />
               <div className="placer-grid placer-grid--2">
                 {coffreCards.map((card) => {
@@ -236,7 +267,7 @@ export function PortalPlacerView({
                       <PortalPlacerBundleCoffreCard
                         key={card.key}
                         bundle={card.bundle}
-                        onInvest={() => setInvestBundle(card.bundle)}
+                        onInvest={() => openBundleInvest(card.bundle)}
                       />
                     )
                   }
@@ -248,11 +279,13 @@ export function PortalPlacerView({
           ) : null}
 
           {show('offres') && offers.length > 0 ? (
-            <div id="placer-offres">
+            <div id="placer-offres" className="placer-section">
               <PortalPlacerSectionHead
-                title="Offres exclusives"
-                desc="Une sélection mensuelle d'actifs tokenisés, instruits par notre comité."
-                action={<PortalPlacerSeeAll href="#placer-offres">Voir toutes les offres</PortalPlacerSeeAll>}
+                title="Exclusive offers"
+                desc="A monthly selection of tokenized assets, vetted by our investment committee."
+                action={
+                  <PortalPlacerSeeAll href="#placer-offres">View all offers</PortalPlacerSeeAll>
+                }
               />
               <div className="placer-grid placer-grid--2">
                 {offers.map((offer) => (
@@ -263,18 +296,20 @@ export function PortalPlacerView({
           ) : null}
 
           {show('paniers') && panierBundles.length > 0 ? (
-            <div id="placer-paniers">
+            <div id="placer-paniers" className="placer-section">
               <PortalPlacerSectionHead
-                title="Paniers crypto"
-                desc="Des expositions thématiques rééquilibrées chaque mois."
-                action={<PortalPlacerSeeAll href="#placer-paniers">Voir tous les paniers</PortalPlacerSeeAll>}
+                title="Crypto baskets"
+                desc="Thematic exposures rebalanced every month."
+                action={
+                  <PortalPlacerSeeAll href="#placer-paniers">View all baskets</PortalPlacerSeeAll>
+                }
               />
               <div className="placer-grid placer-grid--2">
                 {panierBundles.map((bundle) => (
                   <PortalPlacerBasketCard
                     key={bundle.id}
                     bundle={bundle}
-                    onInvest={() => setInvestBundle(bundle)}
+                    onInvest={() => openBundleInvest(bundle)}
                   />
                 ))}
               </div>
@@ -286,24 +321,6 @@ export function PortalPlacerView({
           <PortalPlacerAdvisorBanner />
         </aside>
       </div>
-
-      {investBundle ? (
-        <PortalLazyBundleInvestDialog
-          bundle={investBundle}
-          open
-          onOpenChange={(open) => {
-            if (!open) setInvestBundle(null)
-          }}
-        />
-      ) : null}
-
-      {morphoVault ? (
-        <PortalLazyEarnVaultModal vault={morphoVault} onClose={() => setMorphoVault(null)} />
-      ) : null}
-
-      {ledgityVault ? (
-        <PortalLazyLedgityVaultModal vault={ledgityVault} onClose={() => setLedgityVault(null)} />
-      ) : null}
     </>
   )
 }

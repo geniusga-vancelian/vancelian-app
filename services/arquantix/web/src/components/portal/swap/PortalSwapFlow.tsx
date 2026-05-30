@@ -23,6 +23,11 @@ import { buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
 import {
+  buildSwapFromOptions,
+  buildSwapToOptions,
+  type SwapToOption,
+} from '@/lib/portal/swapFlowFormat'
+import {
   executeSwap,
   fetchSupportedSwapAssets,
   type SwapQuotePayload,
@@ -189,6 +194,37 @@ export function PortalSwapFlow() {
     [activeSwapChain],
   )
 
+  const swapFromOptions = useMemo(() => {
+    if (!toAsset || !toChain) return []
+    return buildSwapFromOptions(sourceAssets, positions, toAsset, toChain)
+  }, [positions, sourceAssets, toAsset, toChain])
+
+  const swapToOptions = useMemo(() => {
+    if (!fromAsset || !activeSwapChain) return []
+    return buildSwapToOptions(destinationAssets, fromAsset, activeSwapChain)
+  }, [activeSwapChain, destinationAssets, fromAsset])
+
+  const onChangeFromOnAmount = useCallback(
+    (option: SwapFromOption) => {
+      if (!activeSwapChain) return
+      setFromAsset(option.asset)
+      setFromChain(activeSwapChain)
+      setSourceBalance(
+        option.position ? resolveSpendableSwapBalance(option.position) : option.balance,
+      )
+    },
+    [activeSwapChain],
+  )
+
+  const onChangeToOnAmount = useCallback(
+    (option: SwapToOption) => {
+      if (!activeSwapChain) return
+      setToAsset(option.asset)
+      setToChain(activeSwapChain)
+    },
+    [activeSwapChain],
+  )
+
   const onAmountContinue = useCallback((nextAmount: string, nextQuote: SwapQuotePayload) => {
     setAmount(nextAmount)
     setQuote(nextQuote)
@@ -324,6 +360,10 @@ export function PortalSwapFlow() {
           fromChain={fromChain}
           toChain={toChain}
           sourceBalance={sourceBalance}
+          fromOptions={swapFromOptions}
+          toOptions={swapToOptions}
+          onChangeFrom={onChangeFromOnAmount}
+          onChangeTo={onChangeToOnAmount}
           onContinue={onAmountContinue}
           onBack={() => setStep(urlIntent.mode === 'sell' ? 'to' : urlIntent.mode === 'buy' ? 'from' : 'from')}
         />

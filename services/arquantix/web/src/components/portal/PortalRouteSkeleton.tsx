@@ -43,11 +43,20 @@ export function PortalMarketsSkeleton() {
 
 export function PortalInvestSkeleton() {
   return (
-    <TwoColumnSkeleton>
-      <ShimmerBlock className="h-40 rounded-v-card" />
-      <ShimmerBlock className="h-72 rounded-v-card" />
-      <ShimmerBlock className="h-80 rounded-v-card" />
-    </TwoColumnSkeleton>
+    <PortalPageContainer>
+      <div className="portal-placer-grid">
+        <div className="col-main space-y-10">
+          <ShimmerBlock className="aspect-[21/9] min-h-[280px] rounded-v-card" />
+          <ShimmerBlock className="h-9 w-full max-w-md rounded-v-pill" />
+          <ShimmerBlock className="h-10 w-64 rounded-v-input" />
+          <div className="placer-grid placer-grid--2">
+            <ShimmerBlock className="min-h-[360px] rounded-v-card" />
+            <ShimmerBlock className="min-h-[360px] rounded-v-card" />
+          </div>
+        </div>
+        <ShimmerBlock className="col-side hidden h-20 rounded-v-card lg:block" />
+      </div>
+    </PortalPageContainer>
   )
 }
 

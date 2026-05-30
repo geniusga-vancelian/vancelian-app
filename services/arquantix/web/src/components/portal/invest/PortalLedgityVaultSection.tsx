@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
-import { PortalLedgityVaultModal } from '@/components/portal/invest/PortalLedgityVaultModal'
 import { PortalDefiVaultOfferCard } from '@/components/portal/invest/PortalDefiVaultOfferCard'
 import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
 import { fetchPortalLedgityVaults } from '@/lib/portal/ledgity/ledgityVaultClient'
@@ -11,6 +10,7 @@ import type {
   PortalLedgityBetaPortalFlags,
   PortalLedgityVaultDetails,
 } from '@/lib/portal/ledgity/ledgityVaultTypes'
+import { portalLedgityVaultInvestRoute } from '@/lib/portal/portalRouting'
 
 type Props = {
   embedded?: boolean
@@ -21,7 +21,6 @@ export function PortalLedgityVaultSection({ embedded = false }: Props) {
   const [beta, setBeta] = useState<PortalLedgityBetaPortalFlags | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedVault, setSelectedVault] = useState<PortalLedgityVaultDetails | null>(null)
 
   const loadVaults = useCallback(async () => {
     setLoading(true)
@@ -94,21 +93,10 @@ export function PortalLedgityVaultSection({ embedded = false }: Props) {
             <PortalDefiVaultOfferCard
               key={vault.id}
               vault={vault}
-              onOpen={() => setSelectedVault(vault)}
+              href={portalLedgityVaultInvestRoute(vault.id)}
             />
           ))}
         </div>
-      ) : null}
-
-      {selectedVault ? (
-        <PortalLedgityVaultModal
-          vault={selectedVault}
-          beta={beta ?? undefined}
-          onClose={() => {
-            setSelectedVault(null)
-            void loadVaults()
-          }}
-        />
       ) : null}
     </section>
   )

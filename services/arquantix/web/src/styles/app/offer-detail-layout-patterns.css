@@ -2,7 +2,33 @@
 
 @scope ([data-v-ds='app']) {
   .ofd-page {
+    max-width: 1200px;
     padding-bottom: 96px;
+  }
+
+  .ofd-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 48px;
+    align-items: start;
+  }
+
+  .ofd-main {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    min-width: 0;
+  }
+
+  @media (max-width: 960px) {
+    .ofd-page {
+      padding-bottom: 120px;
+    }
+
+    .ofd-grid {
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
   }
 
   .ofd-section {
@@ -664,6 +690,26 @@
     z-index: 1;
   }
 
+  .map__cta {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 18px;
+    background: var(--v-white);
+    color: var(--v-fg);
+    border: 0;
+    border-radius: 999px;
+    font-family: var(--v-font-ui);
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 2px 6px rgba(26, 24, 21, 0.12);
+    cursor: pointer;
+  }
+
   .map__mini {
     position: absolute;
     left: 14px;
@@ -1142,6 +1188,12 @@
     width: 100%;
   }
 
+  .ofd-aside__ctas {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .ofd-aside__link {
     text-align: center;
     font-size: 13px;
@@ -1155,14 +1207,109 @@
     text-decoration: underline;
   }
 
-  /* Invest panel */
-  .ofd-invest-panel {
+  /* Exit windows — DS comp 37 */
+  .ofd-section .exit {
+    margin-bottom: 12px;
+  }
+
+  .ofd-section .exit:last-child {
+    margin-bottom: 0;
+  }
+
+  .exit {
+    border-radius: var(--v-radius-lg, 16px);
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 16px;
+    align-items: start;
+    font-family: var(--v-font-ui);
     background: var(--v-white, #ffffff);
+    border: 1px solid var(--v-fg-10);
+  }
+
+  .exit__avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--v-fg-muted);
+    background: var(--v-fg-05);
+  }
+
+  .exit--open .exit__avatar {
+    background: var(--v-green);
+    color: var(--v-white);
+  }
+
+  .exit__body {
+    min-width: 0;
+  }
+
+  .exit__title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+
+  .exit__title {
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--v-fg);
+    margin: 0;
+    line-height: 1.2;
+  }
+
+  .exit__fee {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 6px;
+    background: var(--v-fg-05);
+    color: var(--v-fg);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-feature-settings: 'tnum' on;
+  }
+
+  .exit__text {
+    font-size: 15px;
+    color: var(--v-fg-light);
+    line-height: 1.5;
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .exit__info {
+    width: 20px;
+    height: 20px;
+    color: var(--v-fg-light);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .exit__cta {
+    grid-column: 2 / 4;
+    margin-top: 16px;
+    width: max-content;
+  }
+
+  /* Invest panel — legacy inline embed */
+  .ofd-invest-panel {
+    background: #ffffff;
     border: 1px solid var(--v-fg-10);
     border-radius: var(--v-radius-lg, 16px);
     overflow: hidden;
     box-shadow: 0 1px 2px rgba(26, 24, 21, 0.04);
-    padding: 24px;
+    padding: 0;
   }
 
   /* Sticky mobile CTA */
@@ -1230,6 +1377,13 @@
     }
 
     .ofd-stick__cta {
+      flex-shrink: 0;
+    }
+
+    .ofd-stick__actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
       flex-shrink: 0;
     }
   }

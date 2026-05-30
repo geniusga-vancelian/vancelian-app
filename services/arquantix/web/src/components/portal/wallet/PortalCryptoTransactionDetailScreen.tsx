@@ -30,7 +30,7 @@ export function PortalCryptoTransactionDetailScreen({ asset, txId }: Props) {
     cacheKey: `portal:crypto-wallet:${ticker}`,
     url: `/api/portal/crypto-wallet/${encodeURIComponent(ticker)}`,
     ttlMs: 45_000,
-    errorMessage: 'Impossible de charger la transaction.',
+    errorMessage: 'Unable to load transaction.',
     scopeAware: true,
   })
 
@@ -54,7 +54,7 @@ export function PortalCryptoTransactionDetailScreen({ asset, txId }: Props) {
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-error">{error}</p>
         <Button type="button" onClick={() => void refresh()}>
-          Réessayer
+          Retry
         </Button>
       </Container>
     )
@@ -64,13 +64,13 @@ export function PortalCryptoTransactionDetailScreen({ asset, txId }: Props) {
     return (
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-fg-muted">
-          Transaction introuvable.
+          Transaction not found.
         </p>
         <PortalNavLink
           href={portalCryptoWalletAssetRoute(ticker)}
           className="btn btn--secondary no-underline"
         >
-          Retour à la position
+          Back to position
         </PortalNavLink>
       </Container>
     )
@@ -81,7 +81,7 @@ export function PortalCryptoTransactionDetailScreen({ asset, txId }: Props) {
       <PortalCryptoTransactionDetailView
         detail={detail}
         backHref={portalCryptoWalletAssetRoute(ticker)}
-        backLabel="Retour à la position"
+        backLabel="Back to position"
       />
     </PortalPageContainer>
   )

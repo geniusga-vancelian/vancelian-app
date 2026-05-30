@@ -57,10 +57,10 @@ type Props = {
 }
 
 const DEFAULT_FABS: AppBalanceCardFab[] = [
-  { id: 'deposit', label: 'Déposer', icon: 'add', href: PORTAL_ROUTES.walletDeposit },
-  { id: 'withdraw', label: 'Retirer', icon: 'send-1', disabled: true },
-  { id: 'swap', label: 'Échanger', icon: 'exchange', href: PORTAL_ROUTES.walletSwap },
-  { id: 'invest', label: 'Investir', icon: 'trending-up', href: PORTAL_ROUTES.invest },
+  { id: 'deposit', label: 'Deposit', icon: 'add', href: PORTAL_ROUTES.walletDeposit },
+  { id: 'withdraw', label: 'Withdraw', icon: 'send-1', disabled: true },
+  { id: 'swap', label: 'Swap', icon: 'exchange', href: PORTAL_ROUTES.walletSwap },
+  { id: 'invest', label: 'Invest', icon: 'trending-up', href: PORTAL_ROUTES.invest },
 ]
 
 function BalanceTopAction({ action }: { action: AppBalanceCardTopAction }) {
@@ -130,12 +130,12 @@ export function AppBalanceCardVariantB({
   avatarImageUrl,
   balanceLabel,
   balancePending = false,
-  changeAmountLabel = '+ 0,00 €',
-  changePercentLabel = '+ 0,0 % YTD',
+  changeAmountLabel = '+ €0.00',
+  changePercentLabel = '+ 0.0% YTD',
   changePositive = true,
   chartValues,
   showChart = true,
-  balanceLabelText = 'Solde patrimonial',
+  balanceLabelText = 'Portfolio balance',
   metaLabel,
   welcomeHi = 'Welcome back',
   welcomeLeading,
@@ -155,7 +155,7 @@ export function AppBalanceCardVariantB({
     ? topActions
     : showTopActions
       ? [
-          { id: 'search', icon: 'search', label: 'Recherche', href: searchHref },
+          { id: 'search', icon: 'search', label: 'Search', href: searchHref },
           { id: 'notifications', icon: 'bell', label: 'Notifications', href: notificationsHref },
         ]
       : null
@@ -210,7 +210,7 @@ export function AppBalanceCardVariantB({
           <button
             type="button"
             className="bal-v2__lbl-btn"
-            aria-label={balanceVisible ? 'Masquer le solde' : 'Afficher le solde'}
+            aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
             onClick={() => setBalanceVisible((v) => !v)}
           >
             <KalaiIcon name={balanceVisible ? 'eye' : 'eye-off'} size={16} />

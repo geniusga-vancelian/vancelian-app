@@ -21,9 +21,11 @@ type Props = {
   collateralSubtitle: string
   collateralIconUrl?: string
   stats: AppLoanCardStat[]
+  trailingStats?: AppLoanCardStat[]
   safety?: AppLoanSafety
   safetyLabel?: string
   usagePercent?: number
+  alertAtPercent?: number
   href?: string
   onClick?: () => void
   LinkComponent?: ComponentType<LinkLikeProps>
@@ -60,9 +62,11 @@ export function AppLoanCard({
   collateralSubtitle,
   collateralIconUrl,
   stats,
+  trailingStats,
   safety,
   safetyLabel,
   usagePercent,
+  alertAtPercent,
   href,
   onClick,
   LinkComponent,
@@ -70,10 +74,10 @@ export function AppLoanCard({
 }: Props) {
   const LinkImpl = LinkComponent ?? Link
   const usageFill =
-    usagePercent != null && safety
+    usagePercent != null
       ? {
           width: `${Math.max(0, Math.min(100, usagePercent))}%`,
-          background: safetyTone(safety).fill,
+          background: safetyTone(safety ?? 'ok').fill,
         }
       : undefined
 
@@ -96,13 +100,21 @@ export function AppLoanCard({
       </header>
       <dl className="loan__stats">
         {stats.map((row, i) => (
-          <div key={i} className="loan__row">
+          <div key={`head-${i}`} className="loan__row">
             <dt>{row.label}</dt>
             <dd className={typeof row.value === 'string' ? 'v-tnum' : undefined}>
               {row.value}
             </dd>
           </div>
         ))}
+        {safety && safetyLabel ? (
+          <div className="loan__row">
+            <dt>Niveau de sécurité</dt>
+            <dd>
+              <LoanSafetyTag safety={safety} label={safetyLabel} />
+            </dd>
+          </div>
+        ) : null}
         {usagePercent != null ? (
           <div className="loan__row">
             <dt>Utilisation actuelle</dt>
@@ -116,12 +128,21 @@ export function AppLoanCard({
             </dd>
           </div>
         ) : null}
-        {safety && safetyLabel ? (
-          <div className="loan__row">
-            <dt>Niveau de sécurité</dt>
-            <dd>
-              <LoanSafetyTag safety={safety} label={safetyLabel} />
+        {trailingStats?.map((row, i) => (
+          <div key={`tail-${i}`} className="loan__row">
+            <dt>{row.label}</dt>
+            <dd className={typeof row.value === 'string' ? 'v-tnum' : undefined}>
+              {row.value}
             </dd>
+          </div>
+        ))}
+        {alertAtPercent != null ? (
+          <div className="loan__row">
+            <dt>
+              <KalaiIcon name="bell" size={16} className="loan__alert-ic" />
+              Je reçois une alerte à
+            </dt>
+            <dd className="v-tnum">{alertAtPercent}&nbsp;%</dd>
           </div>
         ) : null}
       </dl>

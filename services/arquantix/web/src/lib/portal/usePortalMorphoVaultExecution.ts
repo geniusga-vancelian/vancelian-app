@@ -10,7 +10,9 @@ import {
   preparePortalMorphoTransactions,
 } from '@/lib/portal/morphoVaultClient'
 import { buildWalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
+import { resolvePortalExecutionScopeWallet } from '@/lib/portal/resolvePortalExecutionScopeWallet'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
+import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
 
 const RECEIPT_TIMEOUT_MS = 180_000
 
@@ -30,6 +32,7 @@ function sleep(ms: number): Promise<void> {
 
 export function usePortalMorphoVaultExecution() {
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
+  const { resolveExecutionWallet } = useExecutionWallet()
 
   const execute = useCallback(
     async (args: {
@@ -41,24 +44,28 @@ export function usePortalMorphoVaultExecution() {
     }) => {
       args.onPhaseChange?.('preparing')
 
-      const wallet = await resolveWallet()
-      const walletMetadata = buildWalletSourceMetadata(wallet)
+      const scopeWallet = await resolvePortalExecutionScopeWallet(resolveExecutionWallet)
+      const walletMetadata = buildWalletSourceMetadata(scopeWallet)
 
       const prepared = await preparePortalMorphoTransactions({
         vaultAddress: args.vaultAddress,
-        walletAddress: wallet.address,
+        walletAddress: scopeWallet.address,
         operation: args.operation,
         amount: args.amount,
         idempotencyKey: args.idempotencyKey,
         walletSource: walletMetadata,
-        externalWalletId: wallet.type === 'external_evm' ? wallet.externalWalletId : null,
-        privyWalletId: wallet.type === 'privy_embedded' ? wallet.privyWalletId ?? null : null,
+        externalWalletId: scopeWallet.type === 'external_evm' ? scopeWallet.externalWalletId : null,
+        privyWalletId: scopeWallet.type === 'privy_embedded' ? scopeWallet.privyWalletId ?? null : null,
       })
 
       if (prepared.serverCompleted) {
         args.onPhaseChange?.('confirmed')
         return prepared.ledgerEntries[0]?.id ?? null
       }
+
+      const wallet = await resolveWallet(scopeWallet, {
+        expectedAddress: scopeWallet.address,
+      })
 
       const client = createBasePublicClient({ side: 'client' })
 
@@ -139,7 +146,7 @@ export function usePortalMorphoVaultExecution() {
       args.onPhaseChange?.('confirmed')
       return lastHash
     },
-    [resolveWallet, sendPortalTransaction],
+    [resolveExecutionWallet, resolveWallet, sendPortalTransaction],
   )
 
   const executeWithFriendlyErrors = useCallback(

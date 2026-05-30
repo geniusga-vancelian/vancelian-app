@@ -24,7 +24,12 @@ export function PortalNewsWidget({ data, minReadLabel = 'min' }: Props) {
 
   return (
     <section className="flex w-full flex-col gap-3">
-      <AppSectionHeader title={data.title} moreHref={headerHref} moreLabel="View all articles" />
+      <AppSectionHeader
+        title={data.title}
+        size="lg"
+        moreHref={headerHref}
+        moreLabel="View all articles"
+      />
       <AppNewsDeck>
         {data.items.map((item) => (
           <PortalFeaturedArticleCard

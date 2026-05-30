@@ -9,11 +9,11 @@ import { AppMobileStickyBar } from './AppMobileStickyBar'
 /** Aperçu live des composants React Webapp-full (complète les iframes). */
 export function AppDsShowcaseReactLive() {
   return (
-    <section className="app-ds-sec sec" id="w-full-react">
-      <header className="sec__head">
-        <span className="sec__dot" aria-hidden />
-        <span className="sec__num">16b</span>
-        <h2 className="sec__title">Webapp-full — Composants React</h2>
+    <section className="app-ds-sec" id="w-full-react">
+      <header className="app-ds-sec__head">
+        <span className="app-ds-sec__dot" aria-hidden />
+        <span className="app-ds-sec__num">16b</span>
+        <h2 className="app-ds-sec__title">Webapp-full — Composants React</h2>
         <span className="app-ds-sec__count">5 exports · live</span>
       </header>
       <div className="app-ds-grid flex flex-col gap-8">

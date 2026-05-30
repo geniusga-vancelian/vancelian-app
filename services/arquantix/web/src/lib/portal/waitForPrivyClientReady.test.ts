@@ -16,6 +16,6 @@ test('waitForPrivyClientReady resolves when getter becomes true during poll', as
 test('waitForPrivyClientReady throws after timeout', async () => {
   await assert.rejects(
     () => waitForPrivyClientReady(() => false, { timeoutMs: 200, intervalMs: 50 }),
-    /Initialisation Privy/,
+    /Privy is still initializing/,
   )
 })

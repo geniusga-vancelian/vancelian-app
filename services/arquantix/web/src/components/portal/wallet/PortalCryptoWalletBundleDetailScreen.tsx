@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { ArrowLeft, PieChart } from 'lucide-react'
 import {
   AppBalanceCardVariantB,
@@ -18,7 +18,6 @@ import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
 import { PortalBundleAllocationPanel } from '@/components/portal/bundles/PortalBundleAllocationPanel'
-import { PortalBundleWithdrawDialog } from '@/components/portal/bundles/PortalBundleWithdrawDialog'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
@@ -42,6 +41,7 @@ import type { PortalBundlePosition, PortalCryptoWalletBundleDetailPayload } from
 import { CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW } from '@/lib/portal/cryptoWalletTypes'
 import {
   PORTAL_ROUTES,
+  portalBundleInvestRoute,
   portalCryptoWalletAssetRoute,
 } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -69,7 +69,6 @@ function bundlePositionValue(position: PortalBundlePosition, currency: string): 
 
 export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
   const id = portfolioId.trim()
-  const [withdrawOpen, setWithdrawOpen] = useState(false)
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletBundleDetailPayload>({
       cacheKey: `portal:crypto-wallet:bundle:${id}`,
@@ -126,18 +125,23 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
 
   const bundleFabs = useMemo((): AppBalanceCardFab[] => {
     return [
-      { id: 'deposit', label: 'Déposer', icon: 'add', href: PORTAL_ROUTES.walletDeposit },
+      {
+        id: 'deposit',
+        label: 'Deposit',
+        icon: 'add',
+        href: portalBundleInvestRoute(id, 'invest'),
+      },
       {
         id: 'withdraw',
-        label: 'Retirer',
+        label: 'Withdraw',
         icon: 'send-1',
         disabled: !canWithdraw || refreshing,
-        onClick: () => setWithdrawOpen(true),
+        href: canWithdraw ? portalBundleInvestRoute(id, 'withdraw') : undefined,
       },
-      { id: 'swap', label: 'Échanger', icon: 'exchange', disabled: true },
-      { id: 'invest', label: 'Investir', icon: 'trending-up', href: PORTAL_ROUTES.invest },
+      { id: 'swap', label: 'Swap', icon: 'exchange', disabled: true },
+      { id: 'invest', label: 'Invest', icon: 'trending-up', href: PORTAL_ROUTES.invest },
     ]
-  }, [canWithdraw, refreshing])
+  }, [canWithdraw, id, refreshing])
 
   if (loading && !data) {
     return <PortalDashboardSkeleton />
@@ -291,34 +295,36 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
           <section className="flex w-full flex-col gap-3">
             <AppSectionHeader title="Withdraw" />
             <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-              Transférez la valeur du bundle vers Mon Trading. Les fonds ne sont crédités qu’après
-              release comptable (RELEASED).
+              Transfer bundle value to Self Trading. Funds are credited only after accounting release
+              (RELEASED).
             </p>
-            <AppButton
-              type="button"
-              variant="secondary"
-              disabled={!canWithdraw || refreshing}
-              onClick={() => setWithdrawOpen(true)}
-            >
-              Retirer vers Mon Trading
-            </AppButton>
+            {canWithdraw ? (
+              <Button type="button" variant="secondary" asChild>
+                <PortalNavLink href={portalBundleInvestRoute(id, 'withdraw')}>
+                  Withdraw to Self Trading
+                </PortalNavLink>
+              </Button>
+            ) : (
+              <AppButton type="button" variant="secondary" disabled>
+                Withdraw to Self Trading
+              </AppButton>
+            )}
           </section>
         </PortalReveal>
 
         <PortalReveal index={5}>
           <section className="flex w-full flex-col gap-3">
-            <AppSectionHeader title="Activité" size="sm" />
+            <AppSectionHeader title="Activity" size="sm" />
             {transactionPreview.length > 0 ? (
               <PortalTransactionHistory title="" seamless items={transactionPreview} />
             ) : (
               <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-                Aucune opération enregistrée pour ce bundle.
+                No activity recorded for this bundle yet.
               </p>
             )}
             {hasMoreTransactions ? (
               <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-                {data?.transactions?.length ?? 0} opérations au total — rechargez pour voir la liste
-                complète.
+                {data?.transactions?.length ?? 0} operations in total — refresh to see the full list.
               </p>
             ) : null}
           </section>
@@ -332,16 +338,6 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
         >
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
-
-        <PortalBundleWithdrawDialog
-          portfolioId={id}
-          portfolioName={bundle.portfolioName}
-          positions={bundle.positions}
-          currency={currency}
-          open={withdrawOpen}
-          onOpenChange={setWithdrawOpen}
-          onCompleted={() => void refresh()}
-        />
       </PortalDashboardLayout>
     </PortalPageContainer>
   )

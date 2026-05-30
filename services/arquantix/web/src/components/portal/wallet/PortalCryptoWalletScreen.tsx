@@ -1,24 +1,20 @@
 'use client'
 
 import { useMemo } from 'react'
-import {
-  SupportAsidePanel,
-  hasSupportAsideContent,
-} from '@/components/design-system/SupportAsidePanel'
+import { PortalDetailBackLink } from '@/components/portal/PortalDetailBackLink'
 import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
-import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
+import { PortalPageSidebar } from '@/components/portal/PortalPageSidebar'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
-import { usePortalSupportContent } from '@/components/portal/PortalSupportContentProvider'
 import { PortalCryptoWalletHeader } from '@/components/portal/wallet/PortalCryptoWalletHeader'
 import { PortalCryptoWalletPositionsCard } from '@/components/portal/wallet/PortalCryptoWalletPositionsCard'
-import { PortalLombardActiveLoansCard } from '@/components/portal/lombard/PortalLombardActiveLoansCard'
 import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
 import {
   buildUnifiedWalletRows,
   formatCryptoMoney,
+  resolveCryptoHubChangeLabels,
   resolveHubTotalValue,
 } from '@/lib/portal/cryptoWalletFormat'
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
@@ -43,13 +39,11 @@ function resolveChainDepositHref(chain: PortalChain): string {
 const CACHE_KEY = 'portal:crypto-wallet'
 
 const CRYPTO_POSITIONS_FOOTER =
-  'Exposition crypto via paniers diversifiés ou actifs détenus en direct. Conservation Fireblocks (régulé NYDFS), couverture Aon 100 M $.'
+  'Your crypto, your keys. Your assets are secured in a personal non-custodial wallet under your control. Vancelian never stores, controls, or accesses your private keys, ensuring that only you can manage your funds.'
 
 export function PortalCryptoWalletScreen() {
   const { chain } = usePortalChainContext()
   const { walletScope } = usePortalWalletScopeContext()
-  const cmsSupport = usePortalSupportContent()
-  const showSupportAside = hasSupportAsideContent(cmsSupport)
 
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletHubPayload>({
@@ -62,6 +56,34 @@ export function PortalCryptoWalletScreen() {
 
   const depositHref = useMemo(() => resolveChainDepositHref(chain), [chain])
 
+  const derived = useMemo(() => {
+    if (!data) return null
+
+    const chainLabel = portalChainContextLabel(chain)
+    const walletLabel = portalWalletScopeContextLabel(walletScope)
+    const filteredPositions = filterCryptoPositionsSummaryByPortalScope(
+      data.positions,
+      chain,
+      walletScope,
+    )
+    const rows = buildUnifiedWalletRows(filteredPositions.positions, data.bundles, data.currency)
+    const totalLabel = formatCryptoMoney(
+      resolveHubTotalValue(filteredPositions, data.bundles, data.currency),
+      data.currency,
+    )
+    const performance = resolveCryptoHubChangeLabels(data.performance, data.currency)
+    const emptyMessage = isPortalScopeExternal(walletScope)
+      ? `Integrated wallet balances do not apply to ${walletLabel}. Use Invest for on-chain DeFi positions.`
+      : `No positions on ${chainLabel}`
+
+    return {
+      rows,
+      totalLabel,
+      performance,
+      emptyMessage,
+    }
+  }, [chain, data, walletScope])
+
   if (loading && !data) {
     return <PortalDashboardSkeleton />
   }
@@ -71,58 +93,40 @@ export function PortalCryptoWalletScreen() {
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-error">{error}</p>
         <Button type="button" onClick={() => void refresh()}>
-          Retry
+          Try again
         </Button>
       </Container>
     )
   }
 
-  if (!data) return null
-
-  const chainLabel = portalChainContextLabel(chain)
-  const walletLabel = portalWalletScopeContextLabel(walletScope)
-  const filteredPositions = filterCryptoPositionsSummaryByPortalScope(
-    data.positions,
-    chain,
-    walletScope,
-  )
-
-  const rows = buildUnifiedWalletRows(filteredPositions.positions, data.bundles, data.currency)
-  const totalLabel = formatCryptoMoney(
-    resolveHubTotalValue(filteredPositions, data.bundles, data.currency),
-    data.currency,
-  )
-  const positionsTitle =
-    rows.length > 0 ? `Mes positions · ${rows.length}` : 'Mes positions'
-  const emptyMessage = isPortalScopeExternal(walletScope)
-    ? `Integrated wallet balances do not apply to ${walletLabel}. Use Invest for on-chain DeFi positions.`
-    : `No positions on ${chainLabel}`
+  if (!data || !derived) return null
 
   return (
     <PortalPageContainer>
+      <PortalDetailBackLink href={PORTAL_ROUTES.dashboard} label="Back to portfolio" />
+
       <PortalPortfolioLayout
         main={
           <>
             <PortalReveal index={0}>
               <PortalCryptoWalletHeader
-                balanceLabel={totalLabel}
-                depositHref={depositHref}
+                balanceLabel={derived.totalLabel}
                 balancePending={refreshing}
-                className="pt-0"
+                changeAmountLabel={derived.performance.amountLabel}
+                changePercentLabel={derived.performance.percentLabel}
+                changePositive={derived.performance.positive}
+                chartValues={data.historyPoints}
+                depositHref={depositHref}
               />
             </PortalReveal>
 
             <PortalReveal index={1}>
-              <PortalLombardActiveLoansCard walletPositions={filteredPositions.positions} />
-            </PortalReveal>
-
-            <PortalReveal index={2}>
               <PortalCryptoWalletPositionsCard
-                rows={rows}
+                rows={derived.rows}
                 currency={data.currency}
-                title={positionsTitle}
-                emptyMessage={emptyMessage}
-                footerHint={rows.length > 0 ? CRYPTO_POSITIONS_FOOTER : undefined}
+                count={derived.rows.length}
+                emptyMessage={derived.emptyMessage}
+                footerHint={derived.rows.length > 0 ? CRYPTO_POSITIONS_FOOTER : undefined}
               />
             </PortalReveal>
 
@@ -144,14 +148,7 @@ export function PortalCryptoWalletScreen() {
             </button>
           </>
         }
-        side={
-          <>
-            <PortalAdvisorBanner />
-            {showSupportAside ? (
-              <SupportAsidePanel support={cmsSupport} stickyTopClassName="static" className="static" />
-            ) : null}
-          </>
-        }
+        side={<PortalPageSidebar showPortrait showFeatured />}
       />
     </PortalPageContainer>
   )

@@ -1,11 +1,11 @@
 'use client'
 
 import {
-  AppBalanceCardProduct,
-  type AppBalanceCardProductAction,
-} from '@/components/design-system/app/AppBalanceCardProduct'
-import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
-import { portalBorrowRoute, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+  AppCategoryHero,
+  type AppCategoryHeroAction,
+} from '@/components/design-system/app/AppCategoryHero'
+import { cryptoBrandColor } from '@/lib/portal/cryptoInstrumentAssets'
+import { portalBorrowRoute } from '@/lib/portal/portalRouting'
 import { normalizeLombardCollateralSymbol } from '@/lib/portal/lombard/lombardWalletAsset'
 import { cn } from '@/lib/utils'
 
@@ -13,26 +13,28 @@ type Props = {
   ticker: string
   title: string
   balanceLabel: string
-  holdingsPhrase?: string
+  changeAmountLabel?: string
+  changePercentLabel?: string
+  changePositive?: boolean
+  chartValues?: number[]
   buyHref?: string
   sellHref?: string
   balancePending?: boolean
-  avatarSymbol: string
-  avatarLogoUrl?: string | null
   className?: string
 }
 
-/** En-tête détail position crypto — Webapp4 + handoff Position.html (kind crypto). */
+/** Position hero — handoff Position.html kind=crypto (`.bal.bal--dark.bal--cat`). */
 export function PortalCryptoWalletDetailHeader({
   ticker,
   title,
   balanceLabel,
-  holdingsPhrase,
+  changeAmountLabel,
+  changePercentLabel,
+  changePositive = true,
+  chartValues = [],
   buyHref,
   sellHref,
   balancePending = false,
-  avatarSymbol,
-  avatarLogoUrl,
   className,
 }: Props) {
   const lombardCollateral = normalizeLombardCollateralSymbol(ticker)
@@ -40,10 +42,10 @@ export function PortalCryptoWalletDetailHeader({
     ? portalBorrowRoute({ collateral: lombardCollateral })
     : portalBorrowRoute()
 
-  const actions: AppBalanceCardProductAction[] = [
+  const actions: AppCategoryHeroAction[] = [
     {
       id: 'buy',
-      label: 'Acheter',
+      label: 'Buy',
       icon: 'arrow-down',
       href: buyHref,
       disabled: !buyHref,
@@ -51,7 +53,7 @@ export function PortalCryptoWalletDetailHeader({
     },
     {
       id: 'sell',
-      label: 'Vendre',
+      label: 'Sell',
       icon: 'arrow-up',
       href: sellHref,
       disabled: !sellHref,
@@ -59,7 +61,7 @@ export function PortalCryptoWalletDetailHeader({
     },
     {
       id: 'borrow',
-      label: 'Emprunter',
+      label: 'Borrow',
       icon: 'trending-up',
       href: borrowHref,
       variant: 'secondary',
@@ -67,30 +69,18 @@ export function PortalCryptoWalletDetailHeader({
   ]
 
   return (
-    <section className={cn('flex flex-col gap-4 pb-2 pt-5', className)}>
-      <div className="flex items-center gap-4">
-        <PortalCryptoAvatar
-          ticker={ticker}
-          symbol={avatarSymbol}
-          apiLogoUrl={avatarLogoUrl}
-          size="lg"
-        />
-        <div className="min-w-0">
-          <p className="v-eyebrow m-0">{ticker}</p>
-          {holdingsPhrase ? (
-            <p className="m-0 mt-1 font-ui text-[14px] text-v-fg-muted">{holdingsPhrase}</p>
-          ) : null}
-        </div>
-      </div>
-
-      <AppBalanceCardProduct
-        balanceLabel={balanceLabel}
-        balanceLabelText={title}
-        balancePending={balancePending}
-        showRevenuePhrase={false}
-        actions={actions}
-        className="m-0"
-      />
-    </section>
+    <AppCategoryHero
+      categoryTitle={ticker}
+      label={title}
+      balanceLabel={balanceLabel}
+      balancePending={balancePending}
+      changeAmountLabel={changeAmountLabel}
+      changePercentLabel={changePercentLabel}
+      changePositive={changePositive}
+      chartValues={chartValues}
+      accent={cryptoBrandColor(ticker)}
+      actions={actions}
+      className={cn('pt-0', className)}
+    />
   )
 }

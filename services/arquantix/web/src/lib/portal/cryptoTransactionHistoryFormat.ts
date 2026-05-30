@@ -61,7 +61,7 @@ function formatCryptoAmountDisplay(amount: string): string {
   const parsed = Number(raw)
   if (Number.isNaN(parsed)) return amount.trim()
   const decimals = raw.includes('.') ? Math.min(8, raw.split('.')[1]?.length ?? 0) : 0
-  return new Intl.NumberFormat('fr-FR', {
+  return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: Math.max(decimals, parsed < 1 ? 4 : 2),
   }).format(parsed)
@@ -76,11 +76,11 @@ function formatTransactionDateLabel(tx: PortalCryptoWalletTransaction): string |
   if (!tx.createdAt) return undefined
   const date = new Date(tx.createdAt)
   if (Number.isNaN(date.getTime())) return undefined
-  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(date)
+  return new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' }).format(date)
 }
 
 function formatSwapExchangeTitle(fromAsset: string, toAsset: string): string {
-  return `Échange · ${fromAsset} → ${toAsset}`
+  return `Swap · ${fromAsset} → ${toAsset}`
 }
 
 function formatTransactionMeta(tx: PortalCryptoWalletTransaction, currency: string): string | undefined {
@@ -219,7 +219,7 @@ function mergeSwapGroup(group: PortalCryptoWalletTransaction[]): PortalCryptoWal
     asset: assets.toAsset,
     amountCrypto: amountTo || amountFrom || platform.amountCrypto,
     direction: 'credit',
-    title: platform.title?.trim() || `Échange ${assets.fromAsset} → ${assets.toAsset}`,
+    title: platform.title?.trim() || `Swap ${assets.fromAsset} → ${assets.toAsset}`,
   }
 }
 
@@ -262,7 +262,7 @@ function formatLombardBorrowMeta(collateralAmount: string | undefined, collatera
   const amount = collateralAmount?.trim()
   const asset = normalizeAsset(collateral)
   if (!amount || !asset) return undefined
-  return `Garantie · ${formatCryptoAmountDisplay(amount)} ${asset}`
+  return `Collateral · ${formatCryptoAmountDisplay(amount)} ${asset}`
 }
 
 function formatAllocationMeta(tx: PortalCryptoWalletTransaction): string | undefined {
@@ -313,7 +313,7 @@ export function mapCryptoTransactionToHistoryItem(
     return {
       id: tx.id,
       variant: 'flow',
-      title: tx.title?.trim() || 'Opération bundle',
+      title: tx.title?.trim() || 'Bundle operation',
       subtitle: tx.subtitle?.trim(),
       amount: '—',
       href,
@@ -329,7 +329,7 @@ export function mapCryptoTransactionToHistoryItem(
     return {
       id: tx.id,
       variant: 'borrow',
-      title: tx.title?.trim() || `Emprunt · ${collateral} → USDC`,
+      title: `Borrow · ${collateral} → USDC`,
       subtitle: tx.subtitle?.trim() || formatTransactionDateLabel(tx),
       amount: formatSignedCryptoAmount(borrowAmount, 'USDC', '+'),
       amountTone: 'in',
@@ -387,7 +387,7 @@ export function mapCryptoTransactionToHistoryItem(
   return {
     id: tx.id,
     variant: 'flow',
-    title: tx.title?.trim() || (incoming ? 'Dépôt' : 'Retrait'),
+    title: tx.title?.trim() || (incoming ? 'Deposit' : 'Withdrawal'),
     subtitle: tx.subtitle?.trim() || undefined,
     amount,
     amountTone,
@@ -397,19 +397,19 @@ export function mapCryptoTransactionToHistoryItem(
   }
 }
 
-const FRENCH_MONTHS_SHORT = [
-  'Janv.',
-  'Févr.',
-  'Mars',
-  'Avr.',
-  'Mai',
-  'Juin',
-  'Juil.',
-  'Août',
-  'Sept.',
-  'Oct.',
-  'Nov.',
-  'Déc.',
+const ENGLISH_MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ] as const
 
 export function cryptoTransactionMonthKey(date: Date): string {
@@ -420,11 +420,11 @@ export function formatCryptoTransactionMonthChip(monthKey: string): string {
   const [year, month] = monthKey.split('-')
   const monthIndex = Number(month) - 1
   if (!year || monthIndex < 0 || monthIndex > 11) return monthKey
-  return `${FRENCH_MONTHS_SHORT[monthIndex]} ${year}`
+  return `${ENGLISH_MONTHS_SHORT[monthIndex]} ${year}`
 }
 
 export function formatCryptoTransactionDayLabel(date: Date): string {
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',

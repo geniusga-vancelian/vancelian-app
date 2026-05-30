@@ -25,6 +25,9 @@ type Props = {
   showRevenuePhrase?: boolean
   revenuePrefix?: string
   revenueSuffix?: string
+  changeAmountLabel?: string
+  changePercentLabel?: string
+  changePositive?: boolean
   actions: AppBalanceCardProductAction[]
   className?: string
 }
@@ -61,13 +64,16 @@ function BalanceAction({ action }: { action: AppBalanceCardProductAction }) {
 /** Balance card home produit — Webapp4 pattern (v-card · v-amount-hero · money-phrase). */
 export function AppBalanceCardProduct({
   balanceLabel,
-  balanceLabelText = 'Solde total',
+  balanceLabelText = 'Total balance',
   balancePending = false,
   revenueAmountLabel,
   revenuePositive = true,
   showRevenuePhrase = true,
   revenuePrefix,
   revenueSuffix,
+  changeAmountLabel,
+  changePercentLabel,
+  changePositive = true,
   actions,
   className,
 }: Props) {
@@ -75,6 +81,10 @@ export function AppBalanceCardProduct({
   const displayBalance = balanceVisible ? balanceLabel : '••••••'
   const displayRevenue =
     balanceVisible && revenueAmountLabel ? revenueAmountLabel : balanceVisible ? undefined : '••••'
+  const displayChangeAmount =
+    balanceVisible && changeAmountLabel ? changeAmountLabel : balanceVisible ? undefined : '••••'
+  const displayChangePercent =
+    balanceVisible && changePercentLabel ? changePercentLabel : undefined
 
   return (
     <article className={cn('v-card bal-product', className)}>
@@ -84,12 +94,12 @@ export function AppBalanceCardProduct({
           <button
             type="button"
             className="ic-btn"
-            aria-label={balanceVisible ? 'Masquer le solde' : 'Afficher le solde'}
+            aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
             onClick={() => setBalanceVisible((v) => !v)}
           >
             <KalaiIcon name={balanceVisible ? 'eye' : 'eye-off'} size={16} />
           </button>
-          <button type="button" className="ic-btn" aria-label="Vue allocation" disabled>
+          <button type="button" className="ic-btn" aria-label="Allocation view" disabled>
             <KalaiIcon name="bar-chart-2" size={16} />
           </button>
         </div>
@@ -100,6 +110,22 @@ export function AppBalanceCardProduct({
       ) : (
         <p className="v-amount-hero bal-product__amt">{displayBalance}</p>
       )}
+
+      {!balancePending && displayChangeAmount ? (
+        <p
+          className={cn(
+            'bal-product__chg m-0',
+            !changePositive && 'bal-product__chg--neg',
+          )}
+          aria-live="polite"
+        >
+          <KalaiIcon name={changePositive ? 'arrow-up' : 'arrow-down'} size={16} aria-hidden />
+          {displayChangeAmount}
+          {displayChangePercent ? (
+            <span className="bal-product__chg-pct"> · {displayChangePercent}</span>
+          ) : null}
+        </p>
+      ) : null}
 
       {!balancePending && showRevenuePhrase && displayRevenue ? (
         <AppMoneyPhrase

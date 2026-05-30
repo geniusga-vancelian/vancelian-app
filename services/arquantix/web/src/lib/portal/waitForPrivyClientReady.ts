@@ -13,6 +13,6 @@ export async function waitForPrivyClientReady(
   }
 
   if (!isReady()) {
-    throw new Error('Initialisation Privy en cours. Réessayez dans un instant.')
+    throw new Error('Privy is still initializing. Please wait a moment and try again.')
   }
 }

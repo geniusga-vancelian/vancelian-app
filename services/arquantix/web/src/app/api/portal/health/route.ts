@@ -10,6 +10,9 @@ import {
   getPortalPrivyOtpDevFixedCode,
   isPortalPrivyOtpDevMockEnabled,
 } from '@/lib/portal/privyOtpDevMockConfig'
+import { isMorphoLocalSandboxEnabled } from '@/lib/portal/morphoLocalSandboxConfig'
+
+export const dynamic = 'force-dynamic'
 
 /** Diagnostic portail — vérifie env + reachability API (sans exposer de secrets). */
 export async function GET() {
@@ -35,5 +38,12 @@ export async function GET() {
     apiHealth,
     privyOtpDevMockEnabled: isPortalPrivyOtpDevMockEnabled(),
     privyOtpDevMockCode: getPortalPrivyOtpDevFixedCode(),
+    morphoLocalSandboxEnabled: (() => {
+      try {
+        return isMorphoLocalSandboxEnabled()
+      } catch {
+        return false
+      }
+    })(),
   })
 }

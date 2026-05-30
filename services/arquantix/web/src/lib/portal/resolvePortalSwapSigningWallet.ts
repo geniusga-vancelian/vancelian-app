@@ -44,11 +44,11 @@ function toSigningWallet(wallet: ConnectedWallet): PortalSwapSigningWallet {
 function privySessionRequiredError(hasBackendWallet: boolean): Error {
   if (hasBackendWallet) {
     return new Error(
-      'Session wallet Privy requise pour signer. Ouvrez Mon wallet crypto et activez votre wallet embedded (code e-mail), puis réessayez.',
+      'Privy wallet session required to sign. Open My crypto wallet, activate your embedded wallet (email code), then try again.',
     )
   }
   return new Error(
-    'Wallet Privy embedded requis — créez votre wallet crypto depuis Mon wallet, puis relancez le swap.',
+    'Privy embedded wallet required — create your crypto wallet from My crypto wallet, then retry.',
   )
 }
 
@@ -93,7 +93,7 @@ export async function resolvePortalSwapSigningWallet(args: {
   }
 
   if (!args.ready) {
-    throw new Error('Initialisation Privy en cours. Réessayez dans un instant.')
+    throw new Error('Privy is still initializing. Please wait a moment and try again.')
   }
 
   if (!args.authenticated) {

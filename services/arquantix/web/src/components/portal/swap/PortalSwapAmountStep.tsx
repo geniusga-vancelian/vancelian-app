@@ -3,12 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
+import { PortalInvestFlowDom } from '@/components/portal/invest/PortalInvestFlowDom'
+import { PortalInvestChip } from '@/components/portal/invest/PortalInvestFlowParts'
 import { PortalExecutionScopeBanner } from '@/components/portal/PortalExecutionScopeBanner'
-import { PortalCryptoExchangeDirection } from '@/components/portal/swap/PortalCryptoExchangeDirection'
+import { PortalSwapAssetSelector } from '@/components/portal/swap/PortalSwapAssetSelector'
 import { PortalSwapFlowShell } from '@/components/portal/swap/PortalSwapFlowShell'
-import { Button } from '@/components/ui/button'
 import { isSwapAmountOverPrivyBalance } from '@/lib/portal/swapAmountValidation'
-import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
+import {
+  formatSwapCryptoAmount,
+  swapAssetChipMeta,
+  type SwapFromOption,
+  type SwapToOption,
+} from '@/lib/portal/swapFlowFormat'
 import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import { requestSwapQuote, type SwapQuotePayload } from '@/lib/portal/swapClient'
 import {
@@ -23,6 +29,10 @@ type Props = {
   fromChain: string
   toChain: string
   sourceBalance: number
+  fromOptions: SwapFromOption[]
+  toOptions: SwapToOption[]
+  onChangeFrom: (option: SwapFromOption) => void
+  onChangeTo: (option: SwapToOption) => void
   onContinue: (amount: string, quote: SwapQuotePayload) => void
   onBack: () => void
 }
@@ -33,6 +43,10 @@ export function PortalSwapAmountStep({
   fromChain,
   toChain,
   sourceBalance,
+  fromOptions,
+  toOptions,
+  onChangeFrom,
+  onChangeTo,
   onContinue,
   onBack,
 }: Props) {
@@ -48,6 +62,14 @@ export function PortalSwapAmountStep({
   const [quote, setQuote] = useState<SwapQuotePayload | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scene, setScene] = useState<'form' | 'selector'>('form')
+  const [field, setField] = useState<'from' | 'to' | null>(null)
+  const [popKey, setPopKey] = useState({ from: 0, to: 0 })
+
+  const fromChip = useMemo(() => swapAssetChipMeta(fromAsset), [fromAsset])
+  const toChip = useMemo(() => swapAssetChipMeta(toAsset), [toAsset])
+  const canPickFrom = fromOptions.length > 1
+  const canPickTo = toOptions.length > 1
 
   const selectedExternal = useMemo(
     () => externalWallets.find((row) => row.id === selectedExternalWalletId) ?? externalWallets[0] ?? null,
@@ -89,7 +111,7 @@ export function PortalSwapAmountStep({
       setQuote(result)
     } catch (e) {
       setQuote(null)
-      setError(e instanceof Error ? e.message : 'Estimation impossible')
+      setError(e instanceof Error ? e.message : 'Quote unavailable')
     } finally {
       setLoading(false)
     }
@@ -112,91 +134,194 @@ export function PortalSwapAmountStep({
     return () => window.clearTimeout(timer)
   }, [fetchQuote])
 
+  useEffect(() => {
+    setAmount('')
+    setQuote(null)
+    setError(null)
+  }, [fromAsset, toAsset, fromChain, toChain])
+
   const chainLabel = SWAP_CHAIN_LABELS[fromChain] ?? fromChain
+  const receiveLabel = quote
+    ? formatSwapCryptoAmount(quote.estimated_receive)
+    : loading
+      ? '…'
+      : '0'
+
+  const openSelector = (next: 'from' | 'to') => {
+    if (next === 'from' && !canPickFrom) return
+    if (next === 'to' && !canPickTo) return
+    setField(next)
+    setScene('selector')
+  }
+
+  const closeSelector = () => {
+    setScene('form')
+  }
+
+  const pickFrom = (option: SwapFromOption) => {
+    onChangeFrom(option)
+    setPopKey((p) => ({ ...p, from: p.from + 1 }))
+    closeSelector()
+  }
+
+  const pickTo = (option: SwapToOption) => {
+    onChangeTo(option)
+    setPopKey((p) => ({ ...p, to: p.to + 1 }))
+    closeSelector()
+  }
+
+  const applyMax = () => {
+    if (sourceBalance <= 0) return
+    setAmount(formatSwapCryptoAmount(sourceBalance))
+  }
+
+  const ctaLabel =
+    parsed > 0
+      ? `Swap ${formatSwapCryptoAmount(parsed)} ${fromAsset}`
+      : 'Enter an amount'
 
   return (
     <PortalSwapFlowShell
       title="Swap"
       onBack={onBack}
-      centered
       footer={
-        <Button
-          type="button"
-          className="h-[52px] w-full rounded-full font-ui text-[16px] font-semibold"
-          disabled={!canContinue}
-          onClick={() => quote && onContinue(amount, quote)}
-        >
-          Continuer
-        </Button>
+        scene === 'form' ? (
+          <button
+            type="button"
+            className="btn btn--primary btn--lg inv-cta !w-full"
+            disabled={!canContinue}
+            onClick={() => quote && onContinue(amount, quote)}
+          >
+            Continue
+          </button>
+        ) : null
       }
     >
-      <div className="flex w-full max-w-md flex-col items-center gap-5 text-center">
-        <PortalCryptoExchangeDirection fromAsset={fromAsset} toAsset={toAsset} />
-        <h2 className="m-0 max-w-sm font-ui text-[22px] font-bold leading-snug text-v-fg">
-          Vous êtes sur le point de convertir
-        </h2>
+      <PortalInvestFlowDom
+        scene={scene}
+        form={
+          <div className="inv-pane !p-0">
+            <header className="inv-head">
+              <h2 className="inv-head__title">Swap</h2>
+            </header>
 
-        <PortalExecutionScopeBanner context="swap" className="w-full text-left" />
+            <PortalExecutionScopeBanner context="swap" className="mb-4 text-left" />
 
-        <label className="w-full">
-          <span className="sr-only">Montant</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder={`0 ${fromAsset}`}
-            className={`w-full border-0 bg-transparent text-center font-ui text-[34px] font-bold tracking-tight outline-none ${
-              overBalance ? 'text-red-600' : 'text-v-fg'
-            }`}
-          />
-        </label>
+            <div className="inv-iowrap">
+              <div className="inv-io">
+                <div className="inv-io__top">
+                  <span className="inv-io__label">You pay</span>
+                  <span className="inv-io__balance">
+                    {usesPrivyBalance ? (
+                      <>
+                        Balance {formatSwapCryptoAmount(sourceBalance)} {fromAsset}
+                        {sourceBalance > 0 ? (
+                          <button type="button" className="inv-io__max" onClick={applyMax}>
+                            Max
+                          </button>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>Wallet on {chainLabel}</>
+                    )}
+                  </span>
+                </div>
+                <div className="inv-io__row">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className={`inv-io__amount${overBalance ? ' inv-io__amount--muted' : ''}`}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0"
+                    aria-label="Amount to swap"
+                  />
+                  <PortalInvestChip
+                    asset={fromChip}
+                    popKey={popKey.from}
+                    selectable={canPickFrom}
+                    onClick={() => openSelector('from')}
+                  />
+                </div>
+              </div>
 
-        <div className="min-h-[24px] font-ui text-[14px] font-semibold text-v-fg">
-          {loading ? (
-            <span className="inline-flex items-center gap-2 text-v-fg-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Estimation...
-            </span>
-          ) : quote ? (
-            <span>≈ {formatSwapCryptoAmount(quote.estimated_receive)} {toAsset}</span>
-          ) : (
-            <span className="text-v-fg-muted">≈ 0 {toAsset}</span>
-          )}
-        </div>
+              <div className="inv-divider" aria-hidden="true" />
 
-        {usesPrivyBalance ? (
-          <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-            {sourceBalance > 0 ? (
-              <>
-                Solde wallet Vancelian : {formatSwapCryptoAmount(sourceBalance)} {fromAsset}
-              </>
-            ) : (
-              <>Solde {fromAsset} indisponible — sélectionnez un actif source avec un solde positif.</>
-            )}
-          </p>
-        ) : null}
+              <div className="inv-io">
+                <div className="inv-io__top">
+                  <span className="inv-io__label">You receive</span>
+                  <span className="inv-io__balance">
+                    {loading ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Estimating…
+                      </span>
+                    ) : (
+                      <>≈ {receiveLabel} {toAsset}</>
+                    )}
+                  </span>
+                </div>
+                <div className="inv-io__row">
+                  <input
+                    type="text"
+                    className="inv-io__amount"
+                    value={receiveLabel}
+                    readOnly
+                    aria-label="Estimated receive amount"
+                  />
+                  <PortalInvestChip
+                    asset={toChip}
+                    popKey={popKey.to}
+                    selectable={canPickTo}
+                    onClick={() => openSelector('to')}
+                  />
+                </div>
+              </div>
+            </div>
 
-        {overBalance ? (
-          <p className="m-0 rounded-v-control bg-red-50 px-3 py-2 font-ui text-[13px] text-v-error">
-            {sourceBalance > 0
-              ? `Montant supérieur au solde disponible (${formatSwapCryptoAmount(sourceBalance)} ${fromAsset}).`
-              : `Solde ${fromAsset} insuffisant pour ce montant.`}
-          </p>
-        ) : null}
+            {overBalance ? (
+              <p className="inv-feedback inv-feedback--error">
+                {sourceBalance > 0
+                  ? `Amount exceeds available balance (${formatSwapCryptoAmount(sourceBalance)} ${fromAsset}).`
+                  : `Insufficient ${fromAsset} balance.`}
+              </p>
+            ) : null}
 
-        {mode === 'external_evm' && signingWalletAddress ? (
-          <p className="m-0 font-ui text-[13px] leading-relaxed text-v-fg-muted">
-            Route LI.FI pour{' '}
-            <span className="font-medium text-v-fg">{formatSwapSigningWalletShort(signingWalletAddress)}</span>{' '}
-            sur {chainLabel}. Vérifiez le solde {fromAsset} et l&apos;ETH gas sur cette adresse MetaMask.
-          </p>
-        ) : null}
+            {mode === 'external_evm' && signingWalletAddress ? (
+              <p className="m-0 mt-3 font-ui text-[13px] leading-relaxed text-v-fg-muted">
+                LI.FI route for{' '}
+                <span className="font-medium text-v-fg">{formatSwapSigningWalletShort(signingWalletAddress)}</span>{' '}
+                on {chainLabel}. Check {fromAsset} balance and ETH gas on this MetaMask address.
+              </p>
+            ) : null}
 
-        {error ? (
-          <p className="m-0 rounded-v-control bg-red-50 px-3 py-2 font-ui text-[13px] text-v-error">{error}</p>
-        ) : null}
-      </div>
+            {error ? <p className="inv-feedback inv-feedback--error">{error}</p> : null}
+
+            <button
+              type="button"
+              className="btn btn--primary btn--lg inv-cta mt-4 hidden md:inline-flex"
+              disabled={!canContinue}
+              onClick={() => quote && onContinue(amount, quote)}
+            >
+              {ctaLabel}
+            </button>
+          </div>
+        }
+        selector={
+          scene === 'selector' && field ? (
+            <PortalSwapAssetSelector
+              field={field}
+              fromAsset={fromAsset}
+              toAsset={toAsset}
+              fromOptions={fromOptions}
+              toOptions={toOptions}
+              onPickFrom={pickFrom}
+              onPickTo={pickTo}
+              onClose={closeSelector}
+            />
+          ) : null
+        }
+      />
     </PortalSwapFlowShell>
   )
 }

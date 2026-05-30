@@ -11,11 +11,13 @@ export const PORTAL_ROUTES = {
   savingsWallet: `${PORTAL_PATH_PREFIX}/wallet/savings`,
   walletDeposit: `${PORTAL_PATH_PREFIX}/wallet/deposit`,
   walletDepositSol: `${PORTAL_PATH_PREFIX}/wallet/deposit/sol`,
+  walletWithdraw: `${PORTAL_PATH_PREFIX}/wallet/withdraw`,
   walletSwap: `${PORTAL_PATH_PREFIX}/wallet/swap`,
   walletCreate: `${PORTAL_PATH_PREFIX}/wallet/create`,
   myWallets: `${PORTAL_PATH_PREFIX}/wallets`,
   invest: `${PORTAL_PATH_PREFIX}/invest`,
   borrow: `${PORTAL_PATH_PREFIX}/borrow`,
+  creditLine: `${PORTAL_PATH_PREFIX}/credit-line`,
   markets: `${PORTAL_PATH_PREFIX}/markets`,
   marketsAllCrypto: `${PORTAL_PATH_PREFIX}/markets/all-crypto`,
   academy: `${PORTAL_PATH_PREFIX}/academy`,
@@ -171,6 +173,97 @@ export function supportsDedicatedPrivyDeposit(asset: string): boolean {
 export function portalCryptoInstrumentRoute(ticker: string): string {
   const slug = ticker.trim().toLowerCase()
   return `${PORTAL_ROUTES.markets}/${encodeURIComponent(slug || 'btc')}`
+}
+
+/** Détail offre exclusive — `/app/invest/{slug}`. */
+export function portalExclusiveOfferRoute(slug: string): string {
+  const normalized = slug.trim()
+  return normalized
+    ? `${PORTAL_ROUTES.invest}/${encodeURIComponent(normalized)}`
+    : PORTAL_ROUTES.invest
+}
+
+/** Flow investissement vault — `/app/invest/{slug}/invest` (comme wallet/swap pour le buy). */
+export function portalVaultInvestRoute(
+  slug: string,
+  mode: PortalVaultFlowMode = 'invest',
+): string {
+  const base = `${portalExclusiveOfferRoute(slug)}/invest`
+  return mode === 'withdraw' ? `${base}?mode=withdraw` : base
+}
+
+/** Investissement DeFi Morpho — page dédiée (Privy stable via layout vault). */
+export function portalMorphoVaultInvestRoute(
+  vaultAddress: string,
+  mode: PortalVaultFlowMode = 'invest',
+): string {
+  const address = vaultAddress.trim().toLowerCase()
+  const base = `${PORTAL_ROUTES.invest}/vault/morpho/${encodeURIComponent(address)}`
+  return mode === 'withdraw' ? `${base}?mode=withdraw` : base
+}
+
+/** Investissement DeFi Ledgity — page dédiée. */
+export function portalLedgityVaultInvestRoute(
+  vaultId: string,
+  mode: PortalVaultFlowMode = 'invest',
+): string {
+  const id = vaultId.trim()
+  const base = `${PORTAL_ROUTES.invest}/vault/ledgity/${encodeURIComponent(id)}`
+  return mode === 'withdraw' ? `${base}?mode=withdraw` : base
+}
+
+export type PortalVaultFlowMode = 'invest' | 'withdraw'
+
+export function parsePortalVaultFlowMode(value: string | null | undefined): PortalVaultFlowMode {
+  return value === 'withdraw' ? 'withdraw' : 'invest'
+}
+
+type PortalDefiVaultFlowTarget = {
+  integrationMode: 'direct_morpho' | 'ledgity_vault'
+  vaultAddress: string
+  /** Identifiant portail (Morpho/Ledgity). */
+  vaultId: string
+}
+
+/** Route invest/retrait DeFi (Morpho ou Ledgity) depuis n’importe quel écran portail. */
+export function resolvePortalDefiVaultFlowRoute(
+  vault: PortalDefiVaultFlowTarget,
+  mode: PortalVaultFlowMode = 'invest',
+  options?: { returnTo?: 'savings' },
+): string {
+  const base =
+    vault.integrationMode === 'ledgity_vault'
+      ? portalLedgityVaultInvestRoute(vault.vaultId, mode)
+      : portalMorphoVaultInvestRoute(vault.vaultAddress, mode)
+  if (options?.returnTo === 'savings') {
+    return `${base}${base.includes('?') ? '&' : '?'}from=savings`
+  }
+  return base
+}
+
+/** Invest / retrait bundle crypto (portfolio PE provisionné). */
+export function portalBundleInvestRoute(
+  portfolioId: string,
+  mode: PortalVaultFlowMode = 'invest',
+): string {
+  const id = portfolioId.trim()
+  const base = `${PORTAL_ROUTES.invest}/bundle/${encodeURIComponent(id)}`
+  return mode === 'withdraw' ? `${base}?mode=withdraw` : base
+}
+
+/** Invest bundle depuis le catalogue produit (fallback si pas encore de portfolio). */
+export function portalBundleProductInvestRoute(
+  productCode: string,
+  mode: PortalVaultFlowMode = 'invest',
+  options?: { portfolioId?: string | null },
+): string {
+  const code = productCode.trim().toUpperCase()
+  const portfolioId = options?.portfolioId?.trim()
+  if (portfolioId) {
+    return portalBundleInvestRoute(portfolioId, mode)
+  }
+  const base = `${PORTAL_ROUTES.invest}/bundle/product/${encodeURIComponent(code)}`
+  return mode === 'withdraw' ? `${base}?mode=withdraw` : base
 }
 
 /** Détail produit crypto bundle (catalogue Markets / Placer) — layout Panier.html. */

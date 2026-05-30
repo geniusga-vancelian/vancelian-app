@@ -38,7 +38,7 @@ export function PortalInvestScreen() {
     cacheKey: INVEST_CACHE_KEY,
     url: `/api/portal/invest?locale=${PORTAL_CONTENT_LOCALE}`,
     ttlMs: 120_000,
-    errorMessage: 'Impossible de charger les offres.',
+    errorMessage: 'Unable to load investment offers.',
   })
 
   const {
@@ -49,7 +49,7 @@ export function PortalInvestScreen() {
     cacheKey: MARKETS_CACHE_KEY,
     url: `/api/portal/markets?locale=${PORTAL_CONTENT_LOCALE}`,
     ttlMs: 120_000,
-    errorMessage: 'Impossible de charger les paniers.',
+    errorMessage: 'Unable to load baskets.',
   })
 
   const [defiVaults, setDefiVaults] = useState<
@@ -96,7 +96,7 @@ export function PortalInvestScreen() {
           onClick={() => void refreshInvest()}
           className="v-text-link border-0 bg-transparent p-0 font-ui text-[14px]"
         >
-          Réessayer
+          Try again
         </button>
       </Container>
     )
@@ -129,7 +129,7 @@ export function PortalInvestScreen() {
           investRefreshing && 'opacity-50',
         )}
       >
-        {investRefreshing ? 'Actualisation…' : 'Actualiser'}
+        {investRefreshing ? 'Refreshing…' : 'Refresh'}
       </button>
     </PortalPageContainer>
   )

@@ -10,8 +10,17 @@ import type { PortalWalletRow } from '@/lib/portal/dashboardTypes'
 import { resolveAccountsRowHref } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
+export type PortalCreditLineRow = {
+  title?: string
+  subtitle: string
+  balanceLabel: string
+  href: string
+  pending?: boolean
+}
+
 type Props = {
   rows: PortalWalletRow[]
+  creditLine?: PortalCreditLineRow | null
   title?: string
   portfolioPending?: boolean
   registrationProgressPercent?: number
@@ -28,14 +37,15 @@ function resolveRegistrationProgressLabel(
   if (completed == null || total == null || total <= 0) return undefined
   return (
     <>
-      Étape <b>{completed}</b> sur {total}
+      Step <b>{completed}</b> of {total}
     </>
   )
 }
 
 export function PortalAccountsCard({
   rows,
-  title = 'Mes comptes',
+  creditLine,
+  title = 'My accounts',
   portfolioPending = false,
   registrationProgressPercent,
   registrationStepCompleted,
@@ -43,7 +53,7 @@ export function PortalAccountsCard({
 }: Props) {
   return (
     <section className="flex w-full flex-col gap-3">
-      <AppSectionHeader title={title} size="sm" />
+      <AppSectionHeader title={title} size="lg" />
       <AppAccountSummaryList>
         {rows.map((row) => {
           const locked = row.locked === true
@@ -60,17 +70,12 @@ export function PortalAccountsCard({
               pending={pending}
               showChevron={Boolean(href) && !locked}
               leading={
-                <PortalWalletRowAvatar
-                  iconKey={row.iconKey}
-                  iconTone={row.iconTone}
-                  locked={locked}
-                  surface="account"
-                />
+                <PortalWalletRowAvatar rowId={row.id} locked={locked} />
               }
-              title={row.id === 'euro' && locked ? 'Compte euro' : row.title}
+              title={row.id === 'euro' && locked ? 'Euro account' : row.title}
               subtitle={
                 locked
-                  ? 'Compte courant en euros'
+                  ? 'Euro current account'
                   : row.subtitle
               }
               amount={shimmerPending ? '' : locked ? '' : row.balance}
@@ -81,7 +86,7 @@ export function PortalAccountsCard({
               }
               ctaLabel={
                 locked
-                  ? 'Compléter mon inscription'
+                  ? 'Complete registration'
                   : row.ctaLabel
               }
               progressPercent={locked ? registrationProgressPercent : undefined}
@@ -97,6 +102,26 @@ export function PortalAccountsCard({
           )
         })}
       </AppAccountSummaryList>
+
+      {creditLine ? (
+        <AppAccountSummaryList className="mt-2">
+          <AppAccountSummaryRow
+            href={creditLine.href}
+            LinkComponent={PortalNavLink}
+            showChevron
+            pending={creditLine.pending}
+            leading={<PortalWalletRowAvatar rowId="credit-line" />}
+            title={creditLine.title ?? 'Credit Line'}
+            subtitle={creditLine.subtitle}
+            amount={creditLine.pending ? '' : creditLine.balanceLabel}
+            amountNode={
+              creditLine.pending ? (
+                <span className="portal-shimmer h-5 w-20 rounded-v-input" aria-hidden />
+              ) : undefined
+            }
+          />
+        </AppAccountSummaryList>
+      ) : null}
     </section>
   )
 }

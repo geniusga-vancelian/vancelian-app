@@ -45,31 +45,31 @@ type Props = {
 }
 
 const MORPHO_DISCLAIMER =
-  'Ce produit place vos USDC dans un vault Morpho sur Base. Le rendement provient d’un protocole DeFi tiers et n’est pas garanti. L’APY est variable. Vous êtes exposé aux risques de smart contract, de liquidité et de marché.'
+  'This product places your USDC in a Morpho vault on Base. Yield comes from a third-party DeFi protocol and is not guaranteed. APY is variable. You are exposed to smart contract, liquidity, and market risks.'
 
 const LEDGITY_DISCLAIMER =
-  'Ce produit place vos stablecoins dans un vault Ledgity (ERC4626) sur Base, exposé à des actifs réels tokenisés (RWA). Le rendement n’est pas garanti et l’APY est variable. La liquidité peut être limitée. Vous êtes exposé aux risques de smart contract, de liquidité, de marché et de contrepartie RWA.'
+  'This product places your stablecoins in a Ledgity vault (ERC4626) on Base, exposed to tokenized real-world assets (RWA). Yield is not guaranteed and APY is variable. Liquidity may be limited. You are exposed to smart contract, liquidity, market, and RWA counterparty risks.'
 
 type ExecutionPhase = PortalMorphoExecutionPhase | PortalLedgityExecutionPhase
 
 function executionPhaseLabel(phase: ExecutionPhase): string {
   switch (phase) {
     case 'preparing':
-      return 'Préparation…'
+      return 'Preparing…'
     case 'approval_pending':
-      return 'Approbation en cours…'
+      return 'Approval pending…'
     case 'deposit_pending':
-      return 'Dépôt en cours…'
+      return 'Deposit pending…'
     case 'withdraw_pending':
-      return 'Retrait en cours…'
+      return 'Withdrawal pending…'
     case 'confirming':
-      return 'Confirmation on-chain…'
+      return 'Confirming on-chain…'
     case 'confirmed':
-      return 'Confirmé'
+      return 'Confirmed'
     case 'failed':
-      return 'Échec'
+      return 'Failed'
     default:
-      return 'Traitement…'
+      return 'Processing…'
   }
 }
 
@@ -197,13 +197,13 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
     setSuccess(null)
 
     if (activeTab === 'deposit' && !disclaimerAccepted) {
-      setError('Veuillez accepter les avertissements avant votre premier dépôt.')
+      setError('Please accept the warnings before your first deposit.')
       return
     }
 
     const normalized = amount.trim().replace(',', '.')
     if (!normalized || Number(normalized) <= 0) {
-      setError('Indiquez un montant valide.')
+      setError('Enter a valid amount.')
       return
     }
 
@@ -225,8 +225,8 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
       })
       setSuccess(
         activeTab === 'deposit'
-          ? `Dépôt de ${normalized} ${assetSymbol} confirmé.${txHash ? ` Tx: ${txHash}` : ''}`
-          : `Retrait de ${normalized} ${assetSymbol} confirmé.${txHash ? ` Tx: ${txHash}` : ''}`,
+          ? `Deposit of ${normalized} ${assetSymbol} confirmed.${txHash ? ` Tx: ${txHash}` : ''}`
+          : `Withdrawal of ${normalized} ${assetSymbol} confirmed.${txHash ? ` Tx: ${txHash}` : ''}`,
       )
       setAmount('')
       idempotencyKeyRef.current = null
@@ -237,7 +237,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
       onSuccess?.()
     } catch (e) {
       setExecutionPhase('failed')
-      setError(e instanceof Error ? e.message : 'Opération impossible.')
+      setError(e instanceof Error ? e.message : 'Operation failed.')
     } finally {
       setExecuting(false)
     }
@@ -275,7 +275,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
     <article className="card-simple overflow-hidden !w-full">
       <div className="border-b border-v-fg-10 px-4 py-3">
         <h2 className="m-0 font-ui text-[16px] font-semibold text-v-fg">
-          {activeTab === 'deposit' ? 'Déposer' : 'Retirer'}
+          {activeTab === 'deposit' ? 'Deposit' : 'Withdraw'}
         </h2>
         <p className="m-0 mt-1 font-ui text-[13px] text-v-fg-muted">
           APY {formatApy(vault.userApyBps)} · {getPortalDefiIntegrationLabel(vault.integrationMode)}
@@ -289,7 +289,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
 
             {showDisclaimer ? (
               <div className="mb-4 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-950">
-                <p className="m-0 font-semibold">Avertissement — premier dépôt</p>
+                <p className="m-0 font-semibold">Warning — first deposit</p>
                 <p className="m-0 mt-2 leading-relaxed">{disclaimer}</p>
                 <Button
                   type="button"
@@ -297,7 +297,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
                   onClick={acceptDisclaimer}
                   disabled={executing}
                 >
-                  J’ai compris et je souhaite continuer
+                  I understand and wish to continue
                 </Button>
               </div>
             ) : null}
@@ -311,14 +311,14 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
             {operationBlocked ? (
               <p className="mb-4 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-900">
                 {depositBlocked
-                  ? 'Les dépôts sont temporairement suspendus. Vous pouvez retirer vos fonds.'
-                  : 'Les retraits sont temporairement suspendus.'}
+                  ? 'Deposits are temporarily paused. You can still withdraw your funds.'
+                  : 'Withdrawals are temporarily paused.'}
               </p>
             ) : null}
 
             {betaLimits && activeTab === 'deposit' ? (
               <p className="mb-4 font-ui text-[12px] text-v-fg-muted">
-                Beta : min {betaLimits.minDepositUsdc} · max {betaLimits.maxDepositUsdc} USDC / tx · exposition max{' '}
+                Beta: min {betaLimits.minDepositUsdc} · max {betaLimits.maxDepositUsdc} USDC / tx · max exposure{' '}
                 {betaLimits.maxUserExposureUsdc} USDC
               </p>
             ) : null}
@@ -326,17 +326,17 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
             <div className="mb-4 rounded-v-card border border-v-border bg-v-card px-4 py-3 font-ui text-[13px]">
               <p className="m-0 text-v-fg-muted">Wallet</p>
               <p className="m-0 mt-1 font-medium text-v-fg">{displayWalletAddress}</p>
-              <p className="m-0 mt-3 text-v-fg-muted">Position dans le vault</p>
+              <p className="m-0 mt-3 text-v-fg-muted">Vault position</p>
               <p className="m-0 mt-1 font-semibold text-v-fg">{positionDisplay}</p>
               {position && position.yieldSyncStatus !== 'pending' && position.earnedYieldDisplay ? (
-                <p className="m-0 mt-1 text-v-green">+{position.earnedYieldDisplay} de rendement</p>
+                <p className="m-0 mt-1 text-v-green">+{position.earnedYieldDisplay} yield</p>
               ) : position?.yieldSyncStatus === 'pending' ? (
                 <p className="m-0 mt-1 text-v-fg-muted">{position.earnedYieldDisplay}</p>
               ) : null}
             </div>
 
             <label className="flex flex-col gap-2 font-ui text-[13px] text-v-fg-muted">
-              Montant ({assetSymbol})
+              Amount ({assetSymbol})
               <input
                 type="text"
                 inputMode="decimal"
@@ -355,7 +355,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
                 onClick={() => setAmount(maxWithdraw)}
                 className="mt-2 v-text-link border-0 bg-transparent p-0 font-ui text-[13px]"
               >
-                Retirer le maximum ({maxWithdraw} {assetSymbol})
+                Withdraw maximum ({maxWithdraw} {assetSymbol})
               </button>
             ) : null}
 
@@ -388,9 +388,9 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
                   {executionPhaseLabel(executionPhase)}
                 </span>
               ) : activeTab === 'deposit' ? (
-                'Confirmer le dépôt'
+                'Confirm deposit'
               ) : (
-                'Confirmer le retrait'
+                'Confirm withdrawal'
               )}
             </Button>
           </>

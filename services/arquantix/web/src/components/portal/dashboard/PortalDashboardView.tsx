@@ -1,18 +1,14 @@
 'use client'
 
 import { useMemo } from 'react'
-import {
-  SupportAsidePanel,
-  hasSupportAsideContent,
-} from '@/components/design-system/SupportAsidePanel'
 import { PortalAccountsCard } from '@/components/portal/dashboard/PortalAccountsCard'
 import { PortalDashboardHeader } from '@/components/portal/dashboard/PortalDashboardHeader'
+import { PortalPortfolioHelpSection } from '@/components/portal/dashboard/PortalPortfolioHelpSection'
 import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
+import { PortalPageSidebar } from '@/components/portal/PortalPageSidebar'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalNewsWidgetSection } from '@/components/portal/dashboard/PortalNewsWidgetSection'
-import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
-import { usePortalSupportContent } from '@/components/portal/PortalSupportContentProvider'
 import {
   applyWalletRowAccess,
   buildWalletRows,
@@ -22,6 +18,8 @@ import {
   resolveReferenceCurrency,
 } from '@/lib/portal/dashboardFormat'
 import type { PortalDashboardPayload } from '@/lib/portal/dashboardTypes'
+import { resolveCreditLineFromPositions } from '@/lib/portal/lombard/lombardCreditLineFormat'
+import { usePortalLombardPositions } from '@/lib/portal/lombard/usePortalLombardPositions'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import {
   isPortalChainDeFiEnabled,
@@ -54,8 +52,11 @@ export function PortalDashboardView({
 }: Props) {
   const { chain } = usePortalChainContext()
   const { walletScope } = usePortalWalletScopeContext()
-  const cmsSupport = usePortalSupportContent()
-  const showSupportAside = hasSupportAsideContent(cmsSupport)
+  const {
+    positions: lombardPositions,
+    loading: lombardLoading,
+    enabled: lombardEnabled,
+  } = usePortalLombardPositions()
 
   const derived = useMemo(() => {
     const currency = resolveReferenceCurrency(data)
@@ -72,8 +73,8 @@ export function PortalDashboardView({
             ...row,
             subtitle:
               count > 0
-                ? `${count} actif${count === 1 ? '' : 's'} · ${chainLabel} · ${walletLabel}`
-                : `Aucun actif · ${chainLabel} · ${walletLabel}`,
+                ? `${count} asset${count === 1 ? '' : 's'} · ${chainLabel} · ${walletLabel}`
+                : `No assets · ${chainLabel} · ${walletLabel}`,
           }
         }
         if (row.id === 'savings' && savings) {
@@ -83,7 +84,7 @@ export function PortalDashboardView({
             subtitle:
               count > 0
                 ? `${count} vault${count === 1 ? '' : 's'} · ${chainLabel} · ${walletLabel}`
-                : `Aucun vault · ${chainLabel} · ${walletLabel}`,
+                : `No vaults · ${chainLabel} · ${walletLabel}`,
           }
         }
         return row
@@ -114,6 +115,18 @@ export function PortalDashboardView({
     }
   }, [data, chain, walletScope])
 
+  const creditLine = useMemo(() => {
+    if (!lombardEnabled) return null
+    const summary = resolveCreditLineFromPositions(lombardPositions)
+    if (!summary.visible && !lombardLoading) return null
+    return {
+      balanceLabel: summary.balanceLabel,
+      subtitle: summary.subtitle,
+      href: summary.href,
+      pending: lombardLoading,
+    }
+  }, [lombardEnabled, lombardLoading, lombardPositions])
+
   const portfolioPending = portfolioLoading || refreshing
 
   return (
@@ -126,16 +139,17 @@ export function PortalDashboardView({
                 balanceLabel={derived.balanceLabel}
                 balancePending={portfolioPending}
                 changeAmountLabel={derived.performance.amountLabel}
+                changePercentLabel={derived.performance.percentLabel}
                 changePositive={derived.performance.positive}
                 depositHref={derived.depositHref}
                 chartValues={derived.chartValues}
-                className="pt-0"
               />
             </PortalReveal>
 
             <PortalReveal index={1}>
               <PortalAccountsCard
                 rows={derived.rows}
+                creditLine={creditLine}
                 portfolioPending={portfolioPending}
                 registrationProgressPercent={derived.registrationProgress}
                 registrationStepCompleted={derived.registrationStepCompleted}
@@ -144,7 +158,11 @@ export function PortalDashboardView({
             </PortalReveal>
 
             <PortalReveal index={2}>
-              <PortalNewsWidgetSection locale="fr" initialData={data.newsWidget} />
+              <PortalNewsWidgetSection locale="en" initialData={data.newsWidget} />
+            </PortalReveal>
+
+            <PortalReveal index={3}>
+              <PortalPortfolioHelpSection />
             </PortalReveal>
 
             {data.partial ? (
@@ -167,14 +185,7 @@ export function PortalDashboardView({
             ) : null}
           </>
         }
-        side={
-          <>
-            <PortalAdvisorBanner />
-            {showSupportAside ? (
-              <SupportAsidePanel support={cmsSupport} stickyTopClassName="static" className="static" />
-            ) : null}
-          </>
-        }
+        side={<PortalPageSidebar showPortrait showFeatured />}
       />
     </PortalPageContainer>
   )

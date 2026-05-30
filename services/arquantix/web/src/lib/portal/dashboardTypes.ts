@@ -136,8 +136,8 @@ export type PortalWalletRow = {
   balance: string
   numericBalance: number
   iconKey: 'euro' | 'savings' | 'offers' | 'portfolio' | 'crypto'
-  /** Teinte DS (`--v-blue`, `--v-green`, etc.) pour l’icône compte. */
-  iconTone: 'blue' | 'green' | 'terracotta' | 'fg' | 'fg-body'
+  /** Conservé pour compatibilité — rendu via `PortalWalletRowAvatar`. */
+  iconTone: 'warm' | 'blue' | 'green' | 'terracotta' | 'safran' | 'fg' | 'fg-body'
   /** Ligne désactivée (ex. compte Euro avant fin d’inscription). */
   locked?: boolean
   ctaLabel?: string

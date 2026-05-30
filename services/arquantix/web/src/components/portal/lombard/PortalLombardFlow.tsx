@@ -308,7 +308,7 @@ export function PortalLombardFlow() {
   }, [])
 
   const handleViewLoans = useCallback(() => {
-    router.push(PORTAL_ROUTES.cryptoWallet)
+    router.push(PORTAL_ROUTES.creditLine)
   }, [router])
 
   const main = !deFiEnabled ? (

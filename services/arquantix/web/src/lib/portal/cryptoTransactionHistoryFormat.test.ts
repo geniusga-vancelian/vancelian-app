@@ -164,10 +164,10 @@ describe('mapCryptoTransactionToHistoryItem', () => {
       'EUR',
     )
     assert.equal(row.variant, 'swap')
-    assert.equal(row.title, 'Échange · USDC → CBBTC')
+    assert.equal(row.title, 'Swap · USDC → CBBTC')
     assert.equal(row.fromAsset, 'USDC')
     assert.equal(row.toAsset, 'CBBTC')
-    assert.match(row.subtitle ?? '', /22 mai/)
+    assert.match(row.subtitle ?? '', /May 22/)
     assert.match(row.meta ?? '', /^−/)
     assert.match(row.meta ?? '', /USDC/)
     assert.match(row.amount, /^\+/)
@@ -191,10 +191,10 @@ describe('mapCryptoTransactionToHistoryItem', () => {
       'EUR',
     )
     assert.equal(row.variant, 'swap')
-    assert.equal(row.title, 'Échange · USDC → CBBTC')
+    assert.equal(row.title, 'Swap · USDC → CBBTC')
     assert.equal(row.fromAsset, 'USDC')
     assert.equal(row.toAsset, 'CBBTC')
-    assert.match(row.subtitle ?? '', /22 mai/)
+    assert.match(row.subtitle ?? '', /May 22/)
     assert.match(row.meta ?? '', /USDC/)
   })
 
@@ -213,10 +213,10 @@ describe('mapCryptoTransactionToHistoryItem', () => {
       'EUR',
     )
     assert.equal(row.variant, 'swap')
-    assert.equal(row.title, 'Échange · USDC → CBBTC')
+    assert.equal(row.title, 'Swap · USDC → CBBTC')
     assert.equal(row.fromAsset, 'USDC')
     assert.equal(row.toAsset, 'CBBTC')
-    assert.match(row.subtitle ?? '', /22 mai/)
+    assert.match(row.subtitle ?? '', /May 22/)
     assert.equal(row.meta, undefined)
     assert.match(row.amount, /^\+/)
     assert.match(row.amount, /CBBTC/)
@@ -255,13 +255,13 @@ describe('mapCryptoTransactionToHistoryItem', () => {
       'EUR',
     )
     assert.equal(row.variant, 'borrow')
-    assert.equal(row.title, 'Emprunt · cbBTC → USDC')
+    assert.equal(row.title, 'Borrow · CBBTC → USDC')
     assert.equal(row.subtitle, 'Morpho · Base')
     assert.equal(row.fromAsset, 'CBBTC')
     assert.equal(row.toAsset, 'USDC')
-    assert.match(row.amount, /1\s?000/)
+    assert.match(row.amount, /1[,\s]?000/)
     assert.match(row.amount, /USDC/)
-    assert.match(row.meta ?? '', /Garantie · 0,017857 CBBTC/)
+    assert.match(row.meta ?? '', /Collateral · 0.017857 CBBTC/)
   })
 
   it('renders bundle PE fund transfer as outgoing USDC flow', () => {

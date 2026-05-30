@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { VaultModuleWeb } from '@/components/exclusive-offer/VaultModuleWeb'
-import { PortalOfferAdvisorCard } from '@/components/portal/invest/PortalOfferDetailSections'
+import { PortalOfferAdvisorCard } from '@/components/portal/invest/vault/PortalOfferMetricsSection'
 import { PortalVaultMarkdownContent } from '@/components/portal/invest/vault/PortalVaultMarkdownContent'
 import {
   PortalVaultAllocation,
@@ -28,81 +28,18 @@ import {
   readCompetitiveAdvantages,
   readDocumentResources,
   readFaqItems,
-  readKeyInformationMetrics,
   readMarkdownModule,
   readParagraphText,
   readStepsTimeline,
-  type PortalVaultMetricRow,
   type PortalVaultTimelineStep,
 } from '@/lib/portal/vaultModulePortalFormat'
 import { cn } from '@/lib/utils'
-
-const COVER_GRAD =
-  'linear-gradient(160deg, #1a2840 0%, #38597d 40%, #c7d4e3 100%)'
 
 const PILLAR_ICONS = ['star', 'globe', 'check'] as const
 
 type PortalVaultContext = {
   headerImageUrl: string | null
   lending: ExclusiveOfferVaultPayload['lending']
-}
-
-function MetricStatRow({ row }: { row: PortalVaultMetricRow }) {
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDown(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  return (
-    <div ref={wrapRef} className={cn('stat', open && 'stat--open')}>
-      <span className="stat__label">
-        <span className="lead" aria-hidden="true">
-          <KalaiIcon name={row.icon} size={16} />
-        </span>
-        {row.key}
-      </span>
-      <span className="stat__value">
-        {row.value}
-        {row.tip ? (
-          <button
-            type="button"
-            className="stat__info"
-            aria-label={`En savoir plus sur ${row.key}`}
-            aria-expanded={open}
-            onClick={(e) => {
-              e.stopPropagation()
-              setOpen((v) => !v)
-            }}
-          >
-            <KalaiIcon name="info" size={16} />
-          </button>
-        ) : null}
-      </span>
-      {open && row.tip ? (
-        <div className="stat__tip" role="tooltip">
-          <p className="stat__tip__title">{row.key}</p>
-          <p className="stat__tip__body">{row.tip}</p>
-          <button type="button" className="stat__tip__close" aria-label="Fermer" onClick={() => setOpen(false)}>
-            <KalaiIcon name="close" size={16} />
-          </button>
-        </div>
-      ) : null}
-    </div>
-  )
 }
 
 function FaqRow({
@@ -164,7 +101,7 @@ function timelineMarker(state: PortalVaultTimelineStep['state']) {
     )
   }
   if (state === 'current') {
-    return <span className="marker marker--current" aria-label="En cours" />
+    return <span className="marker marker--current" aria-label="In progress" />
   }
   return <span className="marker marker--pending" aria-hidden="true" />
 }
@@ -181,75 +118,12 @@ function SectionTitle({ title, action }: { title: string; action?: React.ReactNo
   return <h2 className="ofd-section__title">{title}</h2>
 }
 
-function PortalVaultKeyInformation({ mod }: { mod: VaultModulePublic }) {
-  const title = typeof mod.content.title === 'string' ? mod.content.title.trim() : 'Informations clés'
-  const metrics = readKeyInformationMetrics(mod.content)
-  if (!metrics.length) return null
-  return (
-    <>
-      <SectionTitle title={title || 'Informations clés'} />
-      <div className="stats stats--lined">
-        {metrics.map((row, i) => (
-          <MetricStatRow key={`${row.key}-${i}`} row={row} />
-        ))}
-      </div>
-    </>
-  )
+function PortalVaultKeyInformation(_props: { mod: VaultModulePublic }) {
+  return null
 }
 
-function PortalVaultFunding({ mod, ctx }: { mod: VaultModulePublic; ctx: PortalVaultContext }) {
-  const resolved = mod.content._resolved as Record<string, unknown> | null | undefined
-  if (!resolved && !ctx.lending) return null
-
-  const pct = ctx.lending
-    ? Math.min(100, Math.max(0, Math.round(ctx.lending.progressPct)))
-    : Math.min(
-        100,
-        Math.max(
-          0,
-          Math.round(
-            typeof resolved?.progressPct === 'number'
-              ? resolved.progressPct
-              : Number.parseFloat(String(resolved?.progressPct ?? 0)),
-          ),
-        ),
-      )
-  const raised = ctx.lending?.raised ?? '—'
-  const target =
-    ctx.lending?.target ??
-    (typeof resolved?.totalDisplay === 'string' ? resolved.totalDisplay : '—')
-  const coverUrl = ctx.headerImageUrl
-
-  return (
-    <>
-      {typeof mod.content.title === 'string' && mod.content.title.trim() ? (
-        <SectionTitle title={mod.content.title.trim()} />
-      ) : null}
-      <div className="funding">
-        <div
-          className="funding__media"
-          style={
-            coverUrl ? { backgroundImage: `url('${coverUrl}')` } : { background: COVER_GRAD }
-          }
-        />
-        <div className="funding__body">
-          <div className="funding__lead">
-            <b>{raised}</b>
-            <span className="muted">&nbsp;levés sur {target}</span>
-          </div>
-          <div className="funding__bar">
-            <span style={{ width: `${pct}%` }} />
-          </div>
-          <div className="funding__meta">
-            <span />
-            <span>
-              <b>{pct} %</b>&nbsp;atteints
-            </span>
-          </div>
-        </div>
-      </div>
-    </>
-  )
+function PortalVaultFunding(_props: { mod: VaultModulePublic; ctx: PortalVaultContext }) {
+  return null
 }
 
 function PortalVaultCompetitiveAdvantages({ mod }: { mod: VaultModulePublic }) {
@@ -285,7 +159,7 @@ function PortalVaultSteps({ mod }: { mod: VaultModulePublic }) {
   if (!steps.length) return null
   return (
     <>
-      <SectionTitle title={title || "Calendrier de l'opération"} />
+      <SectionTitle title={title || 'Operation timeline'} />
       <div className="stepper">
         {steps.map((s, i) => (
           <div className="step" key={i}>
@@ -306,7 +180,7 @@ function PortalVaultSteps({ mod }: { mod: VaultModulePublic }) {
 
 function PortalVaultFaq({ mod }: { mod: VaultModulePublic }) {
   const [openIdx, setOpenIdx] = useState(0)
-  const title = typeof mod.content.title === 'string' ? mod.content.title.trim() : 'Questions fréquentes'
+  const title = typeof mod.content.title === 'string' ? mod.content.title.trim() : 'FAQ'
   const faq = readFaqItems(mod.content)
   const footerLabel =
     typeof mod.content.footerLinkLabel === 'string' ? mod.content.footerLinkLabel.trim() : ''
@@ -342,7 +216,7 @@ function PortalVaultFaq({ mod }: { mod: VaultModulePublic }) {
 
 function PortalVaultDocuments({ mod }: { mod: VaultModulePublic }) {
   const title =
-    typeof mod.content.moduleTitle === 'string' ? mod.content.moduleTitle.trim() : 'Ressources'
+    typeof mod.content.moduleTitle === 'string' ? mod.content.moduleTitle.trim() : 'Resources'
   const resources = readDocumentResources(mod.content)
   if (!resources.length) return null
   return (
@@ -373,7 +247,7 @@ function PortalVaultDocuments({ mod }: { mod: VaultModulePublic }) {
               <a
                 href={r.downloadUrl}
                 className="icon-btn icon-btn--outline"
-                aria-label="Télécharger"
+                aria-label="Download"
                 target="_blank"
                 rel="noopener noreferrer"
                 download
@@ -402,7 +276,7 @@ function PortalVaultDocuments({ mod }: { mod: VaultModulePublic }) {
 
 function PortalVaultLocalisation({ mod }: { mod: VaultModulePublic }) {
   const c = mod.content
-  const title = typeof c.moduleTitle === 'string' ? c.moduleTitle.trim() : 'Localisation'
+  const title = typeof c.moduleTitle === 'string' ? c.moduleTitle.trim() : 'Location'
   const address = typeof c.description === 'string' ? c.description.trim() : ''
   const embedUrl = typeof c.embedUrl === 'string' ? c.embedUrl.trim() : ''
   if (!address && !embedUrl) return null
@@ -414,7 +288,7 @@ function PortalVaultLocalisation({ mod }: { mod: VaultModulePublic }) {
         <div className={cn('map', embedUrl && 'map--embed')}>
           {embedUrl ? (
             <iframe
-              title="Carte"
+              title="Map"
               src={embedUrl}
               className="map__iframe"
               loading="lazy"
@@ -423,12 +297,27 @@ function PortalVaultLocalisation({ mod }: { mod: VaultModulePublic }) {
           ) : (
             <>
               <div className="map__grid" aria-hidden />
+              <button type="button" className="map__cta">
+                View full map
+              </button>
               <div className="map__mini" aria-hidden />
+              <div className="map__zoom" aria-hidden>
+                <button type="button" aria-label="Zoom in">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+                <button type="button" aria-label="Zoom out">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14" />
+                  </svg>
+                </button>
+              </div>
             </>
           )}
         </div>
         <div className="map-card__body">
-          <h3 className="map-card__title">Adresse</h3>
+          <h3 className="map-card__title">Address</h3>
           {address ? <p className="map-card__sub">{address}</p> : null}
         </div>
       </div>
@@ -447,7 +336,7 @@ function PortalVaultMarkdown({ mod }: { mod: VaultModulePublic }) {
   const hasLinks = links.some((l) => l?.label && l?.url)
   if (hasLinks) {
     return (
-      <div className="ofd-narrative">
+      <>
         {moduleTitle ? <SectionTitle title={moduleTitle} /> : null}
         <PortalVaultMarkdownContent markdown={markdown} variant="narrative" />
         <div className="ofd-narrative__actions">
@@ -459,7 +348,7 @@ function PortalVaultMarkdown({ mod }: { mod: VaultModulePublic }) {
             ) : null,
           )}
         </div>
-      </div>
+      </>
     )
   }
 
@@ -467,6 +356,7 @@ function PortalVaultMarkdown({ mod }: { mod: VaultModulePublic }) {
     <>
       {moduleTitle ? <SectionTitle title={moduleTitle} /> : null}
       <div className="overview">
+        {moduleTitle ? <h3 className="overview__title">{moduleTitle}</h3> : null}
         <PortalVaultMarkdownContent markdown={markdown} variant="overview" />
       </div>
     </>

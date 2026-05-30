@@ -97,11 +97,19 @@
     gap: 14px;
     text-decoration: none;
     color: inherit;
-    transition: box-shadow 120ms var(--v-ease-out);
+    transition:
+      background var(--v-motion-fast) var(--v-ease-out),
+      border-color var(--v-motion-fast) var(--v-ease-out);
   }
 
   .actu-card:hover {
-    box-shadow: var(--v-elev-subtle);
+    background: var(--v-card-hover);
+    border-color: var(--v-fg-20);
+    box-shadow: none;
+  }
+
+  .actu-card:active {
+    background: var(--v-fg-10);
   }
 
   .actu-card__img {
@@ -141,7 +149,7 @@
   }
 
   .actu-card__title {
-    font-weight: 700;
+    font-weight: 600;
     font-size: 17px;
     line-height: 1.3;
     color: var(--v-fg);

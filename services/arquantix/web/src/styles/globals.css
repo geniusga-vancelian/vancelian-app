@@ -22,7 +22,10 @@
 @import './app/offer-detail-layout-patterns.css';
 @import './app/bundle-detail-layout-patterns.css';
 @import './app/borrow-layout-patterns.css';
+@import './app/app-category-detail-patterns.css';
 @import './app/borrow-flow.css';
+@import './app/chain-flow-patterns.css';
+@import './app/invest-flow-patterns.css';
 
 @tailwind base;
 @tailwind components;

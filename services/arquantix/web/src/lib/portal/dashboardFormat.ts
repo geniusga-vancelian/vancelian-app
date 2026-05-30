@@ -269,20 +269,20 @@ export function buildWalletRows(
   return [
     {
       id: 'euro',
-      title: 'Euro Account',
-      subtitle: 'Consider investing!',
+      title: 'Euro account',
+      subtitle: 'Euro current account',
       balance: formatPortalMoney(eurBalance, 'EUR'),
       numericBalance: eurBalance,
       iconKey: 'euro',
-      iconTone: 'blue',
+      iconTone: 'warm',
     },
     {
       id: 'savings',
-      title: 'Épargne',
+      title: 'Savings',
       subtitle:
         savingsCount > 0
-          ? `${savingsCount} vault${savingsCount > 1 ? 's' : ''} DeFi`
-          : 'Ouvrez votre premier vault !',
+          ? `${savingsCount} DeFi vault${savingsCount > 1 ? 's' : ''}`
+          : 'Open your first vault!',
       balance: formatPortalMoney(savingsValue, currency),
       numericBalance: savingsValue,
       iconKey: 'savings',
@@ -293,8 +293,8 @@ export function buildWalletRows(
       title: 'Exclusive offers',
       subtitle:
         placementsCount > 0
-          ? `${placementsCount} placement${placementsCount > 1 ? 's' : ''}`
-          : 'Discover exclusive offers!',
+          ? `${placementsCount} portfolio holding${placementsCount > 1 ? 's' : ''}`
+          : 'Discover our exclusive offers',
       balance: formatPortalMoney(placementsValue, 'EUR'),
       numericBalance: placementsValue,
       iconKey: 'offers',
@@ -303,23 +303,23 @@ export function buildWalletRows(
     {
       id: 'portfolio',
       title: 'Managed Portfolio',
-      subtitle: 'Build your portfolio',
+      subtitle: 'Managed by Vancelian',
       balance: formatPortalMoney(0, 'EUR'),
       numericBalance: 0,
       iconKey: 'portfolio',
-      iconTone: 'fg',
+      iconTone: 'blue',
     },
     {
       id: 'crypto',
       title: 'Crypto',
       subtitle:
         privyCount > 0
-          ? `${cryptoCount} crypto-actif${cryptoCount === 1 ? '' : 's'} · incl. Privy`
-          : `${cryptoCount} crypto-actif${cryptoCount === 1 ? '' : 's'}`,
+          ? `${cryptoCount} crypto asset${cryptoCount === 1 ? '' : 's'} · incl. Privy`
+          : `${cryptoCount} crypto asset${cryptoCount === 1 ? '' : 's'}`,
       balance: formatPortalMoney(cryptoValue, currency),
       numericBalance: cryptoValue,
       iconKey: 'crypto',
-      iconTone: 'fg-body',
+      iconTone: 'safran',
     },
   ]
 }

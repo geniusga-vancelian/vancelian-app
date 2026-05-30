@@ -27,7 +27,7 @@ export function PortalCryptoWalletBundleTransactionDetailScreen({ portfolioId, t
       cacheKey: `portal:crypto-wallet:bundle:${id}`,
       url: `/api/portal/crypto-wallet/bundle/${encodeURIComponent(id)}`,
       ttlMs: 45_000,
-      errorMessage: 'Impossible de charger la transaction.',
+      errorMessage: 'Unable to load transaction.',
     })
 
   const tx = useMemo(() => {
@@ -42,8 +42,8 @@ export function PortalCryptoWalletBundleTransactionDetailScreen({ portfolioId, t
 
   const backHref = portalCryptoWalletBundleRoute(id)
   const backLabel = data?.bundle?.portfolioName
-    ? `Retour à ${data.bundle.portfolioName}`
-    : 'Retour au bundle'
+    ? `Back to ${data.bundle.portfolioName}`
+    : 'Back to bundle'
 
   if (loading && !data) {
     return <PortalDashboardSkeleton />
@@ -54,7 +54,7 @@ export function PortalCryptoWalletBundleTransactionDetailScreen({ portfolioId, t
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-error">{error}</p>
         <Button type="button" onClick={() => void refresh()}>
-          Réessayer
+          Retry
         </Button>
       </Container>
     )
@@ -64,7 +64,7 @@ export function PortalCryptoWalletBundleTransactionDetailScreen({ portfolioId, t
     return (
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-fg-muted">
-          Transaction introuvable.
+          Transaction not found.
         </p>
         <PortalNavLink href={backHref} className="btn btn--secondary no-underline">
           {backLabel}

@@ -9,10 +9,13 @@ import {
   mergeLombardBorrowWalletTransactions,
   parseCryptoWalletDetail,
   parseSelfTradingCryptoPositionsPayload,
+  parseWalletHistoryPerformance,
   parseWalletHistoryPoints,
   resolveScopedPrivyPositionForAsset,
 } from '@/lib/portal/cryptoWalletFormat'
+import { parseCryptoPositionMarketQuote } from '@/lib/portal/cryptoPositionDetailFormat'
 import { assetToMarketProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+import { mapWidgetNewsItems } from '@/lib/portal/marketsFormat'
 import {
   maybeApplyLombardWalletOverlay,
   resolveLombardOverlayWalletAddress,
@@ -22,6 +25,8 @@ import { fetchLombardBorrowWalletTransactions } from '@/lib/portal/lombard/lomba
 import { appendPortalScopeQuery } from '@/lib/portal/portalScopeQuery'
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
+import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
+import { resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import type { PortalWalletScope } from '@/lib/portal/portalWalletScopeTypes'
 
@@ -36,6 +41,12 @@ async function fetchBackendJson(path: string) {
     cache: 'no-store',
     signal: AbortSignal.timeout(15000),
   })
+  const data = await res.json().catch(() => null)
+  return { ok: res.ok, data }
+}
+
+async function fetchJson(url: string) {
+  const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
   const data = await res.json().catch(() => null)
   return { ok: res.ok, data }
 }
@@ -78,13 +89,15 @@ export async function GET(
   const portalChain = resolvePortalChain(request)
   const walletScope = resolveWalletScope(request, portalChain)
   const providerSymbol = assetToMarketProviderSymbol(asset)
+  const assetSlug = asset.toLowerCase()
+  const bffOrigin = resolvePortalBffOrigin(request.nextUrl.origin)
   const scopedDetailUrl = appendPortalScopeQuery(
     `/api/app/crypto-positions/${encodeURIComponent(asset)}`,
     portalChain,
     walletScope,
   )
 
-  const [detailRes, directRes, txRes, privyDepRes, historyRes, bootstrapRes, marketRes] =
+  const [detailRes, directRes, txRes, privyDepRes, historyRes, bootstrapRes, marketRes, blogWidgetRes] =
     await Promise.all([
       fetchUpstreamJson(scopedDetailUrl),
       fetchUpstreamJson('/api/app/crypto-positions/direct'),
@@ -100,6 +113,9 @@ export async function GET(
       fetchUpstreamJson('/api/app/bootstrap'),
       fetchBackendJson(
         `/api/market-data/market-summary?symbols=${encodeURIComponent(providerSymbol)}`,
+      ),
+      fetchJson(
+        `${bffOrigin}/api/mobile/flutter/widgets/blog-a-la-une?locale=${PORTAL_CONTENT_LOCALE}&assetSlug=${encodeURIComponent(assetSlug)}`,
       ),
     ])
 
@@ -157,6 +173,7 @@ export async function GET(
 
   let change24hPct: number | undefined
   let logoUrl: string | null = null
+  let marketQuote = null as ReturnType<typeof parseCryptoPositionMarketQuote>
   if (marketRes.ok && marketRes.data) {
     const summaries =
       (marketRes.data as { summaries?: unknown })?.summaries ??
@@ -164,6 +181,7 @@ export async function GET(
     const first = Array.isArray(summaries) ? summaries[0] : null
     if (first && typeof first === 'object') {
       const row = first as Record<string, unknown>
+      marketQuote = parseCryptoPositionMarketQuote(row)
       const raw = row.change_24h_pct ?? row.change24h_pct ?? row.change24hPct
       if (raw != null) change24hPct = Number(String(raw).replace('+', ''))
       const rawLogo = row.logo_url ?? row.logoUrl
@@ -172,6 +190,11 @@ export async function GET(
       }
     }
   }
+
+  const blogFeed = (blogWidgetRes.data as { feeds?: Record<string, unknown> })?.feeds?.[
+    'blog-a-la-une'
+  ]
+  const news = mapWidgetNewsItems(blogFeed, bffOrigin).slice(0, 5)
 
   let transactions = mergeCryptoWalletTransactions(
     txRes.ok ? txRes.data : null,
@@ -206,9 +229,12 @@ export async function GET(
     detail,
     transactions,
     historyPoints: historyRes.ok ? parseWalletHistoryPoints(historyRes.data) : [],
-    change24hPct,
+    performance: historyRes.ok ? parseWalletHistoryPerformance(historyRes.data) : null,
+    change24hPct: change24hPct ?? marketQuote?.change24hPct,
     providerSymbol,
     logoUrl,
+    marketQuote,
+    news,
     partial: !detailRes.ok || !txRes.ok || !privyDepRes.ok || !historyRes.ok || !directRes.ok,
   })
 }

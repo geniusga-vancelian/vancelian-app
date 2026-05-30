@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
-import { PortalEarnVaultModal } from '@/components/portal/invest/PortalEarnVaultModal'
 import { PortalDefiVaultOfferCard } from '@/components/portal/invest/PortalDefiVaultOfferCard'
 import { PortalSectionHeading } from '@/components/portal/PortalPageIntro'
 import { fetchPortalMorphoVaults } from '@/lib/portal/morphoVaultClient'
 import type { PortalMorphoVaultDetails, PortalMorphoBetaPortalFlags } from '@/lib/portal/morphoVaultTypes'
+import { portalMorphoVaultInvestRoute } from '@/lib/portal/portalRouting'
 
 type Props = {
   /** Sous-section d’une liste DeFi unifiée (sans titre h2 principal). */
@@ -19,7 +19,6 @@ export function PortalEarnVaultSection({ embedded = false }: Props) {
   const [beta, setBeta] = useState<PortalMorphoBetaPortalFlags | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedVault, setSelectedVault] = useState<PortalMorphoVaultDetails | null>(null)
 
   const loadVaults = useCallback(async () => {
     setLoading(true)
@@ -92,21 +91,10 @@ export function PortalEarnVaultSection({ embedded = false }: Props) {
             <PortalDefiVaultOfferCard
               key={vault.id}
               vault={vault}
-              onOpen={() => setSelectedVault(vault)}
+              href={portalMorphoVaultInvestRoute(vault.vaultAddress)}
             />
           ))}
         </div>
-      ) : null}
-
-      {selectedVault ? (
-        <PortalEarnVaultModal
-          vault={selectedVault}
-          beta={beta ?? undefined}
-          onClose={() => {
-            setSelectedVault(null)
-            void loadVaults()
-          }}
-        />
       ) : null}
     </section>
   )

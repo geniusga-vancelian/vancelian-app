@@ -38,7 +38,7 @@ export function ExternalWalletProvider({ children, wagmiCookieHeader, wagmiIniti
       reconnectOnMount
     >
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider locale="fr-FR">
+        <RainbowKitProvider locale="en-US">
           <ExecutionWalletProvider>{children}</ExecutionWalletProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
