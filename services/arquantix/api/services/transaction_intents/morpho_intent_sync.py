@@ -5,6 +5,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from .enums import IntentOperationType, IntentProductType, IntentStatus
@@ -17,6 +18,8 @@ MORPHO_LINKED_TABLE = "onchain_vault_transactions"
 MORPHO_PRODUCT = IntentProductType.MORPHO_EARN.value
 
 MORPHO_EARN_OPERATIONS = frozenset({"deposit", "withdraw"})
+MORPHO_VAULT_APPROVE_OPERATIONS = frozenset({"approve", "authorize"})
+MORPHO_DIRECT_INTEGRATION = "direct_morpho"
 
 
 def morpho_intent_key(
@@ -340,3 +343,124 @@ def mark_morpho_intent_reconciliation_required(
         vault_transaction_id=vault_transaction_id,
         status=IntentStatus.RECONCILIATION_REQUIRED.value,
     )
+
+
+def _load_morpho_vault_transaction(
+    db: Session,
+    *,
+    person_id: UUID,
+    vault_transaction_id: str,
+) -> dict[str, Any] | None:
+    row = db.execute(
+        sa.text(
+            """
+            SELECT id, person_id, operation, status, tx_hash, chain_id, wallet_address,
+                   idempotency_key, group_key, integration_mode, tx_index, asset_symbol, amount_raw
+            FROM onchain_vault_transactions
+            WHERE id = :id AND person_id = :person_id
+            """
+        ),
+        {"id": vault_transaction_id, "person_id": str(person_id)},
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+def sync_morpho_vault_approve_attempt(
+    db: Session,
+    *,
+    person_id: UUID,
+    vault_transaction_id: str,
+    tx_hash: str | None = None,
+    vault_status: str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Dual-write forward pour OVT Morpho approve/authorize — sans transaction_intent.
+
+    Ne lève pas — retourne None si OVT hors périmètre (deposit, withdraw, autre intégration).
+    """
+    row = _load_morpho_vault_transaction(
+        db,
+        person_id=person_id,
+        vault_transaction_id=vault_transaction_id,
+    )
+    if row is None:
+        return None
+
+    integration_mode = str(row.get("integration_mode") or "").strip().lower()
+    operation = str(row.get("operation") or "").strip().lower()
+    if integration_mode != MORPHO_DIRECT_INTEGRATION or operation not in MORPHO_VAULT_APPROVE_OPERATIONS:
+        return None
+
+    resolved_tx = (tx_hash or row.get("tx_hash") or "").strip().lower() or None
+    resolved_status = (vault_status or row.get("status") or "").strip().lower()
+    if resolved_status == "success" and not resolved_tx:
+        return None
+
+    group_key = str(row.get("group_key") or row.get("idempotency_key") or vault_transaction_id)
+    step_index = int(row.get("tx_index") or 0)
+    chain_id = int(row.get("chain_id") or 8453)
+    wallet_address = str(row.get("wallet_address") or "")
+
+    from services.transaction_attempts.dual_write import dual_write_vault_step
+    from services.transaction_attempts.enums import AttemptStepType
+    from services.transaction_attempts.models import OnchainTransactionAttempt
+    from services.transaction_attempts.repository import OnchainTransactionAttemptRepository
+
+    step_type = (
+        AttemptStepType.APPROVE.value
+        if operation == "approve"
+        else AttemptStepType.AUTHORIZE.value
+    )
+
+    existing_ref = (
+        db.query(OnchainTransactionAttempt)
+        .filter(
+            OnchainTransactionAttempt.linked_reference_id == vault_transaction_id,
+            OnchainTransactionAttempt.step_type == step_type,
+        )
+        .first()
+    )
+    if existing_ref is not None:
+        return {
+            "attempt_id": str(existing_ref.id),
+            "intent_id": None,
+            "vault_operation": operation,
+            "already_exists": True,
+        }
+
+    dual_write_vault_step(
+        db,
+        person_id=person_id,
+        vault_transaction_id=vault_transaction_id,
+        chain_id=chain_id,
+        wallet_address=wallet_address,
+        operation=operation,
+        group_key=group_key,
+        step_index=step_index,
+        integration_mode=MORPHO_DIRECT_INTEGRATION,
+        tx_hash=resolved_tx,
+        vault_status=resolved_status,
+        intent_id=None,
+        asset_symbol=str(row.get("asset_symbol") or "") or None,
+        amount_raw=str(row.get("amount_raw") or "") if row.get("amount_raw") is not None else None,
+        dual_write_source="morpho_vault_approve_sync",
+    )
+
+    idem = f"morpho:{person_id}:{group_key}:{step_type}:{step_index}"
+    attempt = OnchainTransactionAttemptRepository.find_by_composite_key(
+        db,
+        idempotency_key=idem,
+        step_type=step_type,
+    )
+    if attempt is None:
+        return None
+
+    return {
+        "attempt_id": str(attempt.id),
+        "intent_id": None,
+        "vault_operation": operation,
+        "status": attempt.status,
+        "tx_hash": attempt.tx_hash,
+        "linked_reference_id": vault_transaction_id,
+        "group_key": group_key,
+    }

@@ -30,6 +30,12 @@ function shouldSyncVaultIntent(integrationMode: string, operation: string): bool
   return integrationMode === 'direct_morpho' || integrationMode === 'ledgity_vault'
 }
 
+/** Receipt Morpho : intent deposit/withdraw + attempt forward approve (sans intent). */
+function shouldSyncMorphoVaultReceipt(integrationMode: string, operation: string): boolean {
+  if (integrationMode !== 'direct_morpho') return false
+  return operation === 'approve' || operation === 'deposit' || operation === 'withdraw'
+}
+
 function syncVaultIntentPending(
   integrationMode: string,
   input: {
@@ -55,6 +61,7 @@ function syncVaultIntentPending(
 
 function syncVaultIntentAfterReceipt(
   integrationMode: string,
+  operation: string,
   input: {
     personId: string
     vaultTransactionId: string
@@ -62,11 +69,11 @@ function syncVaultIntentAfterReceipt(
     vaultStatus: string
   },
 ): void {
-  if (integrationMode === 'direct_morpho') {
+  if (shouldSyncMorphoVaultReceipt(integrationMode, operation)) {
     void syncMorphoIntentAfterReceipt(input)
     return
   }
-  if (integrationMode === 'ledgity_vault') {
+  if (integrationMode === 'ledgity_vault' && shouldSyncVaultIntent(integrationMode, operation)) {
     void syncLedgityIntentAfterReceipt(input)
   }
 }
@@ -275,6 +282,12 @@ export async function updateLedgerAfterReceipt(args: {
   }
 
   if (entry.status === 'success') {
+    syncVaultIntentAfterReceipt(entry.integrationMode, entry.operation, {
+      personId: entry.personId,
+      vaultTransactionId: entry.id,
+      txHash: entry.txHash,
+      vaultStatus: entry.status,
+    })
     return entry
   }
 
@@ -313,14 +326,12 @@ export async function updateLedgerAfterReceipt(args: {
         errorMessage: message,
       },
     }).then((updated) => {
-      if (shouldSyncVaultIntent(updated.integrationMode, updated.operation)) {
-        syncVaultIntentAfterReceipt(updated.integrationMode, {
-          personId: updated.personId,
-          vaultTransactionId: updated.id,
-          txHash: updated.txHash,
-          vaultStatus: updated.status,
-        })
-      }
+      syncVaultIntentAfterReceipt(updated.integrationMode, updated.operation, {
+        personId: updated.personId,
+        vaultTransactionId: updated.id,
+        txHash: updated.txHash,
+        vaultStatus: updated.status,
+      })
       emitMorphoLedgerTerminalSupportLog(updated)
       return updated
     })
@@ -350,14 +361,12 @@ export async function updateLedgerAfterReceipt(args: {
     })
   }
 
-  if (shouldSyncVaultIntent(updated.integrationMode, updated.operation)) {
-    syncVaultIntentAfterReceipt(updated.integrationMode, {
-      personId: updated.personId,
-      vaultTransactionId: updated.id,
-      txHash: updated.txHash,
-      vaultStatus: updated.status,
-    })
-  }
+  syncVaultIntentAfterReceipt(updated.integrationMode, updated.operation, {
+    personId: updated.personId,
+    vaultTransactionId: updated.id,
+    txHash: updated.txHash,
+    vaultStatus: updated.status,
+  })
 
   if (nextStatus !== 'success') {
     emitMorphoLedgerTerminalSupportLog(updated)

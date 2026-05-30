@@ -16,6 +16,7 @@ from .morpho_intent_sync import (
     mark_morpho_intent_confirmed,
     mark_morpho_intent_failed,
     mark_morpho_intent_submitted,
+    sync_morpho_vault_approve_attempt,
 )
 
 morpho_intent_internal_router = APIRouter(
@@ -106,6 +107,15 @@ def sync_receipt(
         )
     else:
         result = None
+
+    if result is None:
+        result = sync_morpho_vault_approve_attempt(
+            db,
+            person_id=body.person_id,
+            vault_transaction_id=body.vault_transaction_id,
+            tx_hash=body.tx_hash,
+            vault_status=status_norm,
+        )
 
     if result:
         db.commit()

@@ -33,6 +33,7 @@ from services.transaction_intents.lombard_intent_sync import (
 from services.transaction_intents.morpho_intent_sync import (
     mark_morpho_intent_confirmed,
     ensure_morpho_intent_for_vault_transaction,
+    sync_morpho_vault_approve_attempt,
 )
 from services.transaction_intents.privy_deposit_intent_sync import (
     classify_observed_external_privy_deposit,
@@ -80,6 +81,61 @@ def _forward_attempts_for_person(
         and not r.metadata_json.get("backfill")
     ]
     return forward[since_count:] if since_count else forward
+
+
+def _vault_table_ready() -> bool:
+    try:
+        with engine.connect() as conn:
+            r = conn.execute(
+                sa.text(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = 'onchain_vault_transactions'"
+                )
+            )
+            return r.fetchone() is not None
+    except Exception:
+        return False
+
+
+def _insert_morpho_ovt(
+    db: Session,
+    *,
+    ovt_id: str,
+    person_id: uuid.UUID,
+    wallet_address: str,
+    vault_address: str,
+    operation: str,
+    group_key: str,
+    tx_hash: str | None,
+    status: str,
+    tx_index: int = 0,
+) -> None:
+    db.execute(
+        sa.text(
+            """
+            INSERT INTO onchain_vault_transactions (
+                id, person_id, vault_address, chain_id, chain_type, wallet_address,
+                operation, amount_raw, asset_symbol, asset_decimals, status, tx_hash,
+                idempotency_key, group_key, integration_mode, tx_index, created_at, updated_at
+            ) VALUES (
+                :id, :person_id, :vault, 8453, 'evm', :wallet,
+                :operation, '0', 'USDC', 6, :status, :tx_hash,
+                :group_key, :group_key, 'direct_morpho', :tx_index, NOW(), NOW()
+            )
+            """
+        ),
+        {
+            "id": ovt_id,
+            "person_id": str(person_id),
+            "vault": vault_address.lower(),
+            "wallet": wallet_address.lower(),
+            "operation": operation,
+            "status": status,
+            "tx_hash": tx_hash,
+            "group_key": group_key,
+            "tx_index": tx_index,
+        },
+    )
 
 
 def _attempt_report(row: OnchainTransactionAttempt) -> dict[str, Any]:
@@ -384,6 +440,7 @@ def test_forward_same_swap_replay_idempotent(db: Session):
     assert count == 1
 
 
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
 def test_forward_morpho_vault_approve_and_deposit(db: Session):
     pe = make_linked_client(db)
     wallet = _seed_wallet(db, pe)
@@ -395,16 +452,35 @@ def test_forward_morpho_vault_approve_and_deposit(db: Session):
     tx_deposit = _unique_tx("mdep")
     vault = f"0x{uuid.uuid4().hex[:40]}"
 
-    dual_write_vault_step(
+    _insert_morpho_ovt(
+        db,
+        ovt_id=approve_ovt,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="approve",
+        group_key=group_key,
+        tx_hash=tx_approve,
+        status="success",
+        tx_index=0,
+    )
+    _insert_morpho_ovt(
+        db,
+        ovt_id=deposit_ovt,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="deposit",
+        group_key=group_key,
+        tx_hash=tx_deposit,
+        status="success",
+        tx_index=1,
+    )
+
+    approve_result = sync_morpho_vault_approve_attempt(
         db,
         person_id=pe.person_id,
         vault_transaction_id=approve_ovt,
-        chain_id=8453,
-        wallet_address=wallet.address,
-        operation="approve",
-        group_key=group_key,
-        step_index=0,
-        integration_mode="direct_morpho",
         tx_hash=tx_approve,
         vault_status="success",
     )
@@ -429,6 +505,10 @@ def test_forward_morpho_vault_approve_and_deposit(db: Session):
     )
     db.commit()
 
+    assert approve_result is not None
+    assert approve_result["intent_id"] is None
+    assert TransactionIntentRepository.find_by_vault_transaction(db, vault_transaction_id=approve_ovt) is None
+
     created = _forward_attempts_for_person(db, pe.person_id, since_count=before)
     assert len(created) == 2
     approve = next(a for a in created if a.step_type == AttemptStepType.APPROVE.value)
@@ -438,9 +518,76 @@ def test_forward_morpho_vault_approve_and_deposit(db: Session):
     assert deposit.protocol == AttemptProtocol.MORPHO.value
     assert approve.group_key == group_key
     assert deposit.group_key == group_key
+    assert approve.linked_reference_id == approve_ovt
     assert deposit.linked_reference_id == deposit_ovt
     assert deposit.intent_id is not None
+    assert approve.intent_id is None
     assert approve.tx_hash != deposit.tx_hash
+    assert (approve.metadata_json or {}).get("dual_write_source") == "morpho_vault_approve_sync"
+
+    gaps = scan_attempt_gaps_for_person(db, pe.person_id)
+    missing = [
+        g for g in gaps
+        if g.get("gap_type") == "vault_tx_missing_attempt"
+        and g.get("reference_id") in {approve_ovt, deposit_ovt}
+    ]
+    assert missing == []
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
+def test_forward_morpho_vault_approve_sync_idempotent(db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    group_key = f"morpho-idem-{uuid.uuid4().hex[:10]}"
+    approve_ovt = f"cl{uuid.uuid4().hex[:22]}"
+    tx_approve = _unique_tx("midem")
+    vault = f"0x{uuid.uuid4().hex[:40]}"
+
+    _insert_morpho_ovt(
+        db,
+        ovt_id=approve_ovt,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="approve",
+        group_key=group_key,
+        tx_hash=tx_approve,
+        status="success",
+    )
+
+    sync_morpho_vault_approve_attempt(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=approve_ovt,
+        tx_hash=tx_approve,
+        vault_status="success",
+    )
+    sync_morpho_vault_approve_attempt(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=approve_ovt,
+        tx_hash=tx_approve,
+        vault_status="success",
+    )
+    db.commit()
+
+    count = (
+        db.query(OnchainTransactionAttempt)
+        .filter(
+            OnchainTransactionAttempt.linked_reference_id == approve_ovt,
+            OnchainTransactionAttempt.step_type == AttemptStepType.APPROVE.value,
+        )
+        .count()
+    )
+    assert count == 1
+    assert (
+        db.query(OnchainTransactionAttempt)
+        .filter(
+            OnchainTransactionAttempt.chain_id == 8453,
+            OnchainTransactionAttempt.tx_hash == tx_approve.lower(),
+        )
+        .count()
+    ) == 1
 
 
 def test_forward_ledgity_vault_deposit_lifecycle(db: Session):

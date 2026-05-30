@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from config.supported_swap_assets import SUPPORTED_SWAP_CHAINS, normalize_chain_key
 
+from .models import OnchainTransactionAttempt
 from .enums import AttemptOperationType, AttemptProtocol, AttemptStepType
 from .schemas import AttemptCreateInput, AttemptTransitionInput
 from .service import OnchainTransactionAttemptService
@@ -355,6 +356,7 @@ def dual_write_vault_step(
     intent_id: UUID | None = None,
     asset_symbol: str | None = None,
     amount_raw: str | None = None,
+    dual_write_source: str = "vault_intent_sync",
 ) -> None:
     step_type = _vault_step_type(operation)
     if step_type is None:
@@ -363,6 +365,28 @@ def dual_write_vault_step(
         protocol = _vault_protocol(integration_mode)
         idem = f"{protocol}:{person_id}:{group_key}:{step_type}:{step_index}"
         status_norm = (vault_status or "").strip().lower()
+
+        existing_ref = (
+            db.query(OnchainTransactionAttempt)
+            .filter(
+                OnchainTransactionAttempt.linked_reference_id == vault_transaction_id,
+                OnchainTransactionAttempt.step_type == step_type,
+            )
+            .first()
+        )
+        if existing_ref is not None:
+            return
+
+        if tx_hash:
+            norm_tx = tx_hash.strip().lower()
+            existing_tx = find_attempt_by_chain_tx(
+                db,
+                chain_id=chain_id,
+                tx_hash=norm_tx,
+                step_type=step_type,
+            )
+            if existing_tx is not None:
+                return
 
         OnchainTransactionAttemptService.create_prepared_attempt(
             db,
@@ -382,7 +406,7 @@ def dual_write_vault_step(
                 asset_in=asset_symbol,
                 amount_in=amount_raw,
                 metadata_patch={
-                    "dual_write_source": "vault_intent_sync",
+                    "dual_write_source": dual_write_source,
                     "integration_mode": integration_mode,
                     "vault_operation": operation,
                 },
