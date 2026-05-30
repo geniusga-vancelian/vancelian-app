@@ -20,9 +20,12 @@ DEFAULT_TTL_MINUTES: dict[str, int] = {
 PRODUCT_STALE_SEVERITY: dict[str, str] = {
     IntentProductType.LIFI_SWAP.value: "P2",
     IntentProductType.MORPHO_EARN.value: "P2",
+    IntentProductType.LEDGITY_VAULT.value: "P2",
     IntentProductType.LOMBARD_BORROW.value: "P1",
     IntentProductType.BUNDLE_INVEST.value: "P1",
+    IntentProductType.BUNDLE_WITHDRAW.value: "P1",
 }
+# PRIVY_DEPOSIT absent : pas de parcours webapp actif créant des intents.
 
 
 def ttl_minutes_for_status(status: str) -> Optional[int]:

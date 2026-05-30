@@ -323,7 +323,7 @@ def sync_lombard_step_from_ledger_receipt(
         )
 
     if norm == "success":
-        return mark_lombard_step_confirmed(
+        result = mark_lombard_step_confirmed(
             db,
             person_id=person_id,
             group_key=group_key,
@@ -332,8 +332,8 @@ def sync_lombard_step_from_ledger_receipt(
             tx_hash=tx_hash,
             receipt_status=norm,
         )
-    if norm in ("reverted", "failed"):
-        return mark_lombard_step_failed(
+    elif norm in ("reverted", "failed"):
+        result = mark_lombard_step_failed(
             db,
             person_id=person_id,
             group_key=group_key,
@@ -342,7 +342,21 @@ def sync_lombard_step_from_ledger_receipt(
             tx_hash=tx_hash,
             receipt_status=norm,
         )
-    return None
+    else:
+        result = None
+
+    from services.transaction_attempts.dual_write import dual_write_lombard_step_from_receipt
+
+    dual_write_lombard_step_from_receipt(
+        db,
+        person_id=person_id,
+        group_key=group_key,
+        market_or_vault=market_or_vault,
+        ledger_entry_id=ledger_entry_id,
+        tx_hash=tx_hash,
+        ledger_status=norm,
+    )
+    return result
 
 
 def recompute_lombard_parent_intent(

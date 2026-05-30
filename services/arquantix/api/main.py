@@ -111,6 +111,7 @@ from services.privy_wallet.routes import privy_wallet_app_router
 from services.privy_wallet.admin_router import privy_wallet_admin_router
 from services.onchain_reconciliation.admin_router import onchain_reconciliation_admin_router
 from services.transaction_intents.lombard_intent_router import lombard_intent_internal_router
+from services.transaction_intents.ledgity_intent_router import ledgity_intent_internal_router
 from services.transaction_intents.morpho_intent_router import morpho_intent_internal_router
 from services.exchange import exchange_admin_router, exchange_router
 from services.price_alerts import price_alerts_router, orders_router
@@ -246,6 +247,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(privy_wallet_admin_router)
     app.include_router(onchain_reconciliation_admin_router)
     app.include_router(morpho_intent_internal_router)
+    app.include_router(ledgity_intent_internal_router)
     app.include_router(lombard_intent_internal_router)
     app.include_router(exchange_router)
     app.include_router(exchange_admin_router)

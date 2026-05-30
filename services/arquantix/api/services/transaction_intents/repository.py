@@ -207,6 +207,7 @@ class TransactionIntentRepository:
             )
             db.add(row)
 
+        status_from = row.status if not created else None
         row.status = status
         if wallet_address is not None:
             row.wallet_address = wallet_address.strip().lower()
@@ -229,6 +230,51 @@ class TransactionIntentRepository:
 
         row.updated_at = datetime.now(timezone.utc)
         db.flush()
+
+        try:
+            from services.transaction_trace.enums import TraceEventType
+            from services.transaction_trace.transaction_trace_logger import log_transaction_trace
+
+            if created:
+                log_transaction_trace(
+                    TraceEventType.INTENT_CREATED,
+                    db=db,
+                    person_id=person_id,
+                    intent_id=row.id,
+                    idempotency_key=idempotency_key,
+                    protocol=product_type,
+                    operation_type=operation_type,
+                    status_to=status,
+                    chain_id=chain_id,
+                    tx_hash=tx_hash,
+                    linked_table=linked_table,
+                    linked_id=linked_id,
+                    linked_reference_id=linked_reference_id,
+                    source="transaction_intents.repository.upsert",
+                    message=f"intent created ({product_type})",
+                )
+            elif status_from != status:
+                log_transaction_trace(
+                    TraceEventType.INTENT_STATUS_CHANGED,
+                    db=db,
+                    person_id=person_id,
+                    intent_id=row.id,
+                    idempotency_key=idempotency_key,
+                    protocol=product_type,
+                    operation_type=operation_type,
+                    status_from=status_from,
+                    status_to=status,
+                    chain_id=chain_id,
+                    tx_hash=tx_hash,
+                    linked_table=linked_table,
+                    linked_id=linked_id,
+                    linked_reference_id=linked_reference_id,
+                    source="transaction_intents.repository.upsert",
+                    message=f"intent status {status_from} -> {status}",
+                )
+        except Exception:
+            pass
+
         return row, created
 
     @staticmethod

@@ -1,0 +1,495 @@
+"""Dual-write onchain_transaction_attempts — best-effort, n'impacte pas le legacy."""
+from __future__ import annotations
+
+import logging
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from config.supported_swap_assets import SUPPORTED_SWAP_CHAINS, normalize_chain_key
+
+from .enums import AttemptOperationType, AttemptProtocol, AttemptStepType
+from .schemas import AttemptCreateInput, AttemptTransitionInput
+from .service import OnchainTransactionAttemptService
+from .repository import OnchainTransactionAttemptRepository
+from .tx_hash_canonical import (
+    attach_secondary_swap_legacy,
+    find_attempt_by_chain_tx,
+    swap_legacy_record,
+    tx_hash_canonical_idempotency_key,
+)
+
+logger = logging.getLogger(__name__)
+
+LINKED_SWAPS = "person_wallet_swaps"
+LINKED_VAULT = "onchain_vault_transactions"
+
+
+def _chain_id_from_swap(swap) -> int:
+    try:
+        meta = SUPPORTED_SWAP_CHAINS.get(normalize_chain_key(swap.from_chain), {})
+        return int(meta.get("lifi_chain_id") or 8453)
+    except Exception:
+        return 8453
+
+
+def _lifi_protocol_for_swap(swap) -> str:
+    from services.portfolio_engine.bundle_execution.bundle_transaction_scope import (
+        is_bundle_internal_swap,
+    )
+
+    if is_bundle_internal_swap(swap):
+        return AttemptProtocol.INTERNAL_BUNDLE.value
+    return AttemptProtocol.LIFI.value
+
+
+def _resolve_intent_id_for_swap(db: Session, swap) -> UUID | None:
+    try:
+        from services.transaction_intents.repository import TransactionIntentRepository
+
+        row = TransactionIntentRepository.find_by_linked(
+            db,
+            linked_table=LINKED_SWAPS,
+            linked_id=swap.id,
+        )
+        return row.id if row else None
+    except Exception:
+        return None
+
+
+def _attempt_key(prefix: str, *, swap_id: UUID, step: str) -> str:
+    return f"{prefix}:{swap_id}:{step}"
+
+
+def _resolve_swap_attempt_for_transition(
+    db: Session,
+    swap,
+    *,
+    tx_hash: str,
+    step_type: str = AttemptStepType.SWAP.value,
+) -> tuple[str, Any | None]:
+    """Retourne (idempotency_key, attempt_row) pour transitions swap avec tx_hash."""
+    chain_id = _chain_id_from_swap(swap)
+    norm_tx = tx_hash.strip().lower()
+    canonical_idem = tx_hash_canonical_idempotency_key(chain_id=chain_id, tx_hash=norm_tx)
+    swap_idem = _attempt_key("lifi", swap_id=swap.id, step="swap")
+
+    by_tx = find_attempt_by_chain_tx(
+        db,
+        chain_id=chain_id,
+        tx_hash=norm_tx,
+        step_type=step_type,
+    )
+    if by_tx is not None:
+        return by_tx.idempotency_key, by_tx
+
+    by_swap = OnchainTransactionAttemptRepository.find_by_composite_key(
+        db,
+        idempotency_key=swap_idem,
+        step_type=step_type,
+    )
+    if by_swap is not None:
+        return by_swap.idempotency_key, by_swap
+
+    return canonical_idem, None
+
+
+def dual_write_lifi_approval_submitted(
+    db: Session,
+    swap,
+    *,
+    approval_tx_hash: str,
+    intent_id: UUID | None = None,
+) -> None:
+    """Approval hash distinct = attempt distinct (doctrine LI.FI)."""
+    try:
+        protocol = _lifi_protocol_for_swap(swap)
+        chain_id = _chain_id_from_swap(swap)
+        intent_id = intent_id or _resolve_intent_id_for_swap(db, swap)
+        group_key = str(swap.id)
+        idem = _attempt_key("lifi", swap_id=swap.id, step="approve")
+
+        OnchainTransactionAttemptService.create_prepared_attempt(
+            db,
+            AttemptCreateInput(
+                person_id=swap.person_id,
+                chain_id=chain_id,
+                protocol=protocol,
+                operation_type=AttemptOperationType.APPROVE.value,
+                step_type=AttemptStepType.APPROVE.value,
+                idempotency_key=idem,
+                group_key=group_key,
+                intent_id=intent_id,
+                linked_table=LINKED_SWAPS,
+                linked_id=swap.id,
+                asset_in=swap.from_asset,
+                amount_in=str(swap.amount_in) if swap.amount_in is not None else None,
+                metadata_patch={"dual_write_source": "lifi_execute.approval"},
+            ),
+        )
+        OnchainTransactionAttemptService.mark_submitted(
+            db,
+            idempotency_key=idem,
+            step_type=AttemptStepType.APPROVE.value,
+            transition=AttemptTransitionInput(tx_hash=approval_tx_hash),
+        )
+    except Exception as exc:
+        logger.warning(
+            "attempt.dual_write.lifi_approval_failed",
+            extra={"swap_id": str(getattr(swap, "id", "")), "error": str(exc)},
+            exc_info=True,
+        )
+
+
+def dual_write_lifi_swap_submitted(
+    db: Session,
+    swap,
+    *,
+    tx_hash: str,
+    intent_id: UUID | None = None,
+) -> None:
+    """
+    Swap avec tx_hash : canonicalisation par (chain_id, tx_hash).
+
+    Deux swaps bundle partageant le même hash → 1 attempt + secondaries en metadata.
+    """
+    try:
+        protocol = _lifi_protocol_for_swap(swap)
+        chain_id = _chain_id_from_swap(swap)
+        intent_id = intent_id or _resolve_intent_id_for_swap(db, swap)
+        norm_tx = tx_hash.strip().lower()
+        canonical_idem = tx_hash_canonical_idempotency_key(chain_id=chain_id, tx_hash=norm_tx)
+        swap_idem = _attempt_key("lifi", swap_id=swap.id, step="swap")
+        secondary = swap_legacy_record(
+            swap,
+            protocol=protocol,
+            intent_id=intent_id,
+            chain_id=chain_id,
+        )
+
+        existing_tx = find_attempt_by_chain_tx(
+            db,
+            chain_id=chain_id,
+            tx_hash=norm_tx,
+            step_type=AttemptStepType.SWAP.value,
+        )
+        if existing_tx is not None:
+            if existing_tx.linked_id == swap.id:
+                OnchainTransactionAttemptService.mark_submitted(
+                    db,
+                    idempotency_key=existing_tx.idempotency_key,
+                    step_type=AttemptStepType.SWAP.value,
+                    transition=AttemptTransitionInput(tx_hash=norm_tx),
+                )
+            else:
+                attach_secondary_swap_legacy(db, existing_tx, secondary)
+            return
+
+        existing_swap = OnchainTransactionAttemptRepository.find_by_composite_key(
+            db,
+            idempotency_key=swap_idem,
+            step_type=AttemptStepType.SWAP.value,
+        )
+        if existing_swap is not None and existing_swap.linked_id == swap.id:
+            if existing_swap.idempotency_key != canonical_idem:
+                existing_swap.idempotency_key = canonical_idem
+            existing_swap.tx_hash = norm_tx
+            db.add(existing_swap)
+            db.flush()
+            OnchainTransactionAttemptService.mark_submitted(
+                db,
+                idempotency_key=canonical_idem,
+                step_type=AttemptStepType.SWAP.value,
+                transition=AttemptTransitionInput(tx_hash=norm_tx),
+            )
+            return
+
+        OnchainTransactionAttemptService.create_prepared_attempt(
+            db,
+            AttemptCreateInput(
+                person_id=swap.person_id,
+                chain_id=chain_id,
+                protocol=protocol,
+                operation_type=AttemptOperationType.SWAP.value,
+                step_type=AttemptStepType.SWAP.value,
+                idempotency_key=canonical_idem,
+                group_key=str(swap.id),
+                intent_id=intent_id,
+                linked_table=LINKED_SWAPS,
+                linked_id=swap.id,
+                asset_in=swap.from_asset,
+                asset_out=swap.to_asset,
+                amount_in=str(swap.amount_in) if swap.amount_in is not None else None,
+                amount_out_expected=str(swap.estimated_receive)
+                if swap.estimated_receive is not None
+                else None,
+                metadata_patch={
+                    "dual_write_source": "lifi_execute.submit",
+                    "grouped_by_tx_hash": False,
+                    "secondary_legacy_records": [],
+                },
+            ),
+        )
+        OnchainTransactionAttemptService.mark_submitted(
+            db,
+            idempotency_key=canonical_idem,
+            step_type=AttemptStepType.SWAP.value,
+            transition=AttemptTransitionInput(tx_hash=norm_tx),
+        )
+    except Exception as exc:
+        logger.warning(
+            "attempt.dual_write.lifi_swap_submitted_failed",
+            extra={"swap_id": str(getattr(swap, "id", "")), "error": str(exc)},
+            exc_info=True,
+        )
+
+
+def dual_write_lifi_swap_confirmed(
+    db: Session,
+    swap,
+    *,
+    tx_hash: str | None = None,
+    failed: bool = False,
+    reverted: bool = False,
+    error_message: str | None = None,
+) -> None:
+    try:
+        effective_tx = (tx_hash or swap.tx_hash or "").strip()
+        if not effective_tx:
+            idem = _attempt_key("lifi", swap_id=swap.id, step="swap")
+        else:
+            idem, attempt = _resolve_swap_attempt_for_transition(
+                db,
+                swap,
+                tx_hash=effective_tx,
+            )
+            if attempt is not None and attempt.linked_id != swap.id:
+                protocol = _lifi_protocol_for_swap(swap)
+                intent_id = _resolve_intent_id_for_swap(db, swap)
+                attach_secondary_swap_legacy(
+                    db,
+                    attempt,
+                    swap_legacy_record(
+                        swap,
+                        protocol=protocol,
+                        chain_id=_chain_id_from_swap(swap),
+                        intent_id=intent_id,
+                    ),
+                )
+                return
+
+        transition = AttemptTransitionInput(
+            tx_hash=effective_tx or None,
+            error_message=error_message,
+        )
+        if failed or reverted:
+            OnchainTransactionAttemptService.mark_failed(
+                db,
+                idempotency_key=idem,
+                step_type=AttemptStepType.SWAP.value,
+                transition=transition,
+                reverted=reverted,
+            )
+            return
+        OnchainTransactionAttemptService.mark_confirmed(
+            db,
+            idempotency_key=idem,
+            step_type=AttemptStepType.SWAP.value,
+            transition=transition,
+        )
+    except Exception as exc:
+        logger.warning(
+            "attempt.dual_write.lifi_swap_confirmed_failed",
+            extra={"swap_id": str(getattr(swap, "id", "")), "error": str(exc)},
+            exc_info=True,
+        )
+
+
+def _vault_protocol(integration_mode: str | None) -> str:
+    mode = (integration_mode or "").strip().lower()
+    if mode == "ledgity_vault":
+        return AttemptProtocol.LEDGITY.value
+    if mode == "lombard_v1":
+        return AttemptProtocol.LOMBARD.value
+    return AttemptProtocol.MORPHO.value
+
+
+def _vault_step_type(operation: str) -> str | None:
+    op = (operation or "").strip().lower()
+    mapping = {
+        "approve": AttemptStepType.APPROVE.value,
+        "deposit": AttemptStepType.DEPOSIT.value,
+        "withdraw": AttemptStepType.WITHDRAW.value,
+        "authorize": AttemptStepType.AUTHORIZE.value,
+        "open_loan": AttemptStepType.OPEN_LOAN.value,
+        "collateral_supply": AttemptStepType.COLLATERAL_SUPPLY.value,
+    }
+    return mapping.get(op)
+
+
+def _vault_operation_type(operation: str) -> str:
+    op = (operation or "").strip().lower()
+    if op in ("approve", "authorize"):
+        return AttemptOperationType.APPROVE.value
+    if op == "open_loan":
+        return AttemptOperationType.BORROW.value
+    if op == "withdraw":
+        return AttemptOperationType.WITHDRAW.value
+    return AttemptOperationType.DEPOSIT.value
+
+
+def dual_write_vault_step(
+    db: Session,
+    *,
+    person_id: UUID,
+    vault_transaction_id: str,
+    chain_id: int,
+    wallet_address: str,
+    operation: str,
+    group_key: str,
+    step_index: int,
+    integration_mode: str,
+    tx_hash: str | None = None,
+    vault_status: str | None = None,
+    intent_id: UUID | None = None,
+    asset_symbol: str | None = None,
+    amount_raw: str | None = None,
+) -> None:
+    step_type = _vault_step_type(operation)
+    if step_type is None:
+        return
+    try:
+        protocol = _vault_protocol(integration_mode)
+        idem = f"{protocol}:{person_id}:{group_key}:{step_type}:{step_index}"
+        status_norm = (vault_status or "").strip().lower()
+
+        OnchainTransactionAttemptService.create_prepared_attempt(
+            db,
+            AttemptCreateInput(
+                person_id=person_id,
+                chain_id=chain_id,
+                protocol=protocol,
+                operation_type=_vault_operation_type(operation),
+                step_type=step_type,
+                idempotency_key=idem,
+                step_index=step_index,
+                group_key=group_key,
+                intent_id=intent_id,
+                wallet_address=wallet_address,
+                linked_table=LINKED_VAULT,
+                linked_reference_id=vault_transaction_id,
+                asset_in=asset_symbol,
+                amount_in=amount_raw,
+                metadata_patch={
+                    "dual_write_source": "vault_intent_sync",
+                    "integration_mode": integration_mode,
+                    "vault_operation": operation,
+                },
+            ),
+        )
+
+        if tx_hash and status_norm in ("pending", "submitted", ""):
+            OnchainTransactionAttemptService.mark_submitted(
+                db,
+                idempotency_key=idem,
+                step_type=step_type,
+                transition=AttemptTransitionInput(tx_hash=tx_hash),
+            )
+        elif status_norm == "success":
+            OnchainTransactionAttemptService.mark_confirmed(
+                db,
+                idempotency_key=idem,
+                step_type=step_type,
+                transition=AttemptTransitionInput(tx_hash=tx_hash),
+            )
+        elif status_norm in ("failed", "reverted"):
+            OnchainTransactionAttemptService.mark_failed(
+                db,
+                idempotency_key=idem,
+                step_type=step_type,
+                transition=AttemptTransitionInput(tx_hash=tx_hash),
+                reverted=status_norm == "reverted",
+            )
+    except Exception as exc:
+        logger.warning(
+            "attempt.dual_write.vault_step_failed",
+            extra={
+                "vault_transaction_id": vault_transaction_id,
+                "operation": operation,
+                "error": str(exc),
+            },
+            exc_info=True,
+        )
+
+
+def dual_write_lombard_step_from_receipt(
+    db: Session,
+    *,
+    person_id: UUID,
+    group_key: str,
+    market_or_vault: str,
+    ledger_entry_id: str,
+    tx_hash: str | None,
+    ledger_status: str,
+) -> None:
+    try:
+        from services.transaction_intents.repository import TransactionIntentRepository
+        from services.transaction_intents.lombard_intent_sync import _find_step_index, _normalize_steps
+
+        row = TransactionIntentRepository.find_by_lombard_group(
+            db,
+            person_id=person_id,
+            group_key=group_key,
+            market_or_vault=market_or_vault,
+        )
+        if row is None:
+            return
+        meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+        steps = _normalize_steps(meta.get("steps"))
+        idx = _find_step_index(steps, ledger_entry_id)
+        if idx is None:
+            return
+        step = steps[idx]
+        operation = str(step.get("step") or "approve")
+        step_index = idx
+        chain_id = row.chain_id or 8453
+        dual_write_vault_step(
+            db,
+            person_id=person_id,
+            vault_transaction_id=ledger_entry_id,
+            chain_id=chain_id,
+            wallet_address=row.wallet_address or "",
+            operation=operation,
+            group_key=group_key,
+            step_index=step_index,
+            integration_mode="lombard_v1",
+            tx_hash=tx_hash,
+            vault_status=ledger_status,
+            intent_id=row.id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "attempt.dual_write.lombard_step_failed",
+            extra={"ledger_entry_id": ledger_entry_id, "error": str(exc)},
+            exc_info=True,
+        )
+
+
+def resolve_intent_id_for_vault_transaction(
+    db: Session,
+    *,
+    person_id: UUID,
+    vault_transaction_id: str,
+) -> UUID | None:
+    try:
+        from services.transaction_intents.repository import TransactionIntentRepository
+
+        row = TransactionIntentRepository.find_by_vault_transaction(
+            db,
+            vault_transaction_id=vault_transaction_id,
+            person_id=person_id,
+        )
+        return row.id if row else None
+    except Exception:
+        return None

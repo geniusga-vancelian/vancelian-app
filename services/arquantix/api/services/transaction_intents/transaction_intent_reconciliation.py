@@ -28,7 +28,9 @@ from .lombard_intent_sync import (
     STEP_CONFIRMED,
     STEP_FAILED,
 )
+from .ledgity_intent_sync import LEDGITY_PRODUCT
 from .morpho_intent_sync import MORPHO_LINKED_TABLE, MORPHO_PRODUCT
+from .privy_deposit_intent_sync import privy_deposit_raw_event_ttl_hours
 from .repository import TransactionIntentRepository
 
 
@@ -59,29 +61,29 @@ def scan_intent_gaps_for_person(
             SwapSessionStatus.PENDING.value,
             SwapSessionStatus.FAILED.value,
         }:
+            gap_type = "swap_without_intent"
+            if swap.tx_hash:
+                gap_type = "swap_with_tx_hash_without_intent"
             anomalies.append(
                 _anomaly(
-                    "swap_without_intent",
+                    gap_type,
                     person_id=person_id,
                     reference_id=str(swap.id),
                     metadata={"swap_status": swap.status, "tx_hash": swap.tx_hash},
                 )
             )
-            continue
+        elif _swap_requires_approval_without_hash(swap):
+            anomalies.append(
+                _anomaly(
+                    "lifi_swap_missing_approval_hash",
+                    person_id=person_id,
+                    reference_id=str(swap.id),
+                    metadata={"swap_status": swap.status, "tx_hash": swap.tx_hash},
+                )
+            )
 
         if intent is None:
             continue
-
-        if intent.status == IntentStatus.SUBMITTED.value and not intent.tx_hash:
-            anomalies.append(
-                _anomaly(
-                    "intent_submitted_without_tx_hash",
-                    person_id=person_id,
-                    reference_id=str(intent.id),
-                    wallet_address=intent.wallet_address,
-                    metadata={"linked_swap_id": str(swap.id)},
-                )
-            )
 
         if intent.tx_hash and not intent.raw_onchain_event_id:
             has_raw = (
@@ -182,16 +184,151 @@ def scan_intent_gaps_for_person(
                 )
 
     anomalies.extend(_scan_morpho_vault_gaps(db, person_id, stale_cutoff=stale_cutoff))
+    anomalies.extend(
+        _scan_vault_gaps_for_integration(
+            db,
+            person_id,
+            integration_mode="ledgity_vault",
+            product_type=LEDGITY_PRODUCT,
+            gap_type_success="ledgity_vault_tx_success_without_intent",
+            stale_cutoff=stale_cutoff,
+        )
+    )
+    anomalies.extend(_scan_privy_deposit_gaps(db, person_id))
+    anomalies.extend(_scan_submitted_intents_without_tx_hash(db, person_id))
     anomalies.extend(_scan_lombard_borrow_gaps(db, person_id, stale_cutoff=stale_cutoff))
     anomalies.extend(_scan_bundle_invest_gaps(db, person_id, stale_cutoff=stale_cutoff))
 
     return anomalies
 
 
+def build_gap_report_for_person(
+    db: Session,
+    person_id: UUID,
+    *,
+    stale_hours: int = 24,
+) -> dict[str, Any]:
+    """Rapport dry-run structuré par catégorie (Phase 1)."""
+    raw = scan_intent_gaps_for_person(db, person_id, stale_hours=stale_hours)
+    buckets: dict[str, list[dict[str, Any]]] = {
+        "privy_deposits_without_tx_hash": [],
+        "privy_deposits_without_webhook_source": [],
+        "privy_deposits_without_raw_onchain_event": [],
+        "privy_deposits_potential_double_credit": [],
+        "swaps_with_tx_hash_without_intent": [],
+        "lifi_swaps_missing_approval_hash": [],
+        "ledgity_vault_txs_without_intent": [],
+        "intents_submitted_without_tx_hash": [],
+        "confirmed_tx_without_detectable_ledger": [],
+        "other": [],
+    }
+    mapping = {
+        "privy_deposit_without_tx_hash": "privy_deposits_without_tx_hash",
+        "privy_deposit_without_webhook_source": "privy_deposits_without_webhook_source",
+        "privy_deposit_without_raw_onchain_event": "privy_deposits_without_raw_onchain_event",
+        "privy_deposit_potential_double_credit": "privy_deposits_potential_double_credit",
+        "swap_with_tx_hash_without_intent": "swaps_with_tx_hash_without_intent",
+        "lifi_swap_missing_approval_hash": "lifi_swaps_missing_approval_hash",
+        "ledgity_vault_tx_success_without_intent": "ledgity_vault_txs_without_intent",
+        "intent_submitted_without_tx_hash": "intents_submitted_without_tx_hash",
+        "intent_confirmed_without_ledger": "confirmed_tx_without_detectable_ledger",
+    }
+    for row in raw:
+        dtype = row.get("discrepancy_type") or "unknown"
+        bucket = mapping.get(dtype, "other")
+        buckets[bucket].append(row)
+
+    return {
+        "person_id": str(person_id),
+        "gaps": buckets,
+        "total_gaps": len(raw),
+    }
+
+
+def build_gap_report(
+    db: Session,
+    *,
+    person_id: UUID | None = None,
+    person_limit: int = 200,
+    stale_hours: int = 24,
+) -> dict[str, Any]:
+    """Agrège le rapport dry-run par personne (lecture seule)."""
+    from datetime import datetime, timezone
+
+    if person_id is not None:
+        person_ids = [person_id]
+    else:
+        rows = db.execute(
+            sa.text(
+                """
+                SELECT DISTINCT person_id
+                FROM (
+                    SELECT person_id FROM person_wallet_deposits
+                    UNION
+                    SELECT person_id FROM person_wallet_swaps
+                    UNION
+                    SELECT person_id FROM transaction_intents
+                    UNION
+                    SELECT person_id FROM onchain_vault_transactions
+                ) AS sources
+                WHERE person_id IS NOT NULL
+                ORDER BY person_id
+                LIMIT :limit
+                """
+            ),
+            {"limit": person_limit},
+        ).scalars().all()
+        person_ids = [UUID(str(pid)) for pid in rows if pid]
+
+    bucket_keys = [
+        "privy_deposits_without_tx_hash",
+        "privy_deposits_without_webhook_source",
+        "privy_deposits_without_raw_onchain_event",
+        "privy_deposits_potential_double_credit",
+        "swaps_with_tx_hash_without_intent",
+        "lifi_swaps_missing_approval_hash",
+        "ledgity_vault_txs_without_intent",
+        "intents_submitted_without_tx_hash",
+        "confirmed_tx_without_detectable_ledger",
+        "other",
+    ]
+    reports = [
+        build_gap_report_for_person(db, pid, stale_hours=stale_hours) for pid in person_ids
+    ]
+    summary = {key: sum(len(r["gaps"][key]) for r in reports) for key in bucket_keys}
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "dry_run": True,
+        "person_count": len(reports),
+        "summary": summary,
+        "persons": [r for r in reports if r["total_gaps"] > 0],
+    }
+
+
 def _scan_morpho_vault_gaps(
     db: Session,
     person_id: UUID,
     *,
+    stale_cutoff: datetime,
+) -> list[dict[str, Any]]:
+    return _scan_vault_gaps_for_integration(
+        db,
+        person_id,
+        integration_mode="direct_morpho",
+        product_type=MORPHO_PRODUCT,
+        gap_type_success="vault_tx_success_without_intent",
+        stale_cutoff=stale_cutoff,
+    )
+
+
+def _scan_vault_gaps_for_integration(
+    db: Session,
+    person_id: UUID,
+    *,
+    integration_mode: str,
+    product_type: str,
+    gap_type_success: str,
     stale_cutoff: datetime,
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
@@ -202,13 +339,13 @@ def _scan_morpho_vault_gaps(
                    status, tx_hash, idempotency_key, tx_index, created_at, updated_at
             FROM onchain_vault_transactions
             WHERE person_id = :person_id
-              AND integration_mode = 'direct_morpho'
+              AND integration_mode = :integration_mode
               AND operation IN ('deposit', 'withdraw')
             ORDER BY created_at DESC
             LIMIT 200
             """
         ),
-        {"person_id": str(person_id)},
+        {"person_id": str(person_id), "integration_mode": integration_mode},
     ).mappings().all()
 
     for row in rows:
@@ -223,11 +360,15 @@ def _scan_morpho_vault_gaps(
         if vault_status == "success" and intent is None:
             out.append(
                 _anomaly(
-                    "vault_tx_success_without_intent",
+                    gap_type_success,
                     person_id=person_id,
                     reference_id=vault_tx_id,
                     wallet_address=row.get("wallet_address"),
-                    metadata={"operation": row.get("operation"), "tx_hash": row.get("tx_hash")},
+                    metadata={
+                        "operation": row.get("operation"),
+                        "tx_hash": row.get("tx_hash"),
+                        "product_type": product_type,
+                    },
                 )
             )
             continue
@@ -274,7 +415,7 @@ def _scan_morpho_vault_gaps(
                         "intent_tx_without_raw_link",
                         person_id=person_id,
                         reference_id=str(intent.id),
-                        metadata={"tx_hash": intent.tx_hash, "product": MORPHO_PRODUCT},
+                        metadata={"tx_hash": intent.tx_hash, "product": product_type},
                     )
                 )
 
@@ -285,7 +426,10 @@ def _scan_morpho_vault_gaps(
                     "vault_tx_pending_stale",
                     person_id=person_id,
                     reference_id=vault_tx_id,
-                    metadata={"intent_id": str(intent.id) if intent else None},
+                    metadata={
+                        "intent_id": str(intent.id) if intent else None,
+                        "product_type": product_type,
+                    },
                 )
             )
             if intent and intent.status in (
@@ -297,11 +441,184 @@ def _scan_morpho_vault_gaps(
                         "intent_submitted_stale",
                         person_id=person_id,
                         reference_id=str(intent.id),
-                        metadata={"vault_transaction_id": vault_tx_id},
+                        metadata={
+                            "vault_transaction_id": vault_tx_id,
+                            "product_type": product_type,
+                        },
                     )
                 )
 
     return out
+
+
+def _scan_privy_deposit_gaps(db: Session, person_id: UUID) -> list[dict[str, Any]]:
+    from services.privy_wallet.enums import PersonWalletDepositStatus, PersonWalletTransactionKind
+    from services.privy_wallet.models import PersonWalletDeposit
+
+    out: list[dict[str, Any]] = []
+    ttl_hours = privy_deposit_raw_event_ttl_hours()
+    raw_cutoff = datetime.now(timezone.utc) - timedelta(hours=ttl_hours)
+
+    rows = (
+        db.query(PersonWalletDeposit)
+        .filter(
+            PersonWalletDeposit.person_id == person_id,
+            PersonWalletDeposit.transaction_kind == PersonWalletTransactionKind.PRIVY_DEPOSIT_IN.value,
+        )
+        .order_by(PersonWalletDeposit.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    seen_double_credit_keys: set[tuple[str, int | None, int]] = set()
+
+    for deposit in rows:
+        if deposit.status != PersonWalletDepositStatus.CONFIRMED.value:
+            continue
+
+        if not (deposit.tx_hash or "").strip():
+            out.append(
+                _anomaly(
+                    "privy_deposit_without_tx_hash",
+                    person_id=person_id,
+                    reference_id=str(deposit.id),
+                    wallet_address=getattr(deposit, "to_address", None),
+                    severity="P1",
+                    metadata={"asset": deposit.asset},
+                )
+            )
+            continue
+
+        if not getattr(deposit, "privy_webhook_event_id", None):
+            out.append(
+                _anomaly(
+                    "privy_deposit_without_webhook_source",
+                    person_id=person_id,
+                    reference_id=str(deposit.id),
+                    wallet_address=getattr(deposit, "to_address", None),
+                    severity="P2",
+                    metadata={"tx_hash": deposit.tx_hash, "asset": deposit.asset},
+                )
+            )
+
+        confirmed_at = deposit.confirmed_at or deposit.created_at
+        if (
+            confirmed_at
+            and confirmed_at.replace(tzinfo=timezone.utc) < raw_cutoff
+            and deposit.chain_id is not None
+        ):
+            has_raw = (
+                db.query(RawOnChainEvent.id)
+                .filter(
+                    RawOnChainEvent.chain_id == deposit.chain_id,
+                    RawOnChainEvent.tx_hash == deposit.tx_hash.lower(),
+                    RawOnChainEvent.log_index == (deposit.log_index or 0),
+                )
+                .first()
+            )
+            if not has_raw:
+                out.append(
+                    _anomaly(
+                        "privy_deposit_without_raw_onchain_event",
+                        person_id=person_id,
+                        reference_id=str(deposit.id),
+                        wallet_address=getattr(deposit, "to_address", None),
+                        severity="P2",
+                        metadata={
+                            "tx_hash": deposit.tx_hash,
+                            "chain_id": deposit.chain_id,
+                            "log_index": deposit.log_index,
+                            "ttl_hours": ttl_hours,
+                        },
+                    )
+                )
+
+        dedupe_key = (
+            deposit.tx_hash.lower(),
+            deposit.chain_id,
+            int(deposit.log_index or 0),
+        )
+        if dedupe_key in seen_double_credit_keys:
+            continue
+        seen_double_credit_keys.add(dedupe_key)
+
+        duplicate_count = (
+            db.query(PersonWalletDeposit)
+            .filter(
+                PersonWalletDeposit.person_id == person_id,
+                PersonWalletDeposit.transaction_kind == PersonWalletTransactionKind.PRIVY_DEPOSIT_IN.value,
+                PersonWalletDeposit.status == PersonWalletDepositStatus.CONFIRMED.value,
+                PersonWalletDeposit.tx_hash == deposit.tx_hash,
+                PersonWalletDeposit.chain_id == deposit.chain_id,
+                PersonWalletDeposit.log_index == deposit.log_index,
+            )
+            .count()
+        )
+        if duplicate_count > 1:
+            out.append(
+                _anomaly(
+                    "privy_deposit_potential_double_credit",
+                    person_id=person_id,
+                    reference_id=str(deposit.id),
+                    wallet_address=getattr(deposit, "to_address", None),
+                    severity="P1",
+                    metadata={
+                        "tx_hash": deposit.tx_hash,
+                        "chain_id": deposit.chain_id,
+                        "log_index": deposit.log_index,
+                        "duplicate_count": duplicate_count,
+                    },
+                )
+            )
+
+    return out
+
+
+def _scan_submitted_intents_without_tx_hash(
+    db: Session,
+    person_id: UUID,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    rows = (
+        db.query(TransactionIntent)
+        .filter(
+            TransactionIntent.person_id == person_id,
+            TransactionIntent.status == IntentStatus.SUBMITTED.value,
+            TransactionIntent.tx_hash.is_(None),
+        )
+        .order_by(TransactionIntent.updated_at.desc())
+        .limit(100)
+        .all()
+    )
+    for intent in rows:
+        out.append(
+            _anomaly(
+                "intent_submitted_without_tx_hash",
+                person_id=person_id,
+                reference_id=str(intent.id),
+                wallet_address=intent.wallet_address,
+                metadata={
+                    "product_type": intent.product_type,
+                    "operation_type": intent.operation_type,
+                },
+            )
+        )
+    return out
+
+
+def _swap_requires_approval_without_hash(swap: Any) -> bool:
+    audit = getattr(swap, "audit_log", None)
+    if not isinstance(audit, list):
+        return False
+    required = any(isinstance(e, dict) and e.get("event") == "token_approval_required" for e in audit)
+    if not required:
+        return False
+    has_approval = any(
+        isinstance(e, dict) and e.get("event") == "approval_submitted" and e.get("tx_hash")
+        for e in audit
+    )
+    if has_approval:
+        return False
+    return bool(swap.tx_hash)
 
 
 def _scan_lombard_borrow_gaps(
@@ -669,6 +986,7 @@ def _anomaly(
     reference_id: str,
     wallet_address: str | None = None,
     metadata: dict[str, Any] | None = None,
+    severity: str = "P2",
 ) -> dict[str, Any]:
     return {
         "layer": "intent",
@@ -678,7 +996,7 @@ def _anomaly(
         "reference_id": reference_id,
         "wallet_address": wallet_address,
         "metadata_json": metadata or {},
-        "severity": "P2",
+        "severity": severity,
     }
 
 

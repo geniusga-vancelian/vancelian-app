@@ -35,9 +35,13 @@ STALE_TRACKED_STATUSES = frozenset(
 KNOWN_PRODUCTS = (
     IntentProductType.LIFI_SWAP.value,
     IntentProductType.MORPHO_EARN.value,
+    IntentProductType.LEDGITY_VAULT.value,
     IntentProductType.LOMBARD_BORROW.value,
     IntentProductType.BUNDLE_INVEST.value,
+    IntentProductType.BUNDLE_WITHDRAW.value,
 )
+# PRIVY_DEPOSIT : enum dormant — réservé au futur parcours webapp deposit_started.
+# Les dépôts Privy externes observés ne créent pas d'intent (voir privy_deposit_intent_sync.py).
 
 
 @dataclass

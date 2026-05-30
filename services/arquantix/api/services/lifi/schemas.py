@@ -91,6 +91,10 @@ class SwapSubmitRequest(BaseModel):
     tx_hash: str = Field(..., min_length=8, max_length=120)
 
 
+class SwapApprovalSubmitRequest(BaseModel):
+    tx_hash: str = Field(..., min_length=8, max_length=120)
+
+
 class SwapStatusResponse(BaseModel):
     swap_id: UUID
     status: str

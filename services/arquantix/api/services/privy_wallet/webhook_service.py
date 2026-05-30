@@ -188,6 +188,7 @@ class PrivyWebhookProcessor:
             log_index=normalized.log_index,
         )
         if existing:
+            self._classify_observed_external_deposit(db, existing, event=event)
             return existing
 
         for prior in self._deposit_repo.find_confirmed_by_tx_hash(
@@ -196,6 +197,7 @@ class PrivyWebhookProcessor:
             wallet_id=wallet.id,
         ):
             if prior.asset.upper() == normalized.asset.upper():
+                self._classify_observed_external_deposit(db, prior, event=event)
                 return prior
 
         asset_name = ASSET_NAMES.get(normalized.asset, normalized.asset)
@@ -226,7 +228,10 @@ class PrivyWebhookProcessor:
                 "idempotency_key": event.idempotency_key,
                 "title": title,
                 "subtitle": subtitle,
-                "metadata_json": {"privy_event_type": event.event_type},
+                "metadata_json": {
+                    "privy_event_type": event.event_type,
+                    **self._observed_external_deposit_metadata(event),
+                },
                 "confirmed_at": datetime.now(timezone.utc),
             },
         )
@@ -238,7 +243,42 @@ class PrivyWebhookProcessor:
             asset=normalized.asset,
         )
         self._balance_repo.increment_balance(db, balance, delta=normalized.amount)
+        self._classify_observed_external_deposit(db, deposit, event=event)
         return deposit
+
+    @staticmethod
+    def _observed_external_deposit_metadata(event: PrivyWebhookEvent) -> dict[str, Any]:
+        from services.transaction_intents.privy_deposit_intent_sync import (
+            build_observed_external_deposit_classification,
+        )
+
+        return build_observed_external_deposit_classification(
+            privy_webhook_event_id=event.id,
+        )
+
+    @staticmethod
+    def _classify_observed_external_deposit(
+        db: Session,
+        deposit: PersonWalletDeposit,
+        *,
+        event: PrivyWebhookEvent,
+    ) -> None:
+        try:
+            from services.transaction_intents.privy_deposit_intent_sync import (
+                classify_observed_external_privy_deposit,
+            )
+
+            classify_observed_external_privy_deposit(
+                db,
+                deposit,
+                privy_webhook_event_id=event.id,
+            )
+        except Exception:
+            logger.warning(
+                "privy_deposit.observation_failed",
+                extra={"deposit_id": str(deposit.id)},
+                exc_info=True,
+            )
 
     @staticmethod
     def _normalize_deposit_payload(payload: dict[str, Any]) -> NormalizedPrivyDeposit:

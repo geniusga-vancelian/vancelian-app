@@ -138,6 +138,14 @@ def _map_swap_status_to_intent(swap) -> str:
     return IntentStatus.CREATED.value
 
 
+def on_swap_approval_submitted(db: Session, swap, *, approval_tx_hash: str) -> None:
+    sync_lifi_swap_intent(
+        db,
+        swap,
+        metadata_patch={"approval_tx_hash": approval_tx_hash.strip().lower()},
+    )
+
+
 def on_swap_created(db: Session, swap) -> None:
     sync_lifi_swap_intent(db, swap, status=IntentStatus.CREATED.value)
 

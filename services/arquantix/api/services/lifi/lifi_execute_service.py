@@ -75,6 +75,17 @@ class LifiExecuteService:
         transaction = _map_transaction_request(tx_req, swap.from_chain)
         signing_mode, signing_address = read_signing_wallet_from_audit(swap.audit_log)
         token_approval = build_token_approval_payload(swap.lifi_quote_raw)
+        if token_approval.required:
+            self._swap_repo.append_audit(
+                swap,
+                {
+                    "event": "token_approval_required",
+                    "token_address": token_approval.token_address,
+                    "spender_address": token_approval.spender_address,
+                },
+            )
+            db.commit()
+            db.refresh(swap)
         return SwapExecuteResponse(
             swap_id=swap.id,
             status=swap.status,
@@ -144,6 +155,9 @@ class LifiExecuteService:
         from services.transaction_intents.lifi_intent_sync import on_swap_submitted
 
         on_swap_submitted(db, swap, tx_hash=clean_hash)
+        from services.transaction_attempts.dual_write import dual_write_lifi_swap_submitted
+
+        dual_write_lifi_swap_submitted(db, swap, tx_hash=clean_hash)
         db.commit()
         db.refresh(swap)
 
@@ -153,6 +167,38 @@ class LifiExecuteService:
         )
         self.refresh_lifi_status(db, swap)
         db.refresh(swap)
+        return self._build_status_response(swap)
+
+    def record_token_approval(
+        self,
+        db: Session,
+        *,
+        person_id: UUID,
+        swap_id: UUID,
+        tx_hash: str,
+    ) -> SwapStatusResponse:
+        swap = self._get_active_swap(db, person_id=person_id, swap_id=swap_id)
+        if swap.status != SwapSessionStatus.AWAITING_SIGNATURE.value:
+            raise SwapValidationError("swap.invalid_state", "Approval avant signature swap requise")
+
+        clean_hash = tx_hash.strip().lower()
+        self._swap_repo.append_audit(
+            swap,
+            {"event": "approval_submitted", "tx_hash": clean_hash},
+        )
+        from services.transaction_intents.lifi_intent_sync import on_swap_approval_submitted
+
+        on_swap_approval_submitted(db, swap, approval_tx_hash=clean_hash)
+        from services.transaction_attempts.dual_write import dual_write_lifi_approval_submitted
+
+        dual_write_lifi_approval_submitted(db, swap, approval_tx_hash=clean_hash)
+        db.commit()
+        db.refresh(swap)
+
+        logger.info(
+            "swap.approval_submitted",
+            extra={"swap_id": str(swap.id), "person_id": str(person_id), "tx_hash": clean_hash},
+        )
         return self._build_status_response(swap)
 
     def get_status(self, db: Session, *, person_id: UUID, swap_id: UUID) -> SwapStatusResponse:
@@ -316,10 +362,22 @@ class LifiExecuteService:
                     on_swap_settlement_blocked(db, swap, reason=exc.code)
             else:
                 on_swap_confirmed(db, swap)
+            from services.transaction_attempts.dual_write import dual_write_lifi_swap_confirmed
+
+            dual_write_lifi_swap_confirmed(db, swap, tx_hash=swap.tx_hash)
         elif lifi_status == "FAILED":
             swap.status = SwapSessionStatus.FAILED.value
             swap.error_message = substatus_message or f"Swap LI.FI échoué ({substatus or 'FAILED'})"
             on_swap_failed(db, swap)
+            from services.transaction_attempts.dual_write import dual_write_lifi_swap_confirmed
+
+            dual_write_lifi_swap_confirmed(
+                db,
+                swap,
+                tx_hash=swap.tx_hash,
+                failed=True,
+                error_message=swap.error_message,
+            )
 
         db.commit()
 

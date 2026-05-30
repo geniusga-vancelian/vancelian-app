@@ -7,6 +7,7 @@ from enum import Enum
 class IntentProductType(str, Enum):
     LIFI_SWAP = "lifi_swap"
     MORPHO_EARN = "morpho_earn"
+    LEDGITY_VAULT = "ledgity_vault"
     LOMBARD_BORROW = "lombard_borrow"
     BUNDLE_INVEST = "bundle_invest"
     BUNDLE_WITHDRAW = "bundle_withdraw"

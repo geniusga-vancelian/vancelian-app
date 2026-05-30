@@ -25,6 +25,7 @@ from services.lifi.lifi_execute_service import LifiExecuteService
 from services.lifi.lifi_quote_service import LifiQuoteService
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.schemas import (
+    SwapApprovalSubmitRequest,
     SwapExecuteRequest,
     SwapExecuteResponse,
     SwapQuoteRequest,
@@ -160,6 +161,26 @@ def post_swap_submit(
     person_id = _resolve_person_id(credentials)
     try:
         return _execute_svc.submit_signed_tx(
+            db,
+            person_id=person_id,
+            swap_id=swap_id,
+            tx_hash=body.tx_hash,
+        )
+    except SwapValidationError as exc:
+        raise _validation_error(exc) from exc
+
+
+@swaps_router.post("/{swap_id}/approval", response_model=SwapStatusResponse)
+def post_swap_approval(
+    swap_id: UUID,
+    body: SwapApprovalSubmitRequest,
+    db=Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
+):
+    _ensure_swaps_enabled()
+    person_id = _resolve_person_id(credentials)
+    try:
+        return _execute_svc.record_token_approval(
             db,
             person_id=person_id,
             swap_id=swap_id,
