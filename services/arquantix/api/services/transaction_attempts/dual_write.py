@@ -442,6 +442,65 @@ def _find_existing_vault_attempt(
     return None
 
 
+VAULT_SCOPE_HOOK_MODES = frozenset({"direct_morpho", "ledgity_vault"})
+VAULT_SCOPE_HOOK_OPERATIONS = frozenset({"deposit", "withdraw"})
+
+
+def _maybe_apply_vault_scope_movement_after_success(
+    db: Session,
+    *,
+    person_id: UUID,
+    vault_transaction_id: str,
+    integration_mode: str,
+    operation: str,
+    vault_status: str | None,
+) -> None:
+    """Phase 3A+1a — best-effort PE vault scope après OVT Morpho/Ledgity success."""
+    mode = (integration_mode or "").strip().lower()
+    if mode == "lombard_v1" or mode not in VAULT_SCOPE_HOOK_MODES:
+        return
+    op = (operation or "").strip().lower()
+    if op not in VAULT_SCOPE_HOOK_OPERATIONS:
+        return
+    if (vault_status or "").strip().lower() != "success":
+        return
+    try:
+        from services.portfolio_engine.vault_execution.vault_ovt_bridge import (
+            apply_vault_scope_movement_for_ovt,
+        )
+
+        result = apply_vault_scope_movement_for_ovt(
+            db,
+            ovt_id=vault_transaction_id,
+            person_id=person_id,
+            dry_run=False,
+        )
+        if not result.get("ok"):
+            logger.warning(
+                "attempt.dual_write.vault_scope_movement_skipped",
+                extra={
+                    "vault_transaction_id": vault_transaction_id,
+                    "person_id": str(person_id),
+                    "integration_mode": mode,
+                    "operation": op,
+                    "reason": result.get("reason"),
+                    "message": result.get("message"),
+                },
+            )
+    except Exception as exc:
+        logger.warning(
+            "attempt.dual_write.vault_scope_movement_failed",
+            extra={
+                "vault_transaction_id": vault_transaction_id,
+                "person_id": str(person_id),
+                "integration_mode": mode,
+                "operation": op,
+                "error": str(exc),
+            },
+            exc_info=True,
+        )
+
+
 def dual_write_vault_step(
     db: Session,
     *,
@@ -484,6 +543,14 @@ def dual_write_vault_step(
                 tx_hash=tx_hash,
                 intent_id=intent_id,
             )
+            _maybe_apply_vault_scope_movement_after_success(
+                db,
+                person_id=person_id,
+                vault_transaction_id=vault_transaction_id,
+                integration_mode=integration_mode,
+                operation=operation,
+                vault_status=status_norm,
+            )
             return
 
         if tx_hash:
@@ -495,6 +562,14 @@ def dual_write_vault_step(
                 step_type=step_type,
             )
             if existing_tx is not None:
+                _maybe_apply_vault_scope_movement_after_success(
+                    db,
+                    person_id=person_id,
+                    vault_transaction_id=vault_transaction_id,
+                    integration_mode=integration_mode,
+                    operation=operation,
+                    vault_status=status_norm,
+                )
                 return
 
         OnchainTransactionAttemptService.create_prepared_attempt(
@@ -544,6 +619,15 @@ def dual_write_vault_step(
                 transition=AttemptTransitionInput(tx_hash=tx_hash),
                 reverted=status_norm == "reverted",
             )
+
+        _maybe_apply_vault_scope_movement_after_success(
+            db,
+            person_id=person_id,
+            vault_transaction_id=vault_transaction_id,
+            integration_mode=integration_mode,
+            operation=operation,
+            vault_status=status_norm,
+        )
     except Exception as exc:
         logger.warning(
             "attempt.dual_write.vault_step_failed",

@@ -1,7 +1,7 @@
-"""Bridge OVT vault success → scope movements PE (Phase 3A).
+"""Bridge OVT vault success → scope movements PE (Phase 3A / 3A+1a).
 
-Non branché en production tant que Phase 3A n'est pas validée.
-Appel futur depuis ``dual_write_vault_step`` après receipt OVT success.
+Branché live depuis ``dual_write_vault_step`` après receipt OVT success
+(Morpho / Ledgity deposit & withdraw uniquement).
 """
 from __future__ import annotations
 
