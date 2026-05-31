@@ -144,6 +144,23 @@ def resolve_vault_position_available(
     )
 
 
+def resolve_trading_available_by_asset(
+    db: Session,
+    *,
+    client_id: UUID,
+    asset: str,
+) -> Decimal:
+    """Solde PE trading_available pour un actif (scope vault deposit)."""
+    from services.portfolio_engine.direct_overlay import _resolve_or_create_instrument
+
+    instrument = _resolve_or_create_instrument(db, asset.strip().upper())
+    return resolve_trading_available_for_vault(
+        db,
+        client_id=client_id,
+        instrument_id=instrument.id,
+    )
+
+
 def resolve_trading_available_for_vault(
     db: Session,
     *,

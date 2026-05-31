@@ -69,6 +69,7 @@ def merge_app_crypto_positions(
             "name": pos.get("name") or ASSET_NAMES.get(asset, asset),
             "platform_balance": str(pos.get("balance") or "0"),
             "platform_available": str(pos.get("available_balance") or "0"),
+            "trading_available": str(pos.get("trading_available") or "0"),
             "privy_balance": "0",
             "privy_available": "0",
             "chain_id": pos.get("chain_id"),
@@ -155,8 +156,11 @@ def merge_app_crypto_positions(
         if "platform_balance" not in entry:
             entry["platform_balance"] = str(entry.get("balance") or "0")
             entry["platform_available"] = str(entry.get("available_balance") or "0")
+            entry["trading_available"] = str(entry.get("trading_available") or "0")
             entry["privy_balance"] = "0"
             entry["privy_available"] = "0"
+        elif "trading_available" not in entry:
+            entry["trading_available"] = "0"
         out.append(entry)
 
     out.sort(

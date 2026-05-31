@@ -395,3 +395,4 @@ def test_insufficient_trading_logs_warning_without_crashing(db: Session):
     ]
     assert len(skipped_calls) == 1
     assert skipped_calls[0].kwargs["extra"]["reason"] == "vault.funding.insufficient_trading_available"
+    assert "insuffisant" in (skipped_calls[0].kwargs["extra"].get("detail") or "")

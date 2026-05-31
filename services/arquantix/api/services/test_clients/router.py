@@ -486,6 +486,9 @@ def get_direct_crypto_positions(
         backfill_direct_atoms,
         _normalize_asset_symbol,
     )
+    from services.portfolio_engine.vault_execution.vault_funding import (
+        resolve_trading_available_by_asset,
+    )
     from services.portfolio_engine.positions.models import PositionAtom
     from services.portfolio_engine.instruments.models import Instrument
     from services.portfolio_engine.assets.models import Asset
@@ -605,12 +608,19 @@ def get_direct_crypto_positions(
 
         cost_basis = D(str(atom.cost_basis or 0))
         avg_entry = D(str(atom.average_entry_price or 0))
+        trading_available = resolve_trading_available_by_asset(
+            db,
+            client_id=client.id,
+            asset=asset_symbol,
+        )
+        trading_available_str = f"{trading_available:.{precision}f}"
 
         enriched.append({
             "asset": asset_symbol,
             "name": ASSET_NAMES.get(asset_symbol, asset_symbol),
             "balance": balance_str,
             "available_balance": balance_str,
+            "trading_available": trading_available_str,
             "price_eur": price_eur,
             "estimated_value_eur": estimated_value_eur,
             "price_usd": price_usd,

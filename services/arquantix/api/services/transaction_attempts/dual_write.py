@@ -484,7 +484,7 @@ def _maybe_apply_vault_scope_movement_after_success(
                     "integration_mode": mode,
                     "operation": op,
                     "reason": result.get("reason"),
-                    "message": result.get("message"),
+                    "detail": result.get("message"),
                 },
             )
     except Exception as exc:
