@@ -337,6 +337,7 @@ export function resolveVaultDepositUsdcBalance(
     }
     return 0
   }
+  return 0
 }
 
 export type PortalDefiVaultRef =
