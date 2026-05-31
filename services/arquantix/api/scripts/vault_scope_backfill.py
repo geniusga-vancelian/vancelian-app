@@ -49,8 +49,68 @@ def main() -> int:
             person_id=person_id,
             limit=args.limit,
         )
-        db.rollback()
-        print(json.dumps(plan, indent=2, default=str))
+        if dry_run:
+            db.rollback()
+            print(json.dumps(plan, indent=2, default=str))
+            return 0
+
+        applied: list[dict] = []
+        for preview in plan.get("planned_movements", []):
+            if not preview.get("ok"):
+                db.rollback()
+                print(
+                    json.dumps(
+                        {
+                            "ok": False,
+                            "reason": "planned_movement_not_ok",
+                            "failed_preview": preview,
+                            "applied_count": len(applied),
+                        },
+                        indent=2,
+                        default=str,
+                    )
+                )
+                return 1
+            result = apply_vault_scope_movement_for_ovt(
+                db,
+                ovt_id=str(preview["ovt_id"]),
+                person_id=person_id,
+                dry_run=False,
+            )
+            applied.append(result)
+            if not result.get("ok"):
+                db.rollback()
+                print(
+                    json.dumps(
+                        {
+                            "ok": False,
+                            "reason": "apply_failed",
+                            "failed_result": result,
+                            "applied_count": len(applied) - 1,
+                        },
+                        indent=2,
+                        default=str,
+                    )
+                )
+                return 1
+
+        db.commit()
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "dry_run": False,
+                    "person_id": str(person_id),
+                    "ovt_count": plan.get("ovt_count"),
+                    "fund_count": plan.get("fund_count"),
+                    "release_count": plan.get("release_count"),
+                    "applied_count": len(applied),
+                    "applied_movements": applied,
+                },
+                indent=2,
+                default=str,
+            )
+        )
         return 0
     finally:
         db.close()
