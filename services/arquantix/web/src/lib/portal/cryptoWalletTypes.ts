@@ -24,6 +24,8 @@ export type PortalCryptoPosition = {
   portfolioScope?: string
   privyBalance?: number
   platformBalance?: number
+  /** PE scope trading_available — max investissable vault (Phase 3A). */
+  tradingAvailable?: number
   chainType?: string
   chainId?: number | null
   dedicatedWallet?: boolean

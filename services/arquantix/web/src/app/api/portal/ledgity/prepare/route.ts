@@ -36,6 +36,7 @@ import {
 } from '@/lib/portal/portalVaultRouteHelpers'
 import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
+import { assertPortalVaultDepositTradingAvailable } from '@/lib/portal/vaultDepositValidation'
 import type { ExecutionWalletSource, WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 
 function parseWalletSourceMetadata(body: unknown): WalletSourceMetadata {
@@ -152,6 +153,7 @@ export async function POST(request: NextRequest) {
         amount: parsed.amount,
         assetDecimals,
       })
+      await assertPortalVaultDepositTradingAvailable(parsed.amount)
     } else {
       assertLedgityWithdrawsEnabled()
     }

@@ -300,6 +300,45 @@ export function resolveBaseUsdcBalance(
   return 0
 }
 
+/**
+ * USDC max investissable en vault Morpho/Ledgity — trading_available PE uniquement.
+ * N'utilise pas le solde Privy fusionné ni on_chain_balance.
+ */
+export function resolveVaultDepositUsdcBalance(
+  positions: Array<{
+    asset: string
+    balance?: number
+    availableBalance?: number
+    platformBalance?: number
+    tradingAvailable?: number
+    chainId?: number | null
+  }>,
+): number {
+  for (const row of positions) {
+    if (row.asset.trim().toUpperCase() !== 'USDC') continue
+    if (row.chainId != null && row.chainId !== BASE_CHAIN_ID) continue
+    if (row.tradingAvailable != null && Number.isFinite(row.tradingAvailable)) {
+      return Math.max(0, row.tradingAvailable)
+    }
+    if (row.platformBalance != null && row.platformBalance > 0) {
+      return row.platformBalance
+    }
+    return 0
+  }
+  for (const row of positions) {
+    if (row.asset.trim().toUpperCase() !== 'USDC') {
+      continue
+    }
+    if (row.tradingAvailable != null && Number.isFinite(row.tradingAvailable)) {
+      return Math.max(0, row.tradingAvailable)
+    }
+    if (row.platformBalance != null && row.platformBalance > 0) {
+      return row.platformBalance
+    }
+    return 0
+  }
+}
+
 export type PortalDefiVaultRef =
   | { kind: 'morpho'; vault: PortalMorphoVaultDetails }
   | { kind: 'ledgity'; vault: PortalLedgityVaultDetails }

@@ -31,6 +31,7 @@ import {
   assertMorphoUsdcWithdrawsEnabled,
 } from '@/lib/portal/morphoUsdcBetaAccess'
 import { assertMorphoBetaDepositLimits } from '@/lib/portal/morphoUsdcBetaLimits'
+import { assertPortalVaultDepositTradingAvailable } from '@/lib/portal/vaultDepositValidation'
 import type { ExecutionWalletSource, WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 
 function parseWalletSourceMetadata(body: unknown): WalletSourceMetadata {
@@ -146,6 +147,7 @@ export async function POST(request: NextRequest) {
         amount: parsed.amount,
         assetDecimals,
       })
+      await assertPortalVaultDepositTradingAvailable(parsed.amount)
     } else {
       assertMorphoUsdcWithdrawsEnabled()
     }

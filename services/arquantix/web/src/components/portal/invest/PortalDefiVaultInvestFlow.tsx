@@ -31,7 +31,7 @@ import {
   invParseAmount,
   mergeSourceBalance,
   parseVaultPositionAmount,
-  resolveBaseUsdcBalance,
+  resolveVaultDepositUsdcBalance,
   type PortalInvestSource,
   type PortalInvestTarget,
 } from '@/lib/portal/portalInvestFlowFormat'
@@ -251,7 +251,7 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
 
   useEffect(() => {
     const positions = walletData?.positions?.positions ?? []
-    const usdc = resolveBaseUsdcBalance(positions)
+    const usdc = resolveVaultDepositUsdcBalance(positions)
     setSources((prev) => {
       const next = mergeSourceBalance(prev, 'usdc', usdc)
       setSource((current) => next.find((s) => s.key === current.key) ?? next[0]!)

@@ -73,6 +73,7 @@ export function parseCryptoPositionsPayload(raw: unknown): PortalCryptoPositions
         typeof item.portfolio_scope === 'string' ? item.portfolio_scope : undefined,
       privyBalance: toOptionalNumber(item.privy_balance),
       platformBalance: toOptionalNumber(item.platform_balance),
+      tradingAvailable: toOptionalNumber(item.trading_available),
       chainType: typeof item.chain_type === 'string' ? item.chain_type : undefined,
       chainId: typeof item.chain_id === 'number' ? item.chain_id : null,
       dedicatedWallet: item.dedicated_wallet === true,
@@ -142,6 +143,7 @@ export function parseSelfTradingCryptoPositionsPayload(
         ...scaled,
         balance,
         availableBalance: balance,
+        tradingAvailable: position.tradingAvailable,
         portfolioScope: 'direct',
       }
     })

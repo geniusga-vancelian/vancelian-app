@@ -12,6 +12,7 @@ import { MorphoVaultBetaError } from '@/lib/portal/morphoUsdcBetaAccess'
 import { MorphoVaultLedgerError } from '@/lib/portal/morphoVaultLedger'
 import { PortalAuthError } from '@/lib/portal/portalJwt'
 import { PortalForbiddenError } from '@/lib/portal/portalWalletOwnership'
+import { VaultDepositLimitError } from '@/lib/portal/vaultDepositValidation'
 
 export function morphoRpcErrorResponse(error: unknown, route?: string): NextResponse | null {
   if (!isBaseRpcTransientError(error)) return null
@@ -40,6 +41,17 @@ export function morphoLedgerErrorResponse(error: unknown): NextResponse {
   }
   if (error instanceof LedgityVaultLiquidityError) {
     return NextResponse.json({ code: error.code, message: error.message }, { status: error.status })
+  }
+  if (error instanceof VaultDepositLimitError) {
+    return NextResponse.json(
+      {
+        code: error.code,
+        message: error.message,
+        available: error.available,
+        requested: error.requested,
+      },
+      { status: error.status },
+    )
   }
   if (error instanceof MorphoVaultLedgerError) {
     return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })

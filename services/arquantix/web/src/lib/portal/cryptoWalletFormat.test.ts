@@ -268,6 +268,7 @@ describe('parseSelfTradingCryptoPositionsPayload', () => {
           balance: 50,
           available_balance: 50,
           platform_balance: 13.33,
+          trading_available: 2.11,
           privy_balance: 50,
           estimated_value_eur: 50,
           price_eur: 1,
@@ -278,6 +279,7 @@ describe('parseSelfTradingCryptoPositionsPayload', () => {
 
     assert.equal(summary.positions.length, 1)
     assert.equal(summary.positions[0]?.balance, 13.33)
+    assert.equal(summary.positions[0]?.tradingAvailable, 2.11)
     assert.equal(summary.positions[0]?.portfolioScope, 'direct')
     assert.ok(Math.abs((summary.positions[0]?.estimatedValueEur ?? 0) - 13.33) < 0.01)
   })
