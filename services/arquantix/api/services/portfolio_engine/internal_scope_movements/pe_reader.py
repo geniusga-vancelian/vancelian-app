@@ -42,11 +42,22 @@ def read_current_pe_scope_snapshot(db: Session, person_id: UUID) -> CurrentPeSco
         )
         .all()
     ]
+    vault_pf_ids = [
+        r[0]
+        for r in db.query(Portfolio.id)
+        .filter(
+            Portfolio.client_id == snap.client_id,
+            Portfolio.portfolio_type == "vault_portfolio",
+            Portfolio.status == "active",
+        )
+        .all()
+    ]
 
     portfolio_ids = []
     if direct_pf:
         portfolio_ids.append(direct_pf[0])
     portfolio_ids.extend(bundle_pf_ids)
+    portfolio_ids.extend(vault_pf_ids)
 
     if not portfolio_ids:
         return snap
@@ -78,6 +89,11 @@ def read_current_pe_scope_snapshot(db: Session, person_id: UUID) -> CurrentPeSco
             continue
         if scope_hint == "vault_position" or meta.get("role") == "vault_position":
             snap.vault_position[asset] = snap.vault_position.get(asset, Decimal("0")) + qty
+            continue
+
+        if atom.portfolio_id in vault_pf_ids:
+            if atom.position_type == PositionType.SPOT.value:
+                snap.vault_position[asset] = snap.vault_position.get(asset, Decimal("0")) + qty
             continue
 
         if atom.portfolio_id == direct_pf[0] if direct_pf else None:
