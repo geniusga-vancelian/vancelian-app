@@ -75,7 +75,21 @@ def compute_expected_lombard_scope_movements(
 
         ovt_id = str(row["id"])
         collateral_asset = collateral_symbol_from_metadata(meta)
-        collateral_qty = collateral_quantity_from_metadata(meta)
+        collateral_parse = collateral_quantity_from_metadata(meta, asset=collateral_asset)
+        if collateral_parse.warnings:
+            result.notes.extend(collateral_parse.warnings)
+        if collateral_parse.missing_decimals:
+            result.collateral_parse_issues.append(
+                {
+                    "gap_type": "missing_decimals_gap",
+                    "asset": collateral_asset or "UNKNOWN",
+                    "reference_id": ovt_id,
+                    "group_key": group_key,
+                    "guarantee_amount_raw": meta.get("guarantee_amount_raw"),
+                    "message": collateral_parse.warnings[0] if collateral_parse.warnings else "",
+                }
+            )
+        collateral_qty = collateral_parse.quantity
         borrow_qty = borrow_usdc_from_metadata(
             meta,
             fallback_decimals=int(row["asset_decimals"] or 6),
@@ -94,6 +108,14 @@ def compute_expected_lombard_scope_movements(
                     "group_key": group_key,
                     "lombard_operation": "open_loan",
                     "tx_hash": row["tx_hash"],
+                    **(
+                        {
+                            "collateral_decimals": collateral_parse.decimals,
+                            "collateral_decimals_source": collateral_parse.decimals_source,
+                        }
+                        if collateral_parse.decimals is not None
+                        else {}
+                    ),
                 },
             )
             result.movements.append(lock)

@@ -181,6 +181,19 @@ def compare_expected_scopes_vs_current_pe(
                 )
             )
 
+    for issue in lombard_set.collateral_parse_issues:
+        gaps.append(
+            ScopeGap(
+                gap_type="missing_decimals_gap",
+                asset=normalize_asset(str(issue.get("asset") or "UNKNOWN")),
+                expected_scope=InternalScope.TRADING_LOCKED_COLLATERAL.value,
+                expected_quantity=Decimal("0"),
+                current_quantity=Decimal("0"),
+                severity="warning",
+                metadata=issue,
+            )
+        )
+
     legacy_vault = _read_legacy_vault_positions(db, person_id)
     for asset, uvp_qty in legacy_vault.items():
         pe_vault = current.vault_position.get(asset, Decimal("0"))

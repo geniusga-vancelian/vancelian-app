@@ -19,6 +19,10 @@ from services.portfolio_engine.internal_scope_movements import (
     compute_expected_vault_scope_movements,
 )
 from services.portfolio_engine.internal_scope_movements.enums import InternalScope
+from services.portfolio_engine.internal_scope_movements.utils import (
+    collateral_quantity_from_metadata,
+    resolve_collateral_asset_decimals,
+)
 from services.portfolio_engine.portfolios.models import Portfolio
 from tests.conftest import make_linked_client
 from tests.test_phase4_reconciliation import _seed_wallet
@@ -176,6 +180,110 @@ def test_lombard_collateral_lock_expected_movements(db: Session):
     assert lock.destination_scope == InternalScope.TRADING_LOCKED_COLLATERAL.value
     assert lock.asset == "CBBTC"
     assert lock.quantity == Decimal("0.1")
+
+
+def test_collateral_quantity_cbbtc_raw_8_decimals():
+    parsed = collateral_quantity_from_metadata(
+        {"guarantee_amount_raw": "10000000", "collateral": "CBBTC"},
+        asset="CBBTC",
+    )
+    assert parsed.quantity == Decimal("0.1")
+    assert parsed.decimals == 8
+    assert parsed.decimals_source == "supported_swap_assets"
+    assert not parsed.missing_decimals
+
+
+def test_collateral_quantity_cbeth_raw_18_decimals():
+    parsed = collateral_quantity_from_metadata(
+        {"guarantee_amount_raw": "1000000000000000000", "collateral": "CBETH"},
+        asset="CBETH",
+    )
+    assert parsed.quantity == Decimal("1")
+    assert parsed.decimals == 18
+    assert parsed.decimals_source == "supported_swap_assets"
+    assert not parsed.missing_decimals
+
+
+def test_collateral_quantity_unknown_asset_missing_decimals_gap():
+    parsed = collateral_quantity_from_metadata(
+        {"guarantee_amount_raw": "123456789", "collateral": "OBSCURE"},
+        asset="OBSCURE",
+    )
+    assert parsed.quantity is None
+    assert parsed.missing_decimals is True
+    assert parsed.warnings
+    assert "missing_decimals_gap" in parsed.warnings[0]
+    assert resolve_collateral_asset_decimals("OBSCURE", {}) == (None, "unknown_asset")
+
+
+def test_collateral_quantity_prefers_metadata_decimals():
+    parsed = collateral_quantity_from_metadata(
+        {
+            "guarantee_amount_raw": "10000000",
+            "collateral_decimals": 8,
+            "collateral": "CBBTC",
+        },
+        asset="CBBTC",
+    )
+    assert parsed.quantity == Decimal("0.1")
+    assert parsed.decimals_source == "ovt_metadata"
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="OVT table absente.")
+def test_lombard_cbeth_collateral_lock_uses_18_decimals(db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    meta = {
+        "lombard_operation": "open_loan",
+        "collateral": "cbETH",
+        "guarantee_amount_raw": "3085961700228149",
+        "borrow_amount_raw": "5000000",
+    }
+    _insert_vault_ovt(
+        db,
+        ovt_id=f"cl{uuid.uuid4().hex[:22]}",
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        operation="deposit",
+        amount_raw="5000000",
+        integration_mode="lombard_v1",
+        metadata_json=meta,
+    )
+    db.flush()
+
+    result = compute_expected_lombard_scope_movements(db, pe.person_id)
+    lock = next(m for m in result.movements if m.movement_type == "lock")
+    assert lock.asset == "CBETH"
+    assert lock.quantity == Decimal("0.003085961700228149")
+    assert lock.metadata.get("collateral_decimals") == 18
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="OVT table absente.")
+def test_lombard_unknown_collateral_skips_lock_and_reports_gap(db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    meta = {
+        "lombard_operation": "open_loan",
+        "collateral": "OBSCURE",
+        "guarantee_amount_raw": "999",
+        "borrow_amount_raw": "1000000",
+    }
+    _insert_vault_ovt(
+        db,
+        ovt_id=f"cl{uuid.uuid4().hex[:22]}",
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        operation="deposit",
+        amount_raw="1000000",
+        integration_mode="lombard_v1",
+        metadata_json=meta,
+    )
+    db.flush()
+
+    result = compute_expected_lombard_scope_movements(db, pe.person_id)
+    assert not any(m.movement_type == "lock" for m in result.movements)
+    assert len(result.collateral_parse_issues) == 1
+    assert result.collateral_parse_issues[0]["gap_type"] == "missing_decimals_gap"
 
 
 @pytest.mark.skipif(not _vault_table_ready(), reason="OVT table absente.")

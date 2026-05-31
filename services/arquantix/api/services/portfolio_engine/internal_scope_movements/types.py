@@ -52,6 +52,7 @@ class ScopeMovementSet:
     movements: list[ScopeMovement] = field(default_factory=list)
     net_by_scope: dict[tuple[str, str], Decimal] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    collateral_parse_issues: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         net = [
