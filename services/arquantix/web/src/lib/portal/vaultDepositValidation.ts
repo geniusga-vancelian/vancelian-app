@@ -1,4 +1,4 @@
-import { BASE_CHAIN_ID } from '@/lib/portal/portalInvestFlowFormat'
+import { BASE_CHAIN_ID, invParseAmount } from '@/lib/portal/portalInvestFlowFormat'
 
 export class VaultDepositLimitError extends Error {
   readonly code = 'vault.deposit.insufficient_trading_available'
@@ -77,7 +77,8 @@ export async function loadTradingAvailableUsdcForPortal(): Promise<number> {
   return resolveTradingAvailableUsdcFromDirectPayload(data)
 }
 
-export async function assertPortalVaultDepositTradingAvailable(amount: number): Promise<void> {
+export async function assertPortalVaultDepositTradingAvailable(amount: string | number): Promise<void> {
+  const numericAmount = typeof amount === 'number' ? amount : invParseAmount(amount)
   const tradingAvailable = await loadTradingAvailableUsdcForPortal()
-  assertVaultDepositWithinTradingAvailable({ amount, tradingAvailable })
+  assertVaultDepositWithinTradingAvailable({ amount: numericAmount, tradingAvailable })
 }
