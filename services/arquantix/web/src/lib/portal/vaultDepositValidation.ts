@@ -1,4 +1,4 @@
-import { BASE_CHAIN_ID, invParseAmount } from '@/lib/portal/portalInvestFlowFormat'
+import { invParseAmount, resolveVaultDepositUsdcFromRows } from '@/lib/portal/portalInvestFlowFormat'
 
 export class VaultDepositLimitError extends Error {
   readonly code = 'vault.deposit.insufficient_trading_available'
@@ -24,30 +24,15 @@ function toNumber(value: unknown): number | undefined {
 export function resolveTradingAvailableUsdcFromDirectPayload(raw: unknown): number {
   const root = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const list = Array.isArray(root.positions) ? root.positions : []
-  for (const item of list) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as Record<string, unknown>
-    const asset = String(row.asset ?? '').trim().toUpperCase()
-    if (asset !== 'USDC') continue
-    const chainId = typeof row.chain_id === 'number' ? row.chain_id : null
-    if (chainId != null && chainId !== BASE_CHAIN_ID) continue
-    const trading = toNumber(row.trading_available)
-    if (trading != null) return Math.max(0, trading)
-    const platform = toNumber(row.platform_balance)
-    if (platform != null && platform > 0) return platform
-    return 0
-  }
-  for (const item of list) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as Record<string, unknown>
-    if (String(row.asset ?? '').trim().toUpperCase() !== 'USDC') continue
-    const trading = toNumber(row.trading_available)
-    if (trading != null) return Math.max(0, trading)
-    const platform = toNumber(row.platform_balance)
-    if (platform != null && platform > 0) return platform
-    return 0
-  }
-  return 0
+  const rows = list
+    .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
+    .map((row) => ({
+      asset: String(row.asset ?? ''),
+      chainId: typeof row.chain_id === 'number' ? row.chain_id : null,
+      tradingAvailable: toNumber(row.trading_available),
+      platformBalance: toNumber(row.platform_balance),
+    }))
+  return resolveVaultDepositUsdcFromRows(rows)
 }
 
 export function assertVaultDepositWithinTradingAvailable(args: {

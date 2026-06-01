@@ -46,6 +46,25 @@ describe('resolveVaultDepositUsdcBalance', () => {
     ])
     assert.equal(balance, 0)
   })
+
+  it('ignores lombard overlay row without trading_available when PE row has it', () => {
+    const balance = resolveVaultDepositUsdcBalance([
+      {
+        asset: 'USDC',
+        chainId: 8453,
+        balance: 1,
+        platformBalance: 0,
+      },
+      {
+        asset: 'USDC',
+        chainId: 8453,
+        balance: 183.11,
+        platformBalance: 2.11,
+        tradingAvailable: 2.111143,
+      },
+    ])
+    assert.equal(balance, 2.111143)
+  })
 })
 
 describe('resolveTradingAvailableUsdcFromDirectPayload', () => {

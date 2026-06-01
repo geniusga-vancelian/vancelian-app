@@ -65,7 +65,8 @@ export function invFmtAmount(n: number, decimals = 0): string {
 }
 
 export function invFmtMoney(n: number, sym = '$'): string {
-  return `${invFmtAmount(n, sym === '€' ? 2 : 0)} ${sym}`
+  const decimals = sym === '€' || sym === '$' ? 2 : 0
+  return `${invFmtAmount(n, decimals)} ${sym}`
 }
 
 export function invInEur(amount: number, source: PortalInvestSource): number {
@@ -301,9 +302,44 @@ export function resolveBaseUsdcBalance(
 }
 
 /**
- * USDC max investissable en vault Morpho/Ledgity — trading_available PE uniquement.
- * N'utilise pas le solde Privy fusionné ni on_chain_balance.
+ * USDC max investissable en vault — trading_available PE uniquement.
+ * Agrège toutes les lignes USDC Base (évite un early-return 0 si overlay Lombard).
  */
+export function resolveVaultDepositUsdcFromRows(
+  rows: Array<{
+    asset: string
+    chainId?: number | null
+    tradingAvailable?: number
+    platformBalance?: number
+  }>,
+): number {
+  const onBase = rows.filter(
+    (row) =>
+      row.asset.trim().toUpperCase() === 'USDC' &&
+      (row.chainId == null || row.chainId === BASE_CHAIN_ID),
+  )
+  const usdcRows = onBase.length > 0 ? onBase : rows.filter((row) => row.asset.trim().toUpperCase() === 'USDC')
+  if (usdcRows.length === 0) return 0
+
+  let maxTrading: number | undefined
+  let maxPlatform = 0
+
+  for (const row of usdcRows) {
+    if (row.tradingAvailable != null && Number.isFinite(row.tradingAvailable)) {
+      maxTrading =
+        maxTrading == null ? row.tradingAvailable : Math.max(maxTrading, row.tradingAvailable)
+    }
+    if (row.platformBalance != null && row.platformBalance > 0) {
+      maxPlatform = Math.max(maxPlatform, row.platformBalance)
+    }
+  }
+
+  if (maxTrading != null && maxTrading > 0) return maxTrading
+  if (maxPlatform > 0) return maxPlatform
+  if (maxTrading != null) return 0
+  return 0
+}
+
 export function resolveVaultDepositUsdcBalance(
   positions: Array<{
     asset: string
@@ -314,30 +350,14 @@ export function resolveVaultDepositUsdcBalance(
     chainId?: number | null
   }>,
 ): number {
-  for (const row of positions) {
-    if (row.asset.trim().toUpperCase() !== 'USDC') continue
-    if (row.chainId != null && row.chainId !== BASE_CHAIN_ID) continue
-    if (row.tradingAvailable != null && Number.isFinite(row.tradingAvailable)) {
-      return Math.max(0, row.tradingAvailable)
-    }
-    if (row.platformBalance != null && row.platformBalance > 0) {
-      return row.platformBalance
-    }
-    return 0
-  }
-  for (const row of positions) {
-    if (row.asset.trim().toUpperCase() !== 'USDC') {
-      continue
-    }
-    if (row.tradingAvailable != null && Number.isFinite(row.tradingAvailable)) {
-      return Math.max(0, row.tradingAvailable)
-    }
-    if (row.platformBalance != null && row.platformBalance > 0) {
-      return row.platformBalance
-    }
-    return 0
-  }
-  return 0
+  return resolveVaultDepositUsdcFromRows(
+    positions.map((row) => ({
+      asset: row.asset,
+      chainId: row.chainId,
+      tradingAvailable: row.tradingAvailable,
+      platformBalance: row.platformBalance,
+    })),
+  )
 }
 
 export type PortalDefiVaultRef =

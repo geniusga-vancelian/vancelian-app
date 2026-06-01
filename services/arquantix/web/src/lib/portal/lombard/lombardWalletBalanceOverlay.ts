@@ -54,6 +54,7 @@ function buildUsdcOverlayPosition(args: {
   balance: number
   borrowedUsdc: number
   simulatePrivyCredit: boolean
+  tradingAvailable?: number
 }): PortalCryptoPosition {
   const estimatedUsd = args.balance
   const estimatedEur = args.balance * 0.92
@@ -71,6 +72,7 @@ function buildUsdcOverlayPosition(args: {
     portfolioScope: 'privy',
     privyBalance: args.simulatePrivyCredit ? 0 : args.balance,
     platformBalance: 0,
+    tradingAvailable: args.tradingAvailable,
     chainType: 'evm',
     chainId: VANCELIAN_LOMBARD_V1.chainId,
     lombard: {
@@ -122,6 +124,10 @@ export function applyLombardWalletBalanceOverlay(args: {
 
   if (borrowedUsdcTotal > 0) {
     const usdcIndex = positions.findIndex((row) => row.asset.toUpperCase() === 'USDC')
+    const peTradingAvailable = args.summary.positions
+      .filter((row) => row.asset.toUpperCase() === 'USDC')
+      .map((row) => row.tradingAvailable)
+      .find((value) => value != null && Number.isFinite(value) && value > 0)
     const privyUsdc =
       usdcIndex >= 0 ? positions[usdcIndex].privyBalance ?? positions[usdcIndex].balance : 0
     const displayUsdc = args.simulatePrivyBalances ? privyUsdc + borrowedUsdcTotal : privyUsdc
@@ -144,6 +150,7 @@ export function applyLombardWalletBalanceOverlay(args: {
             balance: borrowedUsdcTotal,
             borrowedUsdc: borrowedUsdcTotal,
             simulatePrivyCredit: true,
+            tradingAvailable: peTradingAvailable,
           }),
         )
       } else {
@@ -153,6 +160,7 @@ export function applyLombardWalletBalanceOverlay(args: {
           availableBalance: displayUsdc,
           chainType: 'evm',
           chainId: VANCELIAN_LOMBARD_V1.chainId,
+          tradingAvailable: existing.tradingAvailable ?? peTradingAvailable,
           ...recalcEstimatedValues(existing, displayUsdc),
           lombard: lombardUsdcMeta,
         }
@@ -163,6 +171,7 @@ export function applyLombardWalletBalanceOverlay(args: {
           balance: displayUsdc,
           borrowedUsdc: borrowedUsdcTotal,
           simulatePrivyCredit: args.simulatePrivyBalances,
+          tradingAvailable: peTradingAvailable,
         }),
       )
     }

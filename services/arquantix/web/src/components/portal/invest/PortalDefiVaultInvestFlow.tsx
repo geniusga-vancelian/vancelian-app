@@ -251,7 +251,11 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
 
   useEffect(() => {
     const positions = walletData?.positions?.positions ?? []
-    const usdc = resolveVaultDepositUsdcBalance(positions)
+    const fromDirect = walletData?.tradingAvailableUsdc
+    const usdc =
+      fromDirect != null && Number.isFinite(fromDirect)
+        ? Math.max(0, fromDirect)
+        : resolveVaultDepositUsdcBalance(positions)
     setSources((prev) => {
       const next = mergeSourceBalance(prev, 'usdc', usdc)
       setSource((current) => next.find((s) => s.key === current.key) ?? next[0]!)
