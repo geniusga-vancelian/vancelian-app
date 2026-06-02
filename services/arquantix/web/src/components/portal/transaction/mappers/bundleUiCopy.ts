@@ -1,6 +1,8 @@
 /**
  * Copy produit Bundle invest (FR) — R4.5-E.
  */
+import type { TransactionTerminalFailureCopy } from '@/components/portal/transaction/types'
+
 export const BUNDLE_FORBIDDEN_PRIMARY_JARGON =
   /\bLI\.FI\b|\bLeg\b|\bBatch\b|\bPrivy\b|bundle_internal_swap|group_key|idempotency|tx reverted|0x[a-fA-F0-9]{8,}/i
 
@@ -38,15 +40,15 @@ export const BUNDLE_FLOW_UI = {
     'Certains actifs peuvent ne pas être entièrement disponibles — l’allocation pourrait être partielle.',
 } as const
 
-export const BUNDLE_TERMINAL_IMPOSSIBLE = {
+export const BUNDLE_TERMINAL_IMPOSSIBLE: TransactionTerminalFailureCopy = {
   title: 'Impossible de finaliser l’investissement',
   lines: ['Aucun portefeuille n’a été modifié.'],
-} as const
+}
 
-export const BUNDLE_TERMINAL_RECONCILIATION = {
+export const BUNDLE_TERMINAL_RECONCILIATION: TransactionTerminalFailureCopy = {
   title: 'Vérification nécessaire',
   lines: ['Votre opération est en cours de réconciliation.'],
-} as const
+}
 
 export const BUNDLE_RESULT_ACTIONS = {
   close: 'Fermer',
