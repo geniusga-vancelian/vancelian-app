@@ -26,6 +26,7 @@ STALE_TRACKED_STATUSES = frozenset(
         IntentStatus.AWAITING_SIGNATURE.value,
         IntentStatus.SUBMITTED.value,
         IntentStatus.PARTIAL.value,
+        IntentStatus.RETRYABLE_FAILED.value,
         IntentStatus.RECONCILIATION_REQUIRED.value,
         IntentStatus.CONFIRMING.value,
         IntentStatus.CREATED.value,

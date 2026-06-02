@@ -24,6 +24,63 @@ STEP_SUBMITTED = "submitted"
 STEP_CONFIRMED = "confirmed"
 STEP_FAILED = "failed"
 
+LOMBARD_AUTH_STEPS = frozenset({"approve", "authorize"})
+LOMBARD_TERMINAL_OUTCOME_BORROW_NOT_OPENED = "borrow_not_opened"
+
+
+def _find_lombard_step(steps: list[dict[str, Any]], step_name: str) -> Optional[dict[str, Any]]:
+    target = step_name.strip().lower()
+    for step in steps:
+        if str(step.get("step") or "").strip().lower() == target:
+            return step
+    return None
+
+
+def lombard_auth_prerequisite_confirmed(steps: list[dict[str, Any]]) -> bool:
+    """True si approve ou authorize est confirmé (prérequis retry open_loan)."""
+    for name in LOMBARD_AUTH_STEPS:
+        step = _find_lombard_step(steps, name)
+        if step is not None and str(step.get("status") or "") == STEP_CONFIRMED:
+            return True
+    return False
+
+
+def is_lombard_retryable_failed(steps: list[dict[str, Any]]) -> bool:
+    """open_loan failed + approve/authorize confirmé → échec récupérable."""
+    open_loan = _find_lombard_step(steps, "open_loan")
+    if open_loan is None:
+        return False
+    if str(open_loan.get("status") or "") != STEP_FAILED:
+        return False
+    return lombard_auth_prerequisite_confirmed(steps)
+
+
+def lombard_terminal_metadata_patch(status: str) -> dict[str, Any]:
+    if status == IntentStatus.RETRYABLE_FAILED.value:
+        return {
+            "lombard_status_detail": "retryable_failed",
+            "terminal_outcome": LOMBARD_TERMINAL_OUTCOME_BORROW_NOT_OPENED,
+        }
+    if status == IntentStatus.FAILED_FINAL.value:
+        return {
+            "lombard_status_detail": "failed_final",
+            "terminal_outcome": "retry_exhausted",
+        }
+    if status == IntentStatus.SUPERSEDED.value:
+        return {"lombard_status_detail": "superseded"}
+    return {}
+
+
+def is_lombard_terminal_intent_status(status: str) -> bool:
+    norm = (status or "").strip().lower()
+    return norm in {
+        IntentStatus.CONFIRMED.value,
+        IntentStatus.FAILED.value,
+        IntentStatus.FAILED_FINAL.value,
+        IntentStatus.SUPERSEDED.value,
+        IntentStatus.RECONCILIATION_REQUIRED.value,
+    }
+
 
 def lombard_parent_intent_key(
     *,
@@ -73,6 +130,13 @@ def recompute_lombard_parent_status(steps: list[dict[str, Any]]) -> str:
     if all(s == STEP_FAILED for s in statuses):
         return IntentStatus.FAILED.value
 
+    if is_lombard_retryable_failed(steps):
+        return IntentStatus.RETRYABLE_FAILED.value
+
+    open_loan = _find_lombard_step(steps, "open_loan")
+    if open_loan is not None and str(open_loan.get("status") or "") == STEP_FAILED:
+        return IntentStatus.FAILED.value
+
     if any(s == STEP_CONFIRMED for s in statuses) and any(
         s in (STEP_FAILED, STEP_PENDING, STEP_SUBMITTED) for s in statuses
     ):
@@ -108,9 +172,11 @@ def _save_parent(
     status: Optional[str] = None,
 ) -> dict[str, Any]:
     meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
-    row.metadata_json = {**meta, "steps": steps, "group_key": meta.get("group_key") or row.linked_reference_id}
+    merged = {**meta, "steps": steps, "group_key": meta.get("group_key") or row.linked_reference_id}
     if status is not None:
         row.status = status
+        merged.update(lombard_terminal_metadata_patch(status))
+    row.metadata_json = merged
     tx = _parent_tx_hash_from_steps(steps)
     if tx:
         row.tx_hash = tx
@@ -380,6 +446,65 @@ def recompute_lombard_parent_intent(
         return _save_parent(db, row, steps=steps, status=parent_status)
     except Exception as exc:
         logger.warning("intent.lombard.recompute_failed", extra={"error": str(exc)})
+        return None
+
+
+def mark_lombard_intent_superseded(
+    db: Session,
+    *,
+    person_id: UUID,
+    group_key: str,
+    market_or_vault: str,
+    superseded_by_group_key: str,
+    superseded_by_intent_id: Optional[str] = None,
+) -> dict[str, Any] | None:
+    """Marque une tentative Lombard remplacée par un retry réussi (R3)."""
+    try:
+        row = TransactionIntentRepository.find_by_lombard_group(
+            db,
+            person_id=person_id,
+            group_key=group_key,
+            market_or_vault=market_or_vault,
+        )
+        if row is None:
+            return None
+        steps = _normalize_steps((row.metadata_json or {}).get("steps"))
+        meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+        row.metadata_json = {
+            **meta,
+            "superseded_by_group_key": superseded_by_group_key,
+            **({"superseded_by_intent_id": superseded_by_intent_id} if superseded_by_intent_id else {}),
+        }
+        return _save_parent(db, row, steps=steps, status=IntentStatus.SUPERSEDED.value)
+    except Exception as exc:
+        logger.warning("intent.lombard.superseded_failed", extra={"error": str(exc)})
+        return None
+
+
+def mark_lombard_intent_failed_final(
+    db: Session,
+    *,
+    person_id: UUID,
+    group_key: str,
+    market_or_vault: str,
+    reason: str = "retry_exhausted",
+) -> dict[str, Any] | None:
+    """Clôture métier Lombard après retry épuisé (R3)."""
+    try:
+        row = TransactionIntentRepository.find_by_lombard_group(
+            db,
+            person_id=person_id,
+            group_key=group_key,
+            market_or_vault=market_or_vault,
+        )
+        if row is None:
+            return None
+        steps = _normalize_steps((row.metadata_json or {}).get("steps"))
+        meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+        row.metadata_json = {**meta, "failed_final_reason": reason}
+        return _save_parent(db, row, steps=steps, status=IntentStatus.FAILED_FINAL.value)
+    except Exception as exc:
+        logger.warning("intent.lombard.failed_final_failed", extra={"error": str(exc)})
         return None
 
 

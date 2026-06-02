@@ -11,6 +11,7 @@ DEFAULT_TTL_MINUTES: dict[str, int] = {
     IntentStatus.AWAITING_SIGNATURE.value: 60,
     IntentStatus.SUBMITTED.value: 45,
     IntentStatus.PARTIAL.value: 120,
+    IntentStatus.RETRYABLE_FAILED.value: 120,
     IntentStatus.RECONCILIATION_REQUIRED.value: 360,
     IntentStatus.CONFIRMING.value: 45,
     IntentStatus.CREATED.value: 60,

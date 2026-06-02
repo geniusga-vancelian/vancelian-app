@@ -14,11 +14,16 @@ from services.privy_wallet.repository import PersonWalletBalanceRepository, Pers
 from services.transaction_intents.enums import IntentProductType, IntentStatus
 from services.transaction_intents.lombard_intent_sync import (
     LOMBARD_LINKED_TABLE,
+    LOMBARD_TERMINAL_OUTCOME_BORROW_NOT_OPENED,
     STEP_CONFIRMED,
     STEP_FAILED,
     STEP_PENDING,
     ensure_lombard_parent_intent,
+    is_lombard_retryable_failed,
+    lombard_auth_prerequisite_confirmed,
     lombard_parent_intent_key,
+    mark_lombard_intent_failed_final,
+    mark_lombard_intent_superseded,
     mark_lombard_step_confirmed,
     mark_lombard_step_failed,
     recompute_lombard_parent_status,
@@ -172,6 +177,93 @@ def test_lombard_parent_partial_on_mix(db: Session):
         {"step": "open_loan", "status": STEP_PENDING},
     ]
     assert recompute_lombard_parent_status(steps) == IntentStatus.PARTIAL.value
+
+
+def test_lombard_retryable_failed_when_approve_confirmed_open_loan_failed():
+    steps = [
+        {"step": "approve", "status": STEP_CONFIRMED, "ledger_entry_id": "a1"},
+        {"step": "open_loan", "status": STEP_FAILED, "ledger_entry_id": "a2"},
+    ]
+    assert is_lombard_retryable_failed(steps) is True
+    assert recompute_lombard_parent_status(steps) == IntentStatus.RETRYABLE_FAILED.value
+
+
+def test_lombard_open_loan_failed_without_auth_confirmed_is_failed_not_retryable():
+    steps = [
+        {"step": "approve", "status": STEP_PENDING, "ledger_entry_id": "a1"},
+        {"step": "open_loan", "status": STEP_FAILED, "ledger_entry_id": "a2"},
+    ]
+    assert lombard_auth_prerequisite_confirmed(steps) is False
+    assert is_lombard_retryable_failed(steps) is False
+    assert recompute_lombard_parent_status(steps) == IntentStatus.FAILED.value
+
+
+def test_lombard_open_loan_only_success_stays_confirmed():
+    steps = [{"step": "open_loan", "status": STEP_CONFIRMED, "ledger_entry_id": "a1"}]
+    assert recompute_lombard_parent_status(steps) == IntentStatus.CONFIRMED.value
+
+
+def test_lombard_open_loan_only_failed_is_failed():
+    steps = [{"step": "open_loan", "status": STEP_FAILED, "ledger_entry_id": "a1"}]
+    assert recompute_lombard_parent_status(steps) == IntentStatus.FAILED.value
+
+
+def test_lombard_retryable_failed_sets_terminal_metadata(db: Session):
+    pe = make_linked_client(db)
+    gk, market, ledger_ids = _prepare_parent(db, pe)
+    mark_lombard_step_confirmed(
+        db,
+        person_id=pe.person_id,
+        group_key=gk,
+        market_or_vault=market,
+        ledger_entry_id=ledger_ids[0],
+        receipt_status="success",
+    )
+    sync_lombard_step_from_ledger_receipt(
+        db,
+        person_id=pe.person_id,
+        group_key=gk,
+        market_or_vault=market,
+        ledger_entry_id=ledger_ids[2],
+        tx_hash=f"0x{uuid.uuid4().hex}{uuid.uuid4().hex[:24]}",
+        ledger_status="reverted",
+    )
+    db.commit()
+
+    intent = TransactionIntentRepository.find_by_lombard_group(
+        db, person_id=pe.person_id, group_key=gk, market_or_vault=market
+    )
+    assert intent.status == IntentStatus.RETRYABLE_FAILED.value
+    assert intent.metadata_json.get("lombard_status_detail") == "retryable_failed"
+    assert intent.metadata_json.get("terminal_outcome") == LOMBARD_TERMINAL_OUTCOME_BORROW_NOT_OPENED
+
+
+def test_lombard_mark_superseded_and_failed_final_helpers(db: Session):
+    pe = make_linked_client(db)
+    gk, market, ledger_ids = _prepare_parent(db, pe)
+
+    superseded = mark_lombard_intent_superseded(
+        db,
+        person_id=pe.person_id,
+        group_key=gk,
+        market_or_vault=market,
+        superseded_by_group_key="retry-group-key",
+        superseded_by_intent_id=str(uuid.uuid4()),
+    )
+    db.commit()
+    assert superseded is not None
+    assert superseded["status"] == IntentStatus.SUPERSEDED.value
+
+    failed_final = mark_lombard_intent_failed_final(
+        db,
+        person_id=pe.person_id,
+        group_key=gk,
+        market_or_vault=market,
+        reason="retry_exhausted",
+    )
+    db.commit()
+    assert failed_final is not None
+    assert failed_final["status"] == IntentStatus.FAILED_FINAL.value
 
 
 def test_lombard_parent_failed_when_all_failed(db: Session):

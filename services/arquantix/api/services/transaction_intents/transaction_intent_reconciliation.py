@@ -746,7 +746,10 @@ def _scan_lombard_borrow_gaps(
                     )
                 )
 
-        if intent.status == IntentStatus.PARTIAL.value:
+        if intent.status in (
+            IntentStatus.PARTIAL.value,
+            IntentStatus.RETRYABLE_FAILED.value,
+        ):
             updated = group.get("updated_at")
             if updated and updated.replace(tzinfo=timezone.utc) < stale_cutoff:
                 out.append(

@@ -34,3 +34,7 @@ class IntentStatus(str, Enum):
     FAILED = "failed"
     PARTIAL = "partial"
     RECONCILIATION_REQUIRED = "reconciliation_required"
+    # Lombard multi-step terminal / retry (Phase 3B-R2 — String(32), pas de CHECK DB)
+    RETRYABLE_FAILED = "retryable_failed"
+    SUPERSEDED = "superseded"
+    FAILED_FINAL = "failed_final"
