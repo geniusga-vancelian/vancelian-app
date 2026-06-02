@@ -9,6 +9,7 @@ import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import { PortalLombardBorrowForm } from '@/components/portal/lombard/PortalLombardBorrowForm'
 import { PortalLombardBorrowIntro } from '@/components/portal/lombard/PortalLombardBorrowIntro'
 import { PortalLombardBorrowProcessing } from '@/components/portal/lombard/PortalLombardBorrowProcessing'
+import { PortalLombardBorrowTerminalFailure } from '@/components/portal/lombard/PortalLombardBorrowTerminalFailure'
 import { PortalLombardBorrowSuccess } from '@/components/portal/lombard/PortalLombardBorrowSuccess'
 import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
 import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
@@ -36,25 +37,17 @@ import type {
 } from '@/lib/portal/lombard/lombardTypes'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { isLombardOpeningPhase } from '@/lib/portal/lombard/lombardProcessingUx'
 import {
-  applyLombardRetryLinkAfterFailure,
-  applyLombardRetryLinkAfterSuccess,
-  buildLombardRetryPrepareContext,
-  canAttemptExplicitLombardRetry,
-  createInitialLombardRetryLinkState,
-  isLombardOpenLoanRetryableFailure,
-  markLombardExplicitRetryStarted,
-  resetLombardRetryLinkState,
-} from '@/lib/portal/lombard/lombardRetryLinking'
-import {
-  resolveLombardExecutionFailure,
+  LombardTerminalBorrowError,
   usePortalLombardExecution,
 } from '@/lib/portal/usePortalLombardExecution'
-import type { LombardExecutionFailureView } from '@/lib/portal/lombard/lombardExecutionError'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
 type FlowStep = 'intro' | 'form' | 'processing' | 'success'
+
+const OPENING_SUBTEXT_ROTATE_MS = 5_000
 
 const PRIVY_SIGNING_SESSION_HINT =
   'Pour signer le dépôt de garantie, activez votre wallet Vancelian (code e-mail) depuis Mon wallet crypto, puis relancez l’emprunt.'
@@ -62,13 +55,6 @@ const PRIVY_SIGNING_SESSION_HINT =
 const DEFAULT_TARGET_LTV_PERCENT = 28
 const CAPACITY_DEBOUNCE_MS = 280
 const QUOTE_DEBOUNCE_MS = 350
-
-function createIdempotencyKey(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-  return `lombard-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-}
 
 function resolveInitialStep(prefilled: boolean): FlowStep {
   if (prefilled) return 'form'
@@ -119,9 +105,8 @@ export function PortalLombardFlow() {
   const [executing, setExecuting] = useState(false)
   const [executionPhase, setExecutionPhase] = useState<LombardExecutionPhase>('idle')
   const [lastProgressPhase, setLastProgressPhase] = useState<LombardExecutionPhase>('preparing')
-  const [executionFailure, setExecutionFailure] = useState<LombardExecutionFailureView | null>(null)
-  const idempotencyKeyRef = useRef<string | null>(null)
-  const retryLinkStateRef = useRef(createInitialLombardRetryLinkState())
+  const [terminalFailure, setTerminalFailure] = useState(false)
+  const [openingSubtextTick, setOpeningSubtextTick] = useState(0)
 
   const { data: walletData } = usePortalCachedScreen<PortalCryptoWalletHubPayload>({
     cacheKey: 'portal:crypto-wallet',
@@ -272,86 +257,62 @@ export function PortalLombardFlow() {
     }
   }, [borrowAmount, executionAddress, selectedCollateral, step, targetLtvPercent])
 
-  const runOpenLoan = useCallback(
-    async (opts?: { isExplicitRetry?: boolean }) => {
-      if (executing || !selectedCollateral || !quote || !executionAddress) return
-      if (opts?.isExplicitRetry && !canAttemptExplicitLombardRetry(retryLinkStateRef.current)) {
+  useEffect(() => {
+    if (step !== 'processing' || terminalFailure) return
+    if (!isLombardOpeningPhase(executionPhase)) return
+    const timer = window.setInterval(() => {
+      setOpeningSubtextTick((tick) => tick + 1)
+    }, OPENING_SUBTEXT_ROTATE_MS)
+    return () => window.clearInterval(timer)
+  }, [executionPhase, step, terminalFailure])
+
+  const runOpenLoan = useCallback(async () => {
+    if (executing || !selectedCollateral || !quote || !executionAddress) return
+
+    setBorrowRecap(buildLombardBorrowRecap(quote))
+    setStep('processing')
+    setExecuting(true)
+    setTerminalFailure(false)
+    setOpeningSubtextTick(0)
+    setExecutionPhase('preparing')
+
+    try {
+      await executeOpenLoan({
+        collateral: selectedCollateral,
+        borrowAmount: borrowAmount.trim(),
+        walletAddress: executionAddress,
+        targetLtvPercent,
+        onInvisibleRetry: () => {
+          setOpeningSubtextTick((tick) => tick + 1)
+        },
+        onPhaseChange: (phase) => {
+          setExecutionPhase(phase)
+          if (phase !== 'failed' && phase !== 'idle') {
+            setLastProgressPhase(phase)
+          }
+        },
+      })
+      setStep('success')
+    } catch (error) {
+      if (error instanceof LombardTerminalBorrowError) {
+        setTerminalFailure(true)
+        setExecutionPhase('failed')
         return
       }
-
-      setBorrowRecap(buildLombardBorrowRecap(quote))
-      setStep('processing')
-      setExecuting(true)
-      setExecutionFailure(null)
-      setExecutionPhase('preparing')
-
-      if (!opts?.isExplicitRetry) {
-        retryLinkStateRef.current = resetLombardRetryLinkState(retryLinkStateRef.current)
-      } else {
-        retryLinkStateRef.current = markLombardExplicitRetryStarted(retryLinkStateRef.current)
-      }
-
-      const retryLink = buildLombardRetryPrepareContext({
-        state: retryLinkStateRef.current,
-        isExplicitRetry: Boolean(opts?.isExplicitRetry),
-      })
-      retryLinkStateRef.current = {
-        ...retryLinkStateRef.current,
-        logicalBorrowId: retryLink.logicalBorrowId,
-      }
-
-      idempotencyKeyRef.current = createIdempotencyKey()
-
-      try {
-        await executeOpenLoan({
-          collateral: selectedCollateral,
-          borrowAmount: borrowAmount.trim(),
-          walletAddress: executionAddress,
-          targetLtvPercent,
-          idempotencyKey: idempotencyKeyRef.current,
-          retryLink,
-          onPhaseChange: (phase) => {
-            setExecutionPhase(phase)
-            if (phase !== 'failed' && phase !== 'idle') {
-              setLastProgressPhase(phase)
-            }
-          },
-        })
-        retryLinkStateRef.current = applyLombardRetryLinkAfterSuccess(retryLinkStateRef.current)
-        setStep('success')
-      } catch (error) {
-        setExecutionPhase('failed')
-        const failure = resolveLombardExecutionFailure(error)
-        setExecutionFailure(failure)
-        if (idempotencyKeyRef.current) {
-          retryLinkStateRef.current = applyLombardRetryLinkAfterFailure({
-            state: retryLinkStateRef.current,
-            groupKey: idempotencyKeyRef.current,
-            operation: failure.operation,
-          })
-        }
-      } finally {
-        setExecuting(false)
-      }
-    },
-    [
-      borrowAmount,
-      executeOpenLoan,
-      executing,
-      executionAddress,
-      quote,
-      selectedCollateral,
-      targetLtvPercent,
-    ],
-  )
-
-  const canExplicitRetry = useMemo(
-    () =>
-      Boolean(executionFailure) &&
-      isLombardOpenLoanRetryableFailure({ operation: executionFailure?.operation }) &&
-      canAttemptExplicitLombardRetry(retryLinkStateRef.current),
-    [executionFailure],
-  )
+      setTerminalFailure(true)
+      setExecutionPhase('failed')
+    } finally {
+      setExecuting(false)
+    }
+  }, [
+    borrowAmount,
+    executeOpenLoan,
+    executing,
+    executionAddress,
+    quote,
+    selectedCollateral,
+    targetLtvPercent,
+  ])
 
   const handleIntroContinue = useCallback(() => {
     markBorrowIntroSeen()
@@ -437,50 +398,20 @@ export function PortalLombardFlow() {
 
       {step === 'processing' && borrowRecap ? (
         <div className="flex flex-col gap-5">
-          <PortalLombardBorrowProcessing
-            recap={borrowRecap}
-            executionPhase={executionPhase === 'failed' ? lastProgressPhase : executionPhase}
-            onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
-          />
-
-          {executionFailure ? (
-            <div className="rounded-xl border border-v-error/30 bg-v-error/5 p-4">
-              <p className="m-0 font-ui text-[14px] font-medium text-v-error">{executionFailure.headline}</p>
-              {executionFailure.stepLabel ? (
-                <p className="m-0 mt-2 font-ui text-[13px] text-v-fg">
-                  Étape : {executionFailure.stepLabel}
-                </p>
-              ) : null}
-              {executionFailure.txHash ? (
-                <p className="m-0 mt-1 break-all font-mono text-[12px] text-v-muted">
-                  Transaction : {executionFailure.txHash}
-                </p>
-              ) : null}
-              <div className="brw-foot mt-4">
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--lg"
-                  onClick={() => {
-                    setExecutionFailure(null)
-                    setExecutionPhase('idle')
-                    retryLinkStateRef.current = resetLombardRetryLinkState(retryLinkStateRef.current)
-                    setStep('form')
-                  }}
-                >
-                  Retour
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--primary btn--lg brw-foot__cta"
-                  disabled={executing || !privySigningReady || !canExplicitRetry}
-                  onClick={() => void runOpenLoan({ isExplicitRetry: true })}
-                >
-                  Réessayer
-                </button>
-              </div>
-            </div>
-          ) : null}
-
+          {!terminalFailure ? (
+            <PortalLombardBorrowProcessing
+              recap={borrowRecap}
+              executionPhase={executionPhase === 'failed' ? lastProgressPhase : executionPhase}
+              openingSubtextTick={openingSubtextTick}
+              onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
+            />
+          ) : (
+            <PortalLombardBorrowTerminalFailure
+              retryDisabled={executing || !privySigningReady}
+              onRetry={() => void runOpenLoan()}
+              onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
+            />
+          )}
         </div>
       ) : null}
 

@@ -11,8 +11,11 @@ export type LombardRetryPrepareContext = {
 export type LombardRetryLinkState = {
   logicalBorrowId: string | null
   failedGroupKeyForRetry: string | null
+  /** Retry lié consommé (auto invisible ou manuel post-terminal). */
   hasRetried: boolean
 }
+
+export type LombardRetryPrepareMode = 'initial' | 'linked_retry'
 
 export function createLogicalBorrowId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -35,10 +38,11 @@ export function resetLombardRetryLinkState(state: LombardRetryLinkState): Lombar
 
 export function buildLombardRetryPrepareContext(args: {
   state: LombardRetryLinkState
-  isExplicitRetry: boolean
+  mode: LombardRetryPrepareMode
 }): LombardRetryPrepareContext {
   const logicalBorrowId = args.state.logicalBorrowId ?? createLogicalBorrowId()
-  const retryOfGroupKey = args.isExplicitRetry ? args.state.failedGroupKeyForRetry : null
+  const retryOfGroupKey =
+    args.mode === 'linked_retry' ? args.state.failedGroupKeyForRetry : null
   const retryAttemptNumber = retryOfGroupKey ? 1 : 0
   return {
     logicalBorrowId,
@@ -47,7 +51,12 @@ export function buildLombardRetryPrepareContext(args: {
   }
 }
 
+/** @deprecated R4 — retry manuel post-terminal repart de zéro ; gardé pour compat tests. */
 export function canAttemptExplicitLombardRetry(state: LombardRetryLinkState): boolean {
+  return canAttemptLinkedLombardRetry(state)
+}
+
+export function canAttemptLinkedLombardRetry(state: LombardRetryLinkState): boolean {
   return Boolean(state.failedGroupKeyForRetry) && !state.hasRetried
 }
 
@@ -75,11 +84,16 @@ export function applyLombardRetryLinkAfterSuccess(state: LombardRetryLinkState):
   return resetLombardRetryLinkState(state)
 }
 
-export function markLombardExplicitRetryStarted(state: LombardRetryLinkState): LombardRetryLinkState {
+export function markLombardLinkedRetryStarted(state: LombardRetryLinkState): LombardRetryLinkState {
   return {
     ...state,
     hasRetried: true,
   }
+}
+
+/** @deprecated alias */
+export function markLombardExplicitRetryStarted(state: LombardRetryLinkState): LombardRetryLinkState {
+  return markLombardLinkedRetryStarted(state)
 }
 
 export function buildLombardPrepareRetryBodyFields(

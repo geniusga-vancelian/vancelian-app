@@ -5,10 +5,10 @@ import {
   applyLombardRetryLinkAfterFailure,
   buildLombardPrepareRetryBodyFields,
   buildLombardRetryPrepareContext,
-  canAttemptExplicitLombardRetry,
+  canAttemptLinkedLombardRetry,
   createInitialLombardRetryLinkState,
   createLogicalBorrowId,
-  markLombardExplicitRetryStarted,
+  markLombardLinkedRetryStarted,
   resetLombardRetryLinkState,
 } from './lombardRetryLinking'
 
@@ -20,19 +20,19 @@ describe('lombardRetryLinking', () => {
 
   it('initial prepare has retry_attempt_number 0', () => {
     const state = createInitialLombardRetryLinkState()
-    const ctx = buildLombardRetryPrepareContext({ state, isExplicitRetry: false })
+    const ctx = buildLombardRetryPrepareContext({ state, mode: 'initial' })
     assert.equal(ctx.retryAttemptNumber, 0)
     assert.equal(ctx.retryOfGroupKey, null)
     assert.ok(ctx.logicalBorrowId)
   })
 
-  it('explicit retry carries retry_of_group_key and attempt 1', () => {
+  it('linked retry carries retry_of_group_key and attempt 1', () => {
     const state = {
       logicalBorrowId: 'logical-1',
       failedGroupKeyForRetry: 'group-a',
       hasRetried: false,
     }
-    const ctx = buildLombardRetryPrepareContext({ state, isExplicitRetry: true })
+    const ctx = buildLombardRetryPrepareContext({ state, mode: 'linked_retry' })
     assert.equal(ctx.logicalBorrowId, 'logical-1')
     assert.equal(ctx.retryOfGroupKey, 'group-a')
     assert.equal(ctx.retryAttemptNumber, 1)
@@ -59,13 +59,13 @@ describe('lombardRetryLinking', () => {
     assert.equal(cleared.logicalBorrowId, null)
   })
 
-  it('blocks second explicit retry after one retry started', () => {
-    const state = markLombardExplicitRetryStarted({
+  it('blocks second linked retry after one retry started', () => {
+    const state = markLombardLinkedRetryStarted({
       logicalBorrowId: 'logical-1',
       failedGroupKeyForRetry: 'group-a',
       hasRetried: false,
     })
-    assert.equal(canAttemptExplicitLombardRetry(state), false)
+    assert.equal(canAttemptLinkedLombardRetry(state), false)
   })
 
   it('reset clears retry state', () => {

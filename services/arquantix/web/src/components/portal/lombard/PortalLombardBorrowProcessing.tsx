@@ -1,47 +1,35 @@
 'use client'
 
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
+import type { LombardBorrowRecap } from '@/lib/portal/lombard/lombardBorrowRecap'
 import {
-  lombardBorrowStepperIndex,
-  lombardBorrowStepperState,
-  type LombardBorrowRecap,
-} from '@/lib/portal/lombard/lombardBorrowRecap'
+  isLombardOpeningPhase,
+  LOMBARD_PROCESSING_STEPS,
+  lombardProcessingStepperIndex,
+  lombardProcessingStepperState,
+  resolveProcessingStepSubtext,
+} from '@/lib/portal/lombard/lombardProcessingUx'
 import { parseBorrowAmountInput, formatBorrowAmountFr } from '@/lib/portal/lombard/lombardBorrowUi'
 import type { LombardExecutionPhase } from '@/lib/portal/lombard/lombardTypes'
 
 type Props = {
   recap: LombardBorrowRecap
   executionPhase: LombardExecutionPhase
+  openingSubtextTick?: number
   onClose: () => void
 }
 
-const STEPS = [
-  {
-    label: 'Autorisation de la garantie',
-    sub: (recap: LombardBorrowRecap) =>
-      `Vous autorisez Morpho à utiliser votre ${recap.collateral} comme garantie.`,
-  },
-  {
-    label: 'Dépôt de la garantie',
-    sub: (recap: LombardBorrowRecap) =>
-      `${recap.guaranteeAmount} ${recap.collateral} bloqués sur le marché Morpho.`,
-  },
-  {
-    label: "Ouverture de l'emprunt",
-    sub: (recap: LombardBorrowRecap) =>
-      `Emprunt de ${recap.borrowAmountLabel} USDC ouvert à ${recap.targetLtvPercent} % de niveau d'emprunt.`,
-  },
-  {
-    label: 'Réception sur votre wallet',
-    sub: () => 'Les USDC arrivent sur votre wallet Vancelian.',
-  },
-] as const
-
-export function PortalLombardBorrowProcessing({ recap, executionPhase, onClose }: Props) {
-  const progressIndex = lombardBorrowStepperIndex(executionPhase)
+export function PortalLombardBorrowProcessing({
+  recap,
+  executionPhase,
+  openingSubtextTick = 0,
+  onClose,
+}: Props) {
+  const progressIndex = lombardProcessingStepperIndex(executionPhase)
   const borrowLabel =
     recap.borrowAmountLabel ||
     formatBorrowAmountFr(parseBorrowAmountInput(recap.borrowAmount), 2)
+  const showOpeningRotation = isLombardOpeningPhase(executionPhase)
 
   return (
     <div className="brw brw-proc v-card">
@@ -58,14 +46,22 @@ export function PortalLombardBorrowProcessing({ recap, executionPhase, onClose }
       <div className="brw-proc__head">
         <h3 className="brw__title">Transaction en cours</h3>
         <p className="brw__lead">
-          Votre emprunt de <b className="v-tnum">{borrowLabel} USDC</b> est en cours de validation sur Morpho.
+          Votre emprunt de <b className="v-tnum">{borrowLabel} USDC</b> est en cours de traitement.
           Ne fermez pas cette fenêtre.
         </p>
       </div>
 
       <div className="stepper brw-proc__stepper">
-        {STEPS.map((step, i) => {
-          const st = lombardBorrowStepperState(i, progressIndex)
+        {LOMBARD_PROCESSING_STEPS.map((step, i) => {
+          const st = lombardProcessingStepperState(i, progressIndex)
+          const sub =
+            i === 2 && showOpeningRotation
+              ? resolveProcessingStepSubtext({
+                  stepIndex: i,
+                  recap,
+                  openingSubtextTick,
+                })
+              : step.defaultSub(recap)
           return (
             <div className="step" key={step.label}>
               {st === 'done' ? (
@@ -82,7 +78,7 @@ export function PortalLombardBorrowProcessing({ recap, executionPhase, onClose }
                   {step.label}
                   {st === 'current' ? <span className="tag">En cours</span> : null}
                 </div>
-                <p className="step__sub">{step.sub(recap)}</p>
+                <p className="step__sub">{sub}</p>
               </div>
             </div>
           )

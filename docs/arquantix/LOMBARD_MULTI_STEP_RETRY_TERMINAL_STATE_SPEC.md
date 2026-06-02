@@ -283,22 +283,71 @@ Pour chaque step (approve, open_loan) :
 
 ---
 
-## UX cible
+## UX cible — Processing UX (R4)
 
-| État UI | Copy / comportement | Actions |
-|---------|---------------------|---------|
-| **Processing** | Stepper driven by **DB steps** (OVT/intent), pas `lastProgressPhase` local | — |
-| **Retryable failed** | « Autorisation validée · Emprunt non ouvert » | **Réessayer l’ouverture** · Fermer |
-| **Retrying** | « Nouvelle tentative… » | — |
-| **Success global** | 4 étapes cochées · recap emprunt | Voir mes emprunts |
-| **Failed final** | « Échec définitif · Aucun emprunt ouvert » | Fermer · Support |
-| **Reconciliation** | « Vérification en cours… » | Attendre / support |
+Le client ne voit **que trois états** :
 
-### Règles stepper
+| Vue | Comportement |
+|-----|--------------|
+| **Processing** | Wizard 4 étapes produit (Autorisation → Dépôt → Ouverture → Réception USDC) |
+| **Success** | Recap emprunt · Voir mes emprunts |
+| **Terminal failure** | Échec définitif uniquement |
 
-- Cocher une étape **uniquement** si step backend = `confirmed` / OVT = `success`
-- **Ne pas** cocher « Garantie déposée » tant que `open_loan` ≠ success
-- En `retryable_failed` : approve coché si confirmé ; dépôt/emprunt **non** cochés
+**Masqué côté client :** `retryable_failed`, `reverted`, `superseded`, `partial`, `logical_borrow_id`, jargon blockchain.
+
+### Niveau 1 — échec récupérable (invisible)
+
+`open_loan` revert alors qu’approve (ou allowance) est OK :
+
+```
+Tentative 1 → échec → retry auto 1× → succès
+```
+
+- L’utilisateur **reste sur l’étape 3** « Ouverture de l’emprunt » avec spinner.
+- **Pas de bouton « Réessayer »** au premier échec.
+- Sous-textes rotatifs pendant le retry (justifie le délai sans parler d’erreur) :
+  - « Vérification de votre garantie… »
+  - « Connexion au protocole de prêt… »
+  - « Finalisation de l’emprunt… »
+  - « Validation des fonds… »
+- Backend : statuts R2/R3 inchangés (`retryable_failed`, `linked_retry`, `superseded`).
+
+### Niveau 2 — échec définitif (visible)
+
+Après épuisement du retry (2e échec `open_loan`) :
+
+```
+Impossible d'ouvrir l'emprunt
+Aucun montant n'a été emprunté.
+Votre garantie n'a pas été déposée.
+
+[Réessayer]  [Fermer]
+```
+
+### Règles stepper (phase R4)
+
+- Stepper **phase-driven** (wizard transactionnel), pas explorateur blockchain.
+- Cocher une étape selon la phase d’exécution locale ; pas d’écran « retryable failed » intermédiaire.
+- Pendant retry invisible : phase reste sur « Ouverture de l’emprunt » (étape 3).
+
+### R4.5 (futur) — Transaction framework UX
+
+**Règle universelle Vancelian :** toute transaction = **3 états UX** :
+
+| État | Signification |
+|------|---------------|
+| **En cours** | Stepper produit + sous-textes rassurants ; retry invisible si applicable |
+| **Réussie** | Recap métier + action suivante |
+| **Impossible** | Copy métier claire + [Réessayer] / [Fermer] |
+
+Même composant transactionnel réutilisé pour :
+
+- Lombard Borrow · Lombard Repay
+- Vault Deposit · Vault Withdraw
+- Bundle Invest · Bundle Withdraw
+- LiFi Swap
+
+Le client ne voit jamais revert, retry interne, superseded, logical_borrow_id.
 
 ---
 
@@ -346,8 +395,9 @@ Projection user-facing :
 | **R1** | Confirm incrémental par step | Web BFF (`usePortalLombardExecution`) |
 | **R2** | Statuts intent : `retryable_failed`, `superseded`, `failed_final` dans `recompute_lombard_parent_status` + TTL | API |
 | **R3** | `logical_borrow_id`, `retry_of_*` au prepare retry | Web + API |
-| **R4** | UX écran retryable + stepper DB-driven | Web |
-| **R5** | UX failed final après max retries | Web |
+| **R4** | Processing UX abstraction layer (masque retry/revert/superseded ; retry auto invisible 1×) | Web |
+| **R4.5** | Transaction framework UX générique (Vault, Bundle, LiFi…) | Web |
+| **R5** | Repay / unlock Lombard | Web + API |
 | **R6** | Projection historique merged (wallet / crédit line) | API + Web |
 | **R7** | `reconciliation_required` sur timeout receipt | Web + API |
 
@@ -357,7 +407,8 @@ Projection user-facing :
 
 ## Do not do
 
-- **Pas d’auto-retry invisible** — chaque retry = consentement utilisateur (signature).
+- **Pas de bouton « Réessayer » au premier échec open_loan** — retry 1× masqué sous l’étape 3 ; boutons uniquement en échec terminal.
+- **Pas de copy retry/revert/superseded visible** — statuts internes R2/R3 restent backend-only.
 - **Pas de revoke allowance v1** — `approval_may_remain_on_chain` accepté.
 - **Pas de repair prod** — intents `partial` historiques restent tels quels.
 - **Pas de backfill historique** — pas de rétro-lien `ce0bf19a` ↔ `f83658c9` en prod sans runbook dédié.
@@ -378,18 +429,19 @@ Projection user-facing :
 ## Synthèse doctrine
 
 ```
-Toute tx utilisateur → état terminal explicite
-Lombard multi-step   → même règle
+Toute tx utilisateur → 3 vues client : en cours · réussie · impossible
 
-approve OK + open_loan KO  →  retryable_failed (1 retry max)
-retry OK                   →  confirmed (global), initial superseded
-retry KO                   →  failed_final
+Lombard multi-step :
+  approve OK + open_loan KO  →  retry auto invisible (1×), toujours étape 3
+  retry OK                   →  confirmed (global), initial superseded
+  retry KO                   →  écran terminal + [Réessayer] [Fermer]
+
+Backend : retryable_failed / superseded / logical_borrow_id (R2/R3)
+Client  : ne les voit jamais (R4 Processing UX)
 
 Annulation métier ≠ rollback chain
 approval_may_remain · borrow_not_opened · no PE
 
 SoT : transaction_intents + logical_borrow_id
-Semi-auto UX oui · retry blockchain invisible non
-
-Bug racine : R1 confirm incrémental
+Bug racine corrigé : R1 confirm incrémental
 ```

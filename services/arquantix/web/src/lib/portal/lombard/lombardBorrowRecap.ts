@@ -1,4 +1,4 @@
-import type { LombardExecutionPhase, LombardQuoteResult } from '@/lib/portal/lombard/lombardTypes'
+import type { LombardQuoteResult } from '@/lib/portal/lombard/lombardTypes'
 import { VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/lombardConfig'
 function formatLombardBorrowInterestLabel(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return '—'
@@ -34,30 +34,8 @@ export function buildLombardBorrowRecap(quote: LombardQuoteResult): LombardBorro
   }
 }
 
-/** Index du stepper (0–3) ; 4 = les 4 étapes sont terminées. */
-export function lombardBorrowStepperIndex(phase: LombardExecutionPhase): number {
-  switch (phase) {
-    case 'preparing':
-    case 'authorizing':
-      return 0
-    case 'locking':
-      return 1
-    case 'sending':
-      return 2
-    case 'confirming':
-      return 3
-    case 'confirmed':
-      return 4
-    default:
-      return 0
-  }
-}
+/** Index du stepper (0–3) ; 4 = les 4 étapes sont terminées. @deprecated use lombardProcessingStepperIndex */
+export { lombardProcessingStepperIndex as lombardBorrowStepperIndex } from '@/lib/portal/lombard/lombardProcessingUx'
 
-export function lombardBorrowStepperState(
-  stepIndex: number,
-  progressIndex: number,
-): 'done' | 'current' | 'pending' {
-  if (stepIndex < progressIndex) return 'done'
-  if (stepIndex === progressIndex && progressIndex < 4) return 'current'
-  return 'pending'
-}
+/** @deprecated use lombardProcessingStepperState */
+export { lombardProcessingStepperState as lombardBorrowStepperState } from '@/lib/portal/lombard/lombardProcessingUx'
