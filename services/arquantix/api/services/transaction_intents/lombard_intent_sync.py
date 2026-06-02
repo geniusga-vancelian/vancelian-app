@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from .enums import IntentOperationType, IntentProductType, IntentStatus
 from .raw_event_link import try_link_raw_event_to_intent
 from .repository import TransactionIntentRepository
+from .lombard_retry_linking import LombardRetryLinkError, resolve_lombard_prepare_link_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,31 @@ def _save_parent(
     db.flush()
     if tx:
         try_link_raw_event_to_intent(db, row)
+    if status == IntentStatus.CONFIRMED.value:
+        _maybe_supersede_lombard_retry_predecessor(db, row, merged)
     return {"intent_id": str(row.id), "status": row.status, "steps": steps}
+
+
+def _maybe_supersede_lombard_retry_predecessor(
+    db: Session,
+    row: Any,
+    merged_meta: dict[str, Any],
+) -> None:
+    retry_of = str(merged_meta.get("retry_of_group_key") or "").strip()
+    if not retry_of:
+        return
+    market_or_vault = str(merged_meta.get("market_id") or "").strip()
+    superseded_by_group_key = str(merged_meta.get("group_key") or row.linked_reference_id or "").strip()
+    if not superseded_by_group_key:
+        return
+    mark_lombard_intent_superseded(
+        db,
+        person_id=row.person_id,
+        group_key=retry_of,
+        market_or_vault=market_or_vault,
+        superseded_by_group_key=superseded_by_group_key,
+        superseded_by_intent_id=str(row.id),
+    )
 
 
 def ensure_lombard_parent_intent(
@@ -197,9 +222,20 @@ def ensure_lombard_parent_intent(
     chain_id: int,
     steps: list[dict[str, Any]],
     extra_metadata: dict[str, Any] | None = None,
+    logical_borrow_id: Optional[str] = None,
+    retry_of_group_key: Optional[str] = None,
+    retry_attempt_number: int = 0,
 ) -> dict[str, Any] | None:
     """Crée ou met à jour le parent Lombard + steps en pending."""
     try:
+        link_meta = resolve_lombard_prepare_link_metadata(
+            db,
+            person_id=person_id,
+            market_or_vault=market_or_vault,
+            logical_borrow_id=logical_borrow_id,
+            retry_of_group_key=retry_of_group_key,
+            retry_attempt_number=retry_attempt_number,
+        )
         built_steps: list[dict[str, Any]] = []
         for raw in steps:
             step_name = str(raw.get("step") or "").strip().lower()
@@ -239,10 +275,13 @@ def ensure_lombard_parent_intent(
                 "group_key": group_key,
                 "market_id": market_or_vault.lower(),
                 "steps": built_steps,
+                **link_meta,
                 **(extra_metadata or {}),
             },
         )
         return _save_parent(db, row, steps=built_steps, status=IntentStatus.AWAITING_SIGNATURE.value)
+    except LombardRetryLinkError:
+        raise
     except Exception as exc:
         logger.warning(
             "intent.lombard.prepare_failed",

@@ -77,6 +77,7 @@ export type LombardPreparePayload = {
   groupKey: string
   idempotencyKey: string
   quote: LombardQuoteResult
+  logicalBorrowId?: string
   serverCompleted?: boolean
   mockExecution?: boolean
 }

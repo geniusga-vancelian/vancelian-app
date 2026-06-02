@@ -7,6 +7,8 @@ import type {
 } from '@/lib/portal/lombard/lombardTypes'
 import type { LombardPositionsPayload } from '@/lib/portal/lombard/lombardPositionTypes'
 import { formatBaseRpcUserMessage, isBaseRpcTransientError } from '@/lib/blockchain/baseRpcErrors'
+import type { LombardRetryPrepareContext } from '@/lib/portal/lombard/lombardRetryLinking'
+import { buildLombardPrepareRetryBodyFields } from '@/lib/portal/lombard/lombardRetryLinking'
 import { normalizeLombardBorrowAmountForApi } from '@/lib/portal/lombard/lombardBorrowUi'
 import { parseLombardApiError } from '@/lib/portal/lombard/parseLombardApiError'
 import type { WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
@@ -92,11 +94,13 @@ export async function preparePortalLombardOpenLoan(args: {
   walletSource?: WalletSourceMetadata
   externalWalletId?: string | null
   privyWalletId?: string | null
+  retryLink?: LombardRetryPrepareContext | null
 }): Promise<LombardPreparePayload> {
   const borrowAmount = normalizeLombardBorrowAmountForApi(args.borrowAmount)
   if (!borrowAmount) {
     throw new Error('Montant emprunté invalide.')
   }
+  const retryBody = args.retryLink ? buildLombardPrepareRetryBodyFields(args.retryLink) : {}
   return lombardFetch('/api/portal/lombard/prepare', {
     method: 'POST',
     body: JSON.stringify({
@@ -109,6 +113,7 @@ export async function preparePortalLombardOpenLoan(args: {
       external_wallet_id: args.externalWalletId,
       privy_wallet_id: args.privyWalletId,
       wallet_provider: args.walletSource?.wallet_provider,
+      ...retryBody,
     }),
   })
 }

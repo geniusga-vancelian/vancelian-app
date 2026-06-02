@@ -37,6 +37,16 @@ import type {
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import {
+  applyLombardRetryLinkAfterFailure,
+  applyLombardRetryLinkAfterSuccess,
+  buildLombardRetryPrepareContext,
+  canAttemptExplicitLombardRetry,
+  createInitialLombardRetryLinkState,
+  isLombardOpenLoanRetryableFailure,
+  markLombardExplicitRetryStarted,
+  resetLombardRetryLinkState,
+} from '@/lib/portal/lombard/lombardRetryLinking'
+import {
   resolveLombardExecutionFailure,
   usePortalLombardExecution,
 } from '@/lib/portal/usePortalLombardExecution'
@@ -111,6 +121,7 @@ export function PortalLombardFlow() {
   const [lastProgressPhase, setLastProgressPhase] = useState<LombardExecutionPhase>('preparing')
   const [executionFailure, setExecutionFailure] = useState<LombardExecutionFailureView | null>(null)
   const idempotencyKeyRef = useRef<string | null>(null)
+  const retryLinkStateRef = useRef(createInitialLombardRetryLinkState())
 
   const { data: walletData } = usePortalCachedScreen<PortalCryptoWalletHubPayload>({
     cacheKey: 'portal:crypto-wallet',
@@ -261,46 +272,86 @@ export function PortalLombardFlow() {
     }
   }, [borrowAmount, executionAddress, selectedCollateral, step, targetLtvPercent])
 
-  const runOpenLoan = useCallback(async () => {
-    if (executing || !selectedCollateral || !quote || !executionAddress) return
+  const runOpenLoan = useCallback(
+    async (opts?: { isExplicitRetry?: boolean }) => {
+      if (executing || !selectedCollateral || !quote || !executionAddress) return
+      if (opts?.isExplicitRetry && !canAttemptExplicitLombardRetry(retryLinkStateRef.current)) {
+        return
+      }
 
-    setBorrowRecap(buildLombardBorrowRecap(quote))
-    setStep('processing')
-    setExecuting(true)
-    setExecutionFailure(null)
-    setExecutionPhase('preparing')
-    idempotencyKeyRef.current = createIdempotencyKey()
+      setBorrowRecap(buildLombardBorrowRecap(quote))
+      setStep('processing')
+      setExecuting(true)
+      setExecutionFailure(null)
+      setExecutionPhase('preparing')
 
-    try {
-      await executeOpenLoan({
-        collateral: selectedCollateral,
-        borrowAmount: borrowAmount.trim(),
-        walletAddress: executionAddress,
-        targetLtvPercent,
-        idempotencyKey: idempotencyKeyRef.current,
-        onPhaseChange: (phase) => {
-          setExecutionPhase(phase)
-          if (phase !== 'failed' && phase !== 'idle') {
-            setLastProgressPhase(phase)
-          }
-        },
+      if (!opts?.isExplicitRetry) {
+        retryLinkStateRef.current = resetLombardRetryLinkState(retryLinkStateRef.current)
+      } else {
+        retryLinkStateRef.current = markLombardExplicitRetryStarted(retryLinkStateRef.current)
+      }
+
+      const retryLink = buildLombardRetryPrepareContext({
+        state: retryLinkStateRef.current,
+        isExplicitRetry: Boolean(opts?.isExplicitRetry),
       })
-      setStep('success')
-    } catch (error) {
-      setExecutionPhase('failed')
-      setExecutionFailure(resolveLombardExecutionFailure(error))
-    } finally {
-      setExecuting(false)
-    }
-  }, [
-    borrowAmount,
-    executeOpenLoan,
-    executing,
-    executionAddress,
-    quote,
-    selectedCollateral,
-    targetLtvPercent,
-  ])
+      retryLinkStateRef.current = {
+        ...retryLinkStateRef.current,
+        logicalBorrowId: retryLink.logicalBorrowId,
+      }
+
+      idempotencyKeyRef.current = createIdempotencyKey()
+
+      try {
+        await executeOpenLoan({
+          collateral: selectedCollateral,
+          borrowAmount: borrowAmount.trim(),
+          walletAddress: executionAddress,
+          targetLtvPercent,
+          idempotencyKey: idempotencyKeyRef.current,
+          retryLink,
+          onPhaseChange: (phase) => {
+            setExecutionPhase(phase)
+            if (phase !== 'failed' && phase !== 'idle') {
+              setLastProgressPhase(phase)
+            }
+          },
+        })
+        retryLinkStateRef.current = applyLombardRetryLinkAfterSuccess(retryLinkStateRef.current)
+        setStep('success')
+      } catch (error) {
+        setExecutionPhase('failed')
+        const failure = resolveLombardExecutionFailure(error)
+        setExecutionFailure(failure)
+        if (idempotencyKeyRef.current) {
+          retryLinkStateRef.current = applyLombardRetryLinkAfterFailure({
+            state: retryLinkStateRef.current,
+            groupKey: idempotencyKeyRef.current,
+            operation: failure.operation,
+          })
+        }
+      } finally {
+        setExecuting(false)
+      }
+    },
+    [
+      borrowAmount,
+      executeOpenLoan,
+      executing,
+      executionAddress,
+      quote,
+      selectedCollateral,
+      targetLtvPercent,
+    ],
+  )
+
+  const canExplicitRetry = useMemo(
+    () =>
+      Boolean(executionFailure) &&
+      isLombardOpenLoanRetryableFailure({ operation: executionFailure?.operation }) &&
+      canAttemptExplicitLombardRetry(retryLinkStateRef.current),
+    [executionFailure],
+  )
 
   const handleIntroContinue = useCallback(() => {
     markBorrowIntroSeen()
@@ -412,6 +463,7 @@ export function PortalLombardFlow() {
                   onClick={() => {
                     setExecutionFailure(null)
                     setExecutionPhase('idle')
+                    retryLinkStateRef.current = resetLombardRetryLinkState(retryLinkStateRef.current)
                     setStep('form')
                   }}
                 >
@@ -420,8 +472,8 @@ export function PortalLombardFlow() {
                 <button
                   type="button"
                   className="btn btn--primary btn--lg brw-foot__cta"
-                  disabled={executing || !privySigningReady}
-                  onClick={() => void runOpenLoan()}
+                  disabled={executing || !privySigningReady || !canExplicitRetry}
+                  onClick={() => void runOpenLoan({ isExplicitRetry: true })}
                 >
                   Réessayer
                 </button>

@@ -12,6 +12,7 @@ import { bumpLombardPositionsRevision } from '@/lib/portal/lombard/lombardPositi
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import type { LombardExecutionPhase } from '@/lib/portal/lombard/lombardTypes'
 import { VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/lombardConfig'
+import type { LombardRetryPrepareContext } from '@/lib/portal/lombard/lombardRetryLinking'
 import { executeLombardOpenLoanSteps } from '@/lib/portal/lombard/lombardIncrementalStepConfirm'
 import { generateLombardMockTxHash } from '@/lib/portal/lombard/mocks/lombardMockTxHash'
 import { resolvePortalTransactionReceiptStatus } from '@/lib/portal/portalTransactionReceiptStatus'
@@ -40,6 +41,7 @@ export function usePortalLombardExecution() {
       walletAddress: string
       targetLtvPercent: number
       idempotencyKey: string
+      retryLink?: LombardRetryPrepareContext | null
       onPhaseChange?: (phase: LombardExecutionPhase) => void
     }) => {
       args.onPhaseChange?.('preparing')
@@ -57,6 +59,7 @@ export function usePortalLombardExecution() {
         walletAddress: wallet.address,
         targetLtvPercent: args.targetLtvPercent,
         idempotencyKey: args.idempotencyKey,
+        retryLink: args.retryLink,
         walletSource: walletMetadata,
         externalWalletId: wallet.type === 'external_evm' ? wallet.externalWalletId : null,
         privyWalletId: wallet.type === 'privy_embedded' ? wallet.privyWalletId ?? null : null,

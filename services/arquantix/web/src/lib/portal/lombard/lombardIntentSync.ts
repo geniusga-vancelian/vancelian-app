@@ -9,6 +9,12 @@ export type LombardIntentStepInput = {
   ledgerEntryId: string
 }
 
+export type LombardIntentRetryLinkInput = {
+  logicalBorrowId: string
+  retryOfGroupKey?: string | null
+  retryAttemptNumber: number
+}
+
 export type LombardConfirmIntentResult = {
   ledgerEntryId: string
   txHash?: string | null
@@ -47,6 +53,7 @@ export async function syncLombardIntentAfterPrepare(args: {
   walletAddress: string
   chainId: number
   steps: LombardIntentStepInput[]
+  retryLink?: LombardIntentRetryLinkInput | null
 }): Promise<void> {
   await postLombardIntent('/api/internal/transaction-intents/lombard/prepare', {
     person_id: args.personId,
@@ -59,6 +66,15 @@ export async function syncLombardIntentAfterPrepare(args: {
       tx_index: s.txIndex,
       ledger_entry_id: s.ledgerEntryId,
     })),
+    ...(args.retryLink
+      ? {
+          logical_borrow_id: args.retryLink.logicalBorrowId,
+          retry_attempt_number: args.retryLink.retryAttemptNumber,
+          ...(args.retryLink.retryOfGroupKey
+            ? { retry_of_group_key: args.retryLink.retryOfGroupKey }
+            : {}),
+        }
+      : {}),
   })
 }
 

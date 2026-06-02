@@ -9,6 +9,7 @@ import { LombardMarketError } from '@/lib/portal/lombard/lombardMarket'
 import { LombardQuoteError } from '@/lib/portal/lombard/lombardQuote'
 import { runLombardPreBorrowSafetyChecks } from '@/lib/portal/lombard/lombardSafetyChecks'
 import { isLombardMockEnabled } from '@/lib/portal/lombard/lombardMockConfig'
+import type { LombardRetryPrepareContext } from '@/lib/portal/lombard/lombardRetryLinking'
 import { prepareLombardMockOpenLoan } from '@/lib/portal/lombard/mocks/lombardLocalMock'
 import { buildLombardOpenLoanTransactions } from '@/lib/portal/lombard/lombardTx'
 import { lombardPrepareSchema } from '@/lib/portal/lombard/lombardValidation'
@@ -73,7 +74,21 @@ function parsePrepareBody(body: unknown) {
     walletAddress: row.wallet_address ?? row.walletAddress,
     idempotencyKey: row.idempotency_key ?? row.idempotencyKey,
     targetLtvPercent: row.target_ltv_percent ?? row.targetLtvPercent,
+    logicalBorrowId: row.logical_borrow_id ?? row.logicalBorrowId,
+    retryOfGroupKey: row.retry_of_group_key ?? row.retryOfGroupKey,
+    retryAttemptNumber: row.retry_attempt_number ?? row.retryAttemptNumber,
   })
+}
+
+function buildRetryLinkFromParsed(
+  parsed: z.infer<typeof lombardPrepareSchema>,
+): LombardRetryPrepareContext | null {
+  if (!parsed.logicalBorrowId) return null
+  return {
+    logicalBorrowId: parsed.logicalBorrowId,
+    retryOfGroupKey: parsed.retryOfGroupKey ?? null,
+    retryAttemptNumber: parsed.retryAttemptNumber ?? (parsed.retryOfGroupKey ? 1 : 0),
+  }
 }
 
 /** Prépare approve + open loan (supply collateral + borrow USDC) via Morpho Blue. */
@@ -115,6 +130,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const retryLink = buildRetryLinkFromParsed(parsed)
+
     const quote = await runLombardPreBorrowSafetyChecks({
       personId,
       collateral: parsed.collateral,
@@ -154,6 +171,7 @@ export async function POST(request: NextRequest) {
       quote,
       transactions,
       walletMetadata: walletSource,
+      retryLink,
     })
 
     return NextResponse.json({
@@ -165,6 +183,7 @@ export async function POST(request: NextRequest) {
       })),
       groupKey: parsed.idempotencyKey,
       idempotencyKey: parsed.idempotencyKey,
+      logicalBorrowId: retryLink?.logicalBorrowId,
       quote,
     })
   } catch (error) {

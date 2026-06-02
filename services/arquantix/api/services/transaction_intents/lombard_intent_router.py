@@ -16,6 +16,7 @@ from .lombard_intent_sync import (
     recompute_lombard_parent_intent,
     sync_lombard_step_from_ledger_receipt,
 )
+from .lombard_retry_linking import LombardRetryLinkError
 
 lombard_intent_internal_router = APIRouter(
     prefix="/api/internal/transaction-intents/lombard",
@@ -40,6 +41,9 @@ class LombardPreparePayload(BaseModel):
     wallet_address: str
     chain_id: int = 8453
     steps: List[LombardStepInput]
+    logical_borrow_id: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    retry_of_group_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    retry_attempt_number: int = Field(default=0, ge=0, le=4)
 
 
 class LombardConfirmResult(BaseModel):
@@ -73,15 +77,21 @@ def sync_prepare(
     db: Session = Depends(get_db),
     _: None = Depends(_verify_internal_key),
 ):
-    result = ensure_lombard_parent_intent(
-        db,
-        person_id=body.person_id,
-        group_key=body.group_key,
-        market_or_vault=body.market_or_vault,
-        wallet_address=body.wallet_address,
-        chain_id=body.chain_id,
-        steps=[s.model_dump() for s in body.steps],
-    )
+    try:
+        result = ensure_lombard_parent_intent(
+            db,
+            person_id=body.person_id,
+            group_key=body.group_key,
+            market_or_vault=body.market_or_vault,
+            wallet_address=body.wallet_address,
+            chain_id=body.chain_id,
+            steps=[s.model_dump() for s in body.steps],
+            logical_borrow_id=body.logical_borrow_id,
+            retry_of_group_key=body.retry_of_group_key,
+            retry_attempt_number=body.retry_attempt_number,
+        )
+    except LombardRetryLinkError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if result:
         db.commit()
     else:

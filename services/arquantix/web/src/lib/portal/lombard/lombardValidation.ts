@@ -27,6 +27,9 @@ export const lombardQuoteSchema = z.object({
 
 export const lombardPrepareSchema = lombardQuoteSchema.extend({
   idempotencyKey: idempotencyKeySchema,
+  logicalBorrowId: idempotencyKeySchema.optional(),
+  retryOfGroupKey: idempotencyKeySchema.optional(),
+  retryAttemptNumber: z.coerce.number().int().min(0).max(4).optional(),
 })
 
 export { idempotencyKeySchema }

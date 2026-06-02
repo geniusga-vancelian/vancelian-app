@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { LOMBARD_INTEGRATION_MODE } from '@/lib/portal/lombard/lombardConfig'
+import type { LombardRetryPrepareContext } from '@/lib/portal/lombard/lombardRetryLinking'
 import { syncLombardIntentAfterPrepare } from '@/lib/portal/lombard/lombardIntentSync'
 import type { LombardPreparedTx, LombardQuoteResult } from '@/lib/portal/lombard/lombardTypes'
 import { normalizeVaultAddress } from '@/lib/portal/morphoConstants'
@@ -29,6 +30,7 @@ export async function createLombardLedgerEntries(args: {
   quote: LombardQuoteResult
   transactions: LombardPreparedTx[]
   walletMetadata?: Prisma.InputJsonValue
+  retryLink?: LombardRetryPrepareContext | null
 }) {
   const groupKey = args.idempotencyKey
   const existing = await assertNoConcurrentPendingGroup({
@@ -53,6 +55,7 @@ export async function createLombardLedgerEntries(args: {
         txIndex: existing[index]?.txIndex ?? index,
         ledgerEntryId: existing[index]?.id ?? '',
       })).filter((s) => s.ledgerEntryId),
+      retryLink: args.retryLink,
     })
     return existing
   }
@@ -105,6 +108,7 @@ export async function createLombardLedgerEntries(args: {
       txIndex: ledgerRows[index]?.txIndex ?? index,
       ledgerEntryId: ledgerRows[index]?.id ?? '',
     })).filter((s) => s.ledgerEntryId),
+    retryLink: args.retryLink,
   })
 
   return ledgerRows
