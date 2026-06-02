@@ -98,7 +98,21 @@ def read_current_pe_scope_snapshot(db: Session, person_id: UUID) -> CurrentPeSco
 
         if atom.portfolio_id == direct_pf[0] if direct_pf else None:
             if atom.position_type == PositionType.SPOT.value:
-                snap.trading_available[asset] = snap.trading_available.get(asset, Decimal("0")) + qty
+                available = Decimal(str(atom.available_quantity if atom.available_quantity is not None else atom.quantity or 0))
+                locked = Decimal(str(atom.locked_quantity or 0))
+                if available > 0:
+                    snap.trading_available[asset] = snap.trading_available.get(asset, Decimal("0")) + available
+                if locked > 0:
+                    snap.trading_locked_collateral[asset] = (
+                        snap.trading_locked_collateral.get(asset, Decimal("0")) + locked
+                    )
+                from services.portfolio_engine.lombard_execution.lombard_funding import (
+                    lombard_liability_usdc_from_metadata,
+                )
+
+                liability_usdc = lombard_liability_usdc_from_metadata(meta)
+                if liability_usdc > 0:
+                    snap.liability["USDC"] = snap.liability.get("USDC", Decimal("0")) + liability_usdc
             continue
 
         if atom.portfolio_id in bundle_pf_ids:

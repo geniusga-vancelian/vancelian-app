@@ -501,6 +501,64 @@ def _maybe_apply_vault_scope_movement_after_success(
         )
 
 
+def _maybe_apply_lombard_scope_movement_after_success(
+    db: Session,
+    *,
+    person_id: UUID,
+    vault_transaction_id: str,
+    integration_mode: str,
+    operation: str,
+    vault_status: str | None,
+) -> None:
+    """Phase 3B — best-effort PE Lombard scope après OVT open_loan success."""
+    mode = (integration_mode or "").strip().lower()
+    if mode != "lombard_v1":
+        return
+    if (vault_status or "").strip().lower() != "success":
+        return
+    op = (operation or "").strip().lower()
+    if op not in ("open_loan", "deposit"):
+        return
+    try:
+        from services.portfolio_engine.lombard_execution.lombard_ovt_bridge import (
+            apply_lombard_scope_movement_for_ovt,
+        )
+
+        result = apply_lombard_scope_movement_for_ovt(
+            db,
+            ovt_id=vault_transaction_id,
+            person_id=person_id,
+            dry_run=False,
+        )
+        if not result.get("ok"):
+            reason = str(result.get("reason") or "")
+            if reason in ("not_lombard_open_loan", "ovt_not_found"):
+                return
+            logger.warning(
+                "attempt.dual_write.lombard_scope_movement_skipped",
+                extra={
+                    "vault_transaction_id": vault_transaction_id,
+                    "person_id": str(person_id),
+                    "integration_mode": mode,
+                    "operation": op,
+                    "reason": reason,
+                    "detail": result.get("message"),
+                },
+            )
+    except Exception as exc:
+        logger.warning(
+            "attempt.dual_write.lombard_scope_movement_failed",
+            extra={
+                "vault_transaction_id": vault_transaction_id,
+                "person_id": str(person_id),
+                "integration_mode": mode,
+                "operation": op,
+                "error": str(exc),
+            },
+            exc_info=True,
+        )
+
+
 def dual_write_vault_step(
     db: Session,
     *,
@@ -551,6 +609,14 @@ def dual_write_vault_step(
                 operation=operation,
                 vault_status=status_norm,
             )
+            _maybe_apply_lombard_scope_movement_after_success(
+                db,
+                person_id=person_id,
+                vault_transaction_id=vault_transaction_id,
+                integration_mode=integration_mode,
+                operation=operation,
+                vault_status=status_norm,
+            )
             return
 
         if tx_hash:
@@ -563,6 +629,14 @@ def dual_write_vault_step(
             )
             if existing_tx is not None:
                 _maybe_apply_vault_scope_movement_after_success(
+                    db,
+                    person_id=person_id,
+                    vault_transaction_id=vault_transaction_id,
+                    integration_mode=integration_mode,
+                    operation=operation,
+                    vault_status=status_norm,
+                )
+                _maybe_apply_lombard_scope_movement_after_success(
                     db,
                     person_id=person_id,
                     vault_transaction_id=vault_transaction_id,
@@ -621,6 +695,14 @@ def dual_write_vault_step(
             )
 
         _maybe_apply_vault_scope_movement_after_success(
+            db,
+            person_id=person_id,
+            vault_transaction_id=vault_transaction_id,
+            integration_mode=integration_mode,
+            operation=operation,
+            vault_status=status_norm,
+        )
+        _maybe_apply_lombard_scope_movement_after_success(
             db,
             person_id=person_id,
             vault_transaction_id=vault_transaction_id,

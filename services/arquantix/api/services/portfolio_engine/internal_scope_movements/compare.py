@@ -167,6 +167,19 @@ def compare_expected_scopes_vs_current_pe(
         current_map = _scope_map(current, scope)
         cur_qty = current_map.get(asset, Decimal("0"))
         if abs(cur_qty - exp_qty) > TOLERANCE:
+            # Lombard lock : le débit trading_available legacy est un delta net,
+            # pas un solde absolu PE (collateral pré-existant en trading_available).
+            if (
+                scope == InternalScope.TRADING_AVAILABLE.value
+                and exp_qty < 0
+            ):
+                locked_exp = expected_net.get(
+                    (InternalScope.TRADING_LOCKED_COLLATERAL.value, asset),
+                    Decimal("0"),
+                )
+                locked_cur = current.trading_locked_collateral.get(asset, Decimal("0"))
+                if locked_exp > TOLERANCE and abs(locked_cur - locked_exp) <= TOLERANCE:
+                    continue
             gaps.append(
                 ScopeGap(
                     gap_type="scope_pe_missing_or_divergent",
