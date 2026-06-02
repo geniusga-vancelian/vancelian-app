@@ -3,7 +3,7 @@
 import { useCallback } from 'react'
 
 import { createBasePublicClient } from '@/lib/blockchain/baseRpcProvider'
-import { formatBaseRpcUserMessage, isBaseRpcTransientError } from '@/lib/blockchain/baseRpcErrors'
+import { isBaseRpcTransientError } from '@/lib/blockchain/baseRpcErrors'
 import {
   confirmPortalLombardTransactions,
   preparePortalLombardOpenLoan,
@@ -12,7 +12,7 @@ import { bumpLombardPositionsRevision } from '@/lib/portal/lombard/lombardPositi
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import type { LombardExecutionPhase } from '@/lib/portal/lombard/lombardTypes'
 import { VANCELIAN_LOMBARD_V1 } from '@/lib/portal/lombard/lombardConfig'
-import { LombardExecutionError } from '@/lib/portal/lombard/lombardExecutionError'
+import { executeLombardOpenLoanSteps } from '@/lib/portal/lombard/lombardIncrementalStepConfirm'
 import { generateLombardMockTxHash } from '@/lib/portal/lombard/mocks/lombardMockTxHash'
 import { resolvePortalTransactionReceiptStatus } from '@/lib/portal/portalTransactionReceiptStatus'
 import { buildWalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
@@ -79,64 +79,43 @@ export function usePortalLombardExecution() {
       }
 
       const client = createBasePublicClient({ side: 'client' })
-      const confirmResults: Array<{ ledgerEntryId: string; txHash: string }> = []
-      let lastHash: string | null = null
 
-      for (let index = 0; index < prepared.transactions.length; index += 1) {
-        const tx = prepared.transactions[index]
-        const ledgerEntry = prepared.ledgerEntries[index]
-        if (!ledgerEntry) {
-          throw new Error('Missing ledger entry for prepared transaction.')
-        }
-
-        const phase = mapTxPhase(tx.operation)
-        args.onPhaseChange?.(phase === 'locking' && index === prepared.transactions.length - 1 ? 'sending' : phase)
-
-        const { hash } = await sendPortalTransaction(
-          {
-            chainId: tx.chainId,
-            to: tx.to as `0x${string}`,
-            data: tx.data as `0x${string}`,
-            value: tx.value,
-          },
-          wallet,
-        )
-        lastHash = hash
-
-        const started = Date.now()
-        let receipt = null as Awaited<ReturnType<typeof client.getTransactionReceipt>> | null
-        while (Date.now() - started < RECEIPT_TIMEOUT_MS) {
-          receipt = await client.getTransactionReceipt({ hash: lastHash as `0x${string}` }).catch(() => null)
-          if (receipt) break
-          await sleep(3_000)
-        }
-        if (!receipt) {
-          throw new LombardExecutionError({
-            code: 'receipt_timeout',
-            operation: tx.operation,
-            txHash: lastHash,
-            message: formatBaseRpcUserMessage('Transaction confirmation timed out.'),
-          })
-        }
-        if (resolvePortalTransactionReceiptStatus(receipt) !== 'success') {
+      const lastHash = await executeLombardOpenLoanSteps({
+        groupKey: prepared.groupKey,
+        transactions: prepared.transactions,
+        ledgerEntries: prepared.ledgerEntries,
+        mapTxPhase,
+        onPhaseChange: args.onPhaseChange,
+        sendTransaction: async (tx) => {
+          const sent = await sendPortalTransaction(
+            {
+              chainId: tx.chainId,
+              to: tx.to as `0x${string}`,
+              data: tx.data as `0x${string}`,
+              value: tx.value,
+            },
+            wallet,
+          )
+          return { hash: sent.hash }
+        },
+        waitForReceipt: async (hash) => {
+          const started = Date.now()
+          while (Date.now() - started < RECEIPT_TIMEOUT_MS) {
+            const receipt = await client
+              .getTransactionReceipt({ hash: hash as `0x${string}` })
+              .catch(() => null)
+            if (receipt) return receipt
+            await sleep(3_000)
+          }
+          return null
+        },
+        resolveReceiptStatus: resolvePortalTransactionReceiptStatus,
+        confirmStep: async (result) => {
           await confirmPortalLombardTransactions({
             groupKey: prepared.groupKey,
-            results: [{ ledgerEntryId: ledgerEntry.id, txHash: lastHash }],
-          }).catch(() => null)
-          throw new LombardExecutionError({
-            code: 'reverted',
-            operation: tx.operation,
-            txHash: lastHash,
+            results: [result],
           })
-        }
-
-        confirmResults.push({ ledgerEntryId: ledgerEntry.id, txHash: hash })
-      }
-
-      args.onPhaseChange?.('confirming')
-      await confirmPortalLombardTransactions({
-        groupKey: prepared.groupKey,
-        results: confirmResults,
+        },
       })
 
       bumpLombardPositionsRevision()
