@@ -141,6 +141,15 @@ class LifiExecuteService:
                 from services.transaction_intents.lifi_intent_sync import on_swap_confirmed
 
                 on_swap_confirmed(db, swap)
+                # Mock saute SUBMITTED sur le swap mais aligne Phase 2 comme refresh_lifi_status :
+                # submitted (create attempt) puis confirmed (même tx_hash, idempotent).
+                from services.transaction_attempts.dual_write import (
+                    dual_write_lifi_swap_confirmed,
+                    dual_write_lifi_swap_submitted,
+                )
+
+                dual_write_lifi_swap_submitted(db, swap, tx_hash=swap.tx_hash)
+                dual_write_lifi_swap_confirmed(db, swap, tx_hash=swap.tx_hash)
             db.commit()
             db.refresh(swap)
             logger.info(

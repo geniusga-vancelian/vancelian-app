@@ -138,3 +138,145 @@ def test_mock_swap_quote_execute_and_settle(client: TestClient, db: Session, mon
     assert eth_tx.status_code == 200, eth_tx.text
     eth_titles = [t.get("title") for t in eth_tx.json().get("transactions", [])]
     assert any("Échange USDC → ETH" in str(t) for t in eth_titles)
+
+
+def test_mock_swap_submit_creates_lifi_attempt_confirmed(client: TestClient, db: Session, monkeypatch):
+    """Mock submit doit dual-writer l'attempt swap (Phase 2 forward), comme le chemin live."""
+    monkeypatch.setenv("LIFI_SWAPS_MOCK", "1")
+    monkeypatch.delenv("LIFI_API_KEY", raising=False)
+
+    mock_client = build_lifi_client()
+    _quote_svc._lifi = mock_client
+    _execute_svc._lifi = mock_client
+
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    PrivyWalletAdminService().simulate_deposit(
+        db,
+        PrivySimulateDepositRequest(
+            person_id=pe.person_id,
+            wallet_address=EVM_ADDR,
+            asset="USDC",
+            amount="100",
+            chain_id=8453,
+        ),
+    )
+    db.commit()
+
+    headers = _auth_headers(db, pe)
+    quote_res = client.post(
+        "/api/swaps/quote",
+        headers=headers,
+        json={
+            "from_asset": "USDC",
+            "to_asset": "CBBTC",
+            "amount": "10",
+            "from_chain": "base",
+            "to_chain": "base",
+        },
+    )
+    assert quote_res.status_code == 200, quote_res.text
+    swap_id = quote_res.json()["swap_id"]
+    mock_tx = "0xmock_lifi_attempt_e2e"
+
+    client.post("/api/swaps/execute", headers=headers, json={"swap_id": swap_id})
+    submit_res = client.post(
+        f"/api/swaps/{swap_id}/submit",
+        headers=headers,
+        json={"tx_hash": mock_tx},
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    assert submit_res.json()["status"] == "CONFIRMED"
+
+    from services.transaction_attempts.enums import AttemptProtocol, AttemptStepType
+    from services.transaction_attempts.models import OnchainTransactionAttempt
+
+    attempts = (
+        db.query(OnchainTransactionAttempt)
+        .filter(
+            OnchainTransactionAttempt.person_id == pe.person_id,
+            OnchainTransactionAttempt.protocol == AttemptProtocol.LIFI.value,
+        )
+        .all()
+    )
+    swap_attempts = [a for a in attempts if a.step_type == AttemptStepType.SWAP.value]
+    assert len(swap_attempts) == 1
+    attempt = swap_attempts[0]
+    assert attempt.status == "confirmed"
+    assert attempt.tx_hash == mock_tx.lower()
+    assert attempt.linked_table == "person_wallet_swaps"
+    assert str(attempt.linked_id) == swap_id
+
+    from services.transaction_attempts.reconciliation import build_gap_report
+
+    gap = build_gap_report(db, person_id=pe.person_id, person_limit=1)
+    blocking = gap.get("summary", {}).get("blocking_gaps", gap.get("summary", {}).get("total_gaps", 0))
+    swap_missing = [
+        g for g in gap.get("gaps", []) if g.get("gap_type") == "swap_missing_swap_attempt"
+    ]
+    assert swap_missing == []
+    assert blocking == 0
+
+
+def test_mock_swap_dual_write_idempotent(client: TestClient, db: Session, monkeypatch):
+    """Second appel dual_write confirm sur le même swap mock ne duplique pas l'attempt."""
+    monkeypatch.setenv("LIFI_SWAPS_MOCK", "1")
+    monkeypatch.delenv("LIFI_API_KEY", raising=False)
+
+    mock_client = build_lifi_client()
+    _quote_svc._lifi = mock_client
+    _execute_svc._lifi = mock_client
+
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    PrivyWalletAdminService().simulate_deposit(
+        db,
+        PrivySimulateDepositRequest(
+            person_id=pe.person_id,
+            wallet_address=EVM_ADDR,
+            asset="USDC",
+            amount="50",
+            chain_id=8453,
+        ),
+    )
+    db.commit()
+
+    headers = _auth_headers(db, pe)
+    quote_res = client.post(
+        "/api/swaps/quote",
+        headers=headers,
+        json={
+            "from_asset": "USDC",
+            "to_asset": "CBBTC",
+            "amount": "5",
+            "from_chain": "base",
+            "to_chain": "base",
+        },
+    )
+    swap_id = quote_res.json()["swap_id"]
+    mock_tx = "0xmock_idempotent_swap"
+
+    client.post("/api/swaps/execute", headers=headers, json={"swap_id": swap_id})
+    client.post(
+        f"/api/swaps/{swap_id}/submit",
+        headers=headers,
+        json={"tx_hash": mock_tx},
+    )
+
+    from services.lifi.models import PersonWalletSwap
+    from services.transaction_attempts.dual_write import dual_write_lifi_swap_confirmed
+    from services.transaction_attempts.models import OnchainTransactionAttempt
+
+    swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_id).one()
+    dual_write_lifi_swap_confirmed(db, swap, tx_hash=mock_tx)
+    db.commit()
+
+    count = (
+        db.query(OnchainTransactionAttempt)
+        .filter(
+            OnchainTransactionAttempt.person_id == pe.person_id,
+            OnchainTransactionAttempt.tx_hash == mock_tx.lower(),
+        )
+        .count()
+    )
+    assert count == 1
