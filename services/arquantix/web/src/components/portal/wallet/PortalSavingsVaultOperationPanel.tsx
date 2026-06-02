@@ -1,11 +1,23 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 
 import { PortalExecutionScopeBanner } from '@/components/portal/PortalExecutionScopeBanner'
 import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
+import { PortalVaultReviewStep } from '@/components/portal/invest/PortalVaultReviewStep'
 import { Button } from '@/components/ui/button'
+import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
+import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
+import { TransactionTechnicalDetails } from '@/components/portal/transaction/TransactionTechnicalDetails'
+import {
+  buildVaultProcessingSteps,
+  buildVaultTechnicalDetailRows,
+  resolveVaultFailureCopy,
+  vaultProcessingStepperIndex,
+  vaultSuccessCopy,
+  VAULT_PROCESSING_COMPLETED_INDEX,
+} from '@/components/portal/transaction/mappers/vaultSteps'
+import { VAULT_FLOW_UI, VAULT_RESULT_IMPOSSIBLE_ACTIONS } from '@/components/portal/transaction/mappers/vaultUiCopy'
 import { fetchPortalLedgityPosition } from '@/lib/portal/ledgity/ledgityVaultClient'
 import {
   formatEarnApyFromBps as formatLedgityApyFromBps,
@@ -26,14 +38,22 @@ import type {
 } from '@/lib/portal/morphoVaultTypes'
 import type { PortalDefiBetaPortalFlags, PortalDefiVaultDetails } from '@/lib/portal/portalSavingsTypes'
 import {
-  type PortalMorphoExecutionPhase,
+  buildDefiVaultInvestTarget,
+  defaultInvestSources,
+  invParseAmount,
+} from '@/lib/portal/portalInvestFlowFormat'
+import {
   usePortalMorphoVaultExecution,
 } from '@/lib/portal/usePortalMorphoVaultExecution'
 import {
-  type PortalLedgityExecutionPhase,
   usePortalLedgityVaultExecution,
 } from '@/lib/portal/usePortalLedgityVaultExecution'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
+import type {
+  PortalVaultExecutionPhase,
+  PortalVaultFlowScene,
+  PortalVaultOperation,
+} from '@/lib/portal/vaultFlowTypes'
 
 type Tab = 'deposit' | 'withdraw'
 
@@ -45,33 +65,10 @@ type Props = {
 }
 
 const MORPHO_DISCLAIMER =
-  'This product places your USDC in a Morpho vault on Base. Yield comes from a third-party DeFi protocol and is not guaranteed. APY is variable. You are exposed to smart contract, liquidity, and market risks.'
+  'Ce produit place vos USDC dans un coffre Morpho sur Base. Le rendement provient d’un protocole DeFi tiers et n’est pas garanti. L’APY est variable. Vous êtes exposé aux risques de smart contract, de liquidité et de marché.'
 
 const LEDGITY_DISCLAIMER =
-  'This product places your stablecoins in a Ledgity vault (ERC4626) on Base, exposed to tokenized real-world assets (RWA). Yield is not guaranteed and APY is variable. Liquidity may be limited. You are exposed to smart contract, liquidity, market, and RWA counterparty risks.'
-
-type ExecutionPhase = PortalMorphoExecutionPhase | PortalLedgityExecutionPhase
-
-function executionPhaseLabel(phase: ExecutionPhase): string {
-  switch (phase) {
-    case 'preparing':
-      return 'Preparing…'
-    case 'approval_pending':
-      return 'Approval pending…'
-    case 'deposit_pending':
-      return 'Deposit pending…'
-    case 'withdraw_pending':
-      return 'Withdrawal pending…'
-    case 'confirming':
-      return 'Confirming on-chain…'
-    case 'confirmed':
-      return 'Confirmed'
-    case 'failed':
-      return 'Failed'
-    default:
-      return 'Processing…'
-  }
-}
+  'Ce produit place vos stablecoins dans un coffre Ledgity (ERC4626) sur Base, exposé à des actifs réels tokenisés (RWA). Le rendement n’est pas garanti et l’APY est variable. La liquidité peut être limitée. Vous êtes exposé aux risques de smart contract, de liquidité, de marché et de contrepartie RWA.'
 
 function createIdempotencyKey(prefix: 'morpho' | 'ledgity'): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -86,70 +83,60 @@ function isLedgityVault(vault: PortalDefiVaultDetails): vault is PortalLedgityVa
 
 type VaultPosition = PortalMorphoVaultPosition | PortalLedgityVaultPosition
 
+/** Savings inline deposit / withdraw — Setup → Review → Processing → Result (R4.5-D). */
 export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuccess }: Props) {
   const isLedgity = isLedgityVault(vault)
+  const operation: PortalVaultOperation = activeTab
+  const disclaimer = isLedgity ? LEDGITY_DISCLAIMER : MORPHO_DISCLAIMER
+  const integrationMode = isLedgity ? 'ledgity_vault' as const : 'direct_morpho' as const
   const assetSymbol = vault.asset.symbol
   const formatApy = isLedgity ? formatLedgityApyFromBps : formatEarnApyFromBps
   const formatTokenAmount = isLedgity ? formatLedgityTokenAmount : formatEarnTokenAmount
-  const disclaimer = isLedgity ? LEDGITY_DISCLAIMER : MORPHO_DISCLAIMER
-  const disclaimerStorageKey = isLedgity
-    ? `portal_ledgity_disclaimer_${vault.vaultAddress.toLowerCase()}`
-    : `portal_morpho_disclaimer_${vault.vaultAddress.toLowerCase()}`
 
   const [amount, setAmount] = useState('')
   const [position, setPosition] = useState<VaultPosition | null>(null)
   const [positionLoading, setPositionLoading] = useState(true)
-  const [executing, setExecuting] = useState(false)
-  const [executionPhase, setExecutionPhase] = useState<ExecutionPhase>('idle')
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false)
+  const [flowScene, setFlowScene] = useState<PortalVaultFlowScene>('setup')
+  const [executionPhase, setExecutionPhase] = useState<PortalVaultExecutionPhase>('idle')
+  const [failureCopy, setFailureCopy] = useState(() => resolveVaultFailureCopy(null))
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [resultAmount, setResultAmount] = useState(0)
   const idempotencyKeyRef = useRef<string | null>(null)
+  const executionStartedRef = useRef(false)
   const positionRef = useRef<VaultPosition | null>(null)
   positionRef.current = position
+
+  const source = useMemo(() => defaultInvestSources()[0]!, [])
+  const target = useMemo(
+    () =>
+      buildDefiVaultInvestTarget(
+        isLedgity
+          ? { kind: 'ledgity', vault: vault as PortalLedgityVaultDetails }
+          : { kind: 'morpho', vault: vault as PortalMorphoVaultDetails },
+      ),
+    [isLedgity, vault],
+  )
 
   const { execute: executeMorpho } = usePortalMorphoVaultExecution()
   const { execute: executeLedgity } = usePortalLedgityVaultExecution()
   const { executionAddress: displayWalletAddress } = usePortalExecutionScope()
-
-  useEffect(() => {
-    try {
-      setDisclaimerAccepted(window.localStorage.getItem(disclaimerStorageKey) === '1')
-    } catch {
-      setDisclaimerAccepted(false)
-    }
-  }, [disclaimerStorageKey])
-
-  const acceptDisclaimer = useCallback(() => {
-    setDisclaimerAccepted(true)
-    try {
-      window.localStorage.setItem(disclaimerStorageKey, '1')
-    } catch {
-      /* ignore */
-    }
-  }, [disclaimerStorageKey])
 
   const loadPosition = useCallback(
     async (walletAddress: string, options?: { background?: boolean }) => {
       if (!options?.background && positionRef.current === null) {
         setPositionLoading(true)
       }
-
       try {
         const next = isLedgity
-          ? await fetchPortalLedgityPosition({
-              vaultAddress: vault.vaultAddress,
-              walletAddress,
-            })
+          ? await fetchPortalLedgityPosition({ vaultAddress: vault.vaultAddress, walletAddress })
           : await fetchPortalMorphoPosition({
               vaultAddress: (vault as PortalMorphoVaultDetails).vaultAddress,
               walletAddress,
             })
         setPosition(next)
       } catch {
-        if (!options?.background) {
-          setPosition(null)
-        }
+        if (!options?.background) setPosition(null)
       } finally {
         setPositionLoading(false)
       }
@@ -163,7 +150,6 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
       setPositionLoading(false)
       return
     }
-
     setPosition(null)
     setPositionLoading(true)
     void loadPosition(displayWalletAddress)
@@ -171,10 +157,13 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
 
   useEffect(() => {
     setAmount('')
-    setError(null)
-    setSuccess(null)
-    idempotencyKeyRef.current = null
+    setSetupError(null)
+    setTxHash(null)
+    setFlowScene('setup')
     setExecutionPhase('idle')
+    setFailureCopy(resolveVaultFailureCopy(null))
+    executionStartedRef.current = false
+    idempotencyKeyRef.current = null
   }, [activeTab])
 
   const maxWithdraw = useMemo(() => {
@@ -191,77 +180,9 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
     return `${whole}.${fracStr}`
   }, [position])
 
-  const onSubmit = useCallback(async () => {
-    if (executing) return
-    setError(null)
-    setSuccess(null)
+  const numeric = invParseAmount(amount)
+  const yieldPct = (vault.userApyBps ?? 0) > 0 ? (vault.userApyBps ?? 0) / 10_000 : 0
 
-    if (activeTab === 'deposit' && !disclaimerAccepted) {
-      setError('Please accept the warnings before your first deposit.')
-      return
-    }
-
-    const normalized = amount.trim().replace(',', '.')
-    if (!normalized || Number(normalized) <= 0) {
-      setError('Enter a valid amount.')
-      return
-    }
-
-    if (!idempotencyKeyRef.current) {
-      idempotencyKeyRef.current = createIdempotencyKey(isLedgity ? 'ledgity' : 'morpho')
-    }
-    const idempotencyKey = idempotencyKeyRef.current
-
-    setExecuting(true)
-    setExecutionPhase('preparing')
-    try {
-      const execute = isLedgity ? executeLedgity : executeMorpho
-      const txHash = await execute({
-        vaultAddress: vault.vaultAddress,
-        operation: activeTab,
-        amount: normalized,
-        idempotencyKey,
-        onPhaseChange: setExecutionPhase,
-      })
-      setSuccess(
-        activeTab === 'deposit'
-          ? `Deposit of ${normalized} ${assetSymbol} confirmed.${txHash ? ` Tx: ${txHash}` : ''}`
-          : `Withdrawal of ${normalized} ${assetSymbol} confirmed.${txHash ? ` Tx: ${txHash}` : ''}`,
-      )
-      setAmount('')
-      idempotencyKeyRef.current = null
-      setExecutionPhase('idle')
-      if (displayWalletAddress) {
-        await loadPosition(displayWalletAddress, { background: true })
-      }
-      onSuccess?.()
-    } catch (e) {
-      setExecutionPhase('failed')
-      setError(e instanceof Error ? e.message : 'Operation failed.')
-    } finally {
-      setExecuting(false)
-    }
-  }, [
-    activeTab,
-    amount,
-    assetSymbol,
-    disclaimerAccepted,
-    displayWalletAddress,
-    executeLedgity,
-    executeMorpho,
-    executing,
-    isLedgity,
-    loadPosition,
-    onSuccess,
-    vault.vaultAddress,
-  ])
-
-  const positionDisplay =
-    positionLoading && position === null
-      ? '…'
-      : position?.assetsInVaultDisplay ?? `0 ${assetSymbol}`
-
-  const showDisclaimer = activeTab === 'deposit' && !disclaimerAccepted
   const morphoBeta = !isLedgity ? (beta as PortalMorphoBetaPortalFlags | undefined) : undefined
   const ledgityBeta = isLedgity ? (beta as PortalLedgityBetaPortalFlags | undefined) : undefined
   const depositsDisabled = Boolean(morphoBeta?.depositsDisabled ?? ledgityBeta?.depositsDisabled)
@@ -270,6 +191,196 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
   const withdrawBlocked = activeTab === 'withdraw' && withdrawsDisabled
   const operationBlocked = depositBlocked || withdrawBlocked
   const betaLimits = morphoBeta?.limits ?? ledgityBeta?.limits
+
+  const processingContext = useMemo(
+    () => ({
+      amountLabel: `${amount.trim() || '0'} ${assetSymbol}`,
+      vaultLabel: vault.name,
+      assetSymbol,
+    }),
+    [amount, assetSymbol, vault.name],
+  )
+
+  const reviewContext = useMemo(
+    () => ({
+      operation,
+      amount: numeric,
+      assetSymbol,
+      source,
+      target,
+      vaultAddress: vault.vaultAddress,
+      provider: vault.provider,
+      integrationMode,
+      disclaimer,
+      yieldPct,
+    }),
+    [
+      amount,
+      assetSymbol,
+      disclaimer,
+      integrationMode,
+      numeric,
+      operation,
+      source,
+      target,
+      vault.provider,
+      vault.vaultAddress,
+      yieldPct,
+    ],
+  )
+
+  const resetExecution = useCallback(() => {
+    setExecutionPhase('idle')
+    setFailureCopy(resolveVaultFailureCopy(null))
+    executionStartedRef.current = false
+  }, [])
+
+  const normalizedAmount = useMemo(() => amount.trim().replace(',', '.'), [amount])
+
+  const runExecution = useCallback(async () => {
+    if (!displayWalletAddress || !normalizedAmount || Number(normalizedAmount) <= 0) return
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = createIdempotencyKey(isLedgity ? 'ledgity' : 'morpho')
+    }
+    setExecutionPhase('preparing')
+    try {
+      const execute = isLedgity ? executeLedgity : executeMorpho
+      const hash = await execute({
+        vaultAddress: vault.vaultAddress,
+        operation: activeTab,
+        amount: normalizedAmount,
+        idempotencyKey: idempotencyKeyRef.current,
+        onPhaseChange: setExecutionPhase,
+      })
+      setResultAmount(numeric)
+      setTxHash(typeof hash === 'string' ? hash : null)
+      setExecutionPhase('confirmed')
+      setFlowScene('result')
+      setAmount('')
+      idempotencyKeyRef.current = null
+      if (displayWalletAddress) {
+        await loadPosition(displayWalletAddress, { background: true })
+      }
+      onSuccess?.()
+    } catch (e) {
+      setExecutionPhase('failed')
+      setFailureCopy(resolveVaultFailureCopy(e))
+      setFlowScene('result')
+    }
+  }, [
+    activeTab,
+    displayWalletAddress,
+    executeLedgity,
+    executeMorpho,
+    isLedgity,
+    loadPosition,
+    normalizedAmount,
+    numeric,
+    onSuccess,
+    vault.vaultAddress,
+  ])
+
+  useEffect(() => {
+    if (flowScene !== 'processing' || executionStartedRef.current) return
+    executionStartedRef.current = true
+    void runExecution()
+  }, [flowScene, runExecution])
+
+  const setupDisabled = operationBlocked || positionLoading || numeric <= 0 || !displayWalletAddress
+
+  const successCopy = vaultSuccessCopy(operation)
+
+  const resultTechRows = useMemo(
+    () =>
+      buildVaultTechnicalDetailRows({
+        vaultAddress: vault.vaultAddress,
+        providerLabel: vault.provider,
+        integrationLabel: getPortalDefiIntegrationLabel(integrationMode),
+        sourceAsset: source.techSource,
+        receivedAsset: target.tech,
+        disclaimer,
+        txHash,
+      }),
+    [disclaimer, integrationMode, source.techSource, target.tech, txHash, vault.provider, vault.vaultAddress],
+  )
+
+  if (flowScene === 'review') {
+    return (
+      <article className="card-simple overflow-hidden !w-full">
+        <PortalVaultReviewStep
+          context={reviewContext}
+          onConfirm={() => {
+            resetExecution()
+            executionStartedRef.current = false
+            setFlowScene('processing')
+          }}
+          onBack={() => {
+            resetExecution()
+            setFlowScene('setup')
+          }}
+        />
+      </article>
+    )
+  }
+
+  if (flowScene === 'processing') {
+    return (
+      <article className="card-simple overflow-hidden !w-full px-4 py-4">
+        <TransactionProcessingPage
+          title={VAULT_FLOW_UI.processingTitle}
+          lead={
+            operation === 'deposit'
+              ? VAULT_FLOW_UI.processingLeadDeposit(processingContext.amountLabel, processingContext.vaultLabel)
+              : VAULT_FLOW_UI.processingLeadWithdraw(processingContext.amountLabel, processingContext.vaultLabel)
+          }
+          steps={buildVaultProcessingSteps(operation, processingContext)}
+          progressIndex={vaultProcessingStepperIndex(executionPhase)}
+          completedProgressIndex={VAULT_PROCESSING_COMPLETED_INDEX}
+          onClose={() => {
+            resetExecution()
+            setFlowScene('setup')
+          }}
+        />
+      </article>
+    )
+  }
+
+  if (flowScene === 'result') {
+    return (
+      <article className="card-simple overflow-hidden !w-full px-4 py-4">
+        {executionPhase === 'confirmed' ? (
+          <>
+            <TransactionResultPage
+              variant="success"
+              layout="compact"
+              title={successCopy.title}
+              lead={<>{resultAmount} {assetSymbol}</>}
+              subtitle={successCopy.subtitle}
+              steps={[]}
+              summary={[]}
+              primaryAction={{ label: 'Fermer', onClick: () => setFlowScene('setup') }}
+            />
+            <TransactionTechnicalDetails rows={resultTechRows} />
+          </>
+        ) : (
+          <TransactionResultPage
+            variant="impossible"
+            copy={failureCopy}
+            onRetry={() => {
+              resetExecution()
+              setFlowScene('review')
+            }}
+            onClose={() => {
+              resetExecution()
+              setFlowScene('setup')
+            }}
+            closeLabel={VAULT_RESULT_IMPOSSIBLE_ACTIONS.close}
+            retryLabel={VAULT_RESULT_IMPOSSIBLE_ACTIONS.retry}
+          />
+        )}
+      </article>
+    )
+  }
 
   return (
     <article className="card-simple overflow-hidden !w-full">
@@ -286,21 +397,6 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
         <PortalExecutionScopeGate requirement="defi">
           <>
             <PortalExecutionScopeBanner context="defi" className="mb-4" />
-
-            {showDisclaimer ? (
-              <div className="mb-4 rounded-v-card border border-amber-200 bg-amber-50 px-4 py-3 font-ui text-[13px] text-amber-950">
-                <p className="m-0 font-semibold">Warning — first deposit</p>
-                <p className="m-0 mt-2 leading-relaxed">{disclaimer}</p>
-                <Button
-                  type="button"
-                  className="mt-3 h-10 rounded-full font-ui text-[14px]"
-                  onClick={acceptDisclaimer}
-                  disabled={executing}
-                >
-                  I understand and wish to continue
-                </Button>
-              </div>
-            ) : null}
 
             {beta?.message && beta.allowed ? (
               <p className="mb-4 rounded-v-card border border-sky-200 bg-sky-50 px-4 py-3 font-ui text-[13px] text-sky-950">
@@ -327,12 +423,11 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
               <p className="m-0 text-v-fg-muted">Wallet</p>
               <p className="m-0 mt-1 font-medium text-v-fg">{displayWalletAddress}</p>
               <p className="m-0 mt-3 text-v-fg-muted">Vault position</p>
-              <p className="m-0 mt-1 font-semibold text-v-fg">{positionDisplay}</p>
-              {position && position.yieldSyncStatus !== 'pending' && position.earnedYieldDisplay ? (
-                <p className="m-0 mt-1 text-v-green">+{position.earnedYieldDisplay} yield</p>
-              ) : position?.yieldSyncStatus === 'pending' ? (
-                <p className="m-0 mt-1 text-v-fg-muted">{position.earnedYieldDisplay}</p>
-              ) : null}
+              <p className="m-0 mt-1 font-semibold text-v-fg">
+                {positionLoading && position === null
+                  ? '…'
+                  : position?.assetsInVaultDisplay ?? `0 ${assetSymbol}`}
+              </p>
             </div>
 
             <label className="flex flex-col gap-2 font-ui text-[13px] text-v-fg-muted">
@@ -341,7 +436,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
                 type="text"
                 inputMode="decimal"
                 value={amount}
-                disabled={executing || showDisclaimer || operationBlocked}
+                disabled={operationBlocked}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder={activeTab === 'withdraw' && maxWithdraw ? `Max ${maxWithdraw}` : '0.00'}
                 className="h-12 rounded-v-control border border-v-border bg-white px-4 font-ui text-[16px] text-v-fg outline-none focus:border-v-fg"
@@ -351,7 +446,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
             {activeTab === 'withdraw' && maxWithdraw ? (
               <button
                 type="button"
-                disabled={executing}
+                disabled={positionLoading}
                 onClick={() => setAmount(maxWithdraw)}
                 className="mt-2 v-text-link border-0 bg-transparent p-0 font-ui text-[13px]"
               >
@@ -359,39 +454,28 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
               </button>
             ) : null}
 
-            {executing && executionPhase !== 'idle' ? (
-              <p className="mt-3 mb-0 font-ui text-[13px] text-v-fg-muted">
-                {executionPhaseLabel(executionPhase)}
-              </p>
-            ) : null}
-
-            {error ? (
+            {setupError ? (
               <p className="mt-3 mb-0 rounded-v-control bg-red-50 px-3 py-2 font-ui text-[13px] text-v-error">
-                {error}
-              </p>
-            ) : null}
-            {success ? (
-              <p className="mt-3 mb-0 rounded-v-control bg-emerald-50 px-3 py-2 font-ui text-[13px] text-emerald-800">
-                {success}
+                {setupError}
               </p>
             ) : null}
 
             <Button
               type="button"
-              disabled={executing || showDisclaimer || operationBlocked}
+              disabled={setupDisabled}
               className="mt-4 h-[52px] w-full rounded-full font-ui text-[16px] font-semibold"
-              onClick={() => void onSubmit()}
+              onClick={() => {
+                setSetupError(null)
+                if (setupDisabled) return
+                if (!normalizedAmount || Number(normalizedAmount) <= 0) {
+                  setSetupError('Saisissez un montant valide.')
+                  return
+                }
+                resetExecution()
+                setFlowScene('review')
+              }}
             >
-              {executing ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {executionPhaseLabel(executionPhase)}
-                </span>
-              ) : activeTab === 'deposit' ? (
-                'Confirm deposit'
-              ) : (
-                'Confirm withdrawal'
-              )}
+              {VAULT_FLOW_UI.continueCta}
             </Button>
           </>
         </PortalExecutionScopeGate>
