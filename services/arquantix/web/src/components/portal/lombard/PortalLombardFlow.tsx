@@ -37,7 +37,7 @@ import type {
 } from '@/lib/portal/lombard/lombardTypes'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-import { isLombardOpeningPhase } from '@/lib/portal/lombard/lombardProcessingUx'
+import { isLombardOpeningPhase } from '@/components/portal/transaction/mappers/lombardSteps'
 import {
   LombardTerminalBorrowError,
   usePortalLombardExecution,

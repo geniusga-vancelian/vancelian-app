@@ -1,5 +1,6 @@
 'use client'
 
+import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import type { LombardBorrowRecap } from '@/lib/portal/lombard/lombardBorrowRecap'
 import { parseBorrowAmountInput, formatBorrowAmountFr } from '@/lib/portal/lombard/lombardBorrowUi'
@@ -10,6 +11,7 @@ type Props = {
   onClose?: () => void
 }
 
+/** Lombard borrow success — délégué à TransactionResultPage (R4.5-B). */
 export function PortalLombardBorrowSuccess({ recap, onViewLoans, onClose }: Props) {
   const borrowLabel =
     recap.borrowAmountLabel ||
@@ -57,80 +59,30 @@ export function PortalLombardBorrowSuccess({ recap, onViewLoans, onClose }: Prop
   ]
 
   return (
-    <div className="brw brw-succ v-card">
-      {onClose ? (
-        <button
-          type="button"
-          className="inv-head__btn brw-dismiss"
-          aria-label="Fermer"
-          onClick={onClose}
-          style={{ width: 32 }}
-        >
-          <KalaiIcon name="close" size={16} />
-        </button>
-      ) : null}
-
-      <div className="brw-succ__hero">
-        <span className="brw-succ__badge" aria-hidden>
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </span>
-        <h3 className="brw-succ__title">Emprunt effectué</h3>
-        <p className="brw-succ__lead">
+    <TransactionResultPage
+      variant="success"
+      title="Emprunt effectué"
+      lead={
+        <>
           <b className="v-tnum">{borrowLabel} USDC</b> ont été crédités sur votre wallet. Votre{' '}
           {recap.collateralLabel} reste votre garantie.
-        </p>
-      </div>
-
-      <section className="txn-step brw-succ__step">
-        <h2 className="txn-step__title">Étapes de votre emprunt</h2>
-        <ol className="txn-step__list">
-          {steps.map((step, i) => (
-            <li key={step.name} className="txn-step__item">
-              <span className="txn-step__badge" aria-hidden>
-                {i + 1}
-              </span>
-              <div className="txn-step__body">
-                <h3 className="txn-step__name">{step.name}</h3>
-                {step.body}
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="txn-sum brw-succ__sum">
-        <h2 className="txn-sum__title">Récapitulatif</h2>
-        <div className="txn-sum__list">
-          {summary.map((row) => (
-            <div className="txn-sum__row" key={row.k}>
-              <span className="txn-sum__k">{row.k}</span>
-              <span className="txn-sum__v v-tnum">{row.v}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <p className="brw-succ__note">
-        <KalaiIcon name="info" size={16} className="ic" />
-        Vous remboursez à votre rythme. Une alerte est envoyée si votre garantie approche du seuil de
-        liquidation.
-      </p>
-
-      <div className="brw-foot brw-succ__foot">
-        <button type="button" className="btn btn--primary btn--lg brw-foot__cta" onClick={onViewLoans}>
-          <KalaiIcon name="wallet" size={16} />
-          Voir mes emprunts
-        </button>
-      </div>
-    </div>
+        </>
+      }
+      steps={steps}
+      summary={summary}
+      note={
+        <>
+          <KalaiIcon name="info" size={16} className="ic" />
+          Vous remboursez à votre rythme. Une alerte est envoyée si votre garantie approche du seuil de
+          liquidation.
+        </>
+      }
+      primaryAction={{
+        label: 'Voir mes emprunts',
+        onClick: onViewLoans,
+        icon: <KalaiIcon name="wallet" size={16} />,
+      }}
+      onClose={onClose}
+    />
   )
 }

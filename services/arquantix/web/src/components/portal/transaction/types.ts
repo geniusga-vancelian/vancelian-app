@@ -1,0 +1,90 @@
+import type { ReactNode } from 'react'
+
+/** Étape affichée dans TransactionStepList — jamais un statut backend brut. */
+export type TransactionStep = {
+  label: string
+  subtext: string
+}
+
+export type TransactionStepperMarkerState = 'done' | 'current' | 'pending'
+
+/** Machine UI — distincte des statuts intent / OVT backend. */
+export type TransactionStatus =
+  | 'idle'
+  | 'reviewing'
+  | 'signing'
+  | 'processing'
+  | 'success'
+  | 'impossible'
+  | 'reconciliation_required'
+
+export type TransactionTerminalFailureCopy = {
+  title: string
+  lines: string[]
+}
+
+export type TransactionProcessingPageProps = {
+  title: string
+  lead: ReactNode
+  steps: TransactionStep[]
+  progressIndex: number
+  /** Index à partir duquel toutes les étapes sont terminées (ex. Lombard = 4). */
+  completedProgressIndex: number
+  onClose: () => void
+  cardClassName?: string
+}
+
+export type TransactionResultSuccessStep = {
+  name: string
+  body: ReactNode
+}
+
+export type TransactionResultSummaryRow = {
+  k: string
+  v: string
+}
+
+export type TransactionResultSuccessProps = {
+  variant: 'success'
+  title: string
+  lead: ReactNode
+  steps: TransactionResultSuccessStep[]
+  summary: TransactionResultSummaryRow[]
+  note?: ReactNode
+  primaryAction: {
+    label: string
+    onClick: () => void
+    icon?: ReactNode
+  }
+  onClose?: () => void
+  cardClassName?: string
+}
+
+export type TransactionResultImpossibleProps = {
+  variant: 'impossible'
+  copy: TransactionTerminalFailureCopy
+  onRetry: () => void
+  onClose: () => void
+  retryDisabled?: boolean
+}
+
+export type TransactionResultPageProps =
+  | TransactionResultSuccessProps
+  | TransactionResultImpossibleProps
+
+export type TransactionTechnicalDetailsRow = {
+  label: string
+  value: string
+}
+
+export type TransactionReviewPageProps = {
+  title: string
+  children: ReactNode
+  primaryAction: {
+    label: string
+    onClick: () => void
+    disabled?: boolean
+  }
+  onBack?: () => void
+  onClose?: () => void
+}
