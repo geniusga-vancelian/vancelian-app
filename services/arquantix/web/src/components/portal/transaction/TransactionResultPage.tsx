@@ -4,6 +4,25 @@ import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import type { TransactionResultPageProps } from '@/components/portal/transaction/types'
 
 export function TransactionResultPage(props: TransactionResultPageProps) {
+  if (props.variant === 'reconciliation_required') {
+    const { copy, onClose, closeLabel = 'Fermer' } = props
+    return (
+      <div className="rounded-xl border border-amber-300/50 bg-amber-50/80 p-4">
+        <p className="m-0 font-ui text-[16px] font-medium text-amber-950">{copy.title}</p>
+        {copy.lines.map((line) => (
+          <p key={line} className="m-0 mt-2 font-ui text-[14px] text-amber-900">
+            {line}
+          </p>
+        ))}
+        <div className="brw-foot mt-4">
+          <button type="button" className="btn btn--primary btn--lg brw-foot__cta" onClick={onClose}>
+            {closeLabel}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (props.variant === 'impossible') {
     const {
       copy,

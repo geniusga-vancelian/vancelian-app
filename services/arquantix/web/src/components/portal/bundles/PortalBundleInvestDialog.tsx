@@ -4,13 +4,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
 import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
+import { PortalBundleReviewStep } from '@/components/portal/bundles/PortalBundleReviewStep'
 import { useBundleLifiInvest } from '@/components/portal/bundles/useBundleLifiInvest'
+import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
+import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
+import {
+  BUNDLE_PROCESSING_COMPLETED_INDEX,
+  buildBundleProcessingSteps,
+  bundleInvestProcessingStepperIndex,
+  resolveBundleFailureCopy,
+  resolveBundleInvestResultVariant,
+  shouldAutoResumeBundleInvest,
+} from '@/components/portal/transaction/mappers/bundleSteps'
+import {
+  BUNDLE_FLOW_UI,
+  BUNDLE_RESULT_ACTIONS,
+  BUNDLE_TERMINAL_IMPOSSIBLE,
+  BUNDLE_TERMINAL_RECONCILIATION,
+} from '@/components/portal/transaction/mappers/bundleUiCopy'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -21,21 +36,15 @@ import {
   previewBundleInvest,
   type BundleInvestPreviewPayload,
 } from '@/lib/portal/bundleClient'
+import type { BundleInvestRunResult } from '@/components/portal/bundles/useBundleLifiInvest'
 import {
   displayBundleAssetSymbol,
   formatBundleTargetWeight,
   formatBundleUsdcAmount,
 } from '@/lib/portal/bundleFormat'
-import { formatBundleInvestPreviewWarnings } from '@/lib/portal/bundleInvestPreviewFormat'
-import {
-  bundleExecutionPhaseLabel,
-  bundleLockStatusLabel,
-} from '@/lib/portal/bundleInvestLabels'
-import {
-  clearBundleInvestSession,
-  loadBundleInvestSession,
-  type BundleInvestSession,
-} from '@/lib/portal/bundleInvestSession'
+import { loadBundleInvestSession, type BundleInvestSession } from '@/lib/portal/bundleInvestSession'
+import type { PortalBundleFlowScene } from '@/lib/portal/bundleFlowTypes'
+import type { PortalBundleInvestResultVariant } from '@/lib/portal/bundleFlowTypes'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
@@ -52,24 +61,26 @@ type Props = {
   asPage?: boolean
 }
 
-type Step = 'form' | 'preview' | 'executing' | 'done' | 'error' | 'blocked'
-
 export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = false }: Props) {
   const { privyReady } = usePortalAuthPrivy()
   const privyReadyRef = useRef(privyReady)
-  const [step, setStep] = useState<Step>('form')
+  const [flowScene, setFlowScene] = useState<PortalBundleFlowScene>('setup')
   const [fundingAsset, setFundingAsset] = useState<string>(bundle.entryAssetDefault ?? 'USDC')
   const [amount, setAmount] = useState('')
   const [preview, setPreview] = useState<BundleInvestPreviewPayload | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [legLabel, setLegLabel] = useState<string | null>(null)
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [failureCopy, setFailureCopy] = useState(() => resolveBundleFailureCopy(null))
+  const [resultVariant, setResultVariant] = useState<PortalBundleInvestResultVariant>('success')
+  const [resultAmount, setResultAmount] = useState(0)
+  const [activeAllocationAsset, setActiveAllocationAsset] = useState<string | null>(null)
   const [swapMockMode, setSwapMockMode] = useState(false)
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
-  const [remoteLockStatus, setRemoteLockStatus] = useState<string | null>(null)
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null)
   const [resumeSession, setResumeSession] = useState<BundleInvestSession | null>(null)
   const submitGuardRef = useRef(false)
+  const executionStartedRef = useRef(false)
+  const executionModeRef = useRef<'none' | 'invest' | 'resume'>('none')
 
   const entryOptions = useMemo(() => {
     const allowed = bundle.entryAssetsAllowed?.length
@@ -80,18 +91,21 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
       .filter((a) => PILOT_ENTRY_ASSETS.includes(a as (typeof PILOT_ENTRY_ASSETS)[number]))
   }, [bundle.entryAssetsAllowed])
 
-  const batchInProgress = step === 'executing' || submitGuardRef.current
+  const batchInProgress = flowScene === 'processing' || submitGuardRef.current
 
   const reset = useCallback(() => {
-    setStep('form')
+    setFlowScene('setup')
     setPreview(null)
-    setError(null)
-    setLegLabel(null)
+    setSetupError(null)
+    setFailureCopy(resolveBundleFailureCopy(null))
+    setResultVariant('success')
+    setActiveAllocationAsset(null)
     setExecutionPhase('idle')
-    setRemoteLockStatus(null)
     setBlockedMessage(null)
     setResumeSession(null)
     submitGuardRef.current = false
+    executionStartedRef.current = false
+    executionModeRef.current = 'none'
     setAmount('')
     setFundingAsset(bundle.entryAssetDefault ?? entryOptions[0] ?? 'USDC')
   }, [bundle.entryAssetDefault, entryOptions])
@@ -100,8 +114,8 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
     swapMockMode,
     fundingAsset,
     setExecutionPhase,
-    (current, total, asset) => {
-      setLegLabel(`Leg ${current}/${total} — ${asset}`)
+    (_current, _total, asset) => {
+      setActiveAllocationAsset(asset)
     },
   )
 
@@ -114,23 +128,25 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
   const refreshLockState = useCallback(async () => {
     if (!portfolioReady) return
     const active = await fetchActiveBundleInvestLock(bundle.portfolioId!)
+    const stored = loadBundleInvestSession(bundle.portfolioId!)
+
     if (active.status === 'active' && active.lock) {
-      setRemoteLockStatus(active.lock.status)
-      const stored = loadBundleInvestSession(bundle.portfolioId!)
-      if (stored && stored.batchId === active.lock.batch_id) {
+      if (shouldAutoResumeBundleInvest(active.status, active.lock.batch_id, stored)) {
         setResumeSession(stored)
         setBlockedMessage(null)
+        executionModeRef.current = 'resume'
+        executionStartedRef.current = false
+        setFlowScene('processing')
         return
       }
       setBlockedMessage(
-        'Un investissement bundle est déjà en cours sur ce portefeuille. Terminez-le ou attendez la finalisation.',
+        'Un investissement est déjà en cours sur ce portefeuille. Terminez-le ou attendez la finalisation.',
       )
-      setStep('blocked')
+      setFlowScene('blocked')
       return
     }
-    setRemoteLockStatus(null)
+
     setBlockedMessage(null)
-    const stored = loadBundleInvestSession(bundle.portfolioId!)
     if (stored) {
       setResumeSession(stored)
     }
@@ -150,7 +166,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
         if (!cancelled) setSwapMockMode(false)
       })
     refreshLockState().catch(() => {
-      if (!cancelled) setError('Impossible de vérifier un investissement en cours.')
+      if (!cancelled) setSetupError('Impossible de vérifier un investissement en cours.')
     })
     return () => {
       cancelled = true
@@ -161,7 +177,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
     (next: boolean) => {
       if (!next && batchInProgress) {
         const ok = window.confirm(
-          'Un investissement bundle est en cours. Fermer maintenant peut laisser un batch incomplet. Continuer ?',
+          'Un investissement est en cours. Fermer maintenant peut laisser une opération incomplète. Continuer ?',
         )
         if (!ok) return
       }
@@ -170,324 +186,391 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
     [batchInProgress, onOpenChange],
   )
 
-  const handlePreview = async () => {
+  const parsedAmount = useMemo(() => Number(amount), [amount])
+
+  const processingContext = useMemo(
+    () => ({
+      amountLabel: `${formatBundleUsdcAmount(parsedAmount > 0 ? parsedAmount : amount)} ${fundingAsset}`,
+      bundleLabel: bundle.title,
+      activeAllocationAsset,
+    }),
+    [activeAllocationAsset, amount, bundle.title, fundingAsset, parsedAmount],
+  )
+
+  const reviewContext = useMemo(() => {
+    if (!preview) return null
+    return {
+      bundleTitle: bundle.title,
+      fundingAsset,
+      amount: parsedAmount,
+      preview,
+    }
+  }, [bundle.title, fundingAsset, parsedAmount, preview])
+
+  const runExecution = useCallback(
+    async (runner: () => Promise<unknown>) => {
+      setActiveAllocationAsset(null)
+      setExecutionPhase('preparing')
+      submitGuardRef.current = true
+      try {
+        await waitForPrivyClientReady(() => privyReadyRef.current, { timeoutMs: 30_000 })
+        const outcome = await runner()
+
+        if (
+          outcome &&
+          typeof outcome === 'object' &&
+          'kind' in outcome &&
+          (outcome as { kind: string }).kind === 'already_pending'
+        ) {
+          const pending = outcome as {
+            kind: 'already_pending'
+            payload: { message: string }
+          }
+          setBlockedMessage(pending.payload.message)
+          setFlowScene('blocked')
+          return
+        }
+
+        const runResult = outcome as BundleInvestRunResult | undefined
+        invalidatePortalCache('portal:markets')
+        invalidatePortalCache('portal:crypto-wallet')
+        invalidatePortalCache('portal:dashboard')
+
+        setResultAmount(
+          resumeSession?.fundingAmount ?? (parsedAmount > 0 ? parsedAmount : Number(amount)),
+        )
+        setResultVariant(
+          resolveBundleInvestResultVariant(runResult?.invest, runResult?.finalize),
+        )
+        setFlowScene('result')
+      } catch (err) {
+        setExecutionPhase('failed')
+        setFailureCopy(resolveBundleFailureCopy(err))
+        setResultVariant('impossible')
+        setFlowScene('result')
+      } finally {
+        submitGuardRef.current = false
+        setActiveAllocationAsset(null)
+      }
+    },
+    [amount, parsedAmount, resumeSession?.fundingAmount],
+  )
+
+  const executeProcessing = useCallback(async () => {
+    if (executionStartedRef.current || submitGuardRef.current) return
+    if (executionModeRef.current === 'none') return
+
+    executionStartedRef.current = true
+
+    if (executionModeRef.current === 'resume' && resumeSession) {
+      await runExecution(() => resumeInvest(resumeSession))
+      return
+    }
+
+    if (executionModeRef.current === 'invest') {
+      if (!portfolioReady || inFlightRef.current) return
+      const parsed = parsedAmount
+      if (!Number.isFinite(parsed) || parsed <= 0) return
+      await runExecution(() =>
+        runInvest({
+          portfolio_id: bundle.portfolioId!,
+          funding_asset: fundingAsset,
+          funding_amount: parsed,
+        }),
+      )
+    }
+  }, [
+    bundle.portfolioId,
+    fundingAsset,
+    inFlightRef,
+    parsedAmount,
+    portfolioReady,
+    resumeInvest,
+    resumeSession,
+    runExecution,
+    runInvest,
+  ])
+
+  useEffect(() => {
+    if (flowScene !== 'processing') return
+    void executeProcessing()
+  }, [executeProcessing, flowScene])
+
+  const handleContinueToReview = async () => {
     if (!portfolioReady || batchInProgress || inFlightRef.current) return
-    const parsed = Number(amount)
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setError('Montant invalide.')
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setSetupError('Montant invalide.')
       return
     }
     setPreviewLoading(true)
-    setError(null)
+    setSetupError(null)
     try {
       const result = await previewBundleInvest({
         portfolio_id: bundle.portfolioId!,
         funding_asset: fundingAsset,
-        funding_amount: parsed,
+        funding_amount: parsedAmount,
       })
       setPreview(result)
-      setStep('preview')
+      if (result.preview_status === 'invalid') {
+        setSetupError('Prévisualisation indisponible pour ce montant.')
+        return
+      }
+      setFlowScene('review')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Prévisualisation impossible')
+      setSetupError(err instanceof Error ? err.message : 'Prévisualisation impossible')
     } finally {
       setPreviewLoading(false)
     }
   }
 
-  const runExecution = async (runner: () => Promise<unknown>) => {
-    setStep('executing')
-    setError(null)
-    setExecutionPhase('preparing')
-    submitGuardRef.current = true
-    try {
-      await waitForPrivyClientReady(() => privyReadyRef.current, { timeoutMs: 30_000 })
-      await runner()
-      invalidatePortalCache('portal:markets')
-      invalidatePortalCache('portal:crypto-wallet')
-      invalidatePortalCache('portal:dashboard')
-      if (portfolioReady) {
-        clearBundleInvestSession(bundle.portfolioId!)
-      }
-      setStep('done')
-    } catch (err) {
-      setExecutionPhase('failed')
-      setError(err instanceof Error ? err.message : 'Investissement impossible')
-      setStep('error')
-    } finally {
-      submitGuardRef.current = false
-    }
+  const onReviewConfirm = () => {
+    if (!preview || preview.preview_status === 'invalid') return
+    executionModeRef.current = 'invest'
+    executionStartedRef.current = false
+    setFlowScene('processing')
   }
 
-  const handleInvest = async () => {
-    if (!portfolioReady || submitGuardRef.current || inFlightRef.current) return
-    const parsed = Number(amount)
-    if (!Number.isFinite(parsed) || parsed <= 0) return
-
-    await runExecution(async () => {
-      const outcome = await runInvest({
-        portfolio_id: bundle.portfolioId!,
-        funding_asset: fundingAsset,
-        funding_amount: parsed,
-      })
-      if (outcome && typeof outcome === 'object' && 'kind' in outcome && outcome.kind === 'already_pending') {
-        setRemoteLockStatus(outcome.payload.lock_status ?? 'pending_signature')
-        setBlockedMessage(outcome.payload.message)
-        setStep('blocked')
-        return
-      }
-    })
+  const onBackToSetup = () => {
+    executionModeRef.current = 'none'
+    executionStartedRef.current = false
+    setFlowScene('setup')
   }
 
-  const handleResume = async () => {
-    if (!resumeSession || submitGuardRef.current || inFlightRef.current) return
-    await runExecution(() => resumeInvest(resumeSession))
+  const onResultRetry = () => {
+    executionModeRef.current = 'none'
+    executionStartedRef.current = false
+    setFailureCopy(resolveBundleFailureCopy(null))
+    setFlowScene(preview ? 'review' : 'setup')
   }
 
-  const statusLabel = useMemo(() => {
-    if (legLabel) return legLabel
-    if (remoteLockStatus && step === 'blocked') {
-      return bundleLockStatusLabel(remoteLockStatus)
-    }
-    return bundleExecutionPhaseLabel(executionPhase)
-  }, [executionPhase, legLabel, remoteLockStatus, step])
+  const onResultClose = () => {
+    reset()
+    handleOpenChange(false)
+  }
 
-  const investDisabled =
+  const setupDisabled =
     !portfolioReady ||
     !privyReady ||
     previewLoading ||
     batchInProgress ||
     inFlightRef.current ||
-    step === 'blocked' ||
-    (step === 'preview' && preview?.preview_status === 'invalid')
+    flowScene === 'blocked'
 
-  const entryAssetLabel = preview?.entry_asset_used ?? fundingAsset
-
-  const previewWarning = useMemo(() => {
-    if (!preview || preview.preview_status === 'ok') return null
-    if (preview.preview_status === 'partial') {
-      const structured = formatBundleInvestPreviewWarnings(preview.warnings)
-      if (structured) return structured
-      return 'Certains actifs ne sont pas disponibles pour la cotation Li.FI — l’allocation pourrait être partielle.'
-    }
-    return (
-      formatBundleInvestPreviewWarnings(preview.warnings) ??
-      'Prévisualisation indisponible pour ce montant.'
-    )
-  }, [preview])
+  const reviewDisabled =
+    !portfolioReady ||
+    !privyReady ||
+    batchInProgress ||
+    inFlightRef.current ||
+    preview?.preview_status === 'invalid'
 
   if (asPage && !open) return null
 
-  const header = (
-    <>
-      {asPage ? (
-        <header className="space-y-2">
-          <h1 className="m-0 font-ui text-[22px] font-semibold text-v-fg">Invest — {bundle.title}</h1>
-          <p className="m-0 font-ui text-[14px] text-v-fg-muted">
-            Base pilot · LI.FI · sign with your Vancelian wallet in the browser.
-          </p>
-        </header>
-      ) : (
-        <DialogHeader>
-          <DialogTitle>Investir — {bundle.title}</DialogTitle>
-          <DialogDescription>
-            Pilote Base · LI.FI · signature Privy dans le navigateur.
-          </DialogDescription>
-        </DialogHeader>
-      )}
-    </>
-  )
-
-  const actionButtons = (
-    <>
-      {step === 'form' ? (
-        <>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => handleOpenChange(false)}
-            disabled={batchInProgress}
-          >
-            Cancel
-          </Button>
-          <Button type="button" onClick={handlePreview} disabled={investDisabled}>
-            {previewLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Estimating…
-              </>
-            ) : (
-              'Preview'
-            )}
-          </Button>
-        </>
-      ) : null}
-      {step === 'preview' ? (
-        <>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setStep('form')}
-            disabled={batchInProgress}
-          >
-            Back
-          </Button>
-          <Button type="button" onClick={handleInvest} disabled={investDisabled}>
-            Confirm and invest
-          </Button>
-        </>
-      ) : null}
-      {step === 'done' || step === 'error' || step === 'blocked' ? (
-        <Button
-          type="button"
-          onClick={() => handleOpenChange(false)}
-          disabled={step === 'blocked' && batchInProgress}
-        >
-          Close
-        </Button>
-      ) : null}
-    </>
-  )
-
-  const footer = asPage ? (
-    <div className="flex flex-wrap justify-end gap-2 pt-2">{actionButtons}</div>
+  const header = asPage ? (
+    <header className="space-y-2">
+      <h1 className="m-0 font-ui text-[22px] font-semibold text-v-fg">
+        {BUNDLE_FLOW_UI.setupTitle(bundle.title)}
+      </h1>
+      <p className="m-0 font-ui text-[14px] text-v-fg-muted">{BUNDLE_FLOW_UI.setupLead}</p>
+    </header>
   ) : (
-    <DialogFooter className="gap-2 sm:gap-2">{actionButtons}</DialogFooter>
+    <DialogHeader>
+      <DialogTitle>{BUNDLE_FLOW_UI.setupTitle(bundle.title)}</DialogTitle>
+    </DialogHeader>
   )
 
   const body = (
     <div className={asPage ? 'flex flex-col gap-4' : undefined}>
-      {header}
+      {flowScene === 'setup' || flowScene === 'blocked' ? header : null}
 
-        {step === 'form' ? (
-          <div className="flex flex-col gap-4">
-            {!portfolioReady ? (
-              <p className="m-0 font-ui text-[13px] text-v-error">
-                Ce bundle n’est pas encore provisionné sur votre compte. Rechargez la page Marchés.
-              </p>
-            ) : null}
-            {!privyReady ? (
-              <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-                Initialisation du wallet Privy…
-              </p>
-            ) : null}
-            {resumeSession ? (
-              <div className="rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[13px] text-amber-900">
-                <p className="m-0 font-medium">Investissement en cours détecté</p>
-                <p className="mt-1 mb-0 text-[12px]">
-                  Batch {resumeSession.batchId.slice(0, 8)}… — vous pouvez reprendre la signature.
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="mt-2 h-8"
-                  disabled={investDisabled}
-                  onClick={handleResume}
-                >
-                  Reprendre
-                </Button>
-              </div>
-            ) : null}
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="bundle-entry-asset">Actif d’entrée</Label>
-              <select
-                id="bundle-entry-asset"
-                className="h-10 rounded-v-input border border-v-border bg-v-bg px-3 font-ui text-[14px] text-v-fg"
-                value={fundingAsset}
-                onChange={(e) => setFundingAsset(e.target.value)}
-                disabled={!portfolioReady || batchInProgress}
-              >
-                {entryOptions.map((asset) => (
-                  <option key={asset} value={asset}>
-                    {asset}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="bundle-amount">Montant ({fundingAsset})</Label>
-              <Input
-                id="bundle-amount"
-                type="number"
-                min="0"
-                step="any"
-                placeholder="100"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                disabled={!portfolioReady || batchInProgress}
-              />
-            </div>
-            {error ? <p className="m-0 text-[13px] text-v-error">{error}</p> : null}
-          </div>
-        ) : null}
-
-        {step === 'blocked' ? (
-          <div className="flex flex-col gap-3">
-            <p className="m-0 font-ui text-[14px] text-v-fg">{blockedMessage}</p>
-            <p className="m-0 font-ui text-[13px] text-v-fg-muted">{statusLabel}</p>
-            {resumeSession ? (
-              <Button type="button" disabled={investDisabled} onClick={handleResume}>
-                Reprendre l’investissement
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-
-        {step === 'preview' && preview ? (
-          <div className="flex max-h-[40vh] flex-col gap-2 overflow-y-auto">
-            <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-              Entrée estimée : {formatBundleUsdcAmount(preview.estimated_entry_asset_amount)}{' '}
-              {entryAssetLabel}
+      {flowScene === 'setup' ? (
+        <div className="flex flex-col gap-4">
+          {!portfolioReady ? (
+            <p className="m-0 font-ui text-[13px] text-v-error">
+              Ce bundle n’est pas encore provisionné sur votre compte. Rechargez la page Marchés.
             </p>
-            {previewWarning ? (
-              <p className="m-0 whitespace-pre-line rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[12px] text-amber-900">
-                {previewWarning}
+          ) : null}
+          {!privyReady ? (
+            <p className="m-0 font-ui text-[13px] text-v-fg-muted">{BUNDLE_FLOW_UI.walletConnecting}</p>
+          ) : null}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="bundle-entry-asset">Actif d’entrée</Label>
+            <select
+              id="bundle-entry-asset"
+              className="h-10 rounded-v-input border border-v-border bg-v-bg px-3 font-ui text-[14px] text-v-fg"
+              value={fundingAsset}
+              onChange={(e) => {
+                setFundingAsset(e.target.value)
+                setPreview(null)
+              }}
+              disabled={!portfolioReady || batchInProgress}
+            >
+              {entryOptions.map((asset) => (
+                <option key={asset} value={asset}>
+                  {asset}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="bundle-amount">Montant ({fundingAsset})</Label>
+            <Input
+              id="bundle-amount"
+              type="number"
+              min="0"
+              step="any"
+              placeholder="100"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value)
+                setPreview(null)
+              }}
+              disabled={!portfolioReady || batchInProgress}
+            />
+          </div>
+
+          {preview && preview.allocations && preview.allocations.length > 0 ? (
+            <div className="rounded-v-input border border-v-border bg-v-card px-3 py-2">
+              <p className="m-0 mb-2 font-ui text-[13px] font-medium text-v-fg">
+                {BUNDLE_FLOW_UI.targetAllocationSetup}
               </p>
-            ) : null}
-            <ul className="m-0 list-none space-y-1 p-0">
-              {(preview.allocations ?? []).map((row) => {
-                const label =
-                  row.asset_display?.trim() ||
-                  displayBundleAssetSymbol(row.asset)
-                const inputUsdc = formatBundleUsdcAmount(row.estimated_input_amount)
-                return (
-                  <li
-                    key={`${row.asset}-${row.target_weight}`}
-                    className="flex justify-between gap-3 font-ui text-[12px] text-v-fg-body"
-                  >
-                    <span>
-                      {label}{' '}
-                      <span className="text-v-fg-muted">
-                        ({formatBundleTargetWeight(row.target_weight)})
+              <ul className="m-0 list-none space-y-1 p-0">
+                {preview.allocations.map((row) => {
+                  const label = row.asset_display?.trim() || displayBundleAssetSymbol(row.asset)
+                  return (
+                    <li
+                      key={`${row.asset}-${row.target_weight}`}
+                      className="flex justify-between gap-3 font-ui text-[12px] text-v-fg-body"
+                    >
+                      <span>
+                        {label}{' '}
+                        <span className="text-v-fg-muted">
+                          ({formatBundleTargetWeight(row.target_weight)})
+                        </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 tabular-nums">
-                      {inputUsdc} {entryAssetLabel}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : null}
+
+          {setupError ? <p className="m-0 text-[13px] text-v-error">{setupError}</p> : null}
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={batchInProgress}
+            >
+              Annuler
+            </Button>
+            <Button type="button" onClick={() => void handleContinueToReview()} disabled={setupDisabled}>
+              {previewLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Estimation…
+                </>
+              ) : (
+                BUNDLE_FLOW_UI.continueCta
+              )}
+            </Button>
           </div>
-        ) : null}
+        </div>
+      ) : null}
 
-        {step === 'executing' ? (
-          <div className="flex flex-col items-center gap-3 py-6">
-            <Loader2 className="h-8 w-8 animate-spin text-v-fg-muted" />
-            <p className="m-0 text-center font-ui text-[14px] text-v-fg">{statusLabel}</p>
-          </div>
-        ) : null}
+      {flowScene === 'blocked' ? (
+        <div className="flex flex-col gap-3">
+          <p className="m-0 font-ui text-[14px] text-v-fg">{blockedMessage}</p>
+          {resumeSession ? (
+            <Button
+              type="button"
+              disabled={!privyReady || batchInProgress}
+              onClick={() => {
+                executionModeRef.current = 'resume'
+                executionStartedRef.current = false
+                setFlowScene('processing')
+              }}
+            >
+              Reprendre l’investissement
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+            Fermer
+          </Button>
+        </div>
+      ) : null}
 
-        {step === 'done' ? (
-          <p className="m-0 font-ui text-[14px] text-v-fg">
-            Investissement bundle terminé. Les positions seront visibles après rafraîchissement.
-          </p>
-        ) : null}
+      {flowScene === 'review' && reviewContext ? (
+        <PortalBundleReviewStep
+          context={reviewContext}
+          onConfirm={onReviewConfirm}
+          onBack={onBackToSetup}
+          confirmDisabled={reviewDisabled}
+        />
+      ) : null}
 
-        {step === 'error' ? (
-          <p className="m-0 font-ui text-[14px] text-v-error">{error ?? 'Error'}</p>
-        ) : null}
+      {flowScene === 'processing' ? (
+        <TransactionProcessingPage
+          title={BUNDLE_FLOW_UI.processingTitle}
+          lead={BUNDLE_FLOW_UI.processingLead(processingContext.amountLabel, processingContext.bundleLabel)}
+          steps={buildBundleProcessingSteps('invest', processingContext)}
+          progressIndex={bundleInvestProcessingStepperIndex(executionPhase)}
+          completedProgressIndex={BUNDLE_PROCESSING_COMPLETED_INDEX}
+          onClose={() => {
+            if (batchInProgress) {
+              const ok = window.confirm(
+                'Un investissement est en cours. Fermer maintenant peut laisser une opération incomplète. Continuer ?',
+              )
+              if (!ok) return
+            }
+            handleOpenChange(false)
+          }}
+        />
+      ) : null}
 
-      {footer}
+      {flowScene === 'result' ? (
+        <div className="flex flex-col gap-4">
+          {resultVariant === 'success' ? (
+            <TransactionResultPage
+              variant="success"
+              layout="compact"
+              title={BUNDLE_FLOW_UI.successTitle}
+              lead={
+                <>
+                  {formatBundleUsdcAmount(resultAmount)} {fundingAsset}
+                </>
+              }
+              subtitle={BUNDLE_FLOW_UI.successSubtitle}
+              steps={[]}
+              summary={[]}
+              primaryAction={{
+                label: BUNDLE_FLOW_UI.viewBasketCta,
+                onClick: onResultClose,
+              }}
+              onClose={onResultClose}
+            />
+          ) : null}
+          {resultVariant === 'reconciliation_required' ? (
+            <TransactionResultPage
+              variant="reconciliation_required"
+              copy={BUNDLE_TERMINAL_RECONCILIATION}
+              onClose={onResultClose}
+              closeLabel={BUNDLE_RESULT_ACTIONS.close}
+            />
+          ) : null}
+          {resultVariant === 'impossible' ? (
+            <TransactionResultPage
+              variant="impossible"
+              copy={failureCopy.title === BUNDLE_TERMINAL_IMPOSSIBLE.title ? failureCopy : BUNDLE_TERMINAL_IMPOSSIBLE}
+              onRetry={onResultRetry}
+              onClose={onResultClose}
+              closeLabel={BUNDLE_RESULT_ACTIONS.close}
+              retryLabel={BUNDLE_RESULT_ACTIONS.retry}
+            />
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 

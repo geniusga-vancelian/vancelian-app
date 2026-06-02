@@ -74,9 +74,17 @@ export type TransactionResultImpossibleProps = {
   retryLabel?: string
 }
 
+export type TransactionResultReconciliationProps = {
+  variant: 'reconciliation_required'
+  copy: TransactionTerminalFailureCopy
+  onClose: () => void
+  closeLabel?: string
+}
+
 export type TransactionResultPageProps =
   | TransactionResultSuccessProps
   | TransactionResultImpossibleProps
+  | TransactionResultReconciliationProps
 
 export type TransactionTechnicalDetailsRow = {
   label: string
