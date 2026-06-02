@@ -1,6 +1,7 @@
 """Backfill dry-run et gap audit onchain_transaction_attempts (Phase 2)."""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -26,6 +27,14 @@ from .repository import OnchainTransactionAttemptRepository
 
 VAULT_INTEGRATION_MODES = frozenset(
     {"direct_morpho", "ledgity_vault", "lombard_v1", "morpho_vault"}
+)
+
+LOMBARD_VAULT_STEP_TYPES = frozenset(
+    {
+        AttemptStepType.APPROVE.value,
+        AttemptStepType.AUTHORIZE.value,
+        AttemptStepType.OPEN_LOAN.value,
+    }
 )
 
 
@@ -111,6 +120,88 @@ def _attempt_exists_for_chain_tx(
     if step_type:
         q = q.filter(OnchainTransactionAttempt.step_type == step_type)
     return q.first() is not None
+
+
+def _attempt_exists_by_linked_reference(
+    db: Session,
+    *,
+    linked_reference_id: str,
+    step_type: str,
+) -> bool:
+    return (
+        db.query(OnchainTransactionAttempt)
+        .filter(
+            OnchainTransactionAttempt.linked_reference_id == linked_reference_id,
+            OnchainTransactionAttempt.step_type == step_type,
+        )
+        .first()
+        is not None
+    )
+
+
+def _vault_metadata_dict(metadata_json: Any) -> dict[str, Any]:
+    if isinstance(metadata_json, dict):
+        return metadata_json
+    if isinstance(metadata_json, str) and metadata_json.strip():
+        try:
+            parsed = json.loads(metadata_json)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _expected_vault_attempt_step_type(
+    *,
+    integration_mode: str | None,
+    operation: str,
+    metadata_json: Any = None,
+) -> str:
+    """Map OVT operation (+ Lombard metadata) → expected onchain_transaction_attempt step_type."""
+    op = str(operation or "").strip().lower()
+    mode = str(integration_mode or "").strip().lower()
+    if mode != "lombard_v1":
+        return op
+
+    if op in (
+        AttemptStepType.APPROVE.value,
+        AttemptStepType.AUTHORIZE.value,
+        AttemptStepType.OPEN_LOAN.value,
+    ):
+        return op
+
+    if op == AttemptStepType.DEPOSIT.value:
+        meta = _vault_metadata_dict(metadata_json)
+        lombard_op = str(meta.get("lombard_operation") or "").strip().lower()
+        if lombard_op in LOMBARD_VAULT_STEP_TYPES:
+            return lombard_op
+        return AttemptStepType.OPEN_LOAN.value
+
+    return op
+
+
+def _vault_legacy_covered_by_attempt(
+    db: Session,
+    *,
+    row: sa.RowMapping,
+    expected_step_type: str,
+) -> bool:
+    legacy = _legacy_record_from_vault(row, expected_step_type=expected_step_type)
+    idem = legacy["legacy_idempotency_key"]
+    if _attempt_exists(db, idempotency_key=idem, step_type=expected_step_type):
+        return True
+    if legacy.get("tx_hash") and _attempt_exists_for_chain_tx(
+        db,
+        chain_id=int(legacy["chain_id"]),
+        tx_hash=str(legacy["tx_hash"]),
+        step_type=expected_step_type,
+    ):
+        return True
+    return _attempt_exists_by_linked_reference(
+        db,
+        linked_reference_id=str(row["id"]),
+        step_type=expected_step_type,
+    )
 
 
 def _integration_mode_to_protocol(mode: str | None) -> str | None:
@@ -333,9 +424,18 @@ def _scan_swap_backfill_raw_records(
     return records
 
 
-def _legacy_record_from_vault(row: sa.RowMapping) -> dict[str, Any]:
+def _legacy_record_from_vault(
+    row: sa.RowMapping,
+    *,
+    expected_step_type: str | None = None,
+) -> dict[str, Any]:
     protocol = _integration_mode_to_protocol(row["integration_mode"])
     operation = str(row["operation"] or "").strip().lower()
+    step_type = expected_step_type or _expected_vault_attempt_step_type(
+        integration_mode=str(row.get("integration_mode") or ""),
+        operation=operation,
+        metadata_json=row.get("metadata_json"),
+    )
     group_key = str(row["idempotency_key"] or row["id"])
     step_index = int(row["tx_index"] or 0)
     person_uuid = UUID(str(row["person_id"]))
@@ -345,7 +445,8 @@ def _legacy_record_from_vault(row: sa.RowMapping) -> dict[str, Any]:
         "person_id": str(row["person_id"]),
         "chain_id": int(row["chain_id"] or 8453),
         "tx_hash": str(row["tx_hash"]).strip().lower() if row.get("tx_hash") else None,
-        "step_type": operation,
+        "step_type": step_type,
+        "vault_operation": operation,
         "protocol": protocol,
         "intent_id": None,
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
@@ -355,7 +456,7 @@ def _legacy_record_from_vault(row: sa.RowMapping) -> dict[str, Any]:
             protocol=str(protocol),
             person_id=person_uuid,
             group_key=group_key,
-            step_type=operation,
+            step_type=step_type,
             step_index=step_index,
         ),
     }
@@ -370,7 +471,7 @@ def _scan_vault_backfill_raw_records(
     sql = """
         SELECT id, person_id, operation, status, tx_hash, chain_id, wallet_address,
                idempotency_key, integration_mode, tx_index, asset_symbol, amount_raw,
-               created_at
+               metadata_json, created_at
         FROM onchain_vault_transactions
         WHERE integration_mode = ANY(:modes)
     """
@@ -396,17 +497,14 @@ def _scan_vault_backfill_raw_records(
             AttemptStepType.COLLATERAL_SUPPLY.value,
         }:
             continue
-        legacy = _legacy_record_from_vault(row)
-        idem = legacy["legacy_idempotency_key"]
-        if _attempt_exists(db, idempotency_key=idem, step_type=operation):
+        expected_step = _expected_vault_attempt_step_type(
+            integration_mode=str(row.get("integration_mode") or ""),
+            operation=operation,
+            metadata_json=row.get("metadata_json"),
+        )
+        if _vault_legacy_covered_by_attempt(db, row=row, expected_step_type=expected_step):
             continue
-        if legacy.get("tx_hash") and _attempt_exists_for_chain_tx(
-            db,
-            chain_id=int(legacy["chain_id"]),
-            tx_hash=str(legacy["tx_hash"]),
-            step_type=operation,
-        ):
-            continue
+        legacy = _legacy_record_from_vault(row, expected_step_type=expected_step)
         if not legacy.get("tx_hash") and str(row["status"] or "").lower() not in (
             "success",
             "failed",
@@ -845,7 +943,7 @@ def scan_attempt_gaps_for_person(
         sa.text(
             """
             SELECT id, person_id, operation, status, tx_hash, idempotency_key,
-                   integration_mode, tx_index, amount_raw, created_at, chain_id
+                   integration_mode, tx_index, amount_raw, metadata_json, created_at, chain_id
             FROM onchain_vault_transactions
             WHERE person_id = :person_id
               AND integration_mode = ANY(:modes)
@@ -875,17 +973,14 @@ def scan_attempt_gaps_for_person(
             AttemptStepType.OPEN_LOAN.value,
         }:
             continue
-        legacy = _legacy_record_from_vault(row)
-        idem = legacy["legacy_idempotency_key"]
-        if _attempt_exists(db, idempotency_key=idem, step_type=operation):
+        expected_step = _expected_vault_attempt_step_type(
+            integration_mode=str(row.get("integration_mode") or ""),
+            operation=operation,
+            metadata_json=row.get("metadata_json"),
+        )
+        if _vault_legacy_covered_by_attempt(db, row=row, expected_step_type=expected_step):
             continue
-        if legacy.get("tx_hash") and _attempt_exists_for_chain_tx(
-            db,
-            chain_id=int(legacy["chain_id"]),
-            tx_hash=str(legacy["tx_hash"]),
-            step_type=operation,
-        ):
-            continue
+        legacy = _legacy_record_from_vault(row, expected_step_type=expected_step)
         vault_missing_records.append(legacy)
 
     grouped_vaults, ungrouped_vaults, duplicate_vault_groups = group_legacy_records_by_chain_tx(
@@ -930,11 +1025,16 @@ def scan_attempt_gaps_for_person(
             AttemptStepType.OPEN_LOAN.value,
         }:
             continue
+        expected_step = _expected_vault_attempt_step_type(
+            integration_mode=str(row.get("integration_mode") or ""),
+            operation=operation,
+            metadata_json=row.get("metadata_json"),
+        )
         attempt = (
             db.query(OnchainTransactionAttempt)
             .filter(
                 OnchainTransactionAttempt.linked_reference_id == row["id"],
-                OnchainTransactionAttempt.step_type == operation,
+                OnchainTransactionAttempt.step_type == expected_step,
             )
             .first()
         )
@@ -950,6 +1050,7 @@ def scan_attempt_gaps_for_person(
                     reference_id=str(row["id"]),
                     metadata={
                         "operation": operation,
+                        "expected_step_type": expected_step,
                         "legacy_tx_hash": legacy_tx,
                         "attempt_id": str(attempt.id),
                         "attempt_status": attempt.status,

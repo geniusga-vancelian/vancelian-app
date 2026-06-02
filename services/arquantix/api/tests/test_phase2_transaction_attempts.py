@@ -455,3 +455,238 @@ def test_group_legacy_records_unique_chain_tx_keys():
     assert grouped[0]["idempotency_key"] == tx_hash_backfill_idempotency_key(
         chain_id=8453, tx_hash=shared_tx
     )
+
+
+def _vault_table_ready() -> bool:
+    try:
+        import sqlalchemy as sa
+
+        from database import engine
+
+        with engine.connect() as conn:
+            r = conn.execute(
+                sa.text(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = 'onchain_vault_transactions'"
+                )
+            )
+            return r.fetchone() is not None
+    except Exception:
+        return False
+
+
+def _insert_vault_tx(
+    db: Session,
+    *,
+    ovt_id: str,
+    person_id: uuid.UUID,
+    wallet_address: str,
+    vault_address: str,
+    operation: str,
+    integration_mode: str,
+    group_key: str,
+    tx_hash: str | None,
+    status: str = "success",
+    tx_index: int = 0,
+    metadata: dict | None = None,
+) -> None:
+    import json
+    import sqlalchemy as sa
+
+    db.execute(
+        sa.text(
+            """
+            INSERT INTO onchain_vault_transactions (
+                id, person_id, vault_address, chain_id, chain_type, wallet_address,
+                operation, amount_raw, asset_symbol, asset_decimals, status, tx_hash,
+                idempotency_key, group_key, integration_mode, tx_index, metadata_json,
+                created_at, updated_at
+            ) VALUES (
+                :id, :person_id, :vault, 8453, 'evm', :wallet,
+                :operation, '5000000', 'USDC', 6, :status, :tx_hash,
+                :group_key, :group_key, :integration_mode, :tx_index,
+                CAST(:metadata_json AS jsonb), NOW(), NOW()
+            )
+            """
+        ),
+        {
+            "id": ovt_id,
+            "person_id": str(person_id),
+            "vault": vault_address.lower(),
+            "wallet": wallet_address.lower(),
+            "operation": operation,
+            "status": status,
+            "tx_hash": tx_hash,
+            "group_key": group_key,
+            "integration_mode": integration_mode,
+            "tx_index": tx_index,
+            "metadata_json": json.dumps(metadata) if metadata else None,
+        },
+    )
+
+
+def _vault_missing_gaps(db: Session, person_id: uuid.UUID, ovt_id: str) -> list[dict]:
+    gaps = scan_attempt_gaps_for_person(db, person_id)
+    return [
+        g
+        for g in gaps
+        if g.get("gap_type") == "vault_tx_missing_attempt" and g.get("reference_id") == ovt_id
+    ]
+
+
+def _unique_tx(prefix: str = "tx") -> str:
+    return f"0x{prefix}{uuid.uuid4().hex}{uuid.uuid4().hex[:24]}"
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
+def test_lombard_deposit_open_loan_metadata_covered_by_open_loan_attempt(db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    gk = f"lombard-gap-{uuid.uuid4().hex[:12]}"
+    vault = f"0x{uuid.uuid4().hex[:40]}"
+    ovt_id = f"cl{uuid.uuid4().hex[:22]}"
+    tx = _unique_tx("lomdep")
+
+    _insert_vault_tx(
+        db,
+        ovt_id=ovt_id,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="deposit",
+        integration_mode="lombard_v1",
+        group_key=gk,
+        tx_hash=tx,
+        metadata={"lombard_operation": "open_loan", "collateral": "cbBTC"},
+    )
+    ensure_lombard_parent_intent(
+        db,
+        person_id=pe.person_id,
+        group_key=gk,
+        market_or_vault=vault,
+        wallet_address=wallet.address,
+        chain_id=8453,
+        steps=[{"step": "open_loan", "tx_index": 0, "ledger_entry_id": ovt_id}],
+    )
+    sync_lombard_step_from_ledger_receipt(
+        db,
+        person_id=pe.person_id,
+        group_key=gk,
+        market_or_vault=vault,
+        ledger_entry_id=ovt_id,
+        tx_hash=tx,
+        ledger_status="success",
+    )
+    db.commit()
+
+    assert _vault_missing_gaps(db, pe.person_id, ovt_id) == []
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
+def test_morpho_deposit_covered_by_deposit_attempt(db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    gk = f"morpho-gap-{uuid.uuid4().hex[:12]}"
+    vault = f"0x{uuid.uuid4().hex[:40]}"
+    ovt_id = f"cl{uuid.uuid4().hex[:22]}"
+    tx = _unique_tx("mordep")
+
+    _insert_vault_tx(
+        db,
+        ovt_id=ovt_id,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="deposit",
+        integration_mode="direct_morpho",
+        group_key=gk,
+        tx_hash=tx,
+    )
+    dual_write_vault_step(
+        db,
+        person_id=pe.person_id,
+        vault_transaction_id=ovt_id,
+        chain_id=8453,
+        wallet_address=wallet.address,
+        operation="deposit",
+        group_key=gk,
+        step_index=0,
+        integration_mode="direct_morpho",
+        tx_hash=tx,
+        vault_status="success",
+    )
+    db.commit()
+
+    assert _vault_missing_gaps(db, pe.person_id, ovt_id) == []
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
+def test_lombard_approve_covered_by_approve_attempt(db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    gk = f"lombard-ap-{uuid.uuid4().hex[:12]}"
+    vault = f"0x{uuid.uuid4().hex[:40]}"
+    ovt_id = f"cl{uuid.uuid4().hex[:22]}"
+    tx = _unique_tx("lomap")
+
+    _insert_vault_tx(
+        db,
+        ovt_id=ovt_id,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="approve",
+        integration_mode="lombard_v1",
+        group_key=gk,
+        tx_hash=tx,
+        metadata={"lombard_operation": "open_loan", "collateral": "cbBTC"},
+    )
+    ensure_lombard_parent_intent(
+        db,
+        person_id=pe.person_id,
+        group_key=gk,
+        market_or_vault=vault,
+        wallet_address=wallet.address,
+        chain_id=8453,
+        steps=[{"step": "approve", "tx_index": 0, "ledger_entry_id": ovt_id}],
+    )
+    sync_lombard_step_from_ledger_receipt(
+        db,
+        person_id=pe.person_id,
+        group_key=gk,
+        market_or_vault=vault,
+        ledger_entry_id=ovt_id,
+        tx_hash=tx,
+        ledger_status="success",
+    )
+    db.commit()
+
+    assert _vault_missing_gaps(db, pe.person_id, ovt_id) == []
+
+
+@pytest.mark.skipif(not _vault_table_ready(), reason="Table onchain_vault_transactions absente.")
+def test_lombard_deposit_open_loan_without_attempt_reports_gap(db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    gk = f"lombard-miss-{uuid.uuid4().hex[:12]}"
+    vault = f"0x{uuid.uuid4().hex[:40]}"
+    ovt_id = f"cl{uuid.uuid4().hex[:22]}"
+    tx = _unique_tx("lommiss")
+
+    _insert_vault_tx(
+        db,
+        ovt_id=ovt_id,
+        person_id=pe.person_id,
+        wallet_address=wallet.address,
+        vault_address=vault,
+        operation="deposit",
+        integration_mode="lombard_v1",
+        group_key=gk,
+        tx_hash=tx,
+        metadata={"lombard_operation": "open_loan", "collateral": "cbBTC"},
+    )
+    db.commit()
+
+    missing = _vault_missing_gaps(db, pe.person_id, ovt_id)
+    assert len(missing) == 1
+    assert missing[0]["metadata"]["operation"] == AttemptStepType.OPEN_LOAN.value
