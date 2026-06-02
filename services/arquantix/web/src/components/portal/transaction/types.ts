@@ -46,8 +46,12 @@ export type TransactionResultSummaryRow = {
 
 export type TransactionResultSuccessProps = {
   variant: 'success'
+  /** `compact` — hero + CTA (swap) ; `full` — stepper recap (Lombard). */
+  layout?: 'full' | 'compact'
   title: string
   lead: ReactNode
+  /** Ligne secondaire sous le lead (layout compact). */
+  subtitle?: ReactNode
   steps: TransactionResultSuccessStep[]
   summary: TransactionResultSummaryRow[]
   note?: ReactNode
@@ -66,6 +70,8 @@ export type TransactionResultImpossibleProps = {
   onRetry: () => void
   onClose: () => void
   retryDisabled?: boolean
+  closeLabel?: string
+  retryLabel?: string
 }
 
 export type TransactionResultPageProps =
@@ -87,4 +93,5 @@ export type TransactionReviewPageProps = {
   }
   onBack?: () => void
   onClose?: () => void
+  backButtonLabel?: string
 }

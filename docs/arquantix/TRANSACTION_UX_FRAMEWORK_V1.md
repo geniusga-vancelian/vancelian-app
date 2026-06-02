@@ -362,3 +362,4 @@ Voir checklist complète : [`TRANSACTION_PRODUCT_CANON_V1.md` §12](./TRANSACTIO
 | 2026-06-02 | R4.5-A — création doc, audit front consolidé, doctrine figée |
 | 2026-06-02 | R4.5-A.1 — référence Transaction Product Canon ; B bloqué jusqu’à validation A.1 |
 | 2026-06-02 | R4.5-B — extraction composants `transaction/` depuis Lombard (zéro changement visuel) |
+| 2026-06-02 | R4.5-C — migration Swap LI.FI vers framework (review / processing / result) |

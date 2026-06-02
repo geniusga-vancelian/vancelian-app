@@ -12,6 +12,7 @@ export function TransactionReviewPage({
   primaryAction,
   onBack,
   onClose,
+  backButtonLabel = 'Retour',
 }: TransactionReviewPageProps) {
   return (
     <div className="inv-pane">
@@ -36,7 +37,7 @@ export function TransactionReviewPage({
       <div className="brw-foot inv-review-foot">
         {onBack ? (
           <button type="button" className="btn btn--ghost btn--lg" onClick={onBack}>
-            Retour
+            {backButtonLabel}
           </button>
         ) : null}
         <button

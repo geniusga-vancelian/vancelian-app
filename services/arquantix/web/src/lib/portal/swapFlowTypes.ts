@@ -6,7 +6,7 @@ import {
 import type { SwapQuotePayload, SwapSupportedAssetsPayload } from '@/lib/portal/swapClient'
 import type { PortalCryptoPosition } from '@/lib/portal/cryptoWalletTypes'
 
-export type PortalSwapFlowStep = 'to' | 'from' | 'amount' | 'confirm'
+export type PortalSwapFlowStep = 'to' | 'from' | 'amount' | 'review' | 'processing' | 'result'
 
 export type SwapCatalogAsset = SwapSupportedAssetsPayload['assets'][number]
 

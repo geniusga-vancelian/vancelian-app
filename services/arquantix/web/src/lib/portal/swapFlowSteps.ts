@@ -20,7 +20,7 @@ export function buildConfirmSteps(
       primary: routeLabel,
       secondary: quote.exchange_rate
         ? `Taux estimé : 1 ${quote.from_asset} ≈ ${formatSwapCryptoAmount(quote.exchange_rate)} ${quote.to_asset}`
-        : 'Route optimisée via LI.FI',
+        : 'Route optimisée',
       state: routeStepState(executionPhase),
     },
     {

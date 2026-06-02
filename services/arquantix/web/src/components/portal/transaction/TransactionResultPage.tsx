@@ -5,7 +5,14 @@ import type { TransactionResultPageProps } from '@/components/portal/transaction
 
 export function TransactionResultPage(props: TransactionResultPageProps) {
   if (props.variant === 'impossible') {
-    const { copy, onRetry, onClose, retryDisabled = false } = props
+    const {
+      copy,
+      onRetry,
+      onClose,
+      retryDisabled = false,
+      closeLabel = 'Fermer',
+      retryLabel = 'Réessayer',
+    } = props
     return (
       <div className="rounded-xl border border-v-error/30 bg-v-error/5 p-4">
         <p className="m-0 font-ui text-[16px] font-medium text-v-error">{copy.title}</p>
@@ -16,7 +23,7 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
         ))}
         <div className="brw-foot mt-4">
           <button type="button" className="btn btn--ghost btn--lg" onClick={onClose}>
-            Fermer
+            {closeLabel}
           </button>
           <button
             type="button"
@@ -24,7 +31,7 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
             disabled={retryDisabled}
             onClick={onRetry}
           >
-            Réessayer
+            {retryLabel}
           </button>
         </div>
       </div>
@@ -34,13 +41,17 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
   const {
     title,
     lead,
+    subtitle,
     steps,
     summary,
     note,
     primaryAction,
     onClose,
     cardClassName = 'brw brw-succ v-card',
+    layout = 'full',
   } = props
+
+  const isCompact = layout === 'compact'
 
   return (
     <div className={cardClassName}>
@@ -71,8 +82,20 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
         </span>
         <h3 className="brw-succ__title">{title}</h3>
         <p className="brw-succ__lead">{lead}</p>
+        {isCompact && subtitle ? <p className="brw-succ__lead m-0 mt-2 text-v-fg-muted">{subtitle}</p> : null}
       </div>
 
+      {isCompact ? (
+        <div className="brw-foot brw-succ__foot">
+          <button type="button" className="btn btn--primary btn--lg brw-foot__cta" onClick={primaryAction.onClick}>
+            {primaryAction.icon}
+            {primaryAction.label}
+          </button>
+        </div>
+      ) : null}
+
+      {!isCompact ? (
+        <>
       <section className="txn-step brw-succ__step">
         <h2 className="txn-step__title">Étapes de votre emprunt</h2>
         <ol className="txn-step__list">
@@ -110,6 +133,8 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
           {primaryAction.label}
         </button>
       </div>
+        </>
+      ) : null}
     </div>
   )
 }
