@@ -65,8 +65,23 @@ export const PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS = [
   'src/app/app/(shell)/wallet/(tx)/layout.tsx',
   'src/app/app/(shell)/wallets/layout.tsx',
   'src/app/app/(shell)/borrow/layout.tsx',
-  'src/app/app/(shell)/invest/bundle/layout.tsx',
 ] as const
+
+/** R4.5-F5-A — page invest bundle : pas de layout Web3 eager. */
+export const PORTAL_BUNDLE_INVEST_PAGE_GUARD_PATHS = [
+  'src/app/app/(shell)/invest/bundle/[portfolioId]/page.tsx',
+  'src/components/portal/bundles/PortalBundleInvestScreen.tsx',
+] as const
+
+export const PORTAL_BUNDLE_INVEST_SETUP_GUARD_PATHS = [
+  'src/components/portal/bundles/PortalBundleInvestDialog.tsx',
+] as const
+
+export const PORTAL_BUNDLE_INVEST_SETUP_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  { rule: 'bundle-setup-no-lifi-invest', pattern: /\buseBundleLifiInvest\b/ },
+  { rule: 'bundle-setup-no-lifi-withdraw', pattern: /\buseBundleLifiWithdraw\b/ },
+  { rule: 'bundle-setup-no-lifi-rebalance', pattern: /\buseBundleLifiRebalance\b/ },
+]
 
 /** R4.5-F2 — segments read-only : aucun layout ne doit importer PortalWeb3Boundary. */
 export const PORTAL_WALLET_READ_SEGMENT_LAYOUT_SCAN_DIR = 'src/app/app/(shell)/wallet/(read)' as const
@@ -115,6 +130,8 @@ export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
   'src/components/portal/PortalWeb3Providers.tsx',
   'src/lib/wallet/externalWalletProvider.tsx',
   'src/components/portal/bundles/PortalLazyBundleInvestDialog.tsx',
+  'src/components/portal/bundles/PortalBundleExecutionController.tsx',
+  'src/components/portal/bundles/PortalLazyBundleWithdrawShell.tsx',
   'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
   'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
   'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
@@ -125,7 +142,8 @@ export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
 
 /** Surfaces transactionnelles — doivent importer PortalWeb3BoundaryLazy (pas boundary eager). */
 export const PORTAL_WEB3_BOUNDARY_LAZY_SURFACES = [
-  'src/components/portal/bundles/PortalLazyBundleInvestDialog.tsx',
+  'src/components/portal/bundles/PortalBundleExecutionController.tsx',
+  'src/components/portal/bundles/PortalLazyBundleWithdrawShell.tsx',
   'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
   'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
   'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
@@ -590,6 +608,60 @@ export function scanPortalSwapSetupExecutionImports(
   return violations
 }
 
+/** Bundle invest setup — pas de hooks LI.FI (R4.5-F5-A). */
+export function scanPortalBundleInvestSetupExecutionImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const relativePath of PORTAL_BUNDLE_INVEST_SETUP_GUARD_PATHS) {
+    const source = readRelativeFile(root, relativePath)
+    for (const { rule, pattern } of PORTAL_BUNDLE_INVEST_SETUP_FORBIDDEN_IMPORTS) {
+      if (pattern.test(source)) {
+        violations.push({
+          rule,
+          file: relativePath,
+          detail: 'Bundle invest setup must stay BFF-only; use PortalBundleExecutionController for review+',
+        })
+      }
+    }
+  }
+
+  return violations
+}
+
+/** invest/bundle — pas de layout Web3 eager (R4.5-F5-A). */
+export function scanPortalBundleInvestPageNoEagerWeb3(webRoot?: string): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+  const legacyLayout = 'src/app/app/(shell)/invest/bundle/layout.tsx'
+
+  if (fs.existsSync(path.join(root, legacyLayout))) {
+    const source = readRelativeFile(root, legacyLayout)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'bundle-invest-layout-removed-f5a',
+        file: legacyLayout,
+        detail: 'invest/bundle/layout.tsx must not wrap routes — use PortalBundleExecutionController (F5-A)',
+      })
+    }
+  }
+
+  for (const relativePath of PORTAL_BUNDLE_INVEST_PAGE_GUARD_PATHS) {
+    const source = readRelativeFile(root, relativePath)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'bundle-invest-page-no-eager-web3',
+        file: relativePath,
+        detail: 'Bundle invest page/screen must not import eager PortalWeb3Boundary',
+      })
+    }
+  }
+
+  return violations
+}
+
 /** Vault setup — pas de hooks Morpho/Ledgity execution (R4.5-F4). */
 export function scanPortalVaultSetupExecutionImports(
   webRoot?: string,
@@ -670,6 +742,8 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanWalletReadSegmentNoWeb3Boundary(webRoot),
     ...scanPortalSwapSetupExecutionImports(webRoot),
     ...scanPortalVaultSetupExecutionImports(webRoot),
+    ...scanPortalBundleInvestSetupExecutionImports(webRoot),
+    ...scanPortalBundleInvestPageNoEagerWeb3(webRoot),
     ...scanPortalWeb3BoundaryLazySurfaces(webRoot),
     ...scanPortalSessionRouteHelpersImports(webRoot),
     ...scanDeprecatedPortalWalletRouteHelpersImports(webRoot),

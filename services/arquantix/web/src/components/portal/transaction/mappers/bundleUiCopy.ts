@@ -27,6 +27,7 @@ export const BUNDLE_FLOW_UI = {
   setupTitle: (bundleTitle: string) => `Investir — ${bundleTitle}`,
   setupLead: 'Choisissez le montant et vérifiez l’allocation cible avant de confirmer.',
   continueCta: 'Voir le récapitulatif',
+  preparingSecureConfirmation: 'Preparing secure confirmation…',
   walletConnecting: 'Connexion du portefeuille en cours…',
   targetAllocationSetup: 'Allocation cible (estimation)',
   estimatedEntry: 'Entrée estimée',

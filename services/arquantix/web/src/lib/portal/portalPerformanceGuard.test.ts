@@ -17,6 +17,8 @@ import {
   scanPortalWeb3BoundaryLayoutOffenders,
   scanPortalWeb3BoundaryLazySurfaces,
   scanPortalSwapSetupExecutionImports,
+  scanPortalBundleInvestPageNoEagerWeb3,
+  scanPortalBundleInvestSetupExecutionImports,
   scanPortalVaultSetupExecutionImports,
   scanWalletReadSegmentNoWeb3Boundary,
   scanDeprecatedPortalWalletRouteHelpersImports,
@@ -77,13 +79,14 @@ describe('portalPerformanceGuard — détection synthétique', () => {
 })
 
 describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
-  it('known offender layouts — liste figée (4, vault layout retiré F4)', () => {
+  it('known offender layouts — liste figée (3, bundle layout retiré F5-A)', () => {
     const found = listPortalWeb3BoundaryEagerLayoutOffenders()
     assert.deepEqual(found, [...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS].sort())
     assert.deepEqual(scanPortalWeb3BoundaryLayoutOffenders(), [])
     assert.equal(found.includes('src/app/app/(shell)/wallet/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/wallet/(tx)/layout.tsx'), true)
     assert.equal(found.includes('src/app/app/(shell)/invest/vault/layout.tsx'), false)
+    assert.equal(found.includes('src/app/app/(shell)/invest/bundle/layout.tsx'), false)
   })
 
   it('wallet/(read) segment — aucun layout Web3 (F2)', () => {
@@ -112,7 +115,7 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
 
   it('PortalWeb3BoundaryLazy autorisé sur surfaces transactionnelles lazy', () => {
     assert.deepEqual(scanPortalWeb3BoundaryLazySurfaces(), [])
-    assert.equal(PORTAL_WEB3_BOUNDARY_LAZY_SURFACES.length, 4)
+    assert.equal(PORTAL_WEB3_BOUNDARY_LAZY_SURFACES.length, 5)
   })
 
   it('swap setup — pas de hooks exécution LI.FI / Privy (F3)', () => {
@@ -121,6 +124,14 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
 
   it('vault setup — pas de hooks Morpho/Ledgity execution (F4)', () => {
     assert.deepEqual(scanPortalVaultSetupExecutionImports(), [])
+  })
+
+  it('bundle invest page — pas de layout Web3 eager (F5-A)', () => {
+    assert.deepEqual(scanPortalBundleInvestPageNoEagerWeb3(), [])
+  })
+
+  it('bundle invest setup — pas de hooks LI.FI au mount (F5-A)', () => {
+    assert.deepEqual(scanPortalBundleInvestSetupExecutionImports(), [])
   })
 })
 

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 import { PortalBundleInvestDialog } from '@/components/portal/bundles/PortalBundleInvestDialog'
-import { PortalBundleWithdrawDialog } from '@/components/portal/bundles/PortalBundleWithdrawDialog'
+import { PortalLazyBundleWithdrawShell } from '@/components/portal/bundles/PortalLazyBundleWithdrawShell'
 import { PortalDefiVaultInvestLayout } from '@/components/portal/invest/PortalDefiVaultInvestLayout'
 import type { PortalCryptoWalletBundleDetailPayload } from '@/lib/portal/cryptoWalletTypes'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
@@ -92,7 +92,7 @@ export function PortalBundleInvestScreen({ portfolioId }: Props) {
     if (!bundle?.portfolioId) return null
     if (mode === 'withdraw') {
       return (
-        <PortalBundleWithdrawDialog
+        <PortalLazyBundleWithdrawShell
           portfolioId={bundle.portfolioId}
           portfolioName={bundle.title}
           positions={walletDetail?.bundle?.positions}
