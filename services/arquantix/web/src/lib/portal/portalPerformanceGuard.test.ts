@@ -4,12 +4,19 @@ import { describe, it } from 'node:test'
 import {
   assertPortalPerformanceGuardrails,
   collectPortalPerformanceViolations,
+  listPortalWeb3BoundaryEagerLayoutOffenders,
   parseFirstLoadJsFromBuildLog,
   PORTAL_FIRST_LOAD_JS_BUDGETS_KB,
+  PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS,
+  PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS,
+  PORTAL_WEB3_BOUNDARY_LAZY_SURFACES,
   scanFirstLoadJsBudgetViolations,
   scanMarketsReadOnlyBundleDialogImports,
   scanPortalGlobalShellImports,
   scanPortalReadOnlyWeb3Imports,
+  scanPortalWeb3BoundaryLayoutOffenders,
+  scanPortalWeb3BoundaryLazySurfaces,
+  scanWalletReadSegmentNoWeb3Boundary,
   scanDeprecatedPortalWalletRouteHelpersImports,
   scanPortalSessionRouteHelpersImports,
   scanPortalShellMountWarmup,
@@ -64,6 +71,45 @@ describe('portalPerformanceGuard — détection synthétique', () => {
       violations.some((v) => v.rule.includes('no-static-bundle-invest-dialog')),
       false,
     )
+  })
+})
+
+describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
+  it('known offender layouts — liste figée (5, wallet/(tx) only for wallet)', () => {
+    const found = listPortalWeb3BoundaryEagerLayoutOffenders()
+    assert.deepEqual(found, [...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS].sort())
+    assert.deepEqual(scanPortalWeb3BoundaryLayoutOffenders(), [])
+    assert.equal(found.includes('src/app/app/(shell)/wallet/layout.tsx'), false)
+    assert.equal(found.includes('src/app/app/(shell)/wallet/(tx)/layout.tsx'), true)
+  })
+
+  it('wallet/(read) segment — aucun layout Web3 (F2)', () => {
+    assert.deepEqual(scanWalletReadSegmentNoWeb3Boundary(), [])
+  })
+
+  it('aucun nouveau layout eager PortalWeb3Boundary', () => {
+    const violations = scanPortalWeb3BoundaryLayoutOffenders()
+    assert.equal(
+      violations.filter((v) => v.rule === 'web3-boundary-new-layout-offender').length,
+      0,
+    )
+  })
+
+  it('read-only surfaces — pas de nouvel import Web3/Privy', () => {
+    assert.deepEqual(scanPortalReadOnlyWeb3Imports(), [])
+  })
+
+  it('exception temporaire bundle detail documentée', () => {
+    assert.equal(PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS.length, 1)
+    assert.equal(
+      PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS[0]!.file,
+      'src/components/portal/wallet/PortalCryptoWalletBundleDetailScreen.tsx',
+    )
+  })
+
+  it('PortalWeb3BoundaryLazy autorisé sur surfaces transactionnelles lazy', () => {
+    assert.deepEqual(scanPortalWeb3BoundaryLazySurfaces(), [])
+    assert.equal(PORTAL_WEB3_BOUNDARY_LAZY_SURFACES.length, 4)
   })
 })
 

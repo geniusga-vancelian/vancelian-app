@@ -19,7 +19,7 @@ export const PORTAL_GLOBAL_SHELL_RELATIVE_PATHS = [
   'src/components/portal/PortalTopnav.tsx',
 ] as const
 
-/** Écrans portail read-only — pas de SDK Web3 / modales d’exécution statiques. */
+/** Écrans portail read-only — pas de SDK Web3 / modales d’exécution statiques (R4.5-F1). */
 export const PORTAL_READ_ONLY_GUARD_PATHS = [
   'src/components/portal/academy/PortalAcademyScreen.tsx',
   'src/components/portal/academy/PortalArticleScreen.tsx',
@@ -27,11 +27,77 @@ export const PORTAL_READ_ONLY_GUARD_PATHS = [
   'src/components/portal/markets/PortalMarketsScreen.tsx',
   'src/components/portal/markets/PortalCryptoBundlesSection.tsx',
   'src/components/portal/markets/PortalAllCryptoScreen.tsx',
+  'src/components/portal/markets/PortalInstrumentDetailScreen.tsx',
   'src/components/portal/profile/PortalProfileScreen.tsx',
   'src/components/portal/profile/PortalProfileWalletsSection.tsx',
   'src/components/portal/invest/PortalInvestScreen.tsx',
   'src/components/portal/invest/PortalPlacerView.tsx',
+  'src/components/portal/credit-line/PortalCreditLineScreen.tsx',
+  'src/components/portal/wallet/PortalCryptoWalletScreen.tsx',
+  'src/components/portal/wallet/PortalCryptoWalletDetailScreen.tsx',
+  'src/components/portal/wallet/PortalCryptoWalletTransactionsScreen.tsx',
+  'src/components/portal/wallet/PortalCryptoWalletBundleDetailScreen.tsx',
+  'src/components/portal/wallet/PortalCryptoWalletBundleTransactionDetailScreen.tsx',
+  'src/components/portal/wallet/PortalSavingsWalletScreen.tsx',
+  'src/components/portal/wallet/PortalSavingsVaultDetailScreen.tsx',
+  'src/components/portal/lombard/PortalLombardPositionDetailScreen.tsx',
   'src/lib/portal/usePortalCachedScreen.ts',
+] as const
+
+/**
+ * Dettes read-only connues — ne pas ajouter d’entrées sans ticket F2–F6.
+ * Le guard ignore ces violations jusqu’à retrait de l’exception.
+ */
+export const PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS = [
+  {
+    file: 'src/components/portal/wallet/PortalCryptoWalletBundleDetailScreen.tsx',
+    rule: 'readonly-no-static-bundle-allocation-panel',
+    reason: 'PortalBundleAllocationPanel monte useBundleLifiInvest sur détail wallet read-only',
+    removeBy: 'R4.5-F5',
+  },
+] as const
+
+/**
+ * Layouts montant PortalWeb3Boundary (eager) — liste figée ; échec CI si un layout hors liste apparaît.
+ * R4.5-F2 : `wallet/layout.tsx` supprimé → boundary limitée à `wallet/(tx)/layout.tsx`.
+ */
+export const PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS = [
+  'src/app/app/(shell)/wallet/(tx)/layout.tsx',
+  'src/app/app/(shell)/wallets/layout.tsx',
+  'src/app/app/(shell)/borrow/layout.tsx',
+  'src/app/app/(shell)/invest/vault/layout.tsx',
+  'src/app/app/(shell)/invest/bundle/layout.tsx',
+] as const
+
+/** R4.5-F2 — segments read-only : aucun layout ne doit importer PortalWeb3Boundary. */
+export const PORTAL_WALLET_READ_SEGMENT_LAYOUT_SCAN_DIR = 'src/app/app/(shell)/wallet/(read)' as const
+
+/** Chemins où une boundary Web3 (eager ou lazy) ou Privy auth est légitime. */
+export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
+  'src/app/app/login/layout.tsx',
+  'src/app/app/login/page.tsx',
+  'src/app/app/login/verify/page.tsx',
+  'src/components/portal/PortalAuthPrivyWrapper.tsx',
+  'src/components/portal/PortalAuthPrivyGate.tsx',
+  'src/components/portal/PrivyPortalProvider.tsx',
+  'src/components/portal/web3/PortalWeb3Boundary.tsx',
+  'src/components/portal/web3/PortalWeb3BoundaryLazy.tsx',
+  'src/components/portal/PortalWeb3Providers.tsx',
+  'src/lib/wallet/externalWalletProvider.tsx',
+  'src/components/portal/bundles/PortalLazyBundleInvestDialog.tsx',
+  'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
+  'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
+  'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
+  'src/app/dev/wallet-sandbox/page.tsx',
+  ...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS,
+] as const
+
+/** Surfaces transactionnelles — doivent importer PortalWeb3BoundaryLazy (pas boundary eager). */
+export const PORTAL_WEB3_BOUNDARY_LAZY_SURFACES = [
+  'src/components/portal/bundles/PortalLazyBundleInvestDialog.tsx',
+  'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
+  'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
+  'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
 ] as const
 
 /** @deprecated alias — préférer PORTAL_READ_ONLY_GUARD_PATHS */
@@ -65,6 +131,18 @@ export const PORTAL_WEB3_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
   { rule: 'no-connect-external-wallet-button', pattern: /ConnectExternalWalletButton/ },
 ]
 
+/** Imports interdits sur écrans read-only en plus du socle (R4.5-F1). */
+export const PORTAL_READ_ONLY_EXTRA_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  {
+    rule: 'no-portal-web3-boundary-eager',
+    pattern: /from\s+['"]@\/components\/portal\/web3\/PortalWeb3Boundary['"]/,
+  },
+  { rule: 'no-use-portal-tx-signer', pattern: /\busePortalTxSigner\b/ },
+  { rule: 'no-use-privy-live-session', pattern: /\busePrivyLiveSession\b/ },
+  { rule: 'no-use-privy', pattern: /\busePrivy\b/ },
+  { rule: 'no-use-wallets', pattern: /\buseWallets\b/ },
+]
+
 const SHELL_FORBIDDEN_IMPORTS = PORTAL_WEB3_FORBIDDEN_IMPORTS.map(({ rule, pattern }) => ({
   rule: `shell-${rule}`,
   pattern,
@@ -88,6 +166,16 @@ const STATIC_EXECUTION_DIALOG_IMPORTS: Array<{ rule: string; pattern: RegExp; hi
     pattern:
       /import\s+(?:type\s+)?(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]*PortalLedgityVaultModal['"]/,
     hint: 'Use PortalLazyLedgityVaultModal',
+  },
+]
+
+const READ_ONLY_STATIC_EXECUTION_IMPORTS: Array<{ rule: string; pattern: RegExp; hint: string }> = [
+  ...STATIC_EXECUTION_DIALOG_IMPORTS,
+  {
+    rule: 'no-static-bundle-allocation-panel',
+    pattern:
+      /import\s+(?:type\s+)?(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]*PortalBundleAllocationPanel['"]/,
+    hint: 'Lazy-load bundle allocation execution (R4.5-F5)',
   },
 ]
 
@@ -274,6 +362,12 @@ export function scanDeprecatedPortalWalletRouteHelpersImports(
   return violations
 }
 
+function isReadOnlyTemporaryException(file: string, rule: string): boolean {
+  return PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS.some(
+    (entry) => entry.file === file && entry.rule === rule,
+  )
+}
+
 function scanReadOnlyPaths(
   webRoot: string,
   relativePaths: readonly string[],
@@ -283,23 +377,155 @@ function scanReadOnlyPaths(
 
   for (const relativePath of relativePaths) {
     const source = readRelativeFile(webRoot, relativePath)
-    for (const { rule, pattern } of PORTAL_WEB3_FORBIDDEN_IMPORTS) {
+    const allForbidden = [
+      ...PORTAL_WEB3_FORBIDDEN_IMPORTS,
+      ...PORTAL_READ_ONLY_EXTRA_FORBIDDEN_IMPORTS,
+    ]
+    for (const { rule, pattern } of allForbidden) {
       if (pattern.test(source)) {
+        const fullRule = `${rulePrefix}-${rule}`
+        if (isReadOnlyTemporaryException(relativePath, fullRule)) continue
         violations.push({
-          rule: `${rulePrefix}-${rule}`,
+          rule: fullRule,
           file: relativePath,
           detail: `Forbidden Web3 import in read-only portal surface`,
         })
       }
     }
-    for (const { rule, pattern, hint } of STATIC_EXECUTION_DIALOG_IMPORTS) {
+    for (const { rule, pattern, hint } of READ_ONLY_STATIC_EXECUTION_IMPORTS) {
       if (pattern.test(source)) {
+        const fullRule = `${rulePrefix}-${rule}`
+        if (isReadOnlyTemporaryException(relativePath, fullRule)) continue
         violations.push({
-          rule: `${rulePrefix}-${rule}`,
+          rule: fullRule,
           file: relativePath,
           detail: hint,
         })
       }
+    }
+  }
+
+  return violations
+}
+
+const EAGER_WEB3_BOUNDARY_IMPORT =
+  /import\s+[\s\S]*?from\s+['"]@\/components\/portal\/web3\/PortalWeb3Boundary['"]/
+
+function listLayoutFilesUnder(webRoot: string, relativeDir: string): string[] {
+  return listSourceFilesUnder(webRoot, relativeDir).filter((f) => f.endsWith('layout.tsx'))
+}
+
+/** Liste les layouts `(shell)` qui importent PortalWeb3Boundary (eager). */
+export function listPortalWeb3BoundaryEagerLayoutOffenders(webRoot?: string): string[] {
+  const root = resolveWebRoot(webRoot)
+  const layouts = listLayoutFilesUnder(root, 'src/app/app/(shell)')
+  const offenders: string[] = []
+
+  for (const relativePath of layouts) {
+    const source = readRelativeFile(root, relativePath)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      offenders.push(relativePath)
+    }
+  }
+
+  return offenders.sort()
+}
+
+/**
+ * Échoue si un nouveau layout eager apparaît ou si la liste figée diverge (ajout = régression).
+ * Retrait d’un offender (F2+) : mettre à jour PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS + ce test.
+ */
+export function scanPortalWeb3BoundaryLayoutOffenders(webRoot?: string): PortalPerformanceViolation[] {
+  const found = listPortalWeb3BoundaryEagerLayoutOffenders(webRoot)
+  const known = [...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS].sort()
+  const violations: PortalPerformanceViolation[] = []
+
+  if (found.length !== known.length) {
+    violations.push({
+      rule: 'web3-boundary-offender-count-changed',
+      file: 'PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS',
+      detail: `Expected ${known.length} eager layout offenders, found ${found.length}: ${found.join(', ')}`,
+    })
+  }
+
+  for (const layoutPath of found) {
+    if (!known.includes(layoutPath as (typeof known)[number])) {
+      violations.push({
+        rule: 'web3-boundary-new-layout-offender',
+        file: layoutPath,
+        detail:
+          'New PortalWeb3Boundary layout detected — add to F2 plan or KNOWN_OFFENDER list with explicit review',
+      })
+    }
+  }
+
+  const foundSet = new Set(found)
+  for (const layoutPath of known) {
+    if (!foundSet.has(layoutPath)) {
+      violations.push({
+        rule: 'web3-boundary-known-offender-removed',
+        file: layoutPath,
+        detail:
+          'Layout removed from eager Web3 boundary — update PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS (expected after F2+)',
+      })
+    }
+  }
+
+  return violations
+}
+
+/** Les surfaces lazy transactionnelles doivent utiliser PortalWeb3BoundaryLazy. */
+/** Wallet read segment — pas de boundary Web3 (R4.5-F2). */
+export function scanWalletReadSegmentNoWeb3Boundary(webRoot?: string): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const relativePath of listLayoutFilesUnder(root, PORTAL_WALLET_READ_SEGMENT_LAYOUT_SCAN_DIR)) {
+    const source = readRelativeFile(root, relativePath)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'wallet-read-layout-no-web3-boundary',
+        file: relativePath,
+        detail: 'wallet/(read) layouts must not mount PortalWeb3Boundary',
+      })
+    }
+  }
+
+  const legacyWalletLayout = 'src/app/app/(shell)/wallet/layout.tsx'
+  if (fs.existsSync(path.join(root, legacyWalletLayout))) {
+    const source = readRelativeFile(root, legacyWalletLayout)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'wallet-root-layout-removed-f2',
+        file: legacyWalletLayout,
+        detail:
+          'wallet/layout.tsx must not wrap read-only routes — use wallet/(tx)/layout.tsx only (R4.5-F2)',
+      })
+    }
+  }
+
+  return violations
+}
+
+export function scanPortalWeb3BoundaryLazySurfaces(webRoot?: string): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const relativePath of PORTAL_WEB3_BOUNDARY_LAZY_SURFACES) {
+    const source = readRelativeFile(root, relativePath)
+    if (!/PortalWeb3BoundaryLazy/.test(source)) {
+      violations.push({
+        rule: 'lazy-surface-missing-boundary-lazy',
+        file: relativePath,
+        detail: 'Transaction lazy surface must wrap children with PortalWeb3BoundaryLazy',
+      })
+    }
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'lazy-surface-eager-boundary-import',
+        file: relativePath,
+        detail: 'Do not import eager PortalWeb3Boundary in lazy transaction surfaces',
+      })
     }
   }
 
@@ -363,6 +589,9 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanPortalShellMountWarmup(webRoot),
     ...scanNavigateToPortalLoginImports(webRoot),
     ...scanPortalReadOnlyWeb3Imports(webRoot),
+    ...scanPortalWeb3BoundaryLayoutOffenders(webRoot),
+    ...scanWalletReadSegmentNoWeb3Boundary(webRoot),
+    ...scanPortalWeb3BoundaryLazySurfaces(webRoot),
     ...scanPortalSessionRouteHelpersImports(webRoot),
     ...scanDeprecatedPortalWalletRouteHelpersImports(webRoot),
   ]

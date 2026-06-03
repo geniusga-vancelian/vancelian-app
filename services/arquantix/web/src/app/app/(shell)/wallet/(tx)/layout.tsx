@@ -1,7 +1,8 @@
 import { PortalWeb3Boundary } from '@/components/portal/web3/PortalWeb3Boundary'
 import { getPortalWeb3LayoutProps } from '@/lib/portal/portalWeb3LayoutProps'
 
-export default async function PortalWalletWeb3Layout({ children }: { children: React.ReactNode }) {
+/** Wallet transaction routes only — swap, create, deposit, withdraw (R4.5-F2). */
+export default async function PortalWalletTxWeb3Layout({ children }: { children: React.ReactNode }) {
   const { appId, wagmiCookieHeader } = await getPortalWeb3LayoutProps()
 
   return (
