@@ -70,14 +70,16 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
           <button type="button" className="btn btn--ghost btn--lg" onClick={onClose}>
             {closeLabel}
           </button>
-          <button
-            type="button"
-            className="btn btn--primary btn--lg brw-foot__cta"
-            disabled={retryDisabled}
-            onClick={onRetry}
-          >
-            {retryLabel}
-          </button>
+          {onRetry ? (
+            <button
+              type="button"
+              className="btn btn--primary btn--lg brw-foot__cta"
+              disabled={retryDisabled}
+              onClick={onRetry}
+            >
+              {retryLabel}
+            </button>
+          ) : null}
         </div>
       </div>
     )

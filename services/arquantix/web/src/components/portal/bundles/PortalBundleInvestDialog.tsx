@@ -632,16 +632,16 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
               subtitle=""
               steps={[]}
               summary={[]}
+              note={
+                resultTechnicalDetails.length > 0
+                  ? resultTechnicalDetails[0]?.value
+                  : undefined
+              }
               primaryAction={{
                 label: BUNDLE_FLOW_UI.viewBasketCta,
                 onClick: onResultClose,
               }}
               onClose={onResultClose}
-              closeLabel={BUNDLE_RESULT_ACTIONS.close}
-              technicalDetails={
-                resultTechnicalDetails.length > 0 ? resultTechnicalDetails : undefined
-              }
-              technicalDetailsTitle={BUNDLE_REVIEW_UI.technicalDetailsTitle}
             />
           ) : null}
           {resultVariant === 'reconciliation_required' ? (

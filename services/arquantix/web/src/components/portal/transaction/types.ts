@@ -67,7 +67,7 @@ export type TransactionResultSuccessProps = {
 export type TransactionResultImpossibleProps = {
   variant: 'impossible'
   copy: TransactionTerminalFailureCopy
-  onRetry: () => void
+  onRetry?: () => void
   onClose: () => void
   retryDisabled?: boolean
   closeLabel?: string
