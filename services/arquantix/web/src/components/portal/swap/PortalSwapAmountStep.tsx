@@ -20,7 +20,7 @@ import { requestSwapQuote, type SwapQuotePayload } from '@/lib/portal/swapClient
 import {
   buildSwapSigningWalletQuoteParams,
 } from '@/lib/portal/swapSigningWallet'
-import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 
 type Props = {
   fromAsset: string
@@ -49,13 +49,8 @@ export function PortalSwapAmountStep({
   onContinue,
   onBack,
 }: Props) {
-  const {
-    mode,
-    selectedExternalWalletId,
-    externalWallets,
-    privyEmbeddedAddress,
-    loading: walletLoading,
-  } = useExecutionWallet()
+  const { executionAddress, isExternalWallet, scopeLoading } = usePortalExecutionScope()
+  const signingMode = isExternalWallet ? 'external_evm' : 'privy_embedded'
 
   const [amount, setAmount] = useState('')
   const [quote, setQuote] = useState<SwapQuotePayload | null>(null)
@@ -70,15 +65,10 @@ export function PortalSwapAmountStep({
   const canPickFrom = fromOptions.length > 1
   const canPickTo = toOptions.length > 1
 
-  const selectedExternal = useMemo(
-    () => externalWallets.find((row) => row.id === selectedExternalWalletId) ?? externalWallets[0] ?? null,
-    [externalWallets, selectedExternalWalletId],
-  )
-
   const parsed = Number(amount.replace(',', '.'))
-  const usesPrivyBalance = mode === 'privy_embedded'
+  const usesPrivyBalance = !isExternalWallet
   const overBalance = usesPrivyBalance && isSwapAmountOverPrivyBalance(parsed, sourceBalance)
-  const canContinue = parsed > 0 && !overBalance && quote !== null && !loading && !walletLoading
+  const canContinue = parsed > 0 && !overBalance && quote !== null && !loading && !scopeLoading
 
   const fetchQuote = useCallback(async () => {
     if (parsed <= 0) {
@@ -87,15 +77,15 @@ export function PortalSwapAmountStep({
       return
     }
 
-    if (walletLoading) return
+    if (scopeLoading) return
 
     setLoading(true)
     setError(null)
     try {
       const signing = buildSwapSigningWalletQuoteParams({
-        mode,
-        privyEmbeddedAddress,
-        externalWalletAddress: selectedExternal?.address ?? null,
+        mode: signingMode,
+        privyEmbeddedAddress: !isExternalWallet ? executionAddress : null,
+        externalWalletAddress: isExternalWallet ? executionAddress : null,
       })
       const result = await requestSwapQuote({
         from_asset: fromAsset,
@@ -115,13 +105,13 @@ export function PortalSwapAmountStep({
   }, [
     fromAsset,
     fromChain,
-    mode,
+    executionAddress,
+    isExternalWallet,
     parsed,
-    privyEmbeddedAddress,
-    selectedExternal?.address,
+    signingMode,
     toAsset,
     toChain,
-    walletLoading,
+    scopeLoading,
   ])
 
   useEffect(() => {

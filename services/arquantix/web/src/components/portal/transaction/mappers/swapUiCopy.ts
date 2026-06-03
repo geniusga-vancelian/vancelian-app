@@ -30,6 +30,7 @@ export const SWAP_FLOW_UI = {
   successSubtitle: (payLabel: string, fromAsset: string) => `for ${payLabel} ${fromAsset}`,
   viewWalletCta: (toAsset: string) => `View ${toAsset} wallet`,
   backToWallet: 'Back to wallet',
+  preparingSecureConfirmation: 'Preparing secure confirmation…',
   quoteExpiredLine:
     'Your quote has expired. Go back to the amount step and request a new estimate.',
 } as const

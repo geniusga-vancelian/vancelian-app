@@ -1,35 +1,23 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
 import { PortalSwapUnsupportedNotice } from '@/components/portal/swap/PortalSwapUnsupportedNotice'
 import { PortalSwapAmountStep } from '@/components/portal/swap/PortalSwapAmountStep'
-import { PortalSwapReviewStep } from '@/components/portal/swap/PortalSwapReviewStep'
+import { PortalSwapExecutionController } from '@/components/portal/swap/PortalSwapExecutionController'
 import { PortalSwapFromStep, type SwapFromOption } from '@/components/portal/swap/PortalSwapFromStep'
 import { PortalSwapToStep } from '@/components/portal/swap/PortalSwapToStep'
-import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import { PortalSwapLayout } from '@/components/portal/swap/PortalSwapLayout'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/button'
-import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
-import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
-import {
-  buildSwapProcessingSteps,
-  resolveSwapFailureCopy,
-  SWAP_PROCESSING_COMPLETED_INDEX,
-  swapProcessingStepperIndex,
-  type SwapProcessingContext,
-} from '@/components/portal/transaction/mappers/swapSteps'
-import { SWAP_FLOW_UI, SWAP_RESULT_IMPOSSIBLE_ACTIONS } from '@/components/portal/transaction/mappers/swapUiCopy'
+import type { SwapProcessingContext } from '@/components/portal/transaction/mappers/swapSteps'
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
-import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
-import { buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
 import {
@@ -39,12 +27,11 @@ import {
   type SwapToOption,
 } from '@/lib/portal/swapFlowFormat'
 import {
-  executeSwap,
   fetchSupportedSwapAssets,
   type SwapQuotePayload,
   type SwapSupportedAssetsPayload,
 } from '@/lib/portal/swapClient'
-import type { PortalSwapFlowStep, SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
+import type { PortalSwapFlowStep } from '@/lib/portal/swapFlowTypes'
 import {
   parsePortalSwapUrlIntent,
   pickSwapCatalogListsForChain,
@@ -68,16 +55,6 @@ export function PortalSwapFlow() {
   const [sourceBalance, setSourceBalance] = useState(0)
   const [amount, setAmount] = useState('')
   const [quote, setQuote] = useState<SwapQuotePayload | null>(null)
-
-  const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
-  const [failureCopy, setFailureCopy] = useState(() => resolveSwapFailureCopy(null))
-  const executionStartedRef = useRef(false)
-
-  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
-    Boolean(catalog?.mock_mode),
-    setExecutionPhase,
-    fromAsset,
-  )
 
   const { data: walletData, loading: walletLoading } = usePortalCachedScreen<PortalCryptoWalletHubPayload>({
     cacheKey: 'portal:crypto-wallet',
@@ -142,17 +119,10 @@ export function PortalSwapFlow() {
     void loadCatalog()
   }, [loadCatalog])
 
-  const resetExecution = useCallback(() => {
-    setExecutionPhase('idle')
-    setFailureCopy(resolveSwapFailureCopy(null))
-    executionStartedRef.current = false
-  }, [])
-
   useEffect(() => {
     setAmount('')
     setQuote(null)
-    resetExecution()
-  }, [resetExecution, swapChainKey])
+  }, [swapChainKey])
 
   useEffect(() => {
     if (!activeSwapChain) return
@@ -249,76 +219,10 @@ export function PortalSwapFlow() {
   const onAmountContinue = useCallback((nextAmount: string, nextQuote: SwapQuotePayload) => {
     setAmount(nextAmount)
     setQuote(nextQuote)
-    resetExecution()
     setStep('review')
-  }, [resetExecution])
+  }, [])
 
-  const runExecution = useCallback(async () => {
-    if (!quote) return
-    setExecutionPhase('preparing')
-
-    try {
-      const exec = await executeSwap(quote.swap_id)
-      if (!exec.transaction) {
-        throw new Error('Payload transaction manquant')
-      }
-
-      await signAndSubmit(exec)
-
-      setExecutionPhase('bridging')
-      const status = await pollUntilTerminal(quote.swap_id)
-
-      if (status.status !== 'CONFIRMED') {
-        throw new Error('Swap non confirmé')
-      }
-
-      setExecutionPhase('completed')
-      setStep('result')
-    } catch (e) {
-      setExecutionPhase('failed')
-      setFailureCopy(resolveSwapFailureCopy(e))
-      setStep('result')
-    }
-  }, [pollUntilTerminal, quote, signAndSubmit])
-
-  useEffect(() => {
-    if (step !== 'processing' || !quote || executionStartedRef.current) return
-    executionStartedRef.current = true
-    void runExecution()
-  }, [quote, runExecution, step])
-
-  const onReviewConfirm = useCallback(() => {
-    if (!quote) return
-    resetExecution()
-    executionStartedRef.current = false
-    setStep('processing')
-  }, [quote, resetExecution])
-
-  const onProcessingClose = useCallback(() => {
-    resetExecution()
-    router.push(PORTAL_ROUTES.cryptoWallet)
-  }, [resetExecution, router])
-
-  const onResultSuccess = useCallback(() => {
-    resetExecution()
-    const ticker = toAsset.trim().toUpperCase()
-    const scopeSuffix = buildPortalScopeCacheSuffix(chain, walletScopeId)
-    invalidatePortalCache(`portal:crypto-wallet:${scopeSuffix}`)
-    if (ticker) invalidatePortalCache(`portal:crypto-wallet:${ticker}:${scopeSuffix}`)
-    router.push(
-      ticker ? portalCryptoWalletAssetRoute(ticker) : PORTAL_ROUTES.cryptoWallet,
-    )
-  }, [chain, resetExecution, router, toAsset, walletScopeId])
-
-  const onResultRetry = useCallback(() => {
-    resetExecution()
-    setStep('review')
-  }, [resetExecution])
-
-  const onResultClose = useCallback(() => {
-    resetExecution()
-    router.push(PORTAL_ROUTES.cryptoWallet)
-  }, [resetExecution, router])
+  const isExecutionStep = step === 'review' || step === 'processing' || step === 'result'
 
   if (catalogLoading || (walletLoading && !walletData)) {
     return (
@@ -425,72 +329,18 @@ export function PortalSwapFlow() {
             }
           />
         </PortalSwapLayout>
-      ) : step === 'review' && quote ? (
-        <PortalSwapLayout backLabel="Back to amount" onBackClick={() => setStep('amount')}>
-          <PortalSwapReviewStep
-            fromAsset={fromAsset}
-            toAsset={toAsset}
-            amount={amount}
-            quote={quote}
-            onConfirm={onReviewConfirm}
-            onBack={() => setStep('amount')}
-          />
-        </PortalSwapLayout>
-      ) : step === 'processing' && quote && swapProcessingContext ? (
-        <PortalSwapLayout backLabel={SWAP_FLOW_UI.backToWallet} onBackClick={onProcessingClose}>
-          <TransactionProcessingPage
-            title={SWAP_FLOW_UI.processingTitle}
-            lead={
-              <>
-                {SWAP_FLOW_UI.processingLead(
-                  swapProcessingContext.payLabel,
-                  fromAsset,
-                  toAsset,
-                )}
-              </>
-            }
-            steps={buildSwapProcessingSteps(swapProcessingContext)}
-            progressIndex={swapProcessingStepperIndex(executionPhase)}
-            completedProgressIndex={SWAP_PROCESSING_COMPLETED_INDEX}
-            onClose={onProcessingClose}
-          />
-        </PortalSwapLayout>
-      ) : step === 'result' && quote && swapProcessingContext ? (
-        <PortalSwapLayout backLabel={SWAP_FLOW_UI.backToWallet} onBackClick={onResultClose}>
-          {executionPhase === 'completed' ? (
-            <TransactionResultPage
-              variant="success"
-              layout="compact"
-              title={SWAP_FLOW_UI.successTitle}
-              lead={
-                <>
-                  +<span className="v-tnum">{swapProcessingContext.receiveLabel}</span>
-                </>
-              }
-              subtitle={
-                <>
-                  {SWAP_FLOW_UI.successSubtitle(swapProcessingContext.payLabel, fromAsset)}
-                </>
-              }
-              steps={[]}
-              summary={[]}
-              primaryAction={{
-                label: SWAP_FLOW_UI.viewWalletCta(toAsset),
-                onClick: onResultSuccess,
-              }}
-              onClose={onResultClose}
-            />
-          ) : (
-            <TransactionResultPage
-              variant="impossible"
-              copy={failureCopy}
-              onRetry={onResultRetry}
-              onClose={onResultClose}
-              closeLabel={SWAP_RESULT_IMPOSSIBLE_ACTIONS.close}
-              retryLabel={SWAP_RESULT_IMPOSSIBLE_ACTIONS.retry}
-            />
-          )}
-        </PortalSwapLayout>
+      ) : isExecutionStep && quote && swapProcessingContext ? (
+        <PortalSwapExecutionController
+          step={step}
+          quote={quote}
+          amount={amount}
+          fromAsset={fromAsset}
+          toAsset={toAsset}
+          swapMockMode={Boolean(catalog.mock_mode)}
+          swapProcessingContext={swapProcessingContext}
+          onStepChange={setStep}
+          onResetExecutionState={() => {}}
+        />
       ) : null}
     </PortalExecutionScopeGate>
   )

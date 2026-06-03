@@ -16,6 +16,7 @@ import {
   scanPortalReadOnlyWeb3Imports,
   scanPortalWeb3BoundaryLayoutOffenders,
   scanPortalWeb3BoundaryLazySurfaces,
+  scanPortalSwapSetupExecutionImports,
   scanWalletReadSegmentNoWeb3Boundary,
   scanDeprecatedPortalWalletRouteHelpersImports,
   scanPortalSessionRouteHelpersImports,
@@ -110,6 +111,10 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
   it('PortalWeb3BoundaryLazy autorisé sur surfaces transactionnelles lazy', () => {
     assert.deepEqual(scanPortalWeb3BoundaryLazySurfaces(), [])
     assert.equal(PORTAL_WEB3_BOUNDARY_LAZY_SURFACES.length, 4)
+  })
+
+  it('swap setup — pas de hooks exécution LI.FI / Privy (F3)', () => {
+    assert.deepEqual(scanPortalSwapSetupExecutionImports(), [])
   })
 })
 

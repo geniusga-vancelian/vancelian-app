@@ -72,6 +72,24 @@ export const PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS = [
 /** R4.5-F2 — segments read-only : aucun layout ne doit importer PortalWeb3Boundary. */
 export const PORTAL_WALLET_READ_SEGMENT_LAYOUT_SCAN_DIR = 'src/app/app/(shell)/wallet/(read)' as const
 
+/**
+ * Swap setup (to / from / amount) — BFF-only ; exécution LI.FI via PortalSwapExecutionController (R4.5-F3).
+ */
+export const PORTAL_SWAP_SETUP_GUARD_PATHS = [
+  'src/components/portal/swap/PortalSwapFlow.tsx',
+  'src/components/portal/swap/PortalSwapAmountStep.tsx',
+  'src/components/portal/swap/PortalSwapFromStep.tsx',
+  'src/components/portal/swap/PortalSwapToStep.tsx',
+] as const
+
+/** Hooks d’exécution swap interdits pendant le setup (montés dans PortalSwapExecutionController). */
+export const PORTAL_SWAP_SETUP_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  { rule: 'swap-setup-no-lifi-execution', pattern: /\buseLifiSwapExecution\b/ },
+  { rule: 'swap-setup-no-execution-wallet', pattern: /\buseExecutionWallet\b/ },
+  { rule: 'swap-setup-no-portal-tx-signer', pattern: /\busePortalTxSigner\b/ },
+  { rule: 'swap-setup-no-privy-live-session', pattern: /\busePrivyLiveSession\b/ },
+]
+
 /** Chemins où une boundary Web3 (eager ou lazy) ou Privy auth est légitime. */
 export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
   'src/app/app/login/layout.tsx',
@@ -536,6 +554,29 @@ export function scanPortalReadOnlyWeb3Imports(webRoot?: string): PortalPerforman
   return scanReadOnlyPaths(resolveWebRoot(webRoot), PORTAL_READ_ONLY_GUARD_PATHS, 'readonly')
 }
 
+/** Swap setup — pas de hooks LI.FI / signer / Privy live (R4.5-F3). */
+export function scanPortalSwapSetupExecutionImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const relativePath of PORTAL_SWAP_SETUP_GUARD_PATHS) {
+    const source = readRelativeFile(root, relativePath)
+    for (const { rule, pattern } of PORTAL_SWAP_SETUP_FORBIDDEN_IMPORTS) {
+      if (pattern.test(source)) {
+        violations.push({
+          rule,
+          file: relativePath,
+          detail: 'Swap setup must stay API/BFF-only; use PortalSwapExecutionController for review+',
+        })
+      }
+    }
+  }
+
+  return violations
+}
+
 /** @deprecated alias — préférer scanPortalReadOnlyWeb3Imports */
 export function scanMarketsReadOnlyBundleDialogImports(
   webRoot?: string,
@@ -591,6 +632,7 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanPortalReadOnlyWeb3Imports(webRoot),
     ...scanPortalWeb3BoundaryLayoutOffenders(webRoot),
     ...scanWalletReadSegmentNoWeb3Boundary(webRoot),
+    ...scanPortalSwapSetupExecutionImports(webRoot),
     ...scanPortalWeb3BoundaryLazySurfaces(webRoot),
     ...scanPortalSessionRouteHelpersImports(webRoot),
     ...scanDeprecatedPortalWalletRouteHelpersImports(webRoot),
