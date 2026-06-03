@@ -48,14 +48,19 @@ export const PORTAL_READ_ONLY_GUARD_PATHS = [
  * Dettes read-only connues — ne pas ajouter d’entrées sans ticket F2–F6.
  * Le guard ignore ces violations jusqu’à retrait de l’exception.
  */
-export const PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS = [
-  {
-    file: 'src/components/portal/wallet/PortalCryptoWalletBundleDetailScreen.tsx',
-    rule: 'readonly-no-static-bundle-allocation-panel',
-    reason: 'PortalBundleAllocationPanel monte useBundleLifiInvest sur détail wallet read-only',
-    removeBy: 'R4.5-F5',
-  },
+/** Dettes read-only temporaires — vide post F5-B ; ne pas ajouter sans ticket. */
+export const PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS = [] as const
+
+/** Wallet bundle detail — read-only pur (R4.5-F5-B). */
+export const PORTAL_WALLET_BUNDLE_DETAIL_GUARD_PATHS = [
+  'src/components/portal/wallet/PortalCryptoWalletBundleDetailScreen.tsx',
 ] as const
+
+export const PORTAL_WALLET_BUNDLE_DETAIL_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  { rule: 'wallet-bundle-no-lifi-invest', pattern: /\buseBundleLifiInvest\b/ },
+  { rule: 'wallet-bundle-no-lifi-rebalance', pattern: /\buseBundleLifiRebalance\b/ },
+  { rule: 'wallet-bundle-no-allocation-actions-panel', pattern: /\bPortalBundleAllocationActionsPanel\b/ },
+]
 
 /**
  * Layouts montant PortalWeb3Boundary (eager) — liste figée ; échec CI si un layout hors liste apparaît.
@@ -132,6 +137,8 @@ export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
   'src/components/portal/bundles/PortalLazyBundleInvestDialog.tsx',
   'src/components/portal/bundles/PortalBundleExecutionController.tsx',
   'src/components/portal/bundles/PortalLazyBundleWithdrawShell.tsx',
+  'src/components/portal/bundles/PortalBundleAllocationActionsPanel.tsx',
+  'src/components/portal/bundles/PortalLazyBundleAllocationActions.tsx',
   'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
   'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
   'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
@@ -144,6 +151,7 @@ export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
 export const PORTAL_WEB3_BOUNDARY_LAZY_SURFACES = [
   'src/components/portal/bundles/PortalBundleExecutionController.tsx',
   'src/components/portal/bundles/PortalLazyBundleWithdrawShell.tsx',
+  'src/components/portal/bundles/PortalLazyBundleAllocationActions.tsx',
   'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
   'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
   'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
@@ -631,6 +639,29 @@ export function scanPortalBundleInvestSetupExecutionImports(
   return violations
 }
 
+/** Wallet bundle detail — pas de hooks LI.FI / panel actions statique (R4.5-F5-B). */
+export function scanPortalWalletBundleDetailReadOnlyImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const relativePath of PORTAL_WALLET_BUNDLE_DETAIL_GUARD_PATHS) {
+    const source = readRelativeFile(root, relativePath)
+    for (const { rule, pattern } of PORTAL_WALLET_BUNDLE_DETAIL_FORBIDDEN_IMPORTS) {
+      if (pattern.test(source)) {
+        violations.push({
+          rule,
+          file: relativePath,
+          detail: 'Wallet bundle detail must use PortalBundleAllocationReadOnlyPanel only',
+        })
+      }
+    }
+  }
+
+  return violations
+}
+
 /** invest/bundle — pas de layout Web3 eager (R4.5-F5-A). */
 export function scanPortalBundleInvestPageNoEagerWeb3(webRoot?: string): PortalPerformanceViolation[] {
   const root = resolveWebRoot(webRoot)
@@ -744,6 +775,7 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanPortalVaultSetupExecutionImports(webRoot),
     ...scanPortalBundleInvestSetupExecutionImports(webRoot),
     ...scanPortalBundleInvestPageNoEagerWeb3(webRoot),
+    ...scanPortalWalletBundleDetailReadOnlyImports(webRoot),
     ...scanPortalWeb3BoundaryLazySurfaces(webRoot),
     ...scanPortalSessionRouteHelpersImports(webRoot),
     ...scanDeprecatedPortalWalletRouteHelpersImports(webRoot),

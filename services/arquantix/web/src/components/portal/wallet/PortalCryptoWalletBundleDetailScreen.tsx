@@ -17,7 +17,7 @@ import { AppMetricsList } from '@/components/design-system/app/AppMetricsList'
 import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
-import { PortalBundleAllocationPanel } from '@/components/portal/bundles/PortalBundleAllocationPanel'
+import { PortalBundleAllocationReadOnlyPanel } from '@/components/portal/bundles/PortalBundleAllocationReadOnlyPanel'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
@@ -281,7 +281,7 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
         ) : null}
 
         <PortalReveal index={3}>
-          <PortalBundleAllocationPanel
+          <PortalBundleAllocationReadOnlyPanel
             portfolioId={id}
             portfolioName={bundle.portfolioName}
             positions={bundle.positions}

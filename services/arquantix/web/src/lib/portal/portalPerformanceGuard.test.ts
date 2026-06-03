@@ -19,6 +19,7 @@ import {
   scanPortalSwapSetupExecutionImports,
   scanPortalBundleInvestPageNoEagerWeb3,
   scanPortalBundleInvestSetupExecutionImports,
+  scanPortalWalletBundleDetailReadOnlyImports,
   scanPortalVaultSetupExecutionImports,
   scanWalletReadSegmentNoWeb3Boundary,
   scanDeprecatedPortalWalletRouteHelpersImports,
@@ -105,17 +106,13 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
     assert.deepEqual(scanPortalReadOnlyWeb3Imports(), [])
   })
 
-  it('exception temporaire bundle detail documentée', () => {
-    assert.equal(PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS.length, 1)
-    assert.equal(
-      PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS[0]!.file,
-      'src/components/portal/wallet/PortalCryptoWalletBundleDetailScreen.tsx',
-    )
+  it('aucune exception read-only temporaire (F5-B)', () => {
+    assert.equal(PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS.length, 0)
   })
 
   it('PortalWeb3BoundaryLazy autorisé sur surfaces transactionnelles lazy', () => {
     assert.deepEqual(scanPortalWeb3BoundaryLazySurfaces(), [])
-    assert.equal(PORTAL_WEB3_BOUNDARY_LAZY_SURFACES.length, 5)
+    assert.equal(PORTAL_WEB3_BOUNDARY_LAZY_SURFACES.length, 6)
   })
 
   it('swap setup — pas de hooks exécution LI.FI / Privy (F3)', () => {
@@ -132,6 +129,10 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
 
   it('bundle invest setup — pas de hooks LI.FI au mount (F5-A)', () => {
     assert.deepEqual(scanPortalBundleInvestSetupExecutionImports(), [])
+  })
+
+  it('wallet bundle detail — read-only sans LI.FI (F5-B)', () => {
+    assert.deepEqual(scanPortalWalletBundleDetailReadOnlyImports(), [])
   })
 })
 
