@@ -8,20 +8,12 @@ import {
   PortalInvestChip,
   PortalInvestSelector,
 } from '@/components/portal/invest/PortalInvestFlowParts'
-import { PortalVaultReviewStep } from '@/components/portal/invest/PortalVaultReviewStep'
-import { KalaiIcon } from '@/components/ui/KalaiIcon'
-import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
-import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
-import { TransactionTechnicalDetails } from '@/components/portal/transaction/TransactionTechnicalDetails'
 import {
-  buildVaultProcessingSteps,
-  buildVaultTechnicalDetailRows,
-  resolveVaultFailureCopy,
-  vaultProcessingStepperIndex,
-  vaultSuccessCopy,
-  VAULT_PROCESSING_COMPLETED_INDEX,
-} from '@/components/portal/transaction/mappers/vaultSteps'
-import { VAULT_FLOW_UI, VAULT_RESULT_IMPOSSIBLE_ACTIONS } from '@/components/portal/transaction/mappers/vaultUiCopy'
+  PortalVaultExecutionController,
+  type PortalVaultExecutionScene,
+} from '@/components/portal/invest/PortalVaultExecutionController'
+import { KalaiIcon } from '@/components/ui/KalaiIcon'
+import { VAULT_FLOW_UI } from '@/components/portal/transaction/mappers/vaultUiCopy'
 import { fetchPortalLedgityPosition } from '@/lib/portal/ledgity/ledgityVaultClient'
 import type {
   PortalLedgityBetaPortalFlags,
@@ -46,19 +38,9 @@ import {
   type PortalInvestSource,
   type PortalInvestTarget,
 } from '@/lib/portal/portalInvestFlowFormat'
-import {
-  usePortalLedgityVaultExecution,
-} from '@/lib/portal/usePortalLedgityVaultExecution'
-import {
-  usePortalMorphoVaultExecution,
-} from '@/lib/portal/usePortalMorphoVaultExecution'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
-import type {
-  PortalVaultExecutionPhase,
-  PortalVaultFlowScene,
-  PortalVaultOperation,
-} from '@/lib/portal/vaultFlowTypes'
+import type { PortalVaultFlowScene, PortalVaultOperation } from '@/lib/portal/vaultFlowTypes'
 
 type InvestMode = 'invest' | 'withdraw'
 
@@ -83,13 +65,6 @@ const LEDGITY_DISCLAIMER =
 
 function isLedgityVault(vault: DefiVault): vault is PortalLedgityVaultDetails {
   return vault.integrationMode === 'ledgity_vault'
-}
-
-function createIdempotencyKey(prefix: 'morpho' | 'ledgity'): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 function DefiInvestGain({
@@ -139,21 +114,13 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const [position, setPosition] = useState<VaultPosition | null>(null)
   const [positionLoading, setPositionLoading] = useState(false)
   const [flowScene, setFlowScene] = useState<PortalVaultFlowScene>('setup')
-  const [executionPhase, setExecutionPhase] = useState<PortalVaultExecutionPhase>('idle')
-  const [failureCopy, setFailureCopy] = useState(() => resolveVaultFailureCopy(null))
   const [setupError, setSetupError] = useState<string | null>(null)
-  const [txHash, setTxHash] = useState<string | null>(null)
-  const [resultAmount, setResultAmount] = useState(0)
   const [pulseKey, setPulseKey] = useState(0)
   const [scene, setScene] = useState<'form' | 'selector'>('form')
   const [popSource, setPopSource] = useState(0)
-  const idempotencyKeyRef = useRef<string | null>(null)
-  const executionStartedRef = useRef(false)
   const positionRef = useRef<VaultPosition | null>(null)
   positionRef.current = position
 
-  const { execute: executeMorpho } = usePortalMorphoVaultExecution()
-  const { execute: executeLedgity } = usePortalLedgityVaultExecution()
   const { executionAddress: walletAddress } = usePortalExecutionScope()
 
   const { data: walletData } = usePortalCachedScreen<PortalCryptoWalletHubPayload>({
@@ -234,12 +201,7 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   useEffect(() => {
     setAmount('')
     setSetupError(null)
-    setTxHash(null)
     setFlowScene('setup')
-    setExecutionPhase('idle')
-    setFailureCopy(resolveVaultFailureCopy(null))
-    executionStartedRef.current = false
-    idempotencyKeyRef.current = null
   }, [mode])
 
   const vaultBalance = useMemo(() => {
@@ -310,61 +272,14 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
     ],
   )
 
-  const resetExecution = useCallback(() => {
-    setExecutionPhase('idle')
-    setFailureCopy(resolveVaultFailureCopy(null))
-    executionStartedRef.current = false
-  }, [])
-
   const normalizedAmount = useMemo(() => amount.trim().replace(',', '.'), [amount])
 
-  const runExecution = useCallback(async () => {
-    if (!walletAddress || !normalizedAmount || Number(normalizedAmount) <= 0) return
-
-    if (!idempotencyKeyRef.current) {
-      idempotencyKeyRef.current = createIdempotencyKey(isLedgity ? 'ledgity' : 'morpho')
+  const onExecutionSuccess = useCallback(async () => {
+    setAmount('')
+    if (walletAddress) {
+      await loadPosition(walletAddress, { background: true })
     }
-
-    setExecutionPhase('preparing')
-    try {
-      const execute = isLedgity ? executeLedgity : executeMorpho
-      const hash = await execute({
-        vaultAddress: vault.vaultAddress,
-        operation,
-        amount: normalizedAmount,
-        idempotencyKey: idempotencyKeyRef.current,
-        onPhaseChange: setExecutionPhase,
-      })
-      setResultAmount(numeric)
-      setTxHash(typeof hash === 'string' ? hash : null)
-      setExecutionPhase('confirmed')
-      setFlowScene('result')
-      setAmount('')
-      idempotencyKeyRef.current = null
-      if (walletAddress) {
-        await loadPosition(walletAddress, { background: true })
-      }
-    } catch (e) {
-      setExecutionPhase('failed')
-      setFailureCopy(resolveVaultFailureCopy(e))
-      setFlowScene('result')
-    }
-  }, [
-    executeLedgity,
-    executeMorpho,
-    isLedgity,
-    loadPosition,
-    normalizedAmount,
-    operation,
-    vault.vaultAddress,
-    walletAddress,
-  ])
-
-  useEffect(() => {
-    if (flowScene !== 'processing' || executionStartedRef.current) return
-    executionStartedRef.current = true
-    void runExecution()
-  }, [flowScene, runExecution])
+  }, [loadPosition, walletAddress])
 
   const setAmt = (value: number) => {
     const rounded = Math.round(value * 100) / 100
@@ -389,29 +304,7 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
       setSetupError('Saisissez un montant valide.')
       return
     }
-    resetExecution()
     setFlowScene('review')
-  }
-
-  const onReviewConfirm = () => {
-    resetExecution()
-    executionStartedRef.current = false
-    setFlowScene('processing')
-  }
-
-  const onBackToSetup = () => {
-    resetExecution()
-    setFlowScene('setup')
-  }
-
-  const onResultRetry = () => {
-    resetExecution()
-    setFlowScene('review')
-  }
-
-  const onResultClose = () => {
-    resetExecution()
-    onClose()
   }
 
   useEffect(() => {
@@ -437,78 +330,9 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
     closeSelector()
   }
 
-  const resultTechRows = useMemo(
-    () =>
-      buildVaultTechnicalDetailRows({
-        vaultAddress: vault.vaultAddress,
-        providerLabel: vault.provider,
-        integrationLabel: isLedgity ? 'Ledgity vault' : 'Direct vault',
-        sourceAsset: source.techSource,
-        receivedAsset: target.tech,
-        disclaimer,
-        txHash,
-      }),
-    [disclaimer, isLedgity, source.techSource, target.tech, txHash, vault.provider, vault.vaultAddress],
-  )
+  const isExecutionScene = flowScene !== 'setup'
 
-  const successCopy = vaultSuccessCopy(operation)
-
-  const formPane =
-    flowScene === 'review' ? (
-      <PortalVaultReviewStep
-        context={reviewContext}
-        onConfirm={onReviewConfirm}
-        onBack={onBackToSetup}
-      />
-    ) : flowScene === 'processing' ? (
-      <TransactionProcessingPage
-        title={VAULT_FLOW_UI.processingTitle}
-        lead={
-          operation === 'deposit'
-            ? VAULT_FLOW_UI.processingLeadDeposit(processingContext.amountLabel, processingContext.vaultLabel)
-            : VAULT_FLOW_UI.processingLeadWithdraw(processingContext.amountLabel, processingContext.vaultLabel)
-        }
-        steps={buildVaultProcessingSteps(operation, processingContext)}
-        progressIndex={vaultProcessingStepperIndex(executionPhase)}
-        completedProgressIndex={VAULT_PROCESSING_COMPLETED_INDEX}
-        onClose={onResultClose}
-      />
-    ) : flowScene === 'result' ? (
-      <>
-        {executionPhase === 'confirmed' ? (
-          <TransactionResultPage
-            variant="success"
-            layout="compact"
-            title={successCopy.title}
-            lead={
-              <>
-                {invFmtAmount(resultAmount, resultAmount % 1 === 0 ? 0 : 2)} {vaultAssetSymbol}
-              </>
-            }
-            subtitle={successCopy.subtitle}
-            steps={[]}
-            summary={[]}
-            primaryAction={{
-              label: 'Fermer',
-              onClick: onResultClose,
-            }}
-            onClose={onResultClose}
-          />
-        ) : (
-          <TransactionResultPage
-            variant="impossible"
-            copy={failureCopy}
-            onRetry={onResultRetry}
-            onClose={onResultClose}
-            closeLabel={VAULT_RESULT_IMPOSSIBLE_ACTIONS.close}
-            retryLabel={VAULT_RESULT_IMPOSSIBLE_ACTIONS.retry}
-          />
-        )}
-        {executionPhase === 'confirmed' ? (
-          <TransactionTechnicalDetails rows={resultTechRows} />
-        ) : null}
-      </>
-    ) : (
+  const setupPane = (
       <div className="inv-pane">
         <header className="inv-head">
           <h2 className="inv-head__title">{isInvest ? 'Invest' : 'Withdraw'}</h2>
@@ -658,13 +482,38 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
           {VAULT_FLOW_UI.continueCta}
         </button>
       </div>
-    )
+  )
 
   return (
     <PortalExecutionScopeGate requirement="defi">
       <PortalInvestFlowDom
         scene={scene}
-        form={formPane}
+        form={
+          isExecutionScene && walletAddress ? (
+            <PortalVaultExecutionController
+              flowScene={flowScene as PortalVaultExecutionScene}
+              onFlowSceneChange={setFlowScene}
+              presentation="invest"
+              isLedgity={isLedgity}
+              integrationMode={integrationMode}
+              vaultAddress={vault.vaultAddress}
+              provider={vault.provider}
+              operation={operation}
+              normalizedAmount={normalizedAmount}
+              numeric={numeric}
+              walletAddress={walletAddress}
+              reviewContext={reviewContext}
+              processingContext={processingContext}
+              disclaimer={disclaimer}
+              source={source}
+              target={target}
+              onClose={onClose}
+              onExecutionSuccess={onExecutionSuccess}
+            />
+          ) : (
+            setupPane
+          )
+        }
         selector={
           scene === 'selector' ? (
             <PortalInvestSelector

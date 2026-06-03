@@ -65,7 +65,6 @@ export const PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS = [
   'src/app/app/(shell)/wallet/(tx)/layout.tsx',
   'src/app/app/(shell)/wallets/layout.tsx',
   'src/app/app/(shell)/borrow/layout.tsx',
-  'src/app/app/(shell)/invest/vault/layout.tsx',
   'src/app/app/(shell)/invest/bundle/layout.tsx',
 ] as const
 
@@ -90,6 +89,19 @@ export const PORTAL_SWAP_SETUP_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
   { rule: 'swap-setup-no-privy-live-session', pattern: /\busePrivyLiveSession\b/ },
 ]
 
+/**
+ * Vault setup (amount / continue) — BFF-only ; exécution via PortalVaultExecutionController (R4.5-F4).
+ */
+export const PORTAL_VAULT_SETUP_GUARD_PATHS = [
+  'src/components/portal/invest/PortalDefiVaultInvestFlow.tsx',
+  'src/components/portal/wallet/PortalSavingsVaultOperationPanel.tsx',
+] as const
+
+export const PORTAL_VAULT_SETUP_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  { rule: 'vault-setup-no-morpho-execution', pattern: /\busePortalMorphoVaultExecution\b/ },
+  { rule: 'vault-setup-no-ledgity-execution', pattern: /\busePortalLedgityVaultExecution\b/ },
+]
+
 /** Chemins où une boundary Web3 (eager ou lazy) ou Privy auth est légitime. */
 export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
   'src/app/app/login/layout.tsx',
@@ -106,6 +118,7 @@ export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
   'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
   'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
   'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
+  'src/components/portal/invest/PortalVaultExecutionController.tsx',
   'src/app/dev/wallet-sandbox/page.tsx',
   ...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS,
 ] as const
@@ -577,6 +590,29 @@ export function scanPortalSwapSetupExecutionImports(
   return violations
 }
 
+/** Vault setup — pas de hooks Morpho/Ledgity execution (R4.5-F4). */
+export function scanPortalVaultSetupExecutionImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const relativePath of PORTAL_VAULT_SETUP_GUARD_PATHS) {
+    const source = readRelativeFile(root, relativePath)
+    for (const { rule, pattern } of PORTAL_VAULT_SETUP_FORBIDDEN_IMPORTS) {
+      if (pattern.test(source)) {
+        violations.push({
+          rule,
+          file: relativePath,
+          detail: 'Vault setup must stay API/BFF-only; use PortalVaultExecutionController for review+',
+        })
+      }
+    }
+  }
+
+  return violations
+}
+
 /** @deprecated alias — préférer scanPortalReadOnlyWeb3Imports */
 export function scanMarketsReadOnlyBundleDialogImports(
   webRoot?: string,
@@ -633,6 +669,7 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanPortalWeb3BoundaryLayoutOffenders(webRoot),
     ...scanWalletReadSegmentNoWeb3Boundary(webRoot),
     ...scanPortalSwapSetupExecutionImports(webRoot),
+    ...scanPortalVaultSetupExecutionImports(webRoot),
     ...scanPortalWeb3BoundaryLazySurfaces(webRoot),
     ...scanPortalSessionRouteHelpersImports(webRoot),
     ...scanDeprecatedPortalWalletRouteHelpersImports(webRoot),

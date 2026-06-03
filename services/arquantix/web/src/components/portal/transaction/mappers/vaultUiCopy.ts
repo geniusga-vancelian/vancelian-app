@@ -33,6 +33,7 @@ export const VAULT_FLOW_UI = {
   successWithdrawTitle: 'Retrait effectué',
   successWithdrawSubtitle: 'Vos fonds sont disponibles.',
   continueCta: 'Voir le récapitulatif',
+  preparingSecureConfirmation: 'Preparing secure confirmation…',
 } as const
 
 export const VAULT_RESULT_IMPOSSIBLE_ACTIONS = {

@@ -17,6 +17,7 @@ import {
   scanPortalWeb3BoundaryLayoutOffenders,
   scanPortalWeb3BoundaryLazySurfaces,
   scanPortalSwapSetupExecutionImports,
+  scanPortalVaultSetupExecutionImports,
   scanWalletReadSegmentNoWeb3Boundary,
   scanDeprecatedPortalWalletRouteHelpersImports,
   scanPortalSessionRouteHelpersImports,
@@ -76,12 +77,13 @@ describe('portalPerformanceGuard — détection synthétique', () => {
 })
 
 describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
-  it('known offender layouts — liste figée (5, wallet/(tx) only for wallet)', () => {
+  it('known offender layouts — liste figée (4, vault layout retiré F4)', () => {
     const found = listPortalWeb3BoundaryEagerLayoutOffenders()
     assert.deepEqual(found, [...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS].sort())
     assert.deepEqual(scanPortalWeb3BoundaryLayoutOffenders(), [])
     assert.equal(found.includes('src/app/app/(shell)/wallet/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/wallet/(tx)/layout.tsx'), true)
+    assert.equal(found.includes('src/app/app/(shell)/invest/vault/layout.tsx'), false)
   })
 
   it('wallet/(read) segment — aucun layout Web3 (F2)', () => {
@@ -115,6 +117,10 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
 
   it('swap setup — pas de hooks exécution LI.FI / Privy (F3)', () => {
     assert.deepEqual(scanPortalSwapSetupExecutionImports(), [])
+  })
+
+  it('vault setup — pas de hooks Morpho/Ledgity execution (F4)', () => {
+    assert.deepEqual(scanPortalVaultSetupExecutionImports(), [])
   })
 })
 
