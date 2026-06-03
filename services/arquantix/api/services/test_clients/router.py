@@ -1937,6 +1937,54 @@ def mobile_bundle_invest_active_lock(
     }
 
 
+@bootstrap_router.get("/bundle/reconciliation-state")
+def mobile_bundle_reconciliation_state(
+    portfolio_id: str,
+    batch_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """État read-only d'un batch invest partiel (R4.5-E.2-A) — aucune mutation."""
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundles.bundle_reconciliation_read_model import (
+        BundleReconciliationNotFoundError,
+        build_bundle_reconciliation_state,
+    )
+
+    try:
+        pid = _UUID(str(portfolio_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="invalid portfolio_id",
+        )
+    batch = str(batch_id or "").strip()
+    if not batch:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="batch_id_required",
+        )
+
+    try:
+        return build_bundle_reconciliation_state(
+            db,
+            client_id=client.id,
+            portfolio_id=pid,
+            batch_id=batch,
+        )
+    except BundleReconciliationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
 @bootstrap_router.post("/bundle/invest")
 def mobile_bundle_invest(
     payload: dict,
