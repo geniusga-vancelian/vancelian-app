@@ -52,6 +52,16 @@ export const BUNDLE_TERMINAL_RECONCILIATION: TransactionTerminalFailureCopy = {
   ],
 }
 
+/** R4.5-E.2-B — allocation partielle terminée dans la même session (pas recovery client). */
+export const BUNDLE_TERMINAL_PARTIAL_ALLOCATION: TransactionTerminalFailureCopy = {
+  title: 'Investissement partiellement réalisé',
+  lines: [
+    'Une partie de votre allocation a été réalisée. Le solde non investi reste disponible dans votre portefeuille.',
+  ],
+}
+
+export const BUNDLE_BACKEND_LOCK_PENDING_LABEL = 'Verrou investissement encore actif côté serveur'
+
 export const BUNDLE_RESULT_ACTIONS = {
   close: 'Fermer',
   retry: 'Réessayer',
@@ -83,6 +93,8 @@ export function collectBundleResultPrimaryStrings(): string[] {
     BUNDLE_TERMINAL_IMPOSSIBLE.lines[0]!,
     BUNDLE_TERMINAL_RECONCILIATION.title,
     BUNDLE_TERMINAL_RECONCILIATION.lines[0]!,
+    BUNDLE_TERMINAL_PARTIAL_ALLOCATION.title,
+    BUNDLE_TERMINAL_PARTIAL_ALLOCATION.lines[0]!,
   ]
 }
 

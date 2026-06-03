@@ -3,6 +3,7 @@ import type { BundleFinalizePayload, BundleInvestPayload } from '@/lib/portal/bu
 import type { BundleInvestSession } from '@/lib/portal/bundleInvestSession'
 import { pendingBundleLegs } from '@/lib/portal/bundleClient'
 import type { PortalBundleInvestResultVariant } from '@/lib/portal/bundleFlowTypes'
+import { BundleLegSkippableError } from '@/lib/portal/bundleInvestOrchestration'
 import { fetchSwapStatus, type SwapStatusPayload } from '@/lib/portal/swapClient'
 
 export const BUNDLE_LEG_TERMINAL_STATUSES = new Set(['CONFIRMED', 'FAILED', 'EXPIRED'])
@@ -127,10 +128,6 @@ export function buildBundleInvestTechnicalDetails(params: {
   return rows
 }
 
-function terminalVariantAfterLegFailure(invest?: BundleInvestPayload): PortalBundleInvestResultVariant {
-  return detectPartialBundleSuccess(invest) ? 'reconciliation_required' : 'impossible'
-}
-
 function swapStatusFailureMessage(status: SwapStatusPayload): string {
   if (status.status === 'EXPIRED') return 'Quote expirée.'
   return status.error_message ?? 'Exécution impossible'
@@ -145,16 +142,7 @@ export async function pollBundleLegUntilTerminal(
     const status = await fetchSwapStatus(swapId)
     if (BUNDLE_LEG_TERMINAL_STATUSES.has(status.status)) {
       if (status.status === 'CONFIRMED') return status
-      throw new BundleInvestTerminalError({
-        variant: terminalVariantAfterLegFailure(context?.invest),
-        message: swapStatusFailureMessage(status),
-        technicalDetails: buildBundleInvestTechnicalDetails({
-          batchId: context?.invest?.batch_id,
-          failedAsset: context?.asset,
-          legStatus: status.status,
-          lockStatus: context?.lockStatus,
-        }),
-      })
+      throw new BundleLegSkippableError('swap_failed', status.status)
     }
     await sleep(POLL_INTERVAL_MS)
   }
@@ -162,37 +150,10 @@ export async function pollBundleLegUntilTerminal(
   const last = await fetchSwapStatus(swapId)
   if (last.status === 'CONFIRMED') return last
   if (BUNDLE_LEG_TERMINAL_STATUSES.has(last.status)) {
-    throw new BundleInvestTerminalError({
-      variant: terminalVariantAfterLegFailure(context?.invest),
-      message: swapStatusFailureMessage(last),
-      technicalDetails: buildBundleInvestTechnicalDetails({
-        batchId: context?.invest?.batch_id,
-        failedAsset: context?.asset,
-        legStatus: last.status,
-        lockStatus: context?.lockStatus,
-      }),
-    })
+    throw new BundleLegSkippableError('swap_failed', last.status)
   }
 
-  const variant = detectPartialBundleSuccess(context?.invest, undefined, {
-    lockStatus: context?.lockStatus,
-  })
-    ? 'reconciliation_required'
-    : 'impossible'
-
-  throw new BundleInvestTerminalError({
-    variant,
-    message:
-      variant === 'reconciliation_required'
-        ? 'Allocation partielle — finalisation en cours côté plateforme.'
-        : 'Délai dépassé sans modification du portefeuille.',
-    technicalDetails: buildBundleInvestTechnicalDetails({
-      batchId: context?.invest?.batch_id,
-      failedAsset: context?.asset,
-      legStatus: last.status,
-      lockStatus: context?.lockStatus,
-    }),
-  })
+  throw new BundleLegSkippableError('timeout', last.status)
 }
 
 export function shouldTerminalizeStalePartial(

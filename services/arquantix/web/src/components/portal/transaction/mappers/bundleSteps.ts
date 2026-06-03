@@ -5,6 +5,10 @@ import type { BundleFinalizePayload, BundleInvestPayload } from '@/lib/portal/bu
 import type { BundleInvestSession } from '@/lib/portal/bundleInvestSession'
 import type { PortalBundleInvestResultVariant } from '@/lib/portal/bundleFlowTypes'
 import {
+  mapTerminalStatusToResultVariant,
+  type BundleInvestTerminalStatus,
+} from '@/lib/portal/bundleInvestOrchestration'
+import {
   detectPartialBundleSuccess,
   hasNoBundleInvestProgress,
   shouldAutoResumeBundleInvest as shouldAutoResumeBundleInvestTerminal,
@@ -140,11 +144,18 @@ export function resolveBundleFailureCopy(error: unknown): TransactionTerminalFai
   }
 }
 
-/** Détection partielle à partir des payloads existants — pas de nouvelle logique backend. */
+/**
+ * Variante UI résultat invest.
+ * Si `terminalStatus` est fourni (orchestration E.2-B), il prime sur la détection legacy.
+ */
 export function resolveBundleInvestResultVariant(
   invest?: BundleInvestPayload,
   finalize?: BundleFinalizePayload,
+  terminalStatus?: BundleInvestTerminalStatus,
 ): PortalBundleInvestResultVariant {
+  if (terminalStatus) {
+    return mapTerminalStatusToResultVariant(terminalStatus)
+  }
   if (!invest) return 'impossible'
   if (hasNoBundleInvestProgress(invest) && !detectPartialBundleSuccess(invest, finalize)) {
     return 'impossible'
