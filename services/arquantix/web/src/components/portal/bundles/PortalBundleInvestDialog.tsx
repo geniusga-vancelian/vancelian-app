@@ -234,7 +234,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
   }
 
   const setupDisabled =
-    !portfolioReady || previewLoading || flowScene === 'blocked' || flowScene === 'processing'
+    !portfolioReady || previewLoading || flowScene === 'blocked'
 
   if (asPage && !open) return null
 
@@ -322,7 +322,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
                 setFundingAsset(e.target.value)
                 setPreview(null)
               }}
-              disabled={!portfolioReady || flowScene === 'processing'}
+              disabled={!portfolioReady}
             >
               {entryOptions.map((asset) => (
                 <option key={asset} value={asset}>
@@ -381,7 +381,6 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
               type="button"
               variant="outline"
               onClick={() => handleOpenChange(false)}
-              disabled={flowScene === 'processing'}
             >
               Annuler
             </Button>
