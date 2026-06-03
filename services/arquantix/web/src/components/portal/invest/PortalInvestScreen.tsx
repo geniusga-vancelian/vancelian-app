@@ -17,12 +17,13 @@ import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
 import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import { isPortalChainDeFiEnabled } from '@/lib/portal/portalChainFilter'
+import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { fetchPortalLedgityVaults } from '@/lib/portal/ledgity/ledgityVaultClient'
 import { cn } from '@/lib/utils'
 
-const INVEST_CACHE_KEY = 'portal:invest:v3'
-const MARKETS_CACHE_KEY = 'portal:invest-markets:v1'
+const INVEST_CACHE_KEY = PORTAL_CACHE_KEYS.invest
+const MARKETS_CACHE_KEY = PORTAL_CACHE_KEYS.investMarkets
 
 export function PortalInvestScreen() {
   const { chain } = usePortalChainContext()

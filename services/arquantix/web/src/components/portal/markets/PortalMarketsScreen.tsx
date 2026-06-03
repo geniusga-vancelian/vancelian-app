@@ -13,11 +13,12 @@ import { PortalTopCryptoSection, type TopCryptoTabId } from '@/components/portal
 import { applyQuoteUpdates } from '@/lib/portal/marketsFormat'
 import { Container } from '@/components/ui/Container'
 import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
+import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { useMarketDataQuotesWs } from '@/lib/portal/useMarketDataQuotesWs'
 import { cn } from '@/lib/utils'
 
-const MARKETS_CACHE_KEY = 'portal:markets:v3'
+const MARKETS_CACHE_KEY = PORTAL_CACHE_KEYS.markets
 
 function symbolsForTab(
   tab: TopCryptoTabId,

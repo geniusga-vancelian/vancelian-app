@@ -1,4 +1,5 @@
 import { normalizeNavPath } from '@/components/site/NavPendingContext'
+import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
 import { readPortalDashboardPayloadFromCache } from '@/lib/portal/dashboardCache'
 import { readPortalCache } from '@/lib/portal/portalClientCache'
 import type { PortalDashboardPayload } from '@/lib/portal/dashboardTypes'
@@ -23,22 +24,24 @@ export function readPortalRouteCachedPayload(route: string): PortalRouteCachedPa
   }
 
   if (normalized === PORTAL_ROUTES.markets) {
-    const data = readPortalCache<PortalMarketsPayload>('portal:markets:v2')
+    const data = readPortalCache<PortalMarketsPayload>(PORTAL_CACHE_KEYS.markets)
     return data ? { kind: 'markets', data } : null
   }
 
   if (normalized === PORTAL_ROUTES.invest) {
-    const data = readPortalCache<PortalInvestPayload>('portal:invest:v2')
+    const data = readPortalCache<PortalInvestPayload>(PORTAL_CACHE_KEYS.invest)
     return data ? { kind: 'invest', data } : null
   }
 
   if (normalized === PORTAL_ROUTES.profile) {
-    const data = readPortalCache<{ profile: PortalDashboardPayload['profile'] }>('portal:profile')
+    const data = readPortalCache<{ profile: PortalDashboardPayload['profile'] }>(
+      PORTAL_CACHE_KEYS.profile,
+    )
     return data ? { kind: 'profile', data } : null
   }
 
   if (normalized === PORTAL_ROUTES.cryptoWallet) {
-    const data = readPortalCache<PortalCryptoWalletHubPayload>('portal:crypto-wallet')
+    const data = readPortalCache<PortalCryptoWalletHubPayload>(PORTAL_CACHE_KEYS.cryptoWallet)
     return data ? { kind: 'crypto-wallet', data } : null
   }
 
