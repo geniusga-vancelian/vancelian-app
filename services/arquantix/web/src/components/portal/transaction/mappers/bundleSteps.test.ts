@@ -133,7 +133,7 @@ describe('bundleSteps', () => {
     assert.equal(copy.title, BUNDLE_TERMINAL_IMPOSSIBLE.title)
   })
 
-  it('resume session opens processing when lock matches', () => {
+  it('resume session opens processing when lock matches and legs are actionable', () => {
     const session = {
       portfolioId: 'p1',
       batchId: 'batch-1',
@@ -146,12 +146,19 @@ describe('bundleSteps', () => {
         entry_asset: 'USDC',
         total_entry_asset_received: 100,
         total_entry_asset_consumed: 0,
-        allocation_details: [],
+        allocation_details: [
+          { asset: 'cbETH', status: 'pending', swap_id: 'swap-1' },
+        ],
       },
       savedAt: new Date().toISOString(),
     }
-    assert.equal(shouldAutoResumeBundleInvest('active', 'batch-1', session), true)
+    assert.equal(shouldAutoResumeBundleInvest('active', 'batch-1', session, { batch_id: 'batch-1', status: 'active' }), true)
     assert.equal(shouldAutoResumeBundleInvest('active', 'other', session), false)
     assert.equal(shouldAutoResumeBundleInvest('none', 'batch-1', session), false)
+  })
+
+  it('reconciliation copy matches product spec', () => {
+    assert.match(BUNDLE_TERMINAL_RECONCILIATION.lines[0]!, /Une partie de votre allocation/)
+    assert.match(BUNDLE_TERMINAL_RECONCILIATION.lines[0]!, /réconciliation de votre portefeuille/)
   })
 })

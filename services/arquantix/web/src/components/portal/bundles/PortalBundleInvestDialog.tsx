@@ -15,10 +15,12 @@ import {
   resolveBundleFailureCopy,
   resolveBundleInvestResultVariant,
   shouldAutoResumeBundleInvest,
+  shouldShowReconciliationForActiveLock,
 } from '@/components/portal/transaction/mappers/bundleSteps'
 import {
   BUNDLE_FLOW_UI,
   BUNDLE_RESULT_ACTIONS,
+  BUNDLE_REVIEW_UI,
   BUNDLE_TERMINAL_IMPOSSIBLE,
   BUNDLE_TERMINAL_RECONCILIATION,
 } from '@/components/portal/transaction/mappers/bundleUiCopy'
@@ -43,8 +45,14 @@ import {
   formatBundleUsdcAmount,
 } from '@/lib/portal/bundleFormat'
 import { loadBundleInvestSession, type BundleInvestSession } from '@/lib/portal/bundleInvestSession'
+import {
+  BundleInvestTerminalError,
+  buildBundleInvestTechnicalDetails,
+  detectPartialBundleSuccess,
+} from '@/lib/portal/bundleInvestTerminalization'
 import type { PortalBundleFlowScene } from '@/lib/portal/bundleFlowTypes'
 import type { PortalBundleInvestResultVariant } from '@/lib/portal/bundleFlowTypes'
+import type { TransactionTechnicalDetailsRow } from '@/components/portal/transaction/types'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
@@ -78,6 +86,9 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null)
   const [resumeSession, setResumeSession] = useState<BundleInvestSession | null>(null)
+  const [resultTechnicalDetails, setResultTechnicalDetails] = useState<
+    TransactionTechnicalDetailsRow[]
+  >([])
   const submitGuardRef = useRef(false)
   const executionStartedRef = useRef(false)
   const executionModeRef = useRef<'none' | 'invest' | 'resume'>('none')
@@ -103,6 +114,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
     setExecutionPhase('idle')
     setBlockedMessage(null)
     setResumeSession(null)
+    setResultTechnicalDetails([])
     submitGuardRef.current = false
     executionStartedRef.current = false
     executionModeRef.current = 'none'
@@ -125,13 +137,46 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
     privyReadyRef.current = privyReady
   }, [privyReady])
 
+  const showReconciliationTerminal = useCallback(
+    (
+      session: BundleInvestSession | null,
+      lock?: { batch_id: string; status: string },
+      failedAsset?: string,
+      legStatus?: string,
+    ) => {
+      setResumeSession(session)
+      setResultAmount(session?.fundingAmount ?? 0)
+      setResultVariant('reconciliation_required')
+      setFailureCopy(BUNDLE_TERMINAL_RECONCILIATION)
+      setResultTechnicalDetails(
+        buildBundleInvestTechnicalDetails({
+          batchId: lock?.batch_id ?? session?.batchId,
+          failedAsset,
+          legStatus,
+          lockStatus: lock?.status,
+        }),
+      )
+      executionModeRef.current = 'none'
+      executionStartedRef.current = true
+      setFlowScene('result')
+    },
+    [],
+  )
+
   const refreshLockState = useCallback(async () => {
     if (!portfolioReady) return
     const active = await fetchActiveBundleInvestLock(bundle.portfolioId!)
     const stored = loadBundleInvestSession(bundle.portfolioId!)
 
     if (active.status === 'active' && active.lock) {
-      if (shouldAutoResumeBundleInvest(active.status, active.lock.batch_id, stored)) {
+      if (shouldShowReconciliationForActiveLock(active.lock, stored)) {
+        const failedLeg = stored?.invest.allocation_details?.find(
+          (leg) => leg.status !== 'completed' && leg.status !== 'confirmed',
+        )
+        showReconciliationTerminal(stored, active.lock, failedLeg?.asset, failedLeg?.status)
+        return
+      }
+      if (shouldAutoResumeBundleInvest(active.status, active.lock.batch_id, stored, active.lock)) {
         setResumeSession(stored)
         setBlockedMessage(null)
         executionModeRef.current = 'resume'
@@ -139,8 +184,12 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
         setFlowScene('processing')
         return
       }
+      if (stored && detectPartialBundleSuccess(stored.invest, undefined, { lockStatus: active.lock.status })) {
+        showReconciliationTerminal(stored, active.lock)
+        return
+      }
       setBlockedMessage(
-        'Un investissement est déjà en cours sur ce portefeuille. Terminez-le ou attendez la finalisation.',
+        'Un investissement est déjà en cours sur ce portefeuille. Notre équipe finalise la réconciliation si nécessaire.',
       )
       setFlowScene('blocked')
       return
@@ -150,7 +199,7 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
     if (stored) {
       setResumeSession(stored)
     }
-  }, [bundle.portfolioId, portfolioReady])
+  }, [bundle.portfolioId, portfolioReady, showReconciliationTerminal])
 
   useEffect(() => {
     if (!open) {
@@ -239,14 +288,48 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
         setResultAmount(
           resumeSession?.fundingAmount ?? (parsedAmount > 0 ? parsedAmount : Number(amount)),
         )
-        setResultVariant(
-          resolveBundleInvestResultVariant(runResult?.invest, runResult?.finalize),
-        )
+        const variant = resolveBundleInvestResultVariant(runResult?.invest, runResult?.finalize)
+        setResultVariant(variant)
+        if (variant === 'reconciliation_required') {
+          setFailureCopy(BUNDLE_TERMINAL_RECONCILIATION)
+          const failedLeg = runResult?.invest.allocation_details?.find(
+            (leg) => leg.status !== 'completed' && leg.status !== 'confirmed',
+          )
+          setResultTechnicalDetails(
+            buildBundleInvestTechnicalDetails({
+              batchId: runResult?.invest.batch_id,
+              failedAsset: failedLeg?.asset,
+              legStatus: failedLeg?.status,
+            }),
+          )
+        } else {
+          setResultTechnicalDetails([])
+        }
         setFlowScene('result')
       } catch (err) {
         setExecutionPhase('failed')
-        setFailureCopy(resolveBundleFailureCopy(err))
-        setResultVariant('impossible')
+        if (err instanceof BundleInvestTerminalError) {
+          setResultVariant(err.variant)
+          setFailureCopy(
+            err.variant === 'reconciliation_required'
+              ? BUNDLE_TERMINAL_RECONCILIATION
+              : resolveBundleFailureCopy(err),
+          )
+          setResultTechnicalDetails(err.technicalDetails ?? [])
+        } else {
+          const partial = detectPartialBundleSuccess(resumeSession?.invest)
+          setResultVariant(partial ? 'reconciliation_required' : 'impossible')
+          setFailureCopy(
+            partial ? BUNDLE_TERMINAL_RECONCILIATION : resolveBundleFailureCopy(err),
+          )
+          setResultTechnicalDetails(
+            partial
+              ? buildBundleInvestTechnicalDetails({
+                  batchId: resumeSession?.batchId,
+                })
+              : [],
+          )
+        }
         setFlowScene('result')
       } finally {
         submitGuardRef.current = false
@@ -482,19 +565,6 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
       {flowScene === 'blocked' ? (
         <div className="flex flex-col gap-3">
           <p className="m-0 font-ui text-[14px] text-v-fg">{blockedMessage}</p>
-          {resumeSession ? (
-            <Button
-              type="button"
-              disabled={!privyReady || batchInProgress}
-              onClick={() => {
-                executionModeRef.current = 'resume'
-                executionStartedRef.current = false
-                setFlowScene('processing')
-              }}
-            >
-              Reprendre l’investissement
-            </Button>
-          ) : null}
           <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
             Fermer
           </Button>
@@ -557,6 +627,14 @@ export function PortalBundleInvestDialog({ bundle, open, onOpenChange, asPage = 
               copy={BUNDLE_TERMINAL_RECONCILIATION}
               onClose={onResultClose}
               closeLabel={BUNDLE_RESULT_ACTIONS.close}
+              primaryAction={{
+                label: BUNDLE_FLOW_UI.viewBasketCta,
+                onClick: onResultClose,
+              }}
+              technicalDetails={
+                resultTechnicalDetails.length > 0 ? resultTechnicalDetails : undefined
+              }
+              technicalDetailsTitle={BUNDLE_REVIEW_UI.technicalDetailsTitle}
             />
           ) : null}
           {resultVariant === 'impossible' ? (

@@ -15,6 +15,13 @@ import {
   type BundleInvestResult,
 } from '@/lib/portal/bundleClient'
 import {
+  BUNDLE_MAX_LEG_AUTO_RETRIES,
+  BundleInvestTerminalError,
+  buildBundleInvestTechnicalDetails,
+  detectPartialBundleSuccess,
+  pollBundleLegUntilTerminal,
+} from '@/lib/portal/bundleInvestTerminalization'
+import {
   clearBundleInvestSession,
   saveBundleInvestSession,
   type BundleInvestSession,
@@ -30,7 +37,6 @@ async function executePendingLegs(
   invest: BundleInvestPayload,
   deps: {
     signAndSubmit: ReturnType<typeof useLifiSwapExecution>['signAndSubmit']
-    pollUntilTerminal: ReturnType<typeof useLifiSwapExecution>['pollUntilTerminal']
     onLegProgress?: (current: number, total: number, asset: string) => void
     onPhaseChange?: (phase: SwapExecutionPhase) => void
   },
@@ -52,13 +58,43 @@ async function executePendingLegs(
     const swapId = leg.swap_id!
     deps.onLegProgress?.(i + 1, total, leg.asset)
 
-    const mapped = mapBundleSigningToExecute(leg.signing, swapId)
-    const exec = mapped ?? (await bundleLegPrepareSign(swapId))
-    deps.onPhaseChange?.('signing')
-    await deps.signAndSubmit(exec)
-    deps.onPhaseChange?.('submitting')
-    await deps.pollUntilTerminal(swapId)
-    entryConsumed += Number(leg.entry_asset_consumed ?? 0)
+    let attempts = 0
+    let lastError: unknown
+    while (attempts <= BUNDLE_MAX_LEG_AUTO_RETRIES) {
+      try {
+        const mapped = mapBundleSigningToExecute(leg.signing, swapId)
+        const exec = mapped ?? (await bundleLegPrepareSign(swapId))
+        deps.onPhaseChange?.('signing')
+        await deps.signAndSubmit(exec)
+        deps.onPhaseChange?.('submitting')
+        await pollBundleLegUntilTerminal(swapId, { invest, asset: leg.asset })
+        entryConsumed += Number(leg.entry_asset_consumed ?? 0)
+        lastError = null
+        break
+      } catch (err) {
+        lastError = err
+        if (err instanceof BundleInvestTerminalError) throw err
+        attempts += 1
+        if (attempts > BUNDLE_MAX_LEG_AUTO_RETRIES) {
+          const variant = detectPartialBundleSuccess(invest)
+            ? 'reconciliation_required'
+            : 'impossible'
+          throw new BundleInvestTerminalError({
+            variant,
+            message: err instanceof Error ? err.message : String(err),
+            technicalDetails: buildBundleInvestTechnicalDetails({
+              batchId: invest.batch_id,
+              failedAsset: leg.asset,
+              legStatus: leg.status,
+            }),
+          })
+        }
+      }
+    }
+
+    if (lastError) {
+      throw lastError
+    }
   }
 
   deps.onPhaseChange?.('bridging')
@@ -81,7 +117,7 @@ export function useBundleLifiInvest(
   onLegProgress?: (current: number, total: number, asset: string) => void,
 ) {
   const inFlightRef = useRef(false)
-  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
+  const { signAndSubmit } = useLifiSwapExecution(
     swapMockMode,
     onPhaseChange,
     entryAsset,
@@ -106,7 +142,6 @@ export function useBundleLifiInvest(
 
       const { finalize } = await executePendingLegs(invest, {
         signAndSubmit,
-        pollUntilTerminal,
         onLegProgress,
         onPhaseChange,
       })
@@ -114,7 +149,7 @@ export function useBundleLifiInvest(
       clearBundleInvestSession(invest.portfolio_id)
       return { invest, finalize }
     },
-    [onLegProgress, onPhaseChange, pollUntilTerminal, signAndSubmit],
+    [onLegProgress, onPhaseChange, signAndSubmit],
   )
 
   const runInvest = useCallback(

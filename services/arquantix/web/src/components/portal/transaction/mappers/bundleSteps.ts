@@ -4,6 +4,13 @@
 import type { BundleFinalizePayload, BundleInvestPayload } from '@/lib/portal/bundleClient'
 import type { BundleInvestSession } from '@/lib/portal/bundleInvestSession'
 import type { PortalBundleInvestResultVariant } from '@/lib/portal/bundleFlowTypes'
+import {
+  detectPartialBundleSuccess,
+  hasNoBundleInvestProgress,
+  shouldAutoResumeBundleInvest as shouldAutoResumeBundleInvestTerminal,
+  shouldShowReconciliationForActiveLock,
+  shouldTerminalizeStalePartial,
+} from '@/lib/portal/bundleInvestTerminalization'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import {
   BUNDLE_TERMINAL_IMPOSSIBLE,
@@ -139,32 +146,25 @@ export function resolveBundleInvestResultVariant(
   finalize?: BundleFinalizePayload,
 ): PortalBundleInvestResultVariant {
   if (!invest) return 'impossible'
-
-  const status = String(invest.status ?? '').toLowerCase()
-  if (status.includes('partial')) return 'reconciliation_required'
-
-  const failed = Number(invest.legs_failed ?? 0)
-  const succeeded = Number(invest.legs_succeeded ?? 0)
-  const pending = Number(invest.legs_pending ?? 0)
-  if (pending > 0) return 'reconciliation_required'
-  if (failed > 0 && succeeded > 0) return 'reconciliation_required'
-
-  if (finalize && Number(finalize.recoverable_cash_in_bundle ?? 0) > 0) {
+  if (hasNoBundleInvestProgress(invest) && !detectPartialBundleSuccess(invest, finalize)) {
+    return 'impossible'
+  }
+  if (detectPartialBundleSuccess(invest, finalize)) {
     return 'reconciliation_required'
   }
-
   return 'success'
+}
+
+export {
+  shouldShowReconciliationForActiveLock,
+  shouldTerminalizeStalePartial,
 }
 
 export function shouldAutoResumeBundleInvest(
   lockStatus: 'none' | 'active',
   lockBatchId: string | undefined,
   session: BundleInvestSession | null,
+  lock?: { status?: string; batch_id?: string },
 ): boolean {
-  return Boolean(
-    session?.invest &&
-      lockStatus === 'active' &&
-      lockBatchId &&
-      session.batchId === lockBatchId,
-  )
+  return shouldAutoResumeBundleInvestTerminal(lockStatus, lockBatchId, session, lock)
 }

@@ -47,7 +47,9 @@ export const BUNDLE_TERMINAL_IMPOSSIBLE: TransactionTerminalFailureCopy = {
 
 export const BUNDLE_TERMINAL_RECONCILIATION: TransactionTerminalFailureCopy = {
   title: 'Vérification nécessaire',
-  lines: ['Votre opération est en cours de réconciliation.'],
+  lines: [
+    'Une partie de votre allocation a été réalisée. Nous finalisons la réconciliation de votre portefeuille.',
+  ],
 }
 
 export const BUNDLE_RESULT_ACTIONS = {

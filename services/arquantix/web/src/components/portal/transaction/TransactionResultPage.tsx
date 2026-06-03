@@ -1,11 +1,19 @@
 'use client'
 
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
+import { TransactionTechnicalDetails } from '@/components/portal/transaction/TransactionTechnicalDetails'
 import type { TransactionResultPageProps } from '@/components/portal/transaction/types'
 
 export function TransactionResultPage(props: TransactionResultPageProps) {
   if (props.variant === 'reconciliation_required') {
-    const { copy, onClose, closeLabel = 'Fermer' } = props
+    const {
+      copy,
+      onClose,
+      closeLabel = 'Fermer',
+      primaryAction,
+      technicalDetails,
+      technicalDetailsTitle = 'Détails techniques',
+    } = props
     return (
       <div className="rounded-xl border border-amber-300/50 bg-amber-50/80 p-4">
         <p className="m-0 font-ui text-[16px] font-medium text-amber-950">{copy.title}</p>
@@ -14,10 +22,28 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
             {line}
           </p>
         ))}
+        {technicalDetails && technicalDetails.length > 0 ? (
+          <div className="mt-3">
+            <TransactionTechnicalDetails rows={technicalDetails} title={technicalDetailsTitle} />
+          </div>
+        ) : null}
         <div className="brw-foot mt-4">
-          <button type="button" className="btn btn--primary btn--lg brw-foot__cta" onClick={onClose}>
+          <button type="button" className="btn btn--ghost btn--lg" onClick={onClose}>
             {closeLabel}
           </button>
+          {primaryAction ? (
+            <button
+              type="button"
+              className="btn btn--primary btn--lg brw-foot__cta"
+              onClick={primaryAction.onClick}
+            >
+              {primaryAction.label}
+            </button>
+          ) : (
+            <button type="button" className="btn btn--primary btn--lg brw-foot__cta" onClick={onClose}>
+              {closeLabel}
+            </button>
+          )}
         </div>
       </div>
     )

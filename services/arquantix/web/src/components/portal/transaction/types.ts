@@ -79,6 +79,12 @@ export type TransactionResultReconciliationProps = {
   copy: TransactionTerminalFailureCopy
   onClose: () => void
   closeLabel?: string
+  primaryAction?: {
+    label: string
+    onClick: () => void
+  }
+  technicalDetails?: TransactionTechnicalDetailsRow[]
+  technicalDetailsTitle?: string
 }
 
 export type TransactionResultPageProps =
