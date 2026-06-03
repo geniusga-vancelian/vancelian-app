@@ -49,7 +49,8 @@ export const PORTAL_READ_ONLY_GUARD_PATHS = [
  * Le guard ignore ces violations jusqu’à retrait de l’exception.
  */
 /** Dettes read-only temporaires — vide post F5-B ; ne pas ajouter sans ticket. */
-export const PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS = [] as const
+export const PORTAL_READ_ONLY_TEMPORARY_EXCEPTIONS: ReadonlyArray<{ file: string; rule: string }> =
+  []
 
 /** Wallet bundle detail — read-only pur (R4.5-F5-B). */
 export const PORTAL_WALLET_BUNDLE_DETAIL_GUARD_PATHS = [

@@ -177,7 +177,7 @@ export function PortalBundleAllocationActionsPanel({
             </AppButton>
           </>
         ) : null}
-        <AppButton type="button" variant="outline" disabled={busy} onClick={onClose}>
+        <AppButton type="button" variant="secondary" disabled={busy} onClick={onClose}>
           Fermer
         </AppButton>
       </div>
