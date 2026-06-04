@@ -241,14 +241,21 @@ export function resolvePortalDefiVaultFlowRoute(
   return base
 }
 
+export type PortalBundleInvestFrom = 'markets' | 'invest'
+
 /** Invest / retrait bundle crypto (portfolio PE provisionné). */
 export function portalBundleInvestRoute(
   portfolioId: string,
   mode: PortalVaultFlowMode = 'invest',
+  options?: { from?: PortalBundleInvestFrom },
 ): string {
   const id = portfolioId.trim()
   const base = `${PORTAL_ROUTES.invest}/bundle/${encodeURIComponent(id)}`
-  return mode === 'withdraw' ? `${base}?mode=withdraw` : base
+  const params = new URLSearchParams()
+  if (mode === 'withdraw') params.set('mode', 'withdraw')
+  if (options?.from === 'markets') params.set('from', 'markets')
+  const query = params.toString()
+  return query ? `${base}?${query}` : base
 }
 
 /** Invest bundle depuis le catalogue produit (fallback si pas encore de portfolio). */

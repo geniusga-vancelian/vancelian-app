@@ -41,6 +41,12 @@ import {
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import type { PortalVaultFlowScene, PortalVaultOperation } from '@/lib/portal/vaultFlowTypes'
+import {
+  resolveEffectiveVaultDepositMax,
+  validateVaultDepositSetupAmount,
+  validateVaultWithdrawSetupAmount,
+  vaultSetupExceedsMaxWarning,
+} from '@/lib/portal/vaultInvestSetupLimits'
 
 type InvestMode = 'invest' | 'withdraw'
 
@@ -103,7 +109,7 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const disclaimer = isLedgity ? LEDGITY_DISCLAIMER : MORPHO_DISCLAIMER
   const integrationMode = isLedgity ? 'ledgity_vault' as const : 'direct_morpho' as const
 
-  const [amount, setAmount] = useState(() => (mode === 'invest' ? '10,000' : ''))
+  const [amount, setAmount] = useState('')
   const [sources, setSources] = useState<PortalInvestSource[]>(() => defaultInvestSources())
   const [source, setSource] = useState<PortalInvestSource>(() => defaultInvestSources()[0]!)
   const [target, setTarget] = useState<PortalInvestTarget>(() =>
@@ -219,15 +225,13 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const monthly = amountEur * rate / 12
   const yearly = amountEur * rate
   const maxAmt = isInvest ? source.balance : vaultBalance
-  const sliderVal = Math.max(0, Math.min(maxAmt, numeric))
-  const fillPct = maxAmt > 0 ? (sliderVal / maxAmt) * 100 : 0
   const sym = source.glyph
   const vaultAssetSymbol = vault.asset.symbol
 
   const vaultBalanceLabel = positionLoading
-    ? 'Loading vault balance…'
+    ? 'Chargement du solde coffre…'
     : vaultBalance > 0
-      ? `${invFmtAmount(vaultBalance, vaultBalance % 1 === 0 ? 0 : 2)} ${vaultAssetSymbol} in vault`
+      ? `${invFmtAmount(vaultBalance, vaultBalance % 1 === 0 ? 0 : 2)} ${vaultAssetSymbol} dans le coffre`
       : `${target.held} ${target.heldLabel}`
 
   const depositsDisabled = Boolean(beta?.depositsDisabled)
@@ -235,6 +239,20 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const depositBlocked = isInvest && depositsDisabled
   const withdrawBlocked = !isInvest && withdrawsDisabled
   const operationBlocked = depositBlocked || withdrawBlocked
+  const betaLimits = beta?.limits ?? null
+
+  const depositMaxAmt = useMemo(() => {
+    if (!isInvest) return maxAmt
+    return resolveEffectiveVaultDepositMax({
+      walletUsdc: source.balance,
+      vaultPositionUsdc: vaultBalance,
+      limits: betaLimits,
+    })
+  }, [betaLimits, isInvest, maxAmt, source.balance, vaultBalance])
+
+  const effectiveMaxAmt = isInvest ? depositMaxAmt : maxAmt
+  const sliderVal = Math.max(0, Math.min(effectiveMaxAmt, numeric))
+  const fillPct = effectiveMaxAmt > 0 ? (sliderVal / effectiveMaxAmt) * 100 : 0
 
   const processingContext = useMemo(
     () => ({
@@ -257,12 +275,14 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
       integrationMode,
       disclaimer,
       yieldPct: rate,
+      processingContext,
     }),
     [
       disclaimer,
       integrationMode,
       numeric,
       operation,
+      processingContext,
       rate,
       source,
       target,
@@ -282,28 +302,65 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   }, [loadPosition, walletAddress])
 
   const setAmt = (value: number) => {
+    setSetupError(null)
     const rounded = Math.round(value * 100) / 100
     setAmount(invFmtAmount(rounded, rounded % 1 === 0 ? 0 : 2))
   }
 
   const applyMax = () => {
-    setAmt(isInvest ? source.balance : vaultBalance)
+    setSetupError(null)
+    setAmt(isInvest ? effectiveMaxAmt : vaultBalance)
   }
+
+  const setupAmountWarning = useMemo(() => {
+    if (operationBlocked || positionLoading) return null
+    return vaultSetupExceedsMaxWarning({
+      amount: numeric,
+      maxAmount: effectiveMaxAmt,
+      assetSymbol: vaultAssetSymbol,
+      kind: isInvest ? 'deposit' : 'withdraw',
+    })
+  }, [
+    effectiveMaxAmt,
+    isInvest,
+    numeric,
+    operationBlocked,
+    positionLoading,
+    vaultAssetSymbol,
+  ])
 
   const setupDisabled =
     operationBlocked ||
     positionLoading ||
     numeric <= 0 ||
-    numeric > maxAmt + 1e-6 ||
+    numeric > effectiveMaxAmt + 1e-6 ||
     !walletAddress
 
   const onContinueToReview = () => {
-    setSetupError(null)
-    if (setupDisabled) return
-    if (!normalizedAmount || Number(normalizedAmount) <= 0) {
-      setSetupError('Saisissez un montant valide.')
+    if (operationBlocked) return
+    if (!walletAddress || positionLoading) return
+
+    const limitError = isInvest
+      ? validateVaultDepositSetupAmount({
+          amount: numeric,
+          walletUsdc: source.balance,
+          vaultPositionUsdc: vaultBalance,
+          limits: betaLimits,
+        })
+      : validateVaultWithdrawSetupAmount({
+          amount: numeric,
+          vaultBalanceUsdc: vaultBalance,
+          assetSymbol: vaultAssetSymbol,
+        })
+
+    if (setupAmountWarning) return
+
+    if (limitError) {
+      setSetupError(limitError)
       return
     }
+
+    setSetupError(null)
     setFlowScene('review')
   }
 
@@ -311,8 +368,8 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
     setPulseKey((k) => k + 1)
   }, [amount, mode, target.key, source.key])
 
-  const topLabel = isInvest ? 'I invest' : 'I withdraw from'
-  const bottomLabel = isInvest ? 'I receive' : 'I receive on'
+  const topLabel = isInvest ? 'Je place' : 'Je retire de'
+  const bottomLabel = isInvest ? 'Je reçois' : 'Je reçois sur'
   const canPickSource = isInvest && sources.length > 1
 
   const openSelector = () => {
@@ -335,9 +392,11 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const setupPane = (
       <div className="inv-pane">
         <header className="inv-head">
-          <h2 className="inv-head__title">{isInvest ? 'Invest' : 'Withdraw'}</h2>
+          <h2 className="inv-head__title">
+            {isInvest ? VAULT_FLOW_UI.setupTitleInvest : VAULT_FLOW_UI.setupTitleWithdraw}
+          </h2>
           <div className="inv-head__actions">
-            <button type="button" className="inv-head__btn" onClick={onClose} aria-label="Close">
+            <button type="button" className="inv-head__btn" onClick={onClose} aria-label="Fermer">
               <KalaiIcon name="close" size={16} />
             </button>
           </div>
@@ -346,14 +405,31 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
         {operationBlocked ? (
           <p className="inv-alert">
             {depositBlocked
-              ? 'Deposits are temporarily paused. You can still withdraw your funds.'
-              : 'Withdrawals are temporarily paused.'}
+              ? beta?.message ??
+                'Les dépôts sont temporairement suspendus. Vous pouvez toujours retirer vos fonds.'
+              : 'Les retraits sont temporairement suspendus.'}
+          </p>
+        ) : beta?.message && !depositBlocked ? (
+          <p className="inv-alert inv-alert--info">{beta.message}</p>
+        ) : null}
+
+        {isInvest && betaLimits && !depositBlocked ? (
+          <p className="inv-hint">
+            Plafonds : min. {betaLimits.minDepositUsdc} USDC · max. {betaLimits.maxDepositUsdc} USDC par opération
+            · exposition max. {betaLimits.maxUserExposureUsdc} USDC
+          </p>
+        ) : null}
+
+        {!isInvest && !withdrawBlocked && !positionLoading && vaultBalance > 0 ? (
+          <p className="inv-hint">
+            Retrait maximum : {invFmtAmount(vaultBalance, vaultBalance % 1 === 0 ? 0 : 2)} {vaultAssetSymbol}{' '}
+            dans ce coffre
           </p>
         ) : null}
 
         {!isInvest && !positionLoading && vaultBalance <= 0 ? (
           <p className="inv-alert">
-            No funds in this vault yet. Deposit first, then you can withdraw here.
+            Aucun fonds dans ce coffre pour l’instant. Effectuez d’abord un dépôt, puis vous pourrez retirer ici.
           </p>
         ) : null}
 
@@ -365,7 +441,7 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
                 {isInvest ? (
                   source.balanceLabel
                 ) : (
-                  <>Wallet · {invFmtAmount(source.balance, 2)} USDC</>
+                  <>Wallet · {invFmtAmount(source.balance, 2)} {source.short}</>
                 )}
                 {isInvest && maxAmt > 0 ? (
                   <button type="button" className="inv-io__max" onClick={applyMax}>
@@ -380,7 +456,10 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
                 inputMode="decimal"
                 className="inv-io__amount"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                  setAmount(e.target.value)
+                  setSetupError(null)
+                }}
                 aria-label={isInvest ? topLabel : bottomLabel}
               />
               <PortalInvestChip
@@ -418,60 +497,72 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
                 className="inv-io__amount"
                 value={invFmtAmount(received, received >= 100 ? 0 : 2)}
                 readOnly
-                aria-label="Estimated amount"
+                aria-label="Montant estimé"
               />
               <PortalInvestChip asset={target} selectable={false} />
             </div>
           </div>
         </div>
 
-        {isInvest ? (
+        {effectiveMaxAmt > 0 && !operationBlocked ? (
           <div className="inv-sim">
             <div className="inv-sim__head">
-              <span className="inv-sim__label">Quick simulation</span>
+              <span className="inv-sim__label">
+                {isInvest ? 'Simulation rapide' : 'Montant du retrait'}
+              </span>
               <span className="inv-sim__hint">
-                {invFmtAmount(numeric)} {sym} of {invFmtAmount(source.balance)} {sym}
+                {invFmtAmount(numeric)} {sym} sur {invFmtAmount(effectiveMaxAmt)} {sym}{' '}
+                {isInvest ? 'disponibles' : 'retirables'}
               </span>
             </div>
             <input
               type="range"
               className="inv-range"
               min={0}
-              max={maxAmt}
-              step={Math.max(0.01, maxAmt / 1000)}
+              max={effectiveMaxAmt}
+              step={Math.max(0.01, effectiveMaxAmt / 1000)}
               value={sliderVal}
-              disabled={maxAmt <= 0}
+              disabled={effectiveMaxAmt <= 0}
               onChange={(e) => setAmt(Number(e.target.value))}
               style={{ ['--inv-fill' as string]: `${fillPct}%` }}
-              aria-label="Amount to invest"
+              aria-label={isInvest ? 'Montant à investir' : 'Montant à retirer'}
             />
-            <div className="inv-gains">
-              <DefiInvestGain label="Daily" value={invFmtAmount(daily, 2)} suffix="€" pulseKey={pulseKey} />
-              <DefiInvestGain label="Monthly" value={invFmtAmount(monthly, 0)} suffix="€" pulseKey={pulseKey} />
-              <DefiInvestGain label="Yearly" value={invFmtAmount(yearly, 0)} suffix="€" pulseKey={pulseKey} />
-            </div>
+            {isInvest ? (
+              <div className="inv-gains">
+                <DefiInvestGain label="Par jour" value={invFmtAmount(daily, 2)} suffix="€" pulseKey={pulseKey} />
+                <DefiInvestGain label="Par mois" value={invFmtAmount(monthly, 0)} suffix="€" pulseKey={pulseKey} />
+                <DefiInvestGain label="Par an" value={invFmtAmount(yearly, 0)} suffix="€" pulseKey={pulseKey} />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
         <div className="inv-summary">
           <div className="inv-summary__row">
-            <span className="k">Vancelian fees</span>
-            <span className="v v--accent">Waived</span>
+            <span className="k">Frais Vancelian</span>
+            <span className="v v--accent">Offerts</span>
           </div>
           <div className="inv-summary__row">
-            <span className="k">Target yield</span>
+            <span className="k">Rendement cible</span>
             <span className="v">
               {rate > 0
-                ? `${(rate * 100).toLocaleString('en-US', {
+                ? `${(rate * 100).toLocaleString('fr-FR', {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 2,
-                  })}%/yr`
+                  })} %/an`
                 : '—'}
             </span>
           </div>
         </div>
 
-        {setupError ? <p className="inv-feedback inv-feedback--error">{setupError}</p> : null}
+        {setupAmountWarning ? (
+          <p className="inv-feedback inv-feedback--warn" role="status">
+            {setupAmountWarning}
+          </p>
+        ) : null}
+        {setupError && !setupAmountWarning ? (
+          <p className="inv-feedback inv-feedback--error">{setupError}</p>
+        ) : null}
 
         <button
           type="button"

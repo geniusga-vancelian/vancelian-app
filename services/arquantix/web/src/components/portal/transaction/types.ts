@@ -53,6 +53,10 @@ export type TransactionResultSuccessProps = {
   /** Ligne secondaire sous le lead (layout compact). */
   subtitle?: ReactNode
   steps: TransactionResultSuccessStep[]
+  /** Titre de la section étapes (layout full). */
+  stepsTitle?: string
+  /** Titre du récapitulatif (layout full). */
+  summaryTitle?: string
   summary: TransactionResultSummaryRow[]
   note?: ReactNode
   primaryAction: {
@@ -108,4 +112,6 @@ export type TransactionReviewPageProps = {
   onBack?: () => void
   onClose?: () => void
   backButtonLabel?: string
+  /** Handoff InvestConfirm — flèche avant le titre, pied « Modifier » secondaire. */
+  layout?: 'default' | 'confirm'
 }

@@ -213,7 +213,7 @@ export function mergeSourceBalance(
       return {
         ...source,
         balance,
-        balanceLabel: `Balance ${invFmtAmount(balance, 2)} USDC`,
+        balanceLabel: `Disponible ${invFmtAmount(balance, 2)} USDC`,
       }
     }
     return {

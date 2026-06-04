@@ -8,12 +8,14 @@ import {
   PortalVaultReviewStep,
   type PortalVaultReviewContext,
 } from '@/components/portal/invest/PortalVaultReviewStep'
-import { PortalWeb3BoundaryLazy } from '@/components/portal/web3/PortalWeb3BoundaryLazy'
 import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
 import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
 import { TransactionTechnicalDetails } from '@/components/portal/transaction/TransactionTechnicalDetails'
+import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import {
   buildVaultProcessingSteps,
+  buildVaultSuccessSteps,
+  buildVaultSuccessSummary,
   buildVaultTechnicalDetailRows,
   resolveVaultFailureCopy,
   vaultProcessingStepperIndex,
@@ -80,8 +82,64 @@ function wrapSavings(children: ReactNode, className?: string) {
   )
 }
 
-/** Vault review / processing / result — hooks Morpho/Ledgity + lazy Web3 (R4.5-F4). */
-export function PortalVaultExecutionController({
+/** Review sans hooks wagmi — évite WagmiProviderNotFoundError (R4.5-F4). */
+function PortalVaultReviewScene({
+  reviewContext,
+  onFlowSceneChange,
+  presentation,
+}: Pick<Props, 'reviewContext' | 'onFlowSceneChange' | 'presentation'>) {
+  const { privyReady } = usePortalAuthPrivy()
+  const [signingPrep, setSigningPrep] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setSigningPrep(true)
+    void (async () => {
+      try {
+        await waitForPrivyClientReady(() => privyReady, { timeoutMs: 30_000 })
+      } catch {
+        /* Review still renders */
+      } finally {
+        if (!cancelled) setSigningPrep(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [privyReady])
+
+  const onReviewConfirm = useCallback(() => {
+    onFlowSceneChange('processing')
+  }, [onFlowSceneChange])
+
+  const onBackToSetup = useCallback(() => {
+    onFlowSceneChange('setup')
+  }, [onFlowSceneChange])
+
+  const inner = (
+    <>
+      {signingPrep ? (
+        <div
+          className="mb-4 flex items-center gap-2 rounded-lg border border-v-fg-10 bg-v-fg-02 px-3 py-2 font-ui text-[13px] text-v-fg-muted"
+          aria-live="polite"
+        >
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          {VAULT_FLOW_UI.preparingSecureConfirmation}
+        </div>
+      ) : null}
+      <PortalVaultReviewStep
+        context={reviewContext}
+        onConfirm={onReviewConfirm}
+        onBack={onBackToSetup}
+      />
+    </>
+  )
+
+  return presentation === 'savings' ? wrapSavings(inner) : inner
+}
+
+/** Processing / result — hooks Morpho/Ledgity sous WagmiProvider. */
+function PortalVaultWeb3ExecutionRunner({
   flowScene,
   onFlowSceneChange,
   presentation,
@@ -101,13 +159,11 @@ export function PortalVaultExecutionController({
   onClose,
   onExecutionSuccess,
 }: Props) {
-  const { privyReady } = usePortalAuthPrivy()
   const { execute: executeMorpho } = usePortalMorphoVaultExecution()
   const { execute: executeLedgity } = usePortalLedgityVaultExecution()
 
   const [executionPhase, setExecutionPhase] = useState<PortalVaultExecutionPhase>('idle')
   const [failureCopy, setFailureCopy] = useState(() => resolveVaultFailureCopy(null))
-  const [signingPrep, setSigningPrep] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [resultAmount, setResultAmount] = useState(0)
   const idempotencyKeyRef = useRef<string | null>(null)
@@ -169,35 +225,6 @@ export function PortalVaultExecutionController({
     void runExecution()
   }, [flowScene, runExecution])
 
-  useEffect(() => {
-    if (flowScene !== 'review') {
-      setSigningPrep(false)
-      return
-    }
-
-    let cancelled = false
-    setSigningPrep(true)
-    void (async () => {
-      try {
-        await waitForPrivyClientReady(() => privyReady, { timeoutMs: 30_000 })
-      } catch {
-        /* Review still renders */
-      } finally {
-        if (!cancelled) setSigningPrep(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [flowScene, privyReady])
-
-  const onReviewConfirm = useCallback(() => {
-    resetExecution()
-    executionStartedRef.current = false
-    onFlowSceneChange('processing')
-  }, [onFlowSceneChange, resetExecution])
-
   const onBackToSetup = useCallback(() => {
     resetExecution()
     onFlowSceneChange('setup')
@@ -233,25 +260,18 @@ export function PortalVaultExecutionController({
   )
 
   const successCopy = vaultSuccessCopy(operation)
-
-  const reviewBlock = (
-    <>
-      {signingPrep ? (
-        <div
-          className="mb-4 flex items-center gap-2 rounded-lg border border-v-fg-10 bg-v-fg-02 px-3 py-2 font-ui text-[13px] text-v-fg-muted"
-          aria-live="polite"
-        >
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-          {VAULT_FLOW_UI.preparingSecureConfirmation}
-        </div>
-      ) : null}
-      <PortalVaultReviewStep
-        context={reviewContext}
-        onConfirm={onReviewConfirm}
-        onBack={onBackToSetup}
-      />
-    </>
+  const successSteps = buildVaultSuccessSteps(operation, processingContext)
+  const successSummary = buildVaultSuccessSummary(
+    operation,
+    processingContext,
+    reviewContext.yieldPct,
   )
+  const successNote =
+    operation === 'deposit' ? VAULT_FLOW_UI.successNoteDeposit : VAULT_FLOW_UI.successNoteWithdraw
+  const successStepsTitle =
+    operation === 'deposit'
+      ? VAULT_FLOW_UI.successStepsTitleDeposit
+      : VAULT_FLOW_UI.successStepsTitleWithdraw
 
   const processingBlock = (
     <TransactionProcessingPage
@@ -279,19 +299,30 @@ export function PortalVaultExecutionController({
       {executionPhase === 'confirmed' ? (
         <TransactionResultPage
           variant="success"
-          layout="compact"
+          layout="full"
           title={successCopy.title}
           lead={
             <>
-              {invFmtAmount(resultAmount, resultAmount % 1 === 0 ? 0 : 2)} {vaultAssetSymbol}
+              <b className="v-tnum">
+                {invFmtAmount(resultAmount, resultAmount % 1 === 0 ? 0 : 2)} {vaultAssetSymbol}
+              </b>{' '}
+              {operation === 'deposit'
+                ? `ont été placés sur ${processingContext.vaultLabel}.`
+                : `ont été retirés depuis ${processingContext.vaultLabel}.`}
             </>
           }
-          subtitle={successCopy.subtitle}
-          steps={[]}
-          summary={[]}
+          stepsTitle={successStepsTitle}
+          summaryTitle={VAULT_FLOW_UI.successSummaryTitle}
+          steps={successSteps.map((step) => ({
+            name: step.name,
+            body: <p className="txn-step__amount">{step.body}</p>,
+          }))}
+          summary={successSummary}
+          note={successNote}
           primaryAction={{
-            label: presentation === 'invest' ? 'Fermer' : 'Fermer',
+            label: presentation === 'invest' ? VAULT_FLOW_UI.viewVaultCta : 'Fermer',
             onClick: onClose,
+            icon: presentation === 'invest' ? <KalaiIcon name="wallet" size={16} /> : undefined,
           }}
           onClose={onClose}
         />
@@ -309,25 +340,20 @@ export function PortalVaultExecutionController({
     </>
   )
 
-  const inner =
-    flowScene === 'review' ? (
-      reviewBlock
-    ) : flowScene === 'processing' ? (
-      processingBlock
-    ) : (
-      resultBlock
-    )
-
+  const inner = flowScene === 'processing' ? processingBlock : resultBlock
   const wrapped =
-    presentation === 'savings' ? (
-      flowScene === 'processing' || flowScene === 'result' ? (
-        wrapSavings(inner, 'px-4 py-4')
-      ) : (
-        wrapSavings(inner)
-      )
-    ) : (
-      inner
-    )
+    presentation === 'savings' ? wrapSavings(inner, 'px-4 py-4') : inner
 
-  return <PortalWeb3BoundaryLazy>{wrapped}</PortalWeb3BoundaryLazy>
+  return wrapped
+}
+
+/**
+ * Vault review / processing / result (R4.5-F4).
+ * WagmiProvider fourni par `invest/vault/(tx)/layout.tsx` (comme wallet/(tx)/swap).
+ */
+export function PortalVaultExecutionController(props: Props) {
+  if (props.flowScene === 'review') {
+    return <PortalVaultReviewScene {...props} />
+  }
+  return <PortalVaultWeb3ExecutionRunner {...props} />
 }

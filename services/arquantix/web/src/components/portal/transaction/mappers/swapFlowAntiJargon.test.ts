@@ -25,7 +25,7 @@ describe('swapFlowAntiJargon', () => {
     for (const line of collectSwapReviewPrimaryStrings()) {
       assertNoSwapPrimaryJargon(line)
     }
-    assert.doesNotMatch(SWAP_REVIEW_UI.confirmCta, /confirm swap/i)
+    assert.match(SWAP_REVIEW_UI.confirmCta, /Confirmer l'échange/)
   })
 
   it('processing primary copy has no forbidden jargon', () => {

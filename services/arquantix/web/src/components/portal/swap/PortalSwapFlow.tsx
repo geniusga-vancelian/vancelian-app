@@ -24,6 +24,10 @@ import {
   buildSwapFromOptions,
   buildSwapToOptions,
   formatSwapCryptoAmount,
+  pickDefaultSwapFromOption,
+  pickDefaultSwapToOption,
+  SWAP_DEFAULT_GENERIC_TARGET_ASSET,
+  SWAP_DEFAULT_STABLE_ASSET,
   type SwapToOption,
 } from '@/lib/portal/swapFlowFormat'
 import {
@@ -125,15 +129,50 @@ export function PortalSwapFlow() {
   }, [swapChainKey])
 
   useEffect(() => {
-    if (!activeSwapChain) return
+    if (!activeSwapChain || !catalog) return
+    if (step !== 'to' && step !== 'from') return
+
+    const applyAmountStep = (args: {
+      from: string
+      fromChain: string
+      to: string
+      toChain: string
+      balance: number
+    }) => {
+      setFromAsset(args.from)
+      setFromChain(args.fromChain)
+      setToAsset(args.to)
+      setToChain(args.toChain)
+      setSourceBalance(args.balance)
+      setAmount('')
+      setQuote(null)
+      setStep('amount')
+    }
 
     if (urlIntent.mode === 'buy') {
-      setToAsset(urlIntent.toAsset)
-      setToChain(urlIntent.toChain)
-      setFromAsset('')
-      setFromChain('')
-      setSourceBalance(0)
-      setStep('from')
+      const fromOpt = pickDefaultSwapFromOption(
+        sourceAssets,
+        positions,
+        urlIntent.toAsset,
+        urlIntent.toChain,
+        SWAP_DEFAULT_STABLE_ASSET,
+      )
+      if (fromOpt) {
+        applyAmountStep({
+          from: fromOpt.asset,
+          fromChain: fromOpt.chain,
+          to: urlIntent.toAsset,
+          toChain: urlIntent.toChain,
+          balance: fromOpt.balance,
+        })
+      } else {
+        setToAsset(urlIntent.toAsset)
+        setToChain(urlIntent.toChain)
+        setFromAsset('')
+        setFromChain('')
+        setSourceBalance(0)
+        setStep('from')
+      }
       return
     }
 
@@ -141,16 +180,57 @@ export function PortalSwapFlow() {
       const position = positions.find(
         (p) => p.asset.toUpperCase() === urlIntent.fromAsset,
       )
-      setFromAsset(urlIntent.fromAsset)
-      setFromChain(urlIntent.fromChain)
-      setSourceBalance(
-        position
-          ? resolveSpendableSwapBalance(position)
-          : 0,
+      const toOpt = pickDefaultSwapToOption(
+        destinationAssets,
+        urlIntent.fromAsset,
+        urlIntent.fromChain,
+        SWAP_DEFAULT_STABLE_ASSET,
       )
-      setToAsset('')
-      setToChain('')
-      setStep('to')
+      if (toOpt) {
+        applyAmountStep({
+          from: urlIntent.fromAsset,
+          fromChain: urlIntent.fromChain,
+          to: toOpt.asset,
+          toChain: toOpt.chain,
+          balance: position ? resolveSpendableSwapBalance(position) : 0,
+        })
+      } else {
+        setFromAsset(urlIntent.fromAsset)
+        setFromChain(urlIntent.fromChain)
+        setSourceBalance(position ? resolveSpendableSwapBalance(position) : 0)
+        setToAsset('')
+        setToChain('')
+        setStep('to')
+      }
+      return
+    }
+
+    const genericTo =
+      pickDefaultSwapToOption(
+        destinationAssets,
+        SWAP_DEFAULT_STABLE_ASSET,
+        activeSwapChain,
+        SWAP_DEFAULT_GENERIC_TARGET_ASSET,
+      ) ??
+      pickDefaultSwapToOption(destinationAssets, SWAP_DEFAULT_STABLE_ASSET, activeSwapChain)
+    const genericFrom = genericTo
+      ? pickDefaultSwapFromOption(
+          sourceAssets,
+          positions,
+          genericTo.asset,
+          activeSwapChain,
+          SWAP_DEFAULT_STABLE_ASSET,
+        )
+      : null
+
+    if (genericFrom && genericTo) {
+      applyAmountStep({
+        from: genericFrom.asset,
+        fromChain: genericFrom.chain,
+        to: genericTo.asset,
+        toChain: genericTo.chain,
+        balance: genericFrom.balance,
+      })
       return
     }
 
@@ -160,7 +240,15 @@ export function PortalSwapFlow() {
     setFromAsset('')
     setFromChain('')
     setSourceBalance(0)
-  }, [activeSwapChain, positions, urlIntent])
+  }, [
+    activeSwapChain,
+    catalog,
+    destinationAssets,
+    positions,
+    sourceAssets,
+    step,
+    urlIntent,
+  ])
 
   const onSelectTo = useCallback(
     (asset: string) => {
@@ -309,9 +397,17 @@ export function PortalSwapFlow() {
               : PORTAL_ROUTES.cryptoWallet
           }
           backLabel={urlIntent.mode === 'sell' ? 'Back to asset' : 'Back to wallet'}
-          onBackClick={() =>
-            setStep(urlIntent.mode === 'sell' ? 'to' : urlIntent.mode === 'buy' ? 'from' : 'from')
-          }
+          onBackClick={() => {
+            if (urlIntent.mode === 'sell') {
+              router.push(portalCryptoWalletAssetRoute(urlIntent.fromAsset))
+              return
+            }
+            if (urlIntent.mode === 'buy') {
+              router.push(portalCryptoWalletAssetRoute(toAsset))
+              return
+            }
+            router.push(PORTAL_ROUTES.cryptoWallet)
+          }}
         >
           <PortalSwapAmountStep
             fromAsset={fromAsset}
@@ -324,9 +420,17 @@ export function PortalSwapFlow() {
             onChangeFrom={onChangeFromOnAmount}
             onChangeTo={onChangeToOnAmount}
             onContinue={onAmountContinue}
-            onBack={() =>
-              setStep(urlIntent.mode === 'sell' ? 'to' : urlIntent.mode === 'buy' ? 'from' : 'from')
-            }
+            onBack={() => {
+              if (urlIntent.mode === 'sell') {
+                router.push(portalCryptoWalletAssetRoute(urlIntent.fromAsset))
+                return
+              }
+              if (urlIntent.mode === 'buy') {
+                router.push(portalCryptoWalletAssetRoute(toAsset))
+                return
+              }
+              router.push(PORTAL_ROUTES.cryptoWallet)
+            }}
           />
         </PortalSwapLayout>
       ) : isExecutionStep && quote && swapProcessingContext ? (

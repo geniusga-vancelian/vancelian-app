@@ -13,16 +13,25 @@ type Props = {
   loading?: boolean
   error?: string | null
   onRetry?: () => void
+  backHref?: string
+  backLabel?: string
   children?: ReactNode
 }
 
-/** Layout invest DeFi — grille handoff Placer (flow + sidebar advisor). */
-export function PortalDefiVaultInvestLayout({ loading, error, onRetry, children }: Props) {
+/** Layout invest DeFi / bundle — grille handoff Placer (flow + sidebar advisor), aligné swap. */
+export function PortalDefiVaultInvestLayout({
+  loading,
+  error,
+  onRetry,
+  backHref = PORTAL_ROUTES.invest,
+  backLabel = 'Back to vaults',
+  children,
+}: Props) {
   return (
     <PortalPageContainer className="inv-page">
       <div className="portal-placer-grid">
         <div className="col-main placer-invest">
-          <PortalDetailBackLink href={PORTAL_ROUTES.invest} label="Back to vaults" />
+          <PortalDetailBackLink href={backHref} label={backLabel} />
 
           {loading ? (
             <p className="m-0 font-ui text-[15px] text-v-fg-muted">Loading vault…</p>

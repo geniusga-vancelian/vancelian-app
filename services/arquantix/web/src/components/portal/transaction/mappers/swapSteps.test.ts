@@ -18,7 +18,7 @@ describe('swapSteps', () => {
   })
 
   it('terminal copy is user-facing only', () => {
-    assert.match(SWAP_TERMINAL_FAILURE_COPY.title, /Unable/)
+    assert.match(SWAP_TERMINAL_FAILURE_COPY.title, /Impossible/)
     for (const line of SWAP_TERMINAL_FAILURE_COPY.lines) {
       assert.doesNotMatch(line, /revert|LI\.FI|lifi|group_key|idempotency/i)
     }
@@ -34,7 +34,7 @@ describe('swapSteps', () => {
     const copy = resolveSwapFailureCopy(
       new Error('Quote expirée — revenez à l’étape montant et refaites une estimation.'),
     )
-    assert.match(copy.lines[0]!, /quote has expired/i)
+    assert.match(copy.lines[0]!, /devis a expiré/i)
     assert.doesNotMatch(copy.lines[0]!, /LI\.FI|lifi|revert/i)
   })
 })

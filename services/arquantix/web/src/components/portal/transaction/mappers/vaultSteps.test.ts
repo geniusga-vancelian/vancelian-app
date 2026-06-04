@@ -24,8 +24,8 @@ describe('vaultSteps', () => {
     assert.equal(VAULT_DEPOSIT_PROCESSING_STEP_DEFS.length, 4)
     const steps = buildVaultProcessingSteps('deposit', ctx)
     assert.equal(steps.length, 4)
-    assert.equal(steps[0]!.label, 'Préparation')
-    assert.equal(steps[3]!.label, 'Mise à jour du portefeuille')
+    assert.equal(steps[0]!.label, 'Autorisation du paiement')
+    assert.equal(steps[3]!.label, 'Réception dans votre portefeuille')
   })
 
   it('withdraw mapping exposes 4 product steps', () => {
@@ -45,26 +45,25 @@ describe('vaultSteps', () => {
     assert.equal(vaultProcessingStepperIndex('confirmed'), 4)
   })
 
-  it('review deposit title has no blocking warning copy', () => {
-    assert.match(VAULT_REVIEW_UI.titleDeposit, /Récapitulatif/)
+  it('review uses Confirmation title and deposit CTA without warning checkbox', () => {
+    assert.equal(VAULT_REVIEW_UI.title, 'Confirmation')
+    assert.match(VAULT_REVIEW_UI.confirmDeposit, /Confirmer l'investissement/)
     assert.doesNotMatch(VAULT_REVIEW_UI.confirmDeposit, /I understand|warning/i)
   })
 
-  it('review withdraw title and CTA', () => {
-    assert.match(VAULT_REVIEW_UI.titleWithdraw, /retrait/i)
-    assert.match(VAULT_REVIEW_UI.confirmWithdraw, /Confirmer/)
+  it('review withdraw CTA', () => {
+    assert.match(VAULT_REVIEW_UI.confirmWithdraw, /Confirmer le retrait/)
+    assert.equal(VAULT_REVIEW_UI.modifierCta, 'Modifier')
   })
 
   it('success deposit uses TransactionResultPage copy constants', () => {
     const copy = vaultSuccessCopy('deposit')
-    assert.equal(copy.title, 'Dépôt effectué')
-    assert.match(copy.subtitle, /position/)
+    assert.equal(copy.title, 'Investissement effectué')
   })
 
   it('success withdraw uses TransactionResultPage copy constants', () => {
     const copy = vaultSuccessCopy('withdraw')
     assert.equal(copy.title, 'Retrait effectué')
-    assert.match(copy.subtitle, /disponibles/)
   })
 
   it('failed uses impossible terminal copy', () => {
@@ -95,7 +94,6 @@ describe('vaultSteps', () => {
     assert.match(hashRows[0]!.value, /^0x/)
     const success = vaultSuccessCopy('deposit')
     assert.doesNotMatch(success.title, /0x/)
-    assert.doesNotMatch(success.subtitle, /0x/)
     assert.doesNotMatch(success.title, /tx hash/i)
   })
 

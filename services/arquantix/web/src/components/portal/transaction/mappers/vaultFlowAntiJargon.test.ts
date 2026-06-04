@@ -26,7 +26,7 @@ describe('vaultFlowAntiJargon', () => {
       assertNoVaultPrimaryJargon(line)
     }
     assert.doesNotMatch(VAULT_REVIEW_UI.confirmDeposit, /approval pending/i)
-    assert.doesNotMatch(VAULT_REVIEW_UI.titleDeposit, /I understand/i)
+    assert.equal(VAULT_REVIEW_UI.title, 'Confirmation')
   })
 
   it('processing deposit shows 4 product steps without jargon', () => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
 import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
@@ -9,13 +9,13 @@ import {
   type PortalBundleReviewContext,
 } from '@/components/portal/bundles/PortalBundleReviewStep'
 import { useBundleLifiInvest } from '@/components/portal/bundles/useBundleLifiInvest'
-import { PortalWeb3BoundaryLazy } from '@/components/portal/web3/PortalWeb3BoundaryLazy'
 import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
 import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
 import {
-  BUNDLE_PROCESSING_COMPLETED_INDEX,
-  buildBundleProcessingSteps,
-  bundleInvestProcessingStepperIndex,
+  buildBundleInvestProcessingStepsDynamic,
+  buildBundleReviewPreviewSteps,
+  bundleInvestDynamicProcessingProgressIndex,
+  type BundleInvestProcessingProgress,
   resolveBundleFailureCopy,
   resolveBundleInvestResultVariant,
 } from '@/components/portal/transaction/mappers/bundleSteps'
@@ -67,8 +67,66 @@ type Props = {
   onResultClose: () => void
 }
 
-/** Bundle invest review / processing / result — useBundleLifiInvest + lazy Web3 (R4.5-F5-A). */
-export function PortalBundleExecutionController({
+/** Review sans hooks wagmi — évite WagmiProviderNotFoundError (R4.5-F5-A). */
+function PortalBundleReviewScene({
+  reviewContext,
+  onFlowSceneChange,
+  portfolioReady,
+}: Pick<Props, 'reviewContext' | 'onFlowSceneChange' | 'portfolioReady'>) {
+  const { privyReady } = usePortalAuthPrivy()
+  const [signingPrep, setSigningPrep] = useState(false)
+  const submitGuardRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setSigningPrep(true)
+    void (async () => {
+      try {
+        await waitForPrivyClientReady(() => privyReady, { timeoutMs: 30_000 })
+      } catch {
+        /* Review still renders */
+      } finally {
+        if (!cancelled) setSigningPrep(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [privyReady])
+
+  const onReviewConfirm = useCallback(() => {
+    onFlowSceneChange('processing')
+  }, [onFlowSceneChange])
+
+  const onBackToSetup = useCallback(() => {
+    onFlowSceneChange('setup')
+  }, [onFlowSceneChange])
+
+  const reviewDisabled = !portfolioReady || submitGuardRef.current
+
+  return (
+    <>
+      {signingPrep ? (
+        <div
+          className="mb-4 flex items-center gap-2 rounded-lg border border-v-fg-10 bg-v-fg-02 px-3 py-2 font-ui text-[13px] text-v-fg-muted"
+          aria-live="polite"
+        >
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          {BUNDLE_FLOW_UI.preparingSecureConfirmation}
+        </div>
+      ) : null}
+      <PortalBundleReviewStep
+        context={reviewContext}
+        onConfirm={onReviewConfirm}
+        onBack={onBackToSetup}
+        confirmDisabled={reviewDisabled}
+      />
+    </>
+  )
+}
+
+/** Processing / result — useBundleLifiInvest sous WagmiProvider (`invest/bundle/(tx)/layout`). */
+function PortalBundleWeb3ExecutionRunner({
   flowScene,
   onFlowSceneChange,
   onBlocked,
@@ -87,14 +145,17 @@ export function PortalBundleExecutionController({
   const privyReadyRef = useRef(privyReady)
 
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
+  const [processingProgress, setProcessingProgress] = useState<BundleInvestProcessingProgress>({
+    stage: 'preparing',
+  })
+  const [displayProgressIndex, setDisplayProgressIndex] = useState(0)
+  const maxProgressIndexRef = useRef(0)
   const [failureCopy, setFailureCopy] = useState(() => resolveBundleFailureCopy(null))
   const [resultVariant, setResultVariant] = useState<PortalBundleInvestResultVariant>('success')
   const [resultAmount, setResultAmount] = useState(0)
-  const [activeAllocationAsset, setActiveAllocationAsset] = useState<string | null>(null)
   const [resultTechnicalDetails, setResultTechnicalDetails] = useState<
     TransactionTechnicalDetailsRow[]
   >([])
-  const [signingPrep, setSigningPrep] = useState(false)
   const submitGuardRef = useRef(false)
   const executionStartedRef = useRef(false)
   const executionModeRef = useRef<'none' | 'invest'>('none')
@@ -103,47 +164,61 @@ export function PortalBundleExecutionController({
     swapMockMode,
     fundingAsset,
     setExecutionPhase,
-    (_current, _total, asset) => {
-      setActiveAllocationAsset(asset)
-    },
+    undefined,
+    setProcessingProgress,
   )
 
   useEffect(() => {
     privyReadyRef.current = privyReady
   }, [privyReady])
 
-  useEffect(() => {
-    if (flowScene !== 'review') {
-      setSigningPrep(false)
-      return
-    }
-
-    let cancelled = false
-    setSigningPrep(true)
-    void (async () => {
-      try {
-        await waitForPrivyClientReady(() => privyReadyRef.current, { timeoutMs: 30_000 })
-      } catch {
-        /* Review still renders */
-      } finally {
-        if (!cancelled) setSigningPrep(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [flowScene, privyReady])
-
   const processingContext = {
     amountLabel: `${formatBundleUsdcAmount(parsedAmount > 0 ? parsedAmount : amount)} ${fundingAsset}`,
     bundleLabel: bundle.title,
-    activeAllocationAsset,
   }
+
+  const allocationAssetsForSteps = useMemo(() => {
+    if (processingProgress.allocationAssets?.length) {
+      return processingProgress.allocationAssets
+    }
+    return reviewContext.targetAllocationRows.map((row) => row.asset)
+  }, [processingProgress.allocationAssets, reviewContext.targetAllocationRows])
+
+  const processingSteps = useMemo(
+    () =>
+      buildBundleInvestProcessingStepsDynamic({
+        bundleLabel: bundle.title,
+        entryAsset: processingProgress.entryAsset ?? fundingAsset,
+        allocationAssets: allocationAssetsForSteps,
+      }),
+    [
+      allocationAssetsForSteps,
+      bundle.title,
+      fundingAsset,
+      processingProgress.entryAsset,
+    ],
+  )
+
+  const rawProgressIndex = bundleInvestDynamicProcessingProgressIndex(
+    processingProgress,
+    processingSteps.length,
+  )
+
+  useEffect(() => {
+    maxProgressIndexRef.current = Math.max(maxProgressIndexRef.current, rawProgressIndex)
+    setDisplayProgressIndex(maxProgressIndexRef.current)
+  }, [rawProgressIndex])
+
+  useEffect(() => {
+    if (flowScene === 'processing') {
+      maxProgressIndexRef.current = 0
+      setDisplayProgressIndex(0)
+      setProcessingProgress({ stage: 'preparing', entryAsset: fundingAsset })
+    }
+  }, [flowScene, fundingAsset])
 
   const runExecution = useCallback(
     async (runner: () => Promise<unknown>) => {
-      setActiveAllocationAsset(null)
       setExecutionPhase('preparing')
       submitGuardRef.current = true
       try {
@@ -236,7 +311,6 @@ export function PortalBundleExecutionController({
         onFlowSceneChange('result')
       } finally {
         submitGuardRef.current = false
-        setActiveAllocationAsset(null)
       }
     },
     [
@@ -278,132 +352,125 @@ export function PortalBundleExecutionController({
   ])
 
   useEffect(() => {
+    if (flowScene === 'processing') {
+      executionModeRef.current = 'invest'
+      executionStartedRef.current = false
+    }
+  }, [flowScene])
+
+  useEffect(() => {
     if (flowScene !== 'processing') return
     void executeProcessing()
   }, [executeProcessing, flowScene])
 
-  const onReviewConfirm = () => {
-    executionModeRef.current = 'invest'
-    executionStartedRef.current = false
-    onFlowSceneChange('processing')
-  }
+  const successSteps = buildBundleReviewPreviewSteps(processingContext).map((step) => ({
+    name: step.label,
+    body: step.subtext,
+  }))
 
-  const onBackToSetup = () => {
-    executionModeRef.current = 'none'
-    executionStartedRef.current = false
-    onFlowSceneChange('setup')
-  }
-
-  const batchInProgress = flowScene === 'processing' || submitGuardRef.current
-
-  const reviewDisabled =
-    !portfolioReady ||
-    batchInProgress ||
-    inFlightRef.current ||
-    reviewContext.preview.preview_status === 'invalid'
-
-  const inner =
-    flowScene === 'review' ? (
-      <>
-        {signingPrep ? (
-          <div
-            className="mb-4 flex items-center gap-2 rounded-lg border border-v-fg-10 bg-v-fg-02 px-3 py-2 font-ui text-[13px] text-v-fg-muted"
-            aria-live="polite"
-          >
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-            {BUNDLE_FLOW_UI.preparingSecureConfirmation}
-          </div>
-        ) : null}
-        <PortalBundleReviewStep
-          context={reviewContext}
-          onConfirm={onReviewConfirm}
-          onBack={onBackToSetup}
-          confirmDisabled={reviewDisabled}
-        />
-      </>
-    ) : flowScene === 'processing' ? (
+  if (flowScene === 'processing') {
+    return (
       <TransactionProcessingPage
         title={BUNDLE_FLOW_UI.processingTitle}
         lead={BUNDLE_FLOW_UI.processingLead(
           processingContext.amountLabel,
           processingContext.bundleLabel,
         )}
-        steps={buildBundleProcessingSteps('invest', processingContext)}
-        progressIndex={bundleInvestProcessingStepperIndex(executionPhase)}
-        completedProgressIndex={BUNDLE_PROCESSING_COMPLETED_INDEX}
+        steps={processingSteps}
+        progressIndex={displayProgressIndex}
+        completedProgressIndex={processingSteps.length}
         onClose={onProcessingClose}
       />
-    ) : (
-      <div className="flex flex-col gap-4">
-        {resultVariant === 'success' ? (
-          <TransactionResultPage
-            variant="success"
-            layout="compact"
-            title={BUNDLE_FLOW_UI.successTitle}
-            lead={
-              <>
-                {formatBundleUsdcAmount(resultAmount)} {fundingAsset}
-              </>
-            }
-            subtitle={BUNDLE_FLOW_UI.successSubtitle}
-            steps={[]}
-            summary={[]}
-            primaryAction={{
-              label: BUNDLE_FLOW_UI.viewBasketCta,
-              onClick: onResultClose,
-            }}
-            onClose={onResultClose}
-          />
-        ) : null}
-        {resultVariant === 'completed_partial_allocation' ? (
-          <TransactionResultPage
-            variant="success"
-            layout="compact"
-            title={BUNDLE_TERMINAL_PARTIAL_ALLOCATION.title}
-            lead={BUNDLE_TERMINAL_PARTIAL_ALLOCATION.lines[0]}
-            subtitle=""
-            steps={[]}
-            summary={[]}
-            note={
-              resultTechnicalDetails.length > 0 ? resultTechnicalDetails[0]?.value : undefined
-            }
-            primaryAction={{
-              label: BUNDLE_FLOW_UI.viewBasketCta,
-              onClick: onResultClose,
-            }}
-            onClose={onResultClose}
-          />
-        ) : null}
-        {resultVariant === 'reconciliation_required' ? (
-          <TransactionResultPage
-            variant="reconciliation_required"
-            copy={BUNDLE_TERMINAL_RECONCILIATION}
-            onClose={onResultClose}
-            closeLabel={BUNDLE_RESULT_ACTIONS.close}
-            primaryAction={{
-              label: BUNDLE_FLOW_UI.viewBasketCta,
-              onClick: onResultClose,
-            }}
-            technicalDetails={
-              resultTechnicalDetails.length > 0 ? resultTechnicalDetails : undefined
-            }
-            technicalDetailsTitle={BUNDLE_REVIEW_UI.technicalDetailsTitle}
-          />
-        ) : null}
-        {resultVariant === 'impossible' ? (
-          <TransactionResultPage
-            variant="impossible"
-            copy={
-              failureCopy.title === BUNDLE_TERMINAL_IMPOSSIBLE.title
-                ? failureCopy
-                : BUNDLE_TERMINAL_IMPOSSIBLE
-            }
-            onClose={onResultClose}
-            closeLabel={BUNDLE_RESULT_ACTIONS.close}
-          />
-        ) : null}
-      </div>
     )
+  }
 
-  return <PortalWeb3BoundaryLazy>{inner}</PortalWeb3BoundaryLazy>
+  return (
+    <div className="flex flex-col gap-4">
+      {resultVariant === 'success' ? (
+        <TransactionResultPage
+          variant="success"
+          layout="full"
+          title={BUNDLE_FLOW_UI.successTitle}
+          lead={
+            <>
+              <b className="v-tnum">
+                {formatBundleUsdcAmount(resultAmount)} {fundingAsset}
+              </b>{' '}
+              ont été investis sur {bundle.title}.
+            </>
+          }
+          subtitle={BUNDLE_FLOW_UI.successSubtitle}
+          stepsTitle="Étapes réalisées"
+          steps={successSteps}
+          summary={[
+            { k: BUNDLE_REVIEW_UI.bundle, v: bundle.title },
+            { k: BUNDLE_REVIEW_UI.youInvest, v: `${formatBundleUsdcAmount(resultAmount)} ${fundingAsset}` },
+          ]}
+          primaryAction={{
+            label: BUNDLE_FLOW_UI.viewBasketCta,
+            onClick: onResultClose,
+          }}
+          onClose={onResultClose}
+        />
+      ) : null}
+      {resultVariant === 'completed_partial_allocation' ? (
+        <TransactionResultPage
+          variant="success"
+          layout="full"
+          title={BUNDLE_TERMINAL_PARTIAL_ALLOCATION.title}
+          lead={BUNDLE_TERMINAL_PARTIAL_ALLOCATION.lines[0]}
+          subtitle=""
+          steps={[]}
+          summary={[]}
+          note={
+            resultTechnicalDetails.length > 0 ? resultTechnicalDetails[0]?.value : undefined
+          }
+          primaryAction={{
+            label: BUNDLE_FLOW_UI.viewBasketCta,
+            onClick: onResultClose,
+          }}
+          onClose={onResultClose}
+        />
+      ) : null}
+      {resultVariant === 'reconciliation_required' ? (
+        <TransactionResultPage
+          variant="reconciliation_required"
+          copy={BUNDLE_TERMINAL_RECONCILIATION}
+          onClose={onResultClose}
+          closeLabel={BUNDLE_RESULT_ACTIONS.close}
+          primaryAction={{
+            label: BUNDLE_FLOW_UI.viewBasketCta,
+            onClick: onResultClose,
+          }}
+          technicalDetails={
+            resultTechnicalDetails.length > 0 ? resultTechnicalDetails : undefined
+          }
+          technicalDetailsTitle={BUNDLE_REVIEW_UI.technicalDetailsTitle}
+        />
+      ) : null}
+      {resultVariant === 'impossible' ? (
+        <TransactionResultPage
+          variant="impossible"
+          copy={
+            failureCopy.title === BUNDLE_TERMINAL_IMPOSSIBLE.title
+              ? failureCopy
+              : BUNDLE_TERMINAL_IMPOSSIBLE
+          }
+          onClose={onResultClose}
+          closeLabel={BUNDLE_RESULT_ACTIONS.close}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Bundle invest review / processing / result (R4.5-F5-A).
+ * WagmiProvider fourni par `invest/bundle/(tx)/layout.tsx`.
+ */
+export function PortalBundleExecutionController(props: Props) {
+  if (props.flowScene === 'review') {
+    return <PortalBundleReviewScene {...props} />
+  }
+  return <PortalBundleWeb3ExecutionRunner {...props} />
 }

@@ -53,6 +53,10 @@ function toInvestBundle(payload: PortalBundleProductDetailPayload): PortalCrypto
     entryAssetDefault: payload.entryAssetDefault,
     entryAssetsAllowed: payload.entryAssetsAllowed,
     allocationTickers: payload.allocations.map((a) => a.assetSymbol),
+    targetAllocations: payload.allocations.map((a) => ({
+      assetSymbol: a.assetSymbol,
+      targetWeight: a.targetWeight,
+    })),
     sortOrder: 999,
   }
 }

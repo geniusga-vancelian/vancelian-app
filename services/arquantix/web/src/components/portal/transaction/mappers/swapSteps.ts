@@ -4,8 +4,14 @@
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import type { SwapQuotePayload } from '@/lib/portal/swapClient'
+import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
 import { SWAP_FLOW_UI } from '@/components/portal/transaction/mappers/swapUiCopy'
-import type { TransactionStep, TransactionTerminalFailureCopy } from '@/components/portal/transaction/types'
+import type {
+  TransactionResultSuccessStep,
+  TransactionResultSummaryRow,
+  TransactionStep,
+  TransactionTerminalFailureCopy,
+} from '@/components/portal/transaction/types'
 import type { TransactionTechnicalDetailsRow } from '@/components/portal/transaction/types'
 
 export const SWAP_PROCESSING_STEP_DEFS: Array<{
@@ -13,21 +19,21 @@ export const SWAP_PROCESSING_STEP_DEFS: Array<{
   defaultSub: (ctx: SwapProcessingContext) => string
 }> = [
   {
-    label: 'Preparing exchange',
+    label: "Autorisation de l'échange",
     defaultSub: (ctx) =>
-      `Checking your balance and preparing your ${ctx.fromAsset} → ${ctx.toAsset} exchange.`,
+      `Vous autorisez l'échange de ${ctx.payLabel} ${ctx.fromAsset}.`,
   },
   {
     label: 'Signature',
-    defaultSub: () => 'Confirm the operation in your wallet.',
+    defaultSub: () => 'Confirmez l’opération dans votre wallet.',
   },
   {
-    label: 'Executing exchange',
-    defaultSub: (ctx) => `Converting your ${ctx.fromAsset} to ${ctx.toAsset}.`,
+    label: 'Exécution de l’échange',
+    defaultSub: (ctx) => `Conversion de ${ctx.fromAsset} vers ${ctx.toAsset}.`,
   },
   {
-    label: 'Receiving assets',
-    defaultSub: (ctx) => `Crediting ${ctx.receiveLabel} to your wallet.`,
+    label: 'Réception dans votre wallet',
+    defaultSub: (ctx) => `Crédit de ${ctx.receiveLabel} sur votre portefeuille Vancelian.`,
   },
 ]
 
@@ -41,8 +47,8 @@ export type SwapProcessingContext = {
 export const SWAP_PROCESSING_COMPLETED_INDEX = 4
 
 export const SWAP_TERMINAL_FAILURE_COPY: TransactionTerminalFailureCopy = {
-  title: 'Unable to complete exchange',
-  lines: ['No assets were exchanged.'],
+  title: "Impossible de finaliser l'échange",
+  lines: ['Aucun actif n’a été échangé.'],
 }
 
 const FORBIDDEN_USER_PATTERN =
@@ -72,6 +78,36 @@ export function buildSwapProcessingSteps(ctx: SwapProcessingContext): Transactio
     label: step.label,
     subtext: step.defaultSub(ctx),
   }))
+}
+
+/** Preview accordéon sur l’écran Confirmation (même contenu que processing, libellés handoff). */
+export function buildSwapReviewPreviewSteps(ctx: SwapProcessingContext): TransactionStep[] {
+  return buildSwapProcessingSteps(ctx)
+}
+
+export function buildSwapSuccessSteps(ctx: SwapProcessingContext): TransactionResultSuccessStep[] {
+  return buildSwapProcessingSteps(ctx).map((step) => ({
+    name: step.label,
+    body: step.subtext,
+  }))
+}
+
+export function buildSwapSuccessSummary(
+  quote: SwapQuotePayload,
+  ctx: SwapProcessingContext,
+): TransactionResultSummaryRow[] {
+  const rows: TransactionResultSummaryRow[] = [
+    { k: 'Vous avez échangé', v: `${ctx.payLabel} ${ctx.fromAsset}` },
+    { k: `${ctx.toAsset} reçus`, v: ctx.receiveLabel },
+  ]
+  if (quote.exchange_rate) {
+    rows.push({
+      k: 'Taux',
+      v: `1 ${ctx.fromAsset} ≈ ${formatSwapCryptoAmount(quote.exchange_rate)} ${ctx.toAsset}`,
+    })
+  }
+  rows.push({ k: 'Frais Vancelian', v: 'Offerts' })
+  return rows
 }
 
 export function resolveSwapFailureCopy(error: unknown): TransactionTerminalFailureCopy {
@@ -110,21 +146,21 @@ export function buildSwapTechnicalDetailRows(quote: SwapQuotePayload): Transacti
 
   const rows: TransactionTechnicalDetailsRow[] = [
     { label: 'Route', value: routeLabel },
-    { label: 'Network', value: SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain },
+    { label: 'Réseau', value: SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain },
   ]
 
   if (quote.exchange_rate) {
     rows.push({
-      label: 'Rate',
+      label: 'Taux',
       value: `1 ${quote.from_asset} ≈ ${quote.estimated_receive} ${quote.to_asset}`,
     })
   }
 
   if (quote.signing_wallet_address) {
     const walletLabel =
-      quote.signing_wallet_mode === 'external_evm' ? 'External wallet' : 'Vancelian wallet'
+      quote.signing_wallet_mode === 'external_evm' ? 'Wallet externe' : 'Wallet Vancelian'
     rows.push({
-      label: 'Signer',
+      label: 'Signataire',
       value: `${walletLabel} · ${quote.signing_wallet_address.slice(0, 6)}…${quote.signing_wallet_address.slice(-4)}`,
     })
   }

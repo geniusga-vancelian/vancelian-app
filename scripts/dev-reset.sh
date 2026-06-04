@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Stack dev Arquantix complète : Docker (Postgres, Redis, API WeasyPrint, CMS, Web) + Next local (npm run dev).
+# Stack dev Arquantix : Docker (Postgres, Redis, API WeasyPrint) + Next local (npm run dev sur :3000).
+# Le conteneur arquantix-web n'est PAS démarré par défaut (évite conflit port 3000 + crash-loop prod/mocks).
 # Prérequis : Docker Desktop allumé, .env.arquantix présent.
 #
 # Usage (depuis la racine du dépôt vancelian-app) :
-#   bash scripts/dev-reset.sh              # reset + compose up + Next en arrière-plan
-#   bash scripts/dev-reset.sh --no-next    # Docker uniquement
+#   bash scripts/dev-reset.sh              # reset + compose up (sans arquantix-web) + Next en arrière-plan
+#   bash scripts/dev-reset.sh --no-next    # Docker complet dont arquantix-web (Next dans le conteneur)
 #   bash scripts/dev-reset.sh --build      # idem + docker compose --build
-#   bash scripts/dev-reset.sh --stop       # arrêt compose + libération ports (API, Next, DB, Redis, CMS) + Next PID
+#   bash scripts/dev-reset.sh --stop       # arrêt compose + libération ports (API, Next, DB, Redis) + Next PID
 #
 # Docker : si le daemon est off, tentative de lancement (macOS : open -a Docker) puis attente ≤ 20 s.
 # Projet compose : COMPOSE_PROJECT_NAME + ARQUANTIX_COMPOSE_FILE dans .env.arquantix (défaut recovery).
@@ -208,6 +209,18 @@ curl_http_code() {
 }
 
 stop_next_from_pidfile() {
+  local daemon_pid_file="${TMPDIR:-/tmp}/arquantix-next-dev-daemon.pid"
+  if [ -f "$daemon_pid_file" ]; then
+    local dpid
+    dpid="$(cat "$daemon_pid_file" 2>/dev/null || true)"
+    if [ -n "${dpid:-}" ] && kill -0 "$dpid" 2>/dev/null; then
+      kill "$dpid" 2>/dev/null || true
+      sleep 1
+      kill -9 "$dpid" 2>/dev/null || true
+      log "Ancien superviseur Next (PID $dpid) arrêté"
+    fi
+    rm -f "$daemon_pid_file"
+  fi
   if [ -f "$NEXT_PID_FILE" ]; then
     local pid
     pid="$(cat "$NEXT_PID_FILE" 2>/dev/null || true)"
@@ -234,15 +247,17 @@ start_next_background() {
   kill_port 3000
   kill_port 3001 # idem — éviter double écoute avant npm run dev
 
-  log "Démarrage Next.js (npm run dev) en arrière-plan…"
-  : >"$NEXT_LOG_FILE"
-  (
-    cd "$REPO_ROOT/services/arquantix/web"
-    exec npm run dev
-  ) >>"$NEXT_LOG_FILE" 2>&1 &
-  echo $! >"$NEXT_PID_FILE"
-  log "Next PID $(cat "$NEXT_PID_FILE") — log : $NEXT_LOG_FILE"
-  log "URL attendue : http://localhost:3000 (WEB_PORT — voir .env.arquantix et docs/arquantix/LOCAL_SETUP.md)"
+  log "Démarrage Next.js (daemon avec relance auto)…"
+  bash "$REPO_ROOT/scripts/arquantix-next-dev-daemon.sh" --bg
+  sleep 3
+  _npid=""
+  [ -f "$NEXT_PID_FILE" ] && _npid="$(cat "$NEXT_PID_FILE" 2>/dev/null || true)"
+  if [ -n "${_npid:-}" ] && kill -0 "$_npid" 2>/dev/null; then
+    log "Next PID $_npid — log : $NEXT_LOG_FILE"
+  else
+    msg_error "Next ne répond pas encore — voir : tail -40 $NEXT_LOG_FILE"
+  fi
+  log "URL : http://127.0.0.1:3000/ (préférer 127.0.0.1 si « localhost » échoue dans le navigateur)"
 }
 
 # --- stop only ---
@@ -285,7 +300,14 @@ if [ "$WITH_BUILD" = true ]; then
   UP_ARGS=(up -d --build --force-recreate --remove-orphans)
   log "Build des images activé (--build)…"
 fi
-log "Démarrage Docker : Postgres, Redis, API (WeasyPrint), CMS, Web…"
+_web_scale=0
+if [ "$NO_NEXT" = true ]; then
+  _web_scale=1
+  log "Démarrage Docker : Postgres, Redis, API, arquantix-web (Next dans le conteneur)…"
+else
+  log "Démarrage Docker : Postgres, Redis, API (arquantix-web désactivé — Next = npm sur l'hôte)…"
+fi
+UP_ARGS+=(--scale "arquantix-web=${_web_scale}")
 (cd "$REPO_ROOT" && "${COMPOSE[@]}" "${UP_ARGS[@]}")
 
 msg_wait "Init conteneurs + binding ports (souvent 10–30 s après démarrage à froid de Docker Desktop)…"
@@ -347,9 +369,13 @@ fi
 log "─── URLs (127.0.0.1 = souvent plus fiable que « localhost ») ───"
 log "  Santé API         : http://127.0.0.1:${DEV_API_PORT}/health"
 log "  Doc API (Swagger) : http://127.0.0.1:${DEV_API_PORT}/docs"
-log "  Site Next (npm)   : http://127.0.0.1:${DEV_LOCAL_NEXT_PORT}/"
+log "  Site Next (npm)   : http://127.0.0.1:${DEV_LOCAL_NEXT_PORT}/  (éviter localhost si page blanche / connexion refusée)"
 log "  Admin web (UI)    : http://127.0.0.1:${DEV_LOCAL_NEXT_PORT}/admin/login"
-log "  Next (Docker)     : http://127.0.0.1:${DEV_DOCKER_WEB_PORT}/  (si conteneur arquantix-web up)"
+if [ "$NO_NEXT" = true ]; then
+  log "  Next (Docker)     : http://127.0.0.1:${DEV_DOCKER_WEB_PORT}/  (arquantix-web — mode --no-next)"
+else
+  log "  Next (Docker)     : désactivé (utiliser --no-next ou make arquantix-up pour le conteneur web)"
+fi
 log "  Rappel : sur :${DEV_API_PORT}, les routes /admin/* sont des endpoints API (JSON), pas la page admin du navigateur."
 log "Terminé. Docker : docker compose logs -f   |   Next log : tail -f $NEXT_LOG_FILE"
 log "Stop tout : bash scripts/dev-reset.sh --stop"

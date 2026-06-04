@@ -11,20 +11,21 @@ export const VAULT_DEPOSIT_PROCESSING_STEP_DEFS: Array<{
   defaultSub: (ctx: VaultProcessingContext) => string
 }> = [
   {
-    label: 'Préparation',
-    defaultSub: () => 'Vérification de votre solde et préparation de l’opération.',
+    label: 'Autorisation du paiement',
+    defaultSub: (ctx) =>
+      `Débit de ${ctx.amountLabel} depuis votre compte et préparation de l’opération.`,
   },
   {
-    label: 'Autorisation du dépôt',
-    defaultSub: () => 'Confirmez l’autorisation dans votre portefeuille si demandé.',
+    label: 'Exécution de l’ordre',
+    defaultSub: (ctx) => `Placement de ${ctx.amountLabel} sur ${ctx.vaultLabel}.`,
   },
   {
-    label: 'Dépôt dans le coffre',
-    defaultSub: (ctx) => `Envoi de ${ctx.amountLabel} vers ${ctx.vaultLabel}.`,
+    label: 'Dépôt on-chain',
+    defaultSub: () => 'Confirmez la transaction dans votre portefeuille si demandé.',
   },
   {
-    label: 'Mise à jour du portefeuille',
-    defaultSub: () => 'Synchronisation de votre position.',
+    label: 'Réception dans votre portefeuille',
+    defaultSub: () => 'Votre position dans le coffre est mise à jour.',
   },
 ]
 
@@ -96,6 +97,50 @@ export function buildVaultProcessingSteps(
   }))
 }
 
+/** Preview accordéon — écran Confirmation (handoff InvestConfirm). */
+export function buildVaultReviewPreviewSteps(
+  operation: PortalVaultOperation,
+  ctx: VaultProcessingContext,
+): TransactionStep[] {
+  return buildVaultProcessingSteps(operation, ctx)
+}
+
+export function buildVaultSuccessSteps(
+  operation: PortalVaultOperation,
+  ctx: VaultProcessingContext,
+): Array<{ name: string; body: string }> {
+  return buildVaultProcessingSteps(operation, ctx).map((step) => ({
+    name: step.label,
+    body: step.subtext,
+  }))
+}
+
+export function buildVaultSuccessSummary(
+  operation: PortalVaultOperation,
+  ctx: VaultProcessingContext,
+  yieldPct: number,
+): Array<{ k: string; v: string }> {
+  const rows: Array<{ k: string; v: string }> = [
+    {
+      k: operation === 'deposit' ? 'Montant placé' : 'Montant retiré',
+      v: ctx.amountLabel,
+    },
+    { k: 'Coffre', v: ctx.vaultLabel },
+  ]
+  if (operation === 'deposit' && yieldPct > 0) {
+    rows.push({
+      k: 'Rendement cible',
+      v: `${(yieldPct * 100).toLocaleString('fr-FR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 2,
+      })} % / an`,
+    })
+  }
+  rows.push({ k: 'Frais Vancelian', v: 'Offerts' })
+  rows.push({ k: 'Réseau', v: 'Base' })
+  return rows
+}
+
 export function resolveVaultFailureCopy(error: unknown): TransactionTerminalFailureCopy {
   if (error == null) {
     return VAULT_TERMINAL_FAILURE_COPY
@@ -143,15 +188,11 @@ export function buildVaultTechnicalDetailRows(args: {
 
 export function vaultSuccessCopy(operation: PortalVaultOperation): {
   title: string
-  subtitle: string
 } {
-  return operation === 'deposit'
-    ? {
-        title: VAULT_FLOW_UI.successDepositTitle,
-        subtitle: VAULT_FLOW_UI.successDepositSubtitle,
-      }
-    : {
-        title: VAULT_FLOW_UI.successWithdrawTitle,
-        subtitle: VAULT_FLOW_UI.successWithdrawSubtitle,
-      }
+  return {
+    title:
+      operation === 'deposit'
+        ? VAULT_FLOW_UI.successDepositTitle
+        : VAULT_FLOW_UI.successWithdrawTitle,
+  }
 }

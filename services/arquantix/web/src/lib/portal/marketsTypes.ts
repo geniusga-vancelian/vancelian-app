@@ -19,6 +19,12 @@ export type PortalCryptoAsset = {
   logoUrl: string | null
 }
 
+export type PortalBundleTargetAllocation = {
+  assetSymbol: string
+  /** Poids décimal (0.5) ou pourcentage (50) — normalisé via `bundleTargetWeightToPct`. */
+  targetWeight: number
+}
+
 export type PortalCryptoBundle = {
   id: string
   code: string
@@ -34,6 +40,8 @@ export type PortalCryptoBundle = {
   entryAssetsAllowed: string[]
   /** Actifs du panier (poids décroissant) — stack hero carte DS. */
   allocationTickers: string[]
+  /** Allocation cible théorique du produit (poids PE, pas liée au montant saisi). */
+  targetAllocations: PortalBundleTargetAllocation[]
   /** Ordre d’affichage CMS (`portfolio_product_configs.sort_order`). */
   sortOrder: number
 }

@@ -116,6 +116,15 @@ services:
       ARQUANTIX_ALLOW_UNAUTHENTICATED_APP_ROUTES: ${ARQUANTIX_ALLOW_UNAUTHENTICATED_APP_ROUTES:-1}
       PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED: ${PORTAL_PRIVY_OTP_DEV_MOCK_ENABLED:-true}
       PORTAL_PRIVY_OTP_DEV_FIXED_CODE: ${PORTAL_PRIVY_OTP_DEV_FIXED_CODE:-${TWO_FACTOR_DEV_FIXED_CODE:-111111}}
+      # Garde-fou productionSandboxGuard (instrumentation.ts) : ce conteneur = NODE_ENV production (next start).
+      # Les mocks DeFi dans .env.arquantix servent à npm run dev sur l'hôte — désactivés explicitement ici.
+      LIFI_SWAPS_MOCK: "0"
+      BUNDLE_LIFI_SYNC_MOCK: "0"
+      LIFI_LOCAL_SANDBOX_ENABLED: "0"
+      MORPHO_LOCAL_SANDBOX_ENABLED: "0"
+      LOMBARD_V1_MOCK_ENABLED: "0"
+      LEDGITY_LOCAL_SANDBOX_ENABLED: "0"
+      EXTERNAL_WALLET_LOCAL_MOCK_ENABLED: "0"
       # 0 en local si `migrate deploy` échoue (P3005 : schéma déjà présent sans _prisma_migrations) — évite crash-loop.
       # Migrations manuelles : RUN_PRISMA_MIGRATE_ON_START=1 docker compose … up (une fois la baseline OK).
       RUN_PRISMA_MIGRATE_ON_START: ${RUN_PRISMA_MIGRATE_ON_START:-0}

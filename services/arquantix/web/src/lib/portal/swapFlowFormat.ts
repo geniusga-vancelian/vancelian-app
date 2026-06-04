@@ -207,3 +207,47 @@ export function buildSwapToOptions(
       chain,
     }))
 }
+
+/** Stablecoin par défaut — achat, vente et swap générique. */
+export const SWAP_DEFAULT_STABLE_ASSET = 'USDC'
+
+/** Paire swap générique par défaut (from USDC). */
+export const SWAP_DEFAULT_GENERIC_TARGET_ASSET = 'CBBTC'
+
+export function pickDefaultSwapFromOption(
+  catalog: SwapCatalogAsset[],
+  positions: PortalCryptoPosition[],
+  toAsset: string,
+  toChain: string,
+  preferredSymbol: string = SWAP_DEFAULT_STABLE_ASSET,
+): SwapFromOption | null {
+  const options = buildSwapFromOptions(catalog, positions, toAsset, toChain)
+  const preferred = preferredSymbol.trim().toUpperCase()
+  return (
+    options.find((row) => row.asset.toUpperCase() === preferred) ??
+    options.find((row) => isSwapV1Stable(row.asset)) ??
+    options[0] ??
+    null
+  )
+}
+
+export function pickDefaultSwapToOption(
+  catalog: SwapCatalogAsset[],
+  fromAsset: string,
+  chain: string,
+  preferredSymbol: string = SWAP_DEFAULT_STABLE_ASSET,
+): SwapToOption | null {
+  const options = buildSwapToOptions(catalog, fromAsset, chain)
+  const preferred = preferredSymbol.trim().toUpperCase()
+  return (
+    options.find((row) => row.asset.toUpperCase() === preferred) ??
+    options.find((row) => isSwapV1Stable(row.asset)) ??
+    options[0] ??
+    null
+  )
+}
+
+function isSwapV1Stable(symbol: string): boolean {
+  const sym = symbol.toUpperCase()
+  return sym === 'USDC' || sym === 'EURC'
+}

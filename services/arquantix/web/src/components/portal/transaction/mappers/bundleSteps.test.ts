@@ -3,9 +3,14 @@ import { describe, it } from 'node:test'
 
 import {
   BUNDLE_INVEST_PROCESSING_STEP_DEFS,
+  BUNDLE_INVEST_REVIEW_STEP_DEFS,
   BUNDLE_WITHDRAW_PROCESSING_STEP_DEFS,
-  BUNDLE_PROCESSING_COMPLETED_INDEX,
+  buildBundleReviewPreviewSteps,
+  buildBundleInvestProcessingStepsDynamic,
+  buildBundleWithdrawProcessingStepsDynamic,
   buildBundleProcessingSteps,
+  bundleInvestDynamicProcessingProgressIndex,
+  bundleWithdrawDynamicProcessingProgressIndex,
   bundleInvestProcessingStepperIndex,
   bundleWithdrawProcessingStepperIndex,
   formatBundleAllocationProgressLabel,
@@ -41,18 +46,94 @@ describe('bundleSteps', () => {
     assert.equal(steps[2]!.label, 'Transfert des fonds')
   })
 
-  it('maps swap phases to invest stepper index', () => {
-    assert.equal(bundleInvestProcessingStepperIndex('preparing'), 0)
+  it('legacy swap phase index kept for withdraw stepper', () => {
     assert.equal(bundleInvestProcessingStepperIndex('signing'), 1)
-    assert.equal(bundleInvestProcessingStepperIndex('submitting'), 2)
-    assert.equal(bundleInvestProcessingStepperIndex('bridging'), 3)
-    assert.equal(bundleInvestProcessingStepperIndex('completed'), BUNDLE_PROCESSING_COMPLETED_INDEX)
     assert.equal(bundleWithdrawProcessingStepperIndex('submitting'), 2)
   })
 
-  it('review invest shows target allocation label', () => {
+  it('invest dynamic stepper progresses monotonically per leg', () => {
+    const assets = ['cbBTC', 'cbETH', 'LINK']
+    const steps = buildBundleInvestProcessingStepsDynamic({
+      bundleLabel: 'Crypto Majors',
+      entryAsset: 'USDC',
+      allocationAssets: assets,
+    })
+    assert.equal(steps.length, 2 + assets.length + 1)
+    assert.match(steps[1]!.subtext, /Transfert USDC/)
+    assert.match(steps[2]!.label, /CBBTC/i)
+
+    const stepCount = steps.length
+    const idxPrep = bundleInvestDynamicProcessingProgressIndex({ stage: 'preparing' }, stepCount)
+    const idxTransfer = bundleInvestDynamicProcessingProgressIndex(
+      { stage: 'entry_transfer', allocationLegTotal: 3 },
+      stepCount,
+    )
+    const idxLeg1 = bundleInvestDynamicProcessingProgressIndex(
+      {
+        stage: 'allocating',
+        allocationLegCurrent: 1,
+        allocationLegTotal: 3,
+        activeAsset: 'cbBTC',
+      },
+      stepCount,
+    )
+    const idxLeg2 = bundleInvestDynamicProcessingProgressIndex(
+      {
+        stage: 'allocating',
+        allocationLegCurrent: 2,
+        allocationLegTotal: 3,
+        activeAsset: 'cbETH',
+      },
+      stepCount,
+    )
+    const idxFinalize = bundleInvestDynamicProcessingProgressIndex(
+      { stage: 'finalizing', allocationLegTotal: 3 },
+      stepCount,
+    )
+
+    assert.equal(idxPrep, 0)
+    assert.equal(idxTransfer, 1)
+    assert.equal(idxLeg1, 2)
+    assert.equal(idxLeg2, 3)
+    assert.ok(idxLeg2 > idxLeg1)
+    assert.ok(idxFinalize > idxLeg2)
+    assert.equal(
+      bundleInvestProcessingStepperIndex('signing'),
+      bundleInvestProcessingStepperIndex('submitting') - 1,
+      'legacy phase mapper still oscillates (not used for invest UI)',
+    )
+  })
+
+  it('review invest shows Confirmation screen and preview steps', () => {
+    assert.equal(BUNDLE_REVIEW_UI.title, 'Confirmation')
     assert.match(BUNDLE_REVIEW_UI.targetAllocation, /Allocation cible/)
     assert.match(BUNDLE_REVIEW_UI.confirmCta, /Confirmer l’investissement/)
+    assert.equal(BUNDLE_INVEST_REVIEW_STEP_DEFS.length, 4)
+    const previewSteps = buildBundleReviewPreviewSteps(ctx)
+    assert.equal(previewSteps.length, 4)
+    assert.match(previewSteps[0]!.subtext, /5 000 USDC/)
+  })
+
+  it('withdraw dynamic stepper progresses per unwind leg then USDC transfer', () => {
+    const assets = ['cbBTC', 'cbETH']
+    const steps = buildBundleWithdrawProcessingStepsDynamic({
+      entryAsset: 'USDC',
+      unwindAssets: assets,
+    })
+    assert.equal(steps.length, 5)
+    assert.match(steps[1]!.label, /Désallocation · CBBTC/i)
+    assert.match(steps[3]!.label, /Transfert des fonds/)
+    const stepCount = steps.length
+    const idxLeg2 = bundleWithdrawDynamicProcessingProgressIndex(
+      { stage: 'deallocating', unwindLegCurrent: 2, unwindLegTotal: 2 },
+      stepCount,
+    )
+    const idxTransfer = bundleWithdrawDynamicProcessingProgressIndex(
+      { stage: 'transferring', unwindLegTotal: 2 },
+      stepCount,
+    )
+    assert.ok(idxLeg2 > 1)
+    assert.ok(idxTransfer > idxLeg2)
   })
 
   it('allocation step shows asset in progress without Leg', () => {
@@ -82,7 +163,22 @@ describe('bundleSteps', () => {
     )
   })
 
-  it('detects partial invest from existing payload fields', () => {
+  it('orchestration terminalStatus maps partial allocation to completed_partial_allocation variant', () => {
+    assert.equal(
+      resolveBundleInvestResultVariant(undefined, undefined, 'completed_partial_allocation'),
+      'completed_partial_allocation',
+    )
+    assert.equal(
+      resolveBundleInvestResultVariant(undefined, undefined, 'completed_full_allocation'),
+      'success',
+    )
+    assert.equal(
+      resolveBundleInvestResultVariant(undefined, undefined, 'failed_no_allocation'),
+      'impossible',
+    )
+  })
+
+  it('detects partial invest from existing payload fields (legacy read path)', () => {
     assert.equal(
       resolveBundleInvestResultVariant({
         status: 'partial_pending',

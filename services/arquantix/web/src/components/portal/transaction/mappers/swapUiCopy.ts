@@ -1,43 +1,45 @@
 /**
- * Primary user-facing copy for the swap flow (EN) — R4.5-C.
- * Technical details may expose route labels from the API; main UI must stay jargon-free.
+ * Copy utilisateur — flux swap (FR, handoff InvestConfirm / InvestProcessing).
  */
 export const SWAP_FORBIDDEN_PRIMARY_JARGON =
   /revert|retryable_failed|group_key|logical_borrow_id|idempotency|lifi|li\.fi|token approval|tx reverted|0x[a-f0-9]{8,}/i
 
 export const SWAP_REVIEW_UI = {
-  title: 'Exchange summary',
-  confirmCta: 'Confirm exchange',
-  youPay: 'You pay',
-  youReceive: 'You receive',
-  amountPaidAria: 'Amount to pay',
-  amountReceiveAria: 'Estimated receive amount',
-  exchangeRate: 'Exchange rate',
-  minimumReceive: 'Minimum receive',
-  vancelianFees: 'Vancelian fees',
-  vancelianFeesWaived: 'Waived',
-  networkFees: 'Network fees',
-  network: 'Network',
-  technicalDetailsTitle: 'Technical details',
-  backButton: 'Back',
+  title: 'Confirmation',
+  confirmCta: "Confirmer l'échange",
+  modifierCta: 'Modifier',
+  youExchange: 'Vous échangez',
+  youReceive: 'Vous recevez',
+  vancelianFees: 'Frais Vancelian',
+  vancelianFeesWaived: 'Offerts',
+  exchangeRate: 'Taux',
+  minimumReceive: 'Minimum garanti',
+  networkFees: 'Frais réseau',
+  network: 'Réseau',
+  technicalDetailsTitle: 'Détails techniques',
+  backButtonAria: 'Retour',
 } as const
 
 export const SWAP_FLOW_UI = {
-  processingTitle: 'Transaction in progress',
+  processingTitle: 'Échange en cours',
   processingLead: (payLabel: string, fromAsset: string, toAsset: string) =>
-    `Your exchange of ${payLabel} ${fromAsset} to ${toAsset} is being processed. Do not close this window.`,
-  successTitle: 'Exchange completed',
-  successSubtitle: (payLabel: string, fromAsset: string) => `for ${payLabel} ${fromAsset}`,
-  viewWalletCta: (toAsset: string) => `View ${toAsset} wallet`,
-  backToWallet: 'Back to wallet',
-  preparingSecureConfirmation: 'Preparing secure confirmation…',
+    `Votre échange de ${payLabel} ${fromAsset} vers ${toAsset} est en cours d'exécution. Ne fermez pas cette fenêtre.`,
+  successTitle: 'Échange effectué',
+  successLeadReceive: (receiveLabel: string, toAsset: string) => `${receiveLabel} ${toAsset}`,
+  successStepsTitle: 'Étapes de votre échange',
+  successSummaryTitle: 'Récapitulatif',
+  successNote:
+    'Vos actifs sont conservés en garde MPC. Vous les retrouvez et les gérez depuis votre portefeuille.',
+  viewWalletCta: (toAsset: string) => `Voir mon wallet ${toAsset}`,
+  backToWallet: 'Retour au wallet',
+  preparingSecureConfirmation: 'Préparation de la confirmation sécurisée…',
   quoteExpiredLine:
-    'Your quote has expired. Go back to the amount step and request a new estimate.',
+    'Votre devis a expiré. Revenez à l’étape montant et demandez une nouvelle estimation.',
 } as const
 
 export const SWAP_RESULT_IMPOSSIBLE_ACTIONS = {
-  close: 'Close',
-  retry: 'Try again',
+  close: 'Fermer',
+  retry: 'Réessayer',
 } as const
 
 export function collectSwapReviewPrimaryStrings(): string[] {

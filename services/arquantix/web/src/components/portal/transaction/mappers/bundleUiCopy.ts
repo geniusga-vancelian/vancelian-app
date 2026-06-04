@@ -7,10 +7,11 @@ export const BUNDLE_FORBIDDEN_PRIMARY_JARGON =
   /\bLI\.FI\b|\bLeg\b|\bBatch\b|\bPrivy\b|bundle_internal_swap|group_key|idempotency|tx reverted|0x[a-fA-F0-9]{8,}/i
 
 export const BUNDLE_REVIEW_UI = {
-  title: 'Récapitulatif de l’investissement',
+  title: 'Confirmation',
   confirmCta: 'Confirmer l’investissement',
-  youInvest: 'Vous investissez',
-  bundle: 'Bundle',
+  modifierCta: 'Modifier',
+  youInvest: 'Montant investi',
+  bundle: 'Panier',
   targetAllocation: 'Allocation cible',
   network: 'Réseau',
   networkLabel: 'Base',
@@ -24,12 +25,13 @@ export const BUNDLE_REVIEW_UI = {
 } as const
 
 export const BUNDLE_FLOW_UI = {
-  setupTitle: (bundleTitle: string) => `Investir — ${bundleTitle}`,
-  setupLead: 'Choisissez le montant et vérifiez l’allocation cible avant de confirmer.',
-  continueCta: 'Voir le récapitulatif',
-  preparingSecureConfirmation: 'Preparing secure confirmation…',
+  setupTitle: (bundleTitle: string) => `Investir`,
+  setupLead: (bundleTitle: string) =>
+    `Placez des fonds sur ${bundleTitle}. Vérifiez l’allocation cible avant de confirmer.`,
+  continueCta: 'Continuer',
+  preparingSecureConfirmation: 'Préparation de la confirmation sécurisée…',
   walletConnecting: 'Connexion du portefeuille en cours…',
-  targetAllocationSetup: 'Allocation cible (estimation)',
+  targetAllocationSetup: 'Allocation cible',
   estimatedEntry: 'Entrée estimée',
   processingTitle: 'Investissement en cours',
   processingLead: (amountLabel: string, bundleLabel: string) =>
@@ -74,6 +76,44 @@ export const BUNDLE_WITHDRAW_PROCESSING_STEPS = {
   step3: 'Transfert des fonds',
   step4: 'Mise à jour du portefeuille',
 } as const
+
+export const BUNDLE_WITHDRAW_REVIEW_UI = {
+  title: 'Confirmation',
+  confirmCta: 'Confirmer le retrait',
+  modifierCta: 'Modifier',
+  youWithdraw: 'Montant retiré',
+  bundle: 'Panier',
+  destination: 'Destination',
+  destinationLabel: 'Mon Trading (USDC)',
+  network: 'Réseau',
+  networkLabel: 'Base',
+  technicalDetailsTitle: 'Détails techniques',
+} as const
+
+export const BUNDLE_WITHDRAW_FLOW_UI = {
+  setupTitle: () => 'Retirer',
+  setupLead: (bundleTitle: string) =>
+    `Retirez des fonds depuis ${bundleTitle}. Les USDC seront crédités sur Mon Trading.`,
+  continueCta: 'Continuer',
+  preparingSecureConfirmation: 'Préparation de la confirmation sécurisée…',
+  processingTitle: 'Retrait en cours',
+  processingLead: (amountLabel: string, bundleLabel: string) =>
+    `Votre retrait de ${amountLabel} depuis ${bundleLabel} est en cours. Ne fermez pas cette fenêtre.`,
+  successTitle: 'Retrait effectué',
+  successSubtitle: 'Vos USDC sont en cours de synchronisation sur Mon Trading.',
+  viewTradingCta: 'Voir Mon Trading',
+  cashOnlyNote:
+    'Le cash leg couvre le montant — transfert direct vers Mon Trading, sans vente d’actifs.',
+  unwindNote:
+    'Des positions du panier seront vendues avant le transfert des USDC vers Mon Trading.',
+  releasePendingNote:
+    'Les fonds apparaîtront sur Mon Trading une fois le transfert comptable confirmé.',
+} as const
+
+export const BUNDLE_WITHDRAW_TERMINAL_IMPOSSIBLE: TransactionTerminalFailureCopy = {
+  title: 'Impossible de finaliser le retrait',
+  lines: ['Aucun fonds n’a été transféré vers Mon Trading.'],
+}
 
 export function collectBundleReviewPrimaryStrings(): string[] {
   return Object.values(BUNDLE_REVIEW_UI)

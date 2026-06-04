@@ -10,6 +10,7 @@ import {
   BUNDLE_FLOW_UI,
   BUNDLE_REVIEW_UI,
   BUNDLE_TERMINAL_IMPOSSIBLE,
+  BUNDLE_TERMINAL_PARTIAL_ALLOCATION,
   BUNDLE_TERMINAL_RECONCILIATION,
   collectBundleProcessingPrimaryStrings,
   collectBundleResultPrimaryStrings,
@@ -51,6 +52,8 @@ describe('bundleFlowAntiJargon', () => {
   it('terminal copies have no forbidden jargon', () => {
     assertNoBundlePrimaryJargon(BUNDLE_TERMINAL_IMPOSSIBLE.title)
     assertNoBundlePrimaryJargon(BUNDLE_TERMINAL_RECONCILIATION.title)
+    assertNoBundlePrimaryJargon(BUNDLE_TERMINAL_PARTIAL_ALLOCATION.title)
+    assertNoBundlePrimaryJargon(BUNDLE_TERMINAL_PARTIAL_ALLOCATION.lines[0]!)
     for (const line of collectBundleResultPrimaryStrings()) {
       assertNoBundlePrimaryJargon(line)
     }

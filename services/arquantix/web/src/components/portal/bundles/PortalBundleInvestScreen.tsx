@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-import { PortalBundleInvestDialog } from '@/components/portal/bundles/PortalBundleInvestDialog'
-import { PortalLazyBundleWithdrawShell } from '@/components/portal/bundles/PortalLazyBundleWithdrawShell'
+import { PortalBundleInvestFlow } from '@/components/portal/bundles/PortalBundleInvestFlow'
+import { PortalBundleWithdrawFlow } from '@/components/portal/bundles/PortalBundleWithdrawFlow'
 import { PortalDefiVaultInvestLayout } from '@/components/portal/invest/PortalDefiVaultInvestLayout'
+import { PortalInvestFlowPanel } from '@/components/portal/invest/PortalInvestFlowDom'
 import type { PortalCryptoWalletBundleDetailPayload } from '@/lib/portal/cryptoWalletTypes'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
@@ -28,12 +29,16 @@ export function PortalBundleInvestScreen({ portfolioId }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const mode = parsePortalVaultFlowMode(searchParams?.get('mode') ?? null)
+  const fromMarkets = searchParams?.get('from') === 'markets'
   const [bundle, setBundle] = useState<PortalCryptoBundle | null>(null)
   const [walletDetail, setWalletDetail] = useState<PortalCryptoWalletBundleDetailPayload | null>(
     null,
   )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const backHref = fromMarkets ? PORTAL_ROUTES.markets : PORTAL_ROUTES.invest
+  const backLabel = fromMarkets ? 'Retour aux marchés' : 'Back to vaults'
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -84,42 +89,35 @@ export function PortalBundleInvestScreen({ portfolioId }: Props) {
     void load()
   }, [load])
 
-  const back = useCallback(() => {
-    router.push(PORTAL_ROUTES.invest)
-  }, [router])
+  const exitFlow = useCallback(() => {
+    router.push(backHref)
+  }, [backHref, router])
 
   const flow = useMemo(() => {
     if (!bundle?.portfolioId) return null
     if (mode === 'withdraw') {
       return (
-        <PortalLazyBundleWithdrawShell
+        <PortalBundleWithdrawFlow
           portfolioId={bundle.portfolioId}
           portfolioName={bundle.title}
           positions={walletDetail?.bundle?.positions}
           currency={walletDetail?.currency ?? 'EUR'}
-          open
-          asPage
-          onOpenChange={(open) => {
-            if (!open) back()
-          }}
+          onExit={exitFlow}
         />
       )
     }
-    return (
-      <PortalBundleInvestDialog
-        bundle={bundle}
-        open
-        asPage
-        onOpenChange={(open) => {
-          if (!open) back()
-        }}
-      />
-    )
-  }, [back, bundle, mode, walletDetail?.bundle?.positions, walletDetail?.currency])
+    return <PortalBundleInvestFlow bundle={bundle} onExit={exitFlow} />
+  }, [bundle, exitFlow, mode, walletDetail?.bundle?.positions, walletDetail?.currency])
 
   return (
-    <PortalDefiVaultInvestLayout loading={loading} error={error} onRetry={() => void load()}>
-      {flow}
+    <PortalDefiVaultInvestLayout
+      loading={loading}
+      error={error}
+      onRetry={() => void load()}
+      backHref={backHref}
+      backLabel={backLabel}
+    >
+      {flow ? <PortalInvestFlowPanel>{flow}</PortalInvestFlowPanel> : null}
     </PortalDefiVaultInvestLayout>
   )
 }

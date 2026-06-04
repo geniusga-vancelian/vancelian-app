@@ -19,6 +19,7 @@ import {
   saveBundleWithdrawSession,
   type BundleWithdrawSession,
 } from '@/lib/portal/bundleWithdrawSession'
+import type { BundleWithdrawProcessingProgress } from '@/components/portal/transaction/mappers/bundleSteps'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 export type BundleWithdrawRunResult = {
@@ -33,19 +34,35 @@ async function executePendingSellLegs(
     pollUntilTerminal: ReturnType<typeof useLifiSwapExecution>['pollUntilTerminal']
     onLegProgress?: (current: number, total: number, asset: string) => void
     onPhaseChange?: (phase: SwapExecutionPhase) => void
+    onProcessingProgress?: (progress: BundleWithdrawProcessingProgress) => void
   },
 ): Promise<{ finalize?: BundleWithdrawFinalizePayload }> {
   const pending = pendingWithdrawLegs(withdraw)
+  const entryAsset = withdraw.entry_asset ?? 'USDC'
+  const unwindAssets = pending.map((leg) => leg.asset)
+
   if (pending.length === 0) {
     if (withdraw.release?.released) {
       return {}
     }
+    deps.onProcessingProgress?.({
+      stage: 'transferring',
+      entryAsset,
+      unwindAssets: [],
+      unwindLegTotal: 0,
+    })
     deps.onPhaseChange?.('bridging')
     const finalize = await finalizeBundleWithdraw({
       portfolio_id: withdraw.portfolio_id,
       batch_id: withdraw.batch_id,
     })
     deps.onPhaseChange?.('completed')
+    deps.onProcessingProgress?.({
+      stage: 'completed',
+      entryAsset,
+      unwindAssets: [],
+      unwindLegTotal: 0,
+    })
     return { finalize }
   }
 
@@ -54,6 +71,14 @@ async function executePendingSellLegs(
     const leg = pending[i]!
     const swapId = leg.swap_id!
     deps.onLegProgress?.(i + 1, total, leg.asset)
+    deps.onProcessingProgress?.({
+      stage: 'deallocating',
+      entryAsset,
+      unwindAssets,
+      unwindLegCurrent: i + 1,
+      unwindLegTotal: total,
+      activeAsset: leg.asset,
+    })
 
     const mapped = mapBundleSigningToExecute(leg.signing, swapId)
     const exec = mapped ?? (await bundleLegPrepareSign(swapId))
@@ -63,12 +88,24 @@ async function executePendingSellLegs(
     await deps.pollUntilTerminal(swapId)
   }
 
+  deps.onProcessingProgress?.({
+    stage: 'transferring',
+    entryAsset,
+    unwindAssets,
+    unwindLegTotal: total,
+  })
   deps.onPhaseChange?.('bridging')
   const finalize = await finalizeBundleWithdraw({
     portfolio_id: withdraw.portfolio_id,
     batch_id: withdraw.batch_id,
   })
   deps.onPhaseChange?.('completed')
+  deps.onProcessingProgress?.({
+    stage: 'completed',
+    entryAsset,
+    unwindAssets,
+    unwindLegTotal: total,
+  })
   return { finalize }
 }
 
@@ -77,6 +114,7 @@ export function useBundleLifiWithdraw(
   entryAsset?: string,
   onPhaseChange?: (phase: SwapExecutionPhase) => void,
   onLegProgress?: (current: number, total: number, asset: string) => void,
+  onProcessingProgress?: (progress: BundleWithdrawProcessingProgress) => void,
 ) {
   const inFlightRef = useRef(false)
   const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
@@ -110,12 +148,13 @@ export function useBundleLifiWithdraw(
         pollUntilTerminal,
         onLegProgress,
         onPhaseChange,
+        onProcessingProgress,
       })
 
       clearBundleWithdrawSession(withdraw.portfolio_id)
       return { withdraw, finalize }
     },
-    [onLegProgress, onPhaseChange, pollUntilTerminal, signAndSubmit],
+    [onLegProgress, onPhaseChange, onProcessingProgress, pollUntilTerminal, signAndSubmit],
   )
 
   const runWithdraw = useCallback(
@@ -129,6 +168,7 @@ export function useBundleLifiWithdraw(
       }
       inFlightRef.current = true
       try {
+        onProcessingProgress?.({ stage: 'preparing' })
         const outcome = await withdrawBundle(body)
         if (outcome.kind === 'already_pending') {
           return outcome
@@ -156,7 +196,7 @@ export function useBundleLifiWithdraw(
         inFlightRef.current = false
       }
     },
-    [runFromWithdrawPayload],
+    [onProcessingProgress, runFromWithdrawPayload],
   )
 
   const resumeSession = useCallback(
@@ -166,6 +206,7 @@ export function useBundleLifiWithdraw(
       }
       inFlightRef.current = true
       try {
+        onProcessingProgress?.({ stage: 'preparing' })
         return await runFromWithdrawPayload(session.withdraw, {
           portfolioId: session.portfolioId,
           fullWithdraw: session.fullWithdraw,
@@ -175,7 +216,7 @@ export function useBundleLifiWithdraw(
         inFlightRef.current = false
       }
     },
-    [runFromWithdrawPayload],
+    [onProcessingProgress, runFromWithdrawPayload],
   )
 
   return { runWithdraw, resumeSession, inFlightRef }

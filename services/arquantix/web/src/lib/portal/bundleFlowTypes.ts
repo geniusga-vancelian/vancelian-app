@@ -1,5 +1,7 @@
-/** Scènes UX Bundle invest (R4.5-E) — distinctes des steps legacy dialog. */
+/** Scènes UX Bundle invest / retrait (R4.5-E) — page dédiée, pas modale. */
 export type PortalBundleFlowScene = 'setup' | 'review' | 'processing' | 'result' | 'blocked'
+
+export type PortalBundleWithdrawResultVariant = 'success' | 'impossible'
 
 export type PortalBundleInvestResultVariant =
   | 'success'

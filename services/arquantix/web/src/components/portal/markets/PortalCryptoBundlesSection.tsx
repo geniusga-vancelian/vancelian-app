@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 
-import { PortalLazyBundleInvestDialog } from '@/components/portal/bundles/PortalLazyBundleInvestDialog'
 import {
   isPlacerCoffreBundle,
   PortalPlacerBasketCard,
@@ -10,14 +10,20 @@ import {
   PortalPlacerSectionHead,
 } from '@/components/portal/bundles/PortalPlacerBundleCards'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
+import { resolvePortalBundleFlowRoute } from '@/lib/portal/resolvePortalBundleFlowRoute'
 
 type Props = {
   bundles: PortalCryptoBundle[]
 }
 
-/** Vaults + crypto baskets — Placer.html card pattern. */
+/** Vaults + crypto baskets — Placer.html ; invest → page dédiée (comme swap), pas de modale. */
 export function PortalCryptoBundlesSection({ bundles }: Props) {
-  const [investBundle, setInvestBundle] = useState<PortalCryptoBundle | null>(null)
+  const router = useRouter()
+
+  const openBundleInvest = (bundle: PortalCryptoBundle) => {
+    const href = resolvePortalBundleFlowRoute(bundle, 'invest', { from: 'markets' })
+    if (href) router.push(href)
+  }
 
   const { coffreBundles, panierBundles } = useMemo(() => {
     const coffres = bundles.filter(isPlacerCoffreBundle)
@@ -40,7 +46,7 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
               <PortalPlacerBundleCoffreCard
                 key={bundle.id}
                 bundle={bundle}
-                onInvest={() => setInvestBundle(bundle)}
+                onInvest={() => openBundleInvest(bundle)}
               />
             ))}
           </div>
@@ -58,21 +64,11 @@ export function PortalCryptoBundlesSection({ bundles }: Props) {
               <PortalPlacerBasketCard
                 key={bundle.id}
                 bundle={bundle}
-                onInvest={() => setInvestBundle(bundle)}
+                onInvest={() => openBundleInvest(bundle)}
               />
             ))}
           </div>
         </div>
-      ) : null}
-
-      {investBundle ? (
-        <PortalLazyBundleInvestDialog
-          bundle={investBundle}
-          open
-          onOpenChange={(open) => {
-            if (!open) setInvestBundle(null)
-          }}
-        />
       ) : null}
     </div>
   )

@@ -3,7 +3,7 @@
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 
-import { articleBodyRemarkPlugins } from '@/components/blog/ArticleBlockStream'
+import { articleBodyRemarkPlugins } from '@/lib/blog/articleBodyMarkdown'
 import { cn } from '@/lib/utils'
 
 export type PortalVaultMarkdownVariant = 'overview' | 'narrative' | 'advisor'

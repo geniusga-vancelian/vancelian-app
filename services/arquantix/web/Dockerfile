@@ -1,7 +1,8 @@
 # --- deps ---
 FROM node:20-alpine AS deps
 # libc6-compat : résolution binaire Prisma sur musl — ca-certificates : TLS fiables pour npm / téléchargement engines
-RUN apk add --no-cache libc6-compat ca-certificates
+# python3 + build-base : node-gyp (bufferutil, etc.) lors de npm ci
+RUN apk add --no-cache libc6-compat ca-certificates python3 make g++
 WORKDIR /app
 # Contexte de build = racine monorepo (CI / compose recovery).
 COPY services/arquantix/web/package*.json ./

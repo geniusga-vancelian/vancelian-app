@@ -90,6 +90,8 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
     lead,
     subtitle,
     steps,
+    stepsTitle = 'Étapes de la transaction',
+    summaryTitle = 'Récapitulatif',
     summary,
     note,
     primaryAction,
@@ -144,7 +146,7 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
       {!isCompact ? (
         <>
       <section className="txn-step brw-succ__step">
-        <h2 className="txn-step__title">Étapes de votre emprunt</h2>
+        <h2 className="txn-step__title">{stepsTitle}</h2>
         <ol className="txn-step__list">
           {steps.map((step, i) => (
             <li key={step.name} className="txn-step__item">
@@ -161,7 +163,7 @@ export function TransactionResultPage(props: TransactionResultPageProps) {
       </section>
 
       <section className="txn-sum brw-succ__sum">
-        <h2 className="txn-sum__title">Récapitulatif</h2>
+        <h2 className="txn-sum__title">{summaryTitle}</h2>
         <div className="txn-sum__list">
           {summary.map((row) => (
             <div className="txn-sum__row" key={row.k}>

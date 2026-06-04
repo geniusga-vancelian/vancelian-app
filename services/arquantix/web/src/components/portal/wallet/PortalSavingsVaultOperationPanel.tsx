@@ -33,7 +33,12 @@ import {
   buildDefiVaultInvestTarget,
   defaultInvestSources,
   invParseAmount,
+  parseVaultPositionAmount,
 } from '@/lib/portal/portalInvestFlowFormat'
+import {
+  validateVaultWithdrawSetupAmount,
+  vaultSetupExceedsMaxWarning,
+} from '@/lib/portal/vaultInvestSetupLimits'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import type { PortalVaultFlowScene, PortalVaultOperation } from '@/lib/portal/vaultFlowTypes'
 
@@ -143,6 +148,10 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
   }, [position])
 
   const numeric = invParseAmount(amount)
+  const vaultBalance = useMemo(() => {
+    if (!position) return 0
+    return parseVaultPositionAmount(position.assetsInVault, position.asset.decimals)
+  }, [position])
   const yieldPct = (vault.userApyBps ?? 0) > 0 ? (vault.userApyBps ?? 0) / 10_000 : 0
 
   const morphoBeta = !isLedgity ? (beta as PortalMorphoBetaPortalFlags | undefined) : undefined
@@ -175,6 +184,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
       integrationMode,
       disclaimer,
       yieldPct,
+      processingContext,
     }),
     [
       amount,
@@ -183,6 +193,7 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
       integrationMode,
       numeric,
       operation,
+      processingContext,
       source,
       target,
       vault.provider,
@@ -201,7 +212,22 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
     onSuccess?.()
   }, [displayWalletAddress, loadPosition, onSuccess])
 
-  const setupDisabled = operationBlocked || positionLoading || numeric <= 0 || !displayWalletAddress
+  const setupAmountWarning = useMemo(() => {
+    if (operationBlocked || positionLoading || activeTab !== 'withdraw') return null
+    return vaultSetupExceedsMaxWarning({
+      amount: numeric,
+      maxAmount: vaultBalance,
+      assetSymbol,
+      kind: 'withdraw',
+    })
+  }, [activeTab, assetSymbol, numeric, operationBlocked, positionLoading, vaultBalance])
+
+  const setupDisabled =
+    operationBlocked ||
+    positionLoading ||
+    numeric <= 0 ||
+    !displayWalletAddress ||
+    (activeTab === 'withdraw' && numeric > vaultBalance + 1e-6)
 
   if (flowScene !== 'setup' && displayWalletAddress) {
     return (
@@ -283,7 +309,10 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
                 inputMode="decimal"
                 value={amount}
                 disabled={operationBlocked}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                  setAmount(e.target.value)
+                  setSetupError(null)
+                }}
                 placeholder={activeTab === 'withdraw' && maxWithdraw ? `Max ${maxWithdraw}` : '0.00'}
                 className="h-12 rounded-v-control border border-v-border bg-white px-4 font-ui text-[16px] text-v-fg outline-none focus:border-v-fg"
               />
@@ -300,7 +329,12 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
               </button>
             ) : null}
 
-            {setupError ? (
+            {setupAmountWarning ? (
+              <p className="inv-feedback inv-feedback--warn mt-3 mb-0" role="status">
+                {setupAmountWarning}
+              </p>
+            ) : null}
+            {setupError && !setupAmountWarning ? (
               <p className="mt-3 mb-0 rounded-v-control bg-red-50 px-3 py-2 font-ui text-[13px] text-v-error">
                 {setupError}
               </p>
@@ -311,12 +345,24 @@ export function PortalSavingsVaultOperationPanel({ vault, beta, activeTab, onSuc
               disabled={setupDisabled}
               className="mt-4 h-[52px] w-full rounded-full font-ui text-[16px] font-semibold"
               onClick={() => {
-                setSetupError(null)
-                if (setupDisabled) return
-                if (!normalizedAmount || Number(normalizedAmount) <= 0) {
+                if (operationBlocked || !displayWalletAddress || positionLoading) return
+
+                if (activeTab === 'withdraw') {
+                  const limitError = validateVaultWithdrawSetupAmount({
+                    amount: numeric,
+                    vaultBalanceUsdc: vaultBalance,
+                    assetSymbol,
+                  })
+                  if (limitError) {
+                    setSetupError(limitError)
+                    return
+                  }
+                } else if (numeric <= 0 || !normalizedAmount || Number(normalizedAmount) <= 0) {
                   setSetupError('Saisissez un montant valide.')
                   return
                 }
+
+                setSetupError(null)
                 setFlowScene('review')
               }}
             >

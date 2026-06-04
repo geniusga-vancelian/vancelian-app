@@ -35,6 +35,7 @@ import {
   saveBundleInvestSession,
   type BundleInvestSession,
 } from '@/lib/portal/bundleInvestSession'
+import type { BundleInvestProcessingProgress } from '@/components/portal/transaction/mappers/bundleSteps'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 export type BundleInvestRunResult = {
@@ -77,6 +78,7 @@ async function executePendingLegs(
     signAndSubmit: ReturnType<typeof useLifiSwapExecution>['signAndSubmit']
     onLegProgress?: (current: number, total: number, asset: string) => void
     onPhaseChange?: (phase: SwapExecutionPhase) => void
+    onProcessingProgress?: (progress: BundleInvestProcessingProgress) => void
   },
 ): Promise<{
   invest: BundleInvestPayload
@@ -94,10 +96,27 @@ async function executePendingLegs(
   }
 
   const total = pending.length
+  const allocationAssets = pending.map((leg) => leg.asset)
+
+  deps.onProcessingProgress?.({
+    stage: 'entry_transfer',
+    entryAsset: invest.entry_asset,
+    allocationAssets,
+    allocationLegTotal: total,
+  })
+
   for (let i = 0; i < pending.length; i += 1) {
     const leg = pending[i]!
     const swapId = leg.swap_id!
     deps.onLegProgress?.(i + 1, total, leg.asset)
+    deps.onProcessingProgress?.({
+      stage: 'allocating',
+      entryAsset: invest.entry_asset,
+      allocationAssets,
+      allocationLegCurrent: i + 1,
+      allocationLegTotal: total,
+      activeAsset: leg.asset,
+    })
 
     let attempts = 0
     let confirmed = false
@@ -158,6 +177,12 @@ async function executePendingLegs(
       legOutcomes.some((o) => o.status === 'skipped_failed'))
 
   if (shouldFinalize && invest.entry_instrument_id) {
+    deps.onProcessingProgress?.({
+      stage: 'finalizing',
+      entryAsset: invest.entry_asset,
+      allocationAssets,
+      allocationLegTotal: total,
+    })
     deps.onPhaseChange?.('bridging')
     try {
       finalize = await finalizeBundleBatch({
@@ -168,6 +193,12 @@ async function executePendingLegs(
         entry_consumed: entryConsumed,
       })
       deps.onPhaseChange?.('completed')
+      deps.onProcessingProgress?.({
+        stage: 'completed',
+        entryAsset: invest.entry_asset,
+        allocationAssets,
+        allocationLegTotal: total,
+      })
     } catch (err) {
       finalizeError = true
       if (!isInfraOrchestrationError(err)) {
@@ -208,6 +239,7 @@ export function useBundleLifiInvest(
   entryAsset?: string,
   onPhaseChange?: (phase: SwapExecutionPhase) => void,
   onLegProgress?: (current: number, total: number, asset: string) => void,
+  onProcessingProgress?: (progress: BundleInvestProcessingProgress) => void,
 ) {
   const inFlightRef = useRef(false)
   const { signAndSubmit } = useLifiSwapExecution(
@@ -244,6 +276,7 @@ export function useBundleLifiInvest(
         signAndSubmit,
         onLegProgress,
         onPhaseChange,
+        onProcessingProgress,
       })
 
       clearBundleInvestSession(invest.portfolio_id)
@@ -255,7 +288,7 @@ export function useBundleLifiInvest(
         backendLockPending: outcome.backendLockPending,
       }
     },
-    [onLegProgress, onPhaseChange, signAndSubmit],
+    [onLegProgress, onPhaseChange, onProcessingProgress, signAndSubmit],
   )
 
   const runInvest = useCallback(
@@ -269,6 +302,10 @@ export function useBundleLifiInvest(
       }
       inFlightRef.current = true
       try {
+        onProcessingProgress?.({
+          stage: 'preparing',
+          entryAsset: body.funding_asset,
+        })
         const outcome = await investBundle(body)
         if (outcome.kind === 'already_pending') {
           return outcome
@@ -277,6 +314,12 @@ export function useBundleLifiInvest(
         const invest = outcome.payload
         const pending = pendingBundleLegs(invest)
         if (pending.length === 0) {
+          onProcessingProgress?.({
+            stage: 'completed',
+            entryAsset: invest.entry_asset,
+            allocationAssets: [],
+            allocationLegTotal: 0,
+          })
           clearBundleInvestSession(body.portfolio_id)
           const terminalStatus = resolveTerminalStatusFromOutcomes([], invest)
           return { invest, terminalStatus, legOutcomes: [] }
@@ -291,7 +334,7 @@ export function useBundleLifiInvest(
         inFlightRef.current = false
       }
     },
-    [runFromInvestPayload],
+    [onProcessingProgress, runFromInvestPayload],
   )
 
   const resumeSession = useCallback(
@@ -301,6 +344,10 @@ export function useBundleLifiInvest(
       }
       inFlightRef.current = true
       try {
+        onProcessingProgress?.({
+          stage: 'preparing',
+          entryAsset: session.fundingAsset,
+        })
         return await runFromInvestPayload(session.invest, {
           portfolioId: session.portfolioId,
           fundingAsset: session.fundingAsset,
@@ -310,7 +357,7 @@ export function useBundleLifiInvest(
         inFlightRef.current = false
       }
     },
-    [runFromInvestPayload],
+    [onProcessingProgress, runFromInvestPayload],
   )
 
   return { runInvest, resumeSession, inFlightRef }

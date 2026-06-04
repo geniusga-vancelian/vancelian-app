@@ -158,9 +158,9 @@ arquantix-clean:
 arquantix-backup-db:
 	@bash scripts/backup_db.sh
 
-# Stack complète : Docker (DB, Redis, API, Web) + Next local (npm run dev en arrière-plan).
+# Stack dev : Docker (DB, Redis, API) + Next local sur :3000 (npm run dev). Pas de conteneur arquantix-web par défaut.
 # Docker : scripts/dev-reset.sh vérifie le daemon (docker info), lance Docker Desktop sur macOS si besoin, attente ≤ 20 s.
-# Options : --no-next, --build, --stop (voir scripts/dev-reset.sh).
+# Options : --no-next (Next dans Docker), --build, --stop (voir scripts/dev-reset.sh).
 dev dev-reset:
 	@bash scripts/dev-reset.sh
 

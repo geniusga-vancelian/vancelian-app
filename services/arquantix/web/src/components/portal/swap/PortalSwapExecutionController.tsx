@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
+import { KalaiIcon } from '@/components/ui/KalaiIcon'
+
 import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import { PortalSwapLayout } from '@/components/portal/swap/PortalSwapLayout'
 import { PortalSwapReviewStep } from '@/components/portal/swap/PortalSwapReviewStep'
@@ -12,6 +14,8 @@ import { TransactionProcessingPage } from '@/components/portal/transaction/Trans
 import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
 import {
   buildSwapProcessingSteps,
+  buildSwapSuccessSteps,
+  buildSwapSuccessSummary,
   resolveSwapFailureCopy,
   SWAP_PROCESSING_COMPLETED_INDEX,
   swapProcessingStepperIndex,
@@ -181,6 +185,7 @@ export function PortalSwapExecutionController({
           toAsset={toAsset}
           amount={amount}
           quote={quote}
+          swapProcessingContext={swapProcessingContext}
           onConfirm={onReviewConfirm}
           onBack={() => onStepChange('amount')}
         />
@@ -216,21 +221,36 @@ export function PortalSwapExecutionController({
       {executionPhase === 'completed' ? (
         <TransactionResultPage
           variant="success"
-          layout="compact"
+          layout="full"
           title={SWAP_FLOW_UI.successTitle}
           lead={
             <>
-              +<span className="v-tnum">{swapProcessingContext.receiveLabel}</span>
+              <b className="v-tnum">
+                {SWAP_FLOW_UI.successLeadReceive(
+                  swapProcessingContext.receiveLabel,
+                  toAsset,
+                )}
+              </b>{' '}
+              ont été crédités sur votre wallet.
             </>
           }
-          subtitle={
-            <>{SWAP_FLOW_UI.successSubtitle(swapProcessingContext.payLabel, fromAsset)}</>
-          }
-          steps={[]}
-          summary={[]}
+          stepsTitle={SWAP_FLOW_UI.successStepsTitle}
+          summaryTitle={SWAP_FLOW_UI.successSummaryTitle}
+          steps={buildSwapSuccessSteps(swapProcessingContext).map((step) => ({
+            name: step.name,
+            body:
+              typeof step.body === 'string' ? (
+                <p className="txn-step__amount">{step.body}</p>
+              ) : (
+                step.body
+              ),
+          }))}
+          summary={buildSwapSuccessSummary(quote, swapProcessingContext)}
+          note={SWAP_FLOW_UI.successNote}
           primaryAction={{
             label: SWAP_FLOW_UI.viewWalletCta(toAsset),
             onClick: onResultSuccess,
+            icon: <KalaiIcon name="wallet" size={16} />,
           }}
           onClose={onResultClose}
         />

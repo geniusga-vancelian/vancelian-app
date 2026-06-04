@@ -70,16 +70,19 @@ export const PORTAL_WALLET_BUNDLE_DETAIL_FORBIDDEN_IMPORTS: ForbiddenPattern[] =
 /** R4.5-F7 : seul layout segment Web3 eager restant — routes tx wallet (swap, create, deposit, withdraw). */
 export const PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS = [
   'src/app/app/(shell)/wallet/(tx)/layout.tsx',
+  'src/app/app/(shell)/invest/vault/(tx)/layout.tsx',
+  'src/app/app/(shell)/invest/bundle/(tx)/layout.tsx',
 ] as const
 
 /** R4.5-F5-A — page invest bundle : pas de layout Web3 eager. */
 export const PORTAL_BUNDLE_INVEST_PAGE_GUARD_PATHS = [
-  'src/app/app/(shell)/invest/bundle/[portfolioId]/page.tsx',
+  'src/app/app/(shell)/invest/bundle/(tx)/[portfolioId]/page.tsx',
   'src/components/portal/bundles/PortalBundleInvestScreen.tsx',
 ] as const
 
 export const PORTAL_BUNDLE_INVEST_SETUP_GUARD_PATHS = [
-  'src/components/portal/bundles/PortalBundleInvestDialog.tsx',
+  'src/components/portal/bundles/PortalBundleInvestFlow.tsx',
+  'src/components/portal/bundles/PortalBundleWithdrawFlow.tsx',
 ] as const
 
 export const PORTAL_BUNDLE_INVEST_SETUP_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
@@ -160,6 +163,7 @@ export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
   'src/lib/wallet/externalWalletProvider.tsx',
   'src/components/portal/bundles/PortalLazyBundleInvestDialog.tsx',
   'src/components/portal/bundles/PortalBundleExecutionController.tsx',
+  'src/components/portal/bundles/PortalBundleWithdrawExecutionController.tsx',
   'src/components/portal/bundles/PortalLazyBundleWithdrawShell.tsx',
   'src/components/portal/bundles/PortalBundleAllocationActionsPanel.tsx',
   'src/components/portal/bundles/PortalLazyBundleAllocationActions.tsx',
@@ -174,7 +178,6 @@ export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
 
 /** Surfaces transactionnelles — doivent importer PortalWeb3BoundaryLazy (pas boundary eager). */
 export const PORTAL_WEB3_BOUNDARY_LAZY_SURFACES = [
-  'src/components/portal/bundles/PortalBundleExecutionController.tsx',
   'src/components/portal/bundles/PortalLazyBundleWithdrawShell.tsx',
   'src/components/portal/bundles/PortalLazyBundleAllocationActions.tsx',
   'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
@@ -236,7 +239,7 @@ const STATIC_EXECUTION_DIALOG_IMPORTS: Array<{ rule: string; pattern: RegExp; hi
     rule: 'no-static-bundle-invest-dialog',
     pattern:
       /import\s+(?:type\s+)?(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]*PortalBundleInvestDialog['"]/,
-    hint: 'Use PortalLazyBundleInvestDialog',
+    hint: 'Navigate with resolvePortalBundleFlowRoute (page flow, not modal)',
   },
   {
     rule: 'no-static-earn-vault-modal',
@@ -688,7 +691,7 @@ export function scanPortalWalletBundleDetailReadOnlyImports(
   return violations
 }
 
-/** invest/bundle — pas de layout Web3 eager (R4.5-F5-A). */
+/** invest/bundle setup screen — pas de layout Web3 eager (exécution sous bundle/(tx), R4.5-F5-A). */
 export function scanPortalBundleInvestPageNoEagerWeb3(webRoot?: string): PortalPerformanceViolation[] {
   const root = resolveWebRoot(webRoot)
   const violations: PortalPerformanceViolation[] = []

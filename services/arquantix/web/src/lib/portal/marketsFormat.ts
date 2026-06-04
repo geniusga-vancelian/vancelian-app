@@ -2,6 +2,7 @@ import type {
   MarketQuoteUpdate,
   PortalCryptoAsset,
   PortalCryptoBundle,
+  PortalBundleTargetAllocation,
   PortalMarketsNewsItem,
   PortalResearchItem,
 } from '@/lib/portal/marketsTypes'
@@ -389,7 +390,10 @@ type BundleCatalogItem = {
   }>
 }
 
-function parseBundleAllocationTickers(item: BundleCatalogItem, code: string): string[] {
+function parseBundleTargetAllocations(
+  item: BundleCatalogItem,
+  code: string,
+): PortalBundleTargetAllocation[] {
   const raw = item.allocations
   if (Array.isArray(raw) && raw.length > 0) {
     const rows = raw
@@ -399,15 +403,20 @@ function parseBundleAllocationTickers(item: BundleCatalogItem, code: string): st
         )
         const weight = Number(row.target_weight ?? row.targetWeight ?? 0)
         if (!assetSymbol || assetSymbol === 'USDC') return null
-        return { assetSymbol, weight: Number.isFinite(weight) ? weight : 0 }
+        return { assetSymbol, targetWeight: Number.isFinite(weight) ? weight : 0 }
       })
-      .filter((r): r is { assetSymbol: string; weight: number } => r != null)
-      .sort((a, b) => b.weight - a.weight)
-    if (rows.length > 0) {
-      return rows.map((r) => r.assetSymbol)
-    }
+      .filter((r): r is PortalBundleTargetAllocation => r != null && r.targetWeight > 0)
+      .sort((a, b) => b.targetWeight - a.targetWeight)
+    if (rows.length > 0) return rows
   }
-  return BUNDLE_STACK_TICKERS_BY_CODE[code] ?? []
+  const tickers = BUNDLE_STACK_TICKERS_BY_CODE[code] ?? []
+  if (tickers.length === 0) return []
+  const equal = 1 / tickers.length
+  return tickers.map((assetSymbol) => ({ assetSymbol, targetWeight: equal }))
+}
+
+function parseBundleAllocationTickers(item: BundleCatalogItem, code: string): string[] {
+  return parseBundleTargetAllocations(item, code).map((row) => row.assetSymbol)
 }
 
 type BundleConfig = {
@@ -448,6 +457,7 @@ export function mapCryptoBundles(
           (item.entry_asset_default ?? item.entryAssetDefault)?.trim().toUpperCase() || null,
         entryAssetsAllowed,
         allocationTickers: parseBundleAllocationTickers(item, code),
+        targetAllocations: parseBundleTargetAllocations(item, code),
         sortOrder:
           typeof config?.sortOrder === 'number' && Number.isFinite(config.sortOrder)
             ? config.sortOrder

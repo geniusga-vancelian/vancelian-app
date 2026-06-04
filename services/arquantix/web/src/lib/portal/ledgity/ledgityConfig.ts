@@ -37,6 +37,13 @@ export function assertLedgityLocalSandboxProductionGuard(): void {
 }
 
 export function isLedgityDepositsDisabled(): boolean {
+  if (process.env.NODE_ENV !== 'production') {
+    const devDefaultOpen =
+      readLedgityLocalSandboxEnabledRaw() || isLedgityVaultsEnabled()
+    if (devDefaultOpen) {
+      return readBool('LEDGITY_DEPOSITS_DISABLED', false)
+    }
+  }
   return readBool('LEDGITY_DEPOSITS_DISABLED', true)
 }
 
