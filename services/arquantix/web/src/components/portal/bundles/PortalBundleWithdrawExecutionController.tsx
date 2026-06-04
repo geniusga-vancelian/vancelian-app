@@ -20,6 +20,7 @@ import {
 import {
   BUNDLE_RESULT_ACTIONS,
   BUNDLE_WITHDRAW_FLOW_UI,
+  BUNDLE_WITHDRAW_REVIEW_UI,
   BUNDLE_WITHDRAW_TERMINAL_IMPOSSIBLE,
 } from '@/components/portal/transaction/mappers/bundleUiCopy'
 import {
@@ -304,6 +305,14 @@ function PortalBundleWithdrawWeb3ExecutionRunner({
         subtitle={resultPhaseLabel ?? BUNDLE_WITHDRAW_FLOW_UI.successSubtitle}
         steps={successSteps}
         stepsTitle="Étapes réalisées"
+        summary={[
+          { k: BUNDLE_WITHDRAW_REVIEW_UI.bundle, v: portfolioName },
+          {
+            k: BUNDLE_WITHDRAW_REVIEW_UI.youWithdraw,
+            v: `${formatBundleUsdcAmount(parsedAmount)} ${entryAsset}`,
+          },
+          { k: BUNDLE_WITHDRAW_REVIEW_UI.destination, v: BUNDLE_WITHDRAW_REVIEW_UI.destinationLabel },
+        ]}
         primaryAction={{
           label: BUNDLE_WITHDRAW_FLOW_UI.viewTradingCta,
           onClick: onResultClose,
@@ -322,10 +331,6 @@ function PortalBundleWithdrawWeb3ExecutionRunner({
       }}
       onClose={onResultClose}
       closeLabel={BUNDLE_RESULT_ACTIONS.close}
-      primaryAction={{
-        label: BUNDLE_RESULT_ACTIONS.close,
-        onClick: onResultClose,
-      }}
     />
   )
 }
