@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 import { PortalLombardBorrowForm } from '@/components/portal/lombard/PortalLombardBorrowForm'
+import { PortalLombardBorrowReviewStep } from '@/components/portal/lombard/PortalLombardBorrowReviewStep'
 import {
   PortalLombardExecutionController,
   type PortalLombardExecutionRequest,
@@ -43,7 +44,7 @@ import { isLombardOpeningPhase } from '@/components/portal/transaction/mappers/l
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
-type FlowStep = 'intro' | 'form' | 'processing' | 'success'
+type FlowStep = 'intro' | 'form' | 'review' | 'processing' | 'success'
 
 const OPENING_SUBTEXT_ROTATE_MS = 5_000
 
@@ -268,10 +269,18 @@ export function PortalLombardFlow() {
     }
   }, [])
 
+  const goToBorrowReview = useCallback(() => {
+    if (executing || !quote) return
+    setBorrowRecap(buildLombardBorrowRecap(quote))
+    setStep('review')
+  }, [executing, quote])
+
   const startOpenLoan = useCallback(() => {
     if (executing || !selectedCollateral || !quote || !executionAddress) return
 
-    setBorrowRecap(buildLombardBorrowRecap(quote))
+    if (!borrowRecap) {
+      setBorrowRecap(buildLombardBorrowRecap(quote))
+    }
     setExecutionRequest({
       collateral: selectedCollateral,
       borrowAmount: borrowAmount.trim(),
@@ -289,6 +298,7 @@ export function PortalLombardFlow() {
     executionAddress,
     quote,
     selectedCollateral,
+    borrowRecap,
     targetLtvPercent,
   ])
 
@@ -362,7 +372,7 @@ export function PortalLombardFlow() {
               }
               router.push(PORTAL_ROUTES.cryptoWallet)
             }}
-            onContinue={startOpenLoan}
+            onContinue={goToBorrowReview}
             onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
             continueDisabled={
               !walletReady || executing || !quote || quoteLoading || quoteRefreshing
@@ -382,6 +392,15 @@ export function PortalLombardFlow() {
           ) : null}
 
         </>
+      ) : null}
+
+      {step === 'review' && borrowRecap ? (
+        <PortalLombardBorrowReviewStep
+          recap={borrowRecap}
+          onBack={() => setStep('form')}
+          onConfirm={startOpenLoan}
+          confirmDisabled={executing || !walletReady}
+        />
       ) : null}
 
       {step === 'processing' && borrowRecap && executionRequest ? (

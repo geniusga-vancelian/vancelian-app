@@ -3,9 +3,7 @@
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import type { TransactionReviewPageProps } from '@/components/portal/transaction/types'
 
-/**
- * Écran Review canon — non branché Lombard en R4.5-B (Review Lombard = phase ultérieure).
- */
+/** Écran Review canon — swap, vault, bundle, Lombard (O4). */
 export function TransactionReviewPage({
   title,
   children,
