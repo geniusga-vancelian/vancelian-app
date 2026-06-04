@@ -35,6 +35,10 @@ export const SWAP_FLOW_UI = {
   preparingSecureConfirmation: 'Préparation de la confirmation sécurisée…',
   quoteExpiredLine:
     'Votre devis a expiré. Revenez à l’étape montant et demandez une nouvelle estimation.',
+  priceChangedLine:
+    'Le montant estimé à recevoir a légèrement changé. Vérifiez le récapitulatif puis confirmez à nouveau.',
+  priceChangedReviewBanner:
+    'Le prix a été mis à jour. Vérifiez les montants avant de confirmer.',
 } as const
 
 export const SWAP_RESULT_IMPOSSIBLE_ACTIONS = {

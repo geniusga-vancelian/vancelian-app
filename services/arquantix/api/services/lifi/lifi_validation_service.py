@@ -26,6 +26,29 @@ class SwapValidationError(Exception):
         super().__init__(message)
 
 
+class SwapPriceChangedError(Exception):
+    """Quote fraîche hors bande slippage vs snapshot Review."""
+
+    def __init__(
+        self,
+        *,
+        quote: "SwapQuoteResponse",
+        delta_bps: int,
+        slippage_bps: int,
+        message: str | None = None,
+    ):
+        from services.lifi.schemas import SwapQuoteResponse
+
+        self.code = "swap.price_changed"
+        self.quote: SwapQuoteResponse = quote
+        self.delta_bps = delta_bps
+        self.slippage_bps = slippage_bps
+        self.message = message or (
+            "Le montant estimé à recevoir a légèrement changé. Vérifiez le récapitulatif avant de confirmer."
+        )
+        super().__init__(self.message)
+
+
 def parse_human_amount(raw: str) -> Decimal:
     text = (raw or "").strip().replace(",", ".")
     if not text:

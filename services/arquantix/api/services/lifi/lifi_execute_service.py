@@ -210,6 +210,41 @@ class LifiExecuteService:
         )
         return self._build_status_response(swap)
 
+    def abandon_swap(
+        self,
+        db: Session,
+        *,
+        person_id: UUID,
+        swap_id: UUID,
+        reason: str | None = None,
+    ) -> SwapStatusResponse:
+        swap = self._swap_repo.get_for_person(db, swap_id=swap_id, person_id=person_id)
+        if swap is None:
+            raise SwapValidationError("swap.not_found", "Swap introuvable")
+        if swap.status in {
+            SwapSessionStatus.CONFIRMED.value,
+            SwapSessionStatus.SUBMITTED.value,
+        }:
+            raise SwapValidationError(
+                "swap.invalid_state",
+                "Impossible d’abandonner un swap déjà soumis",
+            )
+        if swap.status == SwapSessionStatus.FAILED.value:
+            return self._build_status_response(swap)
+
+        swap.status = SwapSessionStatus.FAILED.value
+        swap.error_message = reason or "Échange abandonné"
+        self._swap_repo.append_audit(
+            swap,
+            {"event": "client_abandoned", "reason": swap.error_message},
+        )
+        from services.transaction_intents.lifi_intent_sync import on_swap_failed
+
+        on_swap_failed(db, swap)
+        db.commit()
+        db.refresh(swap)
+        return self._build_status_response(swap)
+
     def get_status(self, db: Session, *, person_id: UUID, swap_id: UUID) -> SwapStatusResponse:
         swap = self._swap_repo.get_for_person(db, swap_id=swap_id, person_id=person_id)
         if swap is None:

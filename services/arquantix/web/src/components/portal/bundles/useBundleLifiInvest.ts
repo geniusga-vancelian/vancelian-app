@@ -4,11 +4,9 @@ import { useCallback, useRef } from 'react'
 
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import {
-  bundleLegPrepareSign,
   fetchActiveBundleInvestLock,
   finalizeBundleBatch,
   investBundle,
-  mapBundleSigningToExecute,
   pendingBundleLegs,
   submitBundleLegTx,
   type BundleFinalizePayload,
@@ -36,6 +34,11 @@ import {
   type BundleInvestSession,
 } from '@/lib/portal/bundleInvestSession'
 import type { BundleInvestProcessingProgress } from '@/components/portal/transaction/mappers/bundleSteps'
+import {
+  bundleLegConfirmAndPrepare,
+  snapshotFromInvestLeg,
+} from '@/lib/portal/bundleLegQuoteConfirm'
+import { SwapPriceChangedError } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 export type BundleInvestRunResult = {
@@ -55,8 +58,11 @@ async function tryExecuteSingleLeg(
   },
 ): Promise<{ entryDelta: number; txHash?: string | null }> {
   const swapId = leg.swap_id!
-  const mapped = mapBundleSigningToExecute(leg.signing, swapId)
-  const exec = mapped ?? (await bundleLegPrepareSign(swapId))
+  const snapshot = snapshotFromInvestLeg(leg)
+  if (!snapshot) {
+    throw new Error(`Estimation manquante pour ${leg.asset} — rechargez et réessayez.`)
+  }
+  const exec = await bundleLegConfirmAndPrepare(swapId, snapshot, deps)
   deps.onPhaseChange?.('signing')
   await deps.signAndSubmit(exec)
   deps.onPhaseChange?.('submitting')
@@ -149,8 +155,12 @@ async function executePendingLegs(
             }),
           })
         }
-        lastSkippable =
-          err instanceof BundleLegSkippableError ? err : legSkippableFromUnknown(err)
+        if (err instanceof SwapPriceChangedError) {
+          lastSkippable = new BundleLegSkippableError('swap_failed')
+        } else {
+          lastSkippable =
+            err instanceof BundleLegSkippableError ? err : legSkippableFromUnknown(err)
+        }
         attempts += 1
       }
     }

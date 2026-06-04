@@ -12,6 +12,7 @@ export type SwapCatalogAsset = SwapSupportedAssetsPayload['assets'][number]
 
 export type SwapExecutionPhase =
   | 'idle'
+  | 'verifying_price'
   | 'preparing'
   | 'approving'
   | 'signing'

@@ -21,13 +21,17 @@ from services.lifi.config import (
     swaps_mock_mode,
 )
 from services.lifi.lifi_client import LifiClientError
+from services.lifi.lifi_confirm_service import LifiConfirmService
 from services.lifi.lifi_execute_service import LifiExecuteService
 from services.lifi.lifi_quote_service import LifiQuoteService
-from services.lifi.lifi_validation_service import SwapValidationError
+from services.lifi.lifi_validation_service import SwapPriceChangedError, SwapValidationError
 from services.lifi.schemas import (
     SwapApprovalSubmitRequest,
+    SwapConfirmExecuteRequest,
+    SwapConfirmExecuteResponse,
     SwapExecuteRequest,
     SwapExecuteResponse,
+    SwapPriceChangedDetail,
     SwapQuoteRequest,
     SwapQuoteResponse,
     SwapStatusResponse,
@@ -45,8 +49,10 @@ logger = logging.getLogger(__name__)
 
 swaps_router = APIRouter(prefix="/api/swaps", tags=["swaps"])
 
-_quote_svc = LifiQuoteService(lifi_client=build_lifi_client())
-_execute_svc = LifiExecuteService(lifi_client=build_lifi_client())
+_lifi_client = build_lifi_client()
+_quote_svc = LifiQuoteService(lifi_client=_lifi_client)
+_execute_svc = LifiExecuteService(lifi_client=_lifi_client)
+_confirm_svc = LifiConfirmService(quote_service=_quote_svc, execute_service=_execute_svc)
 
 
 def _resolve_person_id(
@@ -136,12 +142,88 @@ def post_swap_quote(
         ) from exc
 
 
+def _price_changed_error(exc: SwapPriceChangedError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=SwapPriceChangedDetail(
+            code=exc.code,
+            message=exc.message,
+            quote=exc.quote,
+            delta_bps=exc.delta_bps,
+            slippage_bps=exc.slippage_bps,
+        ).model_dump(mode="json"),
+    )
+
+
+@swaps_router.post("/confirm-execute", response_model=SwapConfirmExecuteResponse)
+def post_swap_confirm_execute(
+    body: SwapConfirmExecuteRequest,
+    db=Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
+):
+    _ensure_swaps_enabled()
+    person_id = _resolve_person_id(credentials)
+    try:
+        return _confirm_svc.confirm_execute(
+            db,
+            person_id=person_id,
+            swap_id=body.swap_id,
+            review_estimated_receive=body.review_estimated_receive,
+            review_amount_in=body.review_amount_in,
+        )
+    except SwapPriceChangedError as exc:
+        raise _price_changed_error(exc) from exc
+    except SwapValidationError as exc:
+        raise _validation_error(exc) from exc
+    except LifiClientError as exc:
+        logger.warning("swap.confirm.lifi_error", extra={"code": exc.code})
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+
+
+@swaps_router.post("/{swap_id}/refresh-quote", response_model=SwapQuoteResponse)
+def post_swap_refresh_quote(
+    swap_id: UUID,
+    db=Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
+):
+    _ensure_swaps_enabled()
+    person_id = _resolve_person_id(credentials)
+    try:
+        return _quote_svc.refresh_quote(db, person_id=person_id, swap_id=swap_id)
+    except SwapValidationError as exc:
+        raise _validation_error(exc) from exc
+    except LifiClientError as exc:
+        logger.warning("swap.refresh.lifi_error", extra={"code": exc.code})
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+
+
+@swaps_router.post("/{swap_id}/abandon", response_model=SwapStatusResponse)
+def post_swap_abandon(
+    swap_id: UUID,
+    db=Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
+):
+    _ensure_swaps_enabled()
+    person_id = _resolve_person_id(credentials)
+    try:
+        return _execute_svc.abandon_swap(db, person_id=person_id, swap_id=swap_id)
+    except SwapValidationError as exc:
+        raise _validation_error(exc) from exc
+
+
 @swaps_router.post("/execute", response_model=SwapExecuteResponse)
 def post_swap_execute(
     body: SwapExecuteRequest,
     db=Depends(get_db),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
 ):
+    """Legacy — préférer ``/confirm-execute`` (refresh + slippage + prepare)."""
     _ensure_swaps_enabled()
     person_id = _resolve_person_id(credentials)
     try:

@@ -19,6 +19,11 @@ export const SWAP_PROCESSING_STEP_DEFS: Array<{
   defaultSub: (ctx: SwapProcessingContext) => string
 }> = [
   {
+    label: 'Vérification du prix',
+    defaultSub: () =>
+      'Nous actualisons le dernier prix avant de lancer la signature.',
+  },
+  {
     label: "Autorisation de l'échange",
     defaultSub: (ctx) =>
       `Vous autorisez l'échange de ${ctx.payLabel} ${ctx.fromAsset}.`,
@@ -44,7 +49,7 @@ export type SwapProcessingContext = {
   receiveLabel: string
 }
 
-export const SWAP_PROCESSING_COMPLETED_INDEX = 4
+export const SWAP_PROCESSING_COMPLETED_INDEX = 5
 
 export const SWAP_TERMINAL_FAILURE_COPY: TransactionTerminalFailureCopy = {
   title: "Impossible de finaliser l'échange",
@@ -54,20 +59,22 @@ export const SWAP_TERMINAL_FAILURE_COPY: TransactionTerminalFailureCopy = {
 const FORBIDDEN_USER_PATTERN =
   /revert|retryable_failed|group_key|logical_borrow_id|idempotency|lifi|li\.fi|token approval|tx reverted|0x[a-f0-9]{8,}/i
 
-/** Index stepper produit (0–3) ; 4 = terminé. */
+/** Index stepper produit (0–4) ; 5 = terminé. */
 export function swapProcessingStepperIndex(phase: SwapExecutionPhase): number {
   switch (phase) {
+    case 'verifying_price':
     case 'preparing':
       return 0
     case 'approving':
-    case 'signing':
       return 1
-    case 'submitting':
+    case 'signing':
       return 2
-    case 'bridging':
+    case 'submitting':
       return 3
-    case 'completed':
+    case 'bridging':
       return 4
+    case 'completed':
+      return 5
     default:
       return 0
   }
@@ -119,6 +126,12 @@ export function resolveSwapFailureCopy(error: unknown): TransactionTerminalFailu
     return {
       title: SWAP_TERMINAL_FAILURE_COPY.title,
       lines: [SWAP_FLOW_UI.quoteExpiredLine, SWAP_TERMINAL_FAILURE_COPY.lines[0]!],
+    }
+  }
+  if (msg.includes('légèrement changé') || msg.includes('price_changed')) {
+    return {
+      title: SWAP_TERMINAL_FAILURE_COPY.title,
+      lines: [SWAP_FLOW_UI.priceChangedLine, SWAP_TERMINAL_FAILURE_COPY.lines[0]!],
     }
   }
   if (FORBIDDEN_USER_PATTERN.test(msg)) {

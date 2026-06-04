@@ -601,12 +601,13 @@ class BundleOrchestrator:
         result = self._execution.execute_leg(db, leg, actor)
 
         if result.status == "pending":
+            est_receive = float(result.amount_to or 0)
             record = {
                 "asset": target_asset,
                 "instrument_id": str(target_instrument_id),
                 "target_weight": None,
                 "entry_asset_consumed": float(alloc_entry_amount),
-                "crypto_received": 0,
+                "crypto_received": est_receive,
                 "status": "pending",
                 "swap_id": result.provider_order_id,
                 "leg_id": ext_ref,
@@ -797,7 +798,7 @@ class BundleOrchestrator:
                 "asset": asset,
                 "instrument_id": str(ctx.get("target_instrument_id") or ""),
                 "entry_asset_consumed": float(swap.amount_in or 0),
-                "crypto_received": 0,
+                "crypto_received": float(swap.estimated_receive or 0),
                 "status": "pending",
                 "swap_id": str(swap.id),
                 "leg_id": leg_id,

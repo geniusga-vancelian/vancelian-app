@@ -41,6 +41,35 @@ export type SwapQuotePayload = {
   signing_wallet_address?: string | null
 }
 
+export type SwapConfirmExecutePayload = {
+  freshness: string
+  quote: SwapQuotePayload
+  execute: SwapExecutePayload
+}
+
+export type SwapPriceChangedPayload = {
+  code: string
+  message: string
+  quote: SwapQuotePayload
+  delta_bps: number
+  slippage_bps: number
+}
+
+export class SwapPriceChangedError extends Error {
+  readonly code = 'swap.price_changed'
+  readonly freshQuote: SwapQuotePayload
+  readonly deltaBps: number
+  readonly slippageBps: number
+
+  constructor(detail: SwapPriceChangedPayload) {
+    super(detail.message)
+    this.name = 'SwapPriceChangedError'
+    this.freshQuote = detail.quote
+    this.deltaBps = detail.delta_bps
+    this.slippageBps = detail.slippage_bps
+  }
+}
+
 export type SwapExecutePayload = {
   swap_id: string
   status: string
@@ -64,6 +93,8 @@ export type SwapExecutePayload = {
   } | null
 }
 
+const RETRYABLE_HTTP_STATUS = new Set([502, 503, 504])
+
 export type SwapStatusPayload = {
   swap_id: string
   status: string
@@ -79,16 +110,36 @@ export type SwapStatusPayload = {
 }
 
 async function parseJson<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T & { detail?: { message?: string } }
+  const data = (await res.json()) as T & {
+    detail?: { message?: string; code?: string } | SwapPriceChangedPayload
+  }
   if (!res.ok) {
     if (res.status === 401) {
       throw new Error('Session expirée — reconnectez-vous pour continuer.')
     }
+    if (res.status === 409) {
+      const detail = data.detail
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        'code' in detail &&
+        detail.code === 'swap.price_changed'
+      ) {
+        throw new SwapPriceChangedError(detail as SwapPriceChangedPayload)
+      }
+    }
+    const detail = data.detail
     const message =
-      (data as { detail?: { message?: string } }).detail?.message ??
+      (typeof detail === 'object' && detail && 'message' in detail
+        ? detail.message
+        : undefined) ??
       (data as { message?: string }).message ??
       'Swap request failed'
-    throw new Error(message)
+    const err = new Error(message)
+    if (RETRYABLE_HTTP_STATUS.has(res.status)) {
+      ;(err as Error & { retryable?: boolean }).retryable = true
+    }
+    throw err
   }
   return data
 }
@@ -116,11 +167,36 @@ export async function requestSwapQuote(body: {
   return parseJson(res)
 }
 
+export async function confirmSwapExecution(body: {
+  swap_id: string
+  review_estimated_receive: string
+  review_amount_in?: string
+}): Promise<SwapConfirmExecutePayload> {
+  const res = await fetch('/api/portal/swaps/confirm-execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(25_000),
+  })
+  return parseJson(res)
+}
+
+/** @deprecated Préférer confirmSwapExecution (refresh + slippage). */
 export async function executeSwap(swapId: string): Promise<SwapExecutePayload> {
   const res = await fetch('/api/portal/swaps/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ swap_id: swapId }),
+  })
+  return parseJson(res)
+}
+
+export async function abandonSwap(swapId: string): Promise<SwapStatusPayload> {
+  const res = await fetch(`/api/portal/swaps/${swapId}/abandon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+    signal: AbortSignal.timeout(10_000),
   })
   return parseJson(res)
 }

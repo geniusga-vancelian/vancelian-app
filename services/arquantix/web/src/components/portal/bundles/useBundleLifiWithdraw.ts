@@ -4,9 +4,7 @@ import { useCallback, useRef } from 'react'
 
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import {
-  bundleLegPrepareSign,
   finalizeBundleWithdraw,
-  mapBundleSigningToExecute,
   pendingWithdrawLegs,
   submitBundleLegTx,
   withdrawBundle,
@@ -20,6 +18,10 @@ import {
   type BundleWithdrawSession,
 } from '@/lib/portal/bundleWithdrawSession'
 import type { BundleWithdrawProcessingProgress } from '@/components/portal/transaction/mappers/bundleSteps'
+import {
+  bundleLegConfirmAndPrepare,
+  snapshotFromWithdrawLeg,
+} from '@/lib/portal/bundleLegQuoteConfirm'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 export type BundleWithdrawRunResult = {
@@ -80,8 +82,11 @@ async function executePendingSellLegs(
       activeAsset: leg.asset,
     })
 
-    const mapped = mapBundleSigningToExecute(leg.signing, swapId)
-    const exec = mapped ?? (await bundleLegPrepareSign(swapId))
+    const snapshot = snapshotFromWithdrawLeg(leg)
+    if (!snapshot) {
+      throw new Error(`Estimation manquante pour ${leg.asset} — rechargez et réessayez.`)
+    }
+    const exec = await bundleLegConfirmAndPrepare(swapId, snapshot, deps)
     deps.onPhaseChange?.('signing')
     await deps.signAndSubmit(exec)
     deps.onPhaseChange?.('submitting')

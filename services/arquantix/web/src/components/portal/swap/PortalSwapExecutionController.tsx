@@ -26,7 +26,12 @@ import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
 import { buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
-import { executeSwap, type SwapQuotePayload } from '@/lib/portal/swapClient'
+import { abandonSwap, type SwapQuotePayload } from '@/lib/portal/swapClient'
+import {
+  SwapPriceChangedError,
+  buildSwapReviewSnapshot,
+  confirmSwapWithRetry,
+} from '@/lib/portal/swapQuoteConfirm'
 import type { PortalSwapFlowStep, SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 
@@ -42,6 +47,10 @@ type Props = {
   swapProcessingContext: SwapProcessingContext
   onStepChange: (step: PortalSwapFlowStep) => void
   onResetExecutionState: () => void
+  onQuoteUpdate: (quote: SwapQuotePayload) => void
+  priceChangeNotice: string | null
+  onClearPriceChangeNotice: () => void
+  onPriceChanged: () => void
 }
 
 /** Swap review / processing / result — monte useLifiSwapExecution (R4.5-F3). */
@@ -55,6 +64,10 @@ export function PortalSwapExecutionController({
   swapProcessingContext,
   onStepChange,
   onResetExecutionState,
+  onQuoteUpdate,
+  priceChangeNotice,
+  onClearPriceChangeNotice,
+  onPriceChanged,
 }: Props) {
   const router = useRouter()
   const { chain, walletScopeId } = usePortalExecutionScope()
@@ -64,6 +77,7 @@ export function PortalSwapExecutionController({
   const [failureCopy, setFailureCopy] = useState(() => resolveSwapFailureCopy(null))
   const [signingPrep, setSigningPrep] = useState(false)
   const executionStartedRef = useRef(false)
+  const reviewSnapshotRef = useRef(buildSwapReviewSnapshot(quote))
 
   const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
     swapMockMode,
@@ -80,10 +94,19 @@ export function PortalSwapExecutionController({
 
   const runExecution = useCallback(async () => {
     if (!quote) return
-    setExecutionPhase('preparing')
+    const snapshot = reviewSnapshotRef.current
+    setExecutionPhase('verifying_price')
 
     try {
-      const exec = await executeSwap(quote.swap_id)
+      const confirmed = await confirmSwapWithRetry({
+        swap_id: quote.swap_id,
+        review_estimated_receive: snapshot.estimated_receive,
+        review_amount_in: snapshot.amount_in,
+      })
+      onQuoteUpdate(confirmed.quote)
+      setExecutionPhase('preparing')
+
+      const exec = confirmed.execute
       if (!exec.transaction) {
         throw new Error('Payload transaction manquant')
       }
@@ -100,11 +123,25 @@ export function PortalSwapExecutionController({
       setExecutionPhase('completed')
       onStepChange('result')
     } catch (e) {
+      if (e instanceof SwapPriceChangedError) {
+        onQuoteUpdate(e.freshQuote)
+        reviewSnapshotRef.current = buildSwapReviewSnapshot(e.freshQuote)
+        onPriceChanged()
+        setExecutionPhase('idle')
+        executionStartedRef.current = false
+        onStepChange('review')
+        return
+      }
       setExecutionPhase('failed')
       setFailureCopy(resolveSwapFailureCopy(e))
+      try {
+        await abandonSwap(quote.swap_id)
+      } catch {
+        /* abandon best-effort */
+      }
       onStepChange('result')
     }
-  }, [onStepChange, pollUntilTerminal, quote, signAndSubmit])
+  }, [onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, signAndSubmit])
 
   useEffect(() => {
     if (step !== 'processing' || executionStartedRef.current) return
@@ -139,10 +176,12 @@ export function PortalSwapExecutionController({
   }, [privyReady, step, swapMockMode])
 
   const onReviewConfirm = useCallback(() => {
+    onClearPriceChangeNotice()
+    reviewSnapshotRef.current = buildSwapReviewSnapshot(quote)
     resetExecution()
     executionStartedRef.current = false
     onStepChange('processing')
-  }, [onStepChange, resetExecution])
+  }, [onClearPriceChangeNotice, onStepChange, quote, resetExecution])
 
   const onProcessingClose = useCallback(() => {
     resetExecution()
@@ -171,6 +210,14 @@ export function PortalSwapExecutionController({
   if (step === 'review') {
     return (
       <PortalSwapLayout backLabel="Back to amount" onBackClick={() => onStepChange('amount')}>
+        {priceChangeNotice ? (
+          <div
+            className="mb-4 rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-2 font-ui text-[13px] text-amber-950"
+            role="status"
+          >
+            {priceChangeNotice}
+          </div>
+        ) : null}
         {signingPrep ? (
           <div
             className="mb-4 flex items-center gap-2 rounded-lg border border-v-fg-10 bg-v-fg-02 px-3 py-2 font-ui text-[13px] text-v-fg-muted"

@@ -644,11 +644,12 @@ class BundleWithdrawOrchestrator:
         result = self._execution.execute_leg(db, leg, actor)
 
         if result.status == "pending":
+            est_receive = float(result.amount_to or 0)
             record = {
                 "asset": spot_asset,
                 "instrument_id": str(spot_instrument_id),
                 "quantity_sold": float(sell_qty),
-                "entry_asset_received": 0,
+                "entry_asset_received": est_receive,
                 "status": "pending",
                 "swap_id": result.provider_order_id,
                 "leg_id": ext_ref,

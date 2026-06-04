@@ -179,10 +179,11 @@ class BundleRebalanceOrchestrator:
                     spot_instrument_id=instrument_id,
                 )
                 if swap_result.get("status") == "pending":
+                    est_receive = float(swap_result.get("amount_to") or 0)
                     sell_results.append({
                         "asset": asset,
-                        "quantity_sold": 0,
-                        "entry_asset_received": 0,
+                        "quantity_sold": float(sell_qty),
+                        "entry_asset_received": est_receive,
                         "value_eur": 0,
                         "status": "pending",
                         "swap_id": swap_result.get("swap_id"),
@@ -248,10 +249,11 @@ class BundleRebalanceOrchestrator:
                     spot_instrument_id=instrument_id,
                 )
                 if swap_result.get("status") == "pending":
+                    est_crypto = float(swap_result.get("amount_to") or 0)
                     buy_results.append({
                         "asset": asset,
-                        "quantity_bought": 0,
-                        "entry_asset_spent": 0,
+                        "quantity_bought": est_crypto,
+                        "entry_asset_spent": float(buy_entry_amount),
                         "value_eur": 0,
                         "status": "pending",
                         "swap_id": swap_result.get("swap_id"),
@@ -642,7 +644,7 @@ class BundleRebalanceOrchestrator:
             return {
                 "status": "pending",
                 "swap_id": result.provider_order_id,
-                "amount_to": 0,
+                "amount_to": float(result.amount_to or 0),
                 "reference_value_net": 0,
             }
         out = result.to_swap_legacy_dict()

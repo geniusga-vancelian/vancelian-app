@@ -143,21 +143,22 @@ class BundleLifiLegService:
         if swaps_mock_mode() and bundle_lifi_sync_mock():
             return self._auto_complete_mock(db, leg, swap_id=swap.id, person_id=person_id)
 
-        prepare = self._execute.prepare_execute(db, person_id=person_id, swap_id=swap.id)
+        estimated_out = Decimal(str(quote_resp.estimated_receive or 0))
         return ExecutionResult(
             leg_id=leg.leg_id,
             status="pending",
             from_asset=from_sym,
             to_asset=to_sym,
             amount_from=leg.amount_from,
-            amount_to=None,
+            amount_to=estimated_out,
             tx_hash=None,
             provider_order_id=str(swap.id),
             fees={},
             raw={
                 "swap_id": str(swap.id),
-                "prepare": prepare.model_dump(),
+                "estimated_receive": str(estimated_out),
                 "requires_client_signature": True,
+                "quote_freshness": "deferred_to_confirm_execute",
             },
         )
 

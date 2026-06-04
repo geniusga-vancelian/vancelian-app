@@ -15,6 +15,7 @@ import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/button'
 import type { SwapProcessingContext } from '@/components/portal/transaction/mappers/swapSteps'
+import { SWAP_FLOW_UI } from '@/components/portal/transaction/mappers/swapUiCopy'
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
@@ -59,6 +60,7 @@ export function PortalSwapFlow() {
   const [sourceBalance, setSourceBalance] = useState(0)
   const [amount, setAmount] = useState('')
   const [quote, setQuote] = useState<SwapQuotePayload | null>(null)
+  const [priceChangeNotice, setPriceChangeNotice] = useState<string | null>(null)
 
   const { data: walletData, loading: walletLoading } = usePortalCachedScreen<PortalCryptoWalletHubPayload>({
     cacheKey: 'portal:crypto-wallet',
@@ -444,6 +446,10 @@ export function PortalSwapFlow() {
           swapProcessingContext={swapProcessingContext}
           onStepChange={setStep}
           onResetExecutionState={() => {}}
+          onQuoteUpdate={setQuote}
+          priceChangeNotice={priceChangeNotice}
+          onClearPriceChangeNotice={() => setPriceChangeNotice(null)}
+          onPriceChanged={() => setPriceChangeNotice(SWAP_FLOW_UI.priceChangedReviewBanner)}
         />
       ) : null}
     </PortalExecutionScopeGate>

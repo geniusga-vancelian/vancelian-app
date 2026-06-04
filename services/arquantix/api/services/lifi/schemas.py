@@ -56,6 +56,12 @@ class SwapQuoteResponse(BaseModel):
     signing_wallet_address: Optional[str] = None
 
 
+class SwapConfirmExecuteRequest(BaseModel):
+    swap_id: UUID
+    review_estimated_receive: str = Field(..., min_length=1, max_length=64)
+    review_amount_in: Optional[str] = Field(None, max_length=64)
+
+
 class SwapExecuteRequest(BaseModel):
     swap_id: UUID
 
@@ -85,6 +91,20 @@ class SwapExecuteResponse(BaseModel):
     signing_wallet_mode: Optional[str] = None
     signing_wallet_address: Optional[str] = None
     token_approval: Optional[SwapTokenApprovalPayload] = None
+
+
+class SwapConfirmExecuteResponse(BaseModel):
+    freshness: str = Field(..., description="verified | refreshed")
+    quote: SwapQuoteResponse
+    execute: SwapExecuteResponse
+
+
+class SwapPriceChangedDetail(BaseModel):
+    code: str = "swap.price_changed"
+    message: str
+    quote: SwapQuoteResponse
+    delta_bps: int
+    slippage_bps: int
 
 
 class SwapSubmitRequest(BaseModel):

@@ -4,22 +4,32 @@ import { useCallback, useRef } from 'react'
 
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import {
-  bundleLegPrepareSign,
   executeBundleRebalance,
-  mapBundleSigningToExecute,
   submitBundleLegTx,
   type BundleRebalanceLeg,
   type BundleRebalancePayload,
 } from '@/lib/portal/bundleClient'
+import {
+  bundleLegConfirmAndPrepare,
+  snapshotFromRebalanceLeg,
+} from '@/lib/portal/bundleLegQuoteConfirm'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
-function pendingRebalanceLegs(result: BundleRebalancePayload): BundleRebalanceLeg[] {
-  const buys = (result.buy_results ?? []).filter(
-    (leg) => leg.status === 'pending' && Boolean(leg.swap_id),
-  )
-  const sells = (result.sell_results ?? []).filter(
-    (leg) => leg.status === 'pending' && Boolean(leg.swap_id),
-  )
+type PendingRebalanceLeg = BundleRebalanceLeg & {
+  side: 'buy' | 'sell'
+  quantity_sold?: number
+  entry_asset_received?: number
+  entry_asset_spent?: number
+  quantity_bought?: number
+}
+
+function pendingRebalanceLegs(result: BundleRebalancePayload): PendingRebalanceLeg[] {
+  const sells = (result.sell_results ?? [])
+    .filter((leg) => leg.status === 'pending' && Boolean(leg.swap_id))
+    .map((leg) => ({ ...leg, side: 'sell' as const }))
+  const buys = (result.buy_results ?? [])
+    .filter((leg) => leg.status === 'pending' && Boolean(leg.swap_id))
+    .map((leg) => ({ ...leg, side: 'buy' as const }))
   return [...sells, ...buys]
 }
 
@@ -51,11 +61,13 @@ export function useBundleLifiRebalance(
           const leg = pending[i]!
           const swapId = leg.swap_id!
           onLegProgress?.(i + 1, total, leg.asset)
-          const mapped =
-            mapBundleSigningToExecute(leg.signing, swapId) ??
-            (await bundleLegPrepareSign(swapId))
+          const snapshot = snapshotFromRebalanceLeg(leg, leg.side)
+          if (!snapshot) {
+            throw new Error(`Estimation manquante pour ${leg.asset} — rechargez et réessayez.`)
+          }
+          const exec = await bundleLegConfirmAndPrepare(swapId, snapshot, { onPhaseChange })
           onPhaseChange?.('signing')
-          await signAndSubmit(mapped)
+          await signAndSubmit(exec)
           onPhaseChange?.('submitting')
           await pollUntilTerminal(swapId)
         }

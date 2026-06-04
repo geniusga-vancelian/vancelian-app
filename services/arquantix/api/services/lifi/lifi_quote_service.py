@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
@@ -19,11 +20,20 @@ from services.lifi.enums import SwapSessionStatus
 from services.lifi.lifi_client import LifiClient, LifiClientError
 from services.lifi.lifi_validation_service import SwapValidationError, validate_quote_request
 from services.lifi.schemas import SwapQuoteResponse, SwapRouteStep
-from services.lifi.signing_wallet_service import resolve_swap_signing_wallet
+from services.lifi.signing_wallet_service import read_signing_wallet_from_audit, resolve_swap_signing_wallet
 from services.lifi.swap_repository import PersonWalletSwapRepository
 from services.privy_wallet.repository import PersonCryptoWalletRepository
 
 logger = logging.getLogger(__name__)
+
+LIFI_REFRESH_MAX_ATTEMPTS = 3
+REFRESHABLE_SWAP_STATUSES = frozenset(
+    {
+        SwapSessionStatus.QUOTE_RECEIVED.value,
+        SwapSessionStatus.AWAITING_SIGNATURE.value,
+        SwapSessionStatus.EXPIRED.value,
+    }
+)
 
 
 class LifiQuoteService:
@@ -148,6 +158,139 @@ class LifiQuoteService:
         db.commit()
         db.refresh(swap_row)
 
+        return self._build_quote_response(
+            swap_row,
+            simplified=simplified,
+            expires_at=expires_at,
+            slippage_bps=slippage,
+            signing_wallet_mode=resolved_mode,
+            signing_wallet_address=from_address,
+        )
+
+    def refresh_quote(self, db: Session, *, person_id: UUID, swap_id: UUID) -> SwapQuoteResponse:
+        """Ré-appelle LI.FI et met à jour la ligne swap existante (même swap_id)."""
+        swap_row = self._swap_repo.get_for_person(db, swap_id=swap_id, person_id=person_id)
+        if swap_row is None:
+            raise SwapValidationError("swap.not_found", "Swap introuvable")
+        if swap_row.status not in REFRESHABLE_SWAP_STATUSES:
+            raise SwapValidationError(
+                "swap.invalid_state",
+                f"Refresh impossible en état {swap_row.status}",
+            )
+        if swap_row.tx_hash:
+            raise SwapValidationError(
+                "swap.invalid_state",
+                "Refresh impossible après soumission on-chain",
+            )
+
+        from_token = resolve_swap_token(swap_row.from_asset, swap_row.from_chain)
+        to_token = resolve_swap_token(swap_row.to_asset, swap_row.to_chain)
+        signing_mode, from_address = read_signing_wallet_from_audit(swap_row.audit_log)
+        if not from_address:
+            signing_mode, from_address = resolve_swap_signing_wallet(
+                db,
+                person_id=person_id,
+                chain_key=from_token.chain_key,
+                signing_wallet_mode=signing_mode,
+                signing_wallet_address=None,
+            )
+        _, to_address = resolve_swap_signing_wallet(
+            db,
+            person_id=person_id,
+            chain_key=to_token.chain_key,
+            signing_wallet_mode=signing_mode,
+            signing_wallet_address=from_address if signing_mode == "external_evm" else None,
+        )
+
+        slippage = int(swap_row.slippage_bps or 50)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=QUOTE_TTL_SECONDS)
+        atomic_amount = human_amount_to_atomic(swap_row.amount_in, from_token.decimals)
+        slippage_ratio = slippage / 10_000
+
+        try:
+            lifi_quote = self._get_quote_with_retry(
+                from_chain=from_token.lifi_chain_id,
+                to_chain=to_token.lifi_chain_id,
+                from_token=from_token.token_address,
+                to_token=to_token.token_address,
+                from_amount=atomic_amount,
+                from_address=from_address,
+                to_address=to_address,
+                slippage=slippage_ratio,
+                fee_bps=swap_fee_bps(),
+            )
+        except LifiClientError as exc:
+            swap_row.error_message = str(exc)
+            self._swap_repo.append_audit(swap_row, {"event": "quote_refresh_failed", "code": exc.code})
+            db.commit()
+            raise
+
+        simplified = self._simplify_quote(
+            lifi_quote,
+            amount_in=Decimal(str(swap_row.amount_in)),
+            from_asset=from_token.asset,
+            to_asset=to_token.asset,
+            to_decimals=to_token.decimals,
+        )
+        if signing_mode == "privy_embedded":
+            simplified["network_fee"] = Decimal("0")
+            simplified["network_fee_asset"] = None
+            simplified["network_fee_usd"] = None
+
+        swap_row.status = SwapSessionStatus.QUOTE_RECEIVED.value
+        swap_row.expires_at = expires_at
+        swap_row.error_message = None
+        swap_row.lifi_quote_id = str(lifi_quote.get("id") or "")
+        swap_row.lifi_tool = str(lifi_quote.get("tool") or "")
+        swap_row.lifi_quote_raw = lifi_quote
+        swap_row.transaction_request = lifi_quote.get("transactionRequest")
+        swap_row.vancelian_fee = simplified["vancelian_fee"]
+        swap_row.network_fee = simplified["network_fee"]
+        swap_row.network_fee_asset = simplified["network_fee_asset"]
+        swap_row.estimated_receive = simplified["estimated_receive"]
+        swap_row.estimated_receive_min = simplified["estimated_receive_min"]
+        swap_row.route_steps = [step.model_dump() for step in simplified["route_steps"]]
+        self._swap_repo.append_audit(
+            swap_row,
+            {"event": "quote_refreshed", "tool": swap_row.lifi_tool},
+        )
+        from services.transaction_intents.lifi_intent_sync import sync_lifi_swap_intent
+
+        sync_lifi_swap_intent(db, swap_row)
+        db.commit()
+        db.refresh(swap_row)
+
+        return self._build_quote_response(
+            swap_row,
+            simplified=simplified,
+            expires_at=expires_at,
+            slippage_bps=slippage,
+            signing_wallet_mode=signing_mode,
+            signing_wallet_address=from_address,
+        )
+
+    def _get_quote_with_retry(self, **kwargs: Any) -> dict[str, Any]:
+        last_exc: LifiClientError | None = None
+        for attempt in range(LIFI_REFRESH_MAX_ATTEMPTS):
+            try:
+                return self._lifi.get_quote(**kwargs)
+            except LifiClientError as exc:
+                last_exc = exc
+                if attempt < LIFI_REFRESH_MAX_ATTEMPTS - 1:
+                    time.sleep(0.25 * (attempt + 1))
+        assert last_exc is not None
+        raise last_exc
+
+    def _build_quote_response(
+        self,
+        swap_row,
+        *,
+        simplified: dict[str, Any],
+        expires_at: datetime,
+        slippage_bps: int,
+        signing_wallet_mode: str | None,
+        signing_wallet_address: str | None,
+    ) -> SwapQuoteResponse:
         return SwapQuoteResponse(
             swap_id=swap_row.id,
             status=swap_row.status,
@@ -167,9 +310,9 @@ class LifiQuoteService:
             estimated_duration_seconds=simplified.get("estimated_duration_seconds"),
             route_steps=simplified["route_steps"],
             expires_at=expires_at.isoformat(),
-            slippage_bps=slippage,
-            signing_wallet_mode=resolved_mode,
-            signing_wallet_address=from_address,
+            slippage_bps=slippage_bps,
+            signing_wallet_mode=signing_wallet_mode,
+            signing_wallet_address=signing_wallet_address,
         )
 
     def _simplify_quote(
