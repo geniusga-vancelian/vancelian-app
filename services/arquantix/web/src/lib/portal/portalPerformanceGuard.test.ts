@@ -23,6 +23,7 @@ import {
   scanPortalVaultSetupExecutionImports,
   scanPortalLombardSetupExecutionImports,
   scanPortalLombardBorrowPageNoEagerWeb3,
+  scanPortalWalletsRedirectNoEagerWeb3,
   scanWalletReadSegmentNoWeb3Boundary,
   scanDeprecatedPortalWalletRouteHelpersImports,
   scanPortalSessionRouteHelpersImports,
@@ -82,12 +83,14 @@ describe('portalPerformanceGuard — détection synthétique', () => {
 })
 
 describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
-  it('known offender layouts — liste figée (2, borrow layout retiré F6)', () => {
+  it('known offender layouts — liste figée (1, wallets layout retiré F7)', () => {
     const found = listPortalWeb3BoundaryEagerLayoutOffenders()
     assert.deepEqual(found, [...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS].sort())
     assert.deepEqual(scanPortalWeb3BoundaryLayoutOffenders(), [])
+    assert.equal(PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS.length, 1)
     assert.equal(found.includes('src/app/app/(shell)/wallet/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/wallet/(tx)/layout.tsx'), true)
+    assert.equal(found.includes('src/app/app/(shell)/wallets/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/borrow/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/invest/vault/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/invest/bundle/layout.tsx'), false)
@@ -144,6 +147,10 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
 
   it('lombard borrow routes — pas de layout Web3 eager (F6)', () => {
     assert.deepEqual(scanPortalLombardBorrowPageNoEagerWeb3(), [])
+  })
+
+  it('wallets redirect — pas de layout Web3 eager (F7)', () => {
+    assert.deepEqual(scanPortalWalletsRedirectNoEagerWeb3(), [])
   })
 })
 

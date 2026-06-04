@@ -67,9 +67,9 @@ export const PORTAL_WALLET_BUNDLE_DETAIL_FORBIDDEN_IMPORTS: ForbiddenPattern[] =
  * Layouts montant PortalWeb3Boundary (eager) — liste figée ; échec CI si un layout hors liste apparaît.
  * R4.5-F2 : `wallet/layout.tsx` supprimé → boundary limitée à `wallet/(tx)/layout.tsx`.
  */
+/** R4.5-F7 : seul layout segment Web3 eager restant — routes tx wallet (swap, create, deposit, withdraw). */
 export const PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS = [
   'src/app/app/(shell)/wallet/(tx)/layout.tsx',
-  'src/app/app/(shell)/wallets/layout.tsx',
 ] as const
 
 /** R4.5-F5-A — page invest bundle : pas de layout Web3 eager. */
@@ -139,6 +139,11 @@ export const PORTAL_LOMBARD_SETUP_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
 export const PORTAL_LOMBARD_BORROW_PAGE_GUARD_PATHS = [
   'src/app/app/(shell)/borrow/page.tsx',
   'src/app/app/(shell)/borrow/position/page.tsx',
+] as const
+
+/** R4.5-F7 — redirect /app/wallets → profile#wallets, sans Web3 eager. */
+export const PORTAL_WALLETS_REDIRECT_PAGE_GUARD_PATHS = [
+  'src/app/app/(shell)/wallets/page.tsx',
 ] as const
 
 /** Chemins où une boundary Web3 (eager ou lazy) ou Privy auth est légitime. */
@@ -770,6 +775,38 @@ export function scanPortalLombardBorrowPageNoEagerWeb3(webRoot?: string): Portal
   return violations
 }
 
+/** /app/wallets — redirect profil sans layout Web3 eager (R4.5-F7). */
+export function scanPortalWalletsRedirectNoEagerWeb3(webRoot?: string): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+  const legacyLayout = 'src/app/app/(shell)/wallets/layout.tsx'
+
+  if (fs.existsSync(path.join(root, legacyLayout))) {
+    const source = readRelativeFile(root, legacyLayout)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'wallets-redirect-layout-removed-f7',
+        file: legacyLayout,
+        detail:
+          'wallets/layout.tsx must not wrap routes — connect externe via PortalProfileExternalWalletConnect on profile (F7)',
+      })
+    }
+  }
+
+  for (const relativePath of PORTAL_WALLETS_REDIRECT_PAGE_GUARD_PATHS) {
+    const source = readRelativeFile(root, relativePath)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'wallets-redirect-page-no-eager-web3',
+        file: relativePath,
+        detail: 'Wallets redirect page must not import eager PortalWeb3Boundary',
+      })
+    }
+  }
+
+  return violations
+}
+
 /** Vault setup — pas de hooks Morpho/Ledgity execution (R4.5-F4). */
 export function scanPortalVaultSetupExecutionImports(
   webRoot?: string,
@@ -852,6 +889,7 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanPortalVaultSetupExecutionImports(webRoot),
     ...scanPortalLombardSetupExecutionImports(webRoot),
     ...scanPortalLombardBorrowPageNoEagerWeb3(webRoot),
+    ...scanPortalWalletsRedirectNoEagerWeb3(webRoot),
     ...scanPortalBundleInvestSetupExecutionImports(webRoot),
     ...scanPortalBundleInvestPageNoEagerWeb3(webRoot),
     ...scanPortalWalletBundleDetailReadOnlyImports(webRoot),
