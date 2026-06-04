@@ -18,6 +18,10 @@ import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import { isPortalChainDeFiEnabled } from '@/lib/portal/portalChainFilter'
 import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
+import {
+  resolveInvestHubBundles,
+  shouldShowInvestFullSkeleton,
+} from '@/lib/portal/portalInvestProgressiveData'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { fetchPortalLedgityVaults } from '@/lib/portal/ledgity/ledgityVaultClient'
 import { cn } from '@/lib/utils'
@@ -42,11 +46,7 @@ export function PortalInvestScreen() {
     errorMessage: 'Unable to load investment offers.',
   })
 
-  const {
-    data: marketsData,
-    loading: marketsLoading,
-    refresh: refreshMarkets,
-  } = usePortalCachedScreen<PortalMarketsPayload>({
+  const { data: marketsData, refresh: refreshMarkets } = usePortalCachedScreen<PortalMarketsPayload>({
     cacheKey: MARKETS_CACHE_KEY,
     url: `/api/portal/markets?locale=${PORTAL_CONTENT_LOCALE}`,
     ttlMs: 120_000,
@@ -77,16 +77,20 @@ export function PortalInvestScreen() {
     void loadVaults()
   }, [loadVaults])
 
-  const bundles = marketsData?.bundles ?? []
+  const { bundles } = useMemo(
+    () => resolveInvestHubBundles({ marketsData }),
+    [marketsData],
+  )
+
   const { coffreBundles, panierBundles } = useMemo(() => {
     const coffres = bundles.filter(isPlacerCoffreBundle)
     const paniers = bundles.filter((b) => !isPlacerCoffreBundle(b))
     return { coffreBundles: coffres, panierBundles: paniers }
   }, [bundles])
 
-  const loading = (investLoading && !investData) || (marketsLoading && !marketsData)
-
-  if (loading) return <PortalInvestSkeleton />
+  if (shouldShowInvestFullSkeleton(investLoading, investData)) {
+    return <PortalInvestSkeleton />
+  }
 
   if (investError && !investData) {
     return (
