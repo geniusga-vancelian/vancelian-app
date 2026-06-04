@@ -7,6 +7,7 @@ import {
   markLombardLinkedRetryStarted,
 } from '@/lib/portal/lombard/lombardRetryLinking'
 import {
+  LOMBARD_OPEN_LOAN_INVISIBLE_RETRY_DELAY_MS,
   LombardTerminalBorrowError,
   shouldAttemptInvisibleOpenLoanRetry,
   toLombardTerminalBorrowError,
@@ -35,6 +36,10 @@ describe('lombardOpenLoanExecutionPolicy', () => {
       hasRetried: false,
     })
     assert.equal(shouldAttemptInvisibleOpenLoanRetry(error, state), false)
+  })
+
+  it('exposes invisible retry backoff', () => {
+    assert.equal(LOMBARD_OPEN_LOAN_INVISIBLE_RETRY_DELAY_MS, 2_000)
   })
 
   it('maps terminal errors to public copy only', () => {

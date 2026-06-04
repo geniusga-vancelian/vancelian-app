@@ -9,6 +9,7 @@ import {
   preparePortalLombardOpenLoan,
 } from '@/lib/portal/lombard/lombardClient'
 import {
+  delayBeforeInvisibleOpenLoanRetry,
   LombardTerminalBorrowError,
   shouldAttemptInvisibleOpenLoanRetry,
   toLombardTerminalBorrowError,
@@ -172,6 +173,7 @@ export function usePortalLombardExecution() {
           Object.assign(linkState, markLombardLinkedRetryStarted(linkState))
           args.onInvisibleRetry?.()
           args.onPhaseChange?.('sending')
+          await delayBeforeInvisibleOpenLoanRetry()
           try {
             const retryResult = await runAttempt('linked_retry')
             bumpLombardPositionsRevision()

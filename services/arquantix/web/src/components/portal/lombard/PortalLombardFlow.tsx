@@ -29,6 +29,10 @@ import {
 import { parsePortalBorrowUrlIntent } from '@/lib/portal/lombard/lombardBorrowUrlIntent'
 import { buildLombardBorrowRecap, type LombardBorrowRecap } from '@/lib/portal/lombard/lombardBorrowRecap'
 import {
+  assessLombardConfirmQuote,
+  type LombardConfirmQuoteGuardMode,
+} from '@/lib/portal/lombard/lombardConfirmQuoteGuard'
+import {
   formatLombardBorrowAmountForApi,
   markBorrowIntroSeen,
   normalizeLombardBorrowAmountForApi,
@@ -103,6 +107,9 @@ export function PortalLombardFlow() {
   quoteSnapshotRef.current = quote
 
   const [borrowRecap, setBorrowRecap] = useState<LombardBorrowRecap | null>(null)
+  const [confirmQuoteLoading, setConfirmQuoteLoading] = useState(false)
+  const [confirmQuoteError, setConfirmQuoteError] = useState<string | null>(null)
+  const reviewQuoteSnapshotRef = useRef<LombardQuoteResult | null>(null)
   const [executionRequest, setExecutionRequest] = useState<PortalLombardExecutionRequest | null>(
     null,
   )
@@ -291,50 +298,151 @@ export function PortalLombardFlow() {
 
   const goToBorrowReview = useCallback(() => {
     if (executing || !quote) return
+    reviewQuoteSnapshotRef.current = quote
+    setConfirmQuoteError(null)
     setBorrowRecap(buildLombardBorrowRecap(quote))
     setStep('review')
   }, [executing, quote])
 
-  const startOpenLoan = useCallback(() => {
-    if (executing || !selectedCollateral || !quote || !executionAddress) return
+  const beginProcessingAfterFreshQuote = useCallback(
+    (freshQuote: LombardQuoteResult) => {
+      if (!selectedCollateral || !executionAddress) return
 
-    openLoanSucceededRef.current = false
-    if (!borrowRecap) {
-      setBorrowRecap(buildLombardBorrowRecap(quote))
+      openLoanSucceededRef.current = false
+      setQuote(freshQuote)
+      setBorrowRecap(buildLombardBorrowRecap(freshQuote))
+      reviewQuoteSnapshotRef.current = freshQuote
+      setConfirmQuoteError(null)
+      setExecutionRequest({
+        collateral: selectedCollateral,
+        borrowAmount: borrowAmount.trim(),
+        walletAddress: executionAddress,
+        targetLtvPercent,
+      })
+      setStep('processing')
+      setTerminalFailure(false)
+      setOpeningSubtextTick(0)
+      setExecutionPhase('preparing')
+      setExecutionRunId((id) => id + 1)
+    },
+    [borrowAmount, executionAddress, selectedCollateral, targetLtvPercent],
+  )
+
+  const refreshQuoteBeforeExecution = useCallback(async (args?: {
+    guardMode?: LombardConfirmQuoteGuardMode
+  }): Promise<LombardQuoteResult> => {
+    if (!selectedCollateral || !executionAddress) {
+      throw new Error('Informations manquantes pour actualiser le devis.')
     }
-    setExecutionRequest({
+
+    const normalizedBorrowAmount = normalizeLombardBorrowAmountForApi(borrowAmount)
+    if (!normalizedBorrowAmount) {
+      throw new Error('Montant emprunté invalide.')
+    }
+
+    const guardMode = args?.guardMode ?? 'review_confirm'
+    const snapshot =
+      guardMode === 'processing_retry' ? null : (reviewQuoteSnapshotRef.current ?? quote)
+    if (guardMode === 'review_confirm' && !snapshot) {
+      throw new Error('Devis indisponible. Revenez au formulaire.')
+    }
+
+    const fresh = await fetchPortalLombardQuote({
       collateral: selectedCollateral,
-      borrowAmount: borrowAmount.trim(),
+      borrowAmount: normalizedBorrowAmount,
       walletAddress: executionAddress,
       targetLtvPercent,
+      portalWalletCollateralBalance: portalCollateralBalanceHuman,
     })
-    setStep('processing')
-    setTerminalFailure(false)
-    setOpeningSubtextTick(0)
-    setExecutionPhase('preparing')
-    setExecutionRunId((id) => id + 1)
+
+    const assessment = assessLombardConfirmQuote({ snapshot, fresh, mode: guardMode })
+    setQuote(fresh)
+    setBorrowRecap(buildLombardBorrowRecap(fresh))
+
+    if (!assessment.ok) {
+      reviewQuoteSnapshotRef.current = fresh
+      setConfirmQuoteError(assessment.message)
+      throw new Error(assessment.message)
+    }
+
+    reviewQuoteSnapshotRef.current = fresh
+    return fresh
   }, [
     borrowAmount,
+    executionAddress,
+    portalCollateralBalanceHuman,
+    quote,
+    selectedCollateral,
+    targetLtvPercent,
+  ])
+
+  const startOpenLoan = useCallback(() => {
+    if (confirmQuoteLoading || executing || !selectedCollateral || !quote || !executionAddress) return
+
+    void (async () => {
+      setConfirmQuoteLoading(true)
+      setConfirmQuoteError(null)
+      try {
+        const fresh = await refreshQuoteBeforeExecution()
+        beginProcessingAfterFreshQuote(fresh)
+      } catch (error) {
+        setConfirmQuoteError(
+          (current) =>
+            current ??
+            (error instanceof Error
+              ? error.message
+              : 'Impossible de vérifier le devis. Réessayez.'),
+        )
+      } finally {
+        setConfirmQuoteLoading(false)
+      }
+    })()
+  }, [
+    beginProcessingAfterFreshQuote,
+    confirmQuoteLoading,
     executing,
     executionAddress,
     quote,
+    refreshQuoteBeforeExecution,
     selectedCollateral,
-    borrowRecap,
-    targetLtvPercent,
   ])
+
+  const retryOpenLoanAfterQuoteRefresh = useCallback(() => {
+    if (confirmQuoteLoading || executing || !executionRequest) return
+
+    void (async () => {
+      setConfirmQuoteLoading(true)
+      setConfirmQuoteError(null)
+      try {
+        const fresh = await refreshQuoteBeforeExecution({ guardMode: 'processing_retry' })
+        setQuote(fresh)
+        setBorrowRecap(buildLombardBorrowRecap(fresh))
+        openLoanSucceededRef.current = false
+        setTerminalFailure(false)
+        setOpeningSubtextTick(0)
+        setExecutionPhase('preparing')
+        setExecutionRunId((id) => id + 1)
+      } catch (error) {
+        if (error instanceof Error && error.message) {
+          setConfirmQuoteError(error.message)
+        }
+      } finally {
+        setConfirmQuoteLoading(false)
+      }
+    })()
+  }, [confirmQuoteLoading, executing, executionRequest, refreshQuoteBeforeExecution])
 
   const handleOpeningSubtextTick = useCallback(() => {
     setOpeningSubtextTick((tick) => tick + 1)
   }, [])
 
   const retryOpenLoan = useCallback(() => {
-    if (executing || !executionRequest) return
-    openLoanSucceededRef.current = false
-    setTerminalFailure(false)
-    setOpeningSubtextTick(0)
-    setExecutionPhase('preparing')
-    setExecutionRunId((id) => id + 1)
-  }, [executing, executionRequest])
+    if (step === 'review') {
+      startOpenLoan()
+      return
+    }
+    retryOpenLoanAfterQuoteRefresh()
+  }, [retryOpenLoanAfterQuoteRefresh, startOpenLoan, step])
 
   const handleIntroContinue = useCallback(() => {
     markBorrowIntroSeen()
@@ -448,9 +556,14 @@ export function PortalLombardFlow() {
         <PortalInvestFlowPanel>
           <PortalLombardBorrowReviewStep
             recap={borrowRecap}
-            onBack={() => setStep('form')}
+            onBack={() => {
+              setConfirmQuoteError(null)
+              setStep('form')
+            }}
             onConfirm={startOpenLoan}
             confirmDisabled={executing || !walletReady}
+            confirmLoading={confirmQuoteLoading}
+            confirmError={confirmQuoteError}
           />
         </PortalInvestFlowPanel>
       ) : null}
@@ -476,11 +589,18 @@ export function PortalLombardFlow() {
               onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
             />
           ) : (
-            <PortalLombardBorrowTerminalFailure
-              retryDisabled={executing}
-              onRetry={retryOpenLoan}
-              onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
-            />
+            <>
+              {confirmQuoteError ? (
+                <p className="font-ui text-[14px] text-v-error" role="alert">
+                  {confirmQuoteError}
+                </p>
+              ) : null}
+              <PortalLombardBorrowTerminalFailure
+                retryDisabled={executing || confirmQuoteLoading}
+                onRetry={retryOpenLoan}
+                onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
+              />
+            </>
           )}
         </div>
       ) : null}

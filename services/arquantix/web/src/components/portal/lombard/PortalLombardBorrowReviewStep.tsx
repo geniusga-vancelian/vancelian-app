@@ -15,6 +15,8 @@ type Props = {
   onConfirm: () => void
   onBack: () => void
   confirmDisabled?: boolean
+  confirmLoading?: boolean
+  confirmError?: string | null
 }
 
 /** Lombard borrow — confirmation avant exécution blockchain (handoff portfolio.html). */
@@ -23,6 +25,8 @@ export function PortalLombardBorrowReviewStep({
   onConfirm,
   onBack,
   confirmDisabled = false,
+  confirmLoading = false,
+  confirmError = null,
 }: Props) {
   const previewSteps = useMemo(() => buildLombardReviewPreviewSteps(recap), [recap])
 
@@ -54,11 +58,17 @@ export function PortalLombardBorrowReviewStep({
       onClose={onBack}
       backButtonLabel={LOMBARD_REVIEW_UI.modifierCta}
       primaryAction={{
-        label: LOMBARD_REVIEW_UI.confirmCta,
+        label: confirmLoading ? 'Vérification du devis…' : LOMBARD_REVIEW_UI.confirmCta,
         onClick: onConfirm,
-        disabled: confirmDisabled,
+        disabled: confirmDisabled || confirmLoading,
       }}
     >
+      {confirmError ? (
+        <p className="font-ui text-[14px] text-v-error" role="alert">
+          {confirmError}
+        </p>
+      ) : null}
+
       <p className="inv-confirm__lead">{lead}</p>
 
       <TransactionConfirmStepsPreview steps={previewSteps} title={LOMBARD_REVIEW_UI.stepsTitle} />

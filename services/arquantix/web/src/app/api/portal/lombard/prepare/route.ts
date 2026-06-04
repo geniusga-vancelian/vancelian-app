@@ -11,6 +11,7 @@ import { runLombardPreBorrowSafetyChecks } from '@/lib/portal/lombard/lombardSaf
 import { isLombardMockEnabled } from '@/lib/portal/lombard/lombardMockConfig'
 import type { LombardRetryPrepareContext } from '@/lib/portal/lombard/lombardRetryLinking'
 import { prepareLombardMockOpenLoan } from '@/lib/portal/lombard/mocks/lombardLocalMock'
+import { assertLombardOpenLoanSimulates, LombardSimulationError } from '@/lib/portal/lombard/lombardOpenLoanSimulation'
 import { buildLombardOpenLoanTransactions } from '@/lib/portal/lombard/lombardTx'
 import { lombardPrepareSchema } from '@/lib/portal/lombard/lombardValidation'
 import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
@@ -162,6 +163,11 @@ export async function POST(request: NextRequest) {
       borrowAmountRaw: BigInt(quote.borrowAmountRaw),
     })
 
+    await assertLombardOpenLoanSimulates({
+      walletAddress: parsed.walletAddress,
+      transactions,
+    })
+
     const ledgerEntries = await createLombardLedgerEntries({
       personId,
       marketId: quote.marketId,
@@ -194,7 +200,8 @@ export async function POST(request: NextRequest) {
       error instanceof LombardQuoteError ||
       error instanceof LombardMarketError ||
       error instanceof LombardBetaError ||
-      error instanceof LombardSafetyError
+      error instanceof LombardSafetyError ||
+      error instanceof LombardSimulationError
     ) {
       if (personId && parsed) {
         logLombardPrepareBlocked({

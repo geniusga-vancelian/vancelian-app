@@ -6,6 +6,8 @@ const LOMBARD_CODE_MESSAGES: Record<string, string> = {
   'lombard.quote_failed': 'Impossible de calculer le devis. Réessayez.',
   'lombard.balance_changed':
     'Solde de garantie insuffisant. Actualisez le montant ou réessayez dans quelques secondes.',
+  'lombard.open_loan_simulation_failed':
+    'Le réseau refuse cette ouverture d’emprunt pour l’instant. Réessayez dans quelques instants.',
   'lombard.base_rpc_busy': formatBaseRpcUserMessage(),
   unauthorized: 'Session expirée. Reconnectez-vous pour continuer.',
 }

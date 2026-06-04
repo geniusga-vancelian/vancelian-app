@@ -45,7 +45,7 @@ describe('lombardProcessingUx', () => {
 
   it('terminal copy is user-facing only', () => {
     assert.match(LOMBARD_TERMINAL_FAILURE_COPY.title, /Impossible/)
-    assert.equal(LOMBARD_TERMINAL_FAILURE_COPY.lines.length, 2)
+    assert.equal(LOMBARD_TERMINAL_FAILURE_COPY.lines.length, 3)
     for (const line of LOMBARD_TERMINAL_FAILURE_COPY.lines) {
       assert.doesNotMatch(line, /revert|retryable|group_key|tx_hash/i)
     }
