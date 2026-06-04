@@ -2,11 +2,8 @@
  * Refresh LI.FI + slippage par leg bundle (phase 2 quote freshness).
  */
 import type { BundleAllocationLeg, BundleRebalanceLeg, BundleWithdrawSellLeg } from '@/lib/portal/bundleClient'
-import {
-  SwapPriceChangedError,
-  confirmSwapWithRetry,
-  type SwapExecutePayload,
-} from '@/lib/portal/swapClient'
+import { confirmSwapWithRetry } from '@/lib/portal/swapQuoteConfirm'
+import { SwapPriceChangedError, type SwapExecutePayload } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 export type BundleLegQuoteSnapshot = {
