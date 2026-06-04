@@ -3,13 +3,14 @@
 import { Container } from '@/components/ui/Container'
 import { PortalDashboardSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalDashboardView } from '@/components/portal/dashboard/PortalDashboardView'
+import { shouldShowDashboardFullSkeleton } from '@/lib/portal/portalDashboardProgressiveData'
 import { usePortalDashboardProgressive } from '@/lib/portal/usePortalDashboardProgressive'
 
 export function PortalDashboardScreen() {
   const { data, loading, portfolioLoading, refreshing, error, refresh } =
     usePortalDashboardProgressive()
 
-  if (loading && !data) {
+  if (shouldShowDashboardFullSkeleton(loading, data)) {
     return <PortalDashboardSkeleton />
   }
 

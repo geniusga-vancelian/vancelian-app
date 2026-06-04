@@ -16,6 +16,14 @@ function NewsSkeleton() {
   )
 }
 
+function scheduleSecondaryWidgetLoad(run: () => void): void {
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(run, { timeout: 2000 })
+  } else {
+    window.setTimeout(run, 80)
+  }
+}
+
 type Props = {
   locale?: string
   initialData?: PortalNewsWidgetData | null
@@ -34,26 +42,32 @@ export function PortalNewsWidgetSection({ locale = 'en', initialData }: Props) {
     }
 
     let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      setFailed(false)
-      try {
-        const res = await fetch(`/api/portal/news-widget?locale=${encodeURIComponent(locale)}`)
-        if (!res.ok) {
-          if (!cancelled) {
-            setData(null)
-            setFailed(true)
+
+    const fetchNews = () => {
+      if (cancelled) return
+      ;(async () => {
+        setLoading(true)
+        setFailed(false)
+        try {
+          const res = await fetch(`/api/portal/news-widget?locale=${encodeURIComponent(locale)}`)
+          if (!res.ok) {
+            if (!cancelled) {
+              setData(null)
+              setFailed(true)
+            }
+            return
           }
-          return
+          const json = (await res.json()) as PortalNewsWidgetData
+          if (!cancelled) setData(json.items?.length ? json : null)
+        } catch {
+          if (!cancelled) setFailed(true)
+        } finally {
+          if (!cancelled) setLoading(false)
         }
-        const json = (await res.json()) as PortalNewsWidgetData
-        if (!cancelled) setData(json.items?.length ? json : null)
-      } catch {
-        if (!cancelled) setFailed(true)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
+      })()
+    }
+
+    scheduleSecondaryWidgetLoad(fetchNews)
     return () => {
       cancelled = true
     }

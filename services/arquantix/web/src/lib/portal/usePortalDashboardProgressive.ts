@@ -14,9 +14,14 @@ import {
   DASHBOARD_PORTFOLIO_API_URL,
   DASHBOARD_PORTFOLIO_CACHE_KEY,
   DASHBOARD_PORTFOLIO_TTL_MS,
+  getPortalDashboardBootstrapFromCache,
   resolvePortfolioCurrencyFromCore,
   syncPortalDashboardCompositeCache,
 } from '@/lib/portal/dashboardCache'
+import {
+  hasDashboardCriticalDisplayData,
+  hasDashboardPortfolioDisplayData,
+} from '@/lib/portal/portalDashboardProgressiveData'
 import { mergePortalDashboardPayload } from '@/lib/portal/dashboardMerge'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
@@ -57,17 +62,23 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
 
   const prevScopeKeyRef = useRef(`${scopeSuffix}:${scopeRevision}`)
 
+  const initialDashboardBoot = getPortalDashboardBootstrapFromCache()
+
   const [core, setCore] = useState<PortalDashboardCorePayload | null>(
-    () => getPortalCacheBootstrap<PortalDashboardCorePayload>(DASHBOARD_CORE_CACHE_KEY).data,
+    () => initialDashboardBoot.core.data,
   )
   const [portfolio, setPortfolio] = useState<PortalDashboardPortfolioPayload | null>(
-    () => getPortalCacheBootstrap<PortalDashboardPortfolioPayload>(portfolioCacheKey).data,
+    () => initialDashboardBoot.portfolio.data,
   )
   const [loading, setLoading] = useState(
-    () => !getPortalCacheBootstrap<PortalDashboardCorePayload>(DASHBOARD_CORE_CACHE_KEY).hasInitialData,
+    () =>
+      !initialDashboardBoot.core.hasInitialData &&
+      !hasDashboardCriticalDisplayData(initialDashboardBoot.composite),
   )
   const [portfolioLoading, setPortfolioLoading] = useState(
-    () => !getPortalCacheBootstrap<PortalDashboardPortfolioPayload>(portfolioCacheKey).hasInitialData,
+    () =>
+      !initialDashboardBoot.portfolio.hasInitialData &&
+      !hasDashboardPortfolioDisplayData(initialDashboardBoot.composite),
   )
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')

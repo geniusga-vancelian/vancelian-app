@@ -30,6 +30,10 @@ import {
   portalWalletScopeShortLabel,
 } from '@/lib/portal/portalWalletScopeFilter'
 import { usePortalWalletScopeContext } from '@/lib/portal/portalWalletScopeContext'
+import {
+  shouldShowDashboardAccountsPending,
+  shouldShowDashboardBalancePending,
+} from '@/lib/portal/portalDashboardProgressiveData'
 import { resolvePortalDepositHref } from '@/lib/portal/portalRouting'
 import { cn } from '@/lib/utils'
 
@@ -127,7 +131,16 @@ export function PortalDashboardView({
     }
   }, [lombardEnabled, lombardLoading, lombardPositions])
 
-  const portfolioPending = portfolioLoading || refreshing
+  const balancePending = shouldShowDashboardBalancePending({
+    portfolioLoading,
+    refreshing,
+    data,
+  })
+  const accountsPending = shouldShowDashboardAccountsPending({
+    portfolioLoading,
+    refreshing,
+    data,
+  })
 
   return (
     <PortalPageContainer className={className}>
@@ -137,7 +150,7 @@ export function PortalDashboardView({
             <PortalReveal index={0}>
               <PortalDashboardHeader
                 balanceLabel={derived.balanceLabel}
-                balancePending={portfolioPending}
+                balancePending={balancePending}
                 changeAmountLabel={derived.performance.amountLabel}
                 changePercentLabel={derived.performance.percentLabel}
                 changePositive={derived.performance.positive}
@@ -150,7 +163,7 @@ export function PortalDashboardView({
               <PortalAccountsCard
                 rows={derived.rows}
                 creditLine={creditLine}
-                portfolioPending={portfolioPending}
+                portfolioPending={accountsPending}
                 registrationProgressPercent={derived.registrationProgress}
                 registrationStepCompleted={derived.registrationStepCompleted}
                 registrationStepTotal={derived.registrationStepTotal}
