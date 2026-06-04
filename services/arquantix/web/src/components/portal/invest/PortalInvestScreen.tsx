@@ -20,7 +20,9 @@ import { isPortalChainDeFiEnabled } from '@/lib/portal/portalChainFilter'
 import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
 import {
   resolveInvestHubBundles,
+  shouldShowInvestDefiVaultsSectionLoading,
   shouldShowInvestFullSkeleton,
+  shouldShowInvestMarketsBundlesSectionLoading,
 } from '@/lib/portal/portalInvestProgressiveData'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { fetchPortalLedgityVaults } from '@/lib/portal/ledgity/ledgityVaultClient'
@@ -46,22 +48,26 @@ export function PortalInvestScreen() {
     errorMessage: 'Unable to load investment offers.',
   })
 
-  const { data: marketsData, refresh: refreshMarkets } = usePortalCachedScreen<PortalMarketsPayload>({
-    cacheKey: MARKETS_CACHE_KEY,
-    url: `/api/portal/markets?locale=${PORTAL_CONTENT_LOCALE}`,
-    ttlMs: 120_000,
-    errorMessage: 'Unable to load baskets.',
-  })
+  const { data: marketsData, loading: marketsLoading, refresh: refreshMarkets } =
+    usePortalCachedScreen<PortalMarketsPayload>({
+      cacheKey: MARKETS_CACHE_KEY,
+      url: `/api/portal/markets?locale=${PORTAL_CONTENT_LOCALE}`,
+      ttlMs: 120_000,
+      errorMessage: 'Unable to load baskets.',
+    })
 
   const [defiVaults, setDefiVaults] = useState<
     (PortalMorphoVaultDetails | PortalLedgityVaultDetails)[]
   >([])
+  const [defiVaultsLoading, setDefiVaultsLoading] = useState(showDeFiVaults)
 
   const loadVaults = useCallback(async () => {
     if (!showDeFiVaults) {
       setDefiVaults([])
+      setDefiVaultsLoading(false)
       return
     }
+    setDefiVaultsLoading(true)
     try {
       const [morpho, ledgity] = await Promise.all([
         fetchPortalMorphoVaults().catch(() => ({ vaults: [] as PortalMorphoVaultDetails[] })),
@@ -70,6 +76,8 @@ export function PortalInvestScreen() {
       setDefiVaults([...morpho.vaults, ...ledgity.vaults])
     } catch {
       setDefiVaults([])
+    } finally {
+      setDefiVaultsLoading(false)
     }
   }, [showDeFiVaults])
 
@@ -81,6 +89,16 @@ export function PortalInvestScreen() {
     () => resolveInvestHubBundles({ marketsData }),
     [marketsData],
   )
+
+  const marketsBundlesLoading = shouldShowInvestMarketsBundlesSectionLoading({
+    marketsLoading,
+    bundleCount: bundles.length,
+  })
+  const defiVaultsSectionLoading = shouldShowInvestDefiVaultsSectionLoading({
+    showDeFiVaults,
+    defiVaultsLoading,
+    defiVaultCount: defiVaults.length,
+  })
 
   const { coffreBundles, panierBundles } = useMemo(() => {
     const coffres = bundles.filter(isPlacerCoffreBundle)
@@ -118,6 +136,8 @@ export function PortalInvestScreen() {
           panierBundles={panierBundles}
           defiVaults={defiVaults}
           showDeFiVaults={showDeFiVaults}
+          marketsBundlesLoading={marketsBundlesLoading}
+          defiVaultsLoading={defiVaultsSectionLoading}
         />
       </PortalReveal>
 

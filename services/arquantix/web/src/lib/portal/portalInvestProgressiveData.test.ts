@@ -4,7 +4,9 @@ import { describe, it } from 'node:test'
 import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
 import {
   resolveInvestHubBundles,
+  shouldShowInvestDefiVaultsSectionLoading,
   shouldShowInvestFullSkeleton,
+  shouldShowInvestMarketsBundlesSectionLoading,
 } from '@/lib/portal/portalInvestProgressiveData'
 
 const MARKETS_DIRECT: PortalMarketsPayload = {
@@ -67,5 +69,61 @@ describe('portalInvestProgressiveData — G4-B2', () => {
     })
     assert.equal(resolved.bundles.length, 1)
     assert.equal(shouldShowInvestFullSkeleton(false, { offers: [] }), false)
+  })
+
+  it('section markets : loading sans bundles → skeleton section', () => {
+    assert.equal(
+      shouldShowInvestMarketsBundlesSectionLoading({ marketsLoading: true, bundleCount: 0 }),
+      true,
+    )
+    assert.equal(
+      shouldShowInvestMarketsBundlesSectionLoading({ marketsLoading: true, bundleCount: 1 }),
+      false,
+    )
+    assert.equal(
+      shouldShowInvestMarketsBundlesSectionLoading({ marketsLoading: false, bundleCount: 0 }),
+      false,
+    )
+  })
+
+  it('section DeFi : loading sans vaults sur chaîne DeFi → skeleton', () => {
+    assert.equal(
+      shouldShowInvestDefiVaultsSectionLoading({
+        showDeFiVaults: true,
+        defiVaultsLoading: true,
+        defiVaultCount: 0,
+      }),
+      true,
+    )
+    assert.equal(
+      shouldShowInvestDefiVaultsSectionLoading({
+        showDeFiVaults: false,
+        defiVaultsLoading: true,
+        defiVaultCount: 0,
+      }),
+      false,
+    )
+    assert.equal(
+      shouldShowInvestDefiVaultsSectionLoading({
+        showDeFiVaults: true,
+        defiVaultsLoading: false,
+        defiVaultCount: 0,
+      }),
+      false,
+    )
+  })
+
+  it('fallback bundles pendant markets loading → pas skeleton section', () => {
+    const resolved = resolveInvestHubBundles({
+      marketsData: null,
+      readMarketsCache: () => MARKETS_FALLBACK,
+    })
+    assert.equal(
+      shouldShowInvestMarketsBundlesSectionLoading({
+        marketsLoading: true,
+        bundleCount: resolved.bundles.length,
+      }),
+      false,
+    )
   })
 })

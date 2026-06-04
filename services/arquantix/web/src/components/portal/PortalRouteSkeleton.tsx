@@ -41,6 +41,17 @@ export function PortalMarketsSkeleton() {
   )
 }
 
+/** Skeleton grille 2 cartes pour une section Placer (paniers, coffres, DeFi). */
+export function PortalPlacerSectionSkeleton({ cards = 2 }: { cards?: number }) {
+  return (
+    <div className="placer-grid placer-grid--2" aria-busy="true" aria-label="Loading section">
+      {Array.from({ length: cards }, (_, i) => (
+        <ShimmerBlock key={i} className="min-h-[360px] rounded-v-card" />
+      ))}
+    </div>
+  )
+}
+
 export function PortalInvestSkeleton() {
   return (
     <PortalPageContainer>
@@ -49,10 +60,7 @@ export function PortalInvestSkeleton() {
           <ShimmerBlock className="aspect-[21/9] min-h-[280px] rounded-v-card" />
           <ShimmerBlock className="h-9 w-full max-w-md rounded-v-pill" />
           <ShimmerBlock className="h-10 w-64 rounded-v-input" />
-          <div className="placer-grid placer-grid--2">
-            <ShimmerBlock className="min-h-[360px] rounded-v-card" />
-            <ShimmerBlock className="min-h-[360px] rounded-v-card" />
-          </div>
+          <PortalPlacerSectionSkeleton />
         </div>
         <ShimmerBlock className="col-side hidden h-20 rounded-v-card lg:block" />
       </div>

@@ -47,3 +47,28 @@ export function resolveInvestHubBundles(
 export function shouldShowInvestFullSkeleton(investLoading: boolean, investData: unknown): boolean {
   return investLoading && investData == null
 }
+
+export type InvestHubMarketsSectionLoadingInput = {
+  marketsLoading: boolean
+  bundleCount: number
+}
+
+/** Paniers / coffres bundle : skeleton section si marchés en vol et aucun bundle (y compris fallback). */
+export function shouldShowInvestMarketsBundlesSectionLoading(
+  input: InvestHubMarketsSectionLoadingInput,
+): boolean {
+  return input.marketsLoading && input.bundleCount === 0
+}
+
+export type InvestHubDefiVaultsSectionLoadingInput = {
+  showDeFiVaults: boolean
+  defiVaultsLoading: boolean
+  defiVaultCount: number
+}
+
+/** Morpho / Ledgity : skeleton section DeFi tant que vaults non résolus. */
+export function shouldShowInvestDefiVaultsSectionLoading(
+  input: InvestHubDefiVaultsSectionLoadingInput,
+): boolean {
+  return input.showDeFiVaults && input.defiVaultsLoading && input.defiVaultCount === 0
+}

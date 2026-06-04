@@ -13,6 +13,7 @@ import {
 } from '@/components/portal/bundles/PortalPlacerBundleCards'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalAdvisorBanner } from '@/components/portal/PortalAdvisorBanner'
+import { PortalPlacerSectionSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { resolveExclusiveOfferCoverUrl } from '@/lib/portal/exclusiveOfferPlaceholderImages'
 import { formatEarnApyFromBps as formatLedgityApyFromBps } from '@/lib/portal/ledgity/ledgityVaultFormat'
 import type { PortalLedgityVaultDetails } from '@/lib/portal/ledgity/ledgityVaultTypes'
@@ -183,6 +184,10 @@ type Props = {
   panierBundles: PortalCryptoBundle[]
   defiVaults?: VaultUnion[]
   showDeFiVaults?: boolean
+  /** Marchés (paniers / coffres bundle) encore en chargement sans données affichables. */
+  marketsBundlesLoading?: boolean
+  /** Vaults Morpho / Ledgity encore en chargement. */
+  defiVaultsLoading?: boolean
 }
 
 export function PortalPlacerView({
@@ -191,6 +196,8 @@ export function PortalPlacerView({
   panierBundles,
   defiVaults = [],
   showDeFiVaults = false,
+  marketsBundlesLoading = false,
+  defiVaultsLoading = false,
 }: Props) {
   const router = useRouter()
   const [filter, setFilter] = useState<PlacerFilterId>('all')
@@ -244,6 +251,12 @@ export function PortalPlacerView({
       : []),
   ]
 
+  const showCoffresSection =
+    show('coffres') &&
+    (coffreCards.length > 0 || marketsBundlesLoading || (showDeFiVaults && defiVaultsLoading))
+
+  const showPaniersSection = show('paniers') && (panierBundles.length > 0 || marketsBundlesLoading)
+
   return (
     <>
       <div className="portal-placer-grid">
@@ -251,7 +264,7 @@ export function PortalPlacerView({
           <PortalPlacerBanner offer={bannerOffer} />
           <PortalPlacerFilter value={filter} onChange={setFilter} />
 
-          {show('coffres') && coffreCards.length > 0 ? (
+          {showCoffresSection ? (
             <div id="placer-coffres" className="placer-section">
               <PortalPlacerSectionHead
                 title="Vaults"
@@ -260,21 +273,25 @@ export function PortalPlacerView({
                   <PortalPlacerSeeAll href="#placer-coffres">View all vaults</PortalPlacerSeeAll>
                 }
               />
-              <div className="placer-grid placer-grid--2">
-                {coffreCards.map((card) => {
-                  if (card.kind === 'bundle') {
-                    return (
-                      <PortalPlacerBundleCoffreCard
-                        key={card.key}
-                        bundle={card.bundle}
-                        onInvest={() => openBundleInvest(card.bundle)}
-                      />
-                    )
-                  }
-                  const { key, kind: _kind, ...defiCard } = card
-                  return <PortalPlacerCoffreCard key={key} {...defiCard} />
-                })}
-              </div>
+              {coffreCards.length > 0 ? (
+                <div className="placer-grid placer-grid--2">
+                  {coffreCards.map((card) => {
+                    if (card.kind === 'bundle') {
+                      return (
+                        <PortalPlacerBundleCoffreCard
+                          key={card.key}
+                          bundle={card.bundle}
+                          onInvest={() => openBundleInvest(card.bundle)}
+                        />
+                      )
+                    }
+                    const { key, kind: _kind, ...defiCard } = card
+                    return <PortalPlacerCoffreCard key={key} {...defiCard} />
+                  })}
+                </div>
+              ) : (
+                <PortalPlacerSectionSkeleton />
+              )}
             </div>
           ) : null}
 
@@ -295,7 +312,7 @@ export function PortalPlacerView({
             </div>
           ) : null}
 
-          {show('paniers') && panierBundles.length > 0 ? (
+          {showPaniersSection ? (
             <div id="placer-paniers" className="placer-section">
               <PortalPlacerSectionHead
                 title="Crypto baskets"
@@ -304,15 +321,19 @@ export function PortalPlacerView({
                   <PortalPlacerSeeAll href="#placer-paniers">View all baskets</PortalPlacerSeeAll>
                 }
               />
-              <div className="placer-grid placer-grid--2">
-                {panierBundles.map((bundle) => (
-                  <PortalPlacerBasketCard
-                    key={bundle.id}
-                    bundle={bundle}
-                    onInvest={() => openBundleInvest(bundle)}
-                  />
-                ))}
-              </div>
+              {panierBundles.length > 0 ? (
+                <div className="placer-grid placer-grid--2">
+                  {panierBundles.map((bundle) => (
+                    <PortalPlacerBasketCard
+                      key={bundle.id}
+                      bundle={bundle}
+                      onInvest={() => openBundleInvest(bundle)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <PortalPlacerSectionSkeleton />
+              )}
             </div>
           ) : null}
         </div>
