@@ -6,14 +6,19 @@ import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalMarketsSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { PortalCryptoBundlesSection } from '@/components/portal/markets/PortalCryptoBundlesSection'
-import { PortalMarketsNewsSection } from '@/components/portal/markets/PortalMarketsNewsSection'
-import { PortalMarketsSidebar } from '@/components/portal/markets/PortalMarketsSidebar'
-import { PortalResearchSection } from '@/components/portal/markets/PortalResearchSection'
+import {
+  PortalMarketsNewsSectionLazy,
+  PortalMarketsSidebarLazy,
+  PortalResearchSectionLazy,
+} from '@/components/portal/markets/portalMarketsLazyChunks'
+import { PortalMarketsWhenVisible } from '@/components/portal/markets/PortalMarketsWhenVisible'
 import { PortalTopCryptoSection, type TopCryptoTabId } from '@/components/portal/markets/PortalTopCryptoSection'
+import { PortalMarketsSectionSkeleton } from '@/components/portal/PortalRouteSkeleton'
 import { applyQuoteUpdates } from '@/lib/portal/marketsFormat'
 import { Container } from '@/components/ui/Container'
 import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
 import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
+import { shouldShowMarketsFullSkeleton } from '@/lib/portal/portalMarketsLazySections'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import { useMarketDataQuotesWs } from '@/lib/portal/useMarketDataQuotesWs'
 import { cn } from '@/lib/utils'
@@ -87,7 +92,7 @@ export function PortalMarketsScreen() {
     data?.marketDataPublicBaseUrl,
   )
 
-  if (loading && !data) return <PortalMarketsSkeleton />
+  if (shouldShowMarketsFullSkeleton(loading, data)) return <PortalMarketsSkeleton />
 
   if (error && !data) {
     return (
@@ -137,15 +142,19 @@ export function PortalMarketsScreen() {
             ) : null}
 
             <PortalReveal index={data.bundles.length > 0 ? 2 : 1}>
-              <PortalMarketsNewsSection items={data.news} title="Actualités" />
+              <PortalMarketsWhenVisible fallback={<PortalMarketsSectionSkeleton />}>
+                <PortalMarketsNewsSectionLazy items={data.news} title="Actualités" />
+              </PortalMarketsWhenVisible>
             </PortalReveal>
 
             <PortalReveal index={data.bundles.length > 0 ? 3 : 2}>
-              <PortalResearchSection
-                items={data.research}
-                title="Analyses"
-                maxItems={2}
-              />
+              <PortalMarketsWhenVisible fallback={<PortalMarketsSectionSkeleton variant="compact" />}>
+                <PortalResearchSectionLazy
+                  items={data.research}
+                  title="Analyses"
+                  maxItems={2}
+                />
+              </PortalMarketsWhenVisible>
             </PortalReveal>
 
             {data.partial ? (
@@ -167,7 +176,11 @@ export function PortalMarketsScreen() {
             </button>
           </div>
         }
-        side={<PortalMarketsSidebar />}
+        side={
+          <PortalMarketsWhenVisible fallback={<PortalMarketsSectionSkeleton variant="sidebar" />}>
+            <PortalMarketsSidebarLazy />
+          </PortalMarketsWhenVisible>
+        }
       />
     </PortalPageContainer>
   )

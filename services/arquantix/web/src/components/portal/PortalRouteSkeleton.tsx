@@ -41,6 +41,21 @@ export function PortalMarketsSkeleton() {
   )
 }
 
+/** Placeholder section Markets différée (news, research, sidebar). */
+export function PortalMarketsSectionSkeleton({
+  variant = 'default',
+}: {
+  variant?: 'default' | 'compact' | 'sidebar'
+}) {
+  if (variant === 'sidebar') {
+    return <ShimmerBlock className="h-56 rounded-v-card" aria-hidden />
+  }
+  if (variant === 'compact') {
+    return <ShimmerBlock className="h-40 rounded-v-card" aria-hidden />
+  }
+  return <ShimmerBlock className="h-48 rounded-v-card" aria-hidden />
+}
+
 /** Skeleton grille 2 cartes pour une section Placer (paniers, coffres, DeFi). */
 export function PortalPlacerSectionSkeleton({ cards = 2 }: { cards?: number }) {
   return (
