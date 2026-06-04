@@ -16,8 +16,8 @@ export function SiteContentPending({ children, className }: Props) {
   return (
     <div
       className={cn(
-        'flex min-h-0 flex-col transition-opacity duration-150 ease-out',
-        isNavigating && 'opacity-60',
+        'flex min-h-0 flex-col',
+        isNavigating ? 'opacity-60' : 'transition-opacity duration-150 ease-out',
         className,
       )}
       aria-busy={isNavigating || undefined}

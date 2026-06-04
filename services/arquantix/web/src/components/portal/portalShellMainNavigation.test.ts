@@ -29,5 +29,7 @@ describe('portalShellMainNavigation — G4-B1', () => {
     assert.match(source, /resolvePortalShellMainNavMode/)
     assert.match(source, /pointer-events-none/)
     assert.match(source, /PortalRouteCachedPreview/)
+    assert.match(source, /showPendingBar/)
+    assert.match(source, /portal-nav-pending-bar/)
   })
 })
