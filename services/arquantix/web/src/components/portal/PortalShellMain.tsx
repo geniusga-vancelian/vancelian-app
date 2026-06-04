@@ -15,11 +15,11 @@ type Props = {
 function PortalNavPendingBar() {
   return (
     <div
-      className="portal-nav-pending-bar pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden"
+      className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-v-fg-10"
       role="progressbar"
       aria-hidden
     >
-      <div className="portal-nav-pending-bar__fill h-full bg-v-terracotta" />
+      <div className="h-full w-full animate-pulse bg-v-terracotta/90" />
     </div>
   )
 }
@@ -29,13 +29,13 @@ function PortalNavPendingBar() {
  * courant pendant la transition (G4-B1). Skeleton réservé aux écrans sans contenu.
  */
 export function PortalShellMain({ children, className }: Props) {
-  const { isNavigating, effectivePath, showPendingBar } = useNavPending()
+  const { isNavigating, effectivePath } = useNavPending()
   const hasPreview = isNavigating && hasPortalRouteCachedPreview(effectivePath)
   const mode = resolvePortalShellMainNavMode(isNavigating, hasPreview)
 
   return (
     <div className={cn('relative flex flex-1 flex-col', className)}>
-      {showPendingBar ? <PortalNavPendingBar /> : null}
+      {isNavigating ? <PortalNavPendingBar /> : null}
 
       {mode === 'preview' ? (
         <div className="pointer-events-none flex flex-1 flex-col" aria-busy="true" aria-live="polite">

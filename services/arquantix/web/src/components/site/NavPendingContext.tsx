@@ -1,14 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { flushSync } from 'react-dom'
 import { usePathname } from 'next/navigation'
-import {
-  resolveEffectiveNavPath,
-  resolveNavIsNavigating,
-  resolveNavPendingBarVisible,
-  shouldBeginPortalNavigation,
-} from '@/lib/portal/portalNavInstantFeedback'
 
 export function normalizeNavPath(path: string): string {
   const trimmed = path.replace(/\/$/, '')
@@ -20,11 +13,6 @@ type NavPendingContextValue = {
   effectivePath: string
   /** true pendant une navigation interne en cours. */
   isNavigating: boolean
-  /** Barre terracotta : dès destination optimiste ≠ pathname réel (G4-B1.5). */
-  showPendingBar: boolean
-  /** Démarre la navigation optimiste (pointerdown, rendu synchrone). */
-  beginNavigation: (path: string) => void
-  /** @deprecated Préférer beginNavigation */
   setPendingPath: (path: string) => void
 }
 
@@ -38,27 +26,16 @@ export function NavPendingProvider({ children }: { children: React.ReactNode }) 
     setPendingPathState(null)
   }, [pathname])
 
-  const beginNavigation = React.useCallback(
-    (path: string) => {
-      const normalized = normalizeNavPath(path)
-      if (!shouldBeginPortalNavigation(pathname, normalized)) return
-      if (pendingPath === normalized) return
-      flushSync(() => {
-        setPendingPathState(normalized)
-      })
-    },
-    [pathname, pendingPath],
-  )
+  const setPendingPath = React.useCallback((path: string) => {
+    setPendingPathState(normalizeNavPath(path))
+  }, [])
 
-  const setPendingPath = beginNavigation
-
-  const effectivePath = resolveEffectiveNavPath(pendingPath, pathname)
-  const isNavigating = resolveNavIsNavigating(pendingPath, pathname)
-  const showPendingBar = resolveNavPendingBarVisible(pendingPath, pathname)
+  const effectivePath = pendingPath ?? pathname
+  const isNavigating = pendingPath !== null && pendingPath !== normalizeNavPath(pathname)
 
   const value = React.useMemo(
-    () => ({ effectivePath, isNavigating, showPendingBar, beginNavigation, setPendingPath }),
-    [effectivePath, isNavigating, showPendingBar, beginNavigation, setPendingPath],
+    () => ({ effectivePath, isNavigating, setPendingPath }),
+    [effectivePath, isNavigating, setPendingPath],
   )
 
   return <NavPendingContext.Provider value={value}>{children}</NavPendingContext.Provider>
@@ -73,8 +50,6 @@ export function useNavPending(): NavPendingContextValue {
   return {
     effectivePath: pathname,
     isNavigating: false,
-    showPendingBar: false,
-    beginNavigation: () => {},
     setPendingPath: () => {},
   }
 }

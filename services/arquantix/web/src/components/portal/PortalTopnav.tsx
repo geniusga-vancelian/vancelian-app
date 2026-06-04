@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { BrandLogo, type SiteBrandLogo } from '@/components/ui/BrandLogo'
 import { Container } from '@/components/ui/Container'
@@ -20,7 +20,6 @@ import { PortalWalletSwitcher } from '@/components/portal/PortalWalletSwitcher'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
 import { useNavPending } from '@/components/site/NavPendingContext'
-import { schedulePortalMainNavPrefetch } from '@/lib/portal/portalNavWarmup'
 
 type ProfileAvatarState = {
   initials: string
@@ -87,24 +86,21 @@ function TopnavLink({ href, active, palette, onClick, children }: TopnavLinkProp
       href={href}
       onClick={() => onClick?.()}
       aria-current={active ? 'page' : undefined}
-      data-nav-active={active ? 'true' : undefined}
       className={cn(
-        'topnav-link group relative flex h-full items-center font-ui text-[14px] font-medium leading-none',
-        'no-underline transition-transform duration-150 ease-out active:scale-[0.98]',
-        !active && 'transition-[color] duration-150 ease-out',
+        'group relative flex h-full items-center font-ui text-[14px] font-medium leading-none',
+        'no-underline transition-[color] duration-150 ease-out',
       )}
-      style={{ color: active ? palette.textLinkColor : palette.linkColor }}
+      style={{ color: palette.linkColor }}
     >
       <span>{children}</span>
       <span
         aria-hidden
         className={cn(
           'topnav-link-indicator pointer-events-none absolute inset-x-0 h-px',
-          active
-            ? 'topnav-link-indicator--active opacity-100'
-            : 'opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100',
+          'transition-opacity duration-150 ease-out',
+          active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
         )}
-        style={{ background: active ? palette.textLinkColor : palette.underlineColor }}
+        style={{ background: palette.underlineColor }}
       />
     </PortalNavLink>
   )
@@ -122,7 +118,6 @@ type PortalTopnavProps = {
  * + action Search + profil.
  */
 export function PortalTopnav({ initials: initialsProp, brand: brandProp, className }: PortalTopnavProps) {
-  const router = useRouter()
   const pathname = usePathname() ?? ''
   const { effectivePath } = useNavPending()
   const palette = buildTopnavPalettes(null).solid
@@ -199,8 +194,6 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
       document.body.style.overflow = previousOverflow
     }
   }, [mobileOpen])
-
-  React.useEffect(() => schedulePortalMainNavPrefetch(router), [router])
 
   const avatarLabel = resolveAvatarLabel(profileAvatar.initials)
   const profileActive = isNavActive(effectivePath, PORTAL_ROUTES.profile)

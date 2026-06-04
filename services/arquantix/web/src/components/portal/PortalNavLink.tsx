@@ -2,9 +2,8 @@
 
 import Link from 'next/link'
 import type { ComponentProps } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useNavPending } from '@/components/site/NavPendingContext'
-import { shouldBeginPortalNavigation } from '@/lib/portal/portalNavInstantFeedback'
 import { isPortalPathname } from '@/lib/portal/portalRouting'
 import { warmPortalRoute } from '@/lib/portal/portalNavWarmup'
 
@@ -30,8 +29,7 @@ export function PortalNavLink({
   ...rest
 }: PortalNavLinkProps) {
   const router = useRouter()
-  const pathname = usePathname() ?? ''
-  const { beginNavigation } = useNavPending()
+  const { setPendingPath } = useNavPending()
   const path = hrefToPath(href)
   const isInternalPortal = path ? isPortalPathname(path) : false
 
@@ -39,17 +37,9 @@ export function PortalNavLink({
     if (isInternalPortal) warmPortalRoute(path, router)
   }
 
-  const triggerOptimisticNav = () => {
-    if (!isInternalPortal || !path) return
-    if (!shouldBeginPortalNavigation(pathname, path)) return
-    handleWarm()
-    beginNavigation(path)
-  }
-
   return (
     <Link
       href={href}
-      prefetch={isInternalPortal ? true : undefined}
       onPointerEnter={(event) => {
         handleWarm()
         onPointerEnter?.(event)
@@ -58,11 +48,11 @@ export function PortalNavLink({
         handleWarm()
         onFocus?.(event)
       }}
-      onPointerDown={(event) => {
-        if (event.button === 0) triggerOptimisticNav()
-      }}
       onClick={(event) => {
-        triggerOptimisticNav()
+        if (isInternalPortal) {
+          handleWarm()
+          setPendingPath(path)
+        }
         onClick?.(event)
       }}
       {...rest}
