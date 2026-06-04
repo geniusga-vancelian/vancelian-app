@@ -6,6 +6,14 @@ export type VaultClientDepositLimits = {
   maxUserExposureUsdc: number
 }
 
+function hasPerTxDepositCap(maxDepositUsdc: number): boolean {
+  return Number.isFinite(maxDepositUsdc) && maxDepositUsdc > 0
+}
+
+function hasExposureDepositCap(maxUserExposureUsdc: number): boolean {
+  return Number.isFinite(maxUserExposureUsdc) && maxUserExposureUsdc > 0
+}
+
 export function resolveEffectiveVaultDepositMax(args: {
   walletUsdc: number
   vaultPositionUsdc: number
@@ -14,12 +22,16 @@ export function resolveEffectiveVaultDepositMax(args: {
   const wallet = Math.max(0, args.walletUsdc)
   if (!args.limits) return wallet
 
-  const perTx = Math.max(0, args.limits.maxDepositUsdc)
-  const exposureHeadroom = Math.max(
-    0,
-    args.limits.maxUserExposureUsdc - Math.max(0, args.vaultPositionUsdc),
-  )
-  return Math.min(wallet, perTx, exposureHeadroom)
+  const caps = [wallet]
+  if (hasPerTxDepositCap(args.limits.maxDepositUsdc)) {
+    caps.push(Math.max(0, args.limits.maxDepositUsdc))
+  }
+  if (hasExposureDepositCap(args.limits.maxUserExposureUsdc)) {
+    caps.push(
+      Math.max(0, args.limits.maxUserExposureUsdc - Math.max(0, args.vaultPositionUsdc)),
+    )
+  }
+  return Math.min(...caps)
 }
 
 export function validateVaultDepositSetupAmount(args: {
@@ -41,17 +53,21 @@ export function validateVaultDepositSetupAmount(args: {
 
   if (!args.limits) return null
 
-  if (args.amount + 1e-9 < args.limits.minDepositUsdc) {
-    return `Dépôt minimum : ${formatUsdcAmount(args.limits.minDepositUsdc)} USDC.`
+  const minDeposit = Math.max(0, args.limits.minDepositUsdc)
+  if (minDeposit > 0 && args.amount + 1e-9 < minDeposit) {
+    return `Dépôt minimum : ${formatUsdcAmount(minDeposit)} USDC.`
   }
 
-  if (args.amount > args.limits.maxDepositUsdc + 1e-9) {
+  if (hasPerTxDepositCap(args.limits.maxDepositUsdc) && args.amount > args.limits.maxDepositUsdc + 1e-9) {
     return `Dépôt maximum par opération : ${formatUsdcAmount(args.limits.maxDepositUsdc)} USDC.`
   }
 
-  const exposureHeadroom = args.limits.maxUserExposureUsdc - Math.max(0, args.vaultPositionUsdc)
-  if (args.amount > exposureHeadroom + 1e-9) {
-    return `Exposition maximum atteinte (${formatUsdcAmount(args.limits.maxUserExposureUsdc)} USDC sur ce coffre).`
+  if (hasExposureDepositCap(args.limits.maxUserExposureUsdc)) {
+    const exposureHeadroom =
+      args.limits.maxUserExposureUsdc - Math.max(0, args.vaultPositionUsdc)
+    if (args.amount > exposureHeadroom + 1e-9) {
+      return `Exposition maximum atteinte (${formatUsdcAmount(args.limits.maxUserExposureUsdc)} USDC sur ce coffre).`
+    }
   }
 
   return null
@@ -110,6 +126,23 @@ function formatTokenAmount(value: number): string {
     minimumFractionDigits: value % 1 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })
+}
+
+/** Ligne « Plafonds » setup invest ; `null` si aucun plafond actif (valeur ≤ 0). */
+export function formatVaultDepositLimitsHint(limits: VaultClientDepositLimits): string | null {
+  const parts: string[] = []
+  const minDeposit = Math.max(0, limits.minDepositUsdc)
+  if (minDeposit > 0) {
+    parts.push(`min. ${formatUsdcAmount(minDeposit)} USDC`)
+  }
+  if (hasPerTxDepositCap(limits.maxDepositUsdc)) {
+    parts.push(`max. ${formatUsdcAmount(limits.maxDepositUsdc)} USDC par opération`)
+  }
+  if (hasExposureDepositCap(limits.maxUserExposureUsdc)) {
+    parts.push(`exposition max. ${formatUsdcAmount(limits.maxUserExposureUsdc)} USDC`)
+  }
+  if (parts.length === 0) return null
+  return `Plafonds : ${parts.join(' · ')}`
 }
 
 /** @deprecated alias interne dépôt */

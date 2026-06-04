@@ -52,14 +52,14 @@ export async function assertMorphoBetaDepositLimits(args: {
   const decimals = args.assetDecimals ?? limits.assetDecimals
   const amountRaw = parseHumanAmountToRaw(args.amount, decimals)
 
-  if (amountRaw < limits.minDepositRaw) {
+  if (limits.minDepositRaw > BigInt(0) && amountRaw < limits.minDepositRaw) {
     throw new MorphoVaultBetaError(
       'morpho.beta.deposit_below_min',
       `Dépôt minimum beta : ${Number(limits.minDepositRaw) / 1_000_000} USDC.`,
     )
   }
 
-  if (amountRaw > limits.maxDepositRaw) {
+  if (limits.maxDepositRaw > BigInt(0) && amountRaw > limits.maxDepositRaw) {
     logMorphoSupportEvent({
       code: 'morpho.beta_limit_exceeded',
       level: 'warning',
@@ -78,7 +78,7 @@ export async function assertMorphoBetaDepositLimits(args: {
     loadMorphoGlobalExposureRaw(),
   ])
 
-  if (userExposure + amountRaw > limits.maxUserExposureRaw) {
+  if (limits.maxUserExposureRaw > BigInt(0) && userExposure + amountRaw > limits.maxUserExposureRaw) {
     logMorphoSupportEvent({
       code: 'morpho.beta_limit_exceeded',
       level: 'warning',
@@ -96,7 +96,7 @@ export async function assertMorphoBetaDepositLimits(args: {
     )
   }
 
-  if (globalExposure + amountRaw > limits.maxGlobalExposureRaw) {
+  if (limits.maxGlobalExposureRaw > BigInt(0) && globalExposure + amountRaw > limits.maxGlobalExposureRaw) {
     logMorphoSupportEvent({
       code: 'morpho.beta_limit_exceeded',
       level: 'critical',

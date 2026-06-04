@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  formatVaultDepositLimitsHint,
   resolveEffectiveVaultDepositMax,
   validateVaultDepositSetupAmount,
   validateVaultWithdrawSetupAmount,
@@ -34,6 +35,48 @@ describe('vaultInvestSetupLimits', () => {
       limits,
     })
     assert.match(message ?? '', /maximum disponible.*5/i)
+  })
+
+  it('allows deposit below former min when minDepositUsdc is 0', () => {
+    assert.equal(
+      validateVaultDepositSetupAmount({
+        amount: 1,
+        walletUsdc: 50,
+        vaultPositionUsdc: 0,
+        limits: { ...limits, minDepositUsdc: 0 },
+      }),
+      null,
+    )
+  })
+
+  it('returns null limits hint when all beta caps are disabled (0)', () => {
+    assert.equal(
+      formatVaultDepositLimitsHint({
+        minDepositUsdc: 0,
+        maxDepositUsdc: 0,
+        maxUserExposureUsdc: 0,
+      }),
+      null,
+    )
+  })
+
+  it('omits min from limits hint when minDepositUsdc is 0', () => {
+    const hint = formatVaultDepositLimitsHint({ ...limits, minDepositUsdc: 0 })
+    assert.ok(hint)
+    assert.doesNotMatch(hint, /min\./i)
+    assert.match(hint, /max\./i)
+  })
+
+  it('allows deposit above former per-tx max when maxDepositUsdc is 0', () => {
+    assert.equal(
+      validateVaultDepositSetupAmount({
+        amount: 150,
+        walletUsdc: 200,
+        vaultPositionUsdc: 0,
+        limits: { ...limits, maxDepositUsdc: 0, maxUserExposureUsdc: 0 },
+      }),
+      null,
+    )
   })
 
   it('rejects amount above per-tx beta limit', () => {

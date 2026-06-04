@@ -42,6 +42,7 @@ import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 import type { PortalVaultFlowScene, PortalVaultOperation } from '@/lib/portal/vaultFlowTypes'
 import {
+  formatVaultDepositLimitsHint,
   resolveEffectiveVaultDepositMax,
   validateVaultDepositSetupAmount,
   validateVaultWithdrawSetupAmount,
@@ -413,12 +414,10 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
           <p className="inv-alert inv-alert--info">{beta.message}</p>
         ) : null}
 
-        {isInvest && betaLimits && !depositBlocked ? (
-          <p className="inv-hint">
-            Plafonds : min. {betaLimits.minDepositUsdc} USDC · max. {betaLimits.maxDepositUsdc} USDC par opération
-            · exposition max. {betaLimits.maxUserExposureUsdc} USDC
-          </p>
-        ) : null}
+        {isInvest && betaLimits && !depositBlocked ? (() => {
+          const limitsHint = formatVaultDepositLimitsHint(betaLimits)
+          return limitsHint ? <p className="inv-hint">{limitsHint}</p> : null
+        })() : null}
 
         {!isInvest && !withdrawBlocked && !positionLoading && vaultBalance > 0 ? (
           <p className="inv-hint">

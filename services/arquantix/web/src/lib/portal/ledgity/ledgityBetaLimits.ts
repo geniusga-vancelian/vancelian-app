@@ -73,14 +73,14 @@ export async function assertLedgityDepositLimits(args: {
   const decimals = args.assetDecimals ?? limits.assetDecimals
   const amountRaw = parseHumanAmountToRaw(args.amount, decimals)
 
-  if (amountRaw < limits.minDepositRaw) {
+  if (limits.minDepositRaw > BigInt(0) && amountRaw < limits.minDepositRaw) {
     throw new LedgityVaultBetaError(
       limitCode('deposit_below_min'),
       `Dépôt minimum : ${formatStablecoinAmount(limits.minDepositRaw, decimals)}.`,
     )
   }
 
-  if (amountRaw > limits.maxDepositRaw) {
+  if (limits.maxDepositRaw > BigInt(0) && amountRaw > limits.maxDepositRaw) {
     logLedgitySupportEvent({
       code: limitCode('deposit_above_max'),
       level: 'warning',
@@ -99,7 +99,7 @@ export async function assertLedgityDepositLimits(args: {
     loadLedgityGlobalExposureRaw(),
   ])
 
-  if (userExposure + amountRaw > limits.maxUserExposureRaw) {
+  if (limits.maxUserExposureRaw > BigInt(0) && userExposure + amountRaw > limits.maxUserExposureRaw) {
     logLedgitySupportEvent({
       code: limitCode('user_exposure_exceeded'),
       level: 'warning',
@@ -117,7 +117,7 @@ export async function assertLedgityDepositLimits(args: {
     )
   }
 
-  if (globalExposure + amountRaw > limits.maxGlobalExposureRaw) {
+  if (limits.maxGlobalExposureRaw > BigInt(0) && globalExposure + amountRaw > limits.maxGlobalExposureRaw) {
     logLedgitySupportEvent({
       code: limitCode('global_exposure_exceeded'),
       level: 'critical',

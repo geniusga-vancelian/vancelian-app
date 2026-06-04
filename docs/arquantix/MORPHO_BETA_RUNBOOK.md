@@ -27,7 +27,7 @@ Pour une **beta ouverte à tous les utilisateurs** avec plafonds faibles :
 ```bash
 MORPHO_USDC_BETA_ENABLED=true
 MORPHO_USDC_BETA_ALLOW_ALL_USERS=true
-MORPHO_USDC_BETA_MIN_DEPOSIT_USDC=10
+MORPHO_USDC_BETA_MIN_DEPOSIT_USDC=0
 MORPHO_USDC_BETA_MAX_DEPOSIT_USDC=100
 MORPHO_USDC_BETA_MAX_USER_EXPOSURE_USDC=500
 MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_USDC=5000
@@ -42,10 +42,10 @@ MORPHO_USDC_WITHDRAWS_DISABLED=false
 | `MORPHO_USDC_BETA_PERSON_IDS` | — | UUIDs autorisés (CSV) — ignoré si `ALLOW_ALL_USERS=true` |
 | `MORPHO_USDC_BETA_EMAILS` | — | Emails autorisés (CSV) |
 | `MORPHO_USDC_BETA_PROFILE_TAG` | — | Tag dans `profile_json.tags` |
-| `MORPHO_USDC_BETA_MIN_DEPOSIT_USDC` | `10` | Dépôt minimum |
-| `MORPHO_USDC_BETA_MAX_DEPOSIT_USDC` | `100` | Dépôt max par transaction |
-| `MORPHO_USDC_BETA_MAX_USER_EXPOSURE_USDC` | `500` | Exposition max par utilisateur |
-| `MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_USDC` | `5000` | Cap global beta |
+| `MORPHO_USDC_BETA_MIN_DEPOSIT_USDC` | `0` | Dépôt minimum (`0` = aucun) |
+| `MORPHO_USDC_BETA_MAX_DEPOSIT_USDC` | `0` | Dépôt max par transaction (`0` = aucun) |
+| `MORPHO_USDC_BETA_MAX_USER_EXPOSURE_USDC` | `0` | Exposition max utilisateur (`0` = aucune) |
+| `MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_USDC` | `0` | Cap global beta (`0` = aucun) |
 | `MORPHO_USDC_DEPOSITS_DISABLED` | `false` | Kill switch dépôts |
 | `MORPHO_USDC_WITHDRAWS_DISABLED` | `false` | Kill switch retraits |
 

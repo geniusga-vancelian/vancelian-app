@@ -61,10 +61,16 @@ Les anciennes transactions ledger `integration_mode = privy_earn` et colonnes as
 | `MORPHO_USDC_BETA_ALLOW_ALL_USERS` | `true` |
 | `MORPHO_USDC_DEPOSITS_DISABLED` | `false` |
 | `MORPHO_USDC_WITHDRAWS_DISABLED` | `false` |
-| `MORPHO_USDC_BETA_MIN_DEPOSIT_USDC` | `10` (ajuster si besoin) |
-| `MORPHO_USDC_BETA_MAX_DEPOSIT_USDC` | `100` |
-| `MORPHO_USDC_BETA_MAX_USER_EXPOSURE_USDC` | `500` |
-| `MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_USDC` | `5000` |
+| `MORPHO_USDC_BETA_MIN_DEPOSIT_USDC` | `0` (= aucun minimum) |
+| `MORPHO_USDC_MIN_DEPOSIT_RAW` | `0` |
+| `MORPHO_USDC_BETA_MAX_DEPOSIT_USDC` | `0` (= aucun plafond par opération) |
+| `MORPHO_USDC_MAX_DEPOSIT_RAW` | `0` |
+| `MORPHO_USDC_BETA_MAX_USER_EXPOSURE_USDC` | `0` (= aucune limite d’exposition utilisateur) |
+| `MORPHO_USDC_MAX_USER_EXPOSURE_RAW` | `0` |
+| `MORPHO_USDC_BETA_MAX_GLOBAL_EXPOSURE_USDC` | `0` |
+| `MORPHO_USDC_MAX_GLOBAL_EXPOSURE_RAW` | `0` |
+
+**Note :** avec le code portail récent, une valeur `0` désactive le plafond correspondant (validation + affichage). Les variables `*_RAW` priment sur les `*_USDC`.
 
 ### Optionnelles
 
