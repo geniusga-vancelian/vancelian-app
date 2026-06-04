@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { usePrivy } from '@privy-io/react-auth'
 
-import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import { PortalLombardBorrowForm } from '@/components/portal/lombard/PortalLombardBorrowForm'
+import {
+  PortalLombardExecutionController,
+  type PortalLombardExecutionRequest,
+} from '@/components/portal/lombard/PortalLombardExecutionController'
 import { PortalLombardBorrowIntro } from '@/components/portal/lombard/PortalLombardBorrowIntro'
 import { PortalLombardBorrowProcessing } from '@/components/portal/lombard/PortalLombardBorrowProcessing'
 import { PortalLombardBorrowTerminalFailure } from '@/components/portal/lombard/PortalLombardBorrowTerminalFailure'
@@ -38,10 +40,6 @@ import type {
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { isLombardOpeningPhase } from '@/components/portal/transaction/mappers/lombardSteps'
-import {
-  LombardTerminalBorrowError,
-  usePortalLombardExecution,
-} from '@/lib/portal/usePortalLombardExecution'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
@@ -71,9 +69,6 @@ export function PortalLombardFlow() {
   const prefilled = urlIntent.mode === 'prefilled'
   const { chain, deFiEnabled, executionAddress, isExternalWallet, walletReady, walletScope } =
     usePortalExecutionScope()
-  const { ready: privySdkReady, authenticated: privyAuthenticated } = usePrivy()
-  const { privyReady: privyProviderReady } = usePortalAuthPrivy()
-  const { executeOpenLoan } = usePortalLombardExecution()
   const [step, setStep] = useState<FlowStep>(() => resolveInitialStep(prefilled))
   const showPageSidebar = step !== 'intro'
   const [markets, setMarkets] = useState<LombardMarketSummary[]>([])
@@ -102,6 +97,10 @@ export function PortalLombardFlow() {
   quoteSnapshotRef.current = quote
 
   const [borrowRecap, setBorrowRecap] = useState<LombardBorrowRecap | null>(null)
+  const [executionRequest, setExecutionRequest] = useState<PortalLombardExecutionRequest | null>(
+    null,
+  )
+  const [executionRunId, setExecutionRunId] = useState(0)
   const [executing, setExecuting] = useState(false)
   const [executionPhase, setExecutionPhase] = useState<LombardExecutionPhase>('idle')
   const [lastProgressPhase, setLastProgressPhase] = useState<LombardExecutionPhase>('preparing')
@@ -150,10 +149,6 @@ export function PortalLombardFlow() {
   )
 
   const requiresPrivySigning = !lombardMockMode && !isExternalWallet
-  const privySigningReady =
-    !requiresPrivySigning || (privyProviderReady && privySdkReady && privyAuthenticated)
-  const privySigningHint =
-    requiresPrivySigning && !privySigningReady ? PRIVY_SIGNING_SESSION_HINT : null
 
   useEffect(() => {
     setCapacity(null)
@@ -266,53 +261,44 @@ export function PortalLombardFlow() {
     return () => window.clearInterval(timer)
   }, [executionPhase, step, terminalFailure])
 
-  const runOpenLoan = useCallback(async () => {
+  const handleExecutionPhaseChange = useCallback((phase: LombardExecutionPhase) => {
+    setExecutionPhase(phase)
+    if (phase !== 'failed' && phase !== 'idle') {
+      setLastProgressPhase(phase)
+    }
+  }, [])
+
+  const startOpenLoan = useCallback(() => {
     if (executing || !selectedCollateral || !quote || !executionAddress) return
 
     setBorrowRecap(buildLombardBorrowRecap(quote))
+    setExecutionRequest({
+      collateral: selectedCollateral,
+      borrowAmount: borrowAmount.trim(),
+      walletAddress: executionAddress,
+      targetLtvPercent,
+    })
     setStep('processing')
-    setExecuting(true)
     setTerminalFailure(false)
     setOpeningSubtextTick(0)
     setExecutionPhase('preparing')
-
-    try {
-      await executeOpenLoan({
-        collateral: selectedCollateral,
-        borrowAmount: borrowAmount.trim(),
-        walletAddress: executionAddress,
-        targetLtvPercent,
-        onInvisibleRetry: () => {
-          setOpeningSubtextTick((tick) => tick + 1)
-        },
-        onPhaseChange: (phase) => {
-          setExecutionPhase(phase)
-          if (phase !== 'failed' && phase !== 'idle') {
-            setLastProgressPhase(phase)
-          }
-        },
-      })
-      setStep('success')
-    } catch (error) {
-      if (error instanceof LombardTerminalBorrowError) {
-        setTerminalFailure(true)
-        setExecutionPhase('failed')
-        return
-      }
-      setTerminalFailure(true)
-      setExecutionPhase('failed')
-    } finally {
-      setExecuting(false)
-    }
+    setExecutionRunId((id) => id + 1)
   }, [
     borrowAmount,
-    executeOpenLoan,
     executing,
     executionAddress,
     quote,
     selectedCollateral,
     targetLtvPercent,
   ])
+
+  const retryOpenLoan = useCallback(() => {
+    if (executing || !executionRequest) return
+    setTerminalFailure(false)
+    setOpeningSubtextTick(0)
+    setExecutionPhase('preparing')
+    setExecutionRunId((id) => id + 1)
+  }, [executing, executionRequest])
 
   const handleIntroContinue = useCallback(() => {
     markBorrowIntroSeen()
@@ -376,14 +362,16 @@ export function PortalLombardFlow() {
               }
               router.push(PORTAL_ROUTES.cryptoWallet)
             }}
-            onContinue={() => void runOpenLoan()}
+            onContinue={startOpenLoan}
             onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
-            continueDisabled={!walletReady || !privySigningReady || executing}
+            continueDisabled={
+              !walletReady || executing || !quote || quoteLoading || quoteRefreshing
+            }
           />
 
-          {privySigningHint ? (
+          {requiresPrivySigning ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-ui text-[13px] text-amber-950">
-              <p className="m-0">{privySigningHint}</p>
+              <p className="m-0">{PRIVY_SIGNING_SESSION_HINT}</p>
               <PortalNavLink
                 href={PORTAL_ROUTES.walletCreate}
                 className="mt-2 inline-block font-medium text-amber-950 underline"
@@ -396,8 +384,21 @@ export function PortalLombardFlow() {
         </>
       ) : null}
 
-      {step === 'processing' && borrowRecap ? (
+      {step === 'processing' && borrowRecap && executionRequest ? (
         <div className="flex flex-col gap-5">
+          <PortalLombardExecutionController
+            request={executionRequest}
+            runId={executionRunId}
+            requiresPrivySigning={requiresPrivySigning}
+            onPhaseChange={handleExecutionPhaseChange}
+            onInvisibleRetry={() => setOpeningSubtextTick((tick) => tick + 1)}
+            onSuccess={() => setStep('success')}
+            onTerminalFailure={() => {
+              setTerminalFailure(true)
+              setExecutionPhase('failed')
+            }}
+            onExecutingChange={setExecuting}
+          />
           {!terminalFailure ? (
             <PortalLombardBorrowProcessing
               recap={borrowRecap}
@@ -407,8 +408,8 @@ export function PortalLombardFlow() {
             />
           ) : (
             <PortalLombardBorrowTerminalFailure
-              retryDisabled={executing || !privySigningReady}
-              onRetry={() => void runOpenLoan()}
+              retryDisabled={executing}
+              onRetry={retryOpenLoan}
               onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}
             />
           )}

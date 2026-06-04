@@ -21,6 +21,8 @@ import {
   scanPortalBundleInvestSetupExecutionImports,
   scanPortalWalletBundleDetailReadOnlyImports,
   scanPortalVaultSetupExecutionImports,
+  scanPortalLombardSetupExecutionImports,
+  scanPortalLombardBorrowPageNoEagerWeb3,
   scanWalletReadSegmentNoWeb3Boundary,
   scanDeprecatedPortalWalletRouteHelpersImports,
   scanPortalSessionRouteHelpersImports,
@@ -80,12 +82,13 @@ describe('portalPerformanceGuard — détection synthétique', () => {
 })
 
 describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
-  it('known offender layouts — liste figée (3, bundle layout retiré F5-A)', () => {
+  it('known offender layouts — liste figée (2, borrow layout retiré F6)', () => {
     const found = listPortalWeb3BoundaryEagerLayoutOffenders()
     assert.deepEqual(found, [...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS].sort())
     assert.deepEqual(scanPortalWeb3BoundaryLayoutOffenders(), [])
     assert.equal(found.includes('src/app/app/(shell)/wallet/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/wallet/(tx)/layout.tsx'), true)
+    assert.equal(found.includes('src/app/app/(shell)/borrow/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/invest/vault/layout.tsx'), false)
     assert.equal(found.includes('src/app/app/(shell)/invest/bundle/layout.tsx'), false)
   })
@@ -112,7 +115,7 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
 
   it('PortalWeb3BoundaryLazy autorisé sur surfaces transactionnelles lazy', () => {
     assert.deepEqual(scanPortalWeb3BoundaryLazySurfaces(), [])
-    assert.equal(PORTAL_WEB3_BOUNDARY_LAZY_SURFACES.length, 6)
+    assert.equal(PORTAL_WEB3_BOUNDARY_LAZY_SURFACES.length, 7)
   })
 
   it('swap setup — pas de hooks exécution LI.FI / Privy (F3)', () => {
@@ -133,6 +136,14 @@ describe('portalPerformanceGuard — R4.5-F Privy boundary', () => {
 
   it('wallet bundle detail — read-only sans LI.FI (F5-B)', () => {
     assert.deepEqual(scanPortalWalletBundleDetailReadOnlyImports(), [])
+  })
+
+  it('lombard borrow setup — pas de hooks open_loan / Privy (F6)', () => {
+    assert.deepEqual(scanPortalLombardSetupExecutionImports(), [])
+  })
+
+  it('lombard borrow routes — pas de layout Web3 eager (F6)', () => {
+    assert.deepEqual(scanPortalLombardBorrowPageNoEagerWeb3(), [])
   })
 })
 

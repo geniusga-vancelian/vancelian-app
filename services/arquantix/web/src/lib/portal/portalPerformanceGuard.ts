@@ -70,7 +70,6 @@ export const PORTAL_WALLET_BUNDLE_DETAIL_FORBIDDEN_IMPORTS: ForbiddenPattern[] =
 export const PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS = [
   'src/app/app/(shell)/wallet/(tx)/layout.tsx',
   'src/app/app/(shell)/wallets/layout.tsx',
-  'src/app/app/(shell)/borrow/layout.tsx',
 ] as const
 
 /** R4.5-F5-A — page invest bundle : pas de layout Web3 eager. */
@@ -123,6 +122,25 @@ export const PORTAL_VAULT_SETUP_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
   { rule: 'vault-setup-no-ledgity-execution', pattern: /\busePortalLedgityVaultExecution\b/ },
 ]
 
+/**
+ * Lombard borrow setup (intro / form) — BFF-only ; exécution via PortalLombardExecutionController (R4.5-F6).
+ */
+export const PORTAL_LOMBARD_SETUP_GUARD_PATHS = [
+  'src/components/portal/lombard/PortalLombardFlow.tsx',
+] as const
+
+export const PORTAL_LOMBARD_SETUP_FORBIDDEN_IMPORTS: ForbiddenPattern[] = [
+  { rule: 'lombard-setup-no-open-loan-execution', pattern: /\busePortalLombardExecution\b/ },
+  { rule: 'lombard-setup-no-portal-tx-signer', pattern: /\busePortalTxSigner\b/ },
+  { rule: 'lombard-setup-no-privy-sdk', pattern: /from\s+['"]@privy-io\/react-auth['"]/ },
+]
+
+/** R4.5-F6 — routes borrow sans layout Web3 eager. */
+export const PORTAL_LOMBARD_BORROW_PAGE_GUARD_PATHS = [
+  'src/app/app/(shell)/borrow/page.tsx',
+  'src/app/app/(shell)/borrow/position/page.tsx',
+] as const
+
 /** Chemins où une boundary Web3 (eager ou lazy) ou Privy auth est légitime. */
 export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
   'src/app/app/login/layout.tsx',
@@ -144,6 +162,7 @@ export const PORTAL_WEB3_BOUNDARY_ALLOWED_PATHS = [
   'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
   'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
   'src/components/portal/invest/PortalVaultExecutionController.tsx',
+  'src/components/portal/lombard/PortalLombardExecutionController.tsx',
   'src/app/dev/wallet-sandbox/page.tsx',
   ...PORTAL_WEB3_BOUNDARY_KNOWN_OFFENDER_LAYOUTS,
 ] as const
@@ -156,6 +175,7 @@ export const PORTAL_WEB3_BOUNDARY_LAZY_SURFACES = [
   'src/components/portal/invest/PortalLazyEarnVaultModal.tsx',
   'src/components/portal/invest/PortalLazyLedgityVaultModal.tsx',
   'src/components/portal/profile/PortalProfileExternalWalletConnect.tsx',
+  'src/components/portal/lombard/PortalLombardExecutionController.tsx',
 ] as const
 
 /** @deprecated alias — préférer PORTAL_READ_ONLY_GUARD_PATHS */
@@ -694,6 +714,62 @@ export function scanPortalBundleInvestPageNoEagerWeb3(webRoot?: string): PortalP
   return violations
 }
 
+/** Lombard borrow setup — pas de hooks open_loan / Privy au mount (R4.5-F6). */
+export function scanPortalLombardSetupExecutionImports(
+  webRoot?: string,
+): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+
+  for (const relativePath of PORTAL_LOMBARD_SETUP_GUARD_PATHS) {
+    const source = readRelativeFile(root, relativePath)
+    for (const { rule, pattern } of PORTAL_LOMBARD_SETUP_FORBIDDEN_IMPORTS) {
+      if (pattern.test(source)) {
+        violations.push({
+          rule,
+          file: relativePath,
+          detail:
+            'Lombard borrow setup must stay BFF-only; use PortalLombardExecutionController at processing',
+        })
+      }
+    }
+  }
+
+  return violations
+}
+
+/** borrow/* — pas de layout Web3 eager (R4.5-F6). */
+export function scanPortalLombardBorrowPageNoEagerWeb3(webRoot?: string): PortalPerformanceViolation[] {
+  const root = resolveWebRoot(webRoot)
+  const violations: PortalPerformanceViolation[] = []
+  const legacyLayout = 'src/app/app/(shell)/borrow/layout.tsx'
+
+  if (fs.existsSync(path.join(root, legacyLayout))) {
+    const source = readRelativeFile(root, legacyLayout)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'lombard-borrow-layout-removed-f6',
+        file: legacyLayout,
+        detail:
+          'borrow/layout.tsx must not wrap routes — use PortalLombardExecutionController at processing (F6)',
+      })
+    }
+  }
+
+  for (const relativePath of PORTAL_LOMBARD_BORROW_PAGE_GUARD_PATHS) {
+    const source = readRelativeFile(root, relativePath)
+    if (EAGER_WEB3_BOUNDARY_IMPORT.test(source)) {
+      violations.push({
+        rule: 'lombard-borrow-page-no-eager-web3',
+        file: relativePath,
+        detail: 'Borrow routes must not import eager PortalWeb3Boundary',
+      })
+    }
+  }
+
+  return violations
+}
+
 /** Vault setup — pas de hooks Morpho/Ledgity execution (R4.5-F4). */
 export function scanPortalVaultSetupExecutionImports(
   webRoot?: string,
@@ -774,6 +850,8 @@ export function collectPortalPerformanceViolations(webRoot?: string): PortalPerf
     ...scanWalletReadSegmentNoWeb3Boundary(webRoot),
     ...scanPortalSwapSetupExecutionImports(webRoot),
     ...scanPortalVaultSetupExecutionImports(webRoot),
+    ...scanPortalLombardSetupExecutionImports(webRoot),
+    ...scanPortalLombardBorrowPageNoEagerWeb3(webRoot),
     ...scanPortalBundleInvestSetupExecutionImports(webRoot),
     ...scanPortalBundleInvestPageNoEagerWeb3(webRoot),
     ...scanPortalWalletBundleDetailReadOnlyImports(webRoot),
