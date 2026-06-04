@@ -51,7 +51,7 @@ describe('assessLombardConfirmQuote', () => {
   it('bloque si garantie augmente au-delà du seuil', () => {
     const snapshot = baseQuote({ guaranteeAmountRaw: '2897', guaranteeAmount: '0.00002897' })
     const driftBps = LOMBARD_CONFIRM_GUARANTEE_DRIFT_BPS + 50
-    const increased = (2897n * BigInt(10_000 + driftBps)) / 10_000n
+    const increased = (BigInt(2897) * BigInt(10_000 + driftBps)) / BigInt(10_000)
     const fresh = baseQuote({
       guaranteeAmountRaw: increased.toString(),
       guaranteeAmount: '0.00003000',

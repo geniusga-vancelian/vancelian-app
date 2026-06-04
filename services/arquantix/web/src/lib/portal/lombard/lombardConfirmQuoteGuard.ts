@@ -36,10 +36,12 @@ function assessLombardFreshQuoteHardBlocks(fresh: LombardQuoteResult): LombardCo
   return null
 }
 
+const BPS_SCALE = BigInt(10_000)
+
 function relativeDriftBps(previous: bigint, fresh: bigint): number {
-  if (previous <= 0n) return fresh <= 0n ? 0 : 10_000
+  if (previous <= BigInt(0)) return fresh <= BigInt(0) ? 0 : 10_000
   const diff = fresh >= previous ? fresh - previous : previous - fresh
-  return Number((diff * 10_000n) / previous)
+  return Number((diff * BPS_SCALE) / previous)
 }
 
 export function assessLombardConfirmQuote(args: {
