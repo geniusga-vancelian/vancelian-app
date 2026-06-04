@@ -18,11 +18,26 @@ export const lombardTargetLtvPercentSchema = z.coerce
   .min(1, 'Target LTV must be at least 1%.')
   .max(70, 'Target LTV cannot exceed 70%.')
 
+const lombardPortalCollateralBalanceSchema = z
+  .string()
+  .trim()
+  .max(32)
+  .optional()
+  .transform((value) => (value ? value : undefined))
+
+export const lombardCapacityQuerySchema = z.object({
+  collateral: lombardCollateralSchema,
+  walletAddress: z.string().trim().refine(isValidEvmAddress, 'Invalid wallet address.'),
+  targetLtvPercent: lombardTargetLtvPercentSchema,
+  portalWalletCollateralBalance: lombardPortalCollateralBalanceSchema,
+})
+
 export const lombardQuoteSchema = z.object({
   collateral: lombardCollateralSchema,
   borrowAmount: lombardBorrowAmountSchema,
   walletAddress: z.string().trim().refine(isValidEvmAddress, 'Invalid wallet address.'),
   targetLtvPercent: lombardTargetLtvPercentSchema,
+  portalWalletCollateralBalance: lombardPortalCollateralBalanceSchema,
 })
 
 export const lombardPrepareSchema = lombardQuoteSchema.extend({

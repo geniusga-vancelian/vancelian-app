@@ -5,17 +5,10 @@ import { buildLombardBorrowCapacity } from '@/lib/portal/lombard/lombardBorrowCa
 import { isLombardV1Enabled } from '@/lib/portal/lombard/lombardConfig'
 import { LombardMarketError } from '@/lib/portal/lombard/lombardMarket'
 import { LombardQuoteError } from '@/lib/portal/lombard/lombardQuote'
-import { lombardCollateralSchema, lombardTargetLtvPercentSchema } from '@/lib/portal/lombard/lombardValidation'
+import { lombardCapacityQuerySchema } from '@/lib/portal/lombard/lombardValidation'
 import { assertPortalWalletAddressOwnership } from '@/lib/portal/portalWalletOwnership'
-import { isValidEvmAddress } from '@/lib/portal/morphoConstants'
 import { morphoRpcErrorResponse } from '@/lib/portal/portalVaultRouteHelpers'
 import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
-
-const capacityQuerySchema = z.object({
-  collateral: lombardCollateralSchema,
-  walletAddress: z.string().trim().refine(isValidEvmAddress, 'Invalid wallet address.'),
-  targetLtvPercent: lombardTargetLtvPercentSchema,
-})
 
 /** Capacité max d'emprunt USDC (LTV 70 %) pour le curseur Borrow. */
 export async function GET(request: NextRequest) {
@@ -28,10 +21,13 @@ export async function GET(request: NextRequest) {
     }
 
     const params = request.nextUrl.searchParams
-    const parsed = capacityQuerySchema.parse({
+    const parsed = lombardCapacityQuerySchema.parse({
       collateral: params.get('collateral'),
       walletAddress: params.get('wallet_address') ?? params.get('walletAddress'),
       targetLtvPercent: params.get('target_ltv_percent') ?? params.get('targetLtvPercent'),
+      portalWalletCollateralBalance:
+        params.get('portal_wallet_collateral_balance') ??
+        params.get('portalWalletCollateralBalance'),
     })
 
     await assertPortalWalletAddressOwnership({ personId: auth, walletAddress: parsed.walletAddress })
@@ -40,6 +36,7 @@ export async function GET(request: NextRequest) {
       collateral: parsed.collateral,
       walletAddress: parsed.walletAddress,
       targetLtvPercent: parsed.targetLtvPercent,
+      portalWalletCollateralBalance: parsed.portalWalletCollateralBalance,
     })
 
     return NextResponse.json({ capacity })

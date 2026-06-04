@@ -13,6 +13,16 @@ export type LombardProcessingStepDef = {
   defaultSub: (recap: LombardBorrowRecap) => string
 }
 
+export function buildLombardReviewPreviewSteps(recap: LombardBorrowRecap): Array<{
+  label: string
+  subtext: string
+}> {
+  return LOMBARD_PROCESSING_STEPS.map((step) => ({
+    label: step.label,
+    subtext: step.defaultSub(recap),
+  }))
+}
+
 export const LOMBARD_PROCESSING_STEPS: LombardProcessingStepDef[] = [
   {
     label: 'Autorisation de la garantie',

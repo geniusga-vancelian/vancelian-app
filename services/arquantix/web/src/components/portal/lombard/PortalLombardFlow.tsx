@@ -15,6 +15,7 @@ import { PortalLombardBorrowProcessing } from '@/components/portal/lombard/Porta
 import { PortalLombardBorrowTerminalFailure } from '@/components/portal/lombard/PortalLombardBorrowTerminalFailure'
 import { PortalLombardBorrowSuccess } from '@/components/portal/lombard/PortalLombardBorrowSuccess'
 import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
+import { PortalInvestFlowPanel } from '@/components/portal/invest/PortalInvestFlowDom'
 import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
@@ -28,10 +29,12 @@ import {
 import { parsePortalBorrowUrlIntent } from '@/lib/portal/lombard/lombardBorrowUrlIntent'
 import { buildLombardBorrowRecap, type LombardBorrowRecap } from '@/lib/portal/lombard/lombardBorrowRecap'
 import {
+  formatLombardBorrowAmountForApi,
   markBorrowIntroSeen,
   normalizeLombardBorrowAmountForApi,
   readBorrowIntroSeen,
 } from '@/lib/portal/lombard/lombardBorrowUi'
+import { resolvePortalCollateralBalanceHuman } from '@/lib/portal/lombard/lombardWalletCollateral'
 import type {
   LombardBorrowCapacity,
   LombardExecutionPhase,
@@ -39,7 +42,9 @@ import type {
   LombardQuoteResult,
 } from '@/lib/portal/lombard/lombardTypes'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { portalCryptoWalletAssetRoute, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { bumpLombardPositionsRevision } from '@/lib/portal/lombard/lombardPositionsRefresh'
+import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { isLombardOpeningPhase } from '@/components/portal/transaction/mappers/lombardSteps'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -101,6 +106,7 @@ export function PortalLombardFlow() {
   const [executionRequest, setExecutionRequest] = useState<PortalLombardExecutionRequest | null>(
     null,
   )
+  const openLoanSucceededRef = useRef(false)
   const [executionRunId, setExecutionRunId] = useState(0)
   const [executing, setExecuting] = useState(false)
   const [executionPhase, setExecutionPhase] = useState<LombardExecutionPhase>('idle')
@@ -149,6 +155,18 @@ export function PortalLombardFlow() {
     [markets, selectedCollateral],
   )
 
+  const portalCollateralBalanceHuman = useMemo(() => {
+    if (!selectedCollateral) return null
+    const row = positions.find(
+      (p) => p.asset.toLowerCase() === selectedCollateral.toLowerCase(),
+    )
+    if (!row) return null
+    const balance = resolvePortalCollateralBalanceHuman(row)
+    if (!(balance > 0)) return null
+    const digits = balance < 1 ? 8 : 6
+    return formatLombardBorrowAmountForApi(balance) || null
+  }, [positions, selectedCollateral])
+
   const requiresPrivySigning = !lombardMockMode && !isExternalWallet
 
   useEffect(() => {
@@ -178,6 +196,7 @@ export function PortalLombardFlow() {
             collateral: selectedCollateral,
             walletAddress: executionAddress,
             targetLtvPercent,
+            portalWalletCollateralBalance: portalCollateralBalanceHuman,
           })
           if (requestId !== capacityRequestRef.current) return
           setCapacity(next)
@@ -199,7 +218,7 @@ export function PortalLombardFlow() {
     return () => {
       window.clearTimeout(timer)
     }
-  }, [executionAddress, selectedCollateral, step, targetLtvPercent])
+  }, [executionAddress, portalCollateralBalanceHuman, selectedCollateral, step, targetLtvPercent])
 
   useEffect(() => {
     if (step !== 'form') return
@@ -232,6 +251,7 @@ export function PortalLombardFlow() {
             borrowAmount: borrowAmount.trim(),
             walletAddress: executionAddress,
             targetLtvPercent,
+            portalWalletCollateralBalance: portalCollateralBalanceHuman,
           })
           if (requestId !== quoteRequestRef.current) return
           setQuote(next)
@@ -251,7 +271,7 @@ export function PortalLombardFlow() {
     return () => {
       window.clearTimeout(timer)
     }
-  }, [borrowAmount, executionAddress, selectedCollateral, step, targetLtvPercent])
+  }, [borrowAmount, executionAddress, portalCollateralBalanceHuman, selectedCollateral, step, targetLtvPercent])
 
   useEffect(() => {
     if (step !== 'processing' || terminalFailure) return
@@ -278,6 +298,7 @@ export function PortalLombardFlow() {
   const startOpenLoan = useCallback(() => {
     if (executing || !selectedCollateral || !quote || !executionAddress) return
 
+    openLoanSucceededRef.current = false
     if (!borrowRecap) {
       setBorrowRecap(buildLombardBorrowRecap(quote))
     }
@@ -302,8 +323,13 @@ export function PortalLombardFlow() {
     targetLtvPercent,
   ])
 
+  const handleOpeningSubtextTick = useCallback(() => {
+    setOpeningSubtextTick((tick) => tick + 1)
+  }, [])
+
   const retryOpenLoan = useCallback(() => {
     if (executing || !executionRequest) return
+    openLoanSucceededRef.current = false
     setTerminalFailure(false)
     setOpeningSubtextTick(0)
     setExecutionPhase('preparing')
@@ -315,9 +341,33 @@ export function PortalLombardFlow() {
     setStep('form')
   }, [])
 
-  const handleViewLoans = useCallback(() => {
-    router.push(PORTAL_ROUTES.creditLine)
+  const handleBorrowSuccessExit = useCallback(() => {
+    bumpLombardPositionsRevision()
+    invalidatePortalCache()
+    router.replace(portalCryptoWalletAssetRoute('usdc'))
   }, [router])
+
+  const handleOpenLoanSuccess = useCallback(() => {
+    openLoanSucceededRef.current = true
+    setTerminalFailure(false)
+    setStep('success')
+  }, [])
+
+  const handleOpenLoanTerminalFailure = useCallback(() => {
+    if (openLoanSucceededRef.current) {
+      handleOpenLoanSuccess()
+      return
+    }
+    setTerminalFailure(true)
+    setExecutionPhase('failed')
+  }, [handleOpenLoanSuccess])
+
+  useEffect(() => {
+    if (step !== 'processing' || !openLoanSucceededRef.current) return
+    if (terminalFailure || executionPhase === 'confirmed') {
+      handleOpenLoanSuccess()
+    }
+  }, [executionPhase, handleOpenLoanSuccess, step, terminalFailure])
 
   const main = !deFiEnabled ? (
     <p className="font-ui text-[15px] text-v-muted">
@@ -395,12 +445,14 @@ export function PortalLombardFlow() {
       ) : null}
 
       {step === 'review' && borrowRecap ? (
-        <PortalLombardBorrowReviewStep
-          recap={borrowRecap}
-          onBack={() => setStep('form')}
-          onConfirm={startOpenLoan}
-          confirmDisabled={executing || !walletReady}
-        />
+        <PortalInvestFlowPanel>
+          <PortalLombardBorrowReviewStep
+            recap={borrowRecap}
+            onBack={() => setStep('form')}
+            onConfirm={startOpenLoan}
+            confirmDisabled={executing || !walletReady}
+          />
+        </PortalInvestFlowPanel>
       ) : null}
 
       {step === 'processing' && borrowRecap && executionRequest ? (
@@ -408,14 +460,12 @@ export function PortalLombardFlow() {
           <PortalLombardExecutionController
             request={executionRequest}
             runId={executionRunId}
+            borrowSucceededRef={openLoanSucceededRef}
             requiresPrivySigning={requiresPrivySigning}
             onPhaseChange={handleExecutionPhaseChange}
-            onInvisibleRetry={() => setOpeningSubtextTick((tick) => tick + 1)}
-            onSuccess={() => setStep('success')}
-            onTerminalFailure={() => {
-              setTerminalFailure(true)
-              setExecutionPhase('failed')
-            }}
+            onInvisibleRetry={handleOpeningSubtextTick}
+            onSuccess={handleOpenLoanSuccess}
+            onTerminalFailure={handleOpenLoanTerminalFailure}
             onExecutingChange={setExecuting}
           />
           {!terminalFailure ? (
@@ -438,8 +488,8 @@ export function PortalLombardFlow() {
       {step === 'success' && borrowRecap ? (
         <PortalLombardBorrowSuccess
           recap={borrowRecap}
-          onViewLoans={handleViewLoans}
-          onClose={handleViewLoans}
+          onViewLoans={handleBorrowSuccessExit}
+          onClose={handleBorrowSuccessExit}
         />
       ) : null}
     </>

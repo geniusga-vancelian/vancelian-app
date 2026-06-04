@@ -49,16 +49,28 @@ export async function fetchPortalLombardPositions(args: {
   return lombardFetch(`/api/portal/lombard/position?${params.toString()}`)
 }
 
+function appendPortalCollateralBalance(
+  params: URLSearchParams,
+  portalWalletCollateralBalance?: string | null,
+) {
+  const balance = portalWalletCollateralBalance?.trim()
+  if (balance) {
+    params.set('portal_wallet_collateral_balance', balance)
+  }
+}
+
 export async function fetchPortalLombardBorrowCapacity(args: {
   collateral: string
   walletAddress: string
   targetLtvPercent: number
+  portalWalletCollateralBalance?: string | null
 }): Promise<LombardBorrowCapacity> {
   const params = new URLSearchParams({
     collateral: args.collateral,
     wallet_address: args.walletAddress,
     target_ltv_percent: String(args.targetLtvPercent),
   })
+  appendPortalCollateralBalance(params, args.portalWalletCollateralBalance)
   const data = await lombardFetch<{ capacity: LombardBorrowCapacity }>(
     `/api/portal/lombard/capacity?${params.toString()}`,
   )
@@ -70,6 +82,7 @@ export async function fetchPortalLombardQuote(args: {
   borrowAmount: string
   walletAddress: string
   targetLtvPercent: number
+  portalWalletCollateralBalance?: string | null
 }): Promise<LombardQuoteResult> {
   const borrowAmount = normalizeLombardBorrowAmountForApi(args.borrowAmount)
   if (!borrowAmount) {
@@ -81,6 +94,7 @@ export async function fetchPortalLombardQuote(args: {
     wallet_address: args.walletAddress,
     target_ltv_percent: String(args.targetLtvPercent),
   })
+  appendPortalCollateralBalance(params, args.portalWalletCollateralBalance)
   const data = await lombardFetch<{ quote: LombardQuoteResult }>(`/api/portal/lombard/quote?${params.toString()}`)
   return data.quote
 }

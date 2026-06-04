@@ -10,11 +10,12 @@ import {
   lombardTargetLtvPercentToWad,
 } from '@/lib/portal/lombard/lombardBorrowLtv'
 import {
-  computeMaxIncrementalBorrowRaw,
+  computeMaxIncrementalBorrowRawWithFallback,
   computeProjectedPositionLtvRatio,
   findMinimumIncrementalCollateralForBorrow,
   readLombardPositionBorrowSnapshot,
 } from '@/lib/portal/lombard/lombardBorrowMath'
+import { resolveEffectiveWalletCollateralRaw } from '@/lib/portal/lombard/lombardWalletCollateral'
 import {
   formatLombardTokenAmount,
   lltvWadToPercent,
@@ -93,6 +94,7 @@ export async function buildLombardQuote(args: {
   borrowAmount: string
   walletAddress: string
   targetLtvPercent: number
+  portalWalletCollateralBalance?: string | null
 }): Promise<LombardQuoteResult> {
   const targetLtvPercent = clampLombardTargetLtvPercent(args.targetLtvPercent)
   if (targetLtvPercent <= 0) {
@@ -122,19 +124,28 @@ export async function buildLombardQuote(args: {
     morphoMarket.getPositionData(args.walletAddress as Address),
   ])
   const position = readLombardPositionBorrowSnapshot(positionData)
+  const walletCollateralRaw = resolveEffectiveWalletCollateralRaw({
+    onChainRaw: walletBalance.raw,
+    portalBalanceHuman: args.portalWalletCollateralBalance,
+    decimals: gql.collateralAsset.decimals,
+  })
+  const walletGuaranteeDisplay = rawToLombardHumanAmount(
+    walletCollateralRaw,
+    gql.collateralAsset.decimals,
+  )
 
   const targetLtvWad = lombardTargetLtvPercentToWad(targetLtvPercent)
   const absoluteMaxLtvWad = lombardMaxUserLtvWad()
-  const absoluteMaxBorrowRaw = computeMaxIncrementalBorrowRaw({
+  const absoluteMaxBorrowRaw = computeMaxIncrementalBorrowRawWithFallback({
     marketData,
     position,
-    walletCollateralRaw: walletBalance.raw,
+    walletCollateralRaw,
     maxLtvWad: absoluteMaxLtvWad,
   })
-  const maxBorrowRaw = computeMaxIncrementalBorrowRaw({
+  const maxBorrowRaw = computeMaxIncrementalBorrowRawWithFallback({
     marketData,
     position,
-    walletCollateralRaw: walletBalance.raw,
+    walletCollateralRaw,
     maxLtvWad: targetLtvWad,
   })
   if (maxBorrowRaw == null || absoluteMaxBorrowRaw == null) {
@@ -162,13 +173,13 @@ export async function buildLombardQuote(args: {
     position,
     borrowAmountRaw,
     maxLtvWad: targetLtvWad,
-    walletCollateralRaw: walletBalance.raw,
+    walletCollateralRaw,
   })
 
-  if (guaranteeAmountRaw > walletBalance.raw) {
+  if (guaranteeAmountRaw > walletCollateralRaw) {
     throw new LombardQuoteError(
       'lombard.insufficient_guarantee_balance',
-      `You need ${formatLombardTokenAmount(guaranteeAmountRaw, gql.collateralAsset.decimals)} ${config.collateral} but only have ${walletBalance.display}.`,
+      `You need ${formatLombardTokenAmount(guaranteeAmountRaw, gql.collateralAsset.decimals)} ${config.collateral} but only have ${walletGuaranteeDisplay}.`,
     )
   }
 
@@ -210,7 +221,7 @@ export async function buildLombardQuote(args: {
     recommendedBorrowAmount: formatLombardTokenAmount(recommendedBorrowRaw, gql.loanAsset.decimals),
     borrowApyPercent,
     liquidationLltvPercent: lltvWadToPercent(BigInt(gql.lltv)),
-    walletGuaranteeBalance: walletBalance.display,
+    walletGuaranteeBalance: walletGuaranteeDisplay,
     poweredBy: 'Morpho',
   }
 }

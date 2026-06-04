@@ -7,9 +7,10 @@ import {
   lombardTargetLtvPercentToWad,
 } from '@/lib/portal/lombard/lombardBorrowLtv'
 import {
-  computeMaxIncrementalBorrowRaw,
+  computeMaxIncrementalBorrowRawWithFallback,
   readLombardPositionBorrowSnapshot,
 } from '@/lib/portal/lombard/lombardBorrowMath'
+import { resolveEffectiveWalletCollateralRaw } from '@/lib/portal/lombard/lombardWalletCollateral'
 import {
   formatLombardTokenAmount,
   lltvWadToPercent,
@@ -41,6 +42,8 @@ export async function buildLombardBorrowCapacity(args: {
   collateral: string
   walletAddress: string
   targetLtvPercent: number
+  /** Solde garantie affiché côté portail (hub wallet) — aligne capacité si RPC `balanceOf` est en retard. */
+  portalWalletCollateralBalance?: string | null
 }): Promise<LombardBorrowCapacity> {
   const targetLtvPercent = clampLombardTargetLtvPercent(args.targetLtvPercent)
   if (targetLtvPercent <= 0) {
@@ -65,19 +68,24 @@ export async function buildLombardBorrowCapacity(args: {
     morphoMarket.getPositionData(args.walletAddress as Address),
   ])
   const position = readLombardPositionBorrowSnapshot(positionData)
+  const walletCollateralRaw = resolveEffectiveWalletCollateralRaw({
+    onChainRaw: walletBalance.raw,
+    portalBalanceHuman: args.portalWalletCollateralBalance,
+    decimals: gql.collateralAsset.decimals,
+  })
 
   const absoluteMaxLtvWad = lombardMaxUserLtvWad()
   const targetLtvWad = lombardTargetLtvPercentToWad(targetLtvPercent)
-  const absoluteMaxBorrowRaw = computeMaxIncrementalBorrowRaw({
+  const absoluteMaxBorrowRaw = computeMaxIncrementalBorrowRawWithFallback({
     marketData,
     position,
-    walletCollateralRaw: walletBalance.raw,
+    walletCollateralRaw,
     maxLtvWad: absoluteMaxLtvWad,
   })
-  const maxBorrowRaw = computeMaxIncrementalBorrowRaw({
+  const maxBorrowRaw = computeMaxIncrementalBorrowRawWithFallback({
     marketData,
     position,
-    walletCollateralRaw: walletBalance.raw,
+    walletCollateralRaw,
     maxLtvWad: targetLtvWad,
   })
   if (maxBorrowRaw == null || absoluteMaxBorrowRaw == null) {
@@ -97,7 +105,10 @@ export async function buildLombardBorrowCapacity(args: {
     maxBorrowAmountRaw: maxBorrowRaw.toString(),
     absoluteMaxBorrowAmount: formatLombardTokenAmount(absoluteMaxBorrowRaw, gql.loanAsset.decimals),
     recommendedBorrowAmount: formatLombardTokenAmount(recommendedBorrowRaw, gql.loanAsset.decimals),
-    walletGuaranteeBalance: walletBalance.display,
+    walletGuaranteeBalance: rawToLombardHumanAmount(
+      walletCollateralRaw,
+      gql.collateralAsset.decimals,
+    ),
     borrowApyPercent,
     liquidationLltvPercent: lltvWadToPercent(BigInt(gql.lltv)),
     maxUserLtvPercent: VANCELIAN_LOMBARD_V1.maxUserLtv * 100,

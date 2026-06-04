@@ -78,7 +78,7 @@ export function PortalLombardBorrowSuccess({ recap, onViewLoans, onClose }: Prop
         </>
       }
       primaryAction={{
-        label: 'Voir mes emprunts',
+        label: 'Voir mon USDC',
         onClick: onViewLoans,
         icon: <KalaiIcon name="wallet" size={16} />,
       }}

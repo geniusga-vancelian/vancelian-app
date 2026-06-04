@@ -723,7 +723,11 @@
   margin: 14px 0 18px;
 }
 .inv-confirm__lead b { font-weight: 600; color: var(--v-fg); }
-.inv-confirm__sum { margin-top: 0; }
+.inv-summary.inv-confirm__sum { margin-top: 0; }
+.inv-confirm .txn-sum.inv-confirm__sum {
+  margin-top: 18px;
+  border-radius: var(--v-radius-card, 12px);
+}
 .inv-confirm__steps { margin-top: 24px; }
 .inv-review-foot.inv-confirm__actions {
   display: flex;

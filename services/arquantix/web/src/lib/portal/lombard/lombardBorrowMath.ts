@@ -1,5 +1,7 @@
 import type { AccrualPosition, Market } from '@morpho-org/blue-sdk'
 
+import { LOMBARD_WAD } from '@/lib/portal/lombard/lombardConfig'
+
 /** Aligné sur le +1 share/assets du SDK Morpho (`validatePositionHealth`). */
 export const LOMBARD_BORROW_ASSETS_ROUNDING_BUFFER = BigInt(1)
 
@@ -43,6 +45,42 @@ export function computeMaxIncrementalBorrowRaw(args: {
 
   const incremental = maxTotalBorrow - args.position.borrowAssetsRaw
   return incremental > BigInt(0) ? incremental : BigInt(0)
+}
+
+/** Repli si `getMaxBorrowAssets` renvoie 0 alors que la valeur oracle garantie est > 0. */
+export function estimateMaxIncrementalBorrowFromCollateralValue(args: {
+  marketData: Market
+  position: LombardPositionBorrowSnapshot
+  walletCollateralRaw: bigint
+  maxLtvWad: bigint
+}): bigint | null {
+  const totalCollateral = args.position.collateralRaw + args.walletCollateralRaw
+  if (totalCollateral <= BigInt(0)) return null
+
+  const collateralValue = args.marketData.getCollateralValue(totalCollateral)
+  if (collateralValue == null || collateralValue <= BigInt(0)) return null
+
+  const maxTotalBorrow = (collateralValue * args.maxLtvWad) / LOMBARD_WAD
+  const incremental =
+    maxTotalBorrow > args.position.borrowAssetsRaw
+      ? maxTotalBorrow - args.position.borrowAssetsRaw
+      : BigInt(0)
+  return incremental > BigInt(0) ? incremental : BigInt(0)
+}
+
+export function computeMaxIncrementalBorrowRawWithFallback(args: {
+  marketData: Market
+  position: LombardPositionBorrowSnapshot
+  walletCollateralRaw: bigint
+  maxLtvWad: bigint
+}): bigint | null {
+  const primary = computeMaxIncrementalBorrowRaw(args)
+  if (primary != null && primary > BigInt(0)) return primary
+
+  const fallback = estimateMaxIncrementalBorrowFromCollateralValue(args)
+  if (fallback != null && fallback > BigInt(0)) return fallback
+
+  return primary ?? fallback
 }
 
 export function findMinimumIncrementalCollateralForBorrow(args: {

@@ -19,6 +19,9 @@ function parseQuoteQuery(request: NextRequest) {
     borrowAmount: params.get('borrow_amount') ?? params.get('borrowAmount'),
     walletAddress: params.get('wallet_address') ?? params.get('walletAddress'),
     targetLtvPercent: params.get('target_ltv_percent') ?? params.get('targetLtvPercent'),
+    portalWalletCollateralBalance:
+      params.get('portal_wallet_collateral_balance') ??
+      params.get('portalWalletCollateralBalance'),
   })
 }
 
@@ -73,6 +76,7 @@ export async function GET(request: NextRequest) {
       borrowAmount: parsed.borrowAmount,
       walletAddress: parsed.walletAddress,
       targetLtvPercent: parsed.targetLtvPercent,
+      portalWalletCollateralBalance: parsed.portalWalletCollateralBalance,
     })
 
     return NextResponse.json({ quote })

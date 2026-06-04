@@ -5,10 +5,7 @@ import { useEffect, useRef } from 'react'
 import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import { PortalWeb3BoundaryLazy } from '@/components/portal/web3/PortalWeb3BoundaryLazy'
 import type { LombardExecutionPhase } from '@/lib/portal/lombard/lombardTypes'
-import {
-  LombardTerminalBorrowError,
-  usePortalLombardExecution,
-} from '@/lib/portal/usePortalLombardExecution'
+import { usePortalLombardExecution } from '@/lib/portal/usePortalLombardExecution'
 import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 
 export type PortalLombardExecutionRequest = {
@@ -22,6 +19,8 @@ type Props = {
   request: PortalLombardExecutionRequest
   /** Incrémenté à chaque tentative (continue ou retry) pour relancer l’effet. */
   runId: number
+  /** Mis à true dès que l’open_loan on-chain + confirm backend est terminé (anti-écran erreur fantôme). */
+  borrowSucceededRef: React.MutableRefObject<boolean>
   requiresPrivySigning: boolean
   onPhaseChange: (phase: LombardExecutionPhase) => void
   onInvisibleRetry: () => void
@@ -34,6 +33,7 @@ type Props = {
 function PortalLombardExecutionRunner({
   request,
   runId,
+  borrowSucceededRef,
   requiresPrivySigning,
   onPhaseChange,
   onInvisibleRetry,
@@ -43,44 +43,65 @@ function PortalLombardExecutionRunner({
 }: Props) {
   const { privyReady } = usePortalAuthPrivy()
   const privyReadyRef = useRef(privyReady)
+  const openLoanFinishedRef = useRef(false)
   const { executeOpenLoan } = usePortalLombardExecution()
+
+  const onPhaseChangeRef = useRef(onPhaseChange)
+  const onInvisibleRetryRef = useRef(onInvisibleRetry)
+  const onSuccessRef = useRef(onSuccess)
+  const onTerminalFailureRef = useRef(onTerminalFailure)
+  const onExecutingChangeRef = useRef(onExecutingChange)
+  const executeOpenLoanRef = useRef(executeOpenLoan)
+
+  onPhaseChangeRef.current = onPhaseChange
+  onInvisibleRetryRef.current = onInvisibleRetry
+  onSuccessRef.current = onSuccess
+  onTerminalFailureRef.current = onTerminalFailure
+  onExecutingChangeRef.current = onExecutingChange
+  executeOpenLoanRef.current = executeOpenLoan
 
   useEffect(() => {
     privyReadyRef.current = privyReady
   }, [privyReady])
 
   useEffect(() => {
+    if (borrowSucceededRef.current) return
+
     let cancelled = false
-    onExecutingChange(true)
-    onPhaseChange('preparing')
+    openLoanFinishedRef.current = false
+    onExecutingChangeRef.current(true)
+    onPhaseChangeRef.current('preparing')
 
     void (async () => {
       try {
         if (requiresPrivySigning) {
           await waitForPrivyClientReady(() => privyReadyRef.current, { timeoutMs: 30_000 })
         }
-        await executeOpenLoan({
+        await executeOpenLoanRef.current({
           collateral: request.collateral,
           borrowAmount: request.borrowAmount,
           walletAddress: request.walletAddress,
           targetLtvPercent: request.targetLtvPercent,
           onPhaseChange: (phase) => {
-            if (!cancelled) onPhaseChange(phase)
+            if (!cancelled) onPhaseChangeRef.current(phase)
           },
           onInvisibleRetry: () => {
-            if (!cancelled) onInvisibleRetry()
+            if (!cancelled) onInvisibleRetryRef.current()
           },
         })
-        if (!cancelled) onSuccess()
+        openLoanFinishedRef.current = true
+        borrowSucceededRef.current = true
+        if (!cancelled) onSuccessRef.current()
       } catch (error) {
-        if (cancelled) return
-        if (error instanceof LombardTerminalBorrowError) {
-          onTerminalFailure()
+        if (openLoanFinishedRef.current || borrowSucceededRef.current) {
+          borrowSucceededRef.current = true
+          if (!cancelled) onSuccessRef.current()
           return
         }
-        onTerminalFailure()
+        if (cancelled) return
+        onTerminalFailureRef.current()
       } finally {
-        if (!cancelled) onExecutingChange(false)
+        if (!cancelled) onExecutingChangeRef.current(false)
       }
     })()
 
@@ -88,12 +109,7 @@ function PortalLombardExecutionRunner({
       cancelled = true
     }
   }, [
-    executeOpenLoan,
-    onExecutingChange,
-    onInvisibleRetry,
-    onPhaseChange,
-    onSuccess,
-    onTerminalFailure,
+    borrowSucceededRef,
     request.borrowAmount,
     request.collateral,
     request.targetLtvPercent,

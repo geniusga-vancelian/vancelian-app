@@ -4,6 +4,8 @@ const LOMBARD_CODE_MESSAGES: Record<string, string> = {
   'lombard.disabled': 'Produit temporairement indisponible.',
   'lombard.capacity_failed': 'Impossible de calculer la capacité d’emprunt. Réessayez.',
   'lombard.quote_failed': 'Impossible de calculer le devis. Réessayez.',
+  'lombard.balance_changed':
+    'Solde de garantie insuffisant. Actualisez le montant ou réessayez dans quelques secondes.',
   'lombard.base_rpc_busy': formatBaseRpcUserMessage(),
   unauthorized: 'Session expirée. Reconnectez-vous pour continuer.',
 }

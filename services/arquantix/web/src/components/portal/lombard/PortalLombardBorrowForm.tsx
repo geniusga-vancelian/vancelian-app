@@ -19,6 +19,7 @@ import {
   normalizeLombardBorrowAmountForApi,
   parseBorrowAmountInput,
 } from '@/lib/portal/lombard/lombardBorrowUi'
+import { resolvePortalCollateralBalanceHuman } from '@/lib/portal/lombard/lombardWalletCollateral'
 
 type Props = {
   markets: LombardMarketSummary[]
@@ -47,8 +48,7 @@ type Props = {
 function findGuaranteeBalance(positions: PortalCryptoPosition[], collateral: string): string {
   const row = positions.find((p) => p.asset.toLowerCase() === collateral.toLowerCase())
   if (!row) return '0'
-  const value = row.availableBalance ?? row.balance
-  return String(value)
+  return String(resolvePortalCollateralBalanceHuman(row))
 }
 
 function collateralPriceUsd(positions: PortalCryptoPosition[], collateral: string): number | null {

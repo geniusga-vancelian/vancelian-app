@@ -5,7 +5,7 @@ function formatLombardBorrowInterestLabel(value: number | null): string {
   const pct = value.toFixed(1).replace('.', ',')
   return `~ ${pct} %/an · variable`
 }
-import { formatBorrowAmountFr, parseBorrowAmountInput } from '@/lib/portal/lombard/lombardBorrowUi'
+import { formatBorrowAmountFr, lombardBorrowZoneFor, parseBorrowAmountInput } from '@/lib/portal/lombard/lombardBorrowUi'
 
 export type LombardBorrowRecap = {
   borrowAmount: string
@@ -14,6 +14,7 @@ export type LombardBorrowRecap = {
   collateral: string
   collateralLabel: string
   targetLtvPercent: number
+  targetLtvLabel: string
   safetyLabel: string
   interestLabel: string
   marketLabel: string
@@ -28,6 +29,7 @@ export function buildLombardBorrowRecap(quote: LombardQuoteResult): LombardBorro
     collateral: quote.collateral,
     collateralLabel: quote.collateralName,
     targetLtvPercent: quote.targetLtvPercent,
+    targetLtvLabel: `${quote.targetLtvPercent} % · ${lombardBorrowZoneFor(quote.targetLtvPercent).title}`,
     safetyLabel: quote.safetyLabel,
     interestLabel: formatLombardBorrowInterestLabel(quote.borrowApyPercent),
     marketLabel: `${VANCELIAN_LOMBARD_V1.poweredByLabel.replace('Powered by ', '')} · ${quote.collateral} → USDC`,

@@ -39,6 +39,7 @@ export async function runLombardPreBorrowSafetyChecks(args: {
   borrowAmount: string
   walletAddress: string
   targetLtvPercent: number
+  portalWalletCollateralBalance?: string | null
   chainId?: number
 }): Promise<LombardPreparedBorrowSafety> {
   assertLombardBaseChain(args.chainId)
@@ -52,6 +53,7 @@ export async function runLombardPreBorrowSafetyChecks(args: {
       borrowAmount: args.borrowAmount,
       walletAddress: args.walletAddress,
       targetLtvPercent: args.targetLtvPercent,
+      portalWalletCollateralBalance: args.portalWalletCollateralBalance,
     })
   } catch (error) {
     if (error instanceof LombardQuoteError) throw error
@@ -77,6 +79,7 @@ export async function runLombardPreBorrowSafetyChecks(args: {
     collateral: args.collateral,
     walletAddress: args.walletAddress,
     guaranteeAmountRaw: BigInt(quote.guaranteeAmountRaw),
+    portalWalletCollateralBalance: args.portalWalletCollateralBalance,
   })
 
   const warnings: LombardSafetyWarning[] = []

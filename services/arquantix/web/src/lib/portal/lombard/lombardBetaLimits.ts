@@ -15,6 +15,7 @@ import { resolveLombardMarket } from '@/lib/portal/lombard/lombardMarket'
 import { fetchLombardActivePositionsForWallet } from '@/lib/portal/lombard/lombardPositionService'
 import { formatLombardTokenAmount } from '@/lib/portal/lombard/lombardFormat'
 import { isLombardMockEnabled } from '@/lib/portal/lombard/lombardMockConfig'
+import { resolveEffectiveWalletCollateralRaw } from '@/lib/portal/lombard/lombardWalletCollateral'
 
 export async function loadLombardWalletBorrowExposureRaw(walletAddress: string): Promise<bigint> {
   if (isLombardMockEnabled()) {
@@ -123,6 +124,8 @@ export async function assertLombardBetaBorrowLimits(args: {
 export async function readLombardCollateralBalanceRaw(args: {
   collateral: string
   walletAddress: string
+  /** Solde hub wallet — même source que capacité / devis Morpho. */
+  portalWalletCollateralBalance?: string | null
 }): Promise<bigint> {
   if (isLombardMockEnabled()) {
     const { readLombardMockCollateralBalanceRaw } = await import(
@@ -133,11 +136,16 @@ export async function readLombardCollateralBalanceRaw(args: {
 
   const resolved = await resolveLombardMarket({ collateral: args.collateral })
   const client = createBasePublicClient({ side: 'server' })
-  return client.readContract({
+  const onChainRaw = await client.readContract({
     address: resolved.gql.collateralAsset.address as Address,
     abi: erc20Abi,
     functionName: 'balanceOf',
     args: [args.walletAddress as Address],
+  })
+  return resolveEffectiveWalletCollateralRaw({
+    onChainRaw,
+    portalBalanceHuman: args.portalWalletCollateralBalance,
+    decimals: resolved.gql.collateralAsset.decimals,
   })
 }
 
@@ -145,16 +153,18 @@ export async function assertLombardCollateralBalanceCoversGuarantee(args: {
   collateral: string
   walletAddress: string
   guaranteeAmountRaw: bigint
+  portalWalletCollateralBalance?: string | null
 }): Promise<void> {
   const balance = await readLombardCollateralBalanceRaw({
     collateral: args.collateral,
     walletAddress: args.walletAddress,
+    portalWalletCollateralBalance: args.portalWalletCollateralBalance,
   })
 
   if (balance < args.guaranteeAmountRaw) {
     throw new LombardBetaError(
       'lombard.balance_changed',
-      'Your guarantee balance changed. Refresh the quote and try again.',
+      'Solde de garantie insuffisant. Actualisez le montant ou réessayez dans quelques secondes.',
       409,
     )
   }
