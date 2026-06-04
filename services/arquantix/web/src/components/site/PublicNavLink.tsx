@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import * as React from 'react'
-import { useNavPending } from '@/components/site/NavPendingContext'
 import {
   isPublicHrefExternalNavigation,
   shouldSkipLocalizePublicHref,
@@ -18,12 +17,7 @@ export type PublicNavLinkProps = React.AnchorHTMLAttributes<HTMLAnchorElement> &
 
 /** Lien menu public : `next/link` en interne (SPA), `<a>` pour URLs externes. */
 export function PublicNavLink({ href, children, onClick, ...rest }: PublicNavLinkProps) {
-  const { setPendingPath } = useNavPending()
-
   const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!isExternalNavHref(href)) {
-      setPendingPath(href)
-    }
     onClick?.(event)
   }
 

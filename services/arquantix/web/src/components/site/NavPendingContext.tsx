@@ -9,41 +9,34 @@ export function normalizeNavPath(path: string): string {
 }
 
 type NavPendingContextValue = {
-  /** Pathname effectif pour l’état actif menu (optimiste au clic). */
+  /** Pathname réel — seule source de vérité pour menu actif (URL-first). */
   effectivePath: string
-  /** true pendant une navigation interne en cours. */
+  /** Conservé pour compat site ; toujours false (plus de pending optimiste au clic). */
   isNavigating: boolean
+  /** No-op — la navigation passe par Next Link natif. */
   setPendingPath: (path: string) => void
 }
 
 const NavPendingContext = React.createContext<NavPendingContextValue | null>(null)
 
 export function NavPendingProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname() ?? ''
-  const [pendingPath, setPendingPathState] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    setPendingPathState(null)
-  }, [pathname])
-
-  const setPendingPath = React.useCallback((path: string) => {
-    setPendingPathState(normalizeNavPath(path))
-  }, [])
-
-  const effectivePath = pendingPath ?? pathname
-  const isNavigating = pendingPath !== null && pendingPath !== normalizeNavPath(pathname)
+  const pathname = normalizeNavPath(usePathname() ?? '')
 
   const value = React.useMemo(
-    () => ({ effectivePath, isNavigating, setPendingPath }),
-    [effectivePath, isNavigating, setPendingPath],
+    () => ({
+      effectivePath: pathname,
+      isNavigating: false,
+      setPendingPath: () => {},
+    }),
+    [pathname],
   )
 
   return <NavPendingContext.Provider value={value}>{children}</NavPendingContext.Provider>
 }
 
 export function useNavPending(): NavPendingContextValue {
+  const pathname = normalizeNavPath(usePathname() ?? '')
   const ctx = React.useContext(NavPendingContext)
-  const pathname = usePathname() ?? ''
 
   if (ctx) return ctx
 

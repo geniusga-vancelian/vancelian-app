@@ -19,7 +19,6 @@ import { PortalChainSwitcher } from '@/components/portal/PortalChainSwitcher'
 import { PortalWalletSwitcher } from '@/components/portal/PortalWalletSwitcher'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
-import { useNavPending } from '@/components/site/NavPendingContext'
 
 type ProfileAvatarState = {
   initials: string
@@ -119,7 +118,6 @@ type PortalTopnavProps = {
  */
 export function PortalTopnav({ initials: initialsProp, brand: brandProp, className }: PortalTopnavProps) {
   const pathname = usePathname() ?? ''
-  const { effectivePath } = useNavPending()
   const palette = buildTopnavPalettes(null).solid
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [profileAvatar, setProfileAvatar] = React.useState<ProfileAvatarState>(() =>
@@ -196,7 +194,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
   }, [mobileOpen])
 
   const avatarLabel = resolveAvatarLabel(profileAvatar.initials)
-  const profileActive = isNavActive(effectivePath, PORTAL_ROUTES.profile)
+  const profileActive = isNavActive(pathname, PORTAL_ROUTES.profile)
 
   const navBarStyle: React.CSSProperties = {
     background: palette.background,
@@ -233,7 +231,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
             <ul className="m-0 flex h-full list-none items-stretch gap-8 p-0">
               {PORTAL_MAIN_NAV_TABS.map((tab) => (
                 <li key={tab.id} className="flex h-full">
-                  <TopnavLink href={tab.href} active={isNavActive(effectivePath, tab.href)} palette={palette}>
+                  <TopnavLink href={tab.href} active={isNavActive(pathname, tab.href)} palette={palette}>
                     {tab.label}
                   </TopnavLink>
                 </li>
@@ -254,7 +252,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                 TOPNAV_ACTION_DISC_CLASS,
                 'hidden lg:inline-flex',
                 'transition-colors duration-v-fast hover:bg-v-fg-05',
-                isNavActive(effectivePath, PORTAL_SEARCH_NAV.href) && 'bg-v-fg-05',
+                isNavActive(pathname, PORTAL_SEARCH_NAV.href) && 'bg-v-fg-05',
               )}
               style={{ color: palette.linkColor }}
             >
@@ -323,7 +321,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
               </div>
               <ul className="m-0 flex list-none flex-col gap-1 p-0">
                 {PORTAL_MAIN_NAV_TABS.map((tab) => {
-                  const active = isNavActive(effectivePath, tab.href)
+                  const active = isNavActive(pathname, tab.href)
                   return (
                     <li key={tab.id}>
                       <PortalNavLink
@@ -346,7 +344,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                     onClick={() => setMobileOpen(false)}
                     className={cn(
                       'flex items-center gap-3 rounded-v-input px-3 py-3 font-ui text-[16px] font-medium no-underline',
-                      isNavActive(effectivePath, PORTAL_SEARCH_NAV.href)
+                      isNavActive(pathname, PORTAL_SEARCH_NAV.href)
                         ? 'bg-v-fg-05 text-v-fg'
                         : 'text-v-fg-body',
                     )}

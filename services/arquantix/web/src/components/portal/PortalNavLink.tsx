@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import type { ComponentProps } from 'react'
 import { useRouter } from 'next/navigation'
-import { useNavPending } from '@/components/site/NavPendingContext'
 import { isPortalPathname } from '@/lib/portal/portalRouting'
 import { warmPortalRoute } from '@/lib/portal/portalNavWarmup'
 
@@ -19,7 +18,7 @@ function hrefToPath(href: LinkPropsHref): string {
   return ''
 }
 
-/** Lien portail — navigation optimiste (skeleton immédiat) + prefetch / warm cache. */
+/** Lien portail — Next Link natif (URL-first) + prefetch au survol. */
 export function PortalNavLink({
   href,
   children,
@@ -29,7 +28,6 @@ export function PortalNavLink({
   ...rest
 }: PortalNavLinkProps) {
   const router = useRouter()
-  const { setPendingPath } = useNavPending()
   const path = hrefToPath(href)
   const isInternalPortal = path ? isPortalPathname(path) : false
 
@@ -40,6 +38,7 @@ export function PortalNavLink({
   return (
     <Link
       href={href}
+      prefetch={isInternalPortal ? true : undefined}
       onPointerEnter={(event) => {
         handleWarm()
         onPointerEnter?.(event)
@@ -49,10 +48,7 @@ export function PortalNavLink({
         onFocus?.(event)
       }}
       onClick={(event) => {
-        if (isInternalPortal) {
-          handleWarm()
-          setPendingPath(path)
-        }
+        if (isInternalPortal) handleWarm()
         onClick?.(event)
       }}
       {...rest}
