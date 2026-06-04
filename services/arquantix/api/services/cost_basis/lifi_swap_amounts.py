@@ -53,9 +53,12 @@ def amount_out_from_ledger(db: Session, swap) -> tuple[Decimal | None, str]:
         meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
         if str(meta.get("swap_id") or "") != swap_id:
             continue
+        est = _dec(meta.get("swap_amount_to_estimated"))
         for key in ("swap_amount_to", "amount_actual", "actual_receive_amount"):
             val = _dec(meta.get(key))
             if val is not None:
+                if est is not None and val / est >= Decimal("1000"):
+                    return est, "ledger:swap_amount_to_estimated_inflation_guard"
                 return val, f"ledger:{key}"
         val = _dec(row.amount)
         if val is not None:

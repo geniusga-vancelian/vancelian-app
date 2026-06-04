@@ -108,3 +108,10 @@ BASE_SWAP_SYMBOLS: frozenset[str] = frozenset(
 BASE_MARKET_PROVIDER_SYMBOLS: tuple[str, ...] = tuple(
     dict.fromkeys(a["provider_symbol"] for a in BASE_ALLOWED_ASSETS)
 )
+
+_BASE_DECIMALS_BY_SYMBOL: dict[str, int] = {a["symbol"]: int(a["decimals"]) for a in BASE_ALLOWED_ASSETS}
+
+
+def base_token_decimals(symbol: str) -> int | None:
+    """Décimales ERC-20 / natif sur Base (8453) — source produit swap / ledger on-chain."""
+    return _BASE_DECIMALS_BY_SYMBOL.get((symbol or "").strip().upper())

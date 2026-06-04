@@ -8,6 +8,7 @@ import urllib.request
 from decimal import Decimal
 from typing import Any
 
+from config.base_allowed_assets import BASE_LIFI_CHAIN_ID, base_token_decimals
 from services.exchange.assets import ASSET_PRECISION
 
 from .asset_mapping import ERC20_CONTRACT_TO_ASSET, contract_for_asset, normalize_evm_address
@@ -57,8 +58,18 @@ def hex_to_int(value: str | None) -> int:
     return int(text or "0", 16)
 
 
-def atomic_to_decimal(amount_atomic: int, asset: str) -> Decimal:
-    precision = ASSET_PRECISION.get(asset.upper(), 18)
+def evm_token_decimals(asset: str, *, chain_id: int | None = None) -> int:
+    """Décimales on-chain pour parsing RPC — Base whitelist prioritaire sur Exchange."""
+    sym = (asset or "").strip().upper()
+    if chain_id is None or int(chain_id) == BASE_LIFI_CHAIN_ID:
+        on_base = base_token_decimals(sym)
+        if on_base is not None:
+            return on_base
+    return ASSET_PRECISION.get(sym, 18)
+
+
+def atomic_to_decimal(amount_atomic: int, asset: str, *, chain_id: int | None = None) -> Decimal:
+    precision = evm_token_decimals(asset, chain_id=chain_id)
     return Decimal(amount_atomic) / (Decimal(10) ** precision)
 
 
@@ -108,7 +119,7 @@ def fetch_on_chain_asset_balance(
     contract = contract_for_asset(chain_id, asset_u)
     if contract:
         atomic = fetch_erc20_balance_atomic(rpc_url, contract=contract, wallet_address=wallet_address)
-        return atomic_to_decimal(atomic, asset_u)
+        return atomic_to_decimal(atomic, asset_u, chain_id=chain_id)
     if asset_u == "ETH":
         wei = fetch_native_balance_wei(rpc_url, wallet_address)
         return atomic_to_decimal(wei, "ETH")
@@ -170,7 +181,7 @@ def parse_erc20_transfers_from_receipt(
         out.append(
             {
                 "asset": asset,
-                "amount": atomic_to_decimal(amount_atomic, asset),
+                "amount": atomic_to_decimal(amount_atomic, asset, chain_id=chain_id),
                 "amount_atomic": str(amount_atomic),
                 "from_address": normalize_evm_address(from_addr),
                 "to_address": normalize_evm_address(wallet_address),

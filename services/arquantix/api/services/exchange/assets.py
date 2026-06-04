@@ -28,7 +28,7 @@ ASSET_PRECISION: dict[str, int] = {
     "BNB": 8,
     "DOGE": 8,
     "AVAX": 8,
-    "LINK": 8,
+    "LINK": 18,
     "DOT": 8,
     "USDC": 6,
     "USDT": 6,

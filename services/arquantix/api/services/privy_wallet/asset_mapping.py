@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
+from config.base_allowed_assets import base_token_decimals
 from services.exchange.assets import ASSET_PRECISION, SUPPORTED_ASSETS
 
 # Contrats ERC-20 par réseau — alignés watchlist Privy (ETH natif via NATIVE_SYMBOL_BY_CHAIN).
@@ -146,7 +147,7 @@ def parse_amount_to_decimal(amount_raw: object, asset: str) -> Decimal:
     if amount_raw is None:
         raise ValueError("Missing amount")
 
-    precision = ASSET_PRECISION.get(asset, 18)
+    precision = base_token_decimals(asset) or ASSET_PRECISION.get(asset, 18)
 
     if isinstance(amount_raw, dict):
         raw = amount_raw.get("amount") or amount_raw.get("value") or amount_raw.get("raw")
