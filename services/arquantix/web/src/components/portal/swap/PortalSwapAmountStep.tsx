@@ -32,6 +32,8 @@ type Props = {
   fromChain: string
   toChain: string
   sourceBalance: number
+  /** Solde wallet encore en cours de chargement (évite d'afficher 0 prématurément). */
+  sourceBalancePending?: boolean
   /** `min_amount` catalogue API pour l'actif source (garde-fou UI avant quote). */
   minAmount?: string | null
   fromOptions: SwapFromOption[]
@@ -48,6 +50,7 @@ export function PortalSwapAmountStep({
   fromChain,
   toChain,
   sourceBalance,
+  sourceBalancePending = false,
   minAmount,
   fromOptions,
   toOptions,
@@ -147,7 +150,7 @@ export function PortalSwapAmountStep({
   }, [fromAsset, toAsset, fromChain, toChain])
 
   const receiveLabel = quote
-    ? formatSwapCryptoAmount(quote.estimated_receive)
+    ? formatSwapCryptoAmount(quote.estimated_receive, toAsset)
     : loading
       ? '…'
       : '0'
@@ -177,12 +180,12 @@ export function PortalSwapAmountStep({
 
   const applyMax = () => {
     if (sourceBalance <= 0) return
-    setAmount(formatSwapCryptoAmount(sourceBalance))
+    setAmount(formatSwapCryptoAmount(sourceBalance, fromAsset))
   }
 
   const ctaLabel =
     parsed > 0
-      ? `Continue · ${formatSwapCryptoAmount(parsed)} ${fromAsset}`
+      ? `Continue · ${formatSwapCryptoAmount(parsed, fromAsset)} ${fromAsset}`
       : 'Enter an amount'
 
   return (
@@ -205,14 +208,18 @@ export function PortalSwapAmountStep({
                 <span className="inv-io__label">You pay</span>
                 <span className="inv-io__balance">
                   {usesPrivyBalance ? (
-                    <>
-                      Balance {formatSwapCryptoAmount(sourceBalance)} {fromAsset}
-                      {sourceBalance > 0 ? (
-                        <button type="button" className="inv-io__max" onClick={applyMax}>
-                          Max
-                        </button>
-                      ) : null}
-                    </>
+                    sourceBalancePending ? (
+                      <>Balance …</>
+                    ) : (
+                      <>
+                        Balance {formatSwapCryptoAmount(sourceBalance, fromAsset)} {fromAsset}
+                        {sourceBalance > 0 ? (
+                          <button type="button" className="inv-io__max" onClick={applyMax}>
+                            Max
+                          </button>
+                        ) : null}
+                      </>
+                    )
                   ) : (
                     <>Wallet balance</>
                   )}
@@ -277,14 +284,14 @@ export function PortalSwapAmountStep({
                 <div className="inv-summary__row">
                   <span className="k">Exchange rate</span>
                   <span className="v">
-                    1 {fromAsset} ≈ {formatSwapCryptoAmount(quote.exchange_rate)} {toAsset}
+                    1 {fromAsset} ≈ {formatSwapCryptoAmount(quote.exchange_rate, toAsset)} {toAsset}
                   </span>
                 </div>
               ) : null}
               <div className="inv-summary__row">
                 <span className="k">Minimum receive</span>
                 <span className="v">
-                  {formatSwapCryptoAmount(quote.estimated_receive_min)} {toAsset}
+                  {formatSwapCryptoAmount(quote.estimated_receive_min, toAsset)} {toAsset}
                 </span>
               </div>
               <div className="inv-summary__row">
@@ -301,7 +308,7 @@ export function PortalSwapAmountStep({
           {overBalance ? (
             <p className="inv-feedback inv-feedback--error">
               {sourceBalance > 0
-                ? `Amount exceeds available balance (${formatSwapCryptoAmount(sourceBalance)} ${fromAsset}).`
+                ? `Amount exceeds available balance (${formatSwapCryptoAmount(sourceBalance, fromAsset)} ${fromAsset}).`
                 : `Insufficient ${fromAsset} balance.`}
             </p>
           ) : null}

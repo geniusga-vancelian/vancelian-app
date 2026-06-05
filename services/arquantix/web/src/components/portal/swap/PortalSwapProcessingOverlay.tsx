@@ -53,12 +53,12 @@ export function PortalSwapProcessingOverlay({
             </h2>
             <p className="m-0 font-ui text-[14px] text-v-fg-muted">
               {isSuccess
-                ? `+${formatSwapCryptoAmount(quote.estimated_receive)} ${toAsset}`
+                ? `+${formatSwapCryptoAmount(quote.estimated_receive, toAsset)} ${toAsset}`
                 : error ?? 'Something went wrong'}
             </p>
             {isSuccess ? (
               <p className="m-0 font-ui text-[14px] text-v-fg-muted">
-                for {formatSwapCryptoAmount(quote.amount_in)} {fromAsset}
+                for {formatSwapCryptoAmount(quote.amount_in, fromAsset)} {fromAsset}
               </p>
             ) : null}
           </div>

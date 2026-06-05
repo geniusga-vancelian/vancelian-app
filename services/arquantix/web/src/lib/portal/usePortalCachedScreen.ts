@@ -63,11 +63,15 @@ export function usePortalCachedScreen<T>(options: {
   const revalidate = useCallback(
     async (isManualRefresh: boolean) => {
       const hasDisplayedData = dataRef.current !== null
+      const bootstrap = getPortalCacheBootstrap<T>(resolvedCacheKey)
+      const staleWhileDisplayed = hasDisplayedData && !bootstrap.isFresh
 
       if (isManualRefresh) {
         setRefreshing(true)
       } else if (!hasDisplayedData) {
         setLoading(true)
+      } else if (staleWhileDisplayed) {
+        setRefreshing(true)
       }
 
       setError('')

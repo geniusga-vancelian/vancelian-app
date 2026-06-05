@@ -82,7 +82,7 @@ export function PortalSwapFromStep({
                 }
                 title={opt.name}
                 subtitle={`${SWAP_CHAIN_LABELS[opt.chain] ?? opt.chain} · Swap`}
-                amount={`${formatSwapCryptoAmount(opt.balance)} ${opt.asset}`}
+                amount={`${formatSwapCryptoAmount(opt.balance, opt.asset)} ${opt.asset}`}
               />
             ))}
           </AppAccountSummaryList>

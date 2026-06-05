@@ -64,7 +64,7 @@ export function PortalSwapAssetSelector({
                     <span className="inv-sel-row__desc">{chip.desc}</span>
                   </span>
                   <span className="inv-sel-row__bal">
-                    {formatSwapCryptoAmount(opt.balance)} {opt.asset}
+                    {formatSwapCryptoAmount(opt.balance, opt.asset)} {opt.asset}
                   </span>
                 </button>
               )

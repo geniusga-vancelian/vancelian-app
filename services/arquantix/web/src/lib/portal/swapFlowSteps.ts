@@ -19,15 +19,15 @@ export function buildConfirmSteps(
       title: 'Préparation de la route',
       primary: routeLabel,
       secondary: quote.exchange_rate
-        ? `Taux estimé : 1 ${quote.from_asset} ≈ ${formatSwapCryptoAmount(quote.exchange_rate)} ${quote.to_asset}`
+        ? `Taux estimé : 1 ${quote.from_asset} ≈ ${formatSwapCryptoAmount(quote.exchange_rate, quote.to_asset)} ${quote.to_asset}`
         : 'Route optimisée',
       state: routeStepState(executionPhase),
     },
     {
       number: 2,
       title: 'Conversion estimée',
-      primary: `${formatSwapCryptoAmount(quote.amount_in)} ${quote.from_asset} → ≈ ${formatSwapCryptoAmount(quote.estimated_receive)} ${quote.to_asset}`,
-      secondary: `Minimum garanti : ${formatSwapCryptoAmount(quote.estimated_receive_min)} ${quote.to_asset}`,
+      primary: `${formatSwapCryptoAmount(quote.amount_in, quote.from_asset)} ${quote.from_asset} → ≈ ${formatSwapCryptoAmount(quote.estimated_receive, quote.to_asset)} ${quote.to_asset}`,
+      secondary: `Minimum garanti : ${formatSwapCryptoAmount(quote.estimated_receive_min, quote.to_asset)} ${quote.to_asset}`,
       approximate: true,
       state: conversionStepState(executionPhase),
     },
@@ -95,7 +95,7 @@ export function swapConfirmCtaLabel(args: {
 export function formatSwapFeeLine(quote: SwapQuotePayload): string {
   const parts: string[] = []
   if (Number(quote.vancelian_fee) > 0) {
-    parts.push(`${formatSwapCryptoAmount(quote.vancelian_fee)} ${quote.from_asset} (Vancelian)`)
+    parts.push(`${formatSwapCryptoAmount(quote.vancelian_fee, quote.from_asset)} ${quote.from_asset} (Vancelian)`)
   }
 
   const isPrivySponsored = quote.signing_wallet_mode !== 'external_evm'
@@ -120,7 +120,7 @@ export function formatSwapFeeLine(quote: SwapQuotePayload): string {
     const asset = quote.network_fee_asset ?? quote.from_asset
     const maxSaneToken = Number.isFinite(amountIn) && amountIn > 0 ? amountIn * 2 : networkFee
     if (networkFee <= maxSaneToken) {
-      parts.push(`${formatSwapCryptoAmount(quote.network_fee)} ${asset} (network)`)
+      parts.push(`${formatSwapCryptoAmount(quote.network_fee, asset)} (network)`)
     }
   }
 

@@ -37,8 +37,8 @@ export function PortalSwapReviewStep({
   onBack,
 }: Props) {
   const parsed = Number(amount.replace(',', '.'))
-  const payAmount = formatSwapCryptoAmount(parsed > 0 ? parsed : quote.amount_in)
-  const receiveAmount = formatSwapCryptoAmount(quote.estimated_receive)
+  const payAmount = formatSwapCryptoAmount(parsed > 0 ? parsed : quote.amount_in, fromAsset)
+  const receiveAmount = formatSwapCryptoAmount(quote.estimated_receive, toAsset)
   const networkLabel = SWAP_CHAIN_LABELS[quote.from_chain] ?? quote.from_chain
 
   const previewSteps = useMemo(
@@ -56,12 +56,12 @@ export function PortalSwapReviewStep({
     if (quote.exchange_rate) {
       rows.push({
         k: SWAP_REVIEW_UI.exchangeRate,
-        v: `1 ${fromAsset} ≈ ${formatSwapCryptoAmount(quote.exchange_rate)} ${toAsset}`,
+        v: `1 ${fromAsset} ≈ ${formatSwapCryptoAmount(quote.exchange_rate, toAsset)} ${toAsset}`,
       })
     }
     rows.push({
       k: SWAP_REVIEW_UI.minimumReceive,
-      v: `${formatSwapCryptoAmount(quote.estimated_receive_min)} ${toAsset}`,
+      v: `${formatSwapCryptoAmount(quote.estimated_receive_min, toAsset)} ${toAsset}`,
     })
     rows.push({ k: SWAP_REVIEW_UI.vancelianFees, v: SWAP_REVIEW_UI.vancelianFeesWaived, accent: true })
     rows.push({ k: SWAP_REVIEW_UI.networkFees, v: formatSwapFeeLine(quote) })

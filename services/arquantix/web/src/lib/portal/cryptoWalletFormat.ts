@@ -741,13 +741,25 @@ export function formatPerfPct(pct: number | undefined): string | null {
 export function assetPrecisionDisplay(asset: string): number {
   switch (asset.toUpperCase()) {
     case 'BTC':
+    case 'CBBTC':
+    case 'WBTC':
       return 8
     case 'ETH':
+    case 'CBETH':
+    case 'WETH':
+      return 6
+    case 'USDC':
+    case 'EURC':
+    case 'USDT':
       return 6
     case 'SOL':
     case 'XRP':
     case 'ADA':
       return 4
+    case 'LINK':
+    case 'AAVE':
+    case 'UNI':
+      return 6
     default:
       return 6
   }

@@ -1,3 +1,4 @@
+import { assetPrecisionDisplay } from '@/lib/portal/cryptoWalletFormat'
 import {
   SWAP_V1_PILOT_CHAINS,
   SWAP_V1_SAME_CHAIN_ONLY,
@@ -6,12 +7,33 @@ import {
 import type { PortalCryptoPosition } from '@/lib/portal/cryptoWalletTypes'
 import { resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
 
-export function formatSwapCryptoAmount(value: number | string): string {
+/** Décimales d'affichage swap — catalogue API si dispo, sinon précision produit par ticker. */
+export function resolveSwapAssetDecimals(asset: string, catalog?: SwapCatalogAsset[]): number {
+  const symbol = asset.trim().toUpperCase()
+  const fromCatalog = catalog?.find((row) => row.symbol.toUpperCase() === symbol)?.decimals
+  if (fromCatalog != null && fromCatalog > 0) return Math.min(fromCatalog, 18)
+  return assetPrecisionDisplay(symbol)
+}
+
+/**
+ * Montant crypto lisible (jamais en notation scientifique).
+ * Pour les petits montants (< 1), conserve les zéros initiaux jusqu'à la précision de l'actif.
+ */
+export function formatSwapCryptoAmount(
+  value: number | string,
+  asset?: string,
+  catalog?: SwapCatalogAsset[],
+): string {
   const n = typeof value === 'string' ? Number(value.replace(',', '.')) : value
   if (!Number.isFinite(n) || n === 0) return '0'
-  if (n < 0.0001) return n.toExponential(2)
-  if (n < 1) return trimTrailingZeros(n.toFixed(8))
-  return trimTrailingZeros(n.toFixed(6))
+
+  const maxDecimals = asset ? resolveSwapAssetDecimals(asset, catalog) : 8
+
+  if (n >= 1) {
+    return trimTrailingZeros(n.toFixed(Math.min(maxDecimals, 6)))
+  }
+
+  return trimTrailingZeros(n.toFixed(maxDecimals))
 }
 
 function trimTrailingZeros(raw: string): string {

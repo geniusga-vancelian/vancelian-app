@@ -110,7 +110,7 @@ export function buildSwapSuccessSummary(
   if (quote.exchange_rate) {
     rows.push({
       k: 'Taux',
-      v: `1 ${ctx.fromAsset} ≈ ${formatSwapCryptoAmount(quote.exchange_rate)} ${ctx.toAsset}`,
+      v: `1 ${ctx.fromAsset} ≈ ${formatSwapCryptoAmount(quote.exchange_rate, ctx.toAsset)} ${ctx.toAsset}`,
     })
   }
   rows.push({ k: 'Frais Vancelian', v: 'Offerts' })

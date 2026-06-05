@@ -20,7 +20,10 @@ import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletType
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
-import { resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
+import {
+  resolveLiveSwapSourceBalance,
+  resolveSpendableSwapBalance,
+} from '@/lib/portal/swapAmountValidation'
 import {
   buildSwapFromOptions,
   buildSwapToOptions,
@@ -62,7 +65,8 @@ export function PortalSwapFlow() {
   const [quote, setQuote] = useState<SwapQuotePayload | null>(null)
   const [priceChangeNotice, setPriceChangeNotice] = useState<string | null>(null)
 
-  const { data: walletData, loading: walletLoading } = usePortalCachedScreen<PortalCryptoWalletHubPayload>({
+  const { data: walletData, loading: walletLoading, refreshing: walletRefreshing } =
+    usePortalCachedScreen<PortalCryptoWalletHubPayload>({
     cacheKey: 'portal:crypto-wallet',
     url: '/api/portal/crypto-wallet',
     ttlMs: 45_000,
@@ -98,8 +102,8 @@ export function PortalSwapFlow() {
   const swapProcessingContext = useMemo((): SwapProcessingContext | null => {
     if (!quote) return null
     const parsed = Number(amount.replace(',', '.'))
-    const payLabel = formatSwapCryptoAmount(parsed > 0 ? parsed : quote.amount_in)
-    const receiveLabel = `${formatSwapCryptoAmount(quote.estimated_receive)} ${toAsset}`
+    const payLabel = formatSwapCryptoAmount(parsed > 0 ? parsed : quote.amount_in, fromAsset)
+    const receiveLabel = `${formatSwapCryptoAmount(quote.estimated_receive, toAsset)} ${toAsset}`
     return {
       fromAsset,
       toAsset,
@@ -130,9 +134,32 @@ export function PortalSwapFlow() {
     setQuote(null)
   }, [swapChainKey])
 
+  const displaySourceBalance = useMemo(
+    () => resolveLiveSwapSourceBalance(fromAsset, positions, sourceBalance),
+    [fromAsset, positions, sourceBalance],
+  )
+
+  const sourceBalancePending = useMemo(() => {
+    if (!fromAsset) return false
+    const hasPosition = positions.some(
+      (row) => row.asset.toUpperCase() === fromAsset.toUpperCase(),
+    )
+    if (hasPosition) return false
+    return walletLoading || walletRefreshing
+  }, [fromAsset, positions, walletLoading, walletRefreshing])
+
   useEffect(() => {
-    if (!activeSwapChain || !catalog) return
+    if (step !== 'amount' || !fromAsset) return
+    const next = resolveLiveSwapSourceBalance(fromAsset, positions, sourceBalance)
+    if (next !== sourceBalance) setSourceBalance(next)
+  }, [fromAsset, positions, sourceBalance, step])
+
+  useEffect(() => {
+    if (!activeSwapChain || !catalog || walletLoading) return
     if (step !== 'to' && step !== 'from') return
+
+    const shouldWaitForWalletPositions = (balance: number) =>
+      balance <= 0 && positions.length === 0
 
     const applyAmountStep = (args: {
       from: string
@@ -160,12 +187,21 @@ export function PortalSwapFlow() {
         SWAP_DEFAULT_STABLE_ASSET,
       )
       if (fromOpt) {
+        const balance = fromOpt.position
+          ? resolveSpendableSwapBalance(fromOpt.position)
+          : fromOpt.balance
+        if (shouldWaitForWalletPositions(balance)) {
+          setToAsset(urlIntent.toAsset)
+          setToChain(urlIntent.toChain)
+          setStep('from')
+          return
+        }
         applyAmountStep({
           from: fromOpt.asset,
           fromChain: fromOpt.chain,
           to: urlIntent.toAsset,
           toChain: urlIntent.toChain,
-          balance: fromOpt.balance,
+          balance,
         })
       } else {
         setToAsset(urlIntent.toAsset)
@@ -189,12 +225,19 @@ export function PortalSwapFlow() {
         SWAP_DEFAULT_STABLE_ASSET,
       )
       if (toOpt) {
+        const balance = position ? resolveSpendableSwapBalance(position) : 0
+        if (shouldWaitForWalletPositions(balance)) {
+          setFromAsset(urlIntent.fromAsset)
+          setFromChain(urlIntent.fromChain)
+          setStep('to')
+          return
+        }
         applyAmountStep({
           from: urlIntent.fromAsset,
           fromChain: urlIntent.fromChain,
           to: toOpt.asset,
           toChain: toOpt.chain,
-          balance: position ? resolveSpendableSwapBalance(position) : 0,
+          balance,
         })
       } else {
         setFromAsset(urlIntent.fromAsset)
@@ -226,12 +269,21 @@ export function PortalSwapFlow() {
       : null
 
     if (genericFrom && genericTo) {
+      const balance = genericFrom.position
+        ? resolveSpendableSwapBalance(genericFrom.position)
+        : genericFrom.balance
+      if (shouldWaitForWalletPositions(balance)) {
+        setToAsset(genericTo.asset)
+        setToChain(genericTo.chain)
+        setStep('from')
+        return
+      }
       applyAmountStep({
         from: genericFrom.asset,
         fromChain: genericFrom.chain,
         to: genericTo.asset,
         toChain: genericTo.chain,
-        balance: genericFrom.balance,
+        balance,
       })
       return
     }
@@ -250,6 +302,7 @@ export function PortalSwapFlow() {
     sourceAssets,
     step,
     urlIntent,
+    walletLoading,
   ])
 
   const onSelectTo = useCallback(
@@ -423,7 +476,8 @@ export function PortalSwapFlow() {
             toAsset={toAsset}
             fromChain={fromChain}
             toChain={toChain}
-            sourceBalance={sourceBalance}
+            sourceBalance={displaySourceBalance}
+            sourceBalancePending={sourceBalancePending}
             minAmount={fromMinAmount}
             fromOptions={swapFromOptions}
             toOptions={swapToOptions}

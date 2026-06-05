@@ -17,3 +17,16 @@ export function resolveSpendableSwapBalance(position: {
   if (ledger <= 0) return onChain
   return Math.min(ledger, onChain)
 }
+
+/** Solde source swap à jour depuis les positions wallet (évite un state figé à 0). */
+export function resolveLiveSwapSourceBalance(
+  fromAsset: string,
+  positions: Array<{ asset: string; availableBalance?: number; balance?: number; onChainBalance?: number }>,
+  fallbackBalance = 0,
+): number {
+  const needle = fromAsset.trim().toUpperCase()
+  if (!needle) return fallbackBalance
+  const position = positions.find((row) => row.asset.toUpperCase() === needle)
+  if (!position) return fallbackBalance
+  return resolveSpendableSwapBalance(position)
+}

@@ -50,7 +50,7 @@ export function PortalSwapTechDetails({ quote }: Props) {
             <div className="inv-tech__row">
               <span className="inv-tech__k">Rate</span>
               <span className="inv-tech__v">
-                1 {quote.from_asset} ≈ {formatSwapCryptoAmount(quote.exchange_rate)} {quote.to_asset}
+                1 {quote.from_asset} ≈ {formatSwapCryptoAmount(quote.exchange_rate, quote.to_asset)} {quote.to_asset}
               </span>
             </div>
           ) : null}

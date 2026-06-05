@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { isSwapAmountOverPrivyBalance, resolveSpendableSwapBalance } from '@/lib/portal/swapAmountValidation'
+import {
+  isSwapAmountOverPrivyBalance,
+  resolveLiveSwapSourceBalance,
+  resolveSpendableSwapBalance,
+} from '@/lib/portal/swapAmountValidation'
 
 describe('swapAmountValidation', () => {
   it('blocks positive amount when source balance is zero or unknown', () => {
@@ -25,5 +29,16 @@ describe('swapAmountValidation', () => {
     assert.equal(resolveSpendableSwapBalance({ balance: 10, onChainBalance: 38 }), 10)
     assert.equal(resolveSpendableSwapBalance({ balance: 0, onChainBalance: 38 }), 38)
     assert.equal(resolveSpendableSwapBalance({ balance: 50 }), 50)
+  })
+
+  it('resolveLiveSwapSourceBalance reads position and falls back when missing', () => {
+    const positions = [
+      { asset: 'USDC', balance: 120, onChainBalance: 100 },
+      { asset: 'ETH', balance: 2 },
+    ]
+    assert.equal(resolveLiveSwapSourceBalance('USDC', positions, 0), 100)
+    assert.equal(resolveLiveSwapSourceBalance('usdc', positions, 0), 100)
+    assert.equal(resolveLiveSwapSourceBalance('CBBTC', positions, 0), 0)
+    assert.equal(resolveLiveSwapSourceBalance('CBBTC', positions, 42), 42)
   })
 })
