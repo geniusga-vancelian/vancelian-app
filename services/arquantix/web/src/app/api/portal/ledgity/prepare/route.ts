@@ -17,7 +17,9 @@ import { buildLedgityLedgerMetadata } from '@/lib/portal/ledgity/ledgityLedgerMe
 import {
   assertLedgityWithdrawLiquidity,
   readLedgityVaultLiquidityMetrics,
+  readLedgityWithdrawLiquidity,
 } from '@/lib/portal/ledgity/ledgityVaultLiquidity'
+import { assertLedgityWithdrawNotLocked } from '@/lib/portal/ledgity/ledgityVaultLock'
 import { buildLedgityVaultTransactions } from '@/lib/portal/ledgity/ledgityVaultTx'
 import { prepareLedgityTxSchema } from '@/lib/portal/ledgity/ledgityVaultValidation'
 import {
@@ -191,18 +193,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Actif sous-jacent introuvable pour ce vault.' }, { status: 502 })
     }
 
+    let withdrawMode: 'instant' | 'async_request' = 'instant'
     if (parsed.operation === 'withdraw') {
+      const lockState = await assertLedgityWithdrawNotLocked({ vaultAddress })
+      withdrawMode = lockState.withdrawMode === 'async_request' ? 'async_request' : 'instant'
+
       const position = await fetchLedgityVaultPosition({ vaultAddress, walletAddress })
       const assetsInVault = position?.assets ?? '0'
       await assertWithdrawAmountWithinPosition({
         amountRaw: BigInt(amountRaw),
         assetsInVaultRaw: assetsInVault,
       })
-      await assertLedgityWithdrawLiquidity({
-        vaultAddress,
-        walletAddress,
-        requestedAmountRaw: BigInt(amountRaw),
-      })
+
+      if (withdrawMode === 'instant') {
+        const liquidity = await readLedgityWithdrawLiquidity({ vaultAddress, walletAddress })
+        if (
+          liquidity &&
+          liquidity.maxWithdrawRaw > BigInt(0) &&
+          liquidity.maxWithdrawRaw < BigInt(amountRaw)
+        ) {
+          withdrawMode = 'async_request'
+        } else {
+          await assertLedgityWithdrawLiquidity({
+            vaultAddress,
+            walletAddress,
+            requestedAmountRaw: BigInt(amountRaw),
+          })
+        }
+      }
     }
 
     const vaultMetrics = await readLedgityVaultLiquidityMetrics({ vaultAddress, chainId: LEDGITY_CHAIN_ID })
@@ -234,6 +252,7 @@ export async function POST(request: NextRequest) {
       operation: parsed.operation,
       amount: parsed.amount,
       assetDecimals,
+      withdrawMode: parsed.operation === 'withdraw' ? withdrawMode : undefined,
     })
 
     const groupKey = idempotencyKey

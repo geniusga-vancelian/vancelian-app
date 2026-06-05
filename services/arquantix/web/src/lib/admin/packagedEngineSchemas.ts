@@ -17,3 +17,7 @@ export type CreateLendingFromPackagedBody = z.infer<typeof createLendingFromPack
 export const linkLendingBodySchema = z.object({
   lending_product_id: z.string().uuid(),
 })
+
+export const linkVaultBodySchema = z.object({
+  portal_config_id: z.string().min(1).max(64),
+})

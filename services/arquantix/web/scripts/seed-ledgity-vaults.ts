@@ -1,5 +1,7 @@
 /**
- * Seed vault configs Ledgity publiés (lyUSDC, lyEURC sur Base).
+ * Seed vault configs ERC-4626 publiés sur Base :
+ * - Vancelian/Arquantix : vfEUR, axUSD, axDUBAI, axBALI (mainnet CDC v0.3)
+ * - Ledgity natifs : lyUSDC, lyEURC
  *
  * Usage :
  *   npm run ledgity:seed-vaults

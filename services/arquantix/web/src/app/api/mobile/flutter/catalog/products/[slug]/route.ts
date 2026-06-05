@@ -19,6 +19,7 @@ import {
   resolveVaultPresentation,
   visibilityToApi,
 } from '@/lib/catalog/packagedCatalogHelpers'
+import { fetchVaultEngineSnapshotForCatalog } from '@/lib/catalog/vaultEngineCatalogSnapshot'
 import { normalizeVaultBuilderSectionDataRoot } from '@/lib/vault/normalizeVaultModules'
 import {
   appendNormalizedPortfolioModules,
@@ -141,12 +142,13 @@ export async function GET(
     }
 
     let snapshot: Record<string, unknown> | null = null
-    if (
-      includeEngine &&
-      packaged.engineType === 'LENDING' &&
-      packaged.engineReferenceId?.trim()
-    ) {
-      snapshot = await fetchLendingEngineSnapshot(packaged.engineReferenceId.trim())
+    if (includeEngine && packaged.engineReferenceId?.trim()) {
+      const ref = packaged.engineReferenceId.trim()
+      if (packaged.engineType === 'LENDING') {
+        snapshot = await fetchLendingEngineSnapshot(ref)
+      } else if (packaged.engineType === 'VAULT_ENGINE') {
+        snapshot = await fetchVaultEngineSnapshotForCatalog(ref)
+      }
     }
 
     const vaultPageSlugSet = new Set<string>()

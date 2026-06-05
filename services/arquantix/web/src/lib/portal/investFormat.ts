@@ -1,14 +1,28 @@
-import type { PortalExclusiveOffer, PortalInvestPayload } from '@/lib/portal/investTypes'
+import type {
+  PortalExclusiveOffer,
+  PortalInvestPayload,
+  PortalVaultProduct,
+} from '@/lib/portal/investTypes'
 import { normalizeInvestCategorySlug } from '@/lib/portal/investCategoryFilter'
 
 type CatalogEngineSnapshot = {
   supply_apr?: number | string | null
+  user_apy_bps?: number | string | null
   current_raised?: number | string | null
   target_size?: number | string | null
   progress_pct?: number | string | null
+  liquidity_pct?: number | string | null
+  tvl_usd?: number | string | null
   investors_count?: number | string | null
   status?: string | null
   duration_months?: number | string | null
+  vault_address?: string | null
+  integration_mode?: string | null
+  portal_config_id?: string | null
+  lock_active?: boolean | null
+  lock_status_label?: string | null
+  operation_end_at?: string | null
+  withdraw_mode?: string | null
 }
 
 type CatalogProductRow = {
@@ -18,7 +32,10 @@ type CatalogProductRow = {
   subtitle?: string | null
   coverUrl?: string | null
   category?: string | null
+  productType?: string | null
   engine?: {
+    type?: string | null
+    referenceId?: string | null
     snapshot?: CatalogEngineSnapshot | null
   } | null
 }
@@ -52,15 +69,28 @@ function displayCategory(slug: string | null | undefined): string {
     .join(' ')
 }
 
+function resolveCatalogApy(snap: CatalogEngineSnapshot): number {
+  const supplyApr = toNumber(snap.supply_apr)
+  if (supplyApr > 0) return supplyApr
+  const bps = toNumber(snap.user_apy_bps)
+  return bps > 0 ? bps / 100 : 0
+}
+
 function mapOffer(row: CatalogProductRow): PortalExclusiveOffer {
   const snap = row.engine?.snapshot ?? {}
-  const raised = toNumber(snap.current_raised)
-  const target = toNumber(snap.target_size)
+  const raised = toNumber(snap.current_raised, toNumber(snap.tvl_usd))
+  const target = toNumber(snap.target_size, raised)
   const progressPct = Math.min(
     100,
-    Math.max(0, toNumber(snap.progress_pct, target > 0 ? (raised / target) * 100 : 0)),
+    Math.max(
+      0,
+      toNumber(
+        snap.progress_pct,
+        toNumber(snap.liquidity_pct, target > 0 ? (raised / target) * 100 : 0),
+      ),
+    ),
   )
-  const apy = toNumber(snap.supply_apr)
+  const apy = resolveCatalogApy(snap)
   const status = (snap.status ?? '').toString().toLowerCase()
   const isFunded = progressPct >= 100 || status.includes('funded') || status.includes('closed')
   const slug = row.slug.trim()
@@ -83,11 +113,45 @@ function mapOffer(row: CatalogProductRow): PortalExclusiveOffer {
     durationMonths: snap.duration_months != null ? Math.floor(toNumber(snap.duration_months)) : null,
     isFunded,
     href: slug ? `/app/invest/${encodeURIComponent(slug)}` : '/app/invest',
+    lockActive: snap.lock_active === true,
+    lockStatusLabel:
+      typeof snap.lock_status_label === 'string' ? snap.lock_status_label : null,
+    operationEndAt:
+      typeof snap.operation_end_at === 'string' ? snap.operation_end_at : null,
+    withdrawMode:
+      snap.withdraw_mode === 'instant' ||
+      snap.withdraw_mode === 'async_request' ||
+      snap.withdraw_mode === 'blocked'
+        ? snap.withdraw_mode
+        : null,
   }
 }
 
-export function buildPortalInvestPayload(products: CatalogProductRow[]): PortalInvestPayload {
+function mapVaultProduct(row: CatalogProductRow): PortalVaultProduct {
+  const base = mapOffer(row)
+  const snap = row.engine?.snapshot ?? {}
+  const engineType = row.engine?.type ?? null
   return {
-    offers: products.map(mapOffer),
+    ...base,
+    productType: 'vault_simple',
+    title: base.title === 'Exclusive offer' ? row.title?.trim() || 'Vault' : base.title,
+    category: displayCategory(row.category) || 'Vault',
+    vaultEngineConfigId:
+      engineType === 'vault_engine'
+        ? (row.engine?.referenceId?.trim() || snap.portal_config_id?.toString().trim() || null)
+        : null,
+    vaultAddress: snap.vault_address?.toString().trim() || null,
+    integrationMode: snap.integration_mode?.toString().trim() || null,
+    href: row.slug?.trim() ? `/app/invest/${encodeURIComponent(row.slug.trim())}` : '/app/invest',
+  }
+}
+
+export function buildPortalInvestPayload(
+  exclusiveOffers: CatalogProductRow[],
+  vaultProducts: CatalogProductRow[] = [],
+): PortalInvestPayload {
+  return {
+    offers: exclusiveOffers.map(mapOffer),
+    vaults: vaultProducts.map(mapVaultProduct),
   }
 }

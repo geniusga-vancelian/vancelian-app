@@ -12,11 +12,12 @@ import { getLocaleOrDefault, defaultLocale, type Locale } from '@/config/locales
 import { prisma } from '@/lib/prisma'
 import type { PrismaClient } from '@prisma/client'
 
+import type { VaultEngineSnapshot } from '@/lib/admin/platformVaultEngineTypes'
 import {
   VAULT_BUILDER_TEMPLATE,
   VAULT_SECTION_KEY,
-  resolveMediaUrl,
-} from '@/lib/catalog/packagedCatalogHelpers'
+} from '@/lib/catalog/packagedCatalogConstants'
+import { resolveMediaUrl } from '@/lib/catalog/packagedCatalogHelpers'
 import { resolvePageSeoFields } from '@/lib/cms/resolvePageI18nMetadata'
 import { resolveVaultSectionContentForExclusiveOfferPayload } from '@/lib/cms/resolveVaultSectionContent'
 import { normalizeVaultModulesFromSectionData } from '@/lib/vault/normalizeVaultModules'
@@ -112,6 +113,8 @@ export type ExclusiveOfferVaultPayload = {
   packagedProductId: string | null
   productType: PackagedProductType | null
   lending: LendingSnapshot | null
+  /** Moteur vault plateforme (Morpho / Ledgity) — métriques on-chain. */
+  vaultEngine: VaultEngineSnapshot | null
   /**
    * Titre / sous-titre hero (module `TitlePage` en tête si présent — aligné hero-secondary DS),
    * sinon métadonnées Page CMS.
@@ -407,6 +410,52 @@ function parseDocumentEntriesFromVaultContent(c: Record<string, unknown>): Array
 /**
  * Résout les IDs média du module `DocumentsListModule` en URLs de téléchargement + libellés pour le rendu web.
  */
+function formatUsdDisplay(value: number | null, locale: Locale): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function vaultEngineToFundingSnapshot(
+  snap: VaultEngineSnapshot,
+  locale: Locale,
+): LendingSnapshot {
+  const supplyAprPct = snap.supply_apr ?? 0
+  const tvl = snap.tvl_usd
+  const progressPct = snap.liquidity_pct ?? 0
+  const fr = locale === 'fr'
+  const rows: KeyInformationRow[] = [
+    {
+      label: fr ? 'Rendement (APY)' : 'Yield (APY)',
+      value: formatFundingAprDisplay(supplyAprPct, locale),
+    },
+    {
+      label: fr ? 'TVL vault' : 'Vault TVL',
+      value: formatUsdDisplay(tvl, locale),
+    },
+  ]
+  if (snap.curator) {
+    rows.push({
+      label: fr ? 'Curateur' : 'Curator',
+      value: snap.curator,
+    })
+  }
+  return {
+    asset: snap.asset_symbol,
+    supplyAprPct,
+    raised: formatUsdDisplay(tvl, locale),
+    target: formatUsdDisplay(tvl, locale),
+    progressPct,
+    status: snap.status,
+    minTicket: null,
+    maxTicket: null,
+    keyInformationRows: rows,
+  }
+}
+
 function formatFundingAprDisplay(supplyAprPct: number, locale: Locale): string {
   if (!Number.isFinite(supplyAprPct)) return ''
   if (locale === 'fr') {
@@ -602,7 +651,11 @@ export async function getExclusiveOfferVaultPayload(
     include: { lendingPoolProduct: true },
   })
 
-  if (packaged && packaged.productType === PackagedProductType.EXCLUSIVE_OFFER) {
+  if (
+    packaged &&
+    (packaged.productType === PackagedProductType.EXCLUSIVE_OFFER ||
+      packaged.productType === PackagedProductType.VAULT_SIMPLE)
+  ) {
     if (!options?.allowExclusiveOfferAdminPreview) {
       const skipPublicProductGate = process.env.NODE_ENV === 'development'
       if (!skipPublicProductGate) {
@@ -689,6 +742,7 @@ export async function getExclusiveOfferVaultPayload(
   }
 
   let lending: LendingSnapshot | null = null
+  let vaultEngine: VaultEngineSnapshot | null = null
   const lpp = packaged?.lendingPoolProduct
   if (lpp) {
     const supplyAprPct = Number(lpp.supplyAprBps) / 100
@@ -705,6 +759,15 @@ export async function getExclusiveOfferVaultPayload(
       minTicket: lpp.minTicket != null ? String(lpp.minTicket) : null,
       maxTicket: lpp.maxTicket != null ? String(lpp.maxTicket) : null,
       keyInformationRows: buildKeyInformationRows(lpp, locale),
+    }
+  } else if (
+    packaged?.engineType === 'VAULT_ENGINE' &&
+    packaged.engineReferenceId?.trim()
+  ) {
+    const { fetchVaultEngineSnapshot } = await import('@/lib/admin/platformVaultEngine')
+    vaultEngine = await fetchVaultEngineSnapshot(packaged.engineReferenceId.trim())
+    if (vaultEngine) {
+      lending = vaultEngineToFundingSnapshot(vaultEngine, locale)
     }
   }
 
@@ -727,6 +790,7 @@ export async function getExclusiveOfferVaultPayload(
     packagedProductId: packaged?.id ?? null,
     productType: packaged?.productType ?? null,
     lending,
+    vaultEngine,
     heroTitle,
     heroSubtitle,
     tagPills: [],

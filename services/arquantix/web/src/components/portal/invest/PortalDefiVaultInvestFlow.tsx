@@ -237,8 +237,14 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
 
   const depositsDisabled = Boolean(beta?.depositsDisabled)
   const withdrawsDisabled = Boolean(beta?.withdrawsDisabled)
+  const ledgityLockBlocked =
+    isLedgityVault(vault) && !isInvest && Boolean(vault.lockActive)
+  const ledgityLockLabel =
+    isLedgityVault(vault) && vault.lockStatusLabel?.trim()
+      ? vault.lockStatusLabel.trim()
+      : 'Cette offre exclusive est en période de lock-up. Les retraits seront disponibles à la maturité.'
   const depositBlocked = isInvest && depositsDisabled
-  const withdrawBlocked = !isInvest && withdrawsDisabled
+  const withdrawBlocked = !isInvest && (withdrawsDisabled || ledgityLockBlocked)
   const operationBlocked = depositBlocked || withdrawBlocked
   const betaLimits = beta?.limits ?? null
 
@@ -408,7 +414,9 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
             {depositBlocked
               ? beta?.message ??
                 'Les dépôts sont temporairement suspendus. Vous pouvez toujours retirer vos fonds.'
-              : 'Les retraits sont temporairement suspendus.'}
+              : ledgityLockBlocked
+                ? ledgityLockLabel
+                : 'Les retraits sont temporairement suspendus.'}
           </p>
         ) : beta?.message && !depositBlocked ? (
           <p className="inv-alert inv-alert--info">{beta.message}</p>

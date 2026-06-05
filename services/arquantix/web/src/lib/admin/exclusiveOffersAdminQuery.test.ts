@@ -33,10 +33,18 @@ describe('exclusiveOffersAdminQuery', () => {
     assert.ok(and.some((x) => (x as { commercialStatus?: string }).commercialStatus === 'PUBLISHED'))
     assert.ok(and.some((x) => (x as { visibility?: string }).visibility === 'PUBLIC'))
     assert.ok(
-      and.some(
-        (x) =>
-          (x as { lendingPoolProduct?: { isNot: null } }).lendingPoolProduct?.isNot === null
-      )
+      and.some((x) => {
+        const or = (x as { OR?: unknown[] }).OR
+        return (
+          Array.isArray(or) &&
+          or.some(
+            (part) =>
+              (part as { engineType?: string }).engineType === 'VAULT_ENGINE' ||
+              (part as { lendingPoolProduct?: { isNot: null } }).lendingPoolProduct?.isNot ===
+                null,
+          )
+        )
+      }),
     )
   })
 
@@ -44,9 +52,13 @@ describe('exclusiveOffersAdminQuery', () => {
     const w = buildExclusiveOffersWhere({ engineLinked: 'unlinked' })
     const and = w.AND as Record<string, unknown>[]
     assert.ok(
-      and.some(
-        (x) => (x as { lendingPoolProduct?: null }).lendingPoolProduct === null
-      )
+      and.some((x) => {
+        const inner = (x as { AND?: unknown[] }).AND
+        return (
+          Array.isArray(inner) &&
+          inner.some((part) => (part as { lendingPoolProduct?: null }).lendingPoolProduct === null)
+        )
+      }),
     )
   })
 

@@ -25,6 +25,7 @@ type SerializedPackaged = {
   engineType: string | null
   engineReferenceId: string | null
   lendingEngineLinked: boolean
+  vaultEngineLinked: boolean
   updatedAt: string
   publishedAt: string | null
 }
@@ -52,6 +53,7 @@ function serializePackagedProduct(pp: {
   publishedAt: Date | null
   updatedAt: Date
   lendingPoolProduct: { id: string } | null
+  // engineType / engineReferenceId requis pour vaultEngineLinked
 }): SerializedPackaged {
   return {
     id: pp.id,
@@ -66,6 +68,7 @@ function serializePackagedProduct(pp: {
     engineType: pp.engineType,
     engineReferenceId: pp.engineReferenceId,
     lendingEngineLinked: pp.lendingPoolProduct != null,
+    vaultEngineLinked: pp.engineType === 'VAULT_ENGINE' && Boolean(pp.engineReferenceId?.trim()),
     updatedAt: pp.updatedAt.toISOString(),
     publishedAt: pp.publishedAt ? pp.publishedAt.toISOString() : null,
   }
@@ -155,6 +158,13 @@ export async function PUT(
           'Ce produit packagé est lié au moteur lending. Détachez la liaison (phase 5) avant de désactiver.',
           409,
           { code: 'LENDING_LINKED' }
+        )
+      }
+      if (existing.engineType === 'VAULT_ENGINE' && existing.engineReferenceId?.trim()) {
+        return jsonError(
+          'Ce produit packagé est connecté à un vault plateforme. Déconnectez le vault avant de désactiver.',
+          409,
+          { code: 'VAULT_ENGINE_LINKED' }
         )
       }
       await prisma.packagedProduct.delete({ where: { id: existing.id } })

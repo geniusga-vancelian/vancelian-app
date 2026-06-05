@@ -1,7 +1,7 @@
 import { ContentStatus } from '@prisma/client'
 import type { Locale } from '@/config/locales'
 import { defaultLocale, supportedLocales } from '@/config/locales'
-import { VAULT_BUILDER_TEMPLATE } from '@/lib/catalog/packagedCatalogHelpers'
+import { VAULT_BUILDER_TEMPLATE } from '@/lib/catalog/packagedCatalogConstants'
 
 /**
  * Niveau éditorial par locale (Lot 6) — basé sur SectionContent PUBLISHED + titres PageI18n.

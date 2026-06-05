@@ -26,6 +26,7 @@ import { type VaultLocaleLayerInfo } from '@/lib/admin/vaultLocaleSectionStatus'
 import { toastError, toastSuccess, toastWarning } from '@/lib/admin/toast'
 import { isValidSlug, slugify } from '@/lib/utils/slugify'
 import { PackagedEngineLendingSection } from '@/components/admin/PackagedEngineLendingSection'
+import { PackagedEngineVaultSection } from '@/components/admin/PackagedEngineVaultSection'
 import {
   buildProductRegistryDraft,
   PackagedProductSettingsPanel,
@@ -150,6 +151,7 @@ interface AdminPackagedProductView {
   engineType: string | null
   engineReferenceId: string | null
   lendingEngineLinked: boolean
+  vaultEngineLinked: boolean
   updatedAt: string
   publishedAt: string | null
 }
@@ -893,9 +895,17 @@ function AdminVaultBuilderPageInner() {
     )
   }, [activeVaultLayer])
 
-  const vaultLendingSectionSummary = useMemo(() => {
+  const packagedProductType =
+    productDraft?.productType ?? details?.packagedProduct?.productType ?? 'VAULT_SIMPLE'
+
+  const isVaultEngineEligibleProduct =
+    packagedProductType === 'VAULT_SIMPLE' || packagedProductType === 'EXCLUSIVE_OFFER'
+
+  const vaultEngineSectionSummary = useMemo(() => {
     if (!details?.packagedProduct) return 'aucun produit packagé'
-    return details.packagedProduct.lendingEngineLinked ? 'moteur associé' : 'moteur non associé'
+    if (details.packagedProduct.vaultEngineLinked) return 'vault connecté'
+    if (details.packagedProduct.lendingEngineLinked) return 'lending legacy'
+    return 'aucun moteur'
   }, [details?.packagedProduct])
 
   const promoVideoSectionSummary = useMemo(() => {
@@ -2323,21 +2333,32 @@ function AdminVaultBuilderPageInner() {
               </div>
 
               <CollapsibleAdminSection
-                title="Moteur lending & pool"
-                summary={vaultLendingSectionSummary}
+                title={isVaultEngineEligibleProduct ? 'Moteur vault (plateforme)' : 'Moteur lending & pool'}
+                summary={vaultEngineSectionSummary}
                 icon={<Landmark className="h-3.5 w-3.5" />}
                 defaultOpen={false}
               >
-              <PackagedEngineLendingSection
-                packagedProductId={details.packagedProduct?.id ?? null}
-                productType={
-                  productDraft?.productType ?? details.packagedProduct?.productType ?? 'VAULT_SIMPLE'
-                }
-                hasPackagedRow={Boolean(details.packagedProduct)}
-                onRefresh={async () => {
-                  if (selectedSlug) await reloadVaultDetails(selectedSlug)
-                }}
-              />
+                {isVaultEngineEligibleProduct ? (
+                  <PackagedEngineVaultSection
+                    packagedProductId={details.packagedProduct?.id ?? null}
+                    productType={packagedProductType}
+                    hasPackagedRow={Boolean(details.packagedProduct)}
+                    onRefresh={async () => {
+                      if (selectedSlug) await reloadVaultDetails(selectedSlug)
+                    }}
+                  />
+                ) : (
+                  <PackagedEngineLendingSection
+                    packagedProductId={details.packagedProduct?.id ?? null}
+                    productType={
+                      productDraft?.productType ?? details.packagedProduct?.productType ?? 'VAULT_SIMPLE'
+                    }
+                    hasPackagedRow={Boolean(details.packagedProduct)}
+                    onRefresh={async () => {
+                      if (selectedSlug) await reloadVaultDetails(selectedSlug)
+                    }}
+                  />
+                )}
               </CollapsibleAdminSection>
 
               <VaultModulesSection

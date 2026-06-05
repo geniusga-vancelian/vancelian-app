@@ -14,16 +14,34 @@ export async function GET(request: NextRequest) {
 
     const origin = resolvePortalBffOrigin(request.nextUrl.origin)
     const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
-    const url = `${origin}/api/mobile/flutter/catalog/products?type=exclusive_offer&locale=${encodeURIComponent(locale)}&include_engine_data=true&limit=50`
+    const catalogBase = `${origin}/api/mobile/flutter/catalog/products`
+    const catalogQs = `locale=${encodeURIComponent(locale)}&include_engine_data=true&limit=50`
+    const [eoRes, vaultRes] = await Promise.all([
+      fetch(`${catalogBase}?type=exclusive_offer&${catalogQs}`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(20000),
+      }),
+      fetch(`${catalogBase}?type=vault_simple&${catalogQs}`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(20000),
+      }),
+    ])
 
-    const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
-    const json = await res.json().catch(() => null)
-    if (!res.ok) {
-      return NextResponse.json(json ?? { error: 'upstream_error' }, { status: res.status })
+    const eoJson = await eoRes.json().catch(() => null)
+    const vaultJson = await vaultRes.json().catch(() => null)
+    if (!eoRes.ok) {
+      return NextResponse.json(eoJson ?? { error: 'upstream_error' }, { status: eoRes.status })
+    }
+    if (!vaultRes.ok) {
+      return NextResponse.json(vaultJson ?? { error: 'upstream_error' }, { status: vaultRes.status })
     }
 
-    const products = (json as { products?: unknown[] })?.products ?? []
-    const payload: PortalInvestPayload = buildPortalInvestPayload(products as never[])
+    const exclusiveOffers = (eoJson as { products?: unknown[] })?.products ?? []
+    const vaultProducts = (vaultJson as { products?: unknown[] })?.products ?? []
+    const payload: PortalInvestPayload = buildPortalInvestPayload(
+      exclusiveOffers as never[],
+      vaultProducts as never[],
+    )
 
     return NextResponse.json(payload)
   } catch (error) {

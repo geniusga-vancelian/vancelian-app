@@ -4,7 +4,11 @@ import {
   formatEarnApyFromBps,
   formatEarnTokenAmount,
 } from '@/lib/portal/morphoVaultFormat'
-import { normalizeVaultAddress } from '@/lib/portal/ledgity/ledgityConstants'
+import {
+  normalizeVaultAddress,
+  resolveKnownLedgityVaultAsset,
+} from '@/lib/portal/ledgity/ledgityConstants'
+import type { LedgityVaultLockState } from '@/lib/portal/ledgity/ledgityVaultLock'
 import type {
   LedgityVaultPositionRow,
   PortalLedgityCatalogVault,
@@ -22,11 +26,14 @@ function apyDecimalToBps(value: number | null | undefined): number | null {
 export function mergeLedgityVaultConfigWithCatalog(
   config: PortalMorphoVaultConfig,
   catalog?: PortalLedgityCatalogVault | null,
+  lockState?: LedgityVaultLockState | null,
 ): PortalLedgityVaultDetails {
   const vaultAddress = config.vaultAddress
   const name = config.label?.trim() || catalog?.name || 'Vault Ledgity'
   const description = config.description?.trim() || catalog?.description || null
-  const asset = catalog?.asset ?? { address: '', symbol: 'USDC', decimals: 6 }
+  const asset =
+    catalog?.asset ??
+    resolveKnownLedgityVaultAsset(vaultAddress) ?? { address: '', symbol: 'USDC', decimals: 6 }
 
   return {
     id: normalizeVaultAddress(vaultAddress),
@@ -44,6 +51,11 @@ export function mergeLedgityVaultConfigWithCatalog(
     description,
     curator: config.curator ?? catalog?.curator ?? null,
     listed: catalog?.listed,
+    vaultProfile: lockState?.profile,
+    lockActive: lockState?.lockActive,
+    operationEndAt: lockState?.operationEndAt ?? null,
+    withdrawMode: lockState?.withdrawMode,
+    lockStatusLabel: lockState?.lockStatusLabel ?? null,
   }
 }
 

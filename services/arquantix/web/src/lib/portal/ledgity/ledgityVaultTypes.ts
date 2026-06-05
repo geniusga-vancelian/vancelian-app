@@ -1,4 +1,8 @@
 import type { PortalLedgityIntegrationMode } from '@/lib/portal/ledgity/ledgityConstants'
+import type {
+  LedgityVaultProfile,
+  LedgityVaultWithdrawMode,
+} from '@/lib/portal/ledgity/ledgityVaultProfiles'
 
 export type PortalLedgityAsset = {
   address: string
@@ -23,6 +27,11 @@ export type PortalLedgityVaultDetails = {
   description?: string | null
   curator?: string | null
   listed?: boolean
+  vaultProfile?: LedgityVaultProfile
+  lockActive?: boolean
+  operationEndAt?: string | null
+  withdrawMode?: LedgityVaultWithdrawMode
+  lockStatusLabel?: string | null
 }
 
 export type PortalLedgityVaultPosition = {
@@ -103,6 +112,10 @@ export type PortalLedgityCatalogVault = {
   liquidityUsd?: number | null
   curator?: string | null
   description?: string | null
+  lockState?: {
+    operationEndDateUnix?: string | null
+    withdrawalRequestsEnabled?: boolean
+  }
 }
 
 export type LedgityVaultPositionRow = {

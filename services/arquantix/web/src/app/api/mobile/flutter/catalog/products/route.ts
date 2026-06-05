@@ -13,6 +13,7 @@ import {
   resolveVaultPresentation,
   visibilityToApi,
 } from '@/lib/catalog/packagedCatalogHelpers'
+import { fetchVaultEngineSnapshotForCatalog } from '@/lib/catalog/vaultEngineCatalogSnapshot'
 import { galleryExclusiveOfferCommercialStatuses } from '@/lib/cms/exclusiveOfferGallery'
 import { resolveRequestPublicOrigin } from '@/lib/http/resolveRequestPublicOrigin'
 
@@ -71,14 +72,16 @@ export async function GET(request: NextRequest) {
           publicOrigin,
         })
         let snapshot: Record<string, unknown> | null | undefined
-        if (
-          includeEngine &&
-          row.engineType === 'LENDING' &&
-          row.engineReferenceId?.trim()
-        ) {
-          snapshot =
-            (await fetchLendingEngineSnapshot(row.engineReferenceId.trim())) ??
-            undefined
+        if (includeEngine && row.engineReferenceId?.trim()) {
+          if (row.engineType === 'LENDING') {
+            snapshot =
+              (await fetchLendingEngineSnapshot(row.engineReferenceId.trim())) ??
+              undefined
+          } else if (row.engineType === 'VAULT_ENGINE') {
+            snapshot =
+              (await fetchVaultEngineSnapshotForCatalog(row.engineReferenceId.trim())) ??
+              undefined
+          }
         }
         return {
           id: row.id,

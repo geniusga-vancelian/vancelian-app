@@ -2,8 +2,10 @@ import type { Address } from 'viem'
 
 import { createBasePublicClient } from '@/lib/blockchain/baseRpcProvider'
 import {
+  KNOWN_LEDGITY_VAULT_REGISTRY,
   LEDGITY_CHAIN_ID,
   normalizeVaultAddress,
+  resolveLedgityShareSymbol,
 } from '@/lib/portal/ledgity/ledgityConstants'
 import { isLedgityVaultsEnabled } from '@/lib/portal/ledgity/ledgityConfig'
 import { isLedgityLocalSandboxEnabled } from '@/lib/portal/ledgity/ledgityLocalSandboxConfig'
@@ -134,33 +136,42 @@ export async function fetchLedgityVaultCatalog(args: {
   }
 
   if (!isLedgityVaultsEnabled()) {
-    return addresses.map((address) => ({
-      address,
-      name: 'Vault Ledgity',
-      symbol: 'vault',
-      listed: true,
-      asset: { address: '', symbol: 'USDC', decimals: 6 },
-      netApy: null,
-      pricePerShare: null,
-      tvlUsd: null,
-      liquidityUsd: null,
-    }))
+    return addresses.map((address) => {
+      const known = KNOWN_LEDGITY_VAULT_REGISTRY[normalizeVaultAddress(address)]
+      const asset = known?.asset ?? { address: '', symbol: 'USDC', decimals: 6 }
+      return {
+        address,
+        name: 'Vault ERC-4626',
+        symbol: known?.shareSymbol ?? 'vault',
+        listed: true,
+        asset,
+        netApy: null,
+        pricePerShare: null,
+        tvlUsd: null,
+        liquidityUsd: null,
+      }
+    })
   }
 
   const catalogs: PortalLedgityCatalogVault[] = []
   for (const address of addresses) {
     const metrics = await readLedgityVaultMetrics({ vaultAddress: address, chainId: args.chainId })
     if (!metrics) {
+      const known = KNOWN_LEDGITY_VAULT_REGISTRY[normalizeVaultAddress(address)]
+      const asset = known?.asset ?? { address: '', symbol: 'USDC', decimals: 6 }
+      const sandboxMeta = getSandboxMockVaultCatalog(address)
       catalogs.push({
         address,
-        name: 'Vault Ledgity',
-        symbol: 'vault',
+        name: sandboxMeta?.name ?? 'Vault ERC-4626',
+        symbol: sandboxMeta?.symbol ?? known?.shareSymbol ?? 'vault',
         listed: true,
-        asset: { address: '', symbol: 'USDC', decimals: 6 },
-        netApy: null,
-        pricePerShare: null,
-        tvlUsd: null,
-        liquidityUsd: null,
+        asset,
+        netApy: sandboxMeta?.netApy ?? null,
+        pricePerShare: sandboxMeta?.pricePerShare ?? null,
+        tvlUsd: sandboxMeta?.tvlUsd ?? null,
+        liquidityUsd: sandboxMeta?.liquidityUsd ?? null,
+        curator: sandboxMeta?.curator ?? null,
+        description: sandboxMeta?.description ?? null,
       })
       continue
     }
@@ -168,8 +179,8 @@ export async function fetchLedgityVaultCatalog(args: {
     const sandboxMeta = getSandboxMockVaultCatalog(address)
     catalogs.push({
       address,
-      name: sandboxMeta?.name ?? `Ledgity ${metrics.asset.symbol}`,
-      symbol: sandboxMeta?.symbol ?? `ly${metrics.asset.symbol}`,
+      name: sandboxMeta?.name ?? `Vault ${metrics.asset.symbol}`,
+      symbol: sandboxMeta?.symbol ?? resolveLedgityShareSymbol(address, metrics.asset.symbol),
       listed: true,
       asset: metrics.asset,
       netApy: sandboxMeta?.netApy ?? null,

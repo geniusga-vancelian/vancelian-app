@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { fetchVaultEngineSnapshot } from '@/lib/admin/platformVaultEngine'
 import { getSessionFromCookie } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildBackendUrl } from '@/lib/backend'
@@ -80,6 +81,7 @@ export async function GET(
     }
 
     let lendingSnapshot: Record<string, unknown> | null = null
+    let vaultEngineSnapshot: Record<string, unknown> | null = null
     const ref = pp.engineReferenceId
     if (pp.engineType === 'LENDING' && ref) {
       try {
@@ -93,6 +95,10 @@ export async function GET(
         lendingSnapshot = null
       }
     }
+    if (pp.engineType === 'VAULT_ENGINE' && ref?.trim()) {
+      const snap = await fetchVaultEngineSnapshot(ref.trim())
+      vaultEngineSnapshot = snap ? (snap as unknown as Record<string, unknown>) : null
+    }
 
     return NextResponse.json({
       packagedProductId: pp.id,
@@ -101,6 +107,7 @@ export async function GET(
       engineReferenceId: pp.engineReferenceId,
       lendingPoolProduct: serializeLpp(pp.lendingPoolProduct),
       lendingSnapshot,
+      vaultEngineSnapshot,
     })
   } catch (error) {
     console.error('[packaged-products/engine GET]', error)

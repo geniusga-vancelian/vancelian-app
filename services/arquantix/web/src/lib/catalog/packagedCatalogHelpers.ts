@@ -12,8 +12,12 @@ import { getBackendBaseUrl } from '@/lib/backend'
 import { getSiteOrigin } from '@/lib/metadata/siteOrigin'
 import { resolvePortalAppUrl } from '@/lib/wallet/externalWalletConstants'
 import { resolveVaultSectionContentForCatalog } from '@/lib/cms/resolveVaultSectionContent'
-import { getPresignedUrl } from '@/lib/storage/storageClient'
+import { resolveMedia } from '@/lib/storage/media'
 import type { PrismaClient } from '@prisma/client'
+import {
+  CATALOG_DEFAULT_LOCALE,
+  VAULT_SECTION_KEY,
+} from '@/lib/catalog/packagedCatalogConstants'
 
 function isInternalBindHost(host: string): boolean {
   const hostname = host.split(':')[0]?.trim().toLowerCase() ?? ''
@@ -57,15 +61,13 @@ export function absolutizeMediaUrlForApiClient(
   return `${base.replace(/\/$/, '')}${path}`
 }
 
-export const VAULT_BUILDER_TEMPLATE = 'vault_builder'
-export const VAULT_SECTION_KEY = 'vault_builder_v1'
-
-/** Page CMS gabarit détail offre exclusive (slug réservé — pas une offre publique). */
-export const EXCLUSIVE_OFFER_GABARIT_SLUG = 'exclusive-offer'
-export const EXCLUSIVE_OFFER_GABARIT_TEMPLATE = 'exclusive_offer'
-
-/** Locale par défaut pour section_contents (contenu CMS unique EN pour l'instant). */
-export const CATALOG_DEFAULT_LOCALE = 'en'
+export {
+  CATALOG_DEFAULT_LOCALE,
+  EXCLUSIVE_OFFER_GABARIT_SLUG,
+  EXCLUSIVE_OFFER_GABARIT_TEMPLATE,
+  VAULT_BUILDER_TEMPLATE,
+  VAULT_SECTION_KEY,
+} from '@/lib/catalog/packagedCatalogConstants'
 
 export function parseProductTypeParam(
   raw: string | null,
@@ -188,20 +190,15 @@ export function extractCoverFromVaultData(data: unknown): string | null {
 }
 
 export async function resolveMediaUrl(
-  prisma: PrismaClient,
+  _prisma: PrismaClient,
   mediaId: string | null | undefined,
   opts?: { publicOrigin?: string | null },
 ): Promise<string | null> {
-  if (!mediaId) return null
-  const media = await prisma.media.findUnique({ where: { id: mediaId } })
-  if (!media) return null
-  let out: string | null = null
-  try {
-    out = await getPresignedUrl(media.key, 3600)
-  } catch {
-    out = media.url
-  }
-  return absolutizeMediaUrlForApiClient(out, opts?.publicOrigin ?? null)
+  const info = await resolveMedia(mediaId)
+  if (!info) return null
+  /** Portail web : chemin relatif same-origin (`/api/site/media/...`). Absolu seulement pour le BFF mobile. */
+  if (!opts?.publicOrigin) return info.url
+  return absolutizeMediaUrlForApiClient(info.url, opts.publicOrigin)
 }
 
 /**

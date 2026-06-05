@@ -122,7 +122,9 @@ export async function GET(request: NextRequest) {
         tags: Array.isArray(pp.tags)
           ? (pp.tags as unknown[]).filter((t): t is string => typeof t === 'string')
           : [],
-        engineLinked: lpp != null,
+        engineLinked:
+          (pp.engineType === 'VAULT_ENGINE' && Boolean(pp.engineReferenceId?.trim())) ||
+          lpp != null,
         lendingSnapshot:
           lpp == null
             ? null

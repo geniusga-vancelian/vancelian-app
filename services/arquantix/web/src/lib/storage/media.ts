@@ -50,6 +50,10 @@ export function rewriteMediaUrlsToSiteProxyDeep(data: unknown): unknown {
   if (typeof cover === 'string' && cover.trim()) {
     out.coverMediaUrl = siteMediaProxyPath(cover.trim())
   }
+  const header = out.headerMediaId
+  if (typeof header === 'string' && header.trim()) {
+    out.headerImageUrl = siteMediaProxyPath(header.trim())
+  }
   return out
 }
 
@@ -76,18 +80,9 @@ async function resolvePublicMediaFileUrl(m: {
   if (!isR2Configured()) {
     return m.url.startsWith('/') ? m.url : siteMediaProxyPath(m.id)
   }
-  try {
-    const { getPresignedUrl } = await import('./storageClient')
-    return await Promise.race([
-      getPresignedUrl(m.key, 3600),
-      new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error('Presigned URL timeout')), 5000),
-      ),
-    ])
-  } catch (error) {
-    console.error('[resolvePublicMediaFileUrl] presign failed, using site proxy:', m.id, error)
-    return siteMediaProxyPath(m.id)
-  }
+
+  /** Bucket R2 privé : proxy same-origin (présignatures souvent 403 / referrer / CSS hero). */
+  return siteMediaProxyPath(m.id)
 }
 
 export interface MediaInfo {

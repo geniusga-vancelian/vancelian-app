@@ -276,6 +276,8 @@ export async function GET(
           })
         : null
     const lendingEngineLinked = lendingRow != null
+    const vaultEngineLinked =
+      pp?.engineType === 'VAULT_ENGINE' && Boolean(pp.engineReferenceId?.trim())
 
     const packagedProduct = pp
       ? {
@@ -301,6 +303,7 @@ export async function GET(
           engineType: pp.engineType,
           engineReferenceId: pp.engineReferenceId,
           lendingEngineLinked,
+          vaultEngineLinked,
           updatedAt: pp.updatedAt.toISOString(),
           publishedAt: pp.publishedAt ? pp.publishedAt.toISOString() : null,
         }

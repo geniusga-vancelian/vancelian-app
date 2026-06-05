@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Importe portal_morpho_vault_configs Ledgity (lyUSDC, lyEURC) + defi_vault_registry en prod via ECS RunTask.
+# Importe portal_morpho_vault_configs ERC-4626 (Vancelian/Arquantix + Ledgity) + defi_vault_registry en prod via ECS RunTask.
 # Utilise le client Prisma natif (integration_mode ledgity_vault) — migrations requises avant import.
 set -euo pipefail
 
@@ -81,4 +81,4 @@ MSG=$(aws logs filter-log-events \
 echo "  result: $MSG"
 
 echo ""
-echo "Terminé — lyUSDC + lyEURC synchronisés en prod (portal_morpho_vault_configs + defi_vault_registry)."
+echo "Terminé — vaults Vancelian/Arquantix + Ledgity synchronisés en prod (portal_morpho_vault_configs + defi_vault_registry)."

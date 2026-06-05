@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { ArticleBodyMarkdown } from '@/lib/blog/articleBodyMarkdown'
 import { DoubleQuoteIcon } from '@/components/design-system/extracted'
 import {
   figmaDsArticleQuoteAuthorClassName,
@@ -16,6 +17,8 @@ type Props = {
  * Bloc citation aligné Figma (traits haut / bas, pas de fond, pas de bordure gauche, guillemet en dégradé).
  */
 export function ArticleBodyQuoteBlock({ quote, author, className }: Props) {
+  const quoteTrim = quote.trim()
+  if (!quoteTrim) return null
   const authorTrim = author?.trim() ?? ''
   return (
     <figure className={cn(figmaDsArticleQuoteContainerClassName, 'my-12 w-full', className)}>
@@ -25,7 +28,9 @@ export function ArticleBodyQuoteBlock({ quote, author, className }: Props) {
         </span>
         <div className="min-w-0 flex-1">
           <blockquote className="m-0">
-            <p className={figmaDsArticleQuoteTextClassName}>{quote}</p>
+            <div className={figmaDsArticleQuoteTextClassName}>
+              <ArticleBodyMarkdown text={quoteTrim} variant="inline" />
+            </div>
             {authorTrim ? (
               <footer className={cn('mt-4 block', figmaDsArticleQuoteAuthorClassName)}>{authorTrim}</footer>
             ) : null}

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { CollapsibleAdminSection } from '@/components/admin/CollapsibleAdminSection'
 import { MediaTile } from '@/components/admin/MediaTile'
 import { ContentBlocksSection } from '@/components/admin/ContentBlocksSection'
+import { MarkdownImportDialog } from '@/components/admin/MarkdownImportDialog'
 import HelpHierarchyPicker from '@/components/admin/HelpHierarchyPicker'
 import AcademyHierarchyPicker from '@/components/admin/AcademyHierarchyPicker'
 import { ContentStatus, ArticleBlockType } from '@prisma/client'
@@ -112,6 +113,7 @@ export default function AdminArticleEditorPage() {
   const [approving, setApproving] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showUnpublishDialog, setShowUnpublishDialog] = useState(false)
+  const [showMarkdownImport, setShowMarkdownImport] = useState(false)
   const [i18nData, setI18nData] = useState({
     title: '',
     standfirst: '',
@@ -1468,6 +1470,7 @@ export default function AdminArticleEditorPage() {
         onPatchBlock={handlePatchBlock}
         onDeleteBlock={handleDeleteBlock}
         onReorderBlocks={handleReorderBlocks}
+        onClickImportMarkdown={() => setShowMarkdownImport(true)}
         onClickAddBlock={async () => {
           // Sauvegarde tout (settings + i18n + blocs modifiés) avant de
           // naviguer vers la page modale d'ajout : sinon toute édition en
@@ -1508,6 +1511,18 @@ export default function AdminArticleEditorPage() {
           }}
         />
       )}
+
+      <MarkdownImportDialog
+        open={showMarkdownImport}
+        onOpenChange={setShowMarkdownImport}
+        articleId={articleId}
+        locale={selectedLocale}
+        onApplied={async () => {
+          toastSuccess('Import Markdown appliqué')
+          setPreviewReloadEpoch((n) => n + 1)
+          await fetchArticle()
+        }}
+      />
 
       <ConfirmDialog
         open={showDeleteDialog}

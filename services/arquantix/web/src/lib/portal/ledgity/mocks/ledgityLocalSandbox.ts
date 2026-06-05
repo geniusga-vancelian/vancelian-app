@@ -10,6 +10,10 @@ import {
   LEDGITY_LYEURC_VAULT,
   LEDGITY_LYUSDC_VAULT,
   LEDGITY_USDC_ADDRESS,
+  VANCELIAN_AXBALI_VAULT,
+  VANCELIAN_AXDUBAI_VAULT,
+  VANCELIAN_AXUSD_VAULT,
+  VANCELIAN_VFEUR_VAULT,
   normalizeVaultAddress,
 } from '@/lib/portal/ledgity/ledgityConstants'
 import {
@@ -27,6 +31,7 @@ import {
   LEDGITY_LOCAL_SANDBOX_WALLET_ADDRESS,
 } from '@/lib/portal/ledgity/ledgityLocalSandboxConfig'
 import { buildLedgityLedgerMetadata } from '@/lib/portal/ledgity/ledgityLedgerMetadata'
+import { assertLedgityWithdrawNotLocked } from '@/lib/portal/ledgity/ledgityVaultLock'
 import type { LedgityDependencyHealth } from '@/lib/portal/ledgity/ledgityVaultMonitoring'
 import type {
   LedgityVaultPositionRow,
@@ -67,9 +72,69 @@ type SandboxVaultMeta = {
   pricePerShare: number
   tvlUsd: number
   liquidityUsd: number
+  lockState?: {
+    operationEndDateUnix?: string | null
+    withdrawalRequestsEnabled?: boolean
+  }
 }
 
 const SANDBOX_VAULTS: SandboxVaultMeta[] = [
+  {
+    address: VANCELIAN_VFEUR_VAULT,
+    name: 'Vancelian Flexible Vault EURC',
+    symbol: 'vfEUR',
+    asset: EURC_ASSET,
+    curator: 'Vancelian',
+    description: 'Coffre flexible vfEUR sur Base (sandbox local).',
+    netApy: 0.08,
+    pricePerShare: 1.04,
+    tvlUsd: 8_500_000,
+    liquidityUsd: 850_000,
+  },
+  {
+    address: VANCELIAN_AXUSD_VAULT,
+    name: 'Arquantix Yield USDC',
+    symbol: 'axUSD',
+    asset: USDC_ASSET,
+    curator: 'Arquantix',
+    description: 'Coffre flexible axUSD sur Base (sandbox local).',
+    netApy: 0.12,
+    pricePerShare: 1.06,
+    tvlUsd: 5_200_000,
+    liquidityUsd: 0,
+  },
+  {
+    address: VANCELIAN_AXDUBAI_VAULT,
+    name: 'Arquantix Dubai',
+    symbol: 'axDUBAI',
+    asset: EURC_ASSET,
+    curator: 'Arquantix',
+    description: 'Offre exclusive RWA axDUBAI sur Base (sandbox local).',
+    netApy: 0.12,
+    pricePerShare: 1.05,
+    tvlUsd: 3_100_000,
+    liquidityUsd: 0,
+    lockState: {
+      operationEndDateUnix: String(Math.floor(Date.now() / 1000) + 365 * 24 * 3600),
+      withdrawalRequestsEnabled: true,
+    },
+  },
+  {
+    address: VANCELIAN_AXBALI_VAULT,
+    name: 'Arquantix Bali',
+    symbol: 'axBALI',
+    asset: EURC_ASSET,
+    curator: 'Arquantix',
+    description: 'Offre exclusive RWA axBALI sur Base (sandbox local).',
+    netApy: 0.11,
+    pricePerShare: 1.045,
+    tvlUsd: 2_400_000,
+    liquidityUsd: 0,
+    lockState: {
+      operationEndDateUnix: String(Math.floor(Date.now() / 1000) + 540 * 24 * 3600),
+      withdrawalRequestsEnabled: true,
+    },
+  },
   {
     address: LEDGITY_LYUSDC_VAULT,
     name: 'Ledgity lyUSDC',
@@ -134,6 +199,7 @@ export function getSandboxMockVaultCatalog(vaultAddress: string): PortalLedgityC
     liquidityUsd: meta.liquidityUsd,
     curator: meta.curator,
     description: meta.description,
+    lockState: meta.lockState,
   }
 }
 
@@ -369,6 +435,7 @@ export async function executeSandboxLedgityOperation(args: {
   })
 
   if (args.operation === 'withdraw') {
+    await assertLedgityWithdrawNotLocked({ vaultAddress: args.vaultAddress })
     await assertWithdrawAmountWithinPosition({
       amountRaw: BigInt(args.amountRaw),
       assetsInVaultRaw: position.assetsRaw,

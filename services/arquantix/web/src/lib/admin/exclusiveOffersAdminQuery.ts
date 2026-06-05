@@ -48,9 +48,24 @@ export function buildExclusiveOffersWhere(
   }
 
   if (engine === 'linked') {
-    andParts.push({ lendingPoolProduct: { isNot: null } })
+    andParts.push({
+      OR: [
+        { engineType: 'VAULT_ENGINE', engineReferenceId: { not: null } },
+        { lendingPoolProduct: { isNot: null } },
+      ],
+    })
   } else if (engine === 'unlinked') {
-    andParts.push({ lendingPoolProduct: null })
+    andParts.push({
+      AND: [
+        {
+          OR: [
+            { engineType: { not: 'VAULT_ENGINE' } },
+            { engineReferenceId: null },
+          ],
+        },
+        { lendingPoolProduct: null },
+      ],
+    })
   }
 
   return { AND: andParts }

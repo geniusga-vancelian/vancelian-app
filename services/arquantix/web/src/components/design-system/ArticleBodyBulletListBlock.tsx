@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { ArticleBodyMarkdown } from '@/lib/blog/articleBodyMarkdown'
 import { figmaDsParagraphLargeBoldClassName } from '@/components/design-system/extracted/tokens/typography'
 
 type Props = {
@@ -41,14 +42,14 @@ export function ArticleBodyBulletListBlock({ items, className }: Props) {
           >
             <ListCheckIcon />
           </span>
-          <span
+          <div
             className={cn(
               figmaDsParagraphLargeBoldClassName,
-              'min-w-0 flex-1 text-black',
+              'min-w-0 flex-1 text-black [&_strong]:font-semibold',
             )}
           >
-            {item}
-          </span>
+            <ArticleBodyMarkdown text={item} variant="inline" />
+          </div>
         </li>
       ))}
     </ul>

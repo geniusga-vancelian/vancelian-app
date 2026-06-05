@@ -1,5 +1,49 @@
 [
   {
+    "vaultAddress": "0x46dB81F232DF1884081368cD2aacc9E6Ec6489a2",
+    "chainId": 8453,
+    "integrationMode": "ledgity_vault",
+    "privyVaultId": null,
+    "label": "Vancelian Flexible Vault EURC",
+    "description": "Coffre flexible vfEUR sur Base — dépôt/retrait ERC-4626, actif EURC, buffer liquidité 10 %, target APY 8 %.",
+    "curator": "Vancelian",
+    "sortOrder": 1,
+    "isPublished": true
+  },
+  {
+    "vaultAddress": "0xEF3fbcEEA9d0A1F343433b3d5F2FF2dc28946BdC",
+    "chainId": 8453,
+    "integrationMode": "ledgity_vault",
+    "privyVaultId": null,
+    "label": "Arquantix Yield USDC",
+    "description": "Coffre flexible axUSD sur Base — dépôt/retrait ERC-4626, actif USDC, capital 100 % déployé, APR cible 12 %.",
+    "curator": "Arquantix",
+    "sortOrder": 2,
+    "isPublished": true
+  },
+  {
+    "vaultAddress": "0x273ff92cc955ef76ACeeC7206163C732185CeEBe",
+    "chainId": 8453,
+    "integrationMode": "ledgity_vault",
+    "privyVaultId": null,
+    "label": "Arquantix Dubai",
+    "description": "Offre exclusive RWA axDUBAI sur Base — ERC-4626 EURC, lock-up programmable, target APY 12 %, retraits asynchrones.",
+    "curator": "Arquantix",
+    "sortOrder": 3,
+    "isPublished": true
+  },
+  {
+    "vaultAddress": "0x9A7d4da8aab422a48744791A5f086612A219ea4d",
+    "chainId": 8453,
+    "integrationMode": "ledgity_vault",
+    "privyVaultId": null,
+    "label": "Arquantix Bali",
+    "description": "Offre exclusive RWA axBALI sur Base — ERC-4626 EURC, lock-up programmable, target APY 11 %, retraits asynchrones.",
+    "curator": "Arquantix",
+    "sortOrder": 4,
+    "isPublished": true
+  },
+  {
     "vaultAddress": "0x916f179D5D9B7d8Ad815AC2f8570aabF0C6a6e38",
     "chainId": 8453,
     "integrationMode": "ledgity_vault",

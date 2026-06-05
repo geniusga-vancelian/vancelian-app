@@ -7,6 +7,7 @@ import {
 } from '@/lib/blockchain/baseRpcErrors'
 import { LedgityVaultBetaError } from '@/lib/portal/ledgity/ledgityBetaAccess'
 import { LedgityVaultLiquidityError } from '@/lib/portal/ledgity/ledgityVaultLiquidityErrors'
+import { LedgityVaultLockError } from '@/lib/portal/ledgity/ledgityVaultLockErrors'
 import { LombardBetaError, LombardSafetyError } from '@/lib/portal/lombard/lombardBetaErrors'
 import { MorphoVaultBetaError } from '@/lib/portal/morphoUsdcBetaAccess'
 import { MorphoVaultLedgerError } from '@/lib/portal/morphoVaultLedger'
@@ -40,6 +41,9 @@ export function morphoLedgerErrorResponse(error: unknown): NextResponse {
     return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })
   }
   if (error instanceof LedgityVaultLiquidityError) {
+    return NextResponse.json({ code: error.code, message: error.message }, { status: error.status })
+  }
+  if (error instanceof LedgityVaultLockError) {
     return NextResponse.json({ code: error.code, message: error.message }, { status: error.status })
   }
   if (error instanceof VaultDepositLimitError) {

@@ -33,7 +33,9 @@ make -f Makefile.arquantix local-doctor && make -f Makefile.arquantix local-db-d
 
 **Résultat attendu** : stack Docker up, API `/health` OK, web répond sur le port `WEB_PORT` (souvent 3000), doctors sans **ERROR** (warnings possibles).
 
-**Vérifier le web** : ouvrir `http://127.0.0.1:3000/fr` (ou `WEB_PORT` dans `.env.arquantix`).
+**Vérifier le web** : ouvrir **`http://127.0.0.1:3000/fr`** (ou `WEB_PORT` dans `.env.arquantix`). Si `http://localhost:3000` refuse la connexion alors que `127.0.0.1` répond, utiliser **127.0.0.1** dans le navigateur (cas fréquent sur macOS).
+
+**Next qui s’arrête tout seul** : `bash scripts/dev-reset.sh` lance un superviseur (`scripts/arquantix-next-dev-daemon.sh`) qui relance `npm run dev` automatiquement. Logs : `tail -f "${TMPDIR:-/tmp}/arquantix-next-dev.log"`.
 
 ---
 

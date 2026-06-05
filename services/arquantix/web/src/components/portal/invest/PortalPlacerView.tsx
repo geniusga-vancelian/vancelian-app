@@ -17,7 +17,7 @@ import { PortalPlacerSectionSkeleton } from '@/components/portal/PortalRouteSkel
 import { resolveExclusiveOfferCoverUrl } from '@/lib/portal/exclusiveOfferPlaceholderImages'
 import { formatEarnApyFromBps as formatLedgityApyFromBps } from '@/lib/portal/ledgity/ledgityVaultFormat'
 import type { PortalLedgityVaultDetails } from '@/lib/portal/ledgity/ledgityVaultTypes'
-import type { PortalExclusiveOffer } from '@/lib/portal/investTypes'
+import type { PortalExclusiveOffer, PortalVaultProduct } from '@/lib/portal/investTypes'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import {
   portalLedgityVaultInvestRoute,
@@ -180,6 +180,8 @@ export function PortalPlacerAdvisorBanner() {
 
 type Props = {
   offers: PortalExclusiveOffer[]
+  /** Coffres catalogue (`vault_simple`) — marketing Vault Builder + moteur vault plateforme. */
+  vaultProducts?: PortalVaultProduct[]
   coffreBundles: PortalCryptoBundle[]
   panierBundles: PortalCryptoBundle[]
   defiVaults?: VaultUnion[]
@@ -192,6 +194,7 @@ type Props = {
 
 export function PortalPlacerView({
   offers,
+  vaultProducts = [],
   coffreBundles,
   panierBundles,
   defiVaults = [],
@@ -213,6 +216,11 @@ export function PortalPlacerView({
     offers.find((o) => o.slug.toLowerCase().includes('niseko')) ?? offers[0] ?? null
 
   const coffreCards = [
+    ...vaultProducts.map((vault) => ({
+      key: `vault-product-${vault.id}`,
+      kind: 'vault_product' as const,
+      vault,
+    })),
     ...coffreBundles.map((bundle) => ({
       key: `bundle-${bundle.id}`,
       kind: 'bundle' as const,
@@ -253,7 +261,9 @@ export function PortalPlacerView({
 
   const showCoffresSection =
     show('coffres') &&
-    (coffreCards.length > 0 || marketsBundlesLoading || (showDeFiVaults && defiVaultsLoading))
+    (coffreCards.length > 0 ||
+      marketsBundlesLoading ||
+      (showDeFiVaults && defiVaultsLoading))
 
   const showPaniersSection = show('paniers') && (panierBundles.length > 0 || marketsBundlesLoading)
 
@@ -282,6 +292,24 @@ export function PortalPlacerView({
                           key={card.key}
                           bundle={card.bundle}
                           onInvest={() => openBundleInvest(card.bundle)}
+                        />
+                      )
+                    }
+                    if (card.kind === 'vault_product') {
+                      const vault = card.vault
+                      return (
+                        <PortalPlacerCoffreCard
+                          key={card.key}
+                          title={vault.title}
+                          description={vault.subtitle || vault.description}
+                          photo={resolveExclusiveOfferCoverUrl(vault.coverUrl, vault.slug)}
+                          perf={vault.apyLabel.replace(' APR', '')}
+                          liquidity={vault.raisedLabel}
+                          currency="USD"
+                          currencyIcon={resolveCurrencyIcon('USDC')}
+                          categoryIcon="vault"
+                          href={vault.href}
+                          onInvest={() => router.push(portalVaultInvestRoute(vault.slug))}
                         />
                       )
                     }

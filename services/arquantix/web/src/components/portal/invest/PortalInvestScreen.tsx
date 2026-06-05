@@ -132,10 +132,11 @@ export function PortalInvestScreen() {
       <PortalReveal index={0}>
         <PortalPlacerView
           offers={investData.offers}
+          vaultProducts={investData.vaults}
           coffreBundles={coffreBundles}
           panierBundles={panierBundles}
           defiVaults={defiVaults}
-          showDeFiVaults={showDeFiVaults}
+          showDeFiVaults={false}
           marketsBundlesLoading={marketsBundlesLoading}
           defiVaultsLoading={defiVaultsSectionLoading}
         />

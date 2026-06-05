@@ -2,30 +2,14 @@ import type { PortalMorphoVaultConfig } from '@prisma/client'
 
 import {
   LEDGITY_CHAIN_ID,
-  LEDGITY_EURC_ADDRESS,
-  LEDGITY_LYEURC_VAULT,
-  LEDGITY_LYUSDC_VAULT,
-  LEDGITY_USDC_ADDRESS,
   normalizeVaultAddress,
+  resolveKnownLedgityVaultAsset,
 } from '@/lib/portal/ledgity/ledgityConstants'
 import { prisma } from '@/lib/prisma'
 
-const VAULT_ASSETS: Record<string, { address: string; symbol: string; decimals: number }> = {
-  [normalizeVaultAddress(LEDGITY_LYUSDC_VAULT)]: {
-    address: LEDGITY_USDC_ADDRESS,
-    symbol: 'USDC',
-    decimals: 6,
-  },
-  [normalizeVaultAddress(LEDGITY_LYEURC_VAULT)]: {
-    address: LEDGITY_EURC_ADDRESS,
-    symbol: 'EURC',
-    decimals: 6,
-  },
-}
-
 export async function upsertLedgityVaultRegistryRow(config: PortalMorphoVaultConfig): Promise<void> {
   const vaultAddress = normalizeVaultAddress(config.vaultAddress)
-  const asset = VAULT_ASSETS[vaultAddress] ?? {
+  const asset = resolveKnownLedgityVaultAsset(vaultAddress) ?? {
     address: 'unknown',
     symbol: 'USDC',
     decimals: 6,

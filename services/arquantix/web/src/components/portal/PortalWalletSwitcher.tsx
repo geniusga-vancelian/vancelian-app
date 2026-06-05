@@ -45,12 +45,17 @@ export function PortalWalletSwitcher({
 
   const onEmbeddedDefault = walletScope?.kind === 'privy_embedded'
 
-  if (!loading && scopes.length === 0) {
+  /** Pas de pastille wallet pendant le chargement (évite le flash Privy retiré de la topnav). */
+  if (loading) {
+    return null
+  }
+
+  if (scopes.length === 0) {
     return null
   }
 
   /** Pas de sélecteur tant que seul le wallet intégré est actif (vue « Privy » retirée). */
-  if (!loading && onEmbeddedDefault) {
+  if (onEmbeddedDefault) {
     return null
   }
 

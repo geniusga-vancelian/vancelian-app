@@ -4,6 +4,7 @@ import { getLedgityBetaPortalFlags } from '@/lib/portal/ledgity/ledgityBetaAcces
 import { fetchLedgityVaultCatalog } from '@/lib/portal/ledgity/ledgityVaultAdapter'
 import { resolvePortalLedgityVaultConfigs } from '@/lib/portal/ledgity/ledgityVaultConfigStore'
 import { mergeLedgityVaultConfigWithCatalog } from '@/lib/portal/ledgity/ledgityVaultFormat'
+import { readLedgityVaultLockState } from '@/lib/portal/ledgity/ledgityVaultLock'
 import type { PortalLedgityVaultsPayload } from '@/lib/portal/ledgity/ledgityVaultTypes'
 import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
@@ -34,11 +35,22 @@ export async function GET() {
     }
     const catalogByAddress = new Map(catalogRows.map((row) => [row.address.toLowerCase(), row]))
 
+    const vaults = await Promise.all(
+      configs.map(async (config) => {
+        const lockState = await readLedgityVaultLockState({ vaultAddress: config.vaultAddress }).catch(
+          () => null,
+        )
+        return mergeLedgityVaultConfigWithCatalog(
+          config,
+          catalogByAddress.get(config.vaultAddress.toLowerCase()),
+          lockState,
+        )
+      }),
+    )
+
     const payload: PortalLedgityVaultsPayload = {
       configured: true,
-      vaults: configs.map((config) =>
-        mergeLedgityVaultConfigWithCatalog(config, catalogByAddress.get(config.vaultAddress.toLowerCase())),
-      ),
+      vaults,
       beta,
     }
     return NextResponse.json(payload)

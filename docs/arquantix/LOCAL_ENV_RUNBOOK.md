@@ -216,6 +216,7 @@ Voir [LOCAL_DB_ALIGNMENT.md](./LOCAL_DB_ALIGNMENT.md) — qui lit quel `DATABASE
 - **Volumes / réseau nommés** : `docker-compose.arquantix.yml` — noms explicites pour les données et le réseau applicatif.
 - **`docker-compose.arquantix.attach-volumes.yml`** : conservé pour cas **exceptionnels** uniquement ; **pas** utilisé par le Makefile ni `dev-reset.sh` (voir entête du fichier).
 - **Scripts** : `scripts/dev-reset.sh`, `scripts/start-arquantix.sh` — alignés sur `COMPOSE_PROJECT_NAME` lu depuis `.env.arquantix`, sans bascule automatique vers un second projet.
+- **`dev-reset.sh` (défaut)** : Docker DB + Redis + API, **sans** `arquantix-web` ; Next sur l’hôte (`npm run dev`, port `WEB_PORT`). **`--no-next`** : lance le conteneur `arquantix-web` à la place (mocks DeFi du `.env.arquantix` neutralisés dans le compose recovery pour `NODE_ENV=production`).
 
 ---
 

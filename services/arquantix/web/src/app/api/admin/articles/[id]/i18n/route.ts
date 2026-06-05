@@ -16,6 +16,7 @@ const updateI18nSchema = z.object({
   coverTitle: z.string().optional().nullable(),
   metaTitle: z.string().optional().nullable(),
   metaDescription: z.string().optional().nullable(),
+  seoJson: z.record(z.string(), z.unknown()).optional(),
 })
 
 // PUT /api/admin/articles/[id]/i18n
@@ -38,6 +39,10 @@ export async function PUT(
     const normalizedCoverTitle = validated.coverTitle === '' || validated.coverTitle === undefined ? null : validated.coverTitle
     const normalizedMetaTitle = validated.metaTitle === '' || validated.metaTitle === undefined ? null : validated.metaTitle
     const normalizedMetaDescription = validated.metaDescription === '' || validated.metaDescription === undefined ? null : validated.metaDescription
+    const seoJsonPayload =
+      validated.seoJson !== undefined
+        ? (JSON.parse(JSON.stringify(validated.seoJson)) as object)
+        : undefined
 
     // Upsert i18n
     const i18n = await prisma.articleI18n.upsert({
@@ -53,6 +58,7 @@ export async function PUT(
         coverTitle: normalizedCoverTitle,
         metaTitle: normalizedMetaTitle,
         metaDescription: normalizedMetaDescription,
+        ...(seoJsonPayload !== undefined ? { seoJson: seoJsonPayload } : {}),
       },
       create: {
         articleId: articleId,
@@ -62,6 +68,7 @@ export async function PUT(
         coverTitle: normalizedCoverTitle,
         metaTitle: normalizedMetaTitle,
         metaDescription: normalizedMetaDescription,
+        seoJson: seoJsonPayload ?? {},
       },
     })
 

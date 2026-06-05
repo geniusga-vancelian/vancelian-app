@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Plus } from 'lucide-react'
+import { ChevronDown, FileUp, Plus } from 'lucide-react'
 import { ArticleBlockType } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { MediaField } from '@/components/admin/MediaField'
@@ -35,6 +35,8 @@ export interface ContentBlocksSectionProps {
   onReorderBlocks: (orderedBlockIds: string[]) => void
   /** Action « Ajouter un bloc » : navigation ou modal au choix du parent. */
   onClickAddBlock: () => void | Promise<void>
+  /** Import Markdown blueprint (optionnel). */
+  onClickImportMarkdown?: () => void
   /** Désactive le bouton « Ajouter » pendant un save. */
   saving?: boolean
   /** Identifiant utilisé pour ne déclencher l'auto-collapse qu'une fois par entité. */
@@ -64,6 +66,7 @@ export function ContentBlocksSection({
   onDeleteBlock,
   onReorderBlocks,
   onClickAddBlock,
+  onClickImportMarkdown,
   saving = false,
   entityId,
   title = 'Content Blocks',
@@ -112,6 +115,17 @@ export function ContentBlocksSection({
               }
             >
               {allCollapsed ? 'Tout déplier' : 'Tout replier'}
+            </Button>
+          ) : null}
+          {onClickImportMarkdown ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={onClickImportMarkdown}
+              title="Importer un fichier .md (blueprint metadata + blocs)"
+            >
+              <FileUp className="mr-1 h-4 w-4" /> Importer un Markdown
             </Button>
           ) : null}
           <Button
