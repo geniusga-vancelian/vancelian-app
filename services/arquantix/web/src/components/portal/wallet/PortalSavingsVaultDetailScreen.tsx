@@ -46,6 +46,7 @@ export function PortalSavingsVaultDetailScreen({ vaultAddress }: Props) {
       url: `/api/portal/savings-wallet/${encodeURIComponent(normalizedVault)}`,
       ttlMs: 45_000,
       errorMessage: 'Unable to load vault details.',
+      scopeAware: true,
     })
 
   const currency = data?.currency ?? 'EUR'

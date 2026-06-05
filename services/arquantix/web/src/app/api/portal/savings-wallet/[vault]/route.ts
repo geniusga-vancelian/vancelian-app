@@ -24,10 +24,13 @@ export async function GET(
   const bootstrap = await fetchPortalUpstreamJson('/api/app/bootstrap')
   const currency = resolveDashboardReferenceCurrency(bootstrap.ok ? bootstrap.data : null)
 
+  const walletAddress = _request.nextUrl.searchParams.get('wallet_address')?.trim() || undefined
+
   const detail = await loadPortalSavingsVaultDetail({
     personId,
     vaultAddress,
     currency,
+    walletAddress,
     mapTransactions: (rows, currentBalanceUsd) =>
       mapPortalSavingsVaultTransactions(rows, currentBalanceUsd),
   })

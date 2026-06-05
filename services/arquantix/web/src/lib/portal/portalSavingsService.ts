@@ -446,6 +446,7 @@ type LedgerTransactionRow = {
 async function loadVaultLedgerTransactions(args: {
   personId: string
   vaultAddress: string
+  walletAddress?: string
   limit?: number
 }): Promise<LedgerTransactionRow[]> {
   return prisma.onchainVaultTransaction.findMany({
@@ -453,6 +454,7 @@ async function loadVaultLedgerTransactions(args: {
       personId: args.personId,
       vaultAddress: args.vaultAddress.toLowerCase(),
       operation: { in: ['deposit', 'withdraw'] },
+      ...(args.walletAddress ? { walletAddress: args.walletAddress.toLowerCase() } : {}),
     },
     orderBy: { createdAt: 'desc' },
     take: args.limit ?? 50,
@@ -474,6 +476,7 @@ async function loadVaultLedgerTransactions(args: {
 async function loadSingleVaultLiveAggregate(args: {
   personId: string
   vaultAddress: string
+  walletAddress?: string
 }): Promise<{ aggregate: VaultAggregate | null; vaultDetails: PortalDefiVaultDetails | null; partial: boolean }> {
   const normalizedVault = normalizeVaultAddress(args.vaultAddress)
   const configs = await resolveAllPublishedDefiVaultConfigs()
@@ -494,7 +497,10 @@ async function loadSingleVaultLiveAggregate(args: {
   const ledgityByVault = new Map(ledgityCatalog.map((item) => [normalizeLedgityVaultAddress(item.address), item]))
   const vaultDetails = await mergeVaultDetails(config, normalizedVault, morphoByVault, ledgityByVault)
 
-  const wallets = await loadPersonEvmWalletAddresses(args.personId)
+  const scopedWallet = args.walletAddress?.trim().toLowerCase()
+  const wallets = scopedWallet
+    ? [scopedWallet]
+    : await loadPersonEvmWalletAddresses(args.personId)
   if (wallets.length === 0) {
     return {
       aggregate: null,
@@ -569,6 +575,7 @@ export async function loadPortalSavingsVaultDetail(args: {
   personId: string
   vaultAddress: string
   currency: string
+  walletAddress?: string | null
   mapTransactions: (
     rows: LedgerTransactionRow[],
     currentBalanceUsd: number,
@@ -578,9 +585,11 @@ export async function loadPortalSavingsVaultDetail(args: {
   }
 }): Promise<PortalSavingsVaultDetailPayload | null> {
   const normalizedVault = normalizeVaultAddress(args.vaultAddress)
+  const walletAddress = args.walletAddress?.trim().toLowerCase() || undefined
   const { aggregate, vaultDetails, partial: livePartial } = await loadSingleVaultLiveAggregate({
     personId: args.personId,
     vaultAddress: normalizedVault,
+    walletAddress,
   })
 
   if (!vaultDetails) return null
@@ -608,6 +617,7 @@ export async function loadPortalSavingsVaultDetail(args: {
   const ledgerRows = await loadVaultLedgerTransactions({
     personId: args.personId,
     vaultAddress: normalizedVault,
+    walletAddress,
   })
   const { transactions, historyPoints } = args.mapTransactions(
     ledgerRows,
