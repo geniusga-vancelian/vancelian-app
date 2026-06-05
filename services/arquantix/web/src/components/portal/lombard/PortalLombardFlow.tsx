@@ -48,7 +48,12 @@ import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWa
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { bumpLombardPositionsRevision } from '@/lib/portal/lombard/lombardPositionsRefresh'
 import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
-import { isLombardOpeningPhase } from '@/components/portal/transaction/mappers/lombardSteps'
+import {
+  isLombardOpeningPhase,
+  LOMBARD_TERMINAL_FAILURE_COPY,
+} from '@/components/portal/transaction/mappers/lombardSteps'
+import type { TransactionTerminalFailureCopy } from '@/components/portal/transaction/types'
+import { LombardTerminalBorrowError, toLombardTerminalBorrowError } from '@/lib/portal/lombard/lombardOpenLoanExecutionPolicy'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
@@ -122,6 +127,8 @@ export function PortalLombardFlow() {
   const [executionPhase, setExecutionPhase] = useState<LombardExecutionPhase>('idle')
   const [lastProgressPhase, setLastProgressPhase] = useState<LombardExecutionPhase>('preparing')
   const [terminalFailure, setTerminalFailure] = useState(false)
+  const [terminalFailureCopy, setTerminalFailureCopy] =
+    useState<TransactionTerminalFailureCopy>(LOMBARD_TERMINAL_FAILURE_COPY)
   const [openingSubtextTick, setOpeningSubtextTick] = useState(0)
 
   const { data: walletData } = usePortalCachedScreen<PortalCryptoWalletHubPayload>({
@@ -321,14 +328,16 @@ export function PortalLombardFlow() {
         borrowAmount: borrowAmount.trim(),
         walletAddress: executionAddress,
         targetLtvPercent,
+        portalWalletCollateralBalance: portalCollateralBalanceHuman,
       })
       setStep('processing')
       setTerminalFailure(false)
+      setTerminalFailureCopy(LOMBARD_TERMINAL_FAILURE_COPY)
       setOpeningSubtextTick(0)
       setExecutionPhase('preparing')
       setExecutionRunId((id) => id + 1)
     },
-    [borrowAmount, executionAddress, selectedCollateral, targetLtvPercent],
+    [borrowAmount, executionAddress, portalCollateralBalanceHuman, selectedCollateral, targetLtvPercent],
   )
 
   const refreshQuoteBeforeExecution = useCallback(async (args?: {
@@ -422,6 +431,7 @@ export function PortalLombardFlow() {
         setBorrowRecap(buildLombardBorrowRecap(fresh))
         openLoanSucceededRef.current = false
         setTerminalFailure(false)
+        setTerminalFailureCopy(LOMBARD_TERMINAL_FAILURE_COPY)
         setOpeningSubtextTick(0)
         setExecutionPhase('preparing')
         setExecutionRunId((id) => id + 1)
@@ -467,14 +477,22 @@ export function PortalLombardFlow() {
     setStep('success')
   }, [])
 
-  const handleOpenLoanTerminalFailure = useCallback(() => {
-    if (openLoanSucceededRef.current) {
-      handleOpenLoanSuccess()
-      return
-    }
-    setTerminalFailure(true)
-    setExecutionPhase('failed')
-  }, [handleOpenLoanSuccess])
+  const handleOpenLoanTerminalFailure = useCallback(
+    (error: unknown) => {
+      if (openLoanSucceededRef.current) {
+        handleOpenLoanSuccess()
+        return
+      }
+      setTerminalFailureCopy(
+        error instanceof LombardTerminalBorrowError
+          ? error.userCopy
+          : toLombardTerminalBorrowError(error).userCopy,
+      )
+      setTerminalFailure(true)
+      setExecutionPhase('failed')
+    },
+    [handleOpenLoanSuccess],
+  )
 
   useEffect(() => {
     if (step !== 'processing' || !openLoanSucceededRef.current) return
@@ -589,6 +607,7 @@ export function PortalLombardFlow() {
                 </p>
               ) : null}
               <PortalLombardBorrowTerminalFailure
+                copy={terminalFailureCopy}
                 retryDisabled={executing || confirmQuoteLoading}
                 onRetry={retryOpenLoan}
                 onClose={() => router.push(PORTAL_ROUTES.cryptoWallet)}

@@ -10,6 +10,7 @@ import {
 } from '@/lib/portal/lombard/lombardClient'
 import {
   delayBeforeInvisibleOpenLoanRetry,
+  isLombardLinkedOpenLoanRetryFailure,
   LombardTerminalBorrowError,
   shouldAttemptInvisibleOpenLoanRetry,
   toLombardTerminalBorrowError,
@@ -59,6 +60,7 @@ export function usePortalLombardExecution() {
       borrowAmount: string
       walletAddress: string
       targetLtvPercent: number
+      portalWalletCollateralBalance?: string | null
       onPhaseChange?: (phase: LombardExecutionPhase) => void
       /** Appelé quand un retry open_loan invisible démarre (reste étape 3). */
       onInvisibleRetry?: () => void
@@ -88,6 +90,7 @@ export function usePortalLombardExecution() {
           walletAddress: wallet.address,
           targetLtvPercent: args.targetLtvPercent,
           idempotencyKey,
+          portalWalletCollateralBalance: args.portalWalletCollateralBalance,
           retryLink,
           walletSource: walletMetadata,
           externalWalletId: wallet.type === 'external_evm' ? wallet.externalWalletId : null,
@@ -158,10 +161,11 @@ export function usePortalLombardExecution() {
         args.onPhaseChange?.('confirmed')
         return result
       } catch (error) {
-        if (
-          lastPreparedGroupKey &&
-          shouldAttemptInvisibleOpenLoanRetry(error, linkState)
-        ) {
+        if (!shouldAttemptInvisibleOpenLoanRetry(error, linkState)) {
+          throw toLombardTerminalBorrowError(error, { autoRetryAttempted: false })
+        }
+
+        if (lastPreparedGroupKey && isLombardLinkedOpenLoanRetryFailure(error)) {
           Object.assign(
             linkState,
             applyLombardRetryLinkAfterFailure({
@@ -170,21 +174,22 @@ export function usePortalLombardExecution() {
               operation: 'open_loan',
             }),
           )
-          Object.assign(linkState, markLombardLinkedRetryStarted(linkState))
-          args.onInvisibleRetry?.()
-          args.onPhaseChange?.('sending')
-          await delayBeforeInvisibleOpenLoanRetry()
-          try {
-            const retryResult = await runAttempt('linked_retry')
-            bumpLombardPositionsRevision()
-            invalidatePortalCache()
-            args.onPhaseChange?.('confirmed')
-            return retryResult
-          } catch {
-            throw new LombardTerminalBorrowError()
-          }
         }
-        throw toLombardTerminalBorrowError(error)
+
+        Object.assign(linkState, markLombardLinkedRetryStarted(linkState))
+        args.onInvisibleRetry?.()
+        await delayBeforeInvisibleOpenLoanRetry()
+
+        const retryMode = isLombardLinkedOpenLoanRetryFailure(error) ? 'linked_retry' : 'initial'
+        try {
+          const retryResult = await runAttempt(retryMode)
+          bumpLombardPositionsRevision()
+          invalidatePortalCache()
+          args.onPhaseChange?.('confirmed')
+          return retryResult
+        } catch {
+          throw toLombardTerminalBorrowError(error, { autoRetryAttempted: true })
+        }
       }
     },
     [resolveWallet, sendPortalTransaction],

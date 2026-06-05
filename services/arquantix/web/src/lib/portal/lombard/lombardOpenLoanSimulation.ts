@@ -42,6 +42,10 @@ function extractRevertReason(error: unknown): string | null {
   return raw.trim().slice(0, 500)
 }
 
+function hasOpenLoanPrerequisiteAuth(transactions: LombardPreparedTx[]): boolean {
+  return transactions.some((tx) => tx.operation === 'approve' || tx.operation === 'authorize')
+}
+
 /** eth_call open_loan — bloque avant signature si Morpho revert. */
 export async function assertLombardOpenLoanSimulates(args: {
   walletAddress: string
@@ -49,6 +53,10 @@ export async function assertLombardOpenLoanSimulates(args: {
 }): Promise<void> {
   const openLoan = args.transactions.find((tx) => tx.operation === 'open_loan')
   if (!openLoan) return
+
+  // Sans allowance / autorisation Morpho déjà on-chain, open_loan revert forcément :
+  // simuler ici produit des faux négatifs (prepare bloqué alors que le bundle est valide).
+  if (hasOpenLoanPrerequisiteAuth(args.transactions)) return
 
   const client = createBasePublicClient({ side: 'server' })
 

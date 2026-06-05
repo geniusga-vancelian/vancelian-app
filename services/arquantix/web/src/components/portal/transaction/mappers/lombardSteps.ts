@@ -59,7 +59,7 @@ export const LOMBARD_TERMINAL_FAILURE_COPY: TransactionTerminalFailureCopy = {
   lines: [
     "Aucun montant n'a été emprunté.",
     "Votre garantie n'a pas été déposée.",
-    'Une nouvelle tentative automatique a déjà été effectuée. Vous pouvez réessayer une fois.',
+    'Une nouvelle tentative automatique a déjà été effectuée. Voulez-vous recommencer ?',
   ],
 }
 

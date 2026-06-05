@@ -18,11 +18,14 @@ describe('parseLombardApiError', () => {
     assert.equal(msg, 'Choose a target LTV between 1% and 70%.')
   })
 
-  it('maps Zod invalid borrow amount to French hint', () => {
+  it('maps borrow_exceeds_capacity to French product copy', () => {
     const msg = parseLombardApiError(
-      { error: 'Invalid request data', issues: [{ message: 'Invalid borrow amount.' }] },
+      {
+        code: 'lombard.borrow_exceeds_capacity',
+        message: 'Maximum available borrow is 0 USDC at 28% LTV with your current cbETH balance.',
+      },
       400,
     )
-    assert.match(msg, /Montant emprunté invalide/i)
+    assert.match(msg, /capacité d’emprunt/i)
   })
 })

@@ -13,6 +13,7 @@ export type PortalLombardExecutionRequest = {
   borrowAmount: string
   walletAddress: string
   targetLtvPercent: number
+  portalWalletCollateralBalance?: string | null
 }
 
 type Props = {
@@ -25,7 +26,7 @@ type Props = {
   onPhaseChange: (phase: LombardExecutionPhase) => void
   onInvisibleRetry: () => void
   onSuccess: () => void
-  onTerminalFailure: () => void
+  onTerminalFailure: (error: unknown) => void
   onExecutingChange: (executing: boolean) => void
 }
 
@@ -82,6 +83,7 @@ function PortalLombardExecutionRunner({
           borrowAmount: request.borrowAmount,
           walletAddress: request.walletAddress,
           targetLtvPercent: request.targetLtvPercent,
+          portalWalletCollateralBalance: request.portalWalletCollateralBalance,
           onPhaseChange: (phase) => {
             if (!cancelled) onPhaseChangeRef.current(phase)
           },
@@ -99,7 +101,7 @@ function PortalLombardExecutionRunner({
           return
         }
         if (cancelled) return
-        onTerminalFailureRef.current()
+        onTerminalFailureRef.current(error)
       } finally {
         if (!cancelled) onExecutingChangeRef.current(false)
       }
@@ -110,6 +112,7 @@ function PortalLombardExecutionRunner({
     }
   }, [
     borrowSucceededRef,
+    request.portalWalletCollateralBalance,
     request.borrowAmount,
     request.collateral,
     request.targetLtvPercent,

@@ -4,9 +4,14 @@ import { z } from 'zod'
 import { isLombardV1Enabled } from '@/lib/portal/lombard/lombardConfig'
 import { createLombardLedgerEntries, LombardLedgerError } from '@/lib/portal/lombard/lombardLedger'
 import { LombardBetaError, LombardSafetyError } from '@/lib/portal/lombard/lombardBetaErrors'
-import { logLombardOpsEvent, logLombardPrepareBlocked } from '@/lib/portal/lombard/lombardOpsLog'
+import { logLombardOpsEvent, logLombardPrepareBlocked, logLombardQuotePrepareDrift } from '@/lib/portal/lombard/lombardOpsLog'
 import { LombardMarketError } from '@/lib/portal/lombard/lombardMarket'
 import { LombardQuoteError } from '@/lib/portal/lombard/lombardQuote'
+import {
+  isLombardQuotePrepareDriftCode,
+  resolvePrepareBlockedDriftReason,
+} from '@/lib/portal/lombard/lombardPrepareFailure'
+import { logLombardSupportEvent } from '@/lib/portal/lombard/lombardSupportLog'
 import { runLombardPreBorrowSafetyChecks } from '@/lib/portal/lombard/lombardSafetyChecks'
 import { isLombardMockEnabled } from '@/lib/portal/lombard/lombardMockConfig'
 import type { LombardRetryPrepareContext } from '@/lib/portal/lombard/lombardRetryLinking'
@@ -75,6 +80,8 @@ function parsePrepareBody(body: unknown) {
     walletAddress: row.wallet_address ?? row.walletAddress,
     idempotencyKey: row.idempotency_key ?? row.idempotencyKey,
     targetLtvPercent: row.target_ltv_percent ?? row.targetLtvPercent,
+    portalWalletCollateralBalance:
+      row.portal_wallet_collateral_balance ?? row.portalWalletCollateralBalance,
     logicalBorrowId: row.logical_borrow_id ?? row.logicalBorrowId,
     retryOfGroupKey: row.retry_of_group_key ?? row.retryOfGroupKey,
     retryAttemptNumber: row.retry_attempt_number ?? row.retryAttemptNumber,
@@ -139,6 +146,7 @@ export async function POST(request: NextRequest) {
       borrowAmount: parsed.borrowAmount,
       walletAddress: parsed.walletAddress,
       targetLtvPercent: parsed.targetLtvPercent,
+      portalWalletCollateralBalance: parsed.portalWalletCollateralBalance,
       chainId: 8453,
     })
 
@@ -212,6 +220,35 @@ export async function POST(request: NextRequest) {
           idempotencyKey: parsed.idempotencyKey,
           error: { code: error.code, message: error.message },
         })
+        if (isLombardQuotePrepareDriftCode(error.code)) {
+          const driftReason = resolvePrepareBlockedDriftReason({
+            errorCode: error.code,
+            portalWalletCollateralBalance: parsed.portalWalletCollateralBalance,
+          })
+          logLombardQuotePrepareDrift({
+            personId,
+            walletAddress: parsed.walletAddress,
+            collateral: parsed.collateral,
+            borrowAmount: parsed.borrowAmount,
+            idempotencyKey: parsed.idempotencyKey,
+            errorCode: error.code,
+            driftReason,
+            portalWalletCollateralBalance: parsed.portalWalletCollateralBalance,
+          })
+          logLombardSupportEvent({
+            code: 'lombard.quote_prepare_drift',
+            level: driftReason === 'prepare_missing_portal_balance' ? 'critical' : 'warning',
+            message: `Quote/prepare drift (${driftReason}): ${error.code}`,
+            personId,
+            walletAddress: parsed.walletAddress,
+            metadata: {
+              collateral: parsed.collateral,
+              borrowAmount: parsed.borrowAmount,
+              driftReason,
+              portalBalanceSent: Boolean(parsed.portalWalletCollateralBalance?.trim()),
+            },
+          })
+        }
       }
       return NextResponse.json({ code: error.code, message: error.message }, { status: error.httpStatus })
     }

@@ -4,12 +4,26 @@ const LOMBARD_CODE_MESSAGES: Record<string, string> = {
   'lombard.disabled': 'Produit temporairement indisponible.',
   'lombard.capacity_failed': 'Impossible de calculer la capacité d’emprunt. Réessayez.',
   'lombard.quote_failed': 'Impossible de calculer le devis. Réessayez.',
+  'lombard.borrow_exceeds_capacity':
+    'Le montant dépasse votre capacité d’emprunt actuelle. Réduisez le montant ou ajustez le niveau de risque.',
+  'lombard.insufficient_guarantee_balance':
+    'Solde de garantie insuffisant pour ce montant. Réduisez l’emprunt ou attendez la mise à jour de votre solde.',
+  'lombard.insufficient_liquidity':
+    'Liquidité USDC insuffisante sur ce marché. Réessayez avec un montant plus faible.',
+  'lombard.ltv_cap_exceeded':
+    'Le montant dépasse la limite de sécurité (70 %). Réduisez l’emprunt ou ajustez le curseur.',
   'lombard.balance_changed':
     'Solde de garantie insuffisant. Actualisez le montant ou réessayez dans quelques secondes.',
   'lombard.open_loan_simulation_failed':
     'Le réseau refuse cette ouverture d’emprunt pour l’instant. Réessayez dans quelques instants.',
   'lombard.base_rpc_busy': formatBaseRpcUserMessage(),
   unauthorized: 'Session expirée. Reconnectez-vous pour continuer.',
+}
+
+export function parseLombardApiErrorCode(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const code = (data as Record<string, unknown>).code
+  return typeof code === 'string' ? code : undefined
 }
 
 /** Erreurs API Lombard — ne pas réutiliser parsePortalExchangeError (auth OTP). */

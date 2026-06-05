@@ -10,7 +10,8 @@ import { formatBaseRpcUserMessage, isBaseRpcTransientError } from '@/lib/blockch
 import type { LombardRetryPrepareContext } from '@/lib/portal/lombard/lombardRetryLinking'
 import { buildLombardPrepareRetryBodyFields } from '@/lib/portal/lombard/lombardRetryLinking'
 import { normalizeLombardBorrowAmountForApi } from '@/lib/portal/lombard/lombardBorrowUi'
-import { parseLombardApiError } from '@/lib/portal/lombard/parseLombardApiError'
+import { LombardPrepareBlockedError } from '@/lib/portal/lombard/lombardPrepareFailure'
+import { parseLombardApiError, parseLombardApiErrorCode } from '@/lib/portal/lombard/parseLombardApiError'
 import type { WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 
 async function lombardFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -27,11 +28,15 @@ async function lombardFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     const message = parseLombardApiError(data, res.status)
+    const code = parseLombardApiErrorCode(data)
     if (
       (typeof data === 'object' && data && (data as { code?: string }).code === 'lombard.base_rpc_busy') ||
       isBaseRpcTransientError(message)
     ) {
       throw new Error(formatBaseRpcUserMessage(message))
+    }
+    if (init?.method === 'POST' && url.includes('/lombard/prepare') && code) {
+      throw new LombardPrepareBlockedError(code, message, res.status)
     }
     throw new Error(message)
   }
@@ -105,6 +110,7 @@ export async function preparePortalLombardOpenLoan(args: {
   walletAddress: string
   targetLtvPercent: number
   idempotencyKey: string
+  portalWalletCollateralBalance?: string | null
   walletSource?: WalletSourceMetadata
   externalWalletId?: string | null
   privyWalletId?: string | null
@@ -115,6 +121,7 @@ export async function preparePortalLombardOpenLoan(args: {
     throw new Error('Montant emprunté invalide.')
   }
   const retryBody = args.retryLink ? buildLombardPrepareRetryBodyFields(args.retryLink) : {}
+  const portalBalance = args.portalWalletCollateralBalance?.trim()
   return lombardFetch('/api/portal/lombard/prepare', {
     method: 'POST',
     body: JSON.stringify({
@@ -123,6 +130,7 @@ export async function preparePortalLombardOpenLoan(args: {
       wallet_address: args.walletAddress,
       target_ltv_percent: args.targetLtvPercent,
       idempotency_key: args.idempotencyKey,
+      ...(portalBalance ? { portal_wallet_collateral_balance: portalBalance } : {}),
       wallet_source: args.walletSource?.wallet_source,
       external_wallet_id: args.externalWalletId,
       privy_wallet_id: args.privyWalletId,

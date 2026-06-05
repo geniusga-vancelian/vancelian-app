@@ -2,6 +2,7 @@ export type LombardSupportEventCode =
   | 'lombard.beta_limit_exceeded'
   | 'lombard.reconciliation_delta'
   | 'lombard.pre_borrow_warning'
+  | 'lombard.quote_prepare_drift'
   | 'lombard.tx_failed'
   | 'lombard.base_rpc_error'
 

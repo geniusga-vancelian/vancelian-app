@@ -5,6 +5,7 @@ export type LombardOpsEventCode =
   | 'lombard.quote_blocked'
   | 'lombard.prepare_requested'
   | 'lombard.prepare_blocked'
+  | 'lombard.quote_prepare_drift'
   | 'lombard.tx_submitted'
   | 'lombard.confirm_success'
   | 'lombard.confirm_failed'
@@ -86,6 +87,35 @@ export function logLombardPrepareBlocked(args: {
     metadata: {
       collateral: args.collateral,
       borrowAmount: args.borrowAmount,
+    },
+  })
+}
+
+/** Alerte ops : devis UI OK mais prepare refuse le même montant (régression ou drift marché). */
+export function logLombardQuotePrepareDrift(args: {
+  personId: string
+  walletAddress: string
+  collateral: string
+  borrowAmount: string
+  idempotencyKey: string
+  errorCode: string
+  driftReason: 'prepare_missing_portal_balance' | 'quote_prepare_capacity_mismatch'
+  portalWalletCollateralBalance?: string | null
+}): void {
+  logLombardOpsEvent({
+    code: 'lombard.quote_prepare_drift',
+    level: 'warning',
+    message: 'Quote/prepare capacity mismatch detected.',
+    personId: args.personId,
+    walletAddress: args.walletAddress,
+    groupKey: args.idempotencyKey,
+    blockCode: args.errorCode,
+    metadata: {
+      collateral: args.collateral,
+      borrowAmount: args.borrowAmount,
+      driftReason: args.driftReason,
+      portalBalanceSent: Boolean(args.portalWalletCollateralBalance?.trim()),
+      portalWalletCollateralBalance: args.portalWalletCollateralBalance ?? null,
     },
   })
 }
