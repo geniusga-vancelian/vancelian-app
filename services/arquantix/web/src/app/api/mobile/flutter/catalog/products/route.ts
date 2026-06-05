@@ -79,7 +79,9 @@ export async function GET(request: NextRequest) {
               undefined
           } else if (row.engineType === 'VAULT_ENGINE') {
             snapshot =
-              (await fetchVaultEngineSnapshotForCatalog(row.engineReferenceId.trim())) ??
+              (await fetchVaultEngineSnapshotForCatalog(row.engineReferenceId.trim(), {
+                catalogSlug: row.slug,
+              })) ??
               undefined
           }
         }

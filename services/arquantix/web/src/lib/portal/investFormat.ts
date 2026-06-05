@@ -154,7 +154,9 @@ function mapVaultProduct(row: CatalogProductRow): PortalVaultProduct {
     category: displayCategory(row.category) || 'Vault',
     vaultEngineConfigId:
       engineType === 'vault_engine'
-        ? (row.engine?.referenceId?.trim() || snap.portal_config_id?.toString().trim() || null)
+        ? (snap.portal_config_id?.toString().trim() ||
+          row.engine?.referenceId?.trim() ||
+          null)
         : null,
     vaultAddress: snap.vault_address?.toString().trim() || null,
     integrationMode: snap.integration_mode?.toString().trim() || null,

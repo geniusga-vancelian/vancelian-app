@@ -241,6 +241,79 @@ export function resolvePortalDefiVaultFlowRoute(
   return base
 }
 
+type PortalVaultEngineRouteInput = {
+  portal_config_id?: string | null
+  integration_mode?: string | null
+  vault_address?: string | null
+}
+
+function normalizePortalVaultIntegrationMode(
+  value: string | null | undefined,
+): 'direct_morpho' | 'ledgity_vault' | null {
+  const mode = value?.trim()
+  if (mode === 'ledgity_vault' || mode === 'direct_morpho') return mode
+  return null
+}
+
+/** Route invest catalogue depuis un snapshot moteur VAULT_ENGINE. */
+export function resolvePortalVaultEngineInvestRoute(
+  engine: PortalVaultEngineRouteInput | null | undefined,
+  slug: string,
+  mode: PortalVaultFlowMode = 'invest',
+): string {
+  const configId = engine?.portal_config_id?.trim()
+  const vaultAddress = engine?.vault_address?.trim().toLowerCase()
+  const integrationMode = normalizePortalVaultIntegrationMode(engine?.integration_mode)
+
+  if (integrationMode && configId && vaultAddress) {
+    return resolvePortalDefiVaultFlowRoute(
+      { integrationMode, vaultAddress, vaultId: configId },
+      mode,
+    )
+  }
+  if (integrationMode === 'ledgity_vault' && configId) {
+    return portalLedgityVaultInvestRoute(configId, mode)
+  }
+  if (integrationMode === 'direct_morpho' && vaultAddress) {
+    return portalMorphoVaultInvestRoute(vaultAddress, mode)
+  }
+  return portalVaultInvestRoute(slug, mode)
+}
+
+type PortalVaultProductRouteInput = {
+  slug: string
+  vaultEngineConfigId: string | null
+  vaultAddress: string | null
+  integrationMode: string | null
+}
+
+/** Route invest pour un produit catalogue `vault_simple` (moteur plateforme ou fallback lending). */
+export function resolvePortalVaultProductInvestRoute(
+  vault: PortalVaultProductRouteInput,
+  mode: PortalVaultFlowMode = 'invest',
+): string {
+  const configId = vault.vaultEngineConfigId?.trim()
+  const vaultAddress = vault.vaultAddress?.trim().toLowerCase()
+  const integrationMode = normalizePortalVaultIntegrationMode(vault.integrationMode)
+
+  if (integrationMode && configId && vaultAddress) {
+    return resolvePortalDefiVaultFlowRoute(
+      { integrationMode, vaultAddress, vaultId: configId },
+      mode,
+    )
+  }
+  if (integrationMode === 'ledgity_vault' && configId) {
+    return portalLedgityVaultInvestRoute(configId, mode)
+  }
+  if (integrationMode === 'direct_morpho' && vaultAddress) {
+    return portalMorphoVaultInvestRoute(vaultAddress, mode)
+  }
+  if (configId) {
+    return portalLedgityVaultInvestRoute(configId, mode)
+  }
+  return portalVaultInvestRoute(vault.slug, mode)
+}
+
 export type PortalBundleInvestFrom = 'markets' | 'invest'
 
 /** Invest / retrait bundle crypto (portfolio PE provisionné). */

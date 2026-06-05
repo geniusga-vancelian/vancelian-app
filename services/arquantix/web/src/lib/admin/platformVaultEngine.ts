@@ -16,6 +16,8 @@ import {
   ledgityLockStateToSnapshotFields,
   readLedgityVaultLockState,
 } from '@/lib/portal/ledgity/ledgityVaultLock'
+import { resolveCatalogSlugVaultAddress } from '@/lib/catalog/catalogVaultSlugMap'
+import { normalizeVaultAddress } from '@/lib/portal/ledgity/ledgityConstants'
 import { prisma } from '@/lib/prisma'
 
 export type { VaultEngineSnapshot } from '@/lib/admin/platformVaultEngineTypes'
@@ -148,14 +150,9 @@ export async function listAvailablePlatformVaultsForAdmin(options?: {
   return rows.slice(0, limit)
 }
 
-export async function resolvePlatformVaultAdminRow(
-  portalConfigId: string,
+async function enrichPlatformVaultConfigRow(
+  config: PortalMorphoVaultConfig,
 ): Promise<PlatformVaultAdminRow | null> {
-  const config = await prisma.portalMorphoVaultConfig.findUnique({
-    where: { id: portalConfigId },
-  })
-  if (!config) return null
-
   const mode = String(config.integrationMode)
   if (mode === 'ledgity_vault') {
     const rows = await enrichLedgityRows([config])
@@ -163,6 +160,27 @@ export async function resolvePlatformVaultAdminRow(
   }
   const rows = await enrichMorphoRows([config])
   return rows[0] ?? null
+}
+
+export async function resolvePlatformVaultAdminRowByVaultAddress(
+  vaultAddress: string,
+): Promise<PlatformVaultAdminRow | null> {
+  const normalized = normalizeVaultAddress(vaultAddress)
+  const config = await prisma.portalMorphoVaultConfig.findUnique({
+    where: { vaultAddress: normalized },
+  })
+  if (!config) return null
+  return enrichPlatformVaultConfigRow(config)
+}
+
+export async function resolvePlatformVaultAdminRow(
+  portalConfigId: string,
+): Promise<PlatformVaultAdminRow | null> {
+  const config = await prisma.portalMorphoVaultConfig.findUnique({
+    where: { id: portalConfigId },
+  })
+  if (!config) return null
+  return enrichPlatformVaultConfigRow(config)
 }
 
 export function buildVaultEngineSnapshot(row: PlatformVaultAdminRow): VaultEngineSnapshot {
@@ -189,11 +207,10 @@ export function buildVaultEngineSnapshot(row: PlatformVaultAdminRow): VaultEngin
   }
 }
 
-export async function fetchVaultEngineSnapshot(
-  portalConfigId: string,
-): Promise<VaultEngineSnapshot | null> {
-  const row = await resolvePlatformVaultAdminRow(portalConfigId)
-  if (!row) return null
+async function buildVaultEngineSnapshotFromRow(
+  row: PlatformVaultAdminRow,
+  context?: { portalConfigId?: string },
+): Promise<VaultEngineSnapshot> {
   const snap = buildVaultEngineSnapshot(row)
   if (row.provider !== 'ledgity') return snap
   try {
@@ -201,12 +218,36 @@ export async function fetchVaultEngineSnapshot(
     return { ...snap, ...ledgityLockStateToSnapshotFields(lock) } as VaultEngineSnapshot
   } catch (error) {
     console.error('[platformVaultEngine] lock snapshot enrichment failed', {
-      portalConfigId,
+      portalConfigId: context?.portalConfigId ?? row.portalConfigId,
       vaultAddress: row.vaultAddress,
       error,
     })
     return snap
   }
+}
+
+/** Résout le snapshot moteur — ID config, puis adresse on-chain via slug catalogue. */
+export async function fetchVaultEngineSnapshot(
+  portalConfigId: string,
+  options?: { catalogSlug?: string | null },
+): Promise<VaultEngineSnapshot | null> {
+  let row = await resolvePlatformVaultAdminRow(portalConfigId)
+  if (!row) {
+    const vaultAddress = resolveCatalogSlugVaultAddress(options?.catalogSlug)
+    if (vaultAddress) {
+      row = await resolvePlatformVaultAdminRowByVaultAddress(vaultAddress)
+      if (row) {
+        console.warn('[platformVaultEngine] snapshot recovered by catalog slug vault address', {
+          portalConfigId,
+          catalogSlug: options?.catalogSlug,
+          resolvedConfigId: row.portalConfigId,
+          vaultAddress: row.vaultAddress,
+        })
+      }
+    }
+  }
+  if (!row) return null
+  return buildVaultEngineSnapshotFromRow(row, { portalConfigId })
 }
 
 export function isVaultEngineLinked(engineType: string | null, engineReferenceId: string | null): boolean {

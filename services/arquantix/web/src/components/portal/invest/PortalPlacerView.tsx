@@ -23,6 +23,7 @@ import {
   portalLedgityVaultInvestRoute,
   portalMorphoVaultInvestRoute,
   portalVaultInvestRoute,
+  resolvePortalVaultProductInvestRoute,
 } from '@/lib/portal/portalRouting'
 import { resolvePortalBundleFlowRoute } from '@/lib/portal/resolvePortalBundleFlowRoute'
 import { formatEarnApyFromBps, formatEarnUsd } from '@/lib/portal/morphoVaultFormat'
@@ -309,7 +310,9 @@ export function PortalPlacerView({
                           currencyIcon={resolveCurrencyIcon(vault.assetSymbol ?? 'USDC')}
                           categoryIcon="vault"
                           href={vault.href}
-                          onInvest={() => router.push(portalVaultInvestRoute(vault.slug))}
+                          onInvest={() =>
+                            router.push(resolvePortalVaultProductInvestRoute(vault))
+                          }
                         />
                       )
                     }

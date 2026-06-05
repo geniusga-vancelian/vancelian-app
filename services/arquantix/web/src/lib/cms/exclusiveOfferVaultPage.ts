@@ -758,7 +758,9 @@ export async function getExclusiveOfferVaultPayload(
     packaged.engineReferenceId?.trim()
   ) {
     const { fetchVaultEngineSnapshot } = await import('@/lib/admin/platformVaultEngine')
-    vaultEngine = await fetchVaultEngineSnapshot(packaged.engineReferenceId.trim())
+    vaultEngine = await fetchVaultEngineSnapshot(packaged.engineReferenceId.trim(), {
+      catalogSlug: page.slug,
+    })
     if (vaultEngine) {
       lending = vaultEngineToFundingSnapshot(vaultEngine, locale)
     }

@@ -4,6 +4,11 @@ import {
   isFullSitePreviewPathname,
   isPortalPublicStaticPathname,
   isPublicPreviewPathname,
+  portalLedgityVaultInvestRoute,
+  portalMorphoVaultInvestRoute,
+  portalVaultInvestRoute,
+  resolvePortalVaultEngineInvestRoute,
+  resolvePortalVaultProductInvestRoute,
 } from './portalRouting'
 
 describe('isPortalPublicStaticPathname', () => {
@@ -30,6 +35,54 @@ describe('isPublicPreviewPathname', () => {
   it('rejette les autres chemins', () => {
     assert.equal(isPublicPreviewPathname('/admin/pages'), false)
     assert.equal(isPublicPreviewPathname('/app/dashboard'), false)
+  })
+})
+
+describe('resolvePortalVaultProductInvestRoute', () => {
+  it('route un vault_simple Ledgity vers le flux DeFi dédié', () => {
+    const href = resolvePortalVaultProductInvestRoute({
+      slug: 'vancelianflexvault',
+      vaultEngineConfigId: 'cfg-uuid',
+      vaultAddress: '0x46db81f232df1884081368cd2aacc9e6ec6489a2',
+      integrationMode: 'ledgity_vault',
+    })
+    assert.equal(href, portalLedgityVaultInvestRoute('cfg-uuid'))
+  })
+
+  it('route un vault_simple Morpho par adresse', () => {
+    const address = '0x916f179d5d9b7d8ad815ac2f8570aabf0c6a6e38'
+    const href = resolvePortalVaultProductInvestRoute({
+      slug: 'morpho-usdc',
+      vaultEngineConfigId: 'cfg-morpho',
+      vaultAddress: address,
+      integrationMode: 'direct_morpho',
+    })
+    assert.equal(href, portalMorphoVaultInvestRoute(address))
+  })
+
+  it('retombe sur la page lending mock sans moteur', () => {
+    const href = resolvePortalVaultProductInvestRoute({
+      slug: 'niseko',
+      vaultEngineConfigId: null,
+      vaultAddress: null,
+      integrationMode: null,
+    })
+    assert.equal(href, portalVaultInvestRoute('niseko'))
+  })
+})
+
+describe('resolvePortalVaultEngineInvestRoute', () => {
+  it('route depuis un snapshot moteur Ledgity', () => {
+    const href = resolvePortalVaultEngineInvestRoute(
+      {
+        portal_config_id: 'cfg-uuid',
+        integration_mode: 'ledgity_vault',
+        vault_address: '0x46db81f232df1884081368cd2aacc9e6ec6489a2',
+      },
+      'vancelianflexvault',
+      'withdraw',
+    )
+    assert.equal(href, portalLedgityVaultInvestRoute('cfg-uuid', 'withdraw'))
   })
 })
 

@@ -16,7 +16,11 @@ import {
   buildPortalOfferAsideView,
   buildPortalOfferHeroView,
 } from '@/lib/portal/offerDetailFormat'
-import { PORTAL_ROUTES, portalVaultInvestRoute } from '@/lib/portal/portalRouting'
+import {
+  PORTAL_ROUTES,
+  portalVaultInvestRoute,
+  resolvePortalVaultEngineInvestRoute,
+} from '@/lib/portal/portalRouting'
 
 type Props = {
   payload: ExclusiveOfferVaultPayload
@@ -30,8 +34,12 @@ export function PortalOfferDetailScreen({ payload }: Props) {
     if (!hero.heroCarouselModuleId) return payload.contentModules
     return payload.contentModules.filter((mod) => mod.id !== hero.heroCarouselModuleId)
   }, [payload.contentModules, hero.heroCarouselModuleId])
-  const investHref = portalVaultInvestRoute(payload.pageSlug)
-  const withdrawHref = portalVaultInvestRoute(payload.pageSlug, 'withdraw')
+  const investHref = payload.vaultEngine
+    ? resolvePortalVaultEngineInvestRoute(payload.vaultEngine, payload.pageSlug, 'invest')
+    : portalVaultInvestRoute(payload.pageSlug)
+  const withdrawHref = payload.vaultEngine
+    ? resolvePortalVaultEngineInvestRoute(payload.vaultEngine, payload.pageSlug, 'withdraw')
+    : portalVaultInvestRoute(payload.pageSlug, 'withdraw')
 
   return (
     <PortalPageContainer className="ofd-page">

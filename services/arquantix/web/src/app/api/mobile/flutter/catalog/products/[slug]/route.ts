@@ -147,7 +147,7 @@ export async function GET(
       if (packaged.engineType === 'LENDING') {
         snapshot = await fetchLendingEngineSnapshot(ref)
       } else if (packaged.engineType === 'VAULT_ENGINE') {
-        snapshot = await fetchVaultEngineSnapshotForCatalog(ref)
+        snapshot = await fetchVaultEngineSnapshotForCatalog(ref, { catalogSlug: slug })
       }
     }
 
