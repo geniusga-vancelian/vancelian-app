@@ -32,6 +32,11 @@ import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { buildBundleTargetAllocationRows } from '@/lib/portal/bundleTargetAllocationRows'
+import {
+  formatBundleMinFundingError,
+  formatBundleMinFundingHint,
+  isBundleFundingBelowMin,
+} from '@/lib/portal/bundleMinFunding'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 
 const PILOT_ENTRY_ASSETS = ['USDC', 'EURC'] as const
@@ -187,6 +192,10 @@ export function PortalBundleInvestFlow({ bundle, onExit }: Props) {
       setSetupError('Montant invalide.')
       return
     }
+    if (isBundleFundingBelowMin(parsedAmount, fundingAsset)) {
+      setSetupError(formatBundleMinFundingError(fundingAsset))
+      return
+    }
     setSetupError(null)
     setFlowScene('review')
   }
@@ -213,7 +222,8 @@ export function PortalBundleInvestFlow({ bundle, onExit }: Props) {
     !portfolioReady ||
     flowScene === 'blocked' ||
     !Number.isFinite(parsedAmount) ||
-    parsedAmount <= 0
+    parsedAmount <= 0 ||
+    isBundleFundingBelowMin(parsedAmount, fundingAsset)
 
   if (flowScene === 'result' && lockTerminal) {
     return (
@@ -272,6 +282,7 @@ export function PortalBundleInvestFlow({ bundle, onExit }: Props) {
               portfolioReady={portfolioReady}
               setupError={setupError}
               setupDisabled={setupDisabled}
+              minFundingHint={formatBundleMinFundingHint(fundingAsset)}
               onFundingAssetChange={setFundingAsset}
               onAmountChange={setAmount}
               onContinue={handleContinueToReview}

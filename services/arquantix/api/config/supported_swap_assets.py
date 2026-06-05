@@ -31,15 +31,29 @@ SUPPORTED_SWAP_CHAINS: dict[str, dict[str, Any]] = {
     },
 }
 
+MIN_SWAP_NOTIONAL_USDC = Decimal("5")
+
 DEFAULT_MIN_SWAP_AMOUNT: dict[str, Decimal] = {
     "ETH": Decimal("0.001"),
     "CBETH": Decimal("0.001"),
-    "USDC": Decimal("1"),
-    "EURC": Decimal("1"),
+    "USDC": Decimal("5"),
+    "EURC": Decimal("5"),
     "CBBTC": Decimal("0.00001"),
     "LINK": Decimal("1"),
     "AAVE": Decimal("0.01"),
     "UNI": Decimal("0.1"),
+}
+
+# Prix indicatifs USD — borne basse du min swap (≥ notional MIN_SWAP_NOTIONAL_USDC).
+_SWAP_MIN_USD_REFERENCE: dict[str, Decimal] = {
+    "USDC": Decimal("1"),
+    "EURC": Decimal("1"),
+    "ETH": Decimal("2000"),
+    "CBETH": Decimal("2000"),
+    "CBBTC": Decimal("80000"),
+    "LINK": Decimal("10"),
+    "AAVE": Decimal("150"),
+    "UNI": Decimal("6"),
 }
 
 DEFAULT_MAX_SWAP_AMOUNT: dict[str, Decimal] = {
@@ -97,6 +111,24 @@ def normalize_chain_key(chain: str) -> str:
     if normalized == "ethereum":
         return BASE_CHAIN_KEY
     return normalized
+
+
+def effective_min_swap_amount(symbol: str) -> Decimal:
+    """Montant minimum source — max(seuil actif, équivalent MIN_SWAP_NOTIONAL_USDC)."""
+    sym = normalize_asset_symbol(symbol)
+    floor = DEFAULT_MIN_SWAP_AMOUNT.get(sym, Decimal("1"))
+    ref_usd = _SWAP_MIN_USD_REFERENCE.get(sym)
+    if ref_usd is None or ref_usd <= 0:
+        return max(floor, MIN_SWAP_NOTIONAL_USDC)
+    notional_min = MIN_SWAP_NOTIONAL_USDC / ref_usd
+    return max(floor, notional_min)
+
+
+def format_swap_min_amount(amount: Decimal) -> str:
+    text = format(amount.normalize(), "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
 
 
 def normalize_asset_symbol(asset: str) -> str:
@@ -200,7 +232,7 @@ def _asset_public_payload(symbol: str, meta: dict[str, Any]) -> dict[str, Any]:
         "kind": meta.get("kind"),
         "chains": evm_chains,
         "decimals": meta.get("decimals"),
-        "min_amount": str(DEFAULT_MIN_SWAP_AMOUNT.get(symbol, Decimal("1"))),
+        "min_amount": format_swap_min_amount(effective_min_swap_amount(symbol)),
         "max_amount": str(DEFAULT_MAX_SWAP_AMOUNT.get(symbol, Decimal("100000"))),
     }
 

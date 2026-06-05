@@ -6,7 +6,7 @@ Séparée de ``config.supported_swap_assets`` (portail swap V1) pour ne pas
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_UP
 from typing import Any
 
 from config.supported_swap_assets import SUPPORTED_SWAP_CHAINS
@@ -78,6 +78,8 @@ BUNDLE_BASE_ASSETS: dict[str, dict[str, Any]] = {
     },
 }
 
+BUNDLE_MIN_FUNDING_USDC = Decimal("20")
+
 DEFAULT_BUNDLE_MIN: dict[str, Decimal] = {
     "USDC": Decimal("1"),
     "EURC": Decimal("1"),
@@ -108,6 +110,29 @@ PE_ASSET_TO_BUNDLE_LIFI: dict[str, str] = {
     "USDC": "USDC",
     "EURC": "EURC",
 }
+
+# Prix indicatif USD pour le min invest cbETH (équivalent BUNDLE_MIN_FUNDING_USDC).
+_BUNDLE_FUNDING_USD_REFERENCE: dict[str, Decimal] = {
+    "CBETH": Decimal("2000"),
+}
+
+
+def minimum_bundle_funding_amount(funding_asset: str) -> tuple[Decimal, str]:
+    """Retourne (minimum, libellé actif) pour un investissement bundle."""
+    upper = (funding_asset or "").strip().upper()
+    if upper in ("USDC", "USD"):
+        return BUNDLE_MIN_FUNDING_USDC, "USDC"
+    if upper == "EURC":
+        return BUNDLE_MIN_FUNDING_USDC, "EURC"
+    if upper == "EUR":
+        return Decimal("20"), "EUR"
+    ref_usd = _BUNDLE_FUNDING_USD_REFERENCE.get(upper)
+    if ref_usd and ref_usd > 0:
+        amount = (BUNDLE_MIN_FUNDING_USDC / ref_usd).quantize(
+            Decimal("0.0001"), rounding=ROUND_UP,
+        )
+        return amount, upper
+    return BUNDLE_MIN_FUNDING_USDC, upper
 
 
 @dataclass(frozen=True)

@@ -88,7 +88,7 @@ export async function resolveSwapTokenApprovalForExecution(args: {
     tokenAddress: token,
     spenderAddress: router as Address,
   })
-  if (allowance > 0n) {
+  if (allowance > BigInt(0)) {
     return null
   }
 

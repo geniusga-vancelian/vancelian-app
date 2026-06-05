@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 
 from config.supported_swap_assets import (
     DEFAULT_MAX_SWAP_AMOUNT,
-    DEFAULT_MIN_SWAP_AMOUNT,
+    effective_min_swap_amount,
     SUPPORTED_SWAP_CHAINS,
     asset_available_on_chain,
     is_evm_swap_chain,
@@ -131,7 +131,7 @@ def validate_quote_request(
         )
 
     parsed_amount = parse_human_amount(amount)
-    min_amount = DEFAULT_MIN_SWAP_AMOUNT.get(from_sym, Decimal("1"))
+    min_amount = effective_min_swap_amount(from_sym)
     max_amount = DEFAULT_MAX_SWAP_AMOUNT.get(from_sym, Decimal("100000"))
     if parsed_amount < min_amount:
         raise SwapValidationError(

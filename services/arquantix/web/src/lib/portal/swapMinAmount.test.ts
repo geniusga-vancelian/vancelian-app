@@ -22,6 +22,6 @@ describe('swapMinAmount', () => {
   })
 
   it('formatSwapMinAmountError matches API message', () => {
-    assert.equal(formatSwapMinAmountError('USDC', '1'), 'Montant minimum : 1 USDC')
+    assert.equal(formatSwapMinAmountError('USDC', '5'), 'Montant minimum : 5 USDC')
   })
 })

@@ -1,4 +1,6 @@
 """Tests whitelist swap assets."""
+from decimal import Decimal
+
 import pytest
 
 from config.base_allowed_assets import BASE_SWAP_SYMBOLS
@@ -113,31 +115,35 @@ def test_reject_amount_below_min():
         validate_quote_request(
             from_asset="USDC",
             to_asset="ETH",
-            amount="0.5",
+            amount="4.99",
             from_chain="base",
             to_chain="base",
         )
     assert exc.value.code == "swap.amount_below_min"
-    assert "1" in str(exc.value)
+    assert "5" in str(exc.value)
 
 
 def test_usdc_at_catalog_min_passes_validation():
-    from decimal import Decimal
-
     parsed, _slippage = validate_quote_request(
         from_asset="USDC",
         to_asset="CBBTC",
-        amount="1",
+        amount="5",
         from_chain="base",
         to_chain="base",
     )
-    assert parsed == Decimal("1")
+    assert parsed == Decimal("5")
 
 
-def test_public_usdc_min_amount_is_one():
+def test_public_usdc_min_amount_is_five():
     assets = list_supported_source_assets_public()
     usdc = next(item for item in assets if item["symbol"] == "USDC")
-    assert usdc["min_amount"] == "1"
+    assert usdc["min_amount"] == "5"
+
+
+def test_effective_min_swap_amount_usdc_notional():
+    from config.supported_swap_assets import effective_min_swap_amount
+
+    assert effective_min_swap_amount("USDC") == Decimal("5")
 
 
 def test_human_amount_to_atomic_usdc():

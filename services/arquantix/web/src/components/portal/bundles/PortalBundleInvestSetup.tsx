@@ -17,6 +17,7 @@ type Props = {
   portfolioReady: boolean
   setupError: string | null
   setupDisabled: boolean
+  minFundingHint: string
   onFundingAssetChange: (asset: string) => void
   onAmountChange: (value: string) => void
   onContinue: () => void
@@ -33,6 +34,7 @@ export function PortalBundleInvestSetup({
   portfolioReady,
   setupError,
   setupDisabled,
+  minFundingHint,
   onFundingAssetChange,
   onAmountChange,
   onContinue,
@@ -120,6 +122,7 @@ export function PortalBundleInvestSetup({
               ))}
             </div>
           ) : null}
+          <p className="inv-io__balance">{minFundingHint}</p>
         </div>
 
         <div className="inv-divider" aria-hidden="true" />

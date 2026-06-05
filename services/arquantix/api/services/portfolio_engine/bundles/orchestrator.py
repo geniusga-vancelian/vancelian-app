@@ -30,6 +30,7 @@ from services.portfolio_engine.bundle_execution import BundleExecutionAdapter
 from services.portfolio_engine.bundle_execution.bundle_cost_basis import reference_cost_basis_eur
 from services.portfolio_engine.bundle_execution.lifi_base_config import (
     display_bundle_asset,
+    minimum_bundle_funding_amount,
     normalize_bundle_asset,
 )
 from services.portfolio_engine.bundle_execution.types import ExecutionLeg
@@ -115,6 +116,7 @@ class BundleOrchestrator:
         entry_asset = entry_config["entry_asset_default"]
 
         self._validate_funding_asset(funding_asset, entry_config)
+        self._validate_funding_amount(funding_asset, funding_amount)
 
         allocations = self._load_target_allocations(db, portfolio_id)
         if not allocations:
@@ -870,6 +872,11 @@ class BundleOrchestrator:
         except BundleOrchestratorError as exc:
             return self._invalid_preview(str(exc), funding_asset, funding_amount)
 
+        try:
+            self._validate_funding_amount(funding_asset, funding_amount)
+        except BundleOrchestratorError as exc:
+            return self._invalid_preview(str(exc), funding_asset, funding_amount)
+
         allocations = self._load_target_allocations(db, portfolio_id)
         if not allocations:
             return self._invalid_preview(
@@ -1409,6 +1416,14 @@ class BundleOrchestrator:
                 "entry_assets_allowed", _ENTRY_ASSETS_ALLOWED_FALLBACK,
             ),
         }
+
+    @staticmethod
+    def _validate_funding_amount(funding_asset: str, funding_amount: Decimal) -> None:
+        minimum, label = minimum_bundle_funding_amount(funding_asset)
+        if funding_amount < minimum:
+            raise BundleOrchestratorError(
+                f"funding_amount_below_min: Montant minimum : {minimum} {label}",
+            )
 
     @staticmethod
     def _validate_funding_asset(funding_asset: str, entry_config: dict) -> None:
