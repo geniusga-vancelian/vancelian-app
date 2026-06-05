@@ -14,8 +14,10 @@ import {
   parseSwapGasLimit,
 } from '@/lib/portal/swapTxFormat'
 import { ensureSwapTokenApproval, assertSwapTokenApprovalPayload } from '@/lib/portal/swapTokenApproval'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePrivyLiveSession } from '@/lib/portal/usePrivyLiveSession'
 import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
+import type { ExecutionWalletMode } from '@/lib/wallet/useExecutionWallet'
 import { generateMockExternalWalletTxHash, isLocalMockExternalWallet } from '@/lib/wallet/externalWalletMock'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
@@ -49,8 +51,10 @@ export function useLifiSwapExecution(
   options?: LifiSwapExecutionOptions,
 ) {
   const privyLive = usePrivyLiveSession()
+  const { isExternalWallet } = usePortalExecutionScope()
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
   const submitTxFn = options?.submitTx ?? submitSwapTx
+  const signingMode: ExecutionWalletMode = isExternalWallet ? 'external_evm' : 'privy_embedded'
 
   const signAndSubmit = useCallback(
     async (exec: SwapExecutePayload) => {
@@ -80,6 +84,8 @@ export function useLifiSwapExecution(
 
       const wallet = await resolveWallet(null, {
         expectedAddress: exec.signing_wallet_address ?? undefined,
+        // Scope navbar (Privy par défaut), pas le mode stale en localStorage.
+        forceMode: signingMode,
       })
 
       if (
@@ -132,7 +138,16 @@ export function useLifiSwapExecution(
       await submitTxFn(exec.swap_id, hash)
       return hash
     },
-    [fromAsset, onPhaseChange, privyLive, resolveWallet, sendPortalTransaction, submitTxFn, swapMockMode],
+    [
+      fromAsset,
+      onPhaseChange,
+      privyLive,
+      resolveWallet,
+      sendPortalTransaction,
+      signingMode,
+      submitTxFn,
+      swapMockMode,
+    ],
   )
 
   const pollUntilTerminal = useCallback(async (swapId: string) => {

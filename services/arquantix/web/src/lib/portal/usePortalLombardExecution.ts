@@ -135,8 +135,6 @@ export function usePortalLombardExecution() {
               },
               wallet,
               {
-                walletMode: wallet.type,
-                chainId: tx.chainId,
                 phase: tx.operation === 'approve' ? 'approve' : undefined,
               },
             )
