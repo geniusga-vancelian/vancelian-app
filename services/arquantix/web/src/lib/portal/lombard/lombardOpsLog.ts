@@ -76,7 +76,7 @@ export function logLombardPrepareBlocked(args: {
   collateral: string
   borrowAmount: string
   idempotencyKey: string
-  error: { code: string; message: string }
+  error: { code: string; message: string; revertReason?: string }
 }): void {
   logLombardOpsEvent({
     code: 'lombard.prepare_blocked',
@@ -89,6 +89,7 @@ export function logLombardPrepareBlocked(args: {
     metadata: {
       collateral: args.collateral,
       borrowAmount: args.borrowAmount,
+      ...(args.error.revertReason ? { revertReason: args.error.revertReason } : {}),
     },
   })
 }

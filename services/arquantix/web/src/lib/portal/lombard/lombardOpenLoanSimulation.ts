@@ -22,7 +22,9 @@ export function formatLombardSimulationUserMessage(revertReason: string | null |
   if (
     lower.includes('insufficient') ||
     lower.includes('collateral') ||
-    lower.includes('liquidity')
+    lower.includes('liquidity') ||
+    lower.includes('exceeds balance') ||
+    lower.includes('transfer amount')
   ) {
     return 'La marge ou la garantie disponible est insuffisante pour cet emprunt. Réduisez le montant ou réessayez dans quelques instants.'
   }

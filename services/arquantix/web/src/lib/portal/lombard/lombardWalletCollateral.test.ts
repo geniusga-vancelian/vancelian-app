@@ -16,13 +16,23 @@ describe('lombardWalletCollateral', () => {
     assert.equal(raw, BigInt(60_000))
   })
 
-  it('uses portal balance when higher than on-chain read', () => {
+  it('uses portal balance when on-chain read is still zero', () => {
     const raw = resolveEffectiveWalletCollateralRaw({
       onChainRaw: BigInt(0),
       portalBalanceHuman: '0.0006',
       decimals: 8,
     })
     assert.equal(raw, BigInt(60_000))
+  })
+
+  it('never inflates with portal balance when on-chain is already non-zero', () => {
+    const onChainRaw = BigInt('3244820948372523')
+    const raw = resolveEffectiveWalletCollateralRaw({
+      onChainRaw,
+      portalBalanceHuman: '0.05',
+      decimals: 18,
+    })
+    assert.equal(raw, onChainRaw)
   })
 
   it('resolvePortalCollateralBalanceHuman prefers onChainBalance', () => {

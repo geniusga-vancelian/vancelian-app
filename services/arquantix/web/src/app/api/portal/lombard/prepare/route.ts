@@ -285,7 +285,13 @@ export async function POST(request: NextRequest) {
           collateral: parsed.collateral,
           borrowAmount: parsed.borrowAmount,
           idempotencyKey: parsed.idempotencyKey,
-          error: { code: error.code, message: error.message },
+          error: {
+            code: error.code,
+            message: error.message,
+            ...(error instanceof LombardSimulationError && error.revertReason
+              ? { revertReason: error.revertReason }
+              : {}),
+          },
         })
         if (isLombardQuotePrepareDriftCode(error.code)) {
           const driftReason = resolvePrepareBlockedDriftReason({

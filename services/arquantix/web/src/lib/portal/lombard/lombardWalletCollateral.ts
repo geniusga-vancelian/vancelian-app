@@ -18,18 +18,21 @@ export function resolvePortalCollateralBalanceHuman(args: {
 /**
  * Garantie wallet effective pour capacité / devis Morpho.
  * Le hub peut afficher un solde plateforme alors que `balanceOf` RPC est encore à 0 ;
- * on retient le max pour ne pas bloquer l’emprunt quand les fonds sont visibles côté portail.
+ * on retient le solde portail uniquement dans ce cas (RPC en retard).
+ * Si `balanceOf` est déjà > 0, on ne gonfle jamais avec le portail — sinon simulation
+ * open_loan revert (ERC20 transfer amount exceeds balance).
  */
 export function resolveEffectiveWalletCollateralRaw(args: {
   onChainRaw: bigint
   portalBalanceHuman?: string | null
   decimals: number
 }): bigint {
+  if (args.onChainRaw > BigInt(0)) return args.onChainRaw
+
   const portalHuman = args.portalBalanceHuman?.trim()
   if (!portalHuman) return args.onChainRaw
   try {
-    const portalRaw = parseLombardHumanAmountToRaw(portalHuman, args.decimals)
-    return portalRaw > args.onChainRaw ? portalRaw : args.onChainRaw
+    return parseLombardHumanAmountToRaw(portalHuman, args.decimals)
   } catch {
     return args.onChainRaw
   }
