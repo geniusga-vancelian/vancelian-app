@@ -43,6 +43,85 @@ export function assertSwapTokenApprovalPayload(
   )
 }
 
+const BASE_SWAP_SOURCE_TOKEN_BY_SYMBOL: Record<string, Address> = {
+  USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  EURC: '0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42',
+  CBBTC: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf',
+  CBETH: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22',
+  LINK: '0x88fb150bdc53a65fe94dea0c9ba0a6daf8c6e196',
+}
+
+function resolveBaseSwapSourceToken(fromAsset?: string): Address | null {
+  if (!fromAsset?.trim()) return null
+  return BASE_SWAP_SOURCE_TOKEN_BY_SYMBOL[fromAsset.trim().toUpperCase()] ?? null
+}
+
+/**
+ * Résout l'approbation ERC-20 avant swap : payload API, fallback routeur LI.FI,
+ * puis détection on-chain si allowance nulle (LI.FI sans approvalAddress).
+ */
+export async function resolveSwapTokenApprovalForExecution(args: {
+  approval: SwapTokenApprovalPayload | null | undefined
+  transactionTo?: string | null
+  chainId: number
+  walletAddress: Address
+  fromAsset?: string
+}): Promise<SwapTokenApprovalPayload | null> {
+  const coalesced = coalesceSwapTokenApproval(args.approval, args.transactionTo)
+  if (isSwapTokenApprovalRequired(coalesced)) {
+    return coalesced
+  }
+
+  if (args.chainId !== 8453) {
+    return null
+  }
+
+  const router = args.transactionTo?.trim()
+  const token = resolveBaseSwapSourceToken(args.fromAsset)
+  if (!router || !token) {
+    return null
+  }
+
+  const allowance = await readSwapTokenAllowance({
+    chainId: args.chainId,
+    owner: args.walletAddress,
+    tokenAddress: token,
+    spenderAddress: router as Address,
+  })
+  if (allowance > 0n) {
+    return null
+  }
+
+  return {
+    required: true,
+    token_address: token,
+    spender_address: router,
+    amount_atomic: '1',
+  }
+}
+
+/** Complète spender manquant via le routeur LI.FI (transaction.to). */
+export function coalesceSwapTokenApproval(
+  approval: SwapTokenApprovalPayload | null | undefined,
+  transactionTo?: string | null,
+): SwapTokenApprovalPayload {
+  if (!approval?.required) {
+    return approval ?? { required: false }
+  }
+  if (isSwapTokenApprovalRequired(approval)) {
+    return approval
+  }
+  const spender = approval.spender_address?.trim() || transactionTo?.trim()
+  if (!spender || !approval.token_address?.trim() || !approval.amount_atomic?.trim()) {
+    return approval
+  }
+  return {
+    ...approval,
+    required: true,
+    spender_address: spender,
+  }
+}
+
 export async function readSwapTokenAllowance(args: {
   chainId: number
   owner: Address

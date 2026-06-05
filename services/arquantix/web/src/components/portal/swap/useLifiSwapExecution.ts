@@ -13,7 +13,12 @@ import {
   parseSwapChainId,
   parseSwapGasLimit,
 } from '@/lib/portal/swapTxFormat'
-import { ensureSwapTokenApproval, assertSwapTokenApprovalPayload } from '@/lib/portal/swapTokenApproval'
+import {
+  ensureSwapTokenApproval,
+  assertSwapTokenApprovalPayload,
+  isSwapTokenApprovalRequired,
+  resolveSwapTokenApprovalForExecution,
+} from '@/lib/portal/swapTokenApproval'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePrivyLiveSession } from '@/lib/portal/usePrivyLiveSession'
 import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
@@ -103,13 +108,20 @@ export function useLifiSwapExecution(
         return hash
       }
 
-      if (exec.token_approval?.required) {
-        assertSwapTokenApprovalPayload(exec.token_approval)
+      const tokenApproval = await resolveSwapTokenApprovalForExecution({
+        approval: exec.token_approval,
+        transactionTo: tx.to,
+        chainId,
+        walletAddress: wallet.address as `0x${string}`,
+        fromAsset,
+      })
+      if (tokenApproval && isSwapTokenApprovalRequired(tokenApproval)) {
+        assertSwapTokenApprovalPayload(tokenApproval)
         onPhaseChange?.('approving')
         const approvalResult = await ensureSwapTokenApproval({
           chainId,
           walletAddress: wallet.address as `0x${string}`,
-          approval: exec.token_approval,
+          approval: tokenApproval,
           assetSymbol: fromAsset,
           sendTransaction: (approveTx, errorContext) =>
             sendPortalTransaction(approveTx, wallet, errorContext),

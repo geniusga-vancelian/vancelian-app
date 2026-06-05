@@ -59,6 +59,11 @@ def build_token_approval_payload(lifi_quote_raw: Any) -> SwapTokenApprovalPayloa
         return SwapTokenApprovalPayload(required=False)
 
     spender_address = _normalize_address(estimate.get("approvalAddress"))
+    if not spender_address:
+        tx_req = lifi_quote_raw.get("transactionRequest") or {}
+        if isinstance(tx_req, dict):
+            # LI.FI omet parfois estimate.approvalAddress alors que le routeur (tx.to) requiert allowance.
+            spender_address = _normalize_address(tx_req.get("to"))
     amount_atomic = _normalize_amount_atomic(action.get("fromAmount"))
     if not spender_address or not amount_atomic:
         return SwapTokenApprovalPayload(required=False)

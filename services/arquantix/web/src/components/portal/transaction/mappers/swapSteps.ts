@@ -56,8 +56,12 @@ export const SWAP_TERMINAL_FAILURE_COPY: TransactionTerminalFailureCopy = {
   lines: ['Aucun actif n’a été échangé.'],
 }
 
-const FORBIDDEN_USER_PATTERN =
-  /revert|retryable_failed|group_key|logical_borrow_id|idempotency|lifi|li\.fi|token approval|tx reverted|0x[a-f0-9]{8,}/i
+/** Jargon interne / dumps hex — masqué. Les messages wallet formatés passent. */
+const INTERNAL_ERROR_PATTERN =
+  /retryable_failed|group_key|logical_borrow_id|idempotency|0x[a-f0-9]{40,}/i
+
+const SWAP_USER_FACING_HINT_PATTERN =
+  /approbation|solde .+ insuffisant|wallet vancelian|metamask|refusé sur|transaction refusée|quote expirée|devis a expiré|montant|estimation/i
 
 /** Index stepper produit (0–4) ; 5 = terminé. */
 export function swapProcessingStepperIndex(phase: SwapExecutionPhase): number {
@@ -134,8 +138,23 @@ export function resolveSwapFailureCopy(error: unknown): TransactionTerminalFailu
       lines: [SWAP_FLOW_UI.priceChangedLine, SWAP_TERMINAL_FAILURE_COPY.lines[0]!],
     }
   }
-  if (FORBIDDEN_USER_PATTERN.test(msg)) {
+  if (INTERNAL_ERROR_PATTERN.test(msg)) {
     return SWAP_TERMINAL_FAILURE_COPY
+  }
+  if (SWAP_USER_FACING_HINT_PATTERN.test(msg)) {
+    return {
+      title: SWAP_TERMINAL_FAILURE_COPY.title,
+      lines: [msg, SWAP_TERMINAL_FAILURE_COPY.lines[0]!],
+    }
+  }
+  if (/execution reverted|tx reverted|revert on-chain/i.test(msg)) {
+    return {
+      title: SWAP_TERMINAL_FAILURE_COPY.title,
+      lines: [
+        'L’échange n’a pas pu être exécuté on-chain. Refaites une estimation depuis l’étape montant.',
+        SWAP_TERMINAL_FAILURE_COPY.lines[0]!,
+      ],
+    }
   }
   if (
     msg.includes('Swap échoué') ||

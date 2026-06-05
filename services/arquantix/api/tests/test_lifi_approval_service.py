@@ -27,6 +27,25 @@ def test_build_token_approval_payload_usdt():
     assert payload.amount_atomic == "10000000"
 
 
+def test_build_token_approval_payload_falls_back_to_transaction_router():
+    raw = {
+        "action": {
+            "fromAmount": "1000000",
+            "fromToken": {
+                "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            },
+        },
+        "estimate": {},
+        "transactionRequest": {
+            "to": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE",
+        },
+    }
+    payload = build_token_approval_payload(raw)
+    assert payload.required is True
+    assert payload.spender_address == "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+    assert payload.amount_atomic == "1000000"
+
+
 def test_build_token_approval_payload_native_eth_skipped():
     raw = {
         "action": {
