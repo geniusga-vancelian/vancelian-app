@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { isLombardV1Enabled } from '@/lib/portal/lombard/lombardConfig'
+import { LombardAsyncTimeoutError, withLombardAsyncTimeout } from '@/lib/portal/lombard/lombardAsyncTimeout'
 import { createLombardLedgerEntries, LombardLedgerError } from '@/lib/portal/lombard/lombardLedger'
 import { LombardBetaError, LombardSafetyError } from '@/lib/portal/lombard/lombardBetaErrors'
-import { logLombardOpsEvent, logLombardPrepareBlocked, logLombardQuotePrepareDrift } from '@/lib/portal/lombard/lombardOpsLog'
-import { LombardMarketError } from '@/lib/portal/lombard/lombardMarket'
+import {
+  logLombardOpsEvent,
+  logLombardPrepareBlocked,
+  logLombardPrepareStepSlow,
+  logLombardPrepareSucceeded,
+  logLombardQuotePrepareDrift,
+} from '@/lib/portal/lombard/lombardOpsLog'
+import { LombardMarketError, resolveLombardMarket } from '@/lib/portal/lombard/lombardMarket'
 import { LombardQuoteError } from '@/lib/portal/lombard/lombardQuote'
 import {
   isLombardQuotePrepareDriftCode,
@@ -139,16 +146,33 @@ export async function POST(request: NextRequest) {
     })
 
     const retryLink = buildRetryLinkFromParsed(parsed)
+    const prepareStarted = Date.now()
 
-    const quote = await runLombardPreBorrowSafetyChecks({
-      personId,
-      collateral: parsed.collateral,
-      borrowAmount: parsed.borrowAmount,
-      walletAddress: parsed.walletAddress,
-      targetLtvPercent: parsed.targetLtvPercent,
-      portalWalletCollateralBalance: parsed.portalWalletCollateralBalance,
-      chainId: 8453,
-    })
+    const safetyStarted = Date.now()
+    const quote = await withLombardAsyncTimeout(
+      'pre_borrow_safety_checks',
+      () =>
+        runLombardPreBorrowSafetyChecks({
+          personId,
+          collateral: parsed.collateral,
+          borrowAmount: parsed.borrowAmount,
+          walletAddress: parsed.walletAddress,
+          targetLtvPercent: parsed.targetLtvPercent,
+          portalWalletCollateralBalance: parsed.portalWalletCollateralBalance,
+          chainId: 8453,
+        }),
+      20_000,
+    )
+    const safetyMs = Date.now() - safetyStarted
+    if (safetyMs > 5_000) {
+      logLombardPrepareStepSlow({
+        personId,
+        walletAddress: parsed.walletAddress,
+        idempotencyKey: parsed.idempotencyKey,
+        step: 'pre_borrow_safety_checks',
+        durationMs: safetyMs,
+      })
+    }
 
     if (isLombardMockEnabled()) {
       const mockPrepared = await prepareLombardMockOpenLoan({
@@ -164,12 +188,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(mockPrepared)
     }
 
+    const resolvedMarket = await withLombardAsyncTimeout(
+      'resolve_lombard_market',
+      () => resolveLombardMarket({ collateral: parsed.collateral }),
+      18_000,
+    )
+    const buildStarted = Date.now()
     const transactions = await buildLombardOpenLoanTransactions({
       collateral: parsed.collateral,
       walletAddress: parsed.walletAddress,
       guaranteeAmountRaw: BigInt(quote.guaranteeAmountRaw),
       borrowAmountRaw: BigInt(quote.borrowAmountRaw),
+      resolvedMarket,
     })
+    const buildMs = Date.now() - buildStarted
+    if (buildMs > 8_000) {
+      logLombardPrepareStepSlow({
+        personId,
+        walletAddress: parsed.walletAddress,
+        idempotencyKey: parsed.idempotencyKey,
+        step: 'build_open_loan_transactions',
+        durationMs: buildMs,
+      })
+    }
 
     await assertLombardOpenLoanSimulates({
       walletAddress: parsed.walletAddress,
@@ -188,6 +229,16 @@ export async function POST(request: NextRequest) {
       retryLink,
     })
 
+    logLombardPrepareSucceeded({
+      personId,
+      walletAddress: parsed.walletAddress,
+      collateral: parsed.collateral,
+      borrowAmount: parsed.borrowAmount,
+      idempotencyKey: parsed.idempotencyKey,
+      durationMs: Date.now() - prepareStarted,
+      txCount: transactions.length,
+    })
+
     return NextResponse.json({
       transactions,
       ledgerEntries: ledgerEntries.map((row) => ({
@@ -203,6 +254,19 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid request data', issues: error.issues }, { status: 400 })
+    }
+    if (error instanceof LombardAsyncTimeoutError) {
+      if (personId && parsed) {
+        logLombardPrepareBlocked({
+          personId,
+          walletAddress: parsed.walletAddress,
+          collateral: parsed.collateral,
+          borrowAmount: parsed.borrowAmount,
+          idempotencyKey: parsed.idempotencyKey,
+          error: { code: error.code, message: error.message },
+        })
+      }
+      return NextResponse.json({ code: error.code, message: error.message }, { status: 504 })
     }
     if (
       error instanceof LombardQuoteError ||

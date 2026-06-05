@@ -44,26 +44,36 @@ const MARKET_BY_ID_QUERY = `
   }
 `
 
+const MORPHO_GRAPHQL_TIMEOUT_MS = 15_000
+
 async function morphoGraphqlRequest<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  const res = await fetch(MORPHO_GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    cache: 'no-store',
-  })
-  const payload = (await res.json().catch(() => ({}))) as {
-    data?: T
-    errors?: GraphqlError[]
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), MORPHO_GRAPHQL_TIMEOUT_MS)
+  try {
+    const res = await fetch(MORPHO_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ query, variables }),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    const payload = (await res.json().catch(() => ({}))) as {
+      data?: T
+      errors?: GraphqlError[]
+    }
+    if (!res.ok || payload.errors?.length) {
+      const message =
+        payload.errors?.map((e) => e.message).filter(Boolean).join('; ') ||
+        `Morpho GraphQL HTTP ${res.status}`
+      throw new Error(message)
+    }
+    if (!payload.data) {
+      throw new Error('Morpho GraphQL: empty response.')
+    }
+    return payload.data
+  } finally {
+    clearTimeout(timeoutId)
   }
-  if (!res.ok || payload.errors?.length) {
-    const message =
-      payload.errors?.map((e) => e.message).filter(Boolean).join('; ') || `Morpho GraphQL HTTP ${res.status}`
-    throw new Error(message)
-  }
-  if (!payload.data) {
-    throw new Error('Morpho GraphQL: empty response.')
-  }
-  return payload.data
 }
 
 export async function fetchLombardMorphoMarket(args: {

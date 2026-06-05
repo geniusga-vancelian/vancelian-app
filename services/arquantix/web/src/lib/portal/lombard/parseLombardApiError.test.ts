@@ -28,4 +28,12 @@ describe('parseLombardApiError', () => {
     )
     assert.match(msg, /capacité d’emprunt/i)
   })
+
+  it('maps prepare_timeout to French product copy', () => {
+    const msg = parseLombardApiError(
+      { code: 'lombard.prepare_timeout', message: 'timeout' },
+      504,
+    )
+    assert.match(msg, /préparation de l’emprunt a expiré/i)
+  })
 })

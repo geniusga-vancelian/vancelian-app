@@ -5,6 +5,8 @@ export type LombardOpsEventCode =
   | 'lombard.quote_blocked'
   | 'lombard.prepare_requested'
   | 'lombard.prepare_blocked'
+  | 'lombard.prepare_succeeded'
+  | 'lombard.prepare_step_slow'
   | 'lombard.quote_prepare_drift'
   | 'lombard.tx_submitted'
   | 'lombard.confirm_success'
@@ -91,7 +93,6 @@ export function logLombardPrepareBlocked(args: {
   })
 }
 
-/** Alerte ops : devis UI OK mais prepare refuse le même montant (régression ou drift marché). */
 export function logLombardQuotePrepareDrift(args: {
   personId: string
   walletAddress: string
@@ -116,6 +117,52 @@ export function logLombardQuotePrepareDrift(args: {
       driftReason: args.driftReason,
       portalBalanceSent: Boolean(args.portalWalletCollateralBalance?.trim()),
       portalWalletCollateralBalance: args.portalWalletCollateralBalance ?? null,
+    },
+  })
+}
+
+export function logLombardPrepareSucceeded(args: {
+  personId: string
+  walletAddress: string
+  collateral: string
+  borrowAmount: string
+  idempotencyKey: string
+  durationMs: number
+  txCount: number
+}): void {
+  logLombardOpsEvent({
+    code: 'lombard.prepare_succeeded',
+    level: 'info',
+    message: 'Lombard prepare succeeded.',
+    personId: args.personId,
+    walletAddress: args.walletAddress,
+    groupKey: args.idempotencyKey,
+    metadata: {
+      collateral: args.collateral,
+      borrowAmount: args.borrowAmount,
+      durationMs: args.durationMs,
+      txCount: args.txCount,
+    },
+  })
+}
+
+export function logLombardPrepareStepSlow(args: {
+  personId: string
+  walletAddress: string
+  idempotencyKey: string
+  step: string
+  durationMs: number
+}): void {
+  logLombardOpsEvent({
+    code: 'lombard.prepare_step_slow',
+    level: 'warning',
+    message: `Lombard prepare step slow: ${args.step}`,
+    personId: args.personId,
+    walletAddress: args.walletAddress,
+    groupKey: args.idempotencyKey,
+    metadata: {
+      step: args.step,
+      durationMs: args.durationMs,
     },
   })
 }

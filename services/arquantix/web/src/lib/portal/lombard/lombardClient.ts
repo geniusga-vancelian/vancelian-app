@@ -14,33 +14,63 @@ import { LombardPrepareBlockedError } from '@/lib/portal/lombard/lombardPrepareF
 import { parseLombardApiError, parseLombardApiErrorCode } from '@/lib/portal/lombard/parseLombardApiError'
 import type { WalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 
-async function lombardFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    credentials: 'include',
-    cache: 'no-store',
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers,
-    },
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    const message = parseLombardApiError(data, res.status)
-    const code = parseLombardApiErrorCode(data)
-    if (
-      (typeof data === 'object' && data && (data as { code?: string }).code === 'lombard.base_rpc_busy') ||
-      isBaseRpcTransientError(message)
-    ) {
-      throw new Error(formatBaseRpcUserMessage(message))
+const LOMBARD_PREPARE_FETCH_TIMEOUT_MS = 50_000
+
+async function lombardFetch<T>(
+  url: string,
+  init?: RequestInit & { timeoutMs?: number },
+): Promise<T> {
+  const timeoutMs = init?.timeoutMs
+  const controller = timeoutMs ? new AbortController() : null
+  const timeoutId =
+    timeoutMs && controller
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : undefined
+
+  try {
+    const res = await fetch(url, {
+      credentials: 'include',
+      cache: 'no-store',
+      ...init,
+      signal: controller?.signal ?? init?.signal,
+      headers: {
+        Accept: 'application/json',
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init?.headers,
+      },
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const message = parseLombardApiError(data, res.status)
+      const code = parseLombardApiErrorCode(data)
+      if (
+        (typeof data === 'object' && data && (data as { code?: string }).code === 'lombard.base_rpc_busy') ||
+        isBaseRpcTransientError(message)
+      ) {
+        throw new Error(formatBaseRpcUserMessage(message))
+      }
+      if (init?.method === 'POST' && url.includes('/lombard/prepare')) {
+        throw new LombardPrepareBlockedError(
+          code ?? 'lombard.prepare_failed',
+          message,
+          res.status,
+        )
+      }
+      throw new Error(message)
     }
-    if (init?.method === 'POST' && url.includes('/lombard/prepare') && code) {
-      throw new LombardPrepareBlockedError(code, message, res.status)
+    return data as T
+  } catch (error) {
+    if (controller?.signal.aborted) {
+      throw new LombardPrepareBlockedError(
+        'lombard.prepare_timeout',
+        "La préparation de l'emprunt a expiré. Réessayez dans quelques instants.",
+        504,
+      )
     }
-    throw new Error(message)
+    throw error
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
   }
-  return data as T
 }
 
 export async function fetchPortalLombardMarkets(): Promise<LombardMarketsPayload> {
@@ -124,6 +154,7 @@ export async function preparePortalLombardOpenLoan(args: {
   const portalBalance = args.portalWalletCollateralBalance?.trim()
   return lombardFetch('/api/portal/lombard/prepare', {
     method: 'POST',
+    timeoutMs: LOMBARD_PREPARE_FETCH_TIMEOUT_MS,
     body: JSON.stringify({
       collateral: args.collateral,
       borrow_amount: borrowAmount,

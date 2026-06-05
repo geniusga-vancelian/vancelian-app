@@ -15,6 +15,7 @@ import {
   shouldAttemptInvisibleOpenLoanRetry,
   toLombardTerminalBorrowError,
 } from '@/lib/portal/lombard/lombardOpenLoanExecutionPolicy'
+import { LombardPrepareBlockedError } from '@/lib/portal/lombard/lombardPrepareFailure'
 
 describe('lombardOpenLoanExecutionPolicy', () => {
   it('allows invisible retry on open_loan revert before retry consumed', () => {
@@ -80,6 +81,12 @@ describe('lombardOpenLoanExecutionPolicy', () => {
     assert.equal(
       isLombardPrepareRetryableError(
         new Error('Le réseau refuse cette ouverture d’emprunt pour l’instant.'),
+      ),
+      true,
+    )
+    assert.equal(
+      isLombardPrepareRetryableError(
+        new LombardPrepareBlockedError('lombard.prepare_timeout', 'La préparation a expiré.'),
       ),
       true,
     )

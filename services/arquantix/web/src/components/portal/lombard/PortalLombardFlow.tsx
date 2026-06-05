@@ -45,7 +45,7 @@ import type {
   LombardQuoteResult,
 } from '@/lib/portal/lombard/lombardTypes'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
-import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { portalBorrowRoute, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { bumpLombardPositionsRevision } from '@/lib/portal/lombard/lombardPositionsRefresh'
 import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
 import {
@@ -96,6 +96,20 @@ export function PortalLombardFlow() {
 
   const [selectedCollateral, setSelectedCollateral] = useState<string | null>(() =>
     prefilled ? urlIntent.collateral : null,
+  )
+
+  useEffect(() => {
+    if (urlIntent.mode === 'prefilled') {
+      setSelectedCollateral(urlIntent.collateral)
+    }
+  }, [urlIntent])
+
+  const handleSelectCollateral = useCallback(
+    (collateral: string) => {
+      setSelectedCollateral(collateral)
+      router.replace(portalBorrowRoute({ collateral }), { scroll: false })
+    },
+    [router],
   )
   const [borrowAmount, setBorrowAmount] = useState('')
   const [targetLtvPercent, setTargetLtvPercent] = useState(DEFAULT_TARGET_LTV_PERCENT)
@@ -529,7 +543,7 @@ export function PortalLombardFlow() {
             markets={markets}
             positions={positions}
             selectedCollateral={selectedCollateral}
-            onSelectCollateral={setSelectedCollateral}
+            onSelectCollateral={handleSelectCollateral}
             capacity={capacity}
             capacityLoading={capacityLoading}
             capacityRefreshing={capacityRefreshing}

@@ -36,6 +36,8 @@ export function isLombardPrepareRetryableError(error: unknown): boolean {
   if (error instanceof LombardPrepareBlockedError) {
     return (
       error.code === 'lombard.open_loan_simulation_failed' ||
+      error.code === 'lombard.prepare_timeout' ||
+      error.code === 'lombard.prepare_failed' ||
       error.code === 'lombard.base_rpc_busy' ||
       isBaseRpcTransientError(error.message)
     )
