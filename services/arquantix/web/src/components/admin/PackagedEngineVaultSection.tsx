@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Cog, ExternalLink, Loader2, Unlink } from 'lucide-react'
 
 import { toastError, toastSuccess } from '@/lib/admin/toast'
+import { formatVaultNominalAmount } from '@/lib/portal/morphoVaultFormat'
 
 type EnginePayload = {
   packagedProductId: string
@@ -46,15 +47,6 @@ function num(v: unknown): number | null {
 function formatApy(bps: number | null): string {
   if (bps == null) return '—'
   return `${(bps / 100).toFixed(2)} %`
-}
-
-function formatUsd(v: number | null): string {
-  if (v == null || !Number.isFinite(v)) return '—'
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(v)
 }
 
 export function PackagedEngineVaultSection({
@@ -251,16 +243,30 @@ export function PackagedEngineVaultSection({
           {snapshot && (
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-emerald-100 pt-2 mt-2">
               <div>
+                <dt className="text-gray-500">Actif sous-jacent</dt>
+                <dd>{String(snapshot.asset_symbol ?? snapshot.asset ?? '—')}</dd>
+              </div>
+              <div>
                 <dt className="text-gray-500">APY</dt>
                 <dd>{formatApy(num(snapshot.user_apy_bps))}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">TVL</dt>
-                <dd>{formatUsd(num(snapshot.tvl_usd))}</dd>
+                <dd>
+                  {formatVaultNominalAmount(
+                    num(snapshot.tvl_usd),
+                    typeof snapshot.asset_symbol === 'string' ? snapshot.asset_symbol : null,
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-gray-500">Liquidité dispo.</dt>
-                <dd>{formatUsd(num(snapshot.available_liquidity_usd))}</dd>
+                <dd>
+                  {formatVaultNominalAmount(
+                    num(snapshot.available_liquidity_usd),
+                    typeof snapshot.asset_symbol === 'string' ? snapshot.asset_symbol : null,
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-gray-500">Investable</dt>
@@ -358,7 +364,8 @@ export function PackagedEngineVaultSection({
                   </div>
                   <div className="font-mono text-gray-500 break-all">{row.vaultAddress}</div>
                   <div className="text-gray-500">
-                    APY {formatApy(row.userApyBps)} · TVL {formatUsd(row.tvlUsd)}
+                    APY {formatApy(row.userApyBps)} · TVL{' '}
+                    {formatVaultNominalAmount(row.tvlUsd, row.assetSymbol)}
                     {!row.isPublished ? ' · non publié' : ''}
                   </div>
                 </div>

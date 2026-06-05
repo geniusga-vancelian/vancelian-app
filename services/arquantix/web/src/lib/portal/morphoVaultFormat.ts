@@ -37,6 +37,24 @@ export function formatEarnUsd(value: number | null): string {
   }).format(value)
 }
 
+/**
+ * Montant nominal on-chain (1 USDC/EURC = 1 unité) — pas une conversion FX vers USD.
+ * À utiliser pour TVL / liquidité des vaults ERC-4626 dont l’actif est un stablecoin.
+ */
+export function formatVaultNominalAmount(
+  value: number | null | undefined,
+  assetSymbol: string | null | undefined,
+  locale: 'fr' | 'en' = 'fr',
+): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const sym = (assetSymbol ?? 'USDC').trim().toUpperCase()
+  const formatted = new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value)
+  return `${formatted} ${sym}`
+}
+
 export function mergeMorphoVaultConfigWithGraphql(
   config: PortalMorphoVaultConfig,
   gql?: PortalMorphoCatalogVault | null,

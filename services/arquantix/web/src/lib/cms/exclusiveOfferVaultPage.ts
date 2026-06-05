@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma'
 import type { PrismaClient } from '@prisma/client'
 
 import type { VaultEngineSnapshot } from '@/lib/admin/platformVaultEngineTypes'
+import { formatVaultNominalAmount } from '@/lib/portal/morphoVaultFormat'
 import {
   VAULT_BUILDER_TEMPLATE,
   VAULT_SECTION_KEY,
@@ -410,15 +411,6 @@ function parseDocumentEntriesFromVaultContent(c: Record<string, unknown>): Array
 /**
  * Résout les IDs média du module `DocumentsListModule` en URLs de téléchargement + libellés pour le rendu web.
  */
-function formatUsdDisplay(value: number | null, locale: Locale): string {
-  if (value == null || !Number.isFinite(value)) return '—'
-  return new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
 function vaultEngineToFundingSnapshot(
   snap: VaultEngineSnapshot,
   locale: Locale,
@@ -427,6 +419,7 @@ function vaultEngineToFundingSnapshot(
   const tvl = snap.tvl_usd
   const progressPct = snap.liquidity_pct ?? 0
   const fr = locale === 'fr'
+  const tvlDisplay = formatVaultNominalAmount(tvl, snap.asset_symbol, locale === 'fr' ? 'fr' : 'en')
   const rows: KeyInformationRow[] = [
     {
       label: fr ? 'Rendement (APY)' : 'Yield (APY)',
@@ -434,7 +427,7 @@ function vaultEngineToFundingSnapshot(
     },
     {
       label: fr ? 'TVL vault' : 'Vault TVL',
-      value: formatUsdDisplay(tvl, locale),
+      value: tvlDisplay,
     },
   ]
   if (snap.curator) {
@@ -446,8 +439,8 @@ function vaultEngineToFundingSnapshot(
   return {
     asset: snap.asset_symbol,
     supplyAprPct,
-    raised: formatUsdDisplay(tvl, locale),
-    target: formatUsdDisplay(tvl, locale),
+    raised: tvlDisplay,
+    target: tvlDisplay,
     progressPct,
     status: snap.status,
     minTicket: null,
