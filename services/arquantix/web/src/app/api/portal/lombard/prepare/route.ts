@@ -131,21 +131,24 @@ export async function POST(request: NextRequest) {
 
     await assertPortalWalletAddressOwnership({ personId, walletAddress: parsed.walletAddress })
 
+    const requestPersonId = personId
+    const requestParsed = parsed
+
     logLombardOpsEvent({
       code: 'lombard.prepare_requested',
       level: 'info',
       message: 'Lombard prepare requested.',
-      personId,
-      walletAddress: parsed.walletAddress,
-      groupKey: parsed.idempotencyKey,
+      personId: requestPersonId,
+      walletAddress: requestParsed.walletAddress,
+      groupKey: requestParsed.idempotencyKey,
       metadata: {
-        collateral: parsed.collateral,
-        borrowAmount: parsed.borrowAmount,
-        targetLtvPercent: parsed.targetLtvPercent,
+        collateral: requestParsed.collateral,
+        borrowAmount: requestParsed.borrowAmount,
+        targetLtvPercent: requestParsed.targetLtvPercent,
       },
     })
 
-    const retryLink = buildRetryLinkFromParsed(parsed)
+    const retryLink = buildRetryLinkFromParsed(requestParsed)
     const prepareStarted = Date.now()
 
     const safetyStarted = Date.now()
@@ -153,12 +156,12 @@ export async function POST(request: NextRequest) {
       'pre_borrow_safety_checks',
       () =>
         runLombardPreBorrowSafetyChecks({
-          personId,
-          collateral: parsed.collateral,
-          borrowAmount: parsed.borrowAmount,
-          walletAddress: parsed.walletAddress,
-          targetLtvPercent: parsed.targetLtvPercent,
-          portalWalletCollateralBalance: parsed.portalWalletCollateralBalance,
+          personId: requestPersonId,
+          collateral: requestParsed.collateral,
+          borrowAmount: requestParsed.borrowAmount,
+          walletAddress: requestParsed.walletAddress,
+          targetLtvPercent: requestParsed.targetLtvPercent,
+          portalWalletCollateralBalance: requestParsed.portalWalletCollateralBalance,
           chainId: 8453,
         }),
       20_000,
@@ -166,9 +169,9 @@ export async function POST(request: NextRequest) {
     const safetyMs = Date.now() - safetyStarted
     if (safetyMs > 5_000) {
       logLombardPrepareStepSlow({
-        personId,
-        walletAddress: parsed.walletAddress,
-        idempotencyKey: parsed.idempotencyKey,
+        personId: requestPersonId,
+        walletAddress: requestParsed.walletAddress,
+        idempotencyKey: requestParsed.idempotencyKey,
         step: 'pre_borrow_safety_checks',
         durationMs: safetyMs,
       })
@@ -176,11 +179,11 @@ export async function POST(request: NextRequest) {
 
     if (isLombardMockEnabled()) {
       const mockPrepared = await prepareLombardMockOpenLoan({
-        personId,
-        collateral: parsed.collateral,
-        borrowAmount: parsed.borrowAmount,
-        walletAddress: parsed.walletAddress,
-        idempotencyKey: parsed.idempotencyKey,
+        personId: requestPersonId,
+        collateral: requestParsed.collateral,
+        borrowAmount: requestParsed.borrowAmount,
+        walletAddress: requestParsed.walletAddress,
+        idempotencyKey: requestParsed.idempotencyKey,
         quote,
         privyWalletId: privyWalletIdFromBody,
         walletMetadata: walletSource,
@@ -190,13 +193,13 @@ export async function POST(request: NextRequest) {
 
     const resolvedMarket = await withLombardAsyncTimeout(
       'resolve_lombard_market',
-      () => resolveLombardMarket({ collateral: parsed.collateral }),
+      () => resolveLombardMarket({ collateral: requestParsed.collateral }),
       18_000,
     )
     const buildStarted = Date.now()
     const transactions = await buildLombardOpenLoanTransactions({
-      collateral: parsed.collateral,
-      walletAddress: parsed.walletAddress,
+      collateral: requestParsed.collateral,
+      walletAddress: requestParsed.walletAddress,
       guaranteeAmountRaw: BigInt(quote.guaranteeAmountRaw),
       borrowAmountRaw: BigInt(quote.borrowAmountRaw),
       resolvedMarket,
@@ -204,25 +207,25 @@ export async function POST(request: NextRequest) {
     const buildMs = Date.now() - buildStarted
     if (buildMs > 8_000) {
       logLombardPrepareStepSlow({
-        personId,
-        walletAddress: parsed.walletAddress,
-        idempotencyKey: parsed.idempotencyKey,
+        personId: requestPersonId,
+        walletAddress: requestParsed.walletAddress,
+        idempotencyKey: requestParsed.idempotencyKey,
         step: 'build_open_loan_transactions',
         durationMs: buildMs,
       })
     }
 
     await assertLombardOpenLoanSimulates({
-      walletAddress: parsed.walletAddress,
+      walletAddress: requestParsed.walletAddress,
       transactions,
     })
 
     const ledgerEntries = await createLombardLedgerEntries({
-      personId,
+      personId: requestPersonId,
       marketId: quote.marketId,
-      walletAddress: parsed.walletAddress,
+      walletAddress: requestParsed.walletAddress,
       privyWalletId: privyWalletIdFromBody,
-      idempotencyKey: parsed.idempotencyKey,
+      idempotencyKey: requestParsed.idempotencyKey,
       quote,
       transactions,
       walletMetadata: walletSource,
@@ -230,11 +233,11 @@ export async function POST(request: NextRequest) {
     })
 
     logLombardPrepareSucceeded({
-      personId,
-      walletAddress: parsed.walletAddress,
-      collateral: parsed.collateral,
-      borrowAmount: parsed.borrowAmount,
-      idempotencyKey: parsed.idempotencyKey,
+      personId: requestPersonId,
+      walletAddress: requestParsed.walletAddress,
+      collateral: requestParsed.collateral,
+      borrowAmount: requestParsed.borrowAmount,
+      idempotencyKey: requestParsed.idempotencyKey,
       durationMs: Date.now() - prepareStarted,
       txCount: transactions.length,
     })
@@ -246,8 +249,8 @@ export async function POST(request: NextRequest) {
         operation: row.operation,
         txIndex: row.txIndex,
       })),
-      groupKey: parsed.idempotencyKey,
-      idempotencyKey: parsed.idempotencyKey,
+      groupKey: requestParsed.idempotencyKey,
+      idempotencyKey: requestParsed.idempotencyKey,
       logicalBorrowId: retryLink?.logicalBorrowId,
       quote,
     })
