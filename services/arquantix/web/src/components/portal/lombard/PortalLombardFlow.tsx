@@ -46,9 +46,9 @@ import type {
   LombardQuoteResult,
 } from '@/lib/portal/lombard/lombardTypes'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
-import { portalCryptoWalletAssetRoute, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { bumpLombardPositionsRevision } from '@/lib/portal/lombard/lombardPositionsRefresh'
-import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
+import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
 import { isLombardOpeningPhase } from '@/components/portal/transaction/mappers/lombardSteps'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -77,8 +77,15 @@ export function PortalLombardFlow() {
     [searchParams],
   )
   const prefilled = urlIntent.mode === 'prefilled'
-  const { chain, deFiEnabled, executionAddress, isExternalWallet, walletReady, walletScope } =
-    usePortalExecutionScope()
+  const {
+    chain,
+    deFiEnabled,
+    executionAddress,
+    isExternalWallet,
+    walletReady,
+    walletScope,
+    walletScopeId,
+  } = usePortalExecutionScope()
   const [step, setStep] = useState<FlowStep>(() => resolveInitialStep(prefilled))
   const showPageSidebar = step !== 'intro'
   const [markets, setMarkets] = useState<LombardMarketSummary[]>([])
@@ -451,9 +458,12 @@ export function PortalLombardFlow() {
 
   const handleBorrowSuccessExit = useCallback(() => {
     bumpLombardPositionsRevision()
-    invalidatePortalCache()
-    router.replace(portalCryptoWalletAssetRoute('usdc'))
-  }, [router])
+    void navigateAfterTransactionSuccess(
+      router,
+      { kind: 'crypto_asset', asset: 'USDC' },
+      { chain, walletScope, walletScopeId },
+    )
+  }, [chain, router, walletScope, walletScopeId])
 
   const handleOpenLoanSuccess = useCallback(() => {
     openLoanSucceededRef.current = true

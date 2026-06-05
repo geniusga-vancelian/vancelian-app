@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
@@ -32,6 +33,8 @@ import { bundleWithdrawPhaseLabel } from '@/lib/portal/bundleWithdrawLabels'
 import { formatBundleUsdcAmount } from '@/lib/portal/bundleFormat'
 import type { PortalBundleFlowScene, PortalBundleWithdrawResultVariant } from '@/lib/portal/bundleFlowTypes'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
+import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 
 export type PortalBundleWithdrawExecutionScene = Extract<
@@ -116,8 +119,18 @@ function PortalBundleWithdrawWeb3ExecutionRunner({
   onResultClose,
   onCompleted,
 }: Props) {
+  const router = useRouter()
+  const { chain, walletScope, walletScopeId } = usePortalExecutionScope()
   const { privyReady } = usePortalAuthPrivy()
   const privyReadyRef = useRef(privyReady)
+
+  const onViewTradingWallet = useCallback(() => {
+    void navigateAfterTransactionSuccess(
+      router,
+      { kind: 'crypto_asset', asset: entryAsset },
+      { chain, walletScope, walletScopeId },
+    )
+  }, [chain, entryAsset, router, walletScope, walletScopeId])
 
   const [processingProgress, setProcessingProgress] = useState<BundleWithdrawProcessingProgress>({
     stage: 'preparing',
@@ -315,7 +328,7 @@ function PortalBundleWithdrawWeb3ExecutionRunner({
         ]}
         primaryAction={{
           label: BUNDLE_WITHDRAW_FLOW_UI.viewTradingCta,
-          onClick: onResultClose,
+          onClick: onViewTradingWallet,
         }}
         onClose={onResultClose}
       />

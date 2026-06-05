@@ -148,9 +148,12 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
     return (
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
         <p className="m-0 text-center font-ui text-[15px] text-v-error">{error}</p>
-        <Button type="button" onClick={() => void refresh()}>
-          Retry
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button type="button" onClick={() => void refresh()}>
+            Réessayer
+          </Button>
+          <PortalDetailBackLink href={PORTAL_ROUTES.cryptoWallet} label="Retour au wallet crypto" />
+        </div>
       </Container>
     )
   }

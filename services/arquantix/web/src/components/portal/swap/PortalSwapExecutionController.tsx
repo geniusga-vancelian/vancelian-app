@@ -22,9 +22,8 @@ import {
   type SwapProcessingContext,
 } from '@/components/portal/transaction/mappers/swapSteps'
 import { SWAP_FLOW_UI, SWAP_RESULT_IMPOSSIBLE_ACTIONS } from '@/components/portal/transaction/mappers/swapUiCopy'
-import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
-import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
-import { buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
+import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
+import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { abandonSwap, type SwapQuotePayload } from '@/lib/portal/swapClient'
 import {
@@ -70,7 +69,7 @@ export function PortalSwapExecutionController({
   onPriceChanged,
 }: Props) {
   const router = useRouter()
-  const { chain, walletScopeId } = usePortalExecutionScope()
+  const { chain, walletScope, walletScopeId } = usePortalExecutionScope()
   const { privyReady } = usePortalAuthPrivy()
 
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
@@ -190,12 +189,12 @@ export function PortalSwapExecutionController({
 
   const onResultSuccess = useCallback(() => {
     resetExecution()
-    const ticker = toAsset.trim().toUpperCase()
-    const scopeSuffix = buildPortalScopeCacheSuffix(chain, walletScopeId)
-    invalidatePortalCache(`portal:crypto-wallet:${scopeSuffix}`)
-    if (ticker) invalidatePortalCache(`portal:crypto-wallet:${ticker}:${scopeSuffix}`)
-    router.push(ticker ? portalCryptoWalletAssetRoute(ticker) : PORTAL_ROUTES.cryptoWallet)
-  }, [chain, resetExecution, router, toAsset, walletScopeId])
+    void navigateAfterTransactionSuccess(
+      router,
+      { kind: 'crypto_asset', asset: toAsset },
+      { chain, walletScope, walletScopeId },
+    )
+  }, [chain, resetExecution, router, toAsset, walletScope, walletScopeId])
 
   const onResultRetry = useCallback(() => {
     resetExecution()
@@ -272,13 +271,8 @@ export function PortalSwapExecutionController({
           title={SWAP_FLOW_UI.successTitle}
           lead={
             <>
-              <b className="v-tnum">
-                {SWAP_FLOW_UI.successLeadReceive(
-                  swapProcessingContext.receiveLabel,
-                  toAsset,
-                )}
-              </b>{' '}
-              ont été crédités sur votre wallet.
+              <b className="v-tnum">{swapProcessingContext.receiveLabel}</b> ont été crédités sur
+              votre wallet.
             </>
           }
           stepsTitle={SWAP_FLOW_UI.successStepsTitle}

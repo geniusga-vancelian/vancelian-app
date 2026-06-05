@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
@@ -43,6 +44,8 @@ import type { PortalBundleFlowScene, PortalBundleInvestResultVariant } from '@/l
 import type { TransactionTechnicalDetailsRow } from '@/components/portal/transaction/types'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
+import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 
@@ -141,6 +144,8 @@ function PortalBundleWeb3ExecutionRunner({
   onProcessingClose,
   onResultClose,
 }: Props) {
+  const router = useRouter()
+  const { chain, walletScope, walletScopeId } = usePortalExecutionScope()
   const { privyReady } = usePortalAuthPrivy()
   const privyReadyRef = useRef(privyReady)
 
@@ -176,6 +181,19 @@ function PortalBundleWeb3ExecutionRunner({
     amountLabel: `${formatBundleUsdcAmount(parsedAmount > 0 ? parsedAmount : amount)} ${fundingAsset}`,
     bundleLabel: bundle.title,
   }
+
+  const onViewBasket = useCallback(() => {
+    const portfolioId = bundle.portfolioId?.trim()
+    if (!portfolioId) {
+      onResultClose()
+      return
+    }
+    void navigateAfterTransactionSuccess(
+      router,
+      { kind: 'crypto_bundle', portfolioId },
+      { chain, walletScope, walletScopeId },
+    )
+  }, [bundle.portfolioId, chain, onResultClose, router, walletScope, walletScopeId])
 
   const allocationAssetsForSteps = useMemo(() => {
     if (processingProgress.allocationAssets?.length) {
@@ -408,7 +426,7 @@ function PortalBundleWeb3ExecutionRunner({
           ]}
           primaryAction={{
             label: BUNDLE_FLOW_UI.viewBasketCta,
-            onClick: onResultClose,
+            onClick: onViewBasket,
           }}
           onClose={onResultClose}
         />
@@ -427,7 +445,7 @@ function PortalBundleWeb3ExecutionRunner({
           }
           primaryAction={{
             label: BUNDLE_FLOW_UI.viewBasketCta,
-            onClick: onResultClose,
+            onClick: onViewBasket,
           }}
           onClose={onResultClose}
         />
@@ -440,7 +458,7 @@ function PortalBundleWeb3ExecutionRunner({
           closeLabel={BUNDLE_RESULT_ACTIONS.close}
           primaryAction={{
             label: BUNDLE_FLOW_UI.viewBasketCta,
-            onClick: onResultClose,
+            onClick: onViewBasket,
           }}
           technicalDetails={
             resultTechnicalDetails.length > 0 ? resultTechnicalDetails : undefined

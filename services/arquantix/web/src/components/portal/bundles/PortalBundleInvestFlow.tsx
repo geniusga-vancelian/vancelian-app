@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 import {
   PortalBundleExecutionController,
@@ -28,6 +29,8 @@ import { TransactionResultPage } from '@/components/portal/transaction/Transacti
 import type { PortalBundleFlowScene, PortalBundleInvestResultVariant } from '@/lib/portal/bundleFlowTypes'
 import type { TransactionTechnicalDetailsRow } from '@/components/portal/transaction/types'
 import type { PortalCryptoBundle } from '@/lib/portal/marketsTypes'
+import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { buildBundleTargetAllocationRows } from '@/lib/portal/bundleTargetAllocationRows'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 
@@ -41,6 +44,8 @@ type Props = {
 
 /** Invest bundle — page dédiée, allocation théorique + exécution Web3 (aligné PortalSwapFlow, R4.5-F5-A). */
 export function PortalBundleInvestFlow({ bundle, onExit }: Props) {
+  const router = useRouter()
+  const { chain, walletScope, walletScopeId } = usePortalExecutionScope()
   const [flowScene, setFlowScene] = useState<PortalBundleFlowScene>('setup')
   const [fundingAsset, setFundingAsset] = useState<string>(bundle.entryAssetDefault ?? 'USDC')
   const [amount, setAmount] = useState('')
@@ -191,6 +196,19 @@ export function PortalBundleInvestFlow({ bundle, onExit }: Props) {
     onExit()
   }
 
+  const onViewBasket = useCallback(() => {
+    const portfolioId = bundle.portfolioId?.trim()
+    if (!portfolioId) {
+      onResultClose()
+      return
+    }
+    void navigateAfterTransactionSuccess(
+      router,
+      { kind: 'crypto_bundle', portfolioId },
+      { chain, walletScope, walletScopeId },
+    )
+  }, [bundle.portfolioId, chain, onResultClose, router, walletScope, walletScopeId])
+
   const setupDisabled =
     !portfolioReady ||
     flowScene === 'blocked' ||
@@ -206,7 +224,7 @@ export function PortalBundleInvestFlow({ bundle, onExit }: Props) {
         closeLabel={BUNDLE_RESULT_ACTIONS.close}
         primaryAction={{
           label: BUNDLE_FLOW_UI.viewBasketCta,
-          onClick: onResultClose,
+          onClick: onViewBasket,
         }}
         technicalDetails={
           lockTerminal.technicalDetails.length > 0 ? lockTerminal.technicalDetails : undefined
