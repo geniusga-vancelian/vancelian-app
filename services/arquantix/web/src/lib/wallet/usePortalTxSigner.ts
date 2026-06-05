@@ -30,7 +30,7 @@ import {
   isPortalWalletRequestExpiredError,
   type PortalWalletErrorContext,
 } from '@/lib/wallet/portalWalletErrors'
-import { useExecutionWallet } from '@/lib/wallet/useExecutionWallet'
+import { useExecutionWallet, type ExecutionWalletMode } from '@/lib/wallet/useExecutionWallet'
 
 export type PortalTxRequest = {
   chainId: number
@@ -71,7 +71,7 @@ export function usePortalTxSigner() {
   const resolveWallet = useCallback(
     async (
       override?: ExecutionWallet | null,
-      options?: { expectedAddress?: string | null },
+      options?: { expectedAddress?: string | null; forceMode?: ExecutionWalletMode },
     ): Promise<ExecutionWallet> => {
       if (
         override &&
@@ -79,7 +79,8 @@ export function usePortalTxSigner() {
       ) {
         return override
       }
-      if (mode === 'external_evm') {
+      const effectiveMode = options?.forceMode ?? mode
+      if (effectiveMode === 'external_evm') {
         const external = await resolveExecutionWallet()
         if (external?.type === 'external_evm') return external
         throw new Error(

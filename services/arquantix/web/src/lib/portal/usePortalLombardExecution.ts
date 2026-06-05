@@ -29,6 +29,7 @@ import {
 import { executeLombardOpenLoanSteps } from '@/lib/portal/lombard/lombardIncrementalStepConfirm'
 import { generateLombardMockTxHash } from '@/lib/portal/lombard/mocks/lombardMockTxHash'
 import { resolvePortalTransactionReceiptStatus } from '@/lib/portal/portalTransactionReceiptStatus'
+import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { buildWalletSourceMetadata } from '@/lib/wallet/executionWalletTypes'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
 
@@ -52,7 +53,9 @@ function mapTxPhase(operation: string): LombardExecutionPhase {
 }
 
 export function usePortalLombardExecution() {
+  const { isExternalWallet } = usePortalExecutionScope()
   const { sendPortalTransaction, resolveWallet } = usePortalTxSigner()
+  const signingMode = isExternalWallet ? 'external_evm' : 'privy_embedded'
 
   const executeOpenLoan = useCallback(
     async (args: {
@@ -67,7 +70,10 @@ export function usePortalLombardExecution() {
     }) => {
       args.onPhaseChange?.('preparing')
 
-      const wallet = await resolveWallet(null, { expectedAddress: args.walletAddress })
+      const wallet = await resolveWallet(null, {
+        expectedAddress: args.walletAddress,
+        forceMode: signingMode,
+      })
       if (wallet.address.toLowerCase() !== args.walletAddress.toLowerCase()) {
         throw new LombardTerminalBorrowError()
       }
@@ -197,7 +203,7 @@ export function usePortalLombardExecution() {
         }
       }
     },
-    [resolveWallet, sendPortalTransaction],
+    [resolveWallet, sendPortalTransaction, signingMode],
   )
 
   return { executeOpenLoan, chainId: VANCELIAN_LOMBARD_V1.chainId }
