@@ -20,6 +20,8 @@ export type PortalExclusiveOffer = {
   lockStatusLabel?: string | null
   operationEndAt?: string | null
   withdrawMode?: 'instant' | 'async_request' | 'blocked' | null
+  /** Actif ERC-4626 sous-jacent quand un moteur vault est connecté (USDC, EURC, …). */
+  assetSymbol?: string | null
 }
 
 /** Produit coffre catalogue (`vault_simple`) — présentation carte Invest, moteur = vault plateforme. */

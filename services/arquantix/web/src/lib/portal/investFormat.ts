@@ -4,6 +4,7 @@ import type {
   PortalVaultProduct,
 } from '@/lib/portal/investTypes'
 import { normalizeInvestCategorySlug } from '@/lib/portal/investCategoryFilter'
+import { formatVaultNominalAmount } from '@/lib/portal/morphoVaultFormat'
 
 type CatalogEngineSnapshot = {
   supply_apr?: number | string | null
@@ -23,6 +24,7 @@ type CatalogEngineSnapshot = {
   lock_status_label?: string | null
   operation_end_at?: string | null
   withdraw_mode?: string | null
+  asset_symbol?: string | null
 }
 
 type CatalogProductRow = {
@@ -76,8 +78,21 @@ function resolveCatalogApy(snap: CatalogEngineSnapshot): number {
   return bps > 0 ? bps / 100 : 0
 }
 
+function resolveCatalogAssetSymbol(snap: CatalogEngineSnapshot): string | null {
+  const raw = snap.asset_symbol
+  if (typeof raw !== 'string') return null
+  const sym = raw.trim().toUpperCase()
+  return sym.length > 0 ? sym : null
+}
+
+function formatCatalogAmountLabel(amount: number, assetSymbol: string | null): string {
+  if (assetSymbol) return formatVaultNominalAmount(amount, assetSymbol, 'en')
+  return formatMoney(amount)
+}
+
 function mapOffer(row: CatalogProductRow): PortalExclusiveOffer {
   const snap = row.engine?.snapshot ?? {}
+  const assetSymbol = resolveCatalogAssetSymbol(snap)
   const raised = toNumber(snap.current_raised, toNumber(snap.tvl_usd))
   const target = toNumber(snap.target_size, raised)
   const progressPct = Math.min(
@@ -106,8 +121,9 @@ function mapOffer(row: CatalogProductRow): PortalExclusiveOffer {
     categorySlug,
     description: row.subtitle?.trim() || '',
     progressPct,
-    raisedLabel: formatMoney(raised),
-    targetLabel: target > 0 ? formatMoney(target) : '—',
+    raisedLabel: formatCatalogAmountLabel(raised, assetSymbol),
+    targetLabel: target > 0 ? formatCatalogAmountLabel(target, assetSymbol) : '—',
+    assetSymbol,
     investorsCount: Math.max(0, Math.floor(toNumber(snap.investors_count))),
     apyLabel: apy > 0 ? `${apy.toFixed(2)}% APR` : '—',
     durationMonths: snap.duration_months != null ? Math.floor(toNumber(snap.duration_months)) : null,

@@ -305,8 +305,8 @@ export function PortalPlacerView({
                           photo={resolveExclusiveOfferCoverUrl(vault.coverUrl, vault.slug)}
                           perf={vault.apyLabel.replace(' APR', '')}
                           liquidity={vault.raisedLabel}
-                          currency="USD"
-                          currencyIcon={resolveCurrencyIcon('USDC')}
+                          currency={vault.assetSymbol ?? 'USDC'}
+                          currencyIcon={resolveCurrencyIcon(vault.assetSymbol ?? 'USDC')}
                           categoryIcon="vault"
                           href={vault.href}
                           onInvest={() => router.push(portalVaultInvestRoute(vault.slug))}
