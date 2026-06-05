@@ -10,7 +10,10 @@ import { PortalAdvisorPortraitCard } from '@/components/portal/PortalAdvisorPort
 import { PortalDetailBackLink } from '@/components/portal/PortalDetailBackLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import type { ExclusiveOfferVaultPayload } from '@/lib/cms/exclusiveOfferVaultPage'
-import { buildVaultInvestTarget } from '@/lib/portal/portalInvestFlowFormat'
+import {
+  buildVaultInvestTarget,
+  resolveVaultDepositAssetSymbol,
+} from '@/lib/portal/portalInvestFlowFormat'
 import { parsePortalVaultFlowMode, portalExclusiveOfferRoute } from '@/lib/portal/portalRouting'
 
 type Props = {
@@ -24,6 +27,14 @@ export function PortalVaultInvestScreen({ payload }: Props) {
   const mode = parsePortalVaultFlowMode(searchParams?.get('mode') ?? null)
   const offerHref = portalExclusiveOfferRoute(payload.pageSlug)
   const vaultTarget = useMemo(() => buildVaultInvestTarget(payload), [payload])
+  const depositAssetSymbol = useMemo(
+    () =>
+      resolveVaultDepositAssetSymbol({
+        vaultEngineAsset: payload.vaultEngine?.asset_symbol ?? payload.vaultEngine?.asset ?? null,
+        lendingAsset: payload.lending?.asset ?? null,
+      }),
+    [payload.lending?.asset, payload.vaultEngine?.asset, payload.vaultEngine?.asset_symbol],
+  )
 
   return (
     <PortalPageContainer className="inv-page">
@@ -35,6 +46,7 @@ export function PortalVaultInvestScreen({ payload }: Props) {
               onClose={() => router.push(offerHref)}
               initialTargetKey={payload.pageSlug}
               vaultTarget={vaultTarget}
+              depositAssetSymbol={depositAssetSymbol}
               initialMode={mode}
             />
           </PortalInvestFlowPanel>

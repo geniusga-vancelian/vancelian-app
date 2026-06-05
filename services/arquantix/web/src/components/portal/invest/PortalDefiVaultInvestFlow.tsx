@@ -29,11 +29,12 @@ import type {
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
 import {
   buildDefiVaultInvestTarget,
-  defaultInvestSources,
+  buildLockedInvestSource,
   invFmtAmount,
   invParseAmount,
-  mergeSourceBalance,
   parseVaultPositionAmount,
+  resolveEurcBalance,
+  resolveInvestSourceKeyFromAssetSymbol,
   resolveVaultDepositUsdcBalance,
   type PortalInvestSource,
   type PortalInvestTarget,
@@ -111,8 +112,13 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const integrationMode = isLedgity ? 'ledgity_vault' as const : 'direct_morpho' as const
 
   const [amount, setAmount] = useState('')
-  const [sources, setSources] = useState<PortalInvestSource[]>(() => defaultInvestSources())
-  const [source, setSource] = useState<PortalInvestSource>(() => defaultInvestSources()[0]!)
+  const vaultAssetSymbol = vault.asset.symbol
+  const [sources, setSources] = useState<PortalInvestSource[]>(() => [
+    buildLockedInvestSource(vaultAssetSymbol, 0),
+  ])
+  const [source, setSource] = useState<PortalInvestSource>(() =>
+    buildLockedInvestSource(vaultAssetSymbol, 0),
+  )
   const [target, setTarget] = useState<PortalInvestTarget>(() =>
     buildDefiVaultInvestTarget(
       isLedgity ? { kind: 'ledgity', vault } : { kind: 'morpho', vault: vault as PortalMorphoVaultDetails },
@@ -140,17 +146,18 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
 
   useEffect(() => {
     const positions = walletData?.positions?.positions ?? []
+    const assetKey = resolveInvestSourceKeyFromAssetSymbol(vaultAssetSymbol)
     const fromDirect = walletData?.tradingAvailableUsdc
-    const usdc =
-      fromDirect != null && Number.isFinite(fromDirect)
-        ? Math.max(0, fromDirect)
-        : resolveVaultDepositUsdcBalance(positions)
-    setSources((prev) => {
-      const next = mergeSourceBalance(prev, 'usdc', usdc)
-      setSource((current) => next.find((s) => s.key === current.key) ?? next[0]!)
-      return next
-    })
-  }, [walletData])
+    const balance =
+      assetKey === 'eur'
+        ? resolveEurcBalance(positions)
+        : fromDirect != null && Number.isFinite(fromDirect)
+          ? Math.max(0, fromDirect)
+          : resolveVaultDepositUsdcBalance(positions)
+    const next = buildLockedInvestSource(vaultAssetSymbol, balance)
+    setSources([next])
+    setSource(next)
+  }, [vaultAssetSymbol, walletData])
 
   const loadPosition = useCallback(
     async (address: string, options?: { background?: boolean }) => {
@@ -227,7 +234,6 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const yearly = amountEur * rate
   const maxAmt = isInvest ? source.balance : vaultBalance
   const sym = source.glyph
-  const vaultAssetSymbol = vault.asset.symbol
 
   const vaultBalanceLabel = positionLoading
     ? 'Chargement du solde coffre…'

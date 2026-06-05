@@ -10,9 +10,11 @@ import {
   invFmtAmount,
   invInEur,
   invParseAmount,
+  buildLockedInvestSource,
   mergeSourceBalance,
   resolveBaseUsdcBalance,
   resolveEurcBalance,
+  resolveInvestSourceKeyFromAssetSymbol,
   type PortalInvestSource,
   type PortalInvestTarget,
 } from '@/lib/portal/portalInvestFlowFormat'
@@ -30,6 +32,8 @@ type InvestFlowProps = {
   initialTargetKey?: string
   /** Pre-built target (exclusive offer detail). */
   vaultTarget?: PortalInvestTarget
+  /** Actif ERC-4626 imposé (USDC / EURC) — verrouille la source, sans sélecteur. */
+  depositAssetSymbol?: string | null
   initialMode?: InvestMode
 }
 
@@ -306,15 +310,26 @@ export function PortalInvestFlow({
   onClose,
   initialTargetKey,
   vaultTarget,
+  depositAssetSymbol,
   initialMode = 'invest',
 }: InvestFlowProps) {
+  const lockedAssetSymbol = depositAssetSymbol?.trim().toUpperCase() || 'USDC'
+
   const targets = useMemo(
     () => (vaultTarget ? [vaultTarget] : []),
     [vaultTarget],
   )
 
-  const [sources, setSources] = useState<PortalInvestSource[]>(() => defaultInvestSources())
-  const [source, setSource] = useState<PortalInvestSource>(() => defaultInvestSources()[0]!)
+  const [sources, setSources] = useState<PortalInvestSource[]>(() =>
+    depositAssetSymbol
+      ? [buildLockedInvestSource(lockedAssetSymbol, 0)]
+      : defaultInvestSources(),
+  )
+  const [source, setSource] = useState<PortalInvestSource>(() =>
+    depositAssetSymbol
+      ? buildLockedInvestSource(lockedAssetSymbol, 0)
+      : defaultInvestSources()[0]!,
+  )
   const initialTarget =
     (initialTargetKey && targets.find((t) => t.key === initialTargetKey)) || targets[0] || null
   const [target, setTarget] = useState<PortalInvestTarget | null>(initialTarget)
@@ -334,8 +349,19 @@ export function PortalInvestFlow({
 
   useEffect(() => {
     if (!walletData?.positions?.positions?.length) return
+    const positions = walletData.positions.positions
+
+    if (depositAssetSymbol) {
+      const key = resolveInvestSourceKeyFromAssetSymbol(lockedAssetSymbol)
+      const balance =
+        key === 'eur' ? resolveEurcBalance(positions) : resolveBaseUsdcBalance(positions)
+      const next = buildLockedInvestSource(lockedAssetSymbol, balance)
+      setSources([next])
+      setSource(next)
+      return
+    }
+
     setSources((prev) => {
-      const positions = walletData.positions.positions
       const usdc = resolveBaseUsdcBalance(positions)
       const eur = resolveEurcBalance(positions)
       let next = mergeSourceBalance(prev, 'usdc', usdc)
@@ -343,7 +369,7 @@ export function PortalInvestFlow({
       setSource((current) => next.find((s) => s.key === current.key) ?? next[0]!)
       return next
     })
-  }, [walletData])
+  }, [depositAssetSymbol, lockedAssetSymbol, walletData])
 
   useEffect(() => {
     if (!initialTargetKey || !targets.length) return

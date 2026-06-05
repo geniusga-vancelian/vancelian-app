@@ -187,16 +187,16 @@ export function defaultInvestSources(): PortalInvestSource[] {
     },
     {
       key: 'eur',
-      name: 'Euros',
-      short: 'Euros',
-      unit: 'EUR',
-      desc: 'Primary account currency',
+      name: 'EURC',
+      short: 'EURC',
+      unit: 'Stablecoin · EUR',
+      desc: 'Circle euro stablecoin, 1 EURC ≈ 1 €',
       glyph: '€',
       bg: 'var(--v-fg)',
       color: '#FFFFFF',
       balance: 0,
       rateToEur: 1,
-      balanceLabel: 'Balance €0',
+      balanceLabel: 'Disponible 0 EURC',
       techSource: 'EURC (Circle)',
     },
   ]
@@ -219,9 +219,41 @@ export function mergeSourceBalance(
     return {
       ...source,
       balance,
-      balanceLabel: `Balance €${invFmtAmount(balance, 2)}`,
+      balanceLabel: `Disponible ${invFmtAmount(balance, 2)} EURC`,
     }
   })
+}
+
+export type VaultDepositSourceKey = 'usdc' | 'eur'
+
+/** Clé source invest (`usdc` / `eur`) depuis l’actif ERC-4626 du vault. */
+export function resolveInvestSourceKeyFromAssetSymbol(
+  assetSymbol: string | null | undefined,
+): VaultDepositSourceKey {
+  return assetSymbol?.trim().toUpperCase() === 'EURC' ? 'eur' : 'usdc'
+}
+
+/** Actif de dépôt pour une offre / vault catalogue (moteur plateforme prioritaire). */
+export function resolveVaultDepositAssetSymbol(args: {
+  vaultEngineAsset?: string | null
+  lendingAsset?: string | null
+}): string {
+  const fromEngine = args.vaultEngineAsset?.trim().toUpperCase()
+  if (fromEngine) return fromEngine
+  const fromLending = args.lendingAsset?.trim().toUpperCase()
+  if (fromLending) return fromLending
+  return 'USDC'
+}
+
+/** Une seule source verrouillée sur l’actif du vault (pas de sélecteur devise). */
+export function buildLockedInvestSource(
+  assetSymbol: string,
+  balance = 0,
+): PortalInvestSource {
+  const key = resolveInvestSourceKeyFromAssetSymbol(assetSymbol)
+  const template =
+    defaultInvestSources().find((source) => source.key === key) ?? defaultInvestSources()[0]!
+  return mergeSourceBalance([template], key, balance)[0]!
 }
 
 export function computeReceivedParts(
