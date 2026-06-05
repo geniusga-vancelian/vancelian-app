@@ -11,6 +11,7 @@ from config.supported_swap_assets import (
     list_supported_assets_public,
     list_supported_chains_public,
     list_supported_destination_assets_public,
+    list_supported_source_assets_public,
     resolve_swap_token,
 )
 from services.lifi.lifi_validation_service import SwapValidationError, validate_quote_request
@@ -112,11 +113,31 @@ def test_reject_amount_below_min():
         validate_quote_request(
             from_asset="USDC",
             to_asset="ETH",
-            amount="0.01",
+            amount="0.5",
             from_chain="base",
             to_chain="base",
         )
     assert exc.value.code == "swap.amount_below_min"
+    assert "1" in str(exc.value)
+
+
+def test_usdc_at_catalog_min_passes_validation():
+    from decimal import Decimal
+
+    parsed, _slippage = validate_quote_request(
+        from_asset="USDC",
+        to_asset="CBBTC",
+        amount="1",
+        from_chain="base",
+        to_chain="base",
+    )
+    assert parsed == Decimal("1")
+
+
+def test_public_usdc_min_amount_is_one():
+    assets = list_supported_source_assets_public()
+    usdc = next(item for item in assets if item["symbol"] == "USDC")
+    assert usdc["min_amount"] == "1"
 
 
 def test_human_amount_to_atomic_usdc():

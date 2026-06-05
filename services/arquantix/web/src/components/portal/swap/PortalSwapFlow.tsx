@@ -285,6 +285,13 @@ export function PortalSwapFlow() {
     return buildSwapToOptions(destinationAssets, fromAsset, activeSwapChain)
   }, [activeSwapChain, destinationAssets, fromAsset])
 
+  const fromMinAmount = useMemo(() => {
+    const row = sourceAssets.find(
+      (asset) => asset.symbol.toUpperCase() === fromAsset.toUpperCase(),
+    )
+    return row?.min_amount ?? null
+  }, [fromAsset, sourceAssets])
+
   const onChangeFromOnAmount = useCallback(
     (option: SwapFromOption) => {
       if (!activeSwapChain) return
@@ -417,6 +424,7 @@ export function PortalSwapFlow() {
             fromChain={fromChain}
             toChain={toChain}
             sourceBalance={sourceBalance}
+            minAmount={fromMinAmount}
             fromOptions={swapFromOptions}
             toOptions={swapToOptions}
             onChangeFrom={onChangeFromOnAmount}

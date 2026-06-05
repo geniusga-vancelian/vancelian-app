@@ -34,8 +34,8 @@ SUPPORTED_SWAP_CHAINS: dict[str, dict[str, Any]] = {
 DEFAULT_MIN_SWAP_AMOUNT: dict[str, Decimal] = {
     "ETH": Decimal("0.001"),
     "CBETH": Decimal("0.001"),
-    "USDC": Decimal("5"),
-    "EURC": Decimal("5"),
+    "USDC": Decimal("1"),
+    "EURC": Decimal("1"),
     "CBBTC": Decimal("0.00001"),
     "LINK": Decimal("1"),
     "AAVE": Decimal("0.01"),

@@ -10,6 +10,10 @@ import { PortalSwapAssetSelector } from '@/components/portal/swap/PortalSwapAsse
 import { PortalSwapTechDetails } from '@/components/portal/swap/PortalSwapTechDetails'
 import { isSwapAmountOverPrivyBalance } from '@/lib/portal/swapAmountValidation'
 import {
+  formatSwapMinAmountError,
+  isSwapAmountBelowCatalogMin,
+} from '@/lib/portal/swapMinAmount'
+import {
   formatSwapCryptoAmount,
   swapAssetChipMeta,
   type SwapFromOption,
@@ -28,6 +32,8 @@ type Props = {
   fromChain: string
   toChain: string
   sourceBalance: number
+  /** `min_amount` catalogue API pour l'actif source (garde-fou UI avant quote). */
+  minAmount?: string | null
   fromOptions: SwapFromOption[]
   toOptions: SwapToOption[]
   onChangeFrom: (option: SwapFromOption) => void
@@ -42,6 +48,7 @@ export function PortalSwapAmountStep({
   fromChain,
   toChain,
   sourceBalance,
+  minAmount,
   fromOptions,
   toOptions,
   onChangeFrom,
@@ -68,12 +75,23 @@ export function PortalSwapAmountStep({
   const parsed = Number(amount.replace(',', '.'))
   const usesPrivyBalance = !isExternalWallet
   const overBalance = usesPrivyBalance && isSwapAmountOverPrivyBalance(parsed, sourceBalance)
-  const canContinue = parsed > 0 && !overBalance && quote !== null && !loading && !scopeLoading
+  const belowMin =
+    parsed > 0 && minAmount != null && isSwapAmountBelowCatalogMin(parsed, minAmount)
+  const minAmountError =
+    belowMin && minAmount ? formatSwapMinAmountError(fromAsset, minAmount) : null
+  const canContinue =
+    parsed > 0 && !overBalance && !belowMin && quote !== null && !loading && !scopeLoading
 
   const fetchQuote = useCallback(async () => {
     if (parsed <= 0) {
       setQuote(null)
       setError(null)
+      return
+    }
+
+    if (minAmount && isSwapAmountBelowCatalogMin(parsed, minAmount)) {
+      setQuote(null)
+      setError(formatSwapMinAmountError(fromAsset, minAmount))
       return
     }
 
@@ -105,6 +123,7 @@ export function PortalSwapAmountStep({
   }, [
     fromAsset,
     fromChain,
+    minAmount,
     executionAddress,
     isExternalWallet,
     parsed,
@@ -287,7 +306,9 @@ export function PortalSwapAmountStep({
             </p>
           ) : null}
 
-          {error ? <p className="inv-feedback inv-feedback--error">{error}</p> : null}
+          {minAmountError ?? error ? (
+            <p className="inv-feedback inv-feedback--error">{minAmountError ?? error}</p>
+          ) : null}
 
           <button
             type="button"
