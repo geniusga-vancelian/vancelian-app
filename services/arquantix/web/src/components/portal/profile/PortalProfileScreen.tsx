@@ -18,6 +18,7 @@ import {
   PortalSettingsRow,
 } from '@/components/portal/profile/PortalProfileUi'
 import { PortalProfileWalletsSection } from '@/components/portal/profile/PortalProfileWalletsSection'
+import { PortalChainSwitcher } from '@/components/portal/PortalChainSwitcher'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
 import { PortalProfileSkeleton } from '@/components/portal/PortalRouteSkeleton'
@@ -185,10 +186,22 @@ export function PortalProfileScreen() {
         </PortalReveal>
 
         <PortalReveal index={3}>
-          <PortalProfileWalletsSection />
+          <section className="flex flex-col gap-3">
+            <PortalSectionTitle>Réseau blockchain</PortalSectionTitle>
+            <PortalSettingsCard className="overflow-hidden p-0">
+              <PortalChainSwitcher variant="drawer-row" />
+            </PortalSettingsCard>
+            <p className="m-0 font-ui text-[14px] leading-relaxed text-v-fg-muted">
+              Base, Ethereum ou Solana — utilisé pour les swaps, vaults et transactions DeFi.
+            </p>
+          </section>
         </PortalReveal>
 
         <PortalReveal index={4}>
+          <PortalProfileWalletsSection />
+        </PortalReveal>
+
+        <PortalReveal index={5}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Paramètres</PortalSectionTitle>
             <PortalSettingsCard>
@@ -234,7 +247,7 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={5}>
+        <PortalReveal index={6}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Support</PortalSectionTitle>
             <PortalSettingsCard>
@@ -266,7 +279,7 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={6}>
+        <PortalReveal index={7}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Informations</PortalSectionTitle>
             <PortalSettingsCard>
@@ -277,7 +290,7 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={7}>
+        <PortalReveal index={8}>
           <section className="flex flex-col gap-3 pt-2">
             <PortalSignOutButton variant="profile" />
           </section>

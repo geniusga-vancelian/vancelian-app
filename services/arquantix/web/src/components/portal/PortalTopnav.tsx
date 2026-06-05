@@ -11,11 +11,7 @@ import { TOPNAV_HEIGHT_PX } from '@/hooks/useTopnavSurfaceObserver'
 import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { PORTAL_PATH_PREFIX, PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { readPortalCache } from '@/lib/portal/portalClientCache'
-import {
-  PORTAL_MAIN_NAV_TABS,
-  PORTAL_SEARCH_NAV,
-} from '@/lib/portal/portalNavModel'
-import { PortalChainSwitcher } from '@/components/portal/PortalChainSwitcher'
+import { PORTAL_MAIN_NAV_TABS } from '@/lib/portal/portalNavModel'
 import { PortalWalletSwitcher } from '@/components/portal/PortalWalletSwitcher'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { resolvePortalProfileInitials } from '@/lib/portal/resolveProfileInitials'
@@ -114,7 +110,7 @@ type PortalTopnavProps = {
 /**
  * Topnav portail — même grammaire DS que {@link Navigation} (72px, grid 3 cols,
  * liens underline), avec les tabs mobile (My portfolio / Investing / Markets / Academy)
- * + action Search + profil.
+ * + wallet + profil (réseau blockchain : page Profil uniquement).
  */
 export function PortalTopnav({ initials: initialsProp, brand: brandProp, className }: PortalTopnavProps) {
   const pathname = usePathname() ?? ''
@@ -242,22 +238,7 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
           <div className="flex h-full items-center justify-end gap-3 justify-self-end sm:gap-4">
             <div className="hidden items-center gap-2 sm:flex">
               <PortalWalletSwitcher linkColor={palette.linkColor} />
-              <PortalChainSwitcher linkColor={palette.linkColor} />
             </div>
-
-            <PortalNavLink
-              href={PORTAL_SEARCH_NAV.href}
-              aria-label={PORTAL_SEARCH_NAV.label}
-              className={cn(
-                TOPNAV_ACTION_DISC_CLASS,
-                'hidden lg:inline-flex',
-                'transition-colors duration-v-fast hover:bg-v-fg-05',
-                isNavActive(pathname, PORTAL_SEARCH_NAV.href) && 'bg-v-fg-05',
-              )}
-              style={{ color: palette.linkColor }}
-            >
-              <PORTAL_SEARCH_NAV.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            </PortalNavLink>
 
             {!profileAvatar.loaded ? (
               <div
@@ -317,7 +298,6 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
               <div className="mb-2 sm:hidden">
                 <PortalWalletSwitcher variant="drawer-row" />
-                <PortalChainSwitcher variant="drawer-row" />
               </div>
               <ul className="m-0 flex list-none flex-col gap-1 p-0">
                 {PORTAL_MAIN_NAV_TABS.map((tab) => {
@@ -338,21 +318,6 @@ export function PortalTopnav({ initials: initialsProp, brand: brandProp, classNa
                     </li>
                   )
                 })}
-                <li>
-                  <PortalNavLink
-                    href={PORTAL_SEARCH_NAV.href}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-v-input px-3 py-3 font-ui text-[16px] font-medium no-underline',
-                      isNavActive(pathname, PORTAL_SEARCH_NAV.href)
-                        ? 'bg-v-fg-05 text-v-fg'
-                        : 'text-v-fg-body',
-                    )}
-                  >
-                    <PORTAL_SEARCH_NAV.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
-                    {PORTAL_SEARCH_NAV.label}
-                  </PortalNavLink>
-                </li>
               </ul>
             </div>
           </div>
