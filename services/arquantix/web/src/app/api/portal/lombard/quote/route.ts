@@ -21,7 +21,8 @@ function parseQuoteQuery(request: NextRequest) {
     targetLtvPercent: params.get('target_ltv_percent') ?? params.get('targetLtvPercent'),
     portalWalletCollateralBalance:
       params.get('portal_wallet_collateral_balance') ??
-      params.get('portalWalletCollateralBalance'),
+      params.get('portalWalletCollateralBalance') ??
+      undefined,
   })
 }
 

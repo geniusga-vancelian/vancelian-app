@@ -33,6 +33,9 @@ export function parseLombardApiError(data: unknown, status: number): string {
           if (issueMessage.toLowerCase().includes('borrow amount')) {
             return 'Montant emprunté invalide. Saisissez un nombre (ex. 1000 ou 1 000).'
           }
+          if (/invalid input|expected string|received null/i.test(issueMessage)) {
+            return 'Requête invalide. Réessayez dans quelques secondes.'
+          }
           return issueMessage
         }
       }

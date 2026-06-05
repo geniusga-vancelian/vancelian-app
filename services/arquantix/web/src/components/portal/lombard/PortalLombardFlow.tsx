@@ -17,7 +17,6 @@ import { PortalLombardBorrowSuccess } from '@/components/portal/lombard/PortalLo
 import { PortalPortfolioLayout } from '@/components/portal/dashboard/PortalPortfolioLayout'
 import { PortalInvestFlowPanel } from '@/components/portal/invest/PortalInvestFlowDom'
 import { PortalExecutionScopeGate } from '@/components/portal/PortalExecutionScopeGate'
-import { PortalNavLink } from '@/components/portal/PortalNavLink'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalPageSidebar } from '@/components/portal/PortalPageSidebar'
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
@@ -56,9 +55,6 @@ import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 type FlowStep = 'intro' | 'form' | 'review' | 'processing' | 'success'
 
 const OPENING_SUBTEXT_ROTATE_MS = 5_000
-
-const PRIVY_SIGNING_SESSION_HINT =
-  'Pour signer le dépôt de garantie, activez votre wallet Vancelian (code e-mail) depuis Mon wallet crypto, puis relancez l’emprunt.'
 
 const DEFAULT_TARGET_LTV_PERCENT = 28
 const CAPACITY_DEBOUNCE_MS = 280
@@ -546,19 +542,6 @@ export function PortalLombardFlow() {
               !walletReady || executing || !quote || quoteLoading || quoteRefreshing
             }
           />
-
-          {requiresPrivySigning ? (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-ui text-[13px] text-amber-950">
-              <p className="m-0">{PRIVY_SIGNING_SESSION_HINT}</p>
-              <PortalNavLink
-                href={PORTAL_ROUTES.walletCreate}
-                className="mt-2 inline-block font-medium text-amber-950 underline"
-              >
-                Activer mon wallet crypto
-              </PortalNavLink>
-            </div>
-          ) : null}
-
         </>
       ) : null}
 

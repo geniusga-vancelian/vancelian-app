@@ -18,12 +18,11 @@ export const lombardTargetLtvPercentSchema = z.coerce
   .min(1, 'Target LTV must be at least 1%.')
   .max(70, 'Target LTV cannot exceed 70%.')
 
-const lombardPortalCollateralBalanceSchema = z
-  .string()
-  .trim()
-  .max(32)
-  .optional()
-  .transform((value) => (value ? value : undefined))
+/** Query/body optionnel — `params.get()` renvoie `null` quand le solde portail est absent. */
+const lombardPortalCollateralBalanceSchema = z.preprocess(
+  (value) => (value == null || value === '' ? undefined : value),
+  z.string().trim().max(32).optional(),
+)
 
 export const lombardCapacityQuerySchema = z.object({
   collateral: lombardCollateralSchema,
