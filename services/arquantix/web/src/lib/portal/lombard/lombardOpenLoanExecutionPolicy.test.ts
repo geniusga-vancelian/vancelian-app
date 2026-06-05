@@ -114,4 +114,10 @@ describe('lombardOpenLoanExecutionPolicy', () => {
     assert.equal(err.autoRetryAttempted, true)
     assert.doesNotMatch(err.message, /revert|0x/i)
   })
+
+  it('surfaces wallet signing errors instead of generic market copy', () => {
+    const err = toLombardTerminalBorrowError(new Error('Transaction refusée dans MetaMask.'))
+    assert.match(err.userCopy.lines[0] ?? '', /MetaMask/i)
+    assert.match(err.userCopy.lines[1] ?? '', /Aucune transaction/i)
+  })
 })

@@ -128,6 +128,11 @@ export function usePortalLombardExecution() {
                 value: tx.value,
               },
               wallet,
+              {
+                walletMode: wallet.type,
+                chainId: tx.chainId,
+                phase: tx.operation === 'approve' ? 'approve' : undefined,
+              },
             )
             return { hash: sent.hash }
           },

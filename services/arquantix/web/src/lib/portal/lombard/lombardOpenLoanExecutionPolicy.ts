@@ -114,11 +114,23 @@ export function toLombardTerminalBorrowError(
   error: unknown,
   args?: { autoRetryAttempted?: boolean },
 ): LombardTerminalBorrowError {
+  if (error instanceof LombardTerminalBorrowError) {
+    return error
+  }
   if (error instanceof LombardPrepareBlockedError) {
     return new LombardTerminalBorrowError({
       autoRetryAttempted: args?.autoRetryAttempted ?? false,
       userCopy: buildPrepareBlockedTerminalCopy({
         message: error.message,
+        autoRetryAttempted: args?.autoRetryAttempted,
+      }),
+    })
+  }
+  if (error instanceof Error && error.message.trim() && !(error instanceof LombardExecutionError)) {
+    return new LombardTerminalBorrowError({
+      autoRetryAttempted: args?.autoRetryAttempted ?? false,
+      userCopy: buildPrepareBlockedTerminalCopy({
+        message: error.message.trim(),
         autoRetryAttempted: args?.autoRetryAttempted,
       }),
     })
