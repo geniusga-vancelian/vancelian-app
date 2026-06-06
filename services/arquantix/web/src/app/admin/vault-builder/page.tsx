@@ -38,6 +38,8 @@ import { VaultStructuredModuleEditor } from '@/components/admin/VaultStructuredM
 import { PagePreviewPanel } from '@/components/admin/PagePreviewPanel'
 import { AddVaultModuleModal } from '@/components/admin/AddVaultModuleModal'
 import { VaultModulesSection } from '@/components/admin/VaultModulesSection'
+import { VaultMarkdownImportDialog } from '@/components/admin/VaultMarkdownImportDialog'
+import { exportVaultModulesToMarkdown } from '@/lib/admin/markdownVaultModulesBlueprint'
 import {
   getVaultModuleDefaultContent,
   getVaultModuleDefinition,
@@ -327,6 +329,7 @@ function AdminVaultBuilderPageInner() {
   const [productIsPublished, setProductIsPublished] = useState(false)
   const [productPublishStates, setProductPublishStates] = useState<Record<string, boolean>>({})
   const [vaultAddModuleOpen, setVaultAddModuleOpen] = useState(false)
+  const [vaultMarkdownImportOpen, setVaultMarkdownImportOpen] = useState(false)
   const [productAddModuleOpen, setProductAddModuleOpen] = useState(false)
   const [previewLocale, setPreviewLocale] = useState<Locale>(defaultLocale)
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
@@ -734,6 +737,42 @@ function AdminVaultBuilderPageInner() {
         modules: prev.config.modules.filter((m) => m.id !== moduleId),
       },
     }))
+  }
+
+  const handleExportVaultModulesMarkdown = () => {
+    if (!details) return
+    if (details.config.modules.length === 0) {
+      toastWarning('Aucun module à exporter.')
+      return
+    }
+    const markdown = exportVaultModulesToMarkdown(details.config.modules, editingLocale)
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `vault-modules-${details.page.slug}-${editingLocale}.md`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    toastSuccess('Export Markdown téléchargé.')
+  }
+
+  const handleApplyVaultModulesMarkdownImport = (
+    modules: LandingModule[],
+  ) => {
+    updateDetails((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        config: {
+          ...prev.config,
+          modules,
+        },
+      }
+    })
+    setVaultPreviewReloadEpoch((n) => n + 1)
+    toastSuccess(
+      `${modules.length} module(s) importé(s). Enregistrez le brouillon pour persister.`,
+    )
   }
 
   const handleReorder = async (slug: string, direction: 'up' | 'down') => {
@@ -2367,6 +2406,8 @@ function AdminVaultBuilderPageInner() {
                 entityId={details.page.id}
                 saving={saving}
                 onClickAddModule={() => setVaultAddModuleOpen(true)}
+                onClickExportMarkdown={handleExportVaultModulesMarkdown}
+                onClickImportMarkdown={() => setVaultMarkdownImportOpen(true)}
                 onReorderModules={reorderDetailModulesByIds}
                 onDeleteModule={removeModule}
                 onToggleEnabled={(moduleId, enabled) =>
@@ -2412,6 +2453,15 @@ function AdminVaultBuilderPageInner() {
           )}
         </section>
       </div>
+      {details ? (
+        <VaultMarkdownImportDialog
+          open={vaultMarkdownImportOpen}
+          onOpenChange={setVaultMarkdownImportOpen}
+          locale={editingLocale}
+          currentModuleCount={details.config.modules.length}
+          onApplied={handleApplyVaultModulesMarkdownImport}
+        />
+      ) : null}
       {vaultAddModuleOpen && details ? (
         <AddVaultModuleModal
           headerTitle={`Ajouter un module — ${details.page.slug}`}

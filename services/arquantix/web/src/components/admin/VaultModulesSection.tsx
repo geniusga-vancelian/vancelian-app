@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, Plus } from 'lucide-react'
+import { ChevronDown, Download, FileUp, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getVaultModuleLabel, getVaultModuleSummary } from '@/lib/admin/vaultModuleCatalog'
 
@@ -18,6 +18,10 @@ export interface VaultModulesSectionProps {
   onDeleteModule: (moduleId: string) => void
   onToggleEnabled?: (moduleId: string, enabled: boolean) => void
   onClickAddModule: () => void | Promise<void>
+  /** Export Markdown des modules (section content blocks). */
+  onClickExportMarkdown?: () => void
+  /** Import Markdown blueprint modules. */
+  onClickImportMarkdown?: () => void
   saving?: boolean
   entityId: string
   title?: string
@@ -37,6 +41,8 @@ export function VaultModulesSection({
   onDeleteModule,
   onToggleEnabled,
   onClickAddModule,
+  onClickExportMarkdown,
+  onClickImportMarkdown,
   saving = false,
   entityId,
   title = 'Modules du vault',
@@ -83,6 +89,28 @@ export function VaultModulesSection({
               onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(modules.map((m) => m.id)))}
             >
               {allCollapsed ? 'Tout déplier' : 'Tout replier'}
+            </Button>
+          ) : null}
+          {onClickExportMarkdown ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={saving || modules.length === 0}
+              onClick={onClickExportMarkdown}
+              title="Télécharger les modules au format Markdown"
+            >
+              <Download className="mr-1 h-4 w-4" /> Export Markdown
+            </Button>
+          ) : null}
+          {onClickImportMarkdown ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={onClickImportMarkdown}
+              title="Importer un fichier .md (modules vault uniquement)"
+            >
+              <FileUp className="mr-1 h-4 w-4" /> Importer un Markdown
             </Button>
           ) : null}
           <Button
