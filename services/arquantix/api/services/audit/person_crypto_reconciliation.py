@@ -33,11 +33,13 @@ from services.privy_wallet.repository import PersonCryptoWalletRepository, Perso
 
 logger = logging.getLogger(__name__)
 
-AUDIT_VERSION = "custody_doctrine_v2"
+AUDIT_VERSION = "custody_doctrine_v2_base_only"
 DUST = Decimal("0.000001")
 FOCUS_SWAP_ID = "76830776-039d-48a3-9e58-df48b0b10f7e"
 STABLECOIN_PILOT_ASSETS = frozenset({"EURC", "USDC", "USDT"})
-MULTI_CHAIN_LEDGER_ASSETS = frozenset({"USDT"})
+CUSTODY_CHAIN_ID = BASE_LIFI_CHAIN_ID
+ETHEREUM_CHAIN_ID = 1
+NATIVE_ETH_ETHEREUM_RESIDUAL_TOL = Decimal("0.01")
 
 INFORMATIONAL_TAGS = frozenset(
     {
@@ -115,11 +117,37 @@ def _pick_privy_embedded_wallet(db: Session, person_id: UUID):
 
 
 def _assets_for_onchain_scan(ledger: dict[str, Decimal]) -> list[str]:
-    assets = set(BASE_ALLOWED_SYMBOLS) | set(ledger.keys())
-    for asset, bal in ledger.items():
-        if asset in MULTI_CHAIN_LEDGER_ASSETS and bal > DUST:
-            assets.add(asset)
-    return sorted(assets)
+    return sorted(set(BASE_ALLOWED_SYMBOLS) | set(ledger.keys()))
+
+
+def _collect_ethereum_deposits(db: Session, person_id: UUID) -> list[dict[str, Any]]:
+    rows = (
+        db.query(PersonWalletDeposit)
+        .filter(
+            PersonWalletDeposit.person_id == person_id,
+            PersonWalletDeposit.chain_id == ETHEREUM_CHAIN_ID,
+        )
+        .order_by(PersonWalletDeposit.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "asset": str(row.asset).upper(),
+                "amount": _fmt(Decimal(str(row.amount or 0))),
+                "chain_id": ETHEREUM_CHAIN_ID,
+                "chain_label": CHAIN_LABELS.get(ETHEREUM_CHAIN_ID, "Ethereum"),
+                "tx_hash": row.tx_hash,
+                "log_index": row.log_index,
+                "block_number": row.block_number,
+                "status": row.status,
+                "transaction_kind": row.transaction_kind,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+        )
+    return out
 
 
 def _bundle_positions(db: Session, person_id: UUID) -> dict[str, Any]:
@@ -260,11 +288,23 @@ def _focus_swap(db: Session, swap_id: str) -> dict[str, Any] | None:
     }
 
 
+def _ethereum_explains_base_gap(
+    *,
+    delta_liquid: Decimal,
+    ethereum_bal: Decimal,
+    tol: Decimal,
+) -> bool:
+    if ethereum_bal <= DUST:
+        return False
+    return abs(delta_liquid - ethereum_bal) <= tol
+
+
 def _classify_raw_asset_signals(
     *,
     asset: str,
     ledger_bal: Decimal,
     chain_bal: Decimal,
+    ethereum_bal: Decimal,
     ledger_liquid: Decimal,
     vault_alloc: Decimal,
     bundle_alloc: Decimal,
@@ -273,22 +313,29 @@ def _classify_raw_asset_signals(
     direct_avail: Decimal,
     delta_liquid: Decimal,
     tol: Decimal,
-    chain_ids_scanned: list[int],
 ) -> tuple[list[str], list[str], list[str]]:
     """Retourne (custody_issues, informational, legacy_candidates)."""
     custody: list[str] = []
     informational: list[str] = []
     legacy_candidates: list[str] = []
 
-    eth_scan_missing = (
-        asset in MULTI_CHAIN_LEDGER_ASSETS
-        and 1 not in chain_ids_scanned
-        and ledger_bal > DUST
+    if ethereum_bal > DUST:
+        informational.append("ethereum_out_of_scope")
+
+    ethereum_explains = _ethereum_explains_base_gap(
+        delta_liquid=delta_liquid,
+        ethereum_bal=ethereum_bal,
+        tol=tol,
+    )
+    native_eth_residual = (
+        asset == "ETH"
+        and ethereum_bal > DUST
+        and abs(delta_liquid) <= ethereum_bal + NATIVE_ETH_ETHEREUM_RESIDUAL_TOL
     )
 
     if abs(delta_liquid) > tol and (chain_bal > DUST or ledger_liquid > DUST):
-        if eth_scan_missing:
-            informational.append("missing_chain_scope")
+        if ethereum_explains or native_eth_residual:
+            informational.append("ethereum_explains_ledger_gap")
         elif assets_in_frozen_scope(asset) and collateral > DUST:
             legacy_candidates.append("ledger_liquid_vs_onchain_collateral_legacy")
         else:
@@ -299,9 +346,9 @@ def _classify_raw_asset_signals(
 
     if ledger_bal > DUST and chain_bal <= DUST and vault_alloc <= DUST:
         if collateral <= DUST and bundle_alloc <= DUST:
-            if eth_scan_missing:
-                if "missing_chain_scope" not in informational:
-                    informational.append("missing_chain_scope")
+            if ethereum_explains or (ethereum_bal > DUST and ledger_liquid > DUST):
+                if "ethereum_explains_ledger_gap" not in informational:
+                    informational.append("ethereum_explains_ledger_gap")
             else:
                 custody.append("ledger_without_onchain")
 
@@ -372,19 +419,21 @@ def _build_success_criteria(
 
     for row in asset_rows:
         asset = row["asset"]
+        custody_tags = row.get("custody_issues") or []
         delta_liquid = Decimal(str(row.get("delta_ledger_liquid_vs_onchain") or "0"))
         tol = Decimal(str(row.get("custody_tolerance") or "0"))
         ledger_liquid = Decimal(str(row.get("ledger_liquid") or "0"))
         chain_bal = Decimal(str(row.get("on_chain_balance") or "0"))
 
-        if abs(delta_liquid) > tol and (ledger_liquid > DUST or chain_bal > DUST):
+        if custody_tags and abs(delta_liquid) > tol and (ledger_liquid > DUST or chain_bal > DUST):
             px = _price_usd(db, asset)
             if px is not None:
                 liquid_delta_usd += abs(delta_liquid) * px
 
         if asset in STABLECOIN_PILOT_ASSETS and (ledger_liquid > DUST or chain_bal > DUST):
-            missing_chain = "missing_chain_scope" in (row.get("informational") or [])
-            if abs(delta_liquid) > tol and not missing_chain:
+            info_tags = row.get("informational") or []
+            eth_out = "ethereum_out_of_scope" in info_tags or "ethereum_explains_ledger_gap" in info_tags
+            if abs(delta_liquid) > tol and not eth_out:
                 stablecoin_ok = False
 
     swap_blockers = bool(swaps.get("confirmed_incomplete_settlement") or swaps.get("submitted_confirmed_onchain"))
@@ -456,7 +505,7 @@ def build_person_crypto_audit(
     email: str,
     prepare_fixes: bool = False,
 ) -> dict[str, Any]:
-    """Audit lecture seule — doctrine custody v2."""
+    """Audit lecture seule — doctrine custody Base-only (Ethereum hors scope)."""
     frozen_scope = load_frozen_scope()
     person_ids = resolve_person_ids_by_email(db, email)
     if not person_ids:
@@ -472,12 +521,13 @@ def build_person_crypto_audit(
     ledger = _ledger_balances(db, person_id)
     scope_compare = compare_expected_scopes_vs_current_pe(db, person_id)
 
-    on_chain: dict[str, Decimal] = {}
+    on_chain_base: dict[str, Decimal] = {}
+    on_chain_ethereum: dict[str, Decimal] = {}
     on_chain_by_chain: dict[str, dict[str, str]] = {}
     chain_ids_scanned: list[int] = []
     if primary_wallet and primary_wallet.address:
         scan_assets = _assets_for_onchain_scan(ledger)
-        chain_ids = supported_pilot_chain_ids() or [BASE_LIFI_CHAIN_ID]
+        chain_ids = supported_pilot_chain_ids() or [CUSTODY_CHAIN_ID]
         chain_ids_scanned = list(chain_ids)
         raw = fetch_aggregated_on_chain_balances(
             wallet_address=primary_wallet.address,
@@ -485,9 +535,26 @@ def build_person_crypto_audit(
             assets=scan_assets,
         )
         for (cid, asset), bal in raw.items():
-            on_chain[asset] = on_chain.get(asset, Decimal("0")) + bal
             label = CHAIN_LABELS.get(cid, str(cid))
             on_chain_by_chain.setdefault(asset, {})[label] = _fmt(bal)
+            if cid == CUSTODY_CHAIN_ID:
+                on_chain_base[asset] = on_chain_base.get(asset, Decimal("0")) + bal
+            elif cid == ETHEREUM_CHAIN_ID:
+                on_chain_ethereum[asset] = on_chain_ethereum.get(asset, Decimal("0")) + bal
+
+    ethereum_deposits = _collect_ethereum_deposits(db, person_id)
+    out_of_scope_assets: list[dict[str, Any]] = []
+    for asset, bal in sorted(on_chain_ethereum.items()):
+        if bal > DUST:
+            out_of_scope_assets.append(
+                {
+                    "asset": asset,
+                    "chain_id": ETHEREUM_CHAIN_ID,
+                    "chain_label": CHAIN_LABELS.get(ETHEREUM_CHAIN_ID, "Ethereum"),
+                    "on_chain_balance": _fmt(bal),
+                    "reason": "ethereum_frozen_perimeter",
+                }
+            )
 
     asset_rows: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
@@ -495,14 +562,16 @@ def build_person_crypto_audit(
 
     all_assets = sorted(
         set(ledger.keys())
-        | set(on_chain.keys())
+        | set(on_chain_base.keys())
+        | set(on_chain_ethereum.keys())
         | set(pe.trading_available.keys())
         | set(pe.vault_position.keys())
     )
 
     for asset in all_assets:
         ledger_bal = ledger.get(asset, Decimal("0"))
-        chain_bal = on_chain.get(asset, Decimal("0"))
+        chain_bal = on_chain_base.get(asset, Decimal("0"))
+        ethereum_bal = on_chain_ethereum.get(asset, Decimal("0"))
         direct_avail = pe.trading_available.get(asset, Decimal("0"))
         vault_alloc = pe.vault_position.get(asset, Decimal("0"))
         bundle_alloc = pe.bundle_cash.get(asset, Decimal("0")) + pe.bundle_position.get(asset, Decimal("0"))
@@ -519,6 +588,7 @@ def build_person_crypto_audit(
             asset=asset,
             ledger_bal=ledger_bal,
             chain_bal=chain_bal,
+            ethereum_bal=ethereum_bal,
             ledger_liquid=ledger_liquid,
             vault_alloc=vault_alloc,
             bundle_alloc=bundle_alloc,
@@ -527,7 +597,6 @@ def build_person_crypto_audit(
             direct_avail=direct_avail,
             delta_liquid=delta_liquid,
             tol=tol,
-            chain_ids_scanned=chain_ids_scanned,
         )
 
         for tag in custody_tags:
@@ -542,8 +611,15 @@ def build_person_crypto_audit(
             )
         for tag in info_tags:
             entry: dict[str, Any] = {"type": "informational", "asset": asset, "issue": tag}
-            if tag == "missing_chain_scope":
-                entry["message"] = f"custody status unknown for {asset} Ethereum, not failed"
+            if tag == "ethereum_out_of_scope":
+                entry["message"] = (
+                    f"{asset} on Ethereum ({_fmt(ethereum_bal)}) hors périmètre custody — Base only"
+                )
+                entry["ethereum_balance"] = _fmt(ethereum_bal)
+            elif tag == "ethereum_explains_ledger_gap":
+                entry["message"] = (
+                    f"écart Base expliqué par solde Ethereum ({_fmt(ethereum_bal)}), not custody failure"
+                )
             informational.append(entry)
         for tag in legacy_tags:
             informational.append({"type": "legacy_candidate", "asset": asset, "issue": tag})
@@ -552,6 +628,8 @@ def build_person_crypto_audit(
             {
                 "asset": asset,
                 "on_chain_balance": _fmt(chain_bal),
+                "on_chain_balance_base": _fmt(chain_bal),
+                "on_chain_balance_ethereum": _fmt(ethereum_bal),
                 "ledger_balance": _fmt(ledger_bal),
                 "ledger_liquid": _fmt(ledger_liquid),
                 "vault_allocated": _fmt(vault_alloc),
@@ -621,15 +699,23 @@ def build_person_crypto_audit(
         ],
         "accounting_doctrine": {
             "version": AUDIT_VERSION,
-            "physical_truth": "wallet_privy_on_chain_multi_chain",
-            "liquid_wallet_check": "ledger_liquid = ledger_privy - vault_position_PE == sum(on_chain_by_chain)",
+            "custody_perimeter": "base_only",
+            "custody_chain_id": CUSTODY_CHAIN_ID,
+            "custody_chain_label": CHAIN_LABELS.get(CUSTODY_CHAIN_ID, str(CUSTODY_CHAIN_ID)),
+            "ethereum_status": "frozen_out_of_scope_informational",
+            "physical_truth": "wallet_privy_on_chain_base_for_custody",
+            "liquid_wallet_check": (
+                "ledger_liquid = ledger_privy - vault_position_PE == on_chain_base(8453)"
+            ),
             "bundle_scope": "economic_sub_ledger_subset_of_wallet",
             "vault_scope": "hors_wallet_erc20",
             "collateral_scope": "locked_non_spendable",
-            "swappable_formula": "min(on_chain_wallet_balance, ledger_balance - collateral_locked)",
+            "swappable_formula": "min(on_chain_base_balance, ledger_balance - collateral_locked)",
             "deprecated_formula": "direct+bundle+vault+collateral+pending=on_chain (invalid)",
             "chains_scanned": [CHAIN_LABELS.get(c, str(c)) for c in chain_ids_scanned],
         },
+        "out_of_scope_assets": out_of_scope_assets,
+        "ethereum_deposits": ethereum_deposits,
         "legacy_frozen_policy": {
             "legacy_frozen": frozen_scope.get("legacy_frozen"),
             "requires_protocol_proof": frozen_scope.get("requires_protocol_proof"),
