@@ -403,6 +403,32 @@ def run_defi_observability_tick(
             step_errors.append("transaction_outbox_failed")
             logger.warning("defi_observability.transaction_outbox_failed", exc_info=True)
 
+        # 2d — Outbox worker intent.settle (Phase 2 S3a — settlement skeleton NOOP, flag OFF)
+        try:
+            from services.lifi.config import lifi_outbox_worker_enabled
+            from services.transaction_outbox.settlement_worker import (
+                process_transaction_outbox_intent_settle,
+            )
+
+            if lifi_outbox_worker_enabled() and not dry_run:
+                outbox_settle_step = process_transaction_outbox_intent_settle(db, limit=20)
+            else:
+                outbox_settle_step = {
+                    "skipped": True,
+                    "enabled": lifi_outbox_worker_enabled(),
+                    "dry_run": dry_run,
+                }
+            summary["transaction_outbox_intent_settle"] = outbox_settle_step
+            summary["steps"]["transaction_outbox_intent_settle"] = outbox_settle_step
+        except Exception as exc:
+            summary["transaction_outbox_intent_settle"] = {"error": str(exc)}
+            summary["steps"]["transaction_outbox_intent_settle"] = {"error": str(exc)}
+            step_errors.append("transaction_outbox_intent_settle_failed")
+            logger.warning(
+                "defi_observability.transaction_outbox_intent_settle_failed",
+                exc_info=True,
+            )
+
         if _timeout_before("user_reconcile"):
             summary["alerts"] = compute_ops_alerts(db, summary=summary)
             _finalize_tick_summary(

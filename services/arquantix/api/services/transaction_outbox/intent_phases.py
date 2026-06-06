@@ -8,3 +8,4 @@ class IntentOrchestratorPhase(str, Enum):
     CREATED = "CREATED"
     VALIDATED = "VALIDATED"
     QUEUED = "QUEUED"
+    SETTLED_NOOP = "SETTLED_NOOP"
