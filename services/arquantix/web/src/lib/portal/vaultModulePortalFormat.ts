@@ -61,6 +61,15 @@ export function readKeyInformationMetrics(content: Record<string, unknown>): Por
   }))
 }
 
+/**
+ * Bande « raised / funded » dans la section métriques portail : réservée au module
+ * FundingModule explicite. Ne pas l’afficher pour KeyInformationModule seul même si
+ * l’offre a un produit lending (`ctx.lending`).
+ */
+export function shouldShowVaultMetricsFundingStrip(fundingMod: unknown): boolean {
+  return fundingMod != null
+}
+
 export function readFundingBlock(content: Record<string, unknown>, coverUrl: string | null) {
   const resolved = asRecord(content._resolved)
   if (!resolved) return null

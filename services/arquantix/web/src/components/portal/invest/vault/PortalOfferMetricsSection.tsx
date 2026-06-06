@@ -8,6 +8,7 @@ import type { ExclusiveOfferVaultPayload } from '@/lib/cms/exclusiveOfferVaultPa
 import type { VaultModulePublic } from '@/lib/cms/exclusiveOfferVaultPage'
 import {
   readKeyInformationMetrics,
+  shouldShowVaultMetricsFundingStrip,
   type PortalVaultMetricRow,
 } from '@/lib/portal/vaultModulePortalFormat'
 
@@ -174,7 +175,7 @@ export function PortalOfferMetricsSection({
     'Key information'
 
   const metrics = keyMod ? readKeyInformationMetrics(keyMod.content) : []
-  const hasFunding = Boolean(ctx.lending || fundingMod)
+  const hasFunding = shouldShowVaultMetricsFundingStrip(fundingMod)
   if (!metrics.length && !hasFunding) return null
 
   return (
