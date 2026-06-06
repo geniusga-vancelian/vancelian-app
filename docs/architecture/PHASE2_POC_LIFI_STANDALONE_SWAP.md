@@ -4,10 +4,11 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | À faire |
+| **Statut** | S1 ✅ mergé (#27) · S2 ⏸ en attente feu vert explicite « Go S2 » |
+| **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
-| **Prérequis** | ADR 001, 002, 003, 004 acceptés (`docs/architecture/adr/`) |
-| **Doctrine** | Intent orchestrateur · Outbox Postgres · Settlement Layer · Reconciliation Controller gate |
+| **Prérequis** | ADR 001–004 acceptés · [Gouvernance TRANSACTION_ENGINE](../TRANSACTION_ENGINE_GOVERNANCE.md) mergée |
+| **Doctrine** | Intent orchestrateur · Outbox Postgres · Settlement Layer · Reconciliation Controller gate · **5 règles non négociables** |
 
 **Aucun code métier avant validation explicite de ce ticket.**
 
@@ -343,8 +344,9 @@ Second à settlement/VALIDATED → BALANCE_VERSION_MISMATCH
 - [ ] **L8** — Re-vérification version avant `PROCESSING` et avant settlement
 - [ ] **L9** — Réponse API : `BALANCE_VERSION_MISMATCH` (409) — pas de mutation ledger
 - [ ] **L10** — Test : deux intents même version, même montant, un seul gagne
+- [ ] **L11** — `balance_snapshot_hash` capturé à `VALIDATED` ; re-check avant `PROCESSING` → `BALANCE_CHANGED` si drift
 
-**Pourquoi** : les locks seuls peuvent laisser passer des courses sur le **montant** si la balance change entre quote et submit ; la version rend la validation **extrêmement robuste** à l’échelle (swap + vault + bundle sur même USDC).
+**Pourquoi** : à 5k users / 50k intents/jour, **lock pessimiste + version/hash optimiste** protège plus que les webhooks (S6). Modèle courtage / banque.
 
 ---
 
@@ -449,10 +451,80 @@ Rollback : flag `false` → comportement actuel `webhook_service.py` inchangé.
 
 ---
 
+## S1 — clos ✅
+
+| Livrable | Statut |
+| --- | --- |
+| Migration 173 | ✅ staging `arquantix_fresh` |
+| `transaction_outbox` + `transaction_intent_transitions` | ✅ |
+| Extensions `transaction_intents` | ✅ |
+| Tests A1/A2 | ✅ |
+| Phase 7 non régressée | ✅ |
+| PR #27 | ✅ mergée |
+| Milestone S1 | ✅ fermé |
+| Runtime / flags | ✅ inchangés |
+
+---
+
+## S2 — verrou (pas de démarrage implicite)
+
+**Feu vert requis** : mot explicite **« Go S2 »** — pas de code S2 sans cela.
+
+### Interdictions S2 (jusqu’à feu vert ultérieur par milestone)
+
+- Pas de flag ON en prod/staging
+- Pas de settlement (`apply_swap_settlement`)
+- Pas de reconciliation controller
+- Pas de product locks
+- Pas de submit / poll / worker `provider_submitted`
+
+### Premier objectif S2 (scope ultra strict)
+
+Prouver uniquement :
+
+```
+POST /swaps/quote (LI.FI)
+  ↓
+intent orchestrateur (même TX)
+  ↓
+outbox event intent.created
+```
+
+| # | Livrable S2a | Détail |
+| --- | --- | --- |
+| 1 | Flag | `LIFI_INTENT_ORCHESTRATOR_ENABLED=false` (défaut) |
+| 2 | Quote | `lifi_quote_service` → `persist_intent_swap_outbox_atomic` si flag ON |
+| 3 | Sync legacy | `lifi_intent_sync` bypass **seulement** si flag ON |
+| 4 | Worker minimal | `intent.created` (flag `LIFI_OUTBOX_WORKER_ENABLED=false` par défaut) |
+| 5 | Rollback | flag OFF → comportement Phase 7 **identique** |
+
+**Gate S2a** : quote + intent + outbox en une TX ; legacy intact si flag OFF ; pas encore de traitement swap bout-en-bout.
+
+### Anti-patterns S2 — interdits (risque disciplinaire, pas technique)
+
+| Tentation | Pourquoi refuser |
+| --- | --- |
+| « Un petit `apply_swap_settlement` pour tester » | Contourne ADR 004 ; invalide la coexistence legacy |
+| « Déjà appeler settlement si flag ON » | S2 ≠ S3 ; settlement = milestone suivant |
+| « Worker `provider_submitted` tant qu’on y est » | Élargit le scope ; masque l’échec de coexistence |
+| « Flag ON en staging pour voir » | S5 = staging dual-run ; pas avant |
+
+**Seul succès S2a** : Legacy + Orchestrateur **coexistent** — flag OFF = comportement identique à aujourd’hui.
+
+### Verrou gouvernance
+
+```
+Pas de « Go S2 » explicite = Pas de code S2
+```
+
+Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**aller plus vite que l’architecture** définie.
+
+---
+
 ## Prochaine action
 
-1. Valider ce ticket (revue équipe)
-2. Créer branche `feat/phase2-lifi-intent-orchestrator`
-3. Commencer par **S1** : migrations + tests atomicité — **pas avant feu vert ticket**
-4. **S4 Product Locks** avant staging — priorité concurrence même asset
-5. **S6 Phase 2b** webhooks — après S5 uniquement
+1. ~~S1 fondation~~ — ✅ fait
+2. **Attendre « Go S2 »** — branche `feat/s2-lifi-intent-orchestrator` prête
+3. S3+ : settlement, controller, locks — **hors S2a**
+4. **S4** Product Locks avant staging final
+5. **S6** webhooks — après S5

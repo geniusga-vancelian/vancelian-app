@@ -5,7 +5,7 @@
 | **Branche** | `feat/s1-transaction-outbox-foundation` |
 | **Issue** | [#25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
 | **Milestone** | S1 — Migrations & Atomicity |
-| **Statut** | Prêt pour review — **non mergé** |
+| **Statut** | ✅ **Mergé** — PR #27 · milestone S1 fermé |
 | **Date** | 2026-06-07 |
 
 ---
@@ -99,10 +99,16 @@ pytest tests/test_transaction_outbox_atomicity.py -v
 
 ---
 
-## Prochaine étape (S2 — hors ce PR)
+## Prochaine étape (avant Go S2)
+
+1. **Gouvernance** — [TRANSACTION_ENGINE_GOVERNANCE.md](TRANSACTION_ENGINE_GOVERNANCE.md) commit + merge (5 règles non négociables)
+2. **ADR 004** — traiter comme constitution en review PR
+3. **Go S2 explicite** — puis S2a strict (issue #25)
+
+S2a (quand feu vert) :
 
 - Brancher `lifi_quote_service` sur `persist_intent_swap_outbox_atomic` derrière `LIFI_INTENT_ORCHESTRATOR_ENABLED=false` par défaut
-- Worker `intent.created` dans tick DeFi
+- Worker `intent.created` minimal (flag worker OFF par défaut)
 
 ---
 
@@ -112,4 +118,5 @@ pytest tests/test_transaction_outbox_atomicity.py -v
 - [ ] Tests A1/A2 verts
 - [ ] Aucun import `transaction_outbox` depuis `lifi_*`
 - [ ] ADR 001/002 alignés avec schéma
-- [ ] PR non mergée avant validation explicite CTO / #25
+- [x] PR #27 mergée — milestone S1 fermé
+- [ ] Gouvernance TRANSACTION_ENGINE mergée avant Go S2
