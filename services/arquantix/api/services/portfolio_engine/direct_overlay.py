@@ -351,6 +351,8 @@ def _compute_wac_price(db: Session, client_id: UUID, asset: str) -> Decimal:
 # ------------------------------------------------------------------
 
 _ALIGN_TOLERANCE = Decimal("0.000001")
+# Stablecoins Privy — évite de bootstraper des spots (ETH/LINK/…) sans règle métier dédiée.
+_CUSTODY_ALIGN_ASSETS = frozenset({"EURC", "USDC", "USDT"})
 
 
 def _align_tolerance(asset: str) -> Decimal:
@@ -391,7 +393,7 @@ def align_pe_trading_available_from_ledger_liquid(
     aligned: list[dict[str, str]] = []
 
     for asset, ledger_bal in sorted(ledger.items()):
-        if ledger_bal <= 0:
+        if asset not in _CUSTODY_ALIGN_ASSETS or ledger_bal <= 0:
             continue
         vault_alloc = pe.vault_position.get(asset, Decimal("0"))
         locked_collateral = pe.trading_locked_collateral.get(asset, Decimal("0"))
