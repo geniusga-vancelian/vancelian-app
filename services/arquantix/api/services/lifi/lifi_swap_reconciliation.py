@@ -13,11 +13,13 @@ from sqlalchemy.orm import Session
 from services.lifi.enums import SwapSessionStatus
 from services.lifi.lifi_actual_receive import resolve_lifi_actual_receive_amount
 from services.lifi.lifi_swap_settlement import (
+    SWAP_LEDGER_LOG_INDEX_DEBIT_PREFERRED,
     SwapSettlementBlocked,
     _chain_id_for_swap,
     _create_swap_ledger_entry,
     _resolve_swap_wallet,
-    swap_settlement_already_applied,
+    swap_credit_idempotency_key,
+    swap_debit_idempotency_key,
 )
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.swap_repository import PersonWalletSwapRepository
@@ -60,21 +62,18 @@ def _swap_id_str(swap) -> str:
     return str(swap.id)
 
 
-def _debit_idempotency_key(swap_id: str) -> str:
-    return f"lifi-swap:{swap_id}:debit"
-
-
-def _credit_idempotency_key(swap_id: str) -> str:
-    return f"lifi-swap:{swap_id}:credit"
-
-
 def _deposit_matches_swap(deposit: PersonWalletDeposit, swap_id: str) -> bool:
     meta = deposit.metadata_json if isinstance(deposit.metadata_json, dict) else {}
     if str(meta.get("swap_id") or "") == swap_id:
         return True
-    if deposit.idempotency_key in {_debit_idempotency_key(swap_id), _credit_idempotency_key(swap_id)}:
+    if deposit.idempotency_key in {swap_debit_idempotency_key(swap_id), swap_credit_idempotency_key(swap_id)}:
         return True
     return False
+
+
+def swap_ledger_legs_complete(db: Session, swap) -> bool:
+    legs = detect_swap_ledger_legs(db, swap)
+    return legs.debit_exists and legs.credit_exists
 
 
 def detect_swap_ledger_legs(db: Session, swap) -> SwapLedgerLegStatus:
@@ -90,6 +89,19 @@ def detect_swap_ledger_legs(db: Session, swap) -> SwapLedgerLegStatus:
     credit_id: UUID | None = None
     credit_amount: Decimal | None = None
     credit_source: str | None = None
+
+    debit_by_key = deposit_repo.find_by_deposit_idempotency_key(db, swap_debit_idempotency_key(swap_id))
+    if debit_by_key is not None:
+        debit_exists = True
+        debit_id = debit_by_key.id
+
+    credit_by_key = deposit_repo.find_by_deposit_idempotency_key(db, swap_credit_idempotency_key(swap_id))
+    if credit_by_key is not None:
+        credit_exists = True
+        credit_id = credit_by_key.id
+        credit_amount = Decimal(str(credit_by_key.amount))
+        meta = credit_by_key.metadata_json if isinstance(credit_by_key.metadata_json, dict) else {}
+        credit_source = str(meta.get("source") or credit_by_key.transaction_kind or "lifi_swap")
 
     if tx_hash:
         for dep in deposit_repo.find_confirmed_by_tx_hash(db, tx_hash=tx_hash, person_id=swap.person_id):
@@ -183,6 +195,16 @@ def _cost_basis_missing(db: Session, swap) -> bool:
     return existing == 0
 
 
+def _credit_already_linked_to_swap(db: Session, swap, legs: SwapLedgerLegStatus) -> bool:
+    if legs.credit_deposit_id is None:
+        return False
+    dep = db.query(PersonWalletDeposit).filter(PersonWalletDeposit.id == legs.credit_deposit_id).first()
+    if dep is None:
+        return False
+    meta = dep.metadata_json if isinstance(dep.metadata_json, dict) else {}
+    return str(meta.get("swap_id") or "") == _swap_id_str(swap)
+
+
 def build_reconciliation_dry_run_summary(db: Session, swap) -> dict[str, Any]:
     """Résumé ops pour dry-run ciblé (swap prod 76830776…)."""
     legs = detect_swap_ledger_legs(db, swap)
@@ -191,20 +213,22 @@ def build_reconciliation_dry_run_summary(db: Session, swap) -> dict[str, Any]:
     to_asset = str(swap.to_asset).upper()
     would_debit = not legs.debit_exists
     would_credit = not legs.credit_exists
-    would_link_credit = legs.credit_exists and not legs.debit_exists
-    settled = swap_settlement_already_applied(swap)
+    credit_already_linked = _credit_already_linked_to_swap(db, swap, legs)
+    would_link_credit = legs.credit_exists and not legs.debit_exists and not credit_already_linked
+    already_confirmed = str(swap.status) == SwapSessionStatus.CONFIRMED.value
 
     return {
         "swap_id": _swap_id_str(swap),
         "status": str(swap.status),
         "tx_hash": swap.tx_hash,
+        "already_confirmed": already_confirmed,
         "would_mark_confirmed": on_chain_ok
-        and str(swap.status) == SwapSessionStatus.SUBMITTED.value
-        and not settled,
-        f"would_create_debit_{from_asset}": would_debit and not settled,
-        f"would_create_credit_{to_asset}": would_credit and not settled,
-        f"would_link_existing_credit_{to_asset}": would_link_credit and not settled,
-        "would_create_cost_basis": _cost_basis_missing(db, swap) and not settled,
+        and str(swap.status) == SwapSessionStatus.SUBMITTED.value,
+        f"would_create_debit_{from_asset}": would_debit,
+        f"would_create_credit_{to_asset}": would_credit,
+        f"would_link_existing_credit_{to_asset}": would_link_credit,
+        f"already_linked_credit_{to_asset}": credit_already_linked,
+        "would_create_cost_basis": _cost_basis_missing(db, swap),
         "no_double_write_risk": True,
         "on_chain_confirmed": on_chain_ok,
         "ledger_legs": {
@@ -252,11 +276,12 @@ def settle_lifi_swap_idempotently(
     if not str(swap.tx_hash or "").strip():
         raise SwapValidationError("swap.missing_tx_hash", "tx_hash requis pour la réconciliation")
 
-    if swap_settlement_already_applied(swap):
+    legs = detect_swap_ledger_legs(db, swap)
+    if legs.debit_exists and legs.credit_exists:
         return SwapReconciliationResult(
             swap_id=swap_id,
             dry_run=dry_run,
-            action="noop_already_settled",
+            action="noop_legs_complete",
             status_before=status_before,
             status_after=status_before,
             debit_applied=False,
@@ -265,8 +290,6 @@ def settle_lifi_swap_idempotently(
             would_write=[],
             preview=preview,
         )
-
-    legs = detect_swap_ledger_legs(db, swap)
     on_chain_ok = allow_rpc_confirm and is_tx_confirmed_on_chain(swap)
 
     if status_before not in {SwapSessionStatus.CONFIRMED.value, SwapSessionStatus.SUBMITTED.value}:
@@ -323,12 +346,12 @@ def settle_lifi_swap_idempotently(
                 "direction": "debit",
                 "asset": from_asset,
                 "amount": str(amount_in),
-                "idempotency_key": _debit_idempotency_key(swap_id),
-                "log_index": 0,
+                "idempotency_key": swap_debit_idempotency_key(swap_id),
+                "log_index": SWAP_LEDGER_LOG_INDEX_DEBIT_PREFERRED,
             }
         )
         if not dry_run:
-            _create_swap_ledger_entry(
+            debit_applied = _create_swap_ledger_entry(
                 db,
                 swap=swap,
                 wallet=wallet,
@@ -336,12 +359,11 @@ def settle_lifi_swap_idempotently(
                 asset=from_asset,
                 amount=amount_in,
                 chain_id=from_chain_id,
-                log_index=0,
-                idempotency_key=_debit_idempotency_key(swap_id),
+                log_index=SWAP_LEDGER_LOG_INDEX_DEBIT_PREFERRED,
+                idempotency_key=swap_debit_idempotency_key(swap_id),
                 sync_source=sync_source,
                 settlement_meta=settlement_meta,
             )
-            debit_applied = True
 
     if not legs.credit_exists:
         credit_log_index = actual.log_index if actual.log_index is not None else 1
@@ -351,12 +373,12 @@ def settle_lifi_swap_idempotently(
                 "direction": "credit",
                 "asset": str(swap.to_asset).upper(),
                 "amount": str(actual.amount),
-                "idempotency_key": _credit_idempotency_key(swap_id),
+                "idempotency_key": swap_credit_idempotency_key(swap_id),
                 "log_index": credit_log_index,
             }
         )
         if not dry_run:
-            _create_swap_ledger_entry(
+            credit_applied = _create_swap_ledger_entry(
                 db,
                 swap=swap,
                 wallet=wallet,
@@ -365,12 +387,12 @@ def settle_lifi_swap_idempotently(
                 amount=actual.amount,
                 chain_id=to_chain_id,
                 log_index=credit_log_index,
-                idempotency_key=_credit_idempotency_key(swap_id),
+                idempotency_key=swap_credit_idempotency_key(swap_id),
                 sync_source=sync_source,
                 settlement_meta=settlement_meta,
             )
-            credit_applied = True
-    elif legs.credit_deposit_id:
+    credit_linked = False
+    if legs.credit_deposit_id and not _credit_already_linked_to_swap(db, swap, legs):
         would_write.append(
             {
                 "table": "person_wallet_deposits",
@@ -383,9 +405,10 @@ def settle_lifi_swap_idempotently(
             dep = db.query(PersonWalletDeposit).filter(PersonWalletDeposit.id == legs.credit_deposit_id).first()
             if dep is not None:
                 _link_existing_credit_to_swap(db, swap, dep)
+                credit_linked = True
 
     would_create_cost_basis = _cost_basis_missing(db, swap)
-    if would_create_cost_basis and not swap_settlement_already_applied(swap):
+    if would_create_cost_basis:
         would_write.append({"table": "cost_basis_executions", "action": "create_if_missing"})
 
     cost_basis_applied = False
@@ -400,24 +423,34 @@ def settle_lifi_swap_idempotently(
         except Exception:
             logger.exception("swap.reconciliation.cost_basis_failed swap_id=%s", swap_id)
 
-    action = "reconciled_partial_settlement" if legs.credit_exists and not legs.debit_exists else "reconciled_full_settlement"
-    if not debit_applied and not credit_applied and legs.debit_exists and legs.credit_exists:
-        action = "noop_legs_complete"
+    if debit_applied and legs.credit_exists and status_before == SwapSessionStatus.CONFIRMED.value:
+        action = "reconciled_complete_missing_debit"
+    elif legs.credit_exists and not legs.debit_exists:
+        action = "reconciled_partial_settlement"
+    else:
+        action = "reconciled_full_settlement"
+
+    audit_event = (
+        "swap_reconciled_complete_missing_debit"
+        if action == "reconciled_complete_missing_debit"
+        else "swap_reconciled_partial_settlement"
+        if action == "reconciled_partial_settlement"
+        else "swap_settled"
+    )
+    will_mutate = (
+        not legs.debit_exists
+        or not legs.credit_exists
+        or (legs.credit_deposit_id and not _credit_already_linked_to_swap(db, swap, legs))
+        or would_create_cost_basis
+        or (swap.status != SwapSessionStatus.CONFIRMED.value and on_chain_ok)
+    )
 
     if dry_run:
         if swap.status != SwapSessionStatus.CONFIRMED.value and on_chain_ok:
             would_write.append({"table": "person_wallet_swaps", "status": "CONFIRMED"})
-        would_write.append(
-            {
-                "table": "person_wallet_swaps",
-                "audit_event": (
-                    "swap_reconciled_partial_settlement"
-                    if legs.credit_exists and not legs.debit_exists
-                    else "swap_settled"
-                ),
-            }
-        )
-        would_write.append({"table": "transaction_trace_events", "event": "reconciliation_applied"})
+        if will_mutate:
+            would_write.append({"table": "person_wallet_swaps", "audit_event": audit_event})
+            would_write.append({"table": "transaction_trace_events", "event": "reconciliation_applied"})
         if not legs.debit_exists or not legs.credit_exists or would_create_cost_basis:
             would_write.append({"table": "onchain_transaction_attempts", "status": "confirmed"})
         return SwapReconciliationResult(
@@ -433,17 +466,12 @@ def settle_lifi_swap_idempotently(
             preview=preview,
         )
 
-    if not dry_run:
+    if not dry_run and (debit_applied or credit_applied or credit_linked or cost_basis_applied):
         if swap.status != SwapSessionStatus.CONFIRMED.value:
             swap.status = SwapSessionStatus.CONFIRMED.value
             swap.confirmed_at = datetime.now(timezone.utc)
             would_write.append({"table": "person_wallet_swaps", "status": "CONFIRMED"})
 
-        audit_event = (
-            "swap_reconciled_partial_settlement"
-            if legs.credit_exists and debit_applied
-            else "swap_settled"
-        )
         repo.append_audit(
             swap,
             {
@@ -453,6 +481,7 @@ def settle_lifi_swap_idempotently(
                 "debit_applied": debit_applied,
                 "credit_applied": credit_applied,
                 "credit_preexisting": legs.credit_exists and not credit_applied,
+                "credit_linked": credit_linked,
             },
         )
         on_swap_confirmed(db, swap)
@@ -515,9 +544,11 @@ def find_partial_settlement_candidates(
     seen: set[str] = set()
     for swap in rows:
         sid = _swap_id_str(swap)
-        if sid in seen or swap_settlement_already_applied(swap):
+        if sid in seen:
             continue
         legs = detect_swap_ledger_legs(db, swap)
+        if legs.debit_exists and legs.credit_exists:
+            continue
         on_chain_ok = is_tx_confirmed_on_chain(swap)
         needs_reconcile = False
         if legs.credit_exists and not legs.debit_exists:

@@ -17,6 +17,10 @@ from services.lifi.lifi_swap_reconciliation import (
     detect_swap_ledger_legs,
     settle_lifi_swap_idempotently,
 )
+from services.lifi.lifi_swap_settlement import (
+    SWAP_LEDGER_LOG_INDEX_DEBIT_SYNTHETIC,
+    swap_debit_idempotency_key,
+)
 from services.lifi.models import PersonWalletSwap
 from services.privy_wallet.admin_service import PrivyWalletAdminService
 from services.privy_wallet.enums import PersonWalletDirection
@@ -98,6 +102,43 @@ def _seed_aave_balance(db: Session, wallet, person_id):
             chain_id=8453,
         ),
     )
+    db.commit()
+
+
+def _seed_webhook_eurc_credit_log_index_zero(db: Session, wallet, person_id):
+    """Reproduit la prod : crédit webhook EURC sur log_index=0 (collision avec débit swap)."""
+    PersonWalletDepositRepository().create(
+        db,
+        data={
+            "person_crypto_wallet_id": wallet.id,
+            "person_id": person_id,
+            "pe_client_id": wallet.pe_client_id,
+            "privy_webhook_event_id": None,
+            "transaction_kind": "privy_deposit_in",
+            "direction": PersonWalletDirection.CREDIT.value,
+            "asset": "EURC",
+            "amount": Decimal("11.153851"),
+            "chain_type": "ethereum",
+            "chain_id": 8453,
+            "tx_hash": TX,
+            "log_index": 0,
+            "from_address": "0xrouter",
+            "to_address": EVM_ADDR,
+            "confirmations": 1,
+            "status": "confirmed",
+            "idempotency_key": f"{TX}-444_wallet.funds_deposited",
+            "title": "Dépôt Euro Coin",
+            "subtitle": "+11.153851 EURC",
+            "metadata_json": {
+                "event_source": "privy_webhook",
+                "privy_event_type": "wallet.funds_deposited",
+            },
+            "confirmed_at": datetime.now(timezone.utc),
+        },
+    )
+    balance_repo = PersonWalletBalanceRepository()
+    row = balance_repo.get_or_create_for_update(db, wallet_id=wallet.id, person_id=person_id, asset="EURC")
+    balance_repo.increment_balance(db, row, delta=Decimal("11.153851"), sync_source="test")
     db.commit()
 
 
@@ -216,7 +257,7 @@ def test_partial_settlement_idempotent_no_double_debit(mock_amount, mock_rpc, db
     db.refresh(swap)
 
     result2 = settle_lifi_swap_idempotently(db, swap.id, dry_run=False)
-    assert result2.action == "noop_already_settled"
+    assert result2.action == "noop_legs_complete"
 
 
 @patch("services.lifi.lifi_swap_reconciliation.is_tx_confirmed_on_chain", return_value=True)
@@ -352,7 +393,7 @@ def test_both_legs_exist_noop_until_settled_marker(mock_amount, mock_rpc, db: Se
     db.commit()
 
     result = settle_lifi_swap_idempotently(db, swap.id, dry_run=True)
-    assert result.action == "noop_already_settled"
+    assert result.action == "noop_legs_complete"
 
 
 @patch("services.lifi.lifi_swap_reconciliation.is_tx_confirmed_on_chain", return_value=True)
@@ -373,3 +414,112 @@ def test_rpc_confirms_uses_existing_credit_amount(mock_resolve, mock_rpc, db: Se
     assert dry.preview is not None
     assert dry.preview["would_create_debit_AAVE"] is True
     assert dry.preview["would_create_credit_EURC"] is False
+
+
+@patch("services.lifi.lifi_swap_reconciliation.is_tx_confirmed_on_chain", return_value=True)
+@patch(
+    "services.lifi.lifi_swap_reconciliation.resolve_lifi_actual_receive_amount",
+    return_value=LifiActualReceiveResult(amount=Decimal("11.153851"), source="test"),
+)
+def test_webhook_credit_log_index_zero_does_not_block_debit(mock_amount, mock_rpc, db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    _seed_aave_balance(db, wallet, pe.person_id)
+    swap = _submitted_swap(pe.person_id)
+    db.add(swap)
+    db.flush()
+    _seed_webhook_eurc_credit_log_index_zero(db, wallet, pe.person_id)
+
+    result = settle_lifi_swap_idempotently(db, swap.id, dry_run=False)
+    db.refresh(swap)
+
+    assert result.debit_applied is True
+    assert result.credit_applied is False
+    debit = (
+        db.query(PersonWalletDeposit)
+        .filter(PersonWalletDeposit.idempotency_key == swap_debit_idempotency_key(str(swap.id)))
+        .one()
+    )
+    assert debit.log_index == SWAP_LEDGER_LOG_INDEX_DEBIT_SYNTHETIC
+    assert debit.asset == "AAVE"
+    eurc_count = (
+        db.query(PersonWalletDeposit)
+        .filter(
+            PersonWalletDeposit.person_id == pe.person_id,
+            PersonWalletDeposit.tx_hash == TX,
+            PersonWalletDeposit.asset == "EURC",
+            PersonWalletDeposit.direction == PersonWalletDirection.CREDIT.value,
+        )
+        .count()
+    )
+    assert eurc_count == 1
+
+
+@patch("services.lifi.lifi_swap_reconciliation.is_tx_confirmed_on_chain", return_value=True)
+@patch(
+    "services.lifi.lifi_swap_reconciliation.resolve_lifi_actual_receive_amount",
+    return_value=LifiActualReceiveResult(amount=Decimal("11.153851"), source="test"),
+)
+def test_confirmed_partial_audit_still_creates_missing_debit(mock_amount, mock_rpc, db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    _seed_aave_balance(db, wallet, pe.person_id)
+    swap = _submitted_swap(pe.person_id)
+    swap.status = SwapSessionStatus.CONFIRMED.value
+    swap.confirmed_at = datetime.now(timezone.utc)
+    swap.audit_log = [
+        {"event": "quote_requested", "signing_wallet_address": EVM_ADDR},
+        {"event": "swap_reconciled_partial_settlement"},
+    ]
+    db.add(swap)
+    db.flush()
+    _seed_webhook_eurc_credit_log_index_zero(db, wallet, pe.person_id)
+    dep = (
+        db.query(PersonWalletDeposit)
+        .filter(
+            PersonWalletDeposit.person_id == pe.person_id,
+            PersonWalletDeposit.tx_hash == TX,
+            PersonWalletDeposit.asset == "EURC",
+        )
+        .one()
+    )
+    dep.metadata_json = {**(dep.metadata_json or {}), "swap_id": str(swap.id), "source": "lifi_swap_reconciled"}
+    db.add(dep)
+    db.commit()
+
+    preview = build_reconciliation_dry_run_summary(db, swap)
+    assert preview["already_confirmed"] is True
+    assert preview["would_mark_confirmed"] is False
+    assert preview["would_create_debit_AAVE"] is True
+    assert preview["would_create_credit_EURC"] is False
+    assert preview["already_linked_credit_EURC"] is True
+    assert preview["would_link_existing_credit_EURC"] is False
+
+    result = settle_lifi_swap_idempotently(db, swap.id, dry_run=False)
+    assert result.action == "reconciled_complete_missing_debit"
+    assert result.debit_applied is True
+
+
+@patch("services.lifi.lifi_swap_reconciliation.is_tx_confirmed_on_chain", return_value=True)
+@patch(
+    "services.lifi.lifi_swap_reconciliation.resolve_lifi_actual_receive_amount",
+    return_value=LifiActualReceiveResult(amount=Decimal("11.153851"), source="test"),
+)
+def test_debit_idempotency_key_prevents_double_write(mock_amount, mock_rpc, db: Session):
+    pe = make_linked_client(db)
+    wallet = _seed_wallet(db, pe)
+    _seed_aave_balance(db, wallet, pe.person_id)
+    swap = _submitted_swap(pe.person_id)
+    db.add(swap)
+    db.flush()
+    _seed_webhook_eurc_credit_log_index_zero(db, wallet, pe.person_id)
+
+    settle_lifi_swap_idempotently(db, swap.id, dry_run=False)
+    result2 = settle_lifi_swap_idempotently(db, swap.id, dry_run=False)
+    assert result2.action == "noop_legs_complete"
+    debit_count = (
+        db.query(PersonWalletDeposit)
+        .filter(PersonWalletDeposit.idempotency_key == swap_debit_idempotency_key(str(swap.id)))
+        .count()
+    )
+    assert debit_count == 1
