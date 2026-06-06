@@ -347,6 +347,92 @@ def _compute_wac_price(db: Session, client_id: UUID, asset: str) -> Decimal:
 
 
 # ------------------------------------------------------------------
+# Custody → PE trading_available (Privy-only gaps, ex. EURC)
+# ------------------------------------------------------------------
+
+_ALIGN_TOLERANCE = Decimal("0.000001")
+
+
+def _align_tolerance(asset: str) -> Decimal:
+    if asset.upper() in ("USDC", "USDT", "EURC", "DAI"):
+        return Decimal("0.01")
+    return _ALIGN_TOLERANCE
+
+
+def align_pe_trading_available_from_ledger_liquid(
+    db: Session,
+    person_id: UUID,
+) -> list[dict[str, str]]:
+    """Aligne ``trading_available`` PE (direct_portfolio) sur le ledger Privy liquide.
+
+    Formule : ``ledger_balance - vault_position - locked_collateral`` (doctrine custody).
+    Ne touche pas ``person_wallet_balances`` ; ne réduit jamais un atom direct existant.
+    Ignore les actifs avec collateral Lombard verrouillé (scopes gérés ailleurs).
+    """
+    from services.portfolio_engine.bundle_execution.bundle_cost_basis import reference_cost_basis_eur
+    from services.portfolio_engine.internal_scope_movements.pe_reader import read_current_pe_scope_snapshot
+    from services.portfolio_engine.internal_scope_movements.utils import resolve_client_id
+    from services.privy_wallet.repository import PersonWalletBalanceRepository
+
+    client_id = resolve_client_id(db, person_id)
+    if client_id is None:
+        return []
+
+    pe = read_current_pe_scope_snapshot(db, person_id)
+    ledger: dict[str, Decimal] = {}
+    for row in PersonWalletBalanceRepository.list_for_person(db, person_id):
+        asset = str(row.asset).upper()
+        ledger[asset] = ledger.get(asset, Decimal("0")) + Decimal(str(row.balance or 0))
+
+    if not ledger:
+        return []
+
+    direct_pf = ensure_direct_portfolio(db, client_id)
+    aligned: list[dict[str, str]] = []
+
+    for asset, ledger_bal in sorted(ledger.items()):
+        if ledger_bal <= 0:
+            continue
+        vault_alloc = pe.vault_position.get(asset, Decimal("0"))
+        locked_collateral = pe.trading_locked_collateral.get(asset, Decimal("0"))
+        if locked_collateral > _align_tolerance(asset):
+            continue
+
+        current_avail = pe.trading_available.get(asset, Decimal("0"))
+        expected_avail = max(Decimal("0"), ledger_bal - vault_alloc - locked_collateral)
+        delta = expected_avail - current_avail
+        tol = _align_tolerance(asset)
+        if delta <= tol:
+            continue
+
+        instrument = _resolve_or_create_instrument(db, asset)
+        cost_basis = reference_cost_basis_eur(db, asset, delta)
+        sync_direct_atom(
+            db,
+            direct_pf.id,
+            instrument.id,
+            delta,
+            cost_basis,
+        )
+        aligned.append(
+            {
+                "asset": asset,
+                "delta": str(delta.normalize()),
+                "expected_trading_available": str(expected_avail.normalize()),
+                "previous_trading_available": str(current_avail.normalize()),
+            }
+        )
+        logger.info(
+            "direct_overlay.align_trading_available client=%s asset=%s delta=%s expected=%s",
+            client_id,
+            asset,
+            delta,
+            expected_avail,
+        )
+    return aligned
+
+
+# ------------------------------------------------------------------
 # Invariant F: direct + bundle = crypto_positions
 # ------------------------------------------------------------------
 

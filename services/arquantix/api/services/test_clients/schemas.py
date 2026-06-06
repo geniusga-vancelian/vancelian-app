@@ -443,12 +443,20 @@ class PortfolioBreakdownDoctrine(BaseModel):
     swap_max_field: str
 
 
+class PortfolioBreakdownPeAlignmentEntry(BaseModel):
+    asset: str
+    delta: str
+    expected_trading_available: str
+    previous_trading_available: str
+
+
 class PortfolioBreakdownResponse(BaseModel):
     breakdown_version: str
     person_id: str
     doctrine: PortfolioBreakdownDoctrine
     warnings: list[str]
     non_additive_components: list[str]
+    pe_alignment: list[PortfolioBreakdownPeAlignmentEntry] = []
     assets: list[PortfolioBreakdownAssetPayload]
 
 
