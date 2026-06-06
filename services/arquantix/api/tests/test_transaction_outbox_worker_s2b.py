@@ -23,6 +23,7 @@ from services.transaction_outbox.worker import (
     process_transaction_outbox_intent_created,
 )
 from tests.conftest import make_linked_client
+from tests.lifi_orchestrator_test_utils import enable_lifi_orchestrator_allowlist
 
 
 def _migration_173_ready() -> bool:
@@ -55,8 +56,10 @@ def _economic_counts(db: Session, person_id) -> tuple[int, int]:
     return balances, deposits
 
 
-def _seed_pending_intent_created(db: Session):
+def _seed_pending_intent_created(db: Session, monkeypatch=None):
     pe = make_linked_client(db)
+    if monkeypatch is not None:
+        enable_lifi_orchestrator_allowlist(monkeypatch, pe)
     bundle = persist_intent_swap_outbox_atomic(
         db,
         person_id=pe.person_id,
@@ -81,7 +84,7 @@ def test_s2b_intent_created_transitions_and_marks_outbox_processed(
     db: Session, monkeypatch
 ):
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
-    pe, bundle = _seed_pending_intent_created(db)
+    pe, bundle = _seed_pending_intent_created(db, monkeypatch)
     bal_before, dep_before = _economic_counts(db, pe.person_id)
     transitions_before = TransactionIntentTransitionRepository.count_for_intent(
         db, bundle.intent.id
@@ -107,8 +110,8 @@ def test_s2b_intent_created_transitions_and_marks_outbox_processed(
     assert dep_after == dep_before
 
 
-def test_s2b_handler_idempotent_when_already_queued(db: Session):
-    pe, bundle = _seed_pending_intent_created(db)
+def test_s2b_handler_idempotent_when_already_queued(db: Session, monkeypatch):
+    pe, bundle = _seed_pending_intent_created(db, monkeypatch)
     bundle.intent.current_phase = IntentOrchestratorPhase.QUEUED.value
     db.commit()
 
@@ -123,7 +126,7 @@ def test_s2b_handler_idempotent_when_already_queued(db: Session):
 
 def test_s2b_second_poll_no_double_process(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
-    _pe, bundle = _seed_pending_intent_created(db)
+    _pe, bundle = _seed_pending_intent_created(db, monkeypatch)
 
     first = process_transaction_outbox_intent_created(db)
     assert first["processed"] == 1

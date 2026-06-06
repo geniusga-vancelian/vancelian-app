@@ -15,7 +15,8 @@ from config.supported_swap_assets import (
     human_amount_to_atomic,
     resolve_swap_token,
 )
-from services.lifi.config import QUOTE_TTL_SECONDS, lifi_intent_orchestrator_enabled, swap_fee_bps
+from services.lifi.config import QUOTE_TTL_SECONDS, swap_fee_bps
+from services.lifi.orchestrator_allowlist import lifi_intent_orchestrator_enabled_for_person
 from services.lifi.enums import SwapSessionStatus
 from services.lifi.lifi_client import LifiClient, LifiClientError
 from services.lifi.lifi_validation_service import SwapValidationError, validate_quote_request
@@ -150,7 +151,7 @@ class LifiQuoteService:
         from services.lifi.swap_trace_service import log_swap_trace
         from services.transaction_intents.lifi_intent_sync import sync_lifi_swap_intent
 
-        if not lifi_intent_orchestrator_enabled():
+        if not lifi_intent_orchestrator_enabled_for_person(db, person_id):
             sync_lifi_swap_intent(db, swap_row)
         log_swap_trace(
             db,
@@ -184,7 +185,7 @@ class LifiQuoteService:
         slippage_bps: int,
         expires_at: datetime,
     ):
-        if lifi_intent_orchestrator_enabled():
+        if lifi_intent_orchestrator_enabled_for_person(db, person_id):
             from services.transaction_outbox.atomic import persist_intent_swap_outbox_atomic
 
             bundle = persist_intent_swap_outbox_atomic(
@@ -225,7 +226,7 @@ class LifiQuoteService:
         swap_row.status = SwapSessionStatus.FAILED.value
         swap_row.error_message = str(exc)
         self._swap_repo.append_audit(swap_row, {"event": event, "code": exc.code})
-        if lifi_intent_orchestrator_enabled():
+        if lifi_intent_orchestrator_enabled_for_person(db, swap_row.person_id):
             intent = TransactionIntentRepository.find_by_linked(
                 db,
                 linked_table="person_wallet_swaps",

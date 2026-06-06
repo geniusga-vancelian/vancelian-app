@@ -92,6 +92,14 @@ class TransactionOutboxRepository:
         db.flush()
 
     @staticmethod
+    def release_processing_lock(db: Session, row: TransactionOutbox) -> None:
+        """Remet un événement en pending sans incrémenter attempt_count (skip allowlist, etc.)."""
+        row.status = OutboxEventStatus.PENDING.value
+        row.locked_by = None
+        row.locked_at = None
+        db.flush()
+
+    @staticmethod
     def mark_failure(
         db: Session,
         row: TransactionOutbox,

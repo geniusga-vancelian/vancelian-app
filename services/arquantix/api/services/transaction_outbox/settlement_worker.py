@@ -13,7 +13,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from services.lifi.config import lifi_outbox_worker_enabled, lifi_settlement_layer_ledger_enabled
+from services.lifi.config import lifi_outbox_worker_enabled
+from services.lifi.orchestrator_allowlist import (
+    lifi_outbox_worker_enabled_for_person,
+    lifi_settlement_layer_ledger_enabled_for_person,
+)
 from services.onchain_indexer.models import TransactionIntent
 from services.settlement.constants import SETTLEMENT_RECEIPT_METADATA_KEY
 from services.settlement.preconditions import settlement_marker_present
@@ -82,7 +86,7 @@ def handle_intent_settle_event(db: Session, outbox: TransactionOutbox) -> None:
     if not receipt_hash:
         raise ValueError("settlement_success_missing_receipt_hash")
 
-    ledger_enabled = lifi_settlement_layer_ledger_enabled()
+    ledger_enabled = lifi_settlement_layer_ledger_enabled_for_person(db, intent.person_id)
     post_phase = (
         IntentOrchestratorPhase.LEDGER_SETTLED.value
         if ledger_enabled
@@ -131,9 +135,15 @@ def process_transaction_outbox_intent_settle(
     processed = 0
     failed = 0
     retried = 0
+    skipped_allowlist = 0
     errors: list[dict[str, str]] = []
 
     for event in events:
+        intent = db.query(TransactionIntent).filter(TransactionIntent.id == event.intent_id).first()
+        if intent is None or not lifi_outbox_worker_enabled_for_person(db, intent.person_id):
+            TransactionOutboxRepository.release_processing_lock(db, event)
+            skipped_allowlist += 1
+            continue
         try:
             handle_intent_settle_event(db, event)
             TransactionOutboxRepository.mark_processed(db, event)
@@ -165,7 +175,7 @@ def process_transaction_outbox_intent_settle(
             failed += 1
             errors.append({"outbox_id": str(event.id), "error": str(exc)})
 
-    if processed or failed or retried:
+    if processed or failed or retried or skipped_allowlist:
         db.commit()
 
     return {
@@ -174,5 +184,6 @@ def process_transaction_outbox_intent_settle(
         "processed": processed,
         "failed": failed,
         "retried": retried,
+        "skipped_allowlist": skipped_allowlist,
         "errors": errors,
     }

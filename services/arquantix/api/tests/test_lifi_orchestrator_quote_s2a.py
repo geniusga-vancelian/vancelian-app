@@ -24,6 +24,7 @@ from services.privy_wallet.models import PersonWalletBalance, PersonWalletDeposi
 from services.transaction_outbox.models import TransactionOutbox
 from services.transaction_outbox.repository import TransactionOutboxRepository
 from tests.conftest import make_linked_client
+from tests.lifi_orchestrator_test_utils import enable_lifi_orchestrator_allowlist
 from tests.test_lifi_swap_routes import _auth_headers, _mock_lifi_quote, _seed_wallet
 
 
@@ -132,6 +133,7 @@ def test_s2a_orchestrator_quote_creates_intent_and_outbox(
     monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
     monkeypatch.setenv("LIFI_API_KEY", "test-key")
     pe = make_linked_client(db)
+    enable_lifi_orchestrator_allowlist(monkeypatch, pe)
     _seed_wallet(db, pe)
 
     slippage_bps = 75
@@ -179,6 +181,7 @@ def test_s2a_orchestrator_quote_lifi_failure_persists_coherent_state(
     monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
     monkeypatch.setenv("LIFI_API_KEY", "test-key")
     pe = make_linked_client(db)
+    enable_lifi_orchestrator_allowlist(monkeypatch, pe)
     _seed_wallet(db, pe)
     bal_before, dep_before = _economic_counts(db, pe.person_id)
 
@@ -230,6 +233,7 @@ def test_s2a_intent_sync_bypass_when_orchestrator_enabled(db: Session, monkeypat
 
     monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
     pe = make_linked_client(db)
+    enable_lifi_orchestrator_allowlist(monkeypatch, pe)
     before = db.query(TransactionIntent).count()
 
     swap = PersonWalletSwap(

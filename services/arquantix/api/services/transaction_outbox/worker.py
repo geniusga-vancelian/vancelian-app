@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from services.lifi.config import lifi_outbox_worker_enabled
+from services.lifi.orchestrator_allowlist import lifi_outbox_worker_enabled_for_person
 from services.onchain_indexer.models import TransactionIntent
 from services.transaction_intents.enums import IntentStatus
 from services.transaction_outbox.enums import OutboxEventStatus, OutboxEventType
@@ -91,9 +92,15 @@ def process_transaction_outbox_intent_created(
 
     processed = 0
     failed = 0
+    skipped_allowlist = 0
     errors: list[dict[str, str]] = []
 
     for event in events:
+        intent = db.query(TransactionIntent).filter(TransactionIntent.id == event.intent_id).first()
+        if intent is None or not lifi_outbox_worker_enabled_for_person(db, intent.person_id):
+            TransactionOutboxRepository.release_processing_lock(db, event)
+            skipped_allowlist += 1
+            continue
         try:
             handle_intent_created_event(db, event)
             TransactionOutboxRepository.mark_processed(db, event)
@@ -113,7 +120,7 @@ def process_transaction_outbox_intent_created(
             failed += 1
             errors.append({"outbox_id": str(event.id), "error": str(exc)})
 
-    if processed or failed:
+    if processed or failed or skipped_allowlist:
         db.commit()
 
     return {
@@ -121,5 +128,6 @@ def process_transaction_outbox_intent_created(
         "polled": len(events),
         "processed": processed,
         "failed": failed,
+        "skipped_allowlist": skipped_allowlist,
         "errors": errors,
     }
