@@ -2,6 +2,11 @@
  * Mapper Swap LI.FI → Transaction UX Framework V1 (R4.5-C).
  */
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
+import {
+  SwapExecutionError,
+  userMessageForSwapFailureCode,
+  type SwapFailureCode,
+} from '@/lib/portal/swapFailure'
 import { SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import type { SwapQuotePayload } from '@/lib/portal/swapClient'
 import { formatSwapCryptoAmount } from '@/lib/portal/swapFlowFormat'
@@ -125,7 +130,23 @@ export function resolveSwapFailureCopy(error: unknown): TransactionTerminalFailu
   if (error == null) {
     return SWAP_TERMINAL_FAILURE_COPY
   }
+  if (error instanceof SwapExecutionError) {
+    return {
+      title: SWAP_TERMINAL_FAILURE_COPY.title,
+      lines: [error.userMessage, SWAP_TERMINAL_FAILURE_COPY.lines[0]!],
+    }
+  }
   const msg = error instanceof Error ? error.message : String(error)
+  const codeMatch = /^(user_rejected_signature|user_rejected_approval|wallet_mismatch|quote_expired|insufficient_funds|wallet_error|rpc_error|lifi_error|unknown_error)$/.exec(
+    msg.trim(),
+  )
+  if (codeMatch) {
+    const userLine = userMessageForSwapFailureCode(codeMatch[1] as SwapFailureCode)
+    return {
+      title: SWAP_TERMINAL_FAILURE_COPY.title,
+      lines: [userLine, SWAP_TERMINAL_FAILURE_COPY.lines[0]!],
+    }
+  }
   if (msg.includes('Quote expirée') || /quote expired/i.test(msg)) {
     return {
       title: SWAP_TERMINAL_FAILURE_COPY.title,

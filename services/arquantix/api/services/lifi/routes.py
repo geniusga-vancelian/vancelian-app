@@ -26,11 +26,13 @@ from services.lifi.lifi_execute_service import LifiExecuteService
 from services.lifi.lifi_quote_service import LifiQuoteService
 from services.lifi.lifi_validation_service import SwapPriceChangedError, SwapValidationError
 from services.lifi.schemas import (
+    SwapAbandonRequest,
     SwapApprovalSubmitRequest,
     SwapConfirmExecuteRequest,
     SwapConfirmExecuteResponse,
     SwapExecuteRequest,
     SwapExecuteResponse,
+    SwapFailureRecordRequest,
     SwapPriceChangedDetail,
     SwapQuoteRequest,
     SwapQuoteResponse,
@@ -38,6 +40,7 @@ from services.lifi.schemas import (
     SwapSubmitRequest,
     SwapSupportedAssetsResponse,
 )
+from services.lifi.swap_failure_service import record_swap_failure
 from config.supported_swap_assets import (
     list_supported_chains_public,
     list_supported_destination_assets_public,
@@ -203,16 +206,49 @@ def post_swap_refresh_quote(
         ) from exc
 
 
-@swaps_router.post("/{swap_id}/abandon", response_model=SwapStatusResponse)
-def post_swap_abandon(
+@swaps_router.post("/{swap_id}/failure", response_model=SwapStatusResponse)
+def post_swap_failure(
     swap_id: UUID,
+    body: SwapFailureRecordRequest,
     db=Depends(get_db),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
 ):
     _ensure_swaps_enabled()
     person_id = _resolve_person_id(credentials)
     try:
-        return _execute_svc.abandon_swap(db, person_id=person_id, swap_id=swap_id)
+        record_swap_failure(
+            db,
+            person_id=person_id,
+            swap_id=swap_id,
+            failure_phase=body.failure_phase,
+            error_code=body.error_code,
+            technical_message=body.technical_message,
+            wallet_address=body.signing_wallet_address,
+        )
+        return _execute_svc.get_status(db, person_id=person_id, swap_id=swap_id)
+    except SwapValidationError as exc:
+        raise _validation_error(exc) from exc
+
+
+@swaps_router.post("/{swap_id}/abandon", response_model=SwapStatusResponse)
+def post_swap_abandon(
+    swap_id: UUID,
+    body: SwapAbandonRequest | None = None,
+    db=Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
+):
+    _ensure_swaps_enabled()
+    person_id = _resolve_person_id(credentials)
+    payload = body or SwapAbandonRequest()
+    try:
+        return _execute_svc.abandon_swap(
+            db,
+            person_id=person_id,
+            swap_id=swap_id,
+            reason=payload.reason,
+            explicit_user_abandon=payload.explicit_user_abandon,
+            failure_phase=payload.failure_phase,
+        )
     except SwapValidationError as exc:
         raise _validation_error(exc) from exc
 
@@ -247,6 +283,7 @@ def post_swap_submit(
             person_id=person_id,
             swap_id=swap_id,
             tx_hash=body.tx_hash,
+            signing_wallet_address=body.signing_wallet_address,
         )
     except SwapValidationError as exc:
         raise _validation_error(exc) from exc
@@ -267,6 +304,7 @@ def post_swap_approval(
             person_id=person_id,
             swap_id=swap_id,
             tx_hash=body.tx_hash,
+            signing_wallet_address=body.signing_wallet_address,
         )
     except SwapValidationError as exc:
         raise _validation_error(exc) from exc

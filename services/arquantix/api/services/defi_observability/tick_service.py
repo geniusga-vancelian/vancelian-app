@@ -353,6 +353,35 @@ def run_defi_observability_tick(
             step_errors.append("intent_health_failed")
             logger.warning("defi_observability.health_failed", exc_info=True)
 
+        if _timeout_before("swap_maintenance"):
+            summary["alerts"] = compute_ops_alerts(db, summary=summary)
+            _finalize_tick_summary(
+                db,
+                job_row=job_row,
+                summary=summary,
+                step_errors=step_errors,
+                fatal_error=None,
+                overall_status="timeout_degraded",
+            )
+            return summary
+
+        # 2b — Maintenance sessions swap LI.FI (expiration + réconciliation SUBMITTED)
+        try:
+            from services.lifi.swap_session_maintenance import run_swap_session_maintenance
+
+            swap_maint = run_swap_session_maintenance(db, dry_run=dry_run)
+            summary["swap_maintenance"] = swap_maint
+            summary["steps"]["swap_maintenance"] = {
+                "dry_run": dry_run,
+                "expired": (swap_maint.get("expire_stale") or {}).get("swap_ids", []),
+                "submitted_polled": (swap_maint.get("reconcile_submitted") or {}).get("polled", 0),
+            }
+        except Exception as exc:
+            summary["swap_maintenance"] = {"error": str(exc)}
+            summary["steps"]["swap_maintenance"] = {"error": str(exc)}
+            step_errors.append("swap_maintenance_failed")
+            logger.warning("defi_observability.swap_maintenance_failed", exc_info=True)
+
         if _timeout_before("user_reconcile"):
             summary["alerts"] = compute_ops_alerts(db, summary=summary)
             _finalize_tick_summary(

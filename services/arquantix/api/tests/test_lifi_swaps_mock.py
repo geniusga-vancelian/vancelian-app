@@ -38,6 +38,11 @@ EVM_ADDR = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
 PRIVY_USER = "did:privy:testswapmock001"
 
 
+def _locked_submit_body(tx_hash: str) -> dict:
+    """Submit après execute/confirm : wallet_locked exige signing_wallet_address."""
+    return {"tx_hash": tx_hash, "signing_wallet_address": EVM_ADDR}
+
+
 def _auth_headers(db: Session, client_id):
     user = ensure_admin_for_linked_client(db, client_id)
     token = create_access_token(build_user_jwt_access_base_claims(user))
@@ -91,7 +96,7 @@ def test_mock_swap_quote_execute_and_settle(client: TestClient, db: Session, mon
             wallet_address=EVM_ADDR,
             asset="USDC",
             amount="1000",
-            chain_id=1,
+            chain_id=8453,
         ),
     )
     db.commit()
@@ -104,13 +109,13 @@ def test_mock_swap_quote_execute_and_settle(client: TestClient, db: Session, mon
             "from_asset": "USDC",
             "to_asset": "ETH",
             "amount": "10",
-            "from_chain": "ethereum",
-            "to_chain": "ethereum",
+            "from_chain": "base",
+            "to_chain": "base",
         },
     )
     assert quote_res.status_code == 200, quote_res.text
     quote = quote_res.json()
-    assert quote["from_chain"] == "ethereum"
+    assert quote["from_chain"] == "base"
     assert Decimal(quote["estimated_receive"]) > 0
 
     swap_id = quote["swap_id"]
@@ -120,7 +125,7 @@ def test_mock_swap_quote_execute_and_settle(client: TestClient, db: Session, mon
     submit_res = client.post(
         f"/api/swaps/{swap_id}/submit",
         headers=headers,
-        json={"tx_hash": "0xmockdeadbeef"},
+        json=_locked_submit_body("0xmockdeadbeef"),
     )
     assert submit_res.status_code == 200, submit_res.text
     body = submit_res.json()
@@ -183,7 +188,7 @@ def test_mock_swap_submit_creates_lifi_attempt_confirmed(client: TestClient, db:
     submit_res = client.post(
         f"/api/swaps/{swap_id}/submit",
         headers=headers,
-        json={"tx_hash": mock_tx},
+        json=_locked_submit_body(mock_tx),
     )
     assert submit_res.status_code == 200, submit_res.text
     assert submit_res.json()["status"] == "CONFIRMED"
@@ -260,7 +265,7 @@ def test_mock_swap_dual_write_idempotent(client: TestClient, db: Session, monkey
     client.post(
         f"/api/swaps/{swap_id}/submit",
         headers=headers,
-        json={"tx_hash": mock_tx},
+        json=_locked_submit_body(mock_tx),
     )
 
     from services.lifi.models import PersonWalletSwap

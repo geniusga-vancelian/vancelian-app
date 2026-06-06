@@ -153,8 +153,16 @@ class LifiQuoteService:
         swap_row.route_steps = [step.model_dump() for step in simplified["route_steps"]]
         self._swap_repo.append_audit(swap_row, {"event": "quote_received", "tool": swap_row.lifi_tool})
         from services.transaction_intents.lifi_intent_sync import sync_lifi_swap_intent
+        from services.lifi.swap_trace_service import log_swap_trace
 
         sync_lifi_swap_intent(db, swap_row)
+        log_swap_trace(
+            db,
+            swap_row,
+            event="quote_received",
+            status=swap_row.status,
+            source="lifi_quote.create",
+        )
         db.commit()
         db.refresh(swap_row)
 
@@ -255,8 +263,16 @@ class LifiQuoteService:
             {"event": "quote_refreshed", "tool": swap_row.lifi_tool},
         )
         from services.transaction_intents.lifi_intent_sync import sync_lifi_swap_intent
+        from services.lifi.swap_trace_service import log_swap_trace
 
         sync_lifi_swap_intent(db, swap_row)
+        log_swap_trace(
+            db,
+            swap_row,
+            event="quote_refreshed",
+            status=swap_row.status,
+            source="lifi_quote.refresh",
+        )
         db.commit()
         db.refresh(swap_row)
 

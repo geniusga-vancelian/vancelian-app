@@ -109,10 +109,40 @@ class SwapPriceChangedDetail(BaseModel):
 
 class SwapSubmitRequest(BaseModel):
     tx_hash: str = Field(..., min_length=8, max_length=120)
+    signing_wallet_address: Optional[str] = Field(
+        None,
+        max_length=80,
+        description="Adresse wallet connectée — vérification cohérence avec le devis verrouillé",
+    )
 
 
 class SwapApprovalSubmitRequest(BaseModel):
     tx_hash: str = Field(..., min_length=8, max_length=120)
+    signing_wallet_address: Optional[str] = Field(
+        None,
+        max_length=80,
+        description="Adresse wallet connectée — vérification cohérence avec le devis verrouillé",
+    )
+
+
+class SwapFailureRecordRequest(BaseModel):
+    failure_phase: str = Field(..., min_length=1, max_length=32)
+    error_code: str = Field(..., min_length=1, max_length=64)
+    technical_message: Optional[str] = Field(None, max_length=2000)
+    signing_wallet_address: Optional[str] = Field(None, max_length=80)
+
+
+class SwapAbandonRequest(BaseModel):
+    explicit_user_abandon: bool = Field(
+        default=False,
+        description="True uniquement si l'utilisateur ferme volontairement le flux",
+    )
+    failure_phase: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="Phase au moment de l'abandon explicite (approval, signing, etc.)",
+    )
+    reason: Optional[str] = Field(None, max_length=500)
 
 
 class SwapStatusResponse(BaseModel):

@@ -13,17 +13,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const { swapId } = await context.params
-    const body = await request.json().catch(() => ({}))
-    const res = await portalUpstreamFetch(`/api/swaps/${swapId}/abandon`, {
+    const body = await request.json()
+    const res = await portalUpstreamFetch(`/api/swaps/${swapId}/failure`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(15_000),
     })
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch (error) {
-    console.error('[api/portal/swaps/[swapId]/abandon POST]', error)
+    console.error('[api/portal/swaps/[swapId]/failure POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

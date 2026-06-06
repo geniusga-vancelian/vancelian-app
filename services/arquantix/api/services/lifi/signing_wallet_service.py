@@ -136,18 +136,66 @@ def _resolve_external_signing_wallet(
     )
 
 
+def has_wallet_locked_in_audit(audit_log: Any) -> bool:
+    """True si un événement ``wallet_locked`` avec adresse est présent."""
+    if not isinstance(audit_log, list):
+        return False
+    return any(
+        isinstance(entry, dict)
+        and entry.get("event") == "wallet_locked"
+        and str(entry.get("signing_wallet_address") or "").strip()
+        for entry in audit_log
+    )
+
+
 def read_signing_wallet_from_audit(audit_log: Any) -> tuple[str | None, str | None]:
+    """Wallet signataire — priorité ``wallet_locked`` (confirm_execute) puis ``quote_requested``."""
     if not isinstance(audit_log, list):
         return None, None
+    locked: tuple[str | None, str | None] | None = None
+    quoted: tuple[str | None, str | None] | None = None
     for entry in audit_log:
         if not isinstance(entry, dict):
             continue
-        if entry.get("event") != "quote_requested":
-            continue
-        mode = entry.get("signing_wallet_mode")
-        address = entry.get("signing_wallet_address")
-        return (
-            str(mode) if mode else None,
-            str(address) if address else None,
-        )
+        event = entry.get("event")
+        mode = str(entry.get("signing_wallet_mode") or "") or None
+        address = str(entry.get("signing_wallet_address") or "") or None
+        if event == "wallet_locked" and address:
+            locked = (mode, address)
+        elif event == "quote_requested" and address and quoted is None:
+            quoted = (mode, address)
+    if locked is not None:
+        return locked
+    if quoted is not None:
+        return quoted
     return None, None
+
+
+def assert_locked_signing_wallet_match(
+    swap,
+    *,
+    connected_wallet_address: str | None,
+) -> None:
+    """Refuse approval/submit si wallet_locked exige une adresse ou si elle diffère."""
+    requires_address = has_wallet_locked_in_audit(swap.audit_log)
+    connected_raw = (connected_wallet_address or "").strip()
+
+    if requires_address and not connected_raw:
+        raise SwapValidationError(
+            "swap.wallet_address_required",
+            "Adresse wallet signataire requise pour ce swap.",
+        )
+
+    if not connected_raw:
+        return
+
+    _, locked = read_signing_wallet_from_audit(swap.audit_log)
+    if not locked:
+        return
+    connected = normalize_evm_address(connected_wallet_address)
+    expected = normalize_evm_address(locked)
+    if connected and expected and connected.lower() != expected.lower():
+        raise SwapValidationError(
+            "swap.wallet_mismatch",
+            "Le wallet connecté ne correspond plus au devis — refaites une estimation.",
+        )

@@ -3,6 +3,11 @@
 import { useCallback } from 'react'
 
 import {
+  classifySwapError,
+  executionPhaseToFailurePhase,
+  SwapExecutionError,
+} from '@/lib/portal/swapFailure'
+import {
   fetchSwapStatus,
   submitSwapApproval,
   submitSwapTx,
@@ -61,11 +66,24 @@ export function useLifiSwapExecution(
   const submitTxFn = options?.submitTx ?? submitSwapTx
   const signingMode: ExecutionWalletMode = isExternalWallet ? 'external_evm' : 'privy_embedded'
 
+  const wrapPhaseError = useCallback((error: unknown, phase: SwapExecutionPhase, approval = false) => {
+    if (error instanceof SwapExecutionError) {
+      throw error
+    }
+    throw classifySwapError(error, executionPhaseToFailurePhase(phase), {
+      approvalPhase: approval,
+    })
+  }, [])
+
   const signAndSubmit = useCallback(
     async (exec: SwapExecutePayload) => {
       const tx = exec.transaction
       if (!tx?.to || !tx.data) {
-        throw new Error('Transaction LI.FI incomplète')
+        throw new SwapExecutionError({
+          code: 'lifi_error',
+          failurePhase: 'signing',
+          technicalMessage: 'Transaction LI.FI incomplète',
+        })
       }
 
       if (swapMockMode) {
@@ -97,9 +115,11 @@ export function useLifiSwapExecution(
         exec.signing_wallet_address &&
         wallet.address.toLowerCase() !== exec.signing_wallet_address.toLowerCase()
       ) {
-        throw new Error(
-          'Le wallet connecté ne correspond pas au quote LI.FI. Revenez à l’étape montant et refaites une estimation.',
-        )
+        throw new SwapExecutionError({
+          code: 'wallet_mismatch',
+          failurePhase: 'signing',
+          technicalMessage: `wallet_mismatch expected=${exec.signing_wallet_address} actual=${wallet.address}`,
+        })
       }
 
       if (isLocalMockExternalWallet(wallet)) {
@@ -118,37 +138,55 @@ export function useLifiSwapExecution(
       if (tokenApproval && isSwapTokenApprovalRequired(tokenApproval)) {
         assertSwapTokenApprovalPayload(tokenApproval)
         onPhaseChange?.('approving')
-        const approvalResult = await ensureSwapTokenApproval({
-          chainId,
-          walletAddress: wallet.address as `0x${string}`,
-          approval: tokenApproval,
-          assetSymbol: fromAsset,
-          sendTransaction: (approveTx, errorContext) =>
-            sendPortalTransaction(approveTx, wallet, errorContext),
-        })
-        if (approvalResult.submitted && approvalResult.approvalTxHash) {
-          await submitSwapApproval(exec.swap_id, approvalResult.approvalTxHash)
+        try {
+          const approvalResult = await ensureSwapTokenApproval({
+            chainId,
+            walletAddress: wallet.address as `0x${string}`,
+            approval: tokenApproval,
+            assetSymbol: fromAsset,
+            sendTransaction: (approveTx, errorContext) =>
+              sendPortalTransaction(approveTx, wallet, errorContext),
+          })
+          if (approvalResult.submitted && approvalResult.approvalTxHash) {
+            await submitSwapApproval(
+              exec.swap_id,
+              approvalResult.approvalTxHash,
+              wallet.address,
+            )
+          }
+        } catch (error) {
+          wrapPhaseError(error, 'approving', true)
         }
       }
 
       onPhaseChange?.('signing')
       const gasLimit = parseSwapGasLimit(tx.gas_limit)
 
-      const { hash } = await sendPortalTransaction(
-        {
-          chainId,
-          to: tx.to as `0x${string}`,
-          data: tx.data as `0x${string}`,
-          value: tx.value,
-          ...(gasLimit !== undefined ? { gasLimit } : {}),
-        },
-        wallet,
-        { phase: 'swap', assetSymbol: fromAsset },
-      )
+      let hash: string
+      try {
+        const result = await sendPortalTransaction(
+          {
+            chainId,
+            to: tx.to as `0x${string}`,
+            data: tx.data as `0x${string}`,
+            value: tx.value,
+            ...(gasLimit !== undefined ? { gasLimit } : {}),
+          },
+          wallet,
+          { phase: 'swap', assetSymbol: fromAsset },
+        )
+        hash = result.hash
+      } catch (error) {
+        wrapPhaseError(error, 'signing')
+      }
 
       onPhaseChange?.('submitting')
-      await submitTxFn(exec.swap_id, hash)
-      return hash
+      try {
+        await submitTxFn(exec.swap_id, hash!, wallet.address)
+      } catch (error) {
+        wrapPhaseError(error, 'submitting')
+      }
+      return hash!
     },
     [
       fromAsset,
@@ -159,6 +197,7 @@ export function useLifiSwapExecution(
       signingMode,
       submitTxFn,
       swapMockMode,
+      wrapPhaseError,
     ],
   )
 
@@ -170,7 +209,11 @@ export function useLifiSwapExecution(
         if (status.status === 'CONFIRMED') {
           return status
         }
-        throw new Error(swapStatusErrorMessage(status))
+        throw new SwapExecutionError({
+          code: status.status === 'EXPIRED' ? 'quote_expired' : 'unknown_error',
+          failurePhase: 'polling',
+          technicalMessage: swapStatusErrorMessage(status),
+        })
       }
       await sleep(POLL_INTERVAL_MS)
     }
@@ -179,9 +222,17 @@ export function useLifiSwapExecution(
       return last
     }
     if (TERMINAL_STATUSES.has(last.status)) {
-      throw new Error(swapStatusErrorMessage(last))
+      throw new SwapExecutionError({
+        code: last.status === 'EXPIRED' ? 'quote_expired' : 'unknown_error',
+        failurePhase: 'polling',
+        technicalMessage: swapStatusErrorMessage(last),
+      })
     }
-    return last
+    throw new SwapExecutionError({
+      code: 'unknown_error',
+      failurePhase: 'polling',
+      technicalMessage: 'Délai de confirmation dépassé — l’échange peut encore aboutir.',
+    })
   }, [])
 
   return { signAndSubmit, pollUntilTerminal }
