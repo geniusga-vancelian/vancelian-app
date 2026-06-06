@@ -12,9 +12,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from services.lifi.config import lifi_outbox_worker_enabled
+from services.lifi.config import lifi_outbox_worker_enabled, lifi_settlement_layer_ledger_enabled
 from services.onchain_indexer.models import TransactionIntent
 from services.settlement.constants import SETTLEMENT_RECEIPT_METADATA_KEY
+from services.settlement.preconditions import settlement_marker_present
 from services.settlement.result import SettlementOutcome
 from services.settlement.settle import settle_transaction_intent_idempotently
 from services.transaction_intents.enums import IntentStatus
@@ -80,24 +81,33 @@ def handle_intent_settle_event(db: Session, outbox: TransactionOutbox) -> None:
     if not receipt_hash:
         raise ValueError("settlement_success_missing_receipt_hash")
 
-    meta = dict(intent.metadata_json) if isinstance(intent.metadata_json, dict) else {}
-    meta[SETTLEMENT_RECEIPT_METADATA_KEY] = receipt_hash
-    intent.metadata_json = meta
+    ledger_enabled = lifi_settlement_layer_ledger_enabled()
+    post_phase = (
+        IntentOrchestratorPhase.LEDGER_SETTLED.value
+        if ledger_enabled
+        else IntentOrchestratorPhase.SETTLED_NOOP.value
+    )
+
+    if not settlement_marker_present(intent):
+        meta = dict(intent.metadata_json) if isinstance(intent.metadata_json, dict) else {}
+        meta[SETTLEMENT_RECEIPT_METADATA_KEY] = receipt_hash
+        intent.metadata_json = meta
 
     TransactionIntentTransitionRepository.insert_transition(
         db,
         intent_id=intent.id,
         from_status=intent.status,
         to_status=intent.status,
-        phase=IntentOrchestratorPhase.SETTLED_NOOP.value,
+        phase=post_phase,
         actor=WORKER_ACTOR,
         metadata_json={
             "outbox_id": str(outbox.id),
-            "s3a": True,
+            "s3a": not ledger_enabled,
+            "s3b": ledger_enabled,
             SETTLEMENT_RECEIPT_METADATA_KEY: receipt_hash,
         },
     )
-    intent.current_phase = IntentOrchestratorPhase.SETTLED_NOOP.value
+    intent.current_phase = post_phase
 
 
 def process_transaction_outbox_intent_settle(

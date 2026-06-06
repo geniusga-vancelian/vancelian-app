@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1–S3a ✅ (#27–#34) · S3b 🔒 · S3 ⏸ |
+| **Statut** | S1–S3a ✅ (#27–#34) · S3b en cours · S3 ⏸ |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 · [Gouvernance](../TRANSACTION_ENGINE_GOVERNANCE.md) · [Settlement Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) avant Go S2b |
@@ -589,9 +589,9 @@ SettlementResult → metadata settlement_receipt_hash + phase SETTLED_NOOP
 
 **Test review S3a** : *Si on supprime le handler intent.settle, la réalité économique reste-t-elle identique ?* → **Oui**
 
-### S3b — Premier settlement réel LI.FI standalone (🔒 spec figée — pas de Go)
+### S3b — Premier settlement réel LI.FI standalone (en cours)
 
-> **Premier vrai test d’ADR 004 en production logicielle.** Pas de code S3b sans **« Go S3b »** explicite.
+> **Premier vrai test d’ADR 004 en production logicielle.** Flag `LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED=false` par défaut.
 
 **État pipeline avant S3b** :
 
