@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1 ✅ (#27) · S2a ✅ (#29) · S2a.1 ✅ (#30) · S2b ⏸ |
+| **Statut** | S1 ✅ · S2a ✅ · S2a.1 ✅ · Settlement Contract v1 ✅ · S2b en cours |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 · [Gouvernance](../TRANSACTION_ENGINE_GOVERNANCE.md) · [Settlement Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) avant Go S2b |
@@ -519,7 +519,25 @@ outbox event intent.created
 | 2 | Assertions | `slippage_bps` / `expires_at` alignés swap ↔ intent |
 | 3 | Note technique | Bypass `lifi_intent_sync` **global** si flag ON → traiter avant S5 dual-run |
 
-**Verrou** : pas de S2b tant que S2a.1 non mergé.
+**Verrou** : pas de S2b tant que S2a.1 non mergé. ✅
+
+### S2b — worker `intent.created` (scope strict)
+
+```
+outbox intent.created
+      ↓
+worker (LIFI_OUTBOX_WORKER_ENABLED=false par défaut)
+      ↓
+current_phase: CREATED → VALIDATED → QUEUED
+      ↓
+outbox status: processed
+```
+
+**Tables touchées** : `transaction_intents`, `transaction_intent_transitions`, `transaction_outbox` uniquement.
+
+**Hors scope** : settlement · controller · locks · `provider_submitted` · tables économiques · flag ON prod.
+
+**Test review** : le worker peut être supprimé sans affecter une seule écriture économique.
 
 ### Verrou gouvernance
 
@@ -536,8 +554,9 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 1. ~~S1 fondation~~ — ✅ fait
 2. ~~S2a quote orchestrateur~~ — ✅ mergé (#29)
 3. ~~S2a.1~~ — ✅ mergé (#30)
-4. **Settlement Layer Contract v1** — contrat normatif (avant Go S2b)
-5. S2b+ / S3+ : worker, settlement, controller, locks — **feu vert explicite requis**
-6. **S4** Product Locks avant staging final
-7. **S5** Staging dual-run
-8. **S6** webhooks Privy
+4. ~~Settlement Layer Contract v1~~ — ✅ mergé (#31)
+5. **S2b** worker `intent.created` — en cours
+6. S3+ : settlement, controller, locks — **feu vert explicite requis**
+7. **S4** Product Locks avant staging final
+8. **S5** Staging dual-run
+9. **S6** webhooks Privy

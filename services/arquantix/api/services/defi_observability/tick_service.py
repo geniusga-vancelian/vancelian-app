@@ -382,6 +382,27 @@ def run_defi_observability_tick(
             step_errors.append("swap_maintenance_failed")
             logger.warning("defi_observability.swap_maintenance_failed", exc_info=True)
 
+        # 2c — Outbox worker intent.created (Phase 2 S2b — flag OFF par défaut)
+        try:
+            from services.lifi.config import lifi_outbox_worker_enabled
+            from services.transaction_outbox.worker import process_transaction_outbox_intent_created
+
+            if lifi_outbox_worker_enabled() and not dry_run:
+                outbox_step = process_transaction_outbox_intent_created(db, limit=20)
+            else:
+                outbox_step = {
+                    "skipped": True,
+                    "enabled": lifi_outbox_worker_enabled(),
+                    "dry_run": dry_run,
+                }
+            summary["transaction_outbox"] = outbox_step
+            summary["steps"]["transaction_outbox"] = outbox_step
+        except Exception as exc:
+            summary["transaction_outbox"] = {"error": str(exc)}
+            summary["steps"]["transaction_outbox"] = {"error": str(exc)}
+            step_errors.append("transaction_outbox_failed")
+            logger.warning("defi_observability.transaction_outbox_failed", exc_info=True)
+
         if _timeout_before("user_reconcile"):
             summary["alerts"] = compute_ops_alerts(db, summary=summary)
             _finalize_tick_summary(
