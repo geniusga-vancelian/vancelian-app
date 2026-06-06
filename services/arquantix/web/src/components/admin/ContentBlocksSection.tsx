@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, FileUp, Plus } from 'lucide-react'
+import { ChevronDown, Download, FileUp, Plus } from 'lucide-react'
 import { ArticleBlockType } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { MediaField } from '@/components/admin/MediaField'
@@ -35,6 +35,8 @@ export interface ContentBlocksSectionProps {
   onReorderBlocks: (orderedBlockIds: string[]) => void
   /** Action « Ajouter un bloc » : navigation ou modal au choix du parent. */
   onClickAddBlock: () => void | Promise<void>
+  /** Export Markdown des blocs (optionnel). */
+  onClickExportMarkdown?: () => void
   /** Import Markdown blueprint (optionnel). */
   onClickImportMarkdown?: () => void
   /** Désactive le bouton « Ajouter » pendant un save. */
@@ -66,6 +68,7 @@ export function ContentBlocksSection({
   onDeleteBlock,
   onReorderBlocks,
   onClickAddBlock,
+  onClickExportMarkdown,
   onClickImportMarkdown,
   saving = false,
   entityId,
@@ -117,13 +120,24 @@ export function ContentBlocksSection({
               {allCollapsed ? 'Tout déplier' : 'Tout replier'}
             </Button>
           ) : null}
+          {onClickExportMarkdown ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={saving || blocks.length === 0}
+              onClick={onClickExportMarkdown}
+              title="Télécharger les Content Blocks au format Markdown"
+            >
+              <Download className="mr-1 h-4 w-4" /> Export Markdown
+            </Button>
+          ) : null}
           {onClickImportMarkdown ? (
             <Button
               variant="outline"
               size="sm"
               disabled={saving}
               onClick={onClickImportMarkdown}
-              title="Importer un fichier .md (blueprint metadata + blocs)"
+              title="Importer un fichier .md (Content Blocks ou blueprint article complet)"
             >
               <FileUp className="mr-1 h-4 w-4" /> Importer un Markdown
             </Button>

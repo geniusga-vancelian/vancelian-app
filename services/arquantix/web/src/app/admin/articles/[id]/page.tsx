@@ -13,7 +13,8 @@ import HelpHierarchyPicker from '@/components/admin/HelpHierarchyPicker'
 import AcademyHierarchyPicker from '@/components/admin/AcademyHierarchyPicker'
 import { ContentStatus, ArticleBlockType } from '@prisma/client'
 import { supportedLocales, type Locale, defaultLocale } from '@/config/locales'
-import { toastSuccess, toastError } from '@/lib/admin/toast'
+import { toastSuccess, toastError, toastWarning } from '@/lib/admin/toast'
+import { exportArticleBlocksToMarkdown } from '@/lib/admin/markdownArticleBlocksBlueprint'
 import { TranslateModal } from '@/components/admin/TranslateModal'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { PagePreviewPanel } from '@/components/admin/PagePreviewPanel'
@@ -697,6 +698,74 @@ export default function AdminArticleEditorPage() {
       })
     )
     setBlocksDirty(true)
+  }
+
+  const handleExportArticleBlocksMarkdown = () => {
+    if (!article || blocksDraft.length === 0) {
+      toastWarning('Aucun bloc à exporter.')
+      return
+    }
+    const markdown = exportArticleBlocksToMarkdown(
+      blocksDraft.map((block) => ({
+        type: block.type,
+        data:
+          block.data != null && typeof block.data === 'object' && !Array.isArray(block.data)
+            ? (block.data as Record<string, unknown>)
+            : {},
+      })),
+      selectedLocale,
+    )
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `article-blocks-${article.slug}-${selectedLocale}.md`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    toastSuccess('Export Markdown téléchargé.')
+  }
+
+  const handleApplyArticleBlocksMarkdownImport = async (
+    importedBlocks: Array<{ type: ArticleBlockType; data: Record<string, unknown> }>,
+  ) => {
+    if (!article) return
+    setSaving(true)
+    try {
+      for (const block of article.blocks) {
+        const response = await fetch(`/api/admin/articles/${articleId}/blocks/${block.id}`, {
+          method: 'DELETE',
+        })
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(messageFromAdminApiError(error, 'Failed to delete existing block'))
+        }
+      }
+
+      for (let order = 0; order < importedBlocks.length; order++) {
+        const block = importedBlocks[order]!
+        const response = await fetch(`/api/admin/articles/${articleId}/blocks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: block.type,
+            data: block.data,
+            order,
+          }),
+        })
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(messageFromAdminApiError(error, `Failed to import block ${order + 1}`))
+        }
+      }
+
+      toastSuccess(`${importedBlocks.length} bloc(s) importé(s).`)
+      setPreviewReloadEpoch((n) => n + 1)
+      await fetchArticle()
+    } catch (error: unknown) {
+      toastError(error instanceof Error ? error.message : 'Import Content Blocks impossible')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleReorderBlocks = async (blockIds: string[]) => {
@@ -1470,6 +1539,7 @@ export default function AdminArticleEditorPage() {
         onPatchBlock={handlePatchBlock}
         onDeleteBlock={handleDeleteBlock}
         onReorderBlocks={handleReorderBlocks}
+        onClickExportMarkdown={handleExportArticleBlocksMarkdown}
         onClickImportMarkdown={() => setShowMarkdownImport(true)}
         onClickAddBlock={async () => {
           // Sauvegarde tout (settings + i18n + blocs modifiés) avant de
@@ -1517,11 +1587,13 @@ export default function AdminArticleEditorPage() {
         onOpenChange={setShowMarkdownImport}
         articleId={articleId}
         locale={selectedLocale}
+        currentBlockCount={blocksDraft.length}
         onApplied={async () => {
           toastSuccess('Import Markdown appliqué')
           setPreviewReloadEpoch((n) => n + 1)
           await fetchArticle()
         }}
+        onAppliedBlocks={handleApplyArticleBlocksMarkdownImport}
       />
 
       <ConfirmDialog

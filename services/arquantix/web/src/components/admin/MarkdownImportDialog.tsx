@@ -12,8 +12,15 @@ import {
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import type { Locale } from '@/config/locales'
+import { ArticleBlockType } from '@prisma/client'
+import {
+  isArticleBlocksMarkdownExport,
+  parseArticleBlocksMarkdown,
+  summarizeArticleBlockImportPreview,
+} from '@/lib/admin/markdownArticleBlocksBlueprint'
 
-type ImportPreview = {
+type FullBlueprintPreview = {
+  kind: 'full'
   metadata: {
     title: string
     standfirst: string
@@ -31,12 +38,26 @@ type ImportPreview = {
   warnings: Array<{ code: string; messageFr: string }>
 }
 
+type BlocksOnlyPreview = {
+  kind: 'blocks'
+  blocks: ReturnType<typeof summarizeArticleBlockImportPreview>
+  blockCount: number
+  replaceBlockCount: number
+  warnings: Array<{ code: string; messageFr: string }>
+}
+
+type ImportPreview = FullBlueprintPreview | BlocksOnlyPreview
+
 export type MarkdownImportDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   articleId: string
   locale: Locale
+  currentBlockCount: number
   onApplied: () => void | Promise<void>
+  onAppliedBlocks?: (
+    blocks: Array<{ type: ArticleBlockType; data: Record<string, unknown> }>,
+  ) => void | Promise<void>
 }
 
 export function MarkdownImportDialog({
@@ -44,7 +65,9 @@ export function MarkdownImportDialog({
   onOpenChange,
   articleId,
   locale,
+  currentBlockCount,
   onApplied,
+  onAppliedBlocks,
 }: MarkdownImportDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
@@ -64,22 +87,33 @@ export function MarkdownImportDialog({
     onOpenChange(false)
   }
 
-  const runImport = async (markdown: string, mode: 'preview' | 'apply') => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(`/api/admin/articles/${articleId}/import-markdown`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markdown, locale, mode }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || data.message || 'Import impossible')
-      }
-      return data
-    } finally {
-      setLoading(false)
+  const runFullBlueprintImport = async (markdown: string, mode: 'preview' | 'apply') => {
+    const res = await fetch(`/api/admin/articles/${articleId}/import-markdown`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown, locale, mode }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data.error || data.message || 'Import impossible')
+    }
+    return data
+  }
+
+  const buildBlocksPreview = (markdown: string): BlocksOnlyPreview => {
+    const result = parseArticleBlocksMarkdown(markdown, locale)
+    if (result.warnings.some((w) => w.code === 'YAML_INVALID')) {
+      throw new Error('Frontmatter YAML invalide.')
+    }
+    if (result.blocks.length === 0 && !result.warnings.some((w) => w.code === 'BODY_EMPTY')) {
+      throw new Error('Aucun bloc valide trouvé dans le fichier.')
+    }
+    return {
+      kind: 'blocks',
+      blocks: summarizeArticleBlockImportPreview(result.blocks),
+      blockCount: result.blocks.length,
+      replaceBlockCount: currentBlockCount,
+      warnings: result.warnings.map((w) => ({ code: w.code, messageFr: w.messageFr })),
     }
   }
 
@@ -90,12 +124,24 @@ export function MarkdownImportDialog({
     }
     const text = await file.text()
     setPendingMarkdown(text)
+    setLoading(true)
+    setError(null)
     try {
-      const data = await runImport(text, 'preview')
-      setPreview(data as ImportPreview)
+      if (isArticleBlocksMarkdownExport(text)) {
+        setPreview(buildBlocksPreview(text))
+      } else {
+        const data = await runFullBlueprintImport(text, 'preview')
+        setPreview({
+          kind: 'full',
+          ...(data as Omit<FullBlueprintPreview, 'kind'>),
+          replaceBlockCount: currentBlockCount,
+        })
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erreur')
       setPreview(null)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -106,11 +152,32 @@ export function MarkdownImportDialog({
   }
 
   const applyImport = async () => {
-    if (!pendingMarkdown) return
-    await runImport(pendingMarkdown, 'apply')
-    await onApplied()
-    handleClose()
+    if (!pendingMarkdown || !preview) return
+    setLoading(true)
+    setError(null)
+    try {
+      if (preview.kind === 'blocks') {
+        if (!onAppliedBlocks) {
+          throw new Error('Import Content Blocks non disponible.')
+        }
+        const result = parseArticleBlocksMarkdown(pendingMarkdown, locale)
+        await onAppliedBlocks(result.blocks)
+      } else {
+        await runFullBlueprintImport(pendingMarkdown, 'apply')
+        await onApplied()
+      }
+      handleClose()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setLoading(false)
+    }
   }
+
+  const confirmDescription =
+    preview?.kind === 'blocks'
+      ? `Remplacer tous les Content Blocks (${preview.replaceBlockCount} actuel(s)) par ${preview.blockCount} bloc(s) importé(s) ?`
+      : `Remplacer tous les blocs (${preview?.replaceBlockCount ?? 0} actuel(s)) et mettre à jour metadata + SEO pour ${locale.toUpperCase()} ?`
 
   return (
     <>
@@ -119,7 +186,8 @@ export function MarkdownImportDialog({
           <DialogHeader>
             <DialogTitle>Importer un Markdown</DialogTitle>
             <DialogDescription>
-              Blueprint CMS : metadata, SEO et blocs. Remplacement total des Content Blocks.
+              Export Content Blocks (<code>vancelian-article-blocks</code>) ou blueprint article
+              complet (metadata, SEO et blocs).
             </DialogDescription>
           </DialogHeader>
 
@@ -168,21 +236,27 @@ export function MarkdownImportDialog({
             </div>
           ) : (
             <div className="max-h-[55vh] space-y-3 overflow-y-auto text-sm">
-              <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <p className="font-medium text-gray-900">{preview.metadata.title}</p>
-                {preview.metadata.standfirst ? (
-                  <p className="mt-1 text-xs italic text-gray-600">{preview.metadata.standfirst}</p>
-                ) : null}
-                <ul className="mt-2 space-y-0.5 text-xs text-gray-600">
-                  {preview.metadata.slug ? <li>slug: {preview.metadata.slug}</li> : null}
-                  <li>status: {preview.metadata.status}</li>
-                  <li>locale: {locale}</li>
-                  {preview.metadata.authorName ? <li>auteur: {preview.metadata.authorName}</li> : null}
-                  {preview.metadata.categorySlugs.length ? (
-                    <li>catégories: {preview.metadata.categorySlugs.join(', ')}</li>
+              {preview.kind === 'full' ? (
+                <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                  <p className="font-medium text-gray-900">{preview.metadata.title}</p>
+                  {preview.metadata.standfirst ? (
+                    <p className="mt-1 text-xs italic text-gray-600">{preview.metadata.standfirst}</p>
                   ) : null}
-                </ul>
-              </div>
+                  <ul className="mt-2 space-y-0.5 text-xs text-gray-600">
+                    {preview.metadata.slug ? <li>slug: {preview.metadata.slug}</li> : null}
+                    <li>status: {preview.metadata.status}</li>
+                    <li>locale: {locale}</li>
+                    {preview.metadata.authorName ? <li>auteur: {preview.metadata.authorName}</li> : null}
+                    {preview.metadata.categorySlugs.length ? (
+                      <li>catégories: {preview.metadata.categorySlugs.join(', ')}</li>
+                    ) : null}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-600">
+                  Import Content Blocks uniquement — metadata et SEO de l&apos;article inchangés.
+                </p>
+              )}
 
               <p className="text-xs font-medium text-gray-700">
                 {preview.replaceBlockCount > 0
@@ -193,7 +267,11 @@ export function MarkdownImportDialog({
               <ol className="list-decimal space-y-1 pl-5 text-xs text-gray-700">
                 {preview.blocks.map((b) => (
                   <li key={b.index}>
-                    <span className="font-mono text-[10px] text-indigo-700">{b.type}</span> {b.preview || '—'}
+                    <span className="font-mono text-[10px] text-indigo-700">{b.type}</span>{' '}
+                    {'label' in b && b.label ? (
+                      <span className="text-gray-500">({b.label})</span>
+                    ) : null}{' '}
+                    {'preview' in b ? b.preview || '—' : '—'}
                   </li>
                 ))}
               </ol>
@@ -219,7 +297,7 @@ export function MarkdownImportDialog({
                 <Button
                   size="sm"
                   className="bg-indigo-600 hover:bg-indigo-700"
-                  disabled={loading}
+                  disabled={loading || preview.blockCount === 0}
                   onClick={() => setConfirmApply(true)}
                 >
                   Appliquer
@@ -236,7 +314,7 @@ export function MarkdownImportDialog({
         open={confirmApply}
         onOpenChange={setConfirmApply}
         title="Confirmer l’import"
-        description={`Remplacer tous les blocs (${preview?.replaceBlockCount ?? 0} actuel(s)) et mettre à jour metadata + SEO pour ${locale.toUpperCase()} ?`}
+        description={confirmDescription}
         confirmLabel="Confirmer"
         cancelLabel="Annuler"
         destructive={false}
