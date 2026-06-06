@@ -1,8 +1,9 @@
-"""Dual-write onchain_transaction_attempts — best-effort, n'impacte pas le legacy."""
+"""Dual-write onchain_transaction_attempts — retry + trace critique si échec."""
 from __future__ import annotations
 
 import logging
-from typing import Any
+import time
+from typing import Any, Callable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -23,7 +24,68 @@ from .tx_hash_canonical import (
 
 logger = logging.getLogger(__name__)
 
+DUAL_WRITE_MAX_ATTEMPTS = 3
+DUAL_WRITE_RETRY_DELAY_SECONDS = 0.05
+
 LINKED_SWAPS = "person_wallet_swaps"
+
+
+def _run_dual_write_with_retry(
+    operation: str,
+    fn: Callable[[], None],
+    *,
+    swap_id: str,
+    tx_hash: str | None = None,
+) -> None:
+    last_exc: Exception | None = None
+    for attempt in range(1, DUAL_WRITE_MAX_ATTEMPTS + 1):
+        try:
+            fn()
+            return
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(
+                "attempt.dual_write.retry",
+                extra={
+                    "operation": operation,
+                    "swap_id": swap_id,
+                    "tx_hash": tx_hash,
+                    "attempt": attempt,
+                    "error": str(exc),
+                },
+                exc_info=True,
+            )
+            if attempt < DUAL_WRITE_MAX_ATTEMPTS:
+                time.sleep(DUAL_WRITE_RETRY_DELAY_SECONDS * attempt)
+    logger.critical(
+        "attempt.dual_write.failed_after_retries",
+        extra={
+            "operation": operation,
+            "swap_id": swap_id,
+            "tx_hash": tx_hash,
+            "attempts": DUAL_WRITE_MAX_ATTEMPTS,
+            "error": str(last_exc) if last_exc else "unknown",
+        },
+        exc_info=last_exc is not None,
+    )
+    try:
+        from services.transaction_trace.transaction_trace_logger import log_transaction_trace
+        from services.transaction_trace.enums import TraceEventType
+
+        log_transaction_trace(
+            TraceEventType.RECONCILIATION_GAP_DETECTED,
+            source="dual_write",
+            message=f"dual_write_failed:{operation}",
+            linked_table=LINKED_SWAPS,
+            metadata_json={
+                "operation": operation,
+                "swap_id": swap_id,
+                "tx_hash": tx_hash,
+                "error": str(last_exc) if last_exc else "unknown",
+            },
+        )
+    except Exception:
+        pass
 LINKED_VAULT = "onchain_vault_transactions"
 
 
@@ -104,10 +166,11 @@ def dual_write_lifi_approval_submitted(
     intent_id: UUID | None = None,
 ) -> None:
     """Approval hash distinct = attempt distinct (doctrine LI.FI)."""
-    try:
+
+    def _write() -> None:
         protocol = _lifi_protocol_for_swap(swap)
         chain_id = _chain_id_from_swap(swap)
-        intent_id = intent_id or _resolve_intent_id_for_swap(db, swap)
+        resolved_intent = intent_id or _resolve_intent_id_for_swap(db, swap)
         group_key = str(swap.id)
         idem = _attempt_key("lifi", swap_id=swap.id, step="approve")
 
@@ -121,7 +184,7 @@ def dual_write_lifi_approval_submitted(
                 step_type=AttemptStepType.APPROVE.value,
                 idempotency_key=idem,
                 group_key=group_key,
-                intent_id=intent_id,
+                intent_id=resolved_intent,
                 linked_table=LINKED_SWAPS,
                 linked_id=swap.id,
                 asset_in=swap.from_asset,
@@ -135,12 +198,13 @@ def dual_write_lifi_approval_submitted(
             step_type=AttemptStepType.APPROVE.value,
             transition=AttemptTransitionInput(tx_hash=approval_tx_hash),
         )
-    except Exception as exc:
-        logger.warning(
-            "attempt.dual_write.lifi_approval_failed",
-            extra={"swap_id": str(getattr(swap, "id", "")), "error": str(exc)},
-            exc_info=True,
-        )
+
+    _run_dual_write_with_retry(
+        "lifi_approval_submitted",
+        _write,
+        swap_id=str(getattr(swap, "id", "")),
+        tx_hash=approval_tx_hash,
+    )
 
 
 def dual_write_lifi_swap_submitted(
@@ -155,17 +219,18 @@ def dual_write_lifi_swap_submitted(
 
     Deux swaps bundle partageant le même hash → 1 attempt + secondaries en metadata.
     """
-    try:
+
+    def _write() -> None:
         protocol = _lifi_protocol_for_swap(swap)
         chain_id = _chain_id_from_swap(swap)
-        intent_id = intent_id or _resolve_intent_id_for_swap(db, swap)
+        resolved_intent_id = intent_id or _resolve_intent_id_for_swap(db, swap)
         norm_tx = tx_hash.strip().lower()
         canonical_idem = tx_hash_canonical_idempotency_key(chain_id=chain_id, tx_hash=norm_tx)
         swap_idem = _attempt_key("lifi", swap_id=swap.id, step="swap")
         secondary = swap_legacy_record(
             swap,
             protocol=protocol,
-            intent_id=intent_id,
+            intent_id=resolved_intent_id,
             chain_id=chain_id,
         )
 
@@ -216,7 +281,7 @@ def dual_write_lifi_swap_submitted(
                 step_type=AttemptStepType.SWAP.value,
                 idempotency_key=canonical_idem,
                 group_key=str(swap.id),
-                intent_id=intent_id,
+                intent_id=resolved_intent_id,
                 linked_table=LINKED_SWAPS,
                 linked_id=swap.id,
                 asset_in=swap.from_asset,
@@ -238,12 +303,13 @@ def dual_write_lifi_swap_submitted(
             step_type=AttemptStepType.SWAP.value,
             transition=AttemptTransitionInput(tx_hash=norm_tx),
         )
-    except Exception as exc:
-        logger.warning(
-            "attempt.dual_write.lifi_swap_submitted_failed",
-            extra={"swap_id": str(getattr(swap, "id", "")), "error": str(exc)},
-            exc_info=True,
-        )
+
+    _run_dual_write_with_retry(
+        "lifi_swap_submitted",
+        _write,
+        swap_id=str(getattr(swap, "id", "")),
+        tx_hash=tx_hash,
+    )
 
 
 def dual_write_lifi_swap_confirmed(
@@ -255,7 +321,7 @@ def dual_write_lifi_swap_confirmed(
     reverted: bool = False,
     error_message: str | None = None,
 ) -> None:
-    try:
+    def _write() -> None:
         effective_tx = (tx_hash or swap.tx_hash or "").strip()
         if not effective_tx:
             idem = _attempt_key("lifi", swap_id=swap.id, step="swap")
@@ -299,12 +365,13 @@ def dual_write_lifi_swap_confirmed(
             step_type=AttemptStepType.SWAP.value,
             transition=transition,
         )
-    except Exception as exc:
-        logger.warning(
-            "attempt.dual_write.lifi_swap_confirmed_failed",
-            extra={"swap_id": str(getattr(swap, "id", "")), "error": str(exc)},
-            exc_info=True,
-        )
+
+    _run_dual_write_with_retry(
+        "lifi_swap_confirmed",
+        _write,
+        swap_id=str(getattr(swap, "id", "")),
+        tx_hash=tx_hash or getattr(swap, "tx_hash", None),
+    )
 
 
 def _vault_protocol(integration_mode: str | None) -> str:

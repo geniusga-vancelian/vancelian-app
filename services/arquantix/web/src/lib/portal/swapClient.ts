@@ -191,21 +191,56 @@ export async function executeSwap(swapId: string): Promise<SwapExecutePayload> {
   return parseJson(res)
 }
 
-export async function abandonSwap(swapId: string): Promise<SwapStatusPayload> {
+export async function abandonSwap(
+  swapId: string,
+  body?: {
+    explicit_user_abandon?: boolean
+    failure_phase?: string
+    reason?: string
+  },
+): Promise<SwapStatusPayload> {
   const res = await fetch(`/api/portal/swaps/${swapId}/abandon`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify({
+      explicit_user_abandon: true,
+      ...body,
+    }),
     signal: AbortSignal.timeout(10_000),
   })
   return parseJson(res)
 }
 
-export async function submitSwapTx(swapId: string, txHash: string): Promise<SwapStatusPayload> {
+export async function recordSwapFailure(
+  swapId: string,
+  body: {
+    failure_phase: string
+    error_code: string
+    technical_message?: string
+    signing_wallet_address?: string
+  },
+): Promise<SwapStatusPayload> {
+  const res = await fetch(`/api/portal/swaps/${swapId}/failure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
+  })
+  return parseJson(res)
+}
+
+export async function submitSwapTx(
+  swapId: string,
+  txHash: string,
+  signingWalletAddress?: string,
+): Promise<SwapStatusPayload> {
   const res = await fetch(`/api/portal/swaps/${swapId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tx_hash: txHash }),
+    body: JSON.stringify({
+      tx_hash: txHash,
+      ...(signingWalletAddress ? { signing_wallet_address: signingWalletAddress } : {}),
+    }),
   })
   return parseJson(res)
 }
@@ -213,11 +248,15 @@ export async function submitSwapTx(swapId: string, txHash: string): Promise<Swap
 export async function submitSwapApproval(
   swapId: string,
   approvalTxHash: string,
+  signingWalletAddress?: string,
 ): Promise<SwapStatusPayload> {
   const res = await fetch(`/api/portal/swaps/${swapId}/approval`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tx_hash: approvalTxHash }),
+    body: JSON.stringify({
+      tx_hash: approvalTxHash,
+      ...(signingWalletAddress ? { signing_wallet_address: signingWalletAddress } : {}),
+    }),
   })
   return parseJson(res)
 }

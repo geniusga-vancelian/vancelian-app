@@ -31,13 +31,13 @@ SUPPORTED_SWAP_CHAINS: dict[str, dict[str, Any]] = {
     },
 }
 
-MIN_SWAP_NOTIONAL_USDC = Decimal("5")
+MIN_SWAP_NOTIONAL_USDC = Decimal("0")
 
 DEFAULT_MIN_SWAP_AMOUNT: dict[str, Decimal] = {
-    "ETH": Decimal("0.001"),
-    "CBETH": Decimal("0.001"),
-    "USDC": Decimal("5"),
-    "EURC": Decimal("5"),
+    "ETH": Decimal("0"),
+    "CBETH": Decimal("0"),
+    "USDC": Decimal("0"),
+    "EURC": Decimal("0"),
     "CBBTC": Decimal("0.00001"),
     "LINK": Decimal("1"),
     "AAVE": Decimal("0.01"),
@@ -114,9 +114,11 @@ def normalize_chain_key(chain: str) -> str:
 
 
 def effective_min_swap_amount(symbol: str) -> Decimal:
-    """Montant minimum source — max(seuil actif, équivalent MIN_SWAP_NOTIONAL_USDC)."""
+    """Montant minimum source Vancelian — 0 (contraintes réelles = provider LI.FI uniquement)."""
     sym = normalize_asset_symbol(symbol)
-    floor = DEFAULT_MIN_SWAP_AMOUNT.get(sym, Decimal("1"))
+    floor = DEFAULT_MIN_SWAP_AMOUNT.get(sym, Decimal("0"))
+    if MIN_SWAP_NOTIONAL_USDC <= 0:
+        return floor
     ref_usd = _SWAP_MIN_USD_REFERENCE.get(sym)
     if ref_usd is None or ref_usd <= 0:
         return max(floor, MIN_SWAP_NOTIONAL_USDC)

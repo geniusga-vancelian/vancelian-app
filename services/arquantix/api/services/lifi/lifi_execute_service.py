@@ -28,7 +28,12 @@ from services.lifi.lifi_swap_settlement import (
 )
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.schemas import SwapExecuteResponse, SwapStatusResponse, SwapTransactionPayload
-from services.lifi.signing_wallet_service import read_signing_wallet_from_audit
+from services.lifi.signing_wallet_service import (
+    assert_locked_signing_wallet_match,
+    read_signing_wallet_from_audit,
+)
+from services.lifi.swap_failure_enums import SwapFailureCode
+from services.lifi.swap_trace_service import log_swap_trace
 from services.lifi.swap_repository import PersonWalletSwapRepository
 
 logger = logging.getLogger(__name__)
@@ -65,15 +70,31 @@ class LifiExecuteService:
 
         swap.status = SwapSessionStatus.AWAITING_SIGNATURE.value
         swap.expires_at = datetime.now(timezone.utc) + timedelta(seconds=EXECUTE_GRACE_SECONDS)
+        signing_mode, signing_address = read_signing_wallet_from_audit(swap.audit_log)
+        if signing_address:
+            self._swap_repo.append_audit(
+                swap,
+                {
+                    "event": "wallet_locked",
+                    "signing_wallet_mode": signing_mode,
+                    "signing_wallet_address": signing_address,
+                },
+            )
         self._swap_repo.append_audit(swap, {"event": "awaiting_signature"})
         from services.transaction_intents.lifi_intent_sync import on_swap_awaiting_signature
 
         on_swap_awaiting_signature(db, swap)
+        log_swap_trace(
+            db,
+            swap,
+            event="awaiting_signature",
+            status=swap.status,
+            source="lifi_execute.prepare",
+        )
         db.commit()
         db.refresh(swap)
 
         transaction = _map_transaction_request(tx_req, swap.from_chain)
-        signing_mode, signing_address = read_signing_wallet_from_audit(swap.audit_log)
         token_approval = build_token_approval_payload(swap.lifi_quote_raw)
         if token_approval.required:
             self._swap_repo.append_audit(
@@ -83,6 +104,13 @@ class LifiExecuteService:
                     "token_address": token_approval.token_address,
                     "spender_address": token_approval.spender_address,
                 },
+            )
+            log_swap_trace(
+                db,
+                swap,
+                event="approval_required",
+                status=swap.status,
+                source="lifi_execute.prepare",
             )
             db.commit()
             db.refresh(swap)
@@ -104,10 +132,16 @@ class LifiExecuteService:
         person_id: UUID,
         swap_id: UUID,
         tx_hash: str,
+        signing_wallet_address: str | None = None,
     ) -> SwapStatusResponse:
         swap = self._get_active_swap(db, person_id=person_id, swap_id=swap_id)
         if swap.status != SwapSessionStatus.AWAITING_SIGNATURE.value:
             raise SwapValidationError("swap.invalid_state", "Signature requise avant soumission")
+
+        assert_locked_signing_wallet_match(
+            swap,
+            connected_wallet_address=signing_wallet_address,
+        )
 
         clean_hash = tx_hash.strip()
         if swaps_mock_mode() or clean_hash.startswith("0xmock"):
@@ -167,6 +201,22 @@ class LifiExecuteService:
         from services.transaction_attempts.dual_write import dual_write_lifi_swap_submitted
 
         dual_write_lifi_swap_submitted(db, swap, tx_hash=clean_hash)
+        log_swap_trace(
+            db,
+            swap,
+            event="swap_submitted",
+            status=swap.status,
+            tx_hash=clean_hash,
+            source="lifi_execute.submit",
+        )
+        log_swap_trace(
+            db,
+            swap,
+            event="confirming",
+            status=swap.status,
+            tx_hash=clean_hash,
+            source="lifi_execute.submit",
+        )
         db.commit()
         db.refresh(swap)
 
@@ -185,10 +235,16 @@ class LifiExecuteService:
         person_id: UUID,
         swap_id: UUID,
         tx_hash: str,
+        signing_wallet_address: str | None = None,
     ) -> SwapStatusResponse:
         swap = self._get_active_swap(db, person_id=person_id, swap_id=swap_id)
         if swap.status != SwapSessionStatus.AWAITING_SIGNATURE.value:
             raise SwapValidationError("swap.invalid_state", "Approval avant signature swap requise")
+
+        assert_locked_signing_wallet_match(
+            swap,
+            connected_wallet_address=signing_wallet_address,
+        )
 
         clean_hash = tx_hash.strip().lower()
         self._swap_repo.append_audit(
@@ -201,6 +257,14 @@ class LifiExecuteService:
         from services.transaction_attempts.dual_write import dual_write_lifi_approval_submitted
 
         dual_write_lifi_approval_submitted(db, swap, approval_tx_hash=clean_hash)
+        log_swap_trace(
+            db,
+            swap,
+            event="approval_submitted",
+            status=swap.status,
+            tx_hash=clean_hash,
+            source="lifi_execute.approval",
+        )
         db.commit()
         db.refresh(swap)
 
@@ -217,7 +281,15 @@ class LifiExecuteService:
         person_id: UUID,
         swap_id: UUID,
         reason: str | None = None,
+        explicit_user_abandon: bool = False,
+        failure_phase: str | None = None,
     ) -> SwapStatusResponse:
+        if not explicit_user_abandon:
+            raise SwapValidationError(
+                "swap.abandon_requires_explicit",
+                "Abandon explicite requis — utilisez /failure pour les erreurs d'exécution.",
+            )
+
         swap = self._swap_repo.get_for_person(db, swap_id=swap_id, person_id=person_id)
         if swap is None:
             raise SwapValidationError("swap.not_found", "Swap introuvable")
@@ -232,16 +304,16 @@ class LifiExecuteService:
         if swap.status == SwapSessionStatus.FAILED.value:
             return self._build_status_response(swap)
 
-        swap.status = SwapSessionStatus.FAILED.value
-        swap.error_message = reason or "Échange abandonné"
-        self._swap_repo.append_audit(
-            swap,
-            {"event": "client_abandoned", "reason": swap.error_message},
-        )
-        from services.transaction_intents.lifi_intent_sync import on_swap_failed
+        from services.lifi.swap_failure_service import record_swap_failure
 
-        on_swap_failed(db, swap)
-        db.commit()
+        record_swap_failure(
+            db,
+            person_id=person_id,
+            swap_id=swap_id,
+            failure_phase=failure_phase or "quote",
+            error_code=SwapFailureCode.USER_ABANDONED.value,
+            technical_message=reason or "user_explicit_abandon",
+        )
         db.refresh(swap)
         return self._build_status_response(swap)
 
@@ -394,6 +466,14 @@ class LifiExecuteService:
                         },
                     )
                     on_swap_confirmed(db, swap)
+                    log_swap_trace(
+                        db,
+                        swap,
+                        event="confirmed",
+                        status=swap.status,
+                        tx_hash=swap.tx_hash,
+                        source="lifi_execute.refresh",
+                    )
                 except SwapSettlementBlocked as exc:
                     self._swap_repo.append_audit(
                         swap,
@@ -404,8 +484,25 @@ class LifiExecuteService:
                         },
                     )
                     on_swap_settlement_blocked(db, swap, reason=exc.code)
+                    log_swap_trace(
+                        db,
+                        swap,
+                        event="reconciliation_required",
+                        status=swap.status,
+                        error_code=exc.code,
+                        tx_hash=swap.tx_hash,
+                        source="lifi_execute.refresh",
+                    )
             else:
                 on_swap_confirmed(db, swap)
+                log_swap_trace(
+                    db,
+                    swap,
+                    event="confirmed",
+                    status=swap.status,
+                    tx_hash=swap.tx_hash,
+                    source="lifi_execute.refresh",
+                )
             from services.transaction_attempts.dual_write import dual_write_lifi_swap_confirmed
 
             dual_write_lifi_swap_confirmed(db, swap, tx_hash=swap.tx_hash)

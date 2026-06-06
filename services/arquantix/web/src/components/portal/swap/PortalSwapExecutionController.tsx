@@ -25,7 +25,12 @@ import { SWAP_FLOW_UI, SWAP_RESULT_IMPOSSIBLE_ACTIONS } from '@/components/porta
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { navigateAfterTransactionSuccess } from '@/lib/portal/postTransactionWalletNav'
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
-import { abandonSwap, type SwapQuotePayload } from '@/lib/portal/swapClient'
+import {
+  classifySwapError,
+  executionPhaseToFailurePhase,
+  SwapExecutionError,
+} from '@/lib/portal/swapFailure'
+import { abandonSwap, recordSwapFailure, type SwapQuotePayload } from '@/lib/portal/swapClient'
 import {
   SwapPriceChangedError,
   buildSwapReviewSnapshot,
@@ -131,16 +136,26 @@ export function PortalSwapExecutionController({
         onStepChange('review')
         return
       }
+
+      const classified =
+        e instanceof SwapExecutionError
+          ? e
+          : classifySwapError(e, executionPhaseToFailurePhase(executionPhase))
+
       setExecutionPhase('failed')
-      setFailureCopy(resolveSwapFailureCopy(e))
+      setFailureCopy(resolveSwapFailureCopy(classified))
       try {
-        await abandonSwap(quote.swap_id)
+        await recordSwapFailure(quote.swap_id, {
+          failure_phase: classified.failurePhase,
+          error_code: classified.code,
+          technical_message: classified.technicalMessage,
+        })
       } catch {
-        /* abandon best-effort */
+        /* failure record best-effort — audit DB peut déjà exister */
       }
       onStepChange('result')
     }
-  }, [onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, signAndSubmit])
+  }, [executionPhase, onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, signAndSubmit])
 
   useEffect(() => {
     if (step !== 'processing' || executionStartedRef.current) return
@@ -183,9 +198,17 @@ export function PortalSwapExecutionController({
   }, [onClearPriceChangeNotice, onStepChange, quote, resetExecution])
 
   const onProcessingClose = useCallback(() => {
+    if (quote?.swap_id && executionPhase !== 'completed' && executionPhase !== 'failed') {
+      void abandonSwap(quote.swap_id, {
+        failure_phase: executionPhaseToFailurePhase(executionPhase),
+        reason: 'user_closed_processing',
+      }).catch(() => {
+        /* explicit abandon best-effort */
+      })
+    }
     resetExecution()
     router.push(PORTAL_ROUTES.cryptoWallet)
-  }, [resetExecution, router])
+  }, [executionPhase, quote?.swap_id, resetExecution, router])
 
   const onResultSuccess = useCallback(() => {
     resetExecution()

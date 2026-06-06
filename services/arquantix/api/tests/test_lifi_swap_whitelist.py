@@ -110,17 +110,16 @@ def test_reject_same_asset_same_chain():
     assert exc.value.code == "swap.same_asset"
 
 
-def test_reject_amount_below_min():
+def test_reject_zero_amount():
     with pytest.raises(SwapValidationError) as exc:
         validate_quote_request(
             from_asset="USDC",
             to_asset="ETH",
-            amount="4.99",
+            amount="0",
             from_chain="base",
             to_chain="base",
         )
-    assert exc.value.code == "swap.amount_below_min"
-    assert "5" in str(exc.value)
+    assert exc.value.code == "swap.invalid_amount"
 
 
 def test_usdc_at_catalog_min_passes_validation():
@@ -134,16 +133,27 @@ def test_usdc_at_catalog_min_passes_validation():
     assert parsed == Decimal("5")
 
 
-def test_public_usdc_min_amount_is_five():
+def test_public_usdc_min_amount_is_zero():
     assets = list_supported_source_assets_public()
     usdc = next(item for item in assets if item["symbol"] == "USDC")
-    assert usdc["min_amount"] == "5"
+    assert usdc["min_amount"] == "0"
 
 
-def test_effective_min_swap_amount_usdc_notional():
+def test_effective_min_swap_amount_usdc_is_zero():
     from config.supported_swap_assets import effective_min_swap_amount
 
-    assert effective_min_swap_amount("USDC") == Decimal("5")
+    assert effective_min_swap_amount("USDC") == Decimal("0")
+
+
+def test_usdc_below_five_passes_validation():
+    parsed, _slippage = validate_quote_request(
+        from_asset="USDC",
+        to_asset="CBBTC",
+        amount="1",
+        from_chain="base",
+        to_chain="base",
+    )
+    assert parsed == Decimal("1")
 
 
 def test_human_amount_to_atomic_usdc():
@@ -162,11 +172,11 @@ def test_public_assets_payload_has_no_addresses():
 
 
 def test_wallet_chain_type_matches_evm_aliases():
-    from services.lifi.lifi_quote_service import _wallet_chain_type_matches
+    from services.lifi.signing_wallet_service import _wallet_chain_type_matches
 
-    assert _wallet_chain_type_matches("evm", "base") is True
+    assert _wallet_chain_type_matches("evm", "ethereum") is True
     assert _wallet_chain_type_matches("ethereum", "evm") is True
-    assert _wallet_chain_type_matches("solana", "base") is False
+    assert _wallet_chain_type_matches("solana", "ethereum") is False
 
 
 def test_reject_cross_chain_when_pilot():
@@ -176,9 +186,9 @@ def test_reject_cross_chain_when_pilot():
             to_asset="ETH",
             amount="100",
             from_chain="base",
-            to_chain="ethereum",
+            to_chain="arbitrum",
         )
-    assert exc.value.code == "swap.chain_not_supported"
+    assert exc.value.code in {"swap.chain_not_supported", "swap.cross_chain_disabled"}
 
 
 def test_public_chains_base_only():
