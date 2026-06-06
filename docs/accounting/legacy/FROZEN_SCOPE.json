@@ -1,0 +1,46 @@
+{
+  "legacy_frozen": true,
+  "requires_protocol_proof": true,
+  "do_not_auto_fix": true,
+  "last_updated": "2026-06-06",
+  "reference_audit": "docs/arquantix/gaelitier-final-audit.json",
+  "frozen_scopes": [
+    {
+      "id": "uvp_user_vault_positions",
+      "description": "Table legacy user_vault_positions vs PE vault_position",
+      "assets_affected": ["USDC", "EURC"],
+      "auto_fix_allowed": false
+    },
+    {
+      "id": "ovt_vault_backfill_gaps",
+      "description": "OVT Morpho-derived vault scope divergent de PE",
+      "assets_affected": ["USDC", "EURC"],
+      "auto_fix_allowed": false
+    },
+    {
+      "id": "ovt_lombard_backfill_gaps",
+      "description": "OVT Lombard lock/borrow non rejouables (collateral en protocole)",
+      "assets_affected": ["USDC", "CBBTC", "CBETH"],
+      "auto_fix_allowed": false
+    },
+    {
+      "id": "lombard_liability_historical_delta",
+      "description": "Liability OVT-derived 252 USDC vs PE metadata 69 USDC",
+      "auto_fix_allowed": false
+    }
+  ],
+  "active_reconciliation_ok": {
+    "eurc_ledger_liquid_equals_onchain_base": true,
+    "usdc_ledger_liquid_equals_onchain_base": true,
+    "usdt_ledger_equals_pe_trading": true,
+    "usdt_ethereum_scan_gap_in_audit_v1": true,
+    "lifi_zombie_swaps": 0,
+    "focus_swap_76830776_ledger_complete": true,
+    "cbbtc_cbeth_locked_equals_wallet": true
+  },
+  "closure_prs": {
+    "A_audit_doctrine": "critical",
+    "C_portfolio_breakdown": "high",
+    "B_cost_basis": "medium_deferred"
+  }
+}
