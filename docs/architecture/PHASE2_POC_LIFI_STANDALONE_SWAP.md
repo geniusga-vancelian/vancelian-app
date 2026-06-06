@@ -679,7 +679,8 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 6. ~~**S2.5** Settlement Skeleton NOOP~~ — ✅ mergé (#33)
 7. ~~**S3a** Worker → Settlement NOOP branché~~ — ✅ mergé (#34)
 8. ~~**S3b** Premier settlement réel LI.FI ledger-only~~ — ✅ mergé (#35)
-9. **S3** Controller + reconciliation — ⏸ feu vert explicite requis
-10. **S4** Product Locks — **avant staging final** (checklist activation flags séparée)
-11. **S5** Staging dual-run
-12. **S6** webhooks Privy
+9. **Activation checklist staging** — [STAGING_ACTIVATION_CHECKLIST_LIFI_ORCHESTRATOR.md](STAGING_ACTIVATION_CHECKLIST_LIFI_ORCHESTRATOR.md) (Go checklist staging)
+10. **S4** Product Locks — **avant staging final**
+11. **S5** Staging dual-run — après S4 + checklist validée
+12. **S3** Controller + reconciliation — ⏸ feu vert explicite **post-S5**
+13. **S6** webhooks Privy
