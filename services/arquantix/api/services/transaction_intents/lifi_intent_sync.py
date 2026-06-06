@@ -59,6 +59,11 @@ def sync_lifi_swap_intent(
     metadata_patch: dict[str, Any] | None = None,
 ) -> None:
     """Upsert intent LI.FI — n'appelle jamais settlement ni balances."""
+    from services.lifi.config import lifi_intent_orchestrator_enabled
+
+    if lifi_intent_orchestrator_enabled():
+        return
+
     if swap is None or not swap.person_id:
         return
 
