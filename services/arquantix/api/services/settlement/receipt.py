@@ -8,7 +8,12 @@ from typing import Any
 from services.onchain_indexer.models import TransactionIntent
 
 
-def compute_settlement_receipt_hash(intent: TransactionIntent, *, linked_snapshot: dict[str, Any]) -> str:
+def compute_settlement_receipt_hash(
+    intent: TransactionIntent,
+    *,
+    linked_snapshot: dict[str, Any],
+    projection: str = "s2.5-noop",
+) -> str:
     """Hash déterministe — deux projections identiques → même hash."""
     payload = {
         "intent_id": str(intent.id),
@@ -18,7 +23,7 @@ def compute_settlement_receipt_hash(intent: TransactionIntent, *, linked_snapsho
         "linked_id": str(intent.linked_id) if intent.linked_id else None,
         "assets_json": intent.assets_json,
         "linked_snapshot": linked_snapshot,
-        "skeleton": "s2.5-noop",
+        "projection": projection,
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

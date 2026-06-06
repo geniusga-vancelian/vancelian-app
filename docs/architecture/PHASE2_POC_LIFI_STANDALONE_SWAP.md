@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1–S3a ✅ (#27–#34) · S3b 🔒 · S3 ⏸ |
+| **Statut** | S1–S3a ✅ (#27–#34) · S3b en cours · S3 ⏸ |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 · [Gouvernance](../TRANSACTION_ENGINE_GOVERNANCE.md) · [Settlement Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) avant Go S2b |
@@ -589,9 +589,9 @@ SettlementResult → metadata settlement_receipt_hash + phase SETTLED_NOOP
 
 **Test review S3a** : *Si on supprime le handler intent.settle, la réalité économique reste-t-elle identique ?* → **Oui**
 
-### S3b — Premier settlement réel LI.FI standalone (🔒 spec figée — pas de Go)
+### S3b — Premier settlement réel LI.FI standalone (en cours)
 
-> **Premier vrai test d’ADR 004 en production logicielle.** Pas de code S3b sans **« Go S3b »** explicite.
+> **Premier vrai test d’ADR 004 en production logicielle.** Flag `LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED=false` par défaut.
 
 **État pipeline avant S3b** :
 
@@ -621,7 +621,7 @@ metadata settlement_receipt_hash + phase post-settlement produit
 | Écritures **autorisées** | `person_wallet_deposits`, `person_wallet_balances`, `transaction_intents` (metadata/status settlement) |
 | Écritures **interdites** | `pe_position_atoms` · `cost_basis_executions` · `bundle_ledger_entries` · vault · Lombard |
 | Hors scope | PE · cost basis · controller · `COMPLETED` · bundle · vault · Lombard |
-| Atomicité | Débit + crédit dans **une** transaction DB — échec entre les deux → **ROLLBACK total** |
+| Atomicité | Débit + crédit dans **savepoint** DB — échec entre les deux → **ROLLBACK total** (chemin `settle` + worker) |
 | Idempotence | Marker `settlement_receipt_hash` (S3a) + détection jambes ledger déjà présentes (webhook Privy) |
 | Legacy | Pas de bypass `apply_swap_settlement` hors chemin settlement · flag OFF → legacy inchangé |
 | Contrat v1 | **Sous-ensemble intentionnel** — Garantie 2 complète (ledger+PE+cost basis) = milestone post-S3b |

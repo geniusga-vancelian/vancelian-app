@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 SETTLEMENT_RECEIPT_METADATA_KEY = "settlement_receipt_hash"
+SETTLEMENT_LAYER_SYNC_SOURCE = "settlement_layer_s3b"
 
 # Phases orchestrateur autorisées pour settlement skeleton (P2 — post worker S2b).
 SETTLEMENT_READY_PHASES = frozenset({"QUEUED", "PROCESSING", "ONCHAIN_CONFIRMED"})

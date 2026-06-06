@@ -28,6 +28,7 @@ DEFAULT_LIFI_SWAPS_MOCK = False
 # Phase 2 S2a — intent orchestrateur (défaut OFF : legacy Phase 7 inchangé).
 DEFAULT_LIFI_INTENT_ORCHESTRATOR_ENABLED = False
 DEFAULT_LIFI_OUTBOX_WORKER_ENABLED = False
+DEFAULT_LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED = False
 
 # Alias rétrocompat.
 LIFI_API_BASE_URL = DEFAULT_LIFI_BASE_URL
@@ -102,6 +103,15 @@ def lifi_outbox_worker_enabled() -> bool:
     """Phase 2 S2a+ — poll outbox intent.created (défaut false, hors scope runtime S2a)."""
     raw = (
         os.getenv("LIFI_OUTBOX_WORKER_ENABLED") or str(DEFAULT_LIFI_OUTBOX_WORKER_ENABLED)
+    ).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def lifi_settlement_layer_ledger_enabled() -> bool:
+    """Phase 2 S3b — projection ledger réelle via Settlement Layer (défaut false)."""
+    raw = (
+        os.getenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED")
+        or str(DEFAULT_LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED)
     ).strip().lower()
     return raw in {"1", "true", "yes", "on"}
 
