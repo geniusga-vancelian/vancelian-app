@@ -1,8 +1,8 @@
 """Portfolio breakdown par actif — lecture seule (Privy Ledger → PE → API → UI).
 
-``total_holdings`` est **dérivé** des scopes métier additifs (available + in_vaults +
-locked_collateral). Il ne doit pas être utilisé comme source de vérité opérationnelle
-ni recopié tel quel depuis le ledger Privy.
+``total_holdings`` est **dérivé** des scopes PE : available + in_vaults +
+locked_collateral + bundle_incremental_value (uniquement si bundle-only).
+Il ne doit pas être recopié tel quel depuis le ledger Privy.
 
 WARNING — Les champs breakdown ne sont pas forcément additifs. Certaines composantes
 représentent des sous-scopes économiques du wallet (allocations bundle notamment).
@@ -26,7 +26,7 @@ from services.privy_wallet.deposit_backfill import fetch_aggregated_on_chain_bal
 from services.privy_wallet.evm_chain_config import supported_pilot_chain_ids
 from services.privy_wallet.repository import PersonCryptoWalletRepository, PersonWalletBalanceRepository
 
-BREAKDOWN_VERSION = "portfolio_breakdown_v1"
+BREAKDOWN_VERSION = "portfolio_breakdown_v1_1"
 CUSTODY_CHAIN_ID = BASE_LIFI_CHAIN_ID
 
 _PENDING_SWAP_STATUSES = frozenset(
@@ -149,10 +149,47 @@ def _pending_settlement_by_asset(db: Session, person_id: UUID) -> dict[str, Deci
     return out
 
 
-def _component_payload(asset: str, field: str, quantity: Decimal) -> dict[str, Any]:
+def _component_payload(
+    asset: str,
+    field: str,
+    quantity: Decimal,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     meta = dict(_COMPONENT_SCOPES[field])
     meta["quantity"] = _fmt(quantity, asset=asset)
+    if extra:
+        meta.update(extra)
     return meta
+
+
+def _resolve_bundle_patrimony(
+    *,
+    available: Decimal,
+    in_vaults: Decimal,
+    in_bundles: Decimal,
+    locked_collateral: Decimal,
+) -> tuple[Decimal, Decimal, bool, bool, Decimal]:
+    """Retourne (bundle_incremental, total_holdings, bundle_is_subset, in_bundles_additive, overlap)."""
+    additive_base = available + in_vaults + locked_collateral
+
+    if in_bundles <= 0:
+        return Decimal("0"), additive_base, False, False, Decimal("0")
+
+    if additive_base > 0:
+        # Bundle ⊂ wallet : déjà couvert par available/vault/collateral (+ ledger).
+        overlap = in_bundles
+        return Decimal("0"), additive_base, True, False, overlap
+
+    # Bundle-only : patrimoine économique visible uniquement via bundle PE.
+    return in_bundles, in_bundles, False, True, Decimal("0")
+
+
+def _resolve_swappable_balance(*, available: Decimal, on_chain_balance_base: Decimal) -> Decimal:
+    """MAX swap = min(on_chain_base, available PE) — available est la vérité opérationnelle."""
+    if on_chain_balance_base > 0:
+        return min(on_chain_balance_base, available)
+    return max(available, Decimal("0"))
 
 
 def build_asset_breakdown_row(
@@ -171,18 +208,26 @@ def build_asset_breakdown_row(
     debt = pe.liability.get(asset, Decimal("0"))
     pending_settlement = pending_by_asset.get(asset, Decimal("0"))
 
-    total_holdings = available + in_vaults + locked_collateral
-
     wallet_ledger_balance = ledger.get(asset, Decimal("0"))
     on_chain_balance_base = on_chain_base.get(asset, Decimal("0"))
-    ledger_spendable = max(wallet_ledger_balance - locked_collateral, Decimal("0"))
-    if on_chain_balance_base > 0:
-        swappable_balance = min(on_chain_balance_base, ledger_spendable)
-    else:
-        swappable_balance = ledger_spendable
 
-    components_sum_including_bundles = available + in_vaults + in_bundles + locked_collateral
-    non_additive_overlap = components_sum_including_bundles - total_holdings
+    (
+        bundle_incremental_value,
+        total_holdings,
+        bundle_is_subset_of_wallet,
+        in_bundles_additive,
+        non_additive_overlap,
+    ) = _resolve_bundle_patrimony(
+        available=available,
+        in_vaults=in_vaults,
+        in_bundles=in_bundles,
+        locked_collateral=locked_collateral,
+    )
+
+    swappable_balance = _resolve_swappable_balance(
+        available=available,
+        on_chain_balance_base=on_chain_balance_base,
+    )
 
     return {
         "symbol": asset,
@@ -196,16 +241,26 @@ def build_asset_breakdown_row(
         "swappable_balance": _fmt(swappable_balance, asset=asset),
         "wallet_ledger_balance": _fmt(wallet_ledger_balance, asset=asset),
         "on_chain_balance_base": _fmt(on_chain_balance_base, asset=asset),
+        "bundle_incremental_value": _fmt(bundle_incremental_value, asset=asset),
         "components": {
             "available": _component_payload(asset, "available", available),
             "in_vaults": _component_payload(asset, "in_vaults", in_vaults),
-            "in_bundles": _component_payload(asset, "in_bundles", in_bundles),
+            "in_bundles": _component_payload(
+                asset,
+                "in_bundles",
+                in_bundles,
+                extra={
+                    "in_bundles_additive": in_bundles_additive,
+                    "bundle_is_subset_of_wallet": bundle_is_subset_of_wallet if in_bundles > 0 else False,
+                },
+            ),
             "locked_collateral": _component_payload(asset, "locked_collateral", locked_collateral),
             "debt": _component_payload(asset, "debt", debt),
             "pending_settlement": _component_payload(asset, "pending_settlement", pending_settlement),
         },
-        "bundle_is_subset_of_wallet": in_bundles > 0,
-        "non_additive_overlap": _fmt(max(non_additive_overlap, Decimal("0")), asset=asset),
+        "bundle_is_subset_of_wallet": bundle_is_subset_of_wallet,
+        "in_bundles_additive": in_bundles_additive,
+        "non_additive_overlap": _fmt(non_additive_overlap, asset=asset),
     }
 
 
@@ -268,9 +323,14 @@ def build_portfolio_breakdown(db: Session, person_id: UUID) -> dict[str, Any]:
                 "debt",
                 "pending_settlement",
             ],
-            "total_holdings_formula": "available + in_vaults + locked_collateral",
-            "total_holdings_note": "Recalculé depuis les scopes PE — pas un champ magique ledger.",
-            "swappable_formula": "min(on_chain_balance_base, wallet_ledger_balance - locked_collateral)",
+            "total_holdings_formula": (
+                "available + in_vaults + locked_collateral + bundle_incremental_value"
+            ),
+            "total_holdings_note": (
+                "bundle_incremental_value = in_bundles uniquement si bundle-only "
+                "(additive_base = 0). Sinon bundle ⊂ wallet, non additif."
+            ),
+            "swappable_formula": "min(on_chain_balance_base, available)",
             "swap_max_field": "swappable_balance",
         },
         "warnings": [

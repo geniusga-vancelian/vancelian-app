@@ -412,6 +412,7 @@ class PortfolioBreakdownComponentMeta(BaseModel):
     additive: bool
     quantity: str
     bundle_is_subset_of_wallet: Optional[bool] = None
+    in_bundles_additive: Optional[bool] = None
 
 
 class PortfolioBreakdownAssetPayload(BaseModel):
@@ -426,7 +427,9 @@ class PortfolioBreakdownAssetPayload(BaseModel):
     swappable_balance: str
     wallet_ledger_balance: str
     on_chain_balance_base: str
+    bundle_incremental_value: str
     bundle_is_subset_of_wallet: bool
+    in_bundles_additive: bool
     non_additive_overlap: str
     components: dict[str, PortfolioBreakdownComponentMeta]
 
