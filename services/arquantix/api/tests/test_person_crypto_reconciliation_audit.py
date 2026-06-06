@@ -73,7 +73,7 @@ def test_bundle_overlap_is_informational_not_custody_issue():
         direct_avail=Decimal("70"),
         delta_liquid=Decimal("0"),
         tol=Decimal("0.01"),
-        chain_ids_scanned=[8453],
+        ethereum_bal=Decimal("0"),
     )
     assert "bundle_overlap_expected" in informational
     assert "bundle_overlap_expected" not in custody
@@ -92,18 +92,19 @@ def test_vault_explains_delta_informational():
         direct_avail=Decimal("62"),
         delta_liquid=Decimal("0"),
         tol=Decimal("0.01"),
-        chain_ids_scanned=[8453],
+        ethereum_bal=Decimal("0"),
     )
     assert custody == []
     assert "vault_explains_delta" in informational
     assert "active_debt" in informational
 
 
-def test_usdt_missing_chain_scope_not_custody_when_eth_not_scanned():
+def test_usdt_on_ethereum_only_is_out_of_scope_not_custody():
     custody, informational, _ = _classify_raw_asset_signals(
         asset="USDT",
         ledger_bal=Decimal("150"),
         chain_bal=Decimal("0"),
+        ethereum_bal=Decimal("150"),
         ledger_liquid=Decimal("150"),
         vault_alloc=Decimal("0"),
         bundle_alloc=Decimal("0"),
@@ -112,21 +113,94 @@ def test_usdt_missing_chain_scope_not_custody_when_eth_not_scanned():
         direct_avail=Decimal("150"),
         delta_liquid=Decimal("150"),
         tol=Decimal("0.01"),
-        chain_ids_scanned=[8453],
     )
-    assert "missing_chain_scope" in informational
-    assert "ledger_liquid_vs_onchain" not in custody
-    assert "ledger_without_onchain" not in custody
+    assert "ethereum_out_of_scope" in informational
+    assert "ethereum_explains_ledger_gap" in informational
     assert custody == []
 
+
+def test_usdc_ethereum_extra_not_custody_when_base_matches_ledger():
+    custody, informational, _ = _classify_raw_asset_signals(
+        asset="USDC",
+        ledger_bal=Decimal("176.737796"),
+        chain_bal=Decimal("62.641746"),
+        ethereum_bal=Decimal("10"),
+        ledger_liquid=Decimal("62.641746"),
+        vault_alloc=Decimal("114.09605"),
+        bundle_alloc=Decimal("17.566654"),
+        collateral=Decimal("0"),
+        debt=Decimal("69"),
+        direct_avail=Decimal("62.641746"),
+        delta_liquid=Decimal("0"),
+        tol=Decimal("0.01"),
+    )
+    assert "ethereum_out_of_scope" in informational
+    assert custody == []
+
+
+def test_eth_micro_delta_suppressed_when_ethereum_explains_base_gap():
+    custody, informational, _ = _classify_raw_asset_signals(
+        asset="ETH",
+        ledger_bal=Decimal("0.041263354"),
+        chain_bal=Decimal("0.006542223"),
+        ethereum_bal=Decimal("0.03"),
+        ledger_liquid=Decimal("0.041263354"),
+        vault_alloc=Decimal("0"),
+        bundle_alloc=Decimal("0.0107519855"),
+        collateral=Decimal("0"),
+        debt=Decimal("0"),
+        direct_avail=Decimal("0"),
+        delta_liquid=Decimal("0.034721131"),
+        tol=Decimal("0.00000001"),
+    )
+    assert "ethereum_out_of_scope" in informational
+    assert "ethereum_explains_ledger_gap" in informational
+    assert "ledger_liquid_vs_onchain" not in custody
+    assert custody == []
+
+
+def test_gaelitier_base_only_custody_reconciled():
+    """gaelitier — périmètre Base uniquement, Ethereum gelé hors scope."""
     asset_rows = [
         {
-            "asset": "USDT",
-            "ledger_liquid": "150",
-            "on_chain_balance": "0",
-            "delta_ledger_liquid_vs_onchain": "150",
+            "asset": "EURC",
+            "ledger_liquid": "91.414272",
+            "on_chain_balance": "91.414272",
+            "delta_ledger_liquid_vs_onchain": "0",
             "custody_tolerance": "0.01",
-            "informational": informational,
+            "custody_issues": [],
+            "informational": [],
+        },
+        {
+            "asset": "USDC",
+            "ledger_liquid": "62.641746",
+            "on_chain_balance": "62.641746",
+            "delta_ledger_liquid_vs_onchain": "0",
+            "custody_tolerance": "0.01",
+            "custody_issues": [],
+            "informational": ["ethereum_out_of_scope", "bundle_overlap_expected", "active_debt"],
+        },
+        {
+            "asset": "USDT",
+            "ledger_liquid": "150.02925",
+            "on_chain_balance": "0",
+            "delta_ledger_liquid_vs_onchain": "150.02925",
+            "custody_tolerance": "0.01",
+            "custody_issues": [],
+            "informational": ["ethereum_out_of_scope", "ethereum_explains_ledger_gap"],
+        },
+        {
+            "asset": "ETH",
+            "ledger_liquid": "0.041263354",
+            "on_chain_balance": "0.006542223",
+            "delta_ledger_liquid_vs_onchain": "0.034721131",
+            "custody_tolerance": "0.00000001",
+            "custody_issues": [],
+            "informational": [
+                "ethereum_out_of_scope",
+                "ethereum_explains_ledger_gap",
+                "bundle_overlap_expected",
+            ],
         },
     ]
     db = MagicMock()
@@ -134,16 +208,49 @@ def test_usdt_missing_chain_scope_not_custody_when_eth_not_scanned():
         db,
         asset_rows=asset_rows,
         issues=[],
-        informational=[{"type": "informational", "asset": "USDT", "issue": "missing_chain_scope"}],
+        informational=[],
+        reporting_gaps=[{"type": "cost_basis_missing"}] * 26,
+        legacy_frozen=[{"type": "legacy_frozen"}] * 12,
+        swaps={"submitted_confirmed_onchain": [], "confirmed_incomplete_settlement": []},
+    )
+    assert criteria["custody_reconciled"] is True
+    assert criteria["stablecoin_custody_ok"] is True
+    assert criteria["custody_issue_count"] == 0
+    assert criteria["liquid_wallet_delta_usd"] == "0"
+
+
+def test_liquid_wallet_delta_usd_only_counts_custody_issues():
+    asset_rows = [
+        {
+            "asset": "USDC",
+            "ledger_liquid": "62.641746",
+            "on_chain_balance": "62.641746",
+            "delta_ledger_liquid_vs_onchain": "0",
+            "custody_tolerance": "0.01",
+            "custody_issues": [],
+            "informational": ["ethereum_out_of_scope"],
+        },
+        {
+            "asset": "CBBTC",
+            "ledger_liquid": "0.00205098",
+            "on_chain_balance": "0",
+            "delta_ledger_liquid_vs_onchain": "0.00205098",
+            "custody_tolerance": "0.00000001",
+            "custody_issues": [],
+            "informational": ["collateral_locked_matches_wallet"],
+        },
+    ]
+    db = MagicMock()
+    criteria = _build_success_criteria(
+        db,
+        asset_rows=asset_rows,
+        issues=[],
+        informational=[],
         reporting_gaps=[],
         legacy_frozen=[],
-        swaps={
-            "submitted_confirmed_onchain": [],
-            "confirmed_incomplete_settlement": [],
-        },
+        swaps={"submitted_confirmed_onchain": [], "confirmed_incomplete_settlement": []},
     )
-    assert criteria["stablecoin_custody_ok"] is True
-    assert criteria["custody_reconciled"] is True
+    assert criteria["liquid_wallet_delta_usd"] == "0"
 
 
 def test_gaelitier_stablecoin_custody_success_criteria():
@@ -155,6 +262,7 @@ def test_gaelitier_stablecoin_custody_success_criteria():
             "on_chain_balance": "91.414272",
             "delta_ledger_liquid_vs_onchain": "0",
             "custody_tolerance": "0.01",
+            "custody_issues": [],
             "informational": [],
         },
         {
@@ -163,6 +271,7 @@ def test_gaelitier_stablecoin_custody_success_criteria():
             "on_chain_balance": "62.641746",
             "delta_ledger_liquid_vs_onchain": "0",
             "custody_tolerance": "0.01",
+            "custody_issues": [],
             "informational": ["vault_explains_delta", "bundle_overlap_expected", "active_debt"],
         },
         {
@@ -171,6 +280,7 @@ def test_gaelitier_stablecoin_custody_success_criteria():
             "on_chain_balance": "150.02925",
             "delta_ledger_liquid_vs_onchain": "0",
             "custody_tolerance": "0.01",
+            "custody_issues": [],
             "informational": [],
         },
     ]
