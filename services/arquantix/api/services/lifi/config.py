@@ -30,6 +30,9 @@ DEFAULT_LIFI_INTENT_ORCHESTRATOR_ENABLED = False
 DEFAULT_LIFI_OUTBOX_WORKER_ENABLED = False
 DEFAULT_LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED = False
 
+# Pilot prod contrôlé — emails autorisés (séparés par virgule). Vide = fail-closed si flags ON.
+DEFAULT_LIFI_ORCHESTRATOR_ALLOWED_PERSON_EMAILS = ""
+
 # Alias rétrocompat.
 LIFI_API_BASE_URL = DEFAULT_LIFI_BASE_URL
 

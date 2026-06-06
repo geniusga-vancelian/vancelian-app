@@ -294,9 +294,9 @@ def apply_swap_settlement(
     allow_mock_quote_amount: bool = False,
 ) -> None:
     """Débite l'actif source et crédite la destination (montant réel ``amount_actual`` uniquement)."""
-    from services.lifi.config import lifi_settlement_layer_ledger_enabled
+    from services.lifi.orchestrator_allowlist import lifi_settlement_layer_ledger_enabled_for_person
 
-    if lifi_settlement_layer_ledger_enabled():
+    if lifi_settlement_layer_ledger_enabled_for_person(db, swap.person_id):
         return
 
     if swap_settlement_already_applied(swap):

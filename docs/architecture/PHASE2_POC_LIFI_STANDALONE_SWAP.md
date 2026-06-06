@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1–S3b ✅ (#27–#35) · S3 controller ⏸ · S4 avant staging |
+| **Statut** | S1–S3b ✅ (#27–#35) · pilot prod allowlist · S3 controller ⏸ · S4 avant élargissement |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 · [Gouvernance](../TRANSACTION_ENGINE_GOVERNANCE.md) · [Settlement Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) avant Go S2b |
@@ -41,7 +41,9 @@ La théorie (ADR 001–004 + #25) est complète **avant** d’écrire la platefo
 
 ## Objectif
 
-Prouver en **staging** que le pipeline transactionnel orchestré fonctionne de bout en bout pour les **swaps LI.FI standalone** (`person_wallet_swaps`, hors `is_bundle_internal_swap`), avec **dual-run** : le flux legacy Phase 7 reste actif quand les feature flags sont OFF.
+Prouver que le pipeline transactionnel orchestré fonctionne de bout en bout pour les **swaps LI.FI standalone** (`person_wallet_swaps`, hors `is_bundle_internal_swap`), avec **dual-run** : le flux legacy Phase 7 reste actif pour les utilisateurs hors allowlist (et quand les flags sont OFF).
+
+**Mise à jour 2026-06-07** : pas d’environnement staging Arquantix dédié ([rapport d’exécution](STAGING_ACTIVATION_EXECUTION_REPORT.md) — KO environnemental, smoke tests OK). Alternative retenue : **[Controlled Production Pilot](CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md)** sur compte unique allowlisté (`gaelitier@gmail.com`), pas de flags globaux sans allowlist.
 
 ---
 
@@ -104,6 +106,7 @@ Prouver en **staging** que le pipeline transactionnel orchestré fonctionne de b
 | Variable | Défaut | Description |
 | --- | --- | --- |
 | `LIFI_INTENT_ORCHESTRATOR_ENABLED` | `false` | Pipeline intent → outbox → worker sur quote/submit |
+| `LIFI_ORCHESTRATOR_ALLOWED_PERSON_EMAILS` | *(vide)* | Allowlist pilot prod — **obligatoire** si flags ON ; vide = fail-closed (legacy tous) |
 | `LIFI_OUTBOX_WORKER_ENABLED` | `false` | Step `process_transaction_outbox` dans tick DeFi |
 | `LIFI_RECONCILIATION_BLOCK_ENABLED` | `false` | Blocage API si `RECONCILIATION_REQUIRED` ; `false` = log-only |
 
@@ -679,8 +682,9 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 6. ~~**S2.5** Settlement Skeleton NOOP~~ — ✅ mergé (#33)
 7. ~~**S3a** Worker → Settlement NOOP branché~~ — ✅ mergé (#34)
 8. ~~**S3b** Premier settlement réel LI.FI ledger-only~~ — ✅ mergé (#35)
-9. **Activation checklist staging** — [STAGING_ACTIVATION_CHECKLIST_LIFI_ORCHESTRATOR.md](STAGING_ACTIVATION_CHECKLIST_LIFI_ORCHESTRATOR.md) (Go checklist staging)
-10. **S4** Product Locks — **avant staging final**
-11. **S5** Staging dual-run — après S4 + checklist validée
-12. **S3** Controller + reconciliation — ⏸ feu vert explicite **post-S5**
-13. **S6** webhooks Privy
+9. ~~**Activation checklist staging**~~ — [STAGING_ACTIVATION_EXECUTION_REPORT.md](STAGING_ACTIVATION_EXECUTION_REPORT.md) : **KO environnemental** (pas de staging Arquantix)
+10. **Controlled Production Pilot** — [CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md](CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md) + allowlist backend (Go Pilot Prod explicite requis)
+11. **S4** Product Locks — **avant tout élargissement** au-delà du compte pilote
+12. **S5** Staging dual-run global — **pas Go** (remplacé par pilot allowlist pour validation initiale)
+13. **S3** Controller + reconciliation — ⏸ feu vert explicite **post-pilot + S4**
+14. **S6** webhooks Privy

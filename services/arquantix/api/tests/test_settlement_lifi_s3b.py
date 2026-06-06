@@ -42,6 +42,7 @@ from services.transaction_outbox.intent_phases import IntentOrchestratorPhase
 from services.transaction_outbox.repository import TransactionOutboxRepository
 from services.transaction_outbox.settlement_worker import process_transaction_outbox_intent_settle
 from tests.conftest import make_linked_client
+from tests.lifi_orchestrator_test_utils import enable_lifi_orchestrator_allowlist
 
 EVM_ADDR = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
 TX_HASH = "0xs3btest1234567890abcdef1234567890abcdef1234567890abcdef123456"
@@ -106,8 +107,10 @@ def _seed_wallet(db: Session, pe):
     )
 
 
-def _seed_confirmed_swap_bundle(db: Session):
+def _seed_confirmed_swap_bundle(db: Session, monkeypatch=None):
     pe = make_linked_client(db)
+    if monkeypatch is not None:
+        enable_lifi_orchestrator_allowlist(monkeypatch, pe)
     _seed_wallet(db, pe)
     PrivyWalletAdminService().simulate_deposit(
         db,
@@ -153,7 +156,7 @@ def _seed_confirmed_swap_bundle(db: Session):
 
 def test_s3b_success_one_debit_one_credit(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
-    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
     pe_before = _economic_counts(db, pe.person_id)
 
     result = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
@@ -171,7 +174,7 @@ def test_s3b_success_one_debit_one_credit(db: Session, monkeypatch):
 
 def test_s3b_second_passage_noop_already_settled(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
-    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
 
     first = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
     db.commit()
@@ -189,7 +192,7 @@ def test_s3b_second_passage_noop_already_settled(db: Session, monkeypatch):
 
 def test_s3b_credit_already_present_no_double_credit(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
-    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
     wallet = _seed_wallet(db, pe)
 
     from services.lifi.lifi_swap_settlement import _create_swap_ledger_entry
@@ -230,7 +233,7 @@ def test_s3b_credit_already_present_no_double_credit(db: Session, monkeypatch):
 
 def test_s3b_debit_already_present_no_double_debit(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
-    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
     wallet = _seed_wallet(db, pe)
 
     from services.lifi.lifi_swap_settlement import _create_swap_ledger_entry
@@ -281,7 +284,7 @@ def _patch_fail_credit_before_write(monkeypatch_module):
 
 def test_s3b_failure_between_debit_and_credit_rolls_back(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
-    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
     before = _economic_counts(db, pe.person_id)
 
     import services.settlement.lifi_ledger as lifi_ledger_mod
@@ -305,7 +308,7 @@ def test_s3b_worker_path_failure_rolls_back_no_orphan_legs(db: Session, monkeypa
     """Chemin worker complet — échec entre débit et crédit ne doit pas committer de jambe orpheline."""
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
-    pe, bundle, settle_outbox = _seed_confirmed_swap_bundle(db)
+    pe, bundle, settle_outbox = _seed_confirmed_swap_bundle(db, monkeypatch)
     before = _economic_counts(db, pe.person_id)
 
     usdc_before = (
@@ -349,7 +352,7 @@ def test_s3b_worker_path_failure_rolls_back_no_orphan_legs(db: Session, monkeypa
 
 def test_s3b_bundle_internal_swap_terminal_no_ledger(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
-    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
     bundle.swap.audit_log = [
         {
             "event": "bundle_leg_context",
@@ -375,7 +378,7 @@ def test_s3b_bundle_internal_swap_terminal_no_ledger(db: Session, monkeypatch):
 
 def test_s3b_no_pe_atoms_written(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
-    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
     pe_atoms_before = db.query(PositionAtom).count()
 
     settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
@@ -387,7 +390,7 @@ def test_s3b_no_pe_atoms_written(db: Session, monkeypatch):
 def test_s3b_no_completed_produced(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
-    _pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    _pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
 
     process_transaction_outbox_intent_settle(db)
     db.refresh(bundle.intent)

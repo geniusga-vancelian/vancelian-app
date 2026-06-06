@@ -29,6 +29,7 @@ from services.transaction_outbox.settlement_worker import (
     process_transaction_outbox_intent_settle,
 )
 from tests.conftest import make_linked_client
+from tests.lifi_orchestrator_test_utils import enable_lifi_orchestrator_allowlist
 
 
 def _migration_173_ready() -> bool:
@@ -65,8 +66,10 @@ def _economic_counts(db: Session, person_id) -> dict[str, int]:
     }
 
 
-def _seed_queued_intent_settle_outbox(db: Session):
+def _seed_queued_intent_settle_outbox(db: Session, monkeypatch=None):
     pe = make_linked_client(db)
+    if monkeypatch is not None:
+        enable_lifi_orchestrator_allowlist(monkeypatch, pe)
     bundle = persist_intent_swap_outbox_atomic(
         db,
         person_id=pe.person_id,
@@ -98,7 +101,7 @@ def test_s3a_intent_settle_success_persists_hash_and_processes_outbox(
     db: Session, monkeypatch
 ):
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
-    pe, bundle, settle_outbox = _seed_queued_intent_settle_outbox(db)
+    pe, bundle, settle_outbox = _seed_queued_intent_settle_outbox(db, monkeypatch)
     before = _economic_counts(db, pe.person_id)
     transitions_before = TransactionIntentTransitionRepository.count_for_intent(
         db, bundle.intent.id
@@ -129,7 +132,7 @@ def test_s3a_second_passage_noop_already_settled_no_double_write(
     db: Session, monkeypatch
 ):
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
-    pe, bundle, first_outbox = _seed_queued_intent_settle_outbox(db)
+    pe, bundle, first_outbox = _seed_queued_intent_settle_outbox(db, monkeypatch)
     before = _economic_counts(db, pe.person_id)
 
     first = process_transaction_outbox_intent_settle(db)
@@ -165,7 +168,7 @@ def test_s3a_retryable_failure_retries_outbox_without_new_hash(
     db: Session, monkeypatch
 ):
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
-    pe, bundle, settle_outbox = _seed_queued_intent_settle_outbox(db)
+    pe, bundle, settle_outbox = _seed_queued_intent_settle_outbox(db, monkeypatch)
 
     def _retryable(_db: Session, *, intent_id: UUID) -> SettlementResult:
         return SettlementResult(
@@ -197,7 +200,7 @@ def test_s3a_terminal_failure_marks_intent_failed_and_processes_outbox(
     db: Session, monkeypatch
 ):
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
-    pe, bundle, settle_outbox = _seed_queued_intent_settle_outbox(db)
+    pe, bundle, settle_outbox = _seed_queued_intent_settle_outbox(db, monkeypatch)
     bundle.intent.idempotency_key = "   "
     db.commit()
 
@@ -212,8 +215,8 @@ def test_s3a_terminal_failure_marks_intent_failed_and_processes_outbox(
     assert _economic_counts(db, pe.person_id) == _economic_counts(db, pe.person_id)
 
 
-def test_s3a_handler_terminal_failure_transition_recorded(db: Session):
-    pe, bundle, settle_outbox = _seed_queued_intent_settle_outbox(db)
+def test_s3a_handler_terminal_failure_transition_recorded(db: Session, monkeypatch):
+    pe, bundle, settle_outbox = _seed_queued_intent_settle_outbox(db, monkeypatch)
     bundle.intent.idempotency_key = ""
     db.commit()
     transitions_before = TransactionIntentTransitionRepository.count_for_intent(

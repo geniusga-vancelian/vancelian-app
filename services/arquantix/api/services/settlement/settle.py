@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from services.lifi.config import lifi_settlement_layer_ledger_enabled
+from services.lifi.orchestrator_allowlist import lifi_settlement_layer_ledger_enabled_for_person
 from services.lifi.lifi_validation_service import SwapValidationError
 from services.onchain_indexer.models import TransactionIntent
 from services.settlement.constants import SETTLEMENT_RECEIPT_METADATA_KEY
@@ -77,7 +77,7 @@ def settle_transaction_intent_idempotently(
     assert intent is not None
     linked = _resolve_linked_entity(db, intent)
     snapshot = linked_entity_snapshot(linked)
-    ledger_enabled = lifi_settlement_layer_ledger_enabled()
+    ledger_enabled = lifi_settlement_layer_ledger_enabled_for_person(db, intent.person_id)
     projection = "s3b-ledger" if ledger_enabled else "s2.5-noop"
 
     if ledger_enabled:

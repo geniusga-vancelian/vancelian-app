@@ -65,9 +65,9 @@ def sync_lifi_swap_intent(
     possède intent + outbox. Avant S5 dual-run / activation staging : prévoir
     chemins execute/refresh compatibles orchestrateur (hors scope S2a/S2a.1).
     """
-    from services.lifi.config import lifi_intent_orchestrator_enabled
+    from services.lifi.orchestrator_allowlist import lifi_intent_orchestrator_enabled_for_person
 
-    if lifi_intent_orchestrator_enabled():
+    if lifi_intent_orchestrator_enabled_for_person(db, swap.person_id):
         return
 
     if swap is None or not swap.person_id:
