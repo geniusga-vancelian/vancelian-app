@@ -115,7 +115,35 @@ def test_usdt_missing_chain_scope_not_custody_when_eth_not_scanned():
         chain_ids_scanned=[8453],
     )
     assert "missing_chain_scope" in informational
+    assert "ledger_liquid_vs_onchain" not in custody
     assert "ledger_without_onchain" not in custody
+    assert custody == []
+
+    asset_rows = [
+        {
+            "asset": "USDT",
+            "ledger_liquid": "150",
+            "on_chain_balance": "0",
+            "delta_ledger_liquid_vs_onchain": "150",
+            "custody_tolerance": "0.01",
+            "informational": informational,
+        },
+    ]
+    db = MagicMock()
+    criteria = _build_success_criteria(
+        db,
+        asset_rows=asset_rows,
+        issues=[],
+        informational=[{"type": "informational", "asset": "USDT", "issue": "missing_chain_scope"}],
+        reporting_gaps=[],
+        legacy_frozen=[],
+        swaps={
+            "submitted_confirmed_onchain": [],
+            "confirmed_incomplete_settlement": [],
+        },
+    )
+    assert criteria["stablecoin_custody_ok"] is True
+    assert criteria["custody_reconciled"] is True
 
 
 def test_gaelitier_stablecoin_custody_success_criteria():

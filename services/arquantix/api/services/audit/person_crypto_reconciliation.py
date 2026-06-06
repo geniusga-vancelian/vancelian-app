@@ -280,8 +280,16 @@ def _classify_raw_asset_signals(
     informational: list[str] = []
     legacy_candidates: list[str] = []
 
+    eth_scan_missing = (
+        asset in MULTI_CHAIN_LEDGER_ASSETS
+        and 1 not in chain_ids_scanned
+        and ledger_bal > DUST
+    )
+
     if abs(delta_liquid) > tol and (chain_bal > DUST or ledger_liquid > DUST):
-        if assets_in_frozen_scope(asset) and collateral > DUST:
+        if eth_scan_missing:
+            informational.append("missing_chain_scope")
+        elif assets_in_frozen_scope(asset) and collateral > DUST:
             legacy_candidates.append("ledger_liquid_vs_onchain_collateral_legacy")
         else:
             custody.append("ledger_liquid_vs_onchain")
@@ -291,8 +299,9 @@ def _classify_raw_asset_signals(
 
     if ledger_bal > DUST and chain_bal <= DUST and vault_alloc <= DUST:
         if collateral <= DUST and bundle_alloc <= DUST:
-            if asset in MULTI_CHAIN_LEDGER_ASSETS and 1 not in chain_ids_scanned:
-                informational.append("missing_chain_scope")
+            if eth_scan_missing:
+                if "missing_chain_scope" not in informational:
+                    informational.append("missing_chain_scope")
             else:
                 custody.append("ledger_without_onchain")
 
@@ -532,7 +541,10 @@ def build_person_crypto_audit(
                 }
             )
         for tag in info_tags:
-            informational.append({"type": "informational", "asset": asset, "issue": tag})
+            entry: dict[str, Any] = {"type": "informational", "asset": asset, "issue": tag}
+            if tag == "missing_chain_scope":
+                entry["message"] = f"custody status unknown for {asset} Ethereum, not failed"
+            informational.append(entry)
         for tag in legacy_tags:
             informational.append({"type": "legacy_candidate", "asset": asset, "issue": tag})
 
