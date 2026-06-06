@@ -265,7 +265,14 @@ def build_asset_breakdown_row(
 
 
 def build_portfolio_breakdown(db: Session, person_id: UUID) -> dict[str, Any]:
-    """Agrège le breakdown par actif pour une personne (lecture seule)."""
+    """Agrège le breakdown par actif pour une personne (lecture seule).
+
+    Bootstrap PE ``trading_available`` depuis le ledger liquide Privy si gap (ex. EURC).
+    Ne modifie pas le ledger Privy — uniquement les atoms ``direct_portfolio``.
+    """
+    from services.portfolio_engine.direct_overlay import align_pe_trading_available_from_ledger_liquid
+
+    pe_alignment = align_pe_trading_available_from_ledger_liquid(db, person_id)
     pe = read_current_pe_scope_snapshot(db, person_id)
     ledger = _ledger_balances(db, person_id)
     on_chain_base = _on_chain_base_balances(db, person_id, ledger)
@@ -339,6 +346,7 @@ def build_portfolio_breakdown(db: Session, person_id: UUID) -> dict[str, Any]:
             "Le breakdown est explicatif, pas comptable.",
         ],
         "non_additive_components": ["in_bundles", "debt", "pending_settlement"],
+        "pe_alignment": pe_alignment,
         "assets": assets,
         "swappable_by_asset": swappable_by_asset,
     }
