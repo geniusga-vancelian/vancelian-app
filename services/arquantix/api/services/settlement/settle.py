@@ -24,6 +24,44 @@ def _persist_settlement_marker(intent: TransactionIntent, receipt_hash: str) -> 
     intent.metadata_json = meta
 
 
+def _rollback_savepoint(savepoint) -> None:
+    if savepoint.is_active:
+        savepoint.rollback()
+
+
+def _apply_ledger_settlement_atomic(
+    db: Session,
+    *,
+    intent: TransactionIntent,
+    linked,
+    snapshot: dict,
+) -> tuple[dict, str]:
+    """Projection ledger + marker dans un savepoint — rollback total si échec intermédiaire."""
+    savepoint = db.begin_nested()
+    try:
+        ledger_result = apply_lifi_standalone_ledger_settlement(
+            db,
+            intent=intent,
+            swap=linked,
+        )
+        merged_snapshot = {**snapshot, "ledger": ledger_result}
+        receipt_hash = compute_settlement_receipt_hash(
+            intent,
+            linked_snapshot=merged_snapshot,
+            projection="s3b-ledger",
+        )
+        _persist_settlement_marker(intent, receipt_hash)
+    except (LifiStandaloneSettlementError, SwapValidationError):
+        _rollback_savepoint(savepoint)
+        raise
+    except Exception:
+        _rollback_savepoint(savepoint)
+        raise
+    else:
+        savepoint.commit()
+        return merged_snapshot, receipt_hash
+
+
 def settle_transaction_intent_idempotently(
     db: Session,
     *,
@@ -51,12 +89,12 @@ def settle_transaction_intent_idempotently(
                 error_message="Entité liée introuvable",
             )
         try:
-            ledger_result = apply_lifi_standalone_ledger_settlement(
+            _snapshot, receipt_hash = _apply_ledger_settlement_atomic(
                 db,
                 intent=intent,
-                swap=linked,
+                linked=linked,
+                snapshot=snapshot,
             )
-            snapshot = {**snapshot, "ledger": ledger_result}
         except LifiStandaloneSettlementError as exc:
             return SettlementResult(
                 outcome=SettlementOutcome.TERMINAL_FAILURE,
@@ -78,15 +116,17 @@ def settle_transaction_intent_idempotently(
                 error_code="settlement.ledger_projection_failed",
                 error_message=str(exc),
             )
+        return SettlementResult(
+            outcome=SettlementOutcome.SUCCESS,
+            intent_id=intent.id,
+            settlement_receipt_hash=receipt_hash,
+        )
 
     receipt_hash = compute_settlement_receipt_hash(
         intent,
         linked_snapshot=snapshot,
         projection=projection,
     )
-
-    if ledger_enabled:
-        _persist_settlement_marker(intent, receipt_hash)
 
     return SettlementResult(
         outcome=SettlementOutcome.SUCCESS,

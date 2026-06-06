@@ -268,27 +268,104 @@ def test_s3b_debit_already_present_no_double_debit(db: Session, monkeypatch):
     }
 
 
-def test_s3b_failure_between_debit_and_credit_rolls_back(db: Session, monkeypatch):
-    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
-    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
-    before = _economic_counts(db, pe.person_id)
-
+def _patch_fail_credit_before_write(monkeypatch_module):
     from services.lifi.lifi_swap_settlement import _create_swap_ledger_entry as original_create
-    import services.settlement.lifi_ledger as lifi_ledger_mod
 
     def _fail_on_credit(*args, **kwargs):
         if kwargs.get("direction") == PersonWalletDirection.CREDIT.value:
             raise RuntimeError("simulated_credit_failure")
         return original_create(*args, **kwargs)
 
-    with patch.object(lifi_ledger_mod, "_create_swap_ledger_entry", side_effect=_fail_on_credit):
+    return patch.object(monkeypatch_module, "_create_swap_ledger_entry", side_effect=_fail_on_credit)
+
+
+def test_s3b_failure_between_debit_and_credit_rolls_back(db: Session, monkeypatch):
+    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    before = _economic_counts(db, pe.person_id)
+
+    import services.settlement.lifi_ledger as lifi_ledger_mod
+
+    with _patch_fail_credit_before_write(lifi_ledger_mod):
         result = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
 
     assert result.outcome == SettlementOutcome.TERMINAL_FAILURE
-    db.rollback()
+    assert result.error_code == "settlement.ledger_projection_failed"
 
     db.refresh(bundle.intent)
     assert settlement_marker_present(bundle.intent) is None
+    assert count_swap_settlement_legs(db, swap_id=bundle.swap.id, person_id=pe.person_id) == {
+        "debit": 0,
+        "credit": 0,
+    }
+    assert _economic_counts(db, pe.person_id) == before
+
+
+def test_s3b_worker_path_failure_rolls_back_no_orphan_legs(db: Session, monkeypatch):
+    """Chemin worker complet — échec entre débit et crédit ne doit pas committer de jambe orpheline."""
+    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
+    monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
+    pe, bundle, settle_outbox = _seed_confirmed_swap_bundle(db)
+    before = _economic_counts(db, pe.person_id)
+
+    usdc_before = (
+        db.query(PersonWalletBalance)
+        .filter(
+            PersonWalletBalance.person_id == pe.person_id,
+            PersonWalletBalance.asset == "USDC",
+        )
+        .first()
+    )
+    usdc_available_before = Decimal(str(usdc_before.available_balance)) if usdc_before else Decimal("0")
+
+    import services.settlement.lifi_ledger as lifi_ledger_mod
+
+    with _patch_fail_credit_before_write(lifi_ledger_mod):
+        result = process_transaction_outbox_intent_settle(db)
+
+    assert result["processed"] == 1
+
+    db.refresh(bundle.intent)
+    db.refresh(settle_outbox)
+    assert bundle.intent.status == IntentStatus.FAILED.value
+    assert settlement_marker_present(bundle.intent) is None
+    assert count_swap_settlement_legs(db, swap_id=bundle.swap.id, person_id=pe.person_id) == {
+        "debit": 0,
+        "credit": 0,
+    }
+    assert _economic_counts(db, pe.person_id) == before
+
+    usdc_after = (
+        db.query(PersonWalletBalance)
+        .filter(
+            PersonWalletBalance.person_id == pe.person_id,
+            PersonWalletBalance.asset == "USDC",
+        )
+        .first()
+    )
+    usdc_available_after = Decimal(str(usdc_after.available_balance)) if usdc_after else Decimal("0")
+    assert usdc_available_after == usdc_available_before
+
+
+def test_s3b_bundle_internal_swap_terminal_no_ledger(db: Session, monkeypatch):
+    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db)
+    bundle.swap.audit_log = [
+        {
+            "event": "bundle_leg_context",
+            "bundle_execution": True,
+            "portfolio_id": str(uuid4()),
+            "batch_id": "batch-s3b",
+            "bundle_action": "allocation",
+        },
+        {"event": "quote_requested", "signing_wallet_address": EVM_ADDR},
+    ]
+    db.commit()
+    before = _economic_counts(db, pe.person_id)
+
+    result = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
+    assert result.outcome == SettlementOutcome.TERMINAL_FAILURE
+    assert result.error_code == "settlement.bundle_internal_swap"
     assert count_swap_settlement_legs(db, swap_id=bundle.swap.id, person_id=pe.person_id) == {
         "debit": 0,
         "credit": 0,

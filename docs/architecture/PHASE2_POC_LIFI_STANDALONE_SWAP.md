@@ -621,7 +621,7 @@ metadata settlement_receipt_hash + phase post-settlement produit
 | Écritures **autorisées** | `person_wallet_deposits`, `person_wallet_balances`, `transaction_intents` (metadata/status settlement) |
 | Écritures **interdites** | `pe_position_atoms` · `cost_basis_executions` · `bundle_ledger_entries` · vault · Lombard |
 | Hors scope | PE · cost basis · controller · `COMPLETED` · bundle · vault · Lombard |
-| Atomicité | Débit + crédit dans **une** transaction DB — échec entre les deux → **ROLLBACK total** |
+| Atomicité | Débit + crédit dans **savepoint** DB — échec entre les deux → **ROLLBACK total** (chemin `settle` + worker) |
 | Idempotence | Marker `settlement_receipt_hash` (S3a) + détection jambes ledger déjà présentes (webhook Privy) |
 | Legacy | Pas de bypass `apply_swap_settlement` hors chemin settlement · flag OFF → legacy inchangé |
 | Contrat v1 | **Sous-ensemble intentionnel** — Garantie 2 complète (ledger+PE+cost basis) = milestone post-S3b |

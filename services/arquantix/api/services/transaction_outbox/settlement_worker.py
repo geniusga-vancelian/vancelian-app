@@ -1,7 +1,8 @@
-"""Worker outbox Phase 2 S3a — handler ``intent.settle`` → Settlement skeleton NOOP.
+"""Worker outbox Phase 2 S3a/S3b — handler ``intent.settle`` → Settlement Layer.
 
-Ne touche que ``transaction_intents``, ``transaction_intent_transitions``, ``transaction_outbox``.
-Pas de ledger, PE, cost basis, provider, controller, ni ``COMPLETED``.
+S3a (flag ledger OFF) : metadata + phase uniquement.
+S3b (flag ledger ON) : délègue projection ledger à ``settle`` (savepoint atomique).
+Pas de PE, cost basis, provider, controller, ni ``COMPLETED``.
 """
 from __future__ import annotations
 
