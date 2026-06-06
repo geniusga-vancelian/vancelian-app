@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1–S3a ✅ (#27–#34) · S3b en cours · S3 ⏸ |
+| **Statut** | S1–S3b ✅ (#27–#35) · S3 controller ⏸ · S4 avant staging |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 · [Gouvernance](../TRANSACTION_ENGINE_GOVERNANCE.md) · [Settlement Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) avant Go S2b |
@@ -589,18 +589,20 @@ SettlementResult → metadata settlement_receipt_hash + phase SETTLED_NOOP
 
 **Test review S3a** : *Si on supprime le handler intent.settle, la réalité économique reste-t-elle identique ?* → **Oui**
 
-### S3b — Premier settlement réel LI.FI standalone (en cours)
+### S3b — Premier settlement réel LI.FI standalone ✅
 
-> **Premier vrai test d’ADR 004 en production logicielle.** Flag `LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED=false` par défaut.
+**PR #35** ✅ mergée (incl. patch savepoint `4245247d`).
 
-**État pipeline avant S3b** :
+> **Premier test ADR 004 en code** — ledger custody LI.FI standalone. Flags **OFF** par défaut (`LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED`, `LIFI_OUTBOX_WORKER_ENABLED`).
+
+**État pipeline** :
 
 ```
-Quote → Intent → Outbox → Worker → Settlement NOOP
+Quote → Intent → Outbox → Worker → Settlement (NOOP / Ledger S3b)
   ✅       ✅        ✅       ✅        ✅
 
-Ledger / PE / Cost Basis
-  🔒       🔒           🔒
+Ledger (S3b flag ON)    PE / Cost Basis / Controller
+  ✅ minimal              🔒
 ```
 
 **Objectif S3b** : premier settlement **réel**, mais périmètre **minimal** — LI.FI standalone swap confirmé, **ledger custody uniquement**.
@@ -645,7 +647,7 @@ Réponse attendue : **Oui**.
 | 7 | Aucun `COMPLETED` produit |
 | 8 | Flag OFF → chemin legacy inchangé |
 
-**Discipline** : pas de S3 (controller) dans S3b · pas de flag prod ON · PR dédiée · review ADR 004 obligatoire avant merge.
+**Discipline** : pas de S3 (controller) dans S3b · **pas de flag prod ON** · checklist d’activation staging séparée avant flag ON · atomicité savepoint validée (worker-path).
 
 ### Découpage S3 (officiel — après S2.5)
 
@@ -655,7 +657,7 @@ Réponse attendue : **Oui**.
 | **S3b** | Premier settlement réel LI.FI standalone · debit + credit ledger uniquement | ✅ minimal |
 | **S3** (complet) | Controller gate COMPLETED · reconciliation · PE · cost basis | Selon milestone |
 
-**Verrou** : **S3b 🔒** — première ouverture réelle des tables économiques · pas de settlement réel sans **Go S3b** explicite.
+**Verrou** : **S3 complet ⏸** — controller + reconciliation + PE + cost basis · pas de Go S3 sans feu vert explicite.
 
 ### Verrou gouvernance
 
@@ -676,8 +678,8 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 5. ~~**S2b** worker `intent.created`~~ — ✅ mergé (#32)
 6. ~~**S2.5** Settlement Skeleton NOOP~~ — ✅ mergé (#33)
 7. ~~**S3a** Worker → Settlement NOOP branché~~ — ✅ mergé (#34)
-8. **S3b** Premier settlement réel LI.FI — 🔒 feu vert explicite requis
-9. **S3** Controller + reconciliation — zone dangereuse ADR 004
-10. **S4** Product Locks avant staging final
+8. ~~**S3b** Premier settlement réel LI.FI ledger-only~~ — ✅ mergé (#35)
+9. **S3** Controller + reconciliation — ⏸ feu vert explicite requis
+10. **S4** Product Locks — **avant staging final** (checklist activation flags séparée)
 11. **S5** Staging dual-run
 12. **S6** webhooks Privy
