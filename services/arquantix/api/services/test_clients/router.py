@@ -47,6 +47,7 @@ from .schemas import (
     EuroTransactionPayload,
     IbanDetailsPayload,
     IbanDetailsResponse,
+    PortfolioBreakdownResponse,
     TransactionDetailResponse,
 )
 from .mobile_profile import (
@@ -464,6 +465,24 @@ def get_crypto_positions(
         summary=summary,
         positions=positions,
     )
+
+
+@bootstrap_router.get("/portfolio/breakdown", response_model=PortfolioBreakdownResponse)
+def get_portfolio_breakdown(
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Breakdown patrimoine par actif — scopes PE (lecture seule, non additif)."""
+    from services.portfolio_engine.portfolio_breakdown import build_portfolio_breakdown
+
+    person_id = getattr(client, "person_id", None)
+    if person_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Client sans person_id — breakdown indisponible",
+        )
+    payload = build_portfolio_breakdown(db, person_id)
+    return PortfolioBreakdownResponse(**payload)
 
 
 @bootstrap_router.get("/crypto-positions/direct")

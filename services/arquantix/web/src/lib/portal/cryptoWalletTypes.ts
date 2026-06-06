@@ -32,6 +32,8 @@ export type PortalCryptoPosition = {
   walletAddress?: string
   /** Solde ERC-20 on-chain (Base) — min avec ledger pour swap spendable. */
   onChainBalance?: number
+  /** MAX swap officiel — min(on-chain Base, ledger − collateral) via /portfolio/breakdown. */
+  swappableBalance?: number
 }
 
 export type PortalCryptoPositionsSummary = {

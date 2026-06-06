@@ -79,6 +79,7 @@ export function parseCryptoPositionsPayload(raw: unknown): PortalCryptoPositions
       dedicatedWallet: item.dedicated_wallet === true,
       walletAddress:
         typeof item.wallet_address === 'string' ? item.wallet_address : undefined,
+      swappableBalance: toOptionalNumber(item.swappable_balance),
     }))
     .filter((p) => p.asset)
 

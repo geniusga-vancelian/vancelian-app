@@ -1,16 +1,22 @@
-/** Garde-fou montant swap wallet Privy — solde affiché / ledger. */
+/** Garde-fou montant swap — plafond officiel ``swappable_balance``. */
 export function isSwapAmountOverPrivyBalance(parsed: number, sourceBalance: number): boolean {
   if (!Number.isFinite(parsed) || parsed <= 0) return false
   if (!Number.isFinite(sourceBalance) || sourceBalance <= 0) return true
   return parsed > sourceBalance
 }
 
-/** Solde spendable swap = min(ledger, on-chain) quand les deux sont connus. */
+/**
+ * Solde spendable swap = ``swappable_balance`` (breakdown API) quand exposé.
+ * Ne pas utiliser balance / available_balance / total_holdings comme MAX.
+ */
 export function resolveSpendableSwapBalance(position: {
+  swappableBalance?: number
   availableBalance?: number
   balance?: number
   onChainBalance?: number
 }): number {
+  const official = position.swappableBalance
+  if (official != null && Number.isFinite(official)) return official
   const ledger = position.availableBalance ?? position.balance ?? 0
   const onChain = position.onChainBalance
   if (onChain == null || !Number.isFinite(onChain)) return ledger
@@ -26,13 +32,13 @@ export function isOnChainBalanceVerified(position: {
   return position.onChainBalance != null && Number.isFinite(position.onChainBalance)
 }
 
-/** Montant max signable Privy = min(ledger, on-chain) si on-chain connu. */
+/** Montant max signable = ``swappable_balance`` (breakdown), pas balance/available/total. */
 export function resolvePrivySwapSpendableCap(position: {
+  swappableBalance?: number
   availableBalance?: number
   balance?: number
   onChainBalance?: number
 }): { spendable: number; onChainVerified: boolean; onChainBalance?: number } {
-  const ledger = position.availableBalance ?? position.balance ?? 0
   const onChainVerified = isOnChainBalanceVerified(position)
   const onChainBalance = onChainVerified ? position.onChainBalance : undefined
   return {
@@ -63,7 +69,13 @@ export function isSwapAmountOverOnChainBalance(
 /** Solde source swap à jour depuis les positions wallet (évite un state figé à 0). */
 export function resolveLiveSwapSourceBalance(
   fromAsset: string,
-  positions: Array<{ asset: string; availableBalance?: number; balance?: number; onChainBalance?: number }>,
+  positions: Array<{
+    asset: string
+    swappableBalance?: number
+    availableBalance?: number
+    balance?: number
+    onChainBalance?: number
+  }>,
   fallbackBalance = 0,
 ): number {
   const needle = fromAsset.trim().toUpperCase()

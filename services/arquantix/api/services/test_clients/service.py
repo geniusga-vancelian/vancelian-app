@@ -369,6 +369,15 @@ class TestClientService:
         person_id = getattr(client, "person_id", None)
         merged = merge_app_crypto_positions(enriched, db, person_id=person_id)
 
+        if person_id is not None:
+            from services.portfolio_engine.portfolio_breakdown import swappable_balance_map
+
+            swappable_map = swappable_balance_map(db, person_id)
+            for row in merged:
+                asset = str(row.get("asset") or "").upper()
+                if asset in swappable_map:
+                    row["swappable_balance"] = swappable_map[asset]
+
         total_value_eur = Decimal("0")
         total_value_usd = Decimal("0")
         direct_count = 0

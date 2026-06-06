@@ -28,7 +28,18 @@ describe('swapAmountValidation', () => {
     assert.equal(isSwapAmountOverPrivyBalance(Number.NaN, 100), false)
   })
 
-  it('resolveSpendableSwapBalance prefers min ledger/on-chain', () => {
+  it('resolveSpendableSwapBalance prefers official swappable_balance', () => {
+    assert.equal(
+      resolveSpendableSwapBalance({ swappableBalance: 62.64, balance: 176.74, onChainBalance: 62.64 }),
+      62.64,
+    )
+    assert.equal(
+      resolveSpendableSwapBalance({ swappableBalance: 0, balance: 176.74 }),
+      0,
+    )
+  })
+
+  it('resolveSpendableSwapBalance falls back to min ledger/on-chain without swappable', () => {
     assert.equal(resolveSpendableSwapBalance({ balance: 1150, onChainBalance: 38 }), 38)
     assert.equal(resolveSpendableSwapBalance({ balance: 10, onChainBalance: 38 }), 10)
     assert.equal(resolveSpendableSwapBalance({ balance: 0, onChainBalance: 38 }), 38)

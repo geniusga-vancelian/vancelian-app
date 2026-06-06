@@ -403,6 +403,53 @@ class CryptoPositionPayload(BaseModel):
     chain_type: Optional[str] = None
     chain_id: Optional[int] = None
     wallet_address: Optional[str] = None
+    swappable_balance: Optional[str] = None
+
+
+class PortfolioBreakdownComponentMeta(BaseModel):
+    economic_scope: str
+    ownership_scope: str
+    additive: bool
+    quantity: str
+    bundle_is_subset_of_wallet: Optional[bool] = None
+    in_bundles_additive: Optional[bool] = None
+
+
+class PortfolioBreakdownAssetPayload(BaseModel):
+    symbol: str
+    total_holdings: str
+    available: str
+    in_vaults: str
+    in_bundles: str
+    locked_collateral: str
+    debt: str
+    pending_settlement: str
+    swappable_balance: str
+    wallet_ledger_balance: str
+    on_chain_balance_base: str
+    bundle_incremental_value: str
+    bundle_is_subset_of_wallet: bool
+    in_bundles_additive: bool
+    non_additive_overlap: str
+    components: dict[str, PortfolioBreakdownComponentMeta]
+
+
+class PortfolioBreakdownDoctrine(BaseModel):
+    hierarchy: list[str]
+    operational_source_of_truth: list[str]
+    total_holdings_formula: str
+    total_holdings_note: str
+    swappable_formula: str
+    swap_max_field: str
+
+
+class PortfolioBreakdownResponse(BaseModel):
+    breakdown_version: str
+    person_id: str
+    doctrine: PortfolioBreakdownDoctrine
+    warnings: list[str]
+    non_additive_components: list[str]
+    assets: list[PortfolioBreakdownAssetPayload]
 
 
 class CryptoPositionsSummary(BaseModel):
