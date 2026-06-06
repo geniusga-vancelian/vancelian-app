@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1 ✅ (#27) · S2a ✅ (#29) · S2a.1 en cours · S2b ⏸ |
+| **Statut** | S1 ✅ (#27) · S2a ✅ (#29) · S2a.1 ✅ (#30) · S2b ⏸ |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 acceptés · [Gouvernance TRANSACTION_ENGINE](../TRANSACTION_ENGINE_GOVERNANCE.md) mergée |
@@ -536,6 +536,6 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 1. ~~S1 fondation~~ — ✅ fait
 2. ~~S2a quote orchestrateur~~ — ✅ mergé (#29)
 3. **S2a.1** — tests + note bypass sync (avant S2b)
-4. S2b+ / S3+ : worker, settlement, controller, locks — **hors S2a.1**
-4. **S4** Product Locks avant staging final
-5. **S6** webhooks — après S5
+4. S2b+ / S3+ : worker, settlement, controller, locks — **hors S2a.1** (feu vert explicite requis)
+5. **S4** Product Locks avant staging final
+6. **S6** webhooks — après S5
