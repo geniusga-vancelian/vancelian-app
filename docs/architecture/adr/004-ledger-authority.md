@@ -69,8 +69,9 @@ Checklist reviewer :
 | **Contexte** | Noyau transactionnel Vancelian — cœur comptable |
 | **Priorité** | **ADR 004 > ADR 001 > ADR 002 > ADR 003** (criticité opérationnelle) |
 | **Lié à** | ADR 001 (Intent), ADR 002 (Outbox), ADR 003 (Reconciliation Controller) |
+| **Contrat implémentation** | [Settlement Layer Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) — *comment* la Settlement Layer écrit (interface, garanties, tables) |
 
-**Métaphore** : ADR 001 = cerveau · ADR 002 = système nerveux · ADR 003 = système immunitaire · **ADR 004 = constitution / cœur comptable**.
+**Métaphore** : ADR 001 = cerveau · ADR 002 = système nerveux · ADR 003 = système immunitaire · **ADR 004 = constitution / cœur comptable** · **Settlement Contract = code civil du core banking**.
 
 ---
 

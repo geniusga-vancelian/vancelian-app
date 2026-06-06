@@ -7,7 +7,7 @@
 | **Statut** | S1 ✅ (#27) · S2a ✅ (#29) · S2a.1 ✅ (#30) · S2b ⏸ |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
-| **Prérequis** | ADR 001–004 acceptés · [Gouvernance TRANSACTION_ENGINE](../TRANSACTION_ENGINE_GOVERNANCE.md) mergée |
+| **Prérequis** | ADR 001–004 · [Gouvernance](../TRANSACTION_ENGINE_GOVERNANCE.md) · [Settlement Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) avant Go S2b |
 | **Doctrine** | Intent orchestrateur · Outbox Postgres · Settlement Layer · Reconciliation Controller gate · **5 règles non négociables** |
 
 **Aucun code métier avant validation explicite de ce ticket.**
@@ -535,7 +535,9 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 
 1. ~~S1 fondation~~ — ✅ fait
 2. ~~S2a quote orchestrateur~~ — ✅ mergé (#29)
-3. **S2a.1** — tests + note bypass sync (avant S2b)
-4. S2b+ / S3+ : worker, settlement, controller, locks — **hors S2a.1** (feu vert explicite requis)
-5. **S4** Product Locks avant staging final
-6. **S6** webhooks — après S5
+3. ~~S2a.1~~ — ✅ mergé (#30)
+4. **Settlement Layer Contract v1** — contrat normatif (avant Go S2b)
+5. S2b+ / S3+ : worker, settlement, controller, locks — **feu vert explicite requis**
+6. **S4** Product Locks avant staging final
+7. **S5** Staging dual-run
+8. **S6** webhooks Privy
