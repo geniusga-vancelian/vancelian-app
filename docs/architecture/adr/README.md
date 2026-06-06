@@ -2,7 +2,8 @@
 
 Index des décisions d’architecture pour l’évolution de Vancelian vers un modèle **intent → queue → worker → settlement → reconciliation controller**.
 
-> **Gouvernance PR (obligatoire en review)** : [TRANSACTION_ENGINE_GOVERNANCE.md](../TRANSACTION_ENGINE_GOVERNANCE.md) — 5 règles non négociables, checklist reviewer, rejets automatiques.
+> **Gouvernance PR (obligatoire en review)** : [TRANSACTION_ENGINE_GOVERNANCE.md](../TRANSACTION_ENGINE_GOVERNANCE.md) — 5 règles non négociables, checklist reviewer, rejets automatiques.  
+> **Contrat settlement (avant S2b/S3)** : [SETTLEMENT_LAYER_CONTRACT_v1.md](../SETTLEMENT_LAYER_CONTRACT_v1.md) — interface, exactly-once, tables autorisées.
 
 | ADR | Titre | Statut |
 | --- | --- | --- |

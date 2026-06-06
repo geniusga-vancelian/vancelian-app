@@ -10,6 +10,7 @@
 | **Constitution** | [ADR 004 — Ledger Authority](adr/004-ledger-authority.md) |
 | **ADR liés** | [001](adr/001-intent-as-orchestrator.md) · [002](adr/002-postgresql-outbox-canonical-queue.md) · [003](adr/003-final-reconciliation-controller.md) |
 | **Index** | [adr/README.md](adr/README.md) |
+| **Contrat settlement** | [SETTLEMENT_LAYER_CONTRACT_v1.md](SETTLEMENT_LAYER_CONTRACT_v1.md) — *comment* écrire (exactly-once, atomicité, tables) |
 
 ---
 
@@ -204,11 +205,12 @@ Ce document **ne remplace pas** la roadmap technique ; il la protège.
 | --- | --- |
 | **TRANSACTION_ENGINE_GOVERNANCE.md** (ce fichier) | **Loi opérationnelle** — interdits, rejets PR, override |
 | **ADR 004** | **Constitution** — qui écrit quoi |
+| **SETTLEMENT_LAYER_CONTRACT_v1** | **Contrat normatif** — comment écrire (interface, exactly-once, tables, états) |
 | **ADR 001** | Orchestration intent |
 | **ADR 002** | Transport outbox |
 | **ADR 003** | Gate final |
 
-En cas de conflit textuel : **ADR 004 prime** ; ce document **opérationnalise** les rejets PR que ADR 004 décrit.
+En cas de conflit textuel : **ADR 004 prime** → **Settlement Contract** précise l’implémentation → ce document **opérationnalise** les rejets PR.
 
 ---
 
@@ -218,3 +220,4 @@ En cas de conflit textuel : **ADR 004 prime** ; ce document **opérationnalise**
 | --- | --- |
 | 2026-06-07 | ADR 001–004 acceptés (S1 review) |
 | 2026-06-07 | Publication gouvernance — avant Go S2 |
+| 2026-06-07 | Référence Settlement Layer Contract v1 — avant Go S2b |
