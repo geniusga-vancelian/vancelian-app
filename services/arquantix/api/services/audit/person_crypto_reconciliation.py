@@ -1,4 +1,4 @@
-"""Audit lecture seule — réconciliation compte crypto multi-couches (Privy / PE / swaps / bundles / loans)."""
+"""Audit lecture seule — réconciliation compte crypto (doctrine custody v2)."""
 from __future__ import annotations
 
 import logging
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from config.base_allowed_assets import BASE_ALLOWED_SYMBOLS, BASE_LIFI_CHAIN_ID
 from database import Person, PersonExternalIdentity
+from services.audit.legacy_frozen import assets_in_frozen_scope, load_frozen_scope, map_scope_gap_to_frozen_id
 from services.cost_basis.models import CostBasisExecution
 from services.lifi.enums import SwapSessionStatus
 from services.lifi.lifi_swap_reconciliation import (
@@ -21,17 +22,31 @@ from services.lifi.lifi_swap_reconciliation import (
 from services.lifi.lifi_swap_settlement import swap_debit_idempotency_key
 from services.lifi.models import PersonWalletSwap
 from services.portfolio_engine.clients.models import Client
+from services.portfolio_engine.internal_scope_movements.compare import compare_expected_scopes_vs_current_pe
 from services.portfolio_engine.internal_scope_movements.pe_reader import read_current_pe_scope_snapshot
 from services.portfolio_engine.portfolios.models import Portfolio
 from services.portfolio_engine.positions.models import PositionAtom
 from services.privy_wallet.deposit_backfill import fetch_aggregated_on_chain_balances
+from services.privy_wallet.evm_chain_config import CHAIN_LABELS, supported_pilot_chain_ids
 from services.privy_wallet.models import PersonWalletDeposit
 from services.privy_wallet.repository import PersonCryptoWalletRepository, PersonWalletBalanceRepository
 
 logger = logging.getLogger(__name__)
 
+AUDIT_VERSION = "custody_doctrine_v2"
 DUST = Decimal("0.000001")
 FOCUS_SWAP_ID = "76830776-039d-48a3-9e58-df48b0b10f7e"
+STABLECOIN_PILOT_ASSETS = frozenset({"EURC", "USDC", "USDT"})
+MULTI_CHAIN_LEDGER_ASSETS = frozenset({"USDT"})
+
+INFORMATIONAL_TAGS = frozenset(
+    {
+        "bundle_overlap_expected",
+        "vault_explains_delta",
+        "active_debt",
+        "collateral_locked_matches_wallet",
+    }
+)
 
 
 def _fmt(value: Decimal | None) -> str:
@@ -41,6 +56,32 @@ def _fmt(value: Decimal | None) -> str:
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return text or "0"
+
+
+def _asset_tolerance(asset: str) -> Decimal:
+    a = (asset or "").upper()
+    if a in ("USDC", "USDT", "EURC", "DAI", "USDE"):
+        return Decimal("0.01")
+    if a in ("ETH", "CBETH", "CBBTC", "BTC", "WBTC"):
+        return Decimal("0.00000001")
+    return Decimal("0.000001")
+
+
+def _effective_tolerance(asset: str, balance: Decimal) -> Decimal:
+    pct = abs(balance) * Decimal("0.000001") if balance else Decimal("0")
+    return max(_asset_tolerance(asset), pct)
+
+
+def _price_usd(db: Session, asset: str) -> Decimal | None:
+    try:
+        from services.lending.product_surface import _get_price_eur
+        from services.market_data.fx import get_eurusdt_rate
+
+        eurusdt = get_eurusdt_rate(db, strict=False)
+        price_usdt, _ = _get_price_eur(db, asset, eurusdt)
+        return Decimal(str(price_usdt)) if price_usdt is not None else None
+    except Exception:
+        return None
 
 
 def resolve_person_ids_by_email(db: Session, email: str) -> list[UUID]:
@@ -71,6 +112,14 @@ def _pick_privy_embedded_wallet(db: Session, person_id: UUID):
     if privy:
         return privy[0], wallets
     return (wallets[0], wallets) if wallets else (None, wallets)
+
+
+def _assets_for_onchain_scan(ledger: dict[str, Decimal]) -> list[str]:
+    assets = set(BASE_ALLOWED_SYMBOLS) | set(ledger.keys())
+    for asset, bal in ledger.items():
+        if asset in MULTI_CHAIN_LEDGER_ASSETS and bal > DUST:
+            assets.add(asset)
+    return sorted(assets)
 
 
 def _bundle_positions(db: Session, person_id: UUID) -> dict[str, Any]:
@@ -211,7 +260,146 @@ def _focus_swap(db: Session, swap_id: str) -> dict[str, Any] | None:
     }
 
 
-def _classify_recommendations(report: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def _classify_raw_asset_signals(
+    *,
+    asset: str,
+    ledger_bal: Decimal,
+    chain_bal: Decimal,
+    ledger_liquid: Decimal,
+    vault_alloc: Decimal,
+    bundle_alloc: Decimal,
+    collateral: Decimal,
+    debt: Decimal,
+    direct_avail: Decimal,
+    delta_liquid: Decimal,
+    tol: Decimal,
+    chain_ids_scanned: list[int],
+) -> tuple[list[str], list[str], list[str]]:
+    """Retourne (custody_issues, informational, legacy_candidates)."""
+    custody: list[str] = []
+    informational: list[str] = []
+    legacy_candidates: list[str] = []
+
+    if abs(delta_liquid) > tol and (chain_bal > DUST or ledger_liquid > DUST):
+        if assets_in_frozen_scope(asset) and collateral > DUST:
+            legacy_candidates.append("ledger_liquid_vs_onchain_collateral_legacy")
+        else:
+            custody.append("ledger_liquid_vs_onchain")
+
+    if chain_bal > DUST and ledger_bal <= DUST:
+        custody.append("onchain_without_ledger")
+
+    if ledger_bal > DUST and chain_bal <= DUST and vault_alloc <= DUST:
+        if collateral <= DUST and bundle_alloc <= DUST:
+            if asset in MULTI_CHAIN_LEDGER_ASSETS and 1 not in chain_ids_scanned:
+                informational.append("missing_chain_scope")
+            else:
+                custody.append("ledger_without_onchain")
+
+    if vault_alloc > DUST and abs(ledger_bal - chain_bal) > tol and abs(delta_liquid) <= tol:
+        informational.append("vault_explains_delta")
+
+    if bundle_alloc > DUST and ledger_bal > DUST:
+        informational.append("bundle_overlap_expected")
+
+    if debt > DUST:
+        informational.append("active_debt")
+
+    if collateral > DUST and abs(chain_bal - collateral) <= tol and direct_avail <= DUST:
+        informational.append("collateral_locked_matches_wallet")
+
+    if collateral > DUST and direct_avail > DUST:
+        custody.append("collateral_and_direct_available_overlap")
+
+    return custody, informational, legacy_candidates
+
+
+def _collect_legacy_frozen(scope_compare: dict[str, Any]) -> list[dict[str, Any]]:
+    frozen: list[dict[str, Any]] = []
+    for gap in scope_compare.get("gaps", []):
+        asset = str(gap.get("asset") or "")
+        frozen.append(
+            {
+                "type": "legacy_frozen",
+                "frozen_scope_id": map_scope_gap_to_frozen_id(
+                    str(gap.get("gap_type") or ""),
+                    str(gap.get("expected_scope") or "") or None,
+                ),
+                "asset": asset,
+                "gap_type": gap.get("gap_type"),
+                "expected_scope": gap.get("expected_scope"),
+                "expected_quantity": gap.get("expected_quantity"),
+                "current_quantity": gap.get("current_quantity"),
+                "do_not_auto_fix": True,
+            }
+        )
+    for risk in scope_compare.get("double_counting_risks", []):
+        frozen.append(
+            {
+                "type": "legacy_frozen",
+                "frozen_scope_id": str(risk.get("risk_type") or "double_counting"),
+                "asset": risk.get("asset"),
+                "message": risk.get("message"),
+                "severity": risk.get("severity"),
+                "metadata": risk.get("metadata"),
+                "do_not_auto_fix": True,
+            }
+        )
+    return frozen
+
+
+def _build_success_criteria(
+    db: Session,
+    *,
+    asset_rows: list[dict[str, Any]],
+    issues: list[dict[str, Any]],
+    informational: list[dict[str, Any]],
+    reporting_gaps: list[dict[str, Any]],
+    legacy_frozen: list[dict[str, Any]],
+    swaps: dict[str, Any],
+) -> dict[str, Any]:
+    liquid_delta_usd = Decimal("0")
+    stablecoin_ok = True
+
+    for row in asset_rows:
+        asset = row["asset"]
+        delta_liquid = Decimal(str(row.get("delta_ledger_liquid_vs_onchain") or "0"))
+        tol = Decimal(str(row.get("custody_tolerance") or "0"))
+        ledger_liquid = Decimal(str(row.get("ledger_liquid") or "0"))
+        chain_bal = Decimal(str(row.get("on_chain_balance") or "0"))
+
+        if abs(delta_liquid) > tol and (ledger_liquid > DUST or chain_bal > DUST):
+            px = _price_usd(db, asset)
+            if px is not None:
+                liquid_delta_usd += abs(delta_liquid) * px
+
+        if asset in STABLECOIN_PILOT_ASSETS and (ledger_liquid > DUST or chain_bal > DUST):
+            missing_chain = "missing_chain_scope" in (row.get("informational") or [])
+            if abs(delta_liquid) > tol and not missing_chain:
+                stablecoin_ok = False
+
+    swap_blockers = bool(swaps.get("confirmed_incomplete_settlement") or swaps.get("submitted_confirmed_onchain"))
+    custody_reconciled = stablecoin_ok and not issues and not swap_blockers
+
+    return {
+        "custody_reconciled": custody_reconciled,
+        "stablecoin_custody_ok": stablecoin_ok,
+        "liquid_wallet_delta_usd": _fmt(liquid_delta_usd.quantize(Decimal("0.01"))),
+        "reporting_gaps_count": len(reporting_gaps),
+        "legacy_frozen_count": len(legacy_frozen),
+        "informational_count": len(informational),
+        "custody_issue_count": len(issues),
+        "fully_reconciled": custody_reconciled,
+        "global_delta_usd": None,
+        "global_delta_usd_deprecated": "use liquid_wallet_delta_usd (custody-only)",
+    }
+
+
+def _classify_recommendations(
+    report: dict[str, Any],
+    *,
+    frozen_scope: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
     safe: list[dict[str, Any]] = []
     review: list[dict[str, Any]] = []
     forbidden: list[dict[str, Any]] = []
@@ -232,29 +420,23 @@ def _classify_recommendations(report: dict[str, Any]) -> dict[str, list[dict[str
                 "reason": "SUBMITTED + tx confirmée on-chain — candidat réconciliation idempotente",
             }
         )
-    for row in report.get("cost_basis", {}).get("missing", []):
-        if any(s["swap_id"] == row["swap_id"] for s in report.get("swaps", {}).get("confirmed_incomplete_settlement", [])):
-            continue
-        review.append({"type": "cost_basis_missing", **row})
 
-    for asset_row in report.get("assets", []):
-        delta = Decimal(str(asset_row.get("delta_ledger_vs_onchain") or "0"))
-        if abs(delta) > DUST:
-            review.append(
-                {
-                    "type": "ledger_onchain_delta",
-                    "asset": asset_row["asset"],
-                    "delta": asset_row["delta_ledger_vs_onchain"],
-                }
-            )
-        for issue in asset_row.get("issues", []):
-            if "collateral" in issue or "bundle" in issue:
-                forbidden.append({"type": "scope_overlap", "asset": asset_row["asset"], "issue": issue})
-            elif "debt" in issue:
-                forbidden.append({"type": "active_liability", "asset": asset_row["asset"], "issue": issue})
+    for gap in report.get("reporting_gaps", []):
+        review.append({**gap, "category": "reporting_gap"})
 
-    for gap in report.get("bundles", {}).get("mismatches", []):
-        review.append({"type": "bundle_mismatch", **gap})
+    for issue in report.get("issues", []):
+        review.append({"type": "custody_issue", **issue})
+
+    for entry in report.get("legacy_frozen", []):
+        forbidden.append(
+            {
+                "type": "legacy_frozen",
+                "frozen_scope_id": entry.get("frozen_scope_id"),
+                "asset": entry.get("asset"),
+                "do_not_auto_fix": True,
+                "reason": frozen_scope.get("requires_protocol_proof") and "requires_protocol_proof" or "legacy_frozen",
+            }
+        )
 
     return {"safe_auto": safe, "requires_review": review, "do_not_auto_fix": forbidden}
 
@@ -265,7 +447,8 @@ def build_person_crypto_audit(
     email: str,
     prepare_fixes: bool = False,
 ) -> dict[str, Any]:
-    """Audit lecture seule. ``prepare_fixes`` liste les correctifs safe sans écrire."""
+    """Audit lecture seule — doctrine custody v2."""
+    frozen_scope = load_frozen_scope()
     person_ids = resolve_person_ids_by_email(db, email)
     if not person_ids:
         return {"error": f"Aucune personne pour email={email}"}
@@ -278,60 +461,99 @@ def build_person_crypto_audit(
     primary_wallet, all_wallets = _pick_privy_embedded_wallet(db, person_id)
     pe = read_current_pe_scope_snapshot(db, person_id)
     ledger = _ledger_balances(db, person_id)
+    scope_compare = compare_expected_scopes_vs_current_pe(db, person_id)
 
     on_chain: dict[str, Decimal] = {}
+    on_chain_by_chain: dict[str, dict[str, str]] = {}
+    chain_ids_scanned: list[int] = []
     if primary_wallet and primary_wallet.address:
-        assets = sorted(set(BASE_ALLOWED_SYMBOLS) | set(ledger.keys()))
+        scan_assets = _assets_for_onchain_scan(ledger)
+        chain_ids = supported_pilot_chain_ids() or [BASE_LIFI_CHAIN_ID]
+        chain_ids_scanned = list(chain_ids)
         raw = fetch_aggregated_on_chain_balances(
             wallet_address=primary_wallet.address,
-            chain_ids=[BASE_LIFI_CHAIN_ID],
-            assets=list(assets),
+            chain_ids=chain_ids,
+            assets=scan_assets,
         )
-        for (_cid, asset), bal in raw.items():
-            on_chain[asset] = bal
+        for (cid, asset), bal in raw.items():
+            on_chain[asset] = on_chain.get(asset, Decimal("0")) + bal
+            label = CHAIN_LABELS.get(cid, str(cid))
+            on_chain_by_chain.setdefault(asset, {})[label] = _fmt(bal)
 
     asset_rows: list[dict[str, Any]] = []
-    all_assets = sorted(set(ledger.keys()) | set(on_chain.keys()) | set(pe.trading_available.keys()))
+    issues: list[dict[str, Any]] = []
+    informational: list[dict[str, Any]] = []
+
+    all_assets = sorted(
+        set(ledger.keys())
+        | set(on_chain.keys())
+        | set(pe.trading_available.keys())
+        | set(pe.vault_position.keys())
+    )
 
     for asset in all_assets:
         ledger_bal = ledger.get(asset, Decimal("0"))
         chain_bal = on_chain.get(asset, Decimal("0"))
         direct_avail = pe.trading_available.get(asset, Decimal("0"))
+        vault_alloc = pe.vault_position.get(asset, Decimal("0"))
         bundle_alloc = pe.bundle_cash.get(asset, Decimal("0")) + pe.bundle_position.get(asset, Decimal("0"))
         collateral = pe.trading_locked_collateral.get(asset, Decimal("0"))
         debt = pe.liability.get(asset, Decimal("0"))
+        ledger_liquid = ledger_bal - vault_alloc
         ledger_spendable = max(ledger_bal - collateral, Decimal("0"))
         swappable = min(chain_bal, ledger_spendable) if chain_bal > 0 else ledger_spendable
-        delta = ledger_bal - chain_bal
-        issues: list[str] = []
-        if abs(delta) > DUST:
-            if delta > 0:
-                issues.append("ledger_gt_onchain")
-            else:
-                issues.append("ledger_lt_onchain")
-        if chain_bal > DUST and ledger_bal <= DUST:
-            issues.append("onchain_without_ledger")
-        if ledger_bal > DUST and chain_bal <= DUST and collateral <= DUST and bundle_alloc <= DUST:
-            issues.append("ledger_without_onchain")
-        if collateral > DUST and direct_avail > DUST:
-            issues.append("collateral_and_direct_available_overlap")
-        if debt > DUST:
-            issues.append("active_debt_usdc")
-        if bundle_alloc > DUST and ledger_bal > DUST:
-            issues.append("bundle_and_ledger_both_nonzero")
+        delta_liquid = ledger_liquid - chain_bal
+        tol = _effective_tolerance(asset, max(chain_bal, ledger_liquid, ledger_bal))
+        custody_ok = abs(delta_liquid) <= tol or (chain_bal <= DUST and ledger_liquid <= DUST)
+
+        custody_tags, info_tags, legacy_tags = _classify_raw_asset_signals(
+            asset=asset,
+            ledger_bal=ledger_bal,
+            chain_bal=chain_bal,
+            ledger_liquid=ledger_liquid,
+            vault_alloc=vault_alloc,
+            bundle_alloc=bundle_alloc,
+            collateral=collateral,
+            debt=debt,
+            direct_avail=direct_avail,
+            delta_liquid=delta_liquid,
+            tol=tol,
+            chain_ids_scanned=chain_ids_scanned,
+        )
+
+        for tag in custody_tags:
+            issues.append(
+                {
+                    "type": "custody_issue",
+                    "asset": asset,
+                    "issue": tag,
+                    "delta_ledger_liquid_vs_onchain": _fmt(delta_liquid),
+                    "tolerance": _fmt(tol),
+                }
+            )
+        for tag in info_tags:
+            informational.append({"type": "informational", "asset": asset, "issue": tag})
+        for tag in legacy_tags:
+            informational.append({"type": "legacy_candidate", "asset": asset, "issue": tag})
 
         asset_rows.append(
             {
                 "asset": asset,
                 "on_chain_balance": _fmt(chain_bal),
                 "ledger_balance": _fmt(ledger_bal),
+                "ledger_liquid": _fmt(ledger_liquid),
+                "vault_allocated": _fmt(vault_alloc),
                 "direct_available": _fmt(direct_avail),
                 "bundle_allocated": _fmt(bundle_alloc),
                 "collateral_locked": _fmt(collateral),
                 "debt": _fmt(debt),
                 "swappable_balance": _fmt(swappable),
-                "delta_ledger_vs_onchain": _fmt(delta),
-                "issues": issues,
+                "delta_ledger_liquid_vs_onchain": _fmt(delta_liquid),
+                "custody_tolerance": _fmt(tol),
+                "custody_reconciled": custody_ok and not custody_tags,
+                "on_chain_by_chain": on_chain_by_chain.get(asset, {}),
+                "custody_issues": custody_tags,
+                "informational": info_tags,
             }
         )
 
@@ -339,6 +561,12 @@ def build_person_crypto_audit(
     bundles = _bundle_positions(db, person_id)
     cost_basis = _cost_basis_audit(db, person_id)
     focus = _focus_swap(db, FOCUS_SWAP_ID)
+    legacy_frozen = _collect_legacy_frozen(scope_compare)
+
+    reporting_gaps = [
+        {"type": "cost_basis_missing", **row}
+        for row in cost_basis.get("missing", [])
+    ]
 
     loans = {
         "positions": [
@@ -349,7 +577,19 @@ def build_person_crypto_audit(
         "mismatches": [],
     }
 
+    success_criteria = _build_success_criteria(
+        db,
+        asset_rows=asset_rows,
+        issues=issues,
+        informational=informational,
+        reporting_gaps=reporting_gaps,
+        legacy_frozen=legacy_frozen,
+        swaps=swaps,
+    )
+
     report: dict[str, Any] = {
+        "audit_version": AUDIT_VERSION,
+        "read_only": True,
         "person": {
             "email": email,
             "person_id": str(person_id),
@@ -368,23 +608,42 @@ def build_person_crypto_audit(
             for w in all_wallets
         ],
         "accounting_doctrine": {
-            "physical_truth": "wallet_privy_on_chain",
-            "application_truth": "person_wallet_balances_reconcilable",
-            "bundle_scope": "economic_sub_ledger_not_separate_wallet",
+            "version": AUDIT_VERSION,
+            "physical_truth": "wallet_privy_on_chain_multi_chain",
+            "liquid_wallet_check": "ledger_liquid = ledger_privy - vault_position_PE == sum(on_chain_by_chain)",
+            "bundle_scope": "economic_sub_ledger_subset_of_wallet",
+            "vault_scope": "hors_wallet_erc20",
             "collateral_scope": "locked_non_spendable",
             "swappable_formula": "min(on_chain_wallet_balance, ledger_balance - collateral_locked)",
+            "deprecated_formula": "direct+bundle+vault+collateral+pending=on_chain (invalid)",
+            "chains_scanned": [CHAIN_LABELS.get(c, str(c)) for c in chain_ids_scanned],
+        },
+        "legacy_frozen_policy": {
+            "legacy_frozen": frozen_scope.get("legacy_frozen"),
+            "requires_protocol_proof": frozen_scope.get("requires_protocol_proof"),
+            "do_not_auto_fix": frozen_scope.get("do_not_auto_fix"),
+            "source": "docs/accounting/legacy/FROZEN_SCOPE.json",
         },
         "assets": asset_rows,
+        "issues": issues,
+        "informational": informational,
+        "reporting_gaps": reporting_gaps,
+        "legacy_frozen": legacy_frozen,
+        "success_criteria": success_criteria,
         "swaps": swaps,
         "bundles": bundles,
         "loans": loans,
         "cost_basis": cost_basis,
         "focus_swap_aave_eurc": focus,
+        "scope_compare": {
+            "summary": scope_compare.get("summary"),
+            "legacy_user_vault_positions": scope_compare.get("legacy_user_vault_positions"),
+        },
         "pe_scope": pe.to_dict(),
         "recommended_actions": {},
         "prepare_fixes": prepare_fixes,
     }
-    report["recommended_actions"] = _classify_recommendations(report)
+    report["recommended_actions"] = _classify_recommendations(report, frozen_scope=frozen_scope)
 
     if prepare_fixes:
         report["proposed_safe_fixes"] = [
