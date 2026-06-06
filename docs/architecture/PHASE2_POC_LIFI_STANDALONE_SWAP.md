@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1–S2b ✅ (#27–#32) · Milestone S2 ouvert (S3 ⏸) |
+| **Statut** | S1–S2b ✅ (#27–#32) · S2.5 en cours · S3/S3a/S3b ⏸ |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 · [Gouvernance](../TRANSACTION_ENGINE_GOVERNANCE.md) · [Settlement Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) avant Go S2b |
@@ -539,6 +539,37 @@ outbox status: processed
 
 **Test review** : le worker peut être supprimé sans affecter une seule écriture économique.
 
+### S2.5 — Settlement Skeleton NOOP (frontière Worker → Settlement)
+
+**Objectif** : `settle_transaction_intent_idempotently(intent_id)` exécutable — **aucune écriture économique**.
+
+```
+Worker (futur intent.settle)
+      ↓
+services/settlement/settle.py  (S2.5 skeleton)
+      ↓
+SettlementResult { SUCCESS | RETRYABLE_FAILURE | TERMINAL_FAILURE | NOOP_ALREADY_SETTLED }
+```
+
+| Règle S2.5 | Détail |
+| --- | --- |
+| Pré-conditions | P1–P6 Contract v1 (lecture seule) |
+| Écritures | **Aucune** ledger / PE / cost basis / legacy `apply_swap_settlement` |
+| Persistance marker | **Aucune** en S2.5 (idempotence marker = S3a) |
+| Review | Module `services/settlement/` supprimable sans impact économique |
+
+**Test review S2.5** : *Le module settlement peut-il être supprimé sans modifier une seule réalité économique ?* → **Oui**
+
+### Découpage S3 (officiel — après S2.5)
+
+| Phase | Contenu | Écriture économique |
+| --- | --- | --- |
+| **S3a** | Worker → Settlement NOOP branché · retry · idempotence · checksum persisté | ❌ |
+| **S3b** | Premier settlement réel LI.FI standalone · `person_wallet_balances` + `person_wallet_deposits` | ✅ minimal |
+| **S3** (complet) | Controller gate COMPLETED · reconciliation | Selon milestone |
+
+**Verrou** : pas de **Go S3** / S3b sans **S2.5** mergé · pas de settlement réel sans **Go S3b** explicite.
+
 ### Verrou gouvernance
 
 ```
@@ -556,7 +587,10 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 3. ~~S2a.1~~ — ✅ mergé (#30)
 4. ~~Settlement Layer Contract v1~~ — ✅ mergé (#31)
 5. ~~**S2b** worker `intent.created`~~ — ✅ mergé (#32)
-6. **S3** settlement + controller — **feu vert explicite requis** (zone dangereuse ADR 004)
-7. **S4** Product Locks avant staging final
-8. **S5** Staging dual-run
-9. **S6** webhooks Privy
+6. **S2.5** Settlement Skeleton NOOP — en cours
+7. **S3a** Worker → Settlement NOOP branché — feu vert après S2.5
+8. **S3b** Premier settlement réel LI.FI — feu vert explicite
+9. **S3** Controller + reconciliation — zone dangereuse ADR 004
+10. **S4** Product Locks avant staging final
+11. **S5** Staging dual-run
+12. **S6** webhooks Privy
