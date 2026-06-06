@@ -589,13 +589,71 @@ SettlementResult → metadata settlement_receipt_hash + phase SETTLED_NOOP
 
 **Test review S3a** : *Si on supprime le handler intent.settle, la réalité économique reste-t-elle identique ?* → **Oui**
 
+### S3b — Premier settlement réel LI.FI standalone (🔒 spec figée — pas de Go)
+
+> **Premier vrai test d’ADR 004 en production logicielle.** Pas de code S3b sans **« Go S3b »** explicite.
+
+**État pipeline avant S3b** :
+
+```
+Quote → Intent → Outbox → Worker → Settlement NOOP
+  ✅       ✅        ✅       ✅        ✅
+
+Ledger / PE / Cost Basis
+  🔒       🔒           🔒
+```
+
+**Objectif S3b** : premier settlement **réel**, mais périmètre **minimal** — LI.FI standalone swap confirmé, **ledger custody uniquement**.
+
+```
+intent.settle (déjà câblé S3a)
+      ↓
+settle_transaction_intent_idempotently()  — projection ledger réelle
+      ↓
+1 débit source + 1 crédit destination (exactly-once)
+      ↓
+metadata settlement_receipt_hash + phase post-settlement produit
+```
+
+| Règle S3b | Détail |
+| --- | --- |
+| Produit | LI.FI standalone swap **uniquement** |
+| Écritures **autorisées** | `person_wallet_deposits`, `person_wallet_balances`, `transaction_intents` (metadata/status settlement) |
+| Écritures **interdites** | `pe_position_atoms` · `cost_basis_executions` · `bundle_ledger_entries` · vault · Lombard |
+| Hors scope | PE · cost basis · controller · `COMPLETED` · bundle · vault · Lombard |
+| Atomicité | Débit + crédit dans **une** transaction DB — échec entre les deux → **ROLLBACK total** |
+| Idempotence | Marker `settlement_receipt_hash` (S3a) + détection jambes ledger déjà présentes (webhook Privy) |
+| Legacy | Pas de bypass `apply_swap_settlement` hors chemin settlement · flag OFF → legacy inchangé |
+| Contrat v1 | **Sous-ensemble intentionnel** — Garantie 2 complète (ledger+PE+cost basis) = milestone post-S3b |
+
+**Question review S3b** :
+
+> *Un swap LI.FI standalone confirmé peut-il être settlé exactement une fois, avec un débit source et un crédit destination, sans toucher au reste ?*
+
+Réponse attendue : **Oui**.
+
+**Tests bloquants S3b** (gate merge) :
+
+| # | Test |
+| --- | --- |
+| 1 | `SUCCESS` → exactement **1 débit** source + **1 crédit** destination |
+| 2 | Deuxième passage → `NOOP_ALREADY_SETTLED` — zéro double écriture |
+| 3 | Crédit destination déjà présent (webhook Privy) → **pas de double crédit** |
+| 4 | Débit source déjà présent → **pas de double débit** |
+| 5 | Échec simulé entre débit et crédit → **rollback total** (aucune jambe orpheline) |
+| 6 | Aucune écriture `pe_position_atoms` |
+| 7 | Aucun `COMPLETED` produit |
+| 8 | Flag OFF → chemin legacy inchangé |
+
+**Discipline** : pas de S3 (controller) dans S3b · pas de flag prod ON · PR dédiée · review ADR 004 obligatoire avant merge.
+
 ### Découpage S3 (officiel — après S2.5)
 
 | Phase | Contenu | Écriture économique |
 | --- | --- | --- |
 | **S3a** | Worker → Settlement NOOP branché · retry · idempotence · checksum persisté | ❌ |
-| **S3b** | Premier settlement réel LI.FI standalone · `person_wallet_balances` + `person_wallet_deposits` | ✅ minimal |
-| **S3** (complet) | Controller gate COMPLETED · reconciliation | Selon milestone |
+| **S3b** | Premier settlement réel LI.FI standalone · debit + credit ledger uniquement | ✅ minimal |
+| **S3** (complet) | Controller gate COMPLETED · reconciliation · PE · cost basis | Selon milestone |
 
 **Verrou** : **S3b 🔒** — première ouverture réelle des tables économiques · pas de settlement réel sans **Go S3b** explicite.
 
