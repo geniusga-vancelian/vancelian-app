@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,7 +18,8 @@ from services.lifi.models import PersonWalletSwap
 from services.lifi.routes import _confirm_svc, _execute_svc, _quote_svc
 from services.lifi.signing_wallet_service import read_signing_wallet_from_audit
 from services.lifi.swap_failure_enums import SwapFailureCode, SwapFailurePhase
-from services.lifi.swap_failure_service import record_swap_failure
+from services.lifi.swap_failure_service import record_swap_failure, validate_swap_failure_payload
+from services.lifi.lifi_validation_service import SwapValidationError
 from tests.conftest import ensure_admin_for_linked_client, make_linked_client
 
 
@@ -177,6 +179,132 @@ def test_explicit_abandon_records_user_abandoned(client: TestClient, db: Session
     audit = swap.audit_log if isinstance(swap.audit_log, list) else []
     failed = [e for e in audit if isinstance(e, dict) and e.get("event") == "execution_failed"]
     assert failed and failed[-1]["error_code"] == SwapFailureCode.USER_ABANDONED.value
+
+
+def test_failure_rejects_invalid_error_code(client: TestClient, db: Session, monkeypatch):
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    swap_id = _create_awaiting_swap(client, db, pe, monkeypatch)
+
+    res = client.post(
+        f"/api/swaps/{swap_id}/failure",
+        headers=_auth_headers(db, pe),
+        json={
+            "failure_phase": SwapFailurePhase.APPROVAL.value,
+            "error_code": "not_a_real_code",
+            "technical_message": "bad code",
+        },
+    )
+    assert res.status_code == 400
+    assert res.json()["detail"]["code"] == "swap.invalid_error_code"
+
+
+def test_failure_rejects_invalid_failure_phase(client: TestClient, db: Session, monkeypatch):
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    swap_id = _create_awaiting_swap(client, db, pe, monkeypatch)
+
+    res = client.post(
+        f"/api/swaps/{swap_id}/failure",
+        headers=_auth_headers(db, pe),
+        json={
+            "failure_phase": "not_a_phase",
+            "error_code": SwapFailureCode.UNKNOWN_ERROR.value,
+        },
+    )
+    assert res.status_code == 400
+    assert res.json()["detail"]["code"] == "swap.invalid_failure_phase"
+
+
+def test_validate_swap_failure_payload_unit():
+    validate_swap_failure_payload(
+        failure_phase=SwapFailurePhase.SIGNING.value,
+        error_code=SwapFailureCode.WALLET_ERROR.value,
+    )
+    with pytest.raises(SwapValidationError) as exc_info:
+        validate_swap_failure_payload(
+            failure_phase="bogus",
+            error_code=SwapFailureCode.UNKNOWN_ERROR.value,
+        )
+    assert exc_info.value.code == "swap.invalid_failure_phase"
+    with pytest.raises(SwapValidationError) as exc_info:
+        validate_swap_failure_payload(
+            failure_phase=SwapFailurePhase.POLLING.value,
+            error_code="bogus",
+        )
+    assert exc_info.value.code == "swap.invalid_error_code"
+
+
+def test_submit_requires_wallet_address_when_locked(client: TestClient, db: Session, monkeypatch):
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    swap_id = _create_awaiting_swap(client, db, pe, monkeypatch)
+
+    res = client.post(
+        f"/api/swaps/{swap_id}/submit",
+        headers=_auth_headers(db, pe),
+        json={
+            "tx_hash": "0xabc123def4567890abc123def4567890abc123def4567890abc123def4567890",
+        },
+    )
+    assert res.status_code == 400
+    assert res.json()["detail"]["code"] == "swap.wallet_address_required"
+
+
+def test_approval_requires_wallet_address_when_locked(client: TestClient, db: Session, monkeypatch):
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    swap_id = _create_awaiting_swap(client, db, pe, monkeypatch)
+
+    res = client.post(
+        f"/api/swaps/{swap_id}/approval",
+        headers=_auth_headers(db, pe),
+        json={
+            "tx_hash": "0xabc123def4567890abc123def4567890abc123def4567890abc123def4567890",
+        },
+    )
+    assert res.status_code == 400
+    assert res.json()["detail"]["code"] == "swap.wallet_address_required"
+
+
+def test_submit_without_address_ok_legacy_swap_no_wallet_lock(
+    client: TestClient,
+    db: Session,
+    monkeypatch,
+):
+    """Rétrocompat : swaps sans wallet_locked n'exigent pas signing_wallet_address."""
+    monkeypatch.setenv("LIFI_SWAPS_MOCK", "1")
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    swap_id = uuid4()
+    swap = PersonWalletSwap(
+        id=swap_id,
+        person_id=pe.person_id,
+        status=SwapSessionStatus.AWAITING_SIGNATURE.value,
+        from_asset="USDC",
+        to_asset="CBBTC",
+        from_chain="base",
+        to_chain="base",
+        amount_in=Decimal("1"),
+        slippage_bps=50,
+        audit_log=[
+            {
+                "event": "quote_requested",
+                "signing_wallet_mode": "privy_embedded",
+                "signing_wallet_address": EVM_ADDR,
+            }
+        ],
+    )
+    db.add(swap)
+    db.commit()
+
+    res = client.post(
+        f"/api/swaps/{swap_id}/submit",
+        headers=_auth_headers(db, pe),
+        json={"tx_hash": f"0xmock{swap_id.hex[:16]}"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["status"] == SwapSessionStatus.CONFIRMED.value
 
 
 def test_wallet_mismatch_on_submit(client: TestClient, db: Session, monkeypatch):

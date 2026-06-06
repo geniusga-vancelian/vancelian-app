@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.lifi.enums import SwapSessionStatus
+from services.lifi.lifi_validation_service import SwapValidationError
 from services.lifi.swap_failure_enums import SwapFailureCode, SwapFailurePhase
 from services.lifi.swap_repository import PersonWalletSwapRepository
 from services.lifi.swap_trace_service import log_swap_trace
@@ -33,6 +34,26 @@ def user_facing_failure_message(error_code: str) -> str:
     return _USER_FACING_MESSAGES.get(error_code, _USER_FACING_MESSAGES[SwapFailureCode.UNKNOWN_ERROR.value])
 
 
+_VALID_FAILURE_PHASES = frozenset(phase.value for phase in SwapFailurePhase)
+_VALID_ERROR_CODES = frozenset(code.value for code in SwapFailureCode)
+
+
+def validate_swap_failure_payload(*, failure_phase: str, error_code: str) -> None:
+    """Valide failure_phase et error_code contre les enums connus."""
+    phase = (failure_phase or "").strip()
+    code = (error_code or "").strip()
+    if phase not in _VALID_FAILURE_PHASES:
+        raise SwapValidationError(
+            "swap.invalid_failure_phase",
+            f"Phase d'échec invalide : {phase or '(vide)'}",
+        )
+    if code not in _VALID_ERROR_CODES:
+        raise SwapValidationError(
+            "swap.invalid_error_code",
+            f"Code d'erreur invalide : {code or '(vide)'}",
+        )
+
+
 def record_swap_failure(
     db: Session,
     *,
@@ -44,11 +65,11 @@ def record_swap_failure(
     wallet_address: str | None = None,
 ) -> None:
     """Persiste un échec sans écraser un swap déjà soumis ou confirmé."""
+    validate_swap_failure_payload(failure_phase=failure_phase, error_code=error_code)
+
     repo = PersonWalletSwapRepository()
     swap = repo.get_for_person(db, swap_id=swap_id, person_id=person_id)
     if swap is None:
-        from services.lifi.lifi_validation_service import SwapValidationError
-
         raise SwapValidationError("swap.not_found", "Swap introuvable")
 
     if swap.status in {
