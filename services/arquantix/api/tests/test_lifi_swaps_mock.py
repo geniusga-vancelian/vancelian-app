@@ -96,7 +96,7 @@ def test_mock_swap_quote_execute_and_settle(client: TestClient, db: Session, mon
             wallet_address=EVM_ADDR,
             asset="USDC",
             amount="1000",
-            chain_id=1,
+            chain_id=8453,
         ),
     )
     db.commit()
@@ -109,13 +109,13 @@ def test_mock_swap_quote_execute_and_settle(client: TestClient, db: Session, mon
             "from_asset": "USDC",
             "to_asset": "ETH",
             "amount": "10",
-            "from_chain": "ethereum",
-            "to_chain": "ethereum",
+            "from_chain": "base",
+            "to_chain": "base",
         },
     )
     assert quote_res.status_code == 200, quote_res.text
     quote = quote_res.json()
-    assert quote["from_chain"] == "ethereum"
+    assert quote["from_chain"] == "base"
     assert Decimal(quote["estimated_receive"]) > 0
 
     swap_id = quote["swap_id"]
