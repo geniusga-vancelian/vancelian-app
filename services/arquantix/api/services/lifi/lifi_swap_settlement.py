@@ -46,6 +46,18 @@ class SwapSettlementBlocked(Exception):
 
 _SETTLEMENT_DONE_EVENTS = frozenset({"swap_settled", "swap_reconciled_partial_settlement"})
 
+SWAP_LEDGER_LOG_INDEX_DEBIT_PREFERRED = 0
+SWAP_LEDGER_LOG_INDEX_DEBIT_SYNTHETIC = -1
+SWAP_LEDGER_LOG_INDEX_CREDIT_SYNTHETIC = -2
+
+
+def swap_debit_idempotency_key(swap_id: str) -> str:
+    return f"lifi-swap:{swap_id}:debit"
+
+
+def swap_credit_idempotency_key(swap_id: str) -> str:
+    return f"lifi-swap:{swap_id}:credit"
+
 
 def swap_settlement_already_applied(swap) -> bool:
     audit = swap.audit_log
@@ -55,6 +67,52 @@ def swap_settlement_already_applied(swap) -> bool:
             for entry in audit
         )
     return False
+
+
+def _resolve_available_log_index(
+    db: Session,
+    *,
+    chain_id: int,
+    tx_hash: str,
+    preferred: int,
+    fallbacks: tuple[int, ...],
+    idempotency_key: str,
+) -> int:
+    """Choisit un log_index libre — la contrainte DB est (chain_id, tx_hash, log_index)."""
+    deposit_repo = PersonWalletDepositRepository()
+    by_key = deposit_repo.find_by_deposit_idempotency_key(db, idempotency_key)
+    if by_key is not None:
+        return int(by_key.log_index)
+
+    normalized = str(tx_hash or "").strip().lower()
+    for candidate in (preferred, *fallbacks):
+        occupied = deposit_repo.find_by_chain_tx(
+            db,
+            chain_id=chain_id,
+            tx_hash=normalized,
+            log_index=candidate,
+        )
+        if occupied is None:
+            return candidate
+        if str(occupied.idempotency_key or "") == idempotency_key:
+            return candidate
+
+    for idx in range(-3, -100, -1):
+        if (
+            deposit_repo.find_by_chain_tx(
+                db,
+                chain_id=chain_id,
+                tx_hash=normalized,
+                log_index=idx,
+            )
+            is None
+        ):
+            return idx
+
+    raise SwapSettlementBlocked(
+        "log_index_exhausted",
+        "Aucun log_index disponible pour la jambe ledger swap.",
+    )
 
 
 def _chain_id_for_swap(chain_key: str) -> int:
@@ -98,20 +156,42 @@ def _create_swap_ledger_entry(
     idempotency_key: str,
     sync_source: str,
     settlement_meta: dict[str, Any] | None = None,
-) -> None:
+) -> bool:
+    """Crée une jambe ledger swap. Retourne True si une nouvelle ligne a été écrite."""
     deposit_repo = PersonWalletDepositRepository()
     balance_repo = PersonWalletBalanceRepository()
+    swap_id = str(swap.id)
+    asset_u = asset.upper()
 
-    existing = deposit_repo.find_by_chain_tx(
+    if deposit_repo.find_by_deposit_idempotency_key(db, idempotency_key) is not None:
+        return False
+
+    if (
+        deposit_repo.find_swap_ledger_leg(
+            db,
+            person_id=wallet.person_id,
+            swap_id=swap_id,
+            direction=direction,
+            asset=asset_u,
+        )
+        is not None
+    ):
+        return False
+
+    fallbacks = (
+        (SWAP_LEDGER_LOG_INDEX_DEBIT_SYNTHETIC,)
+        if direction == PersonWalletDirection.DEBIT.value
+        else (SWAP_LEDGER_LOG_INDEX_CREDIT_SYNTHETIC,)
+    )
+    resolved_log_index = _resolve_available_log_index(
         db,
         chain_id=chain_id,
-        tx_hash=swap.tx_hash,
-        log_index=log_index,
+        tx_hash=str(swap.tx_hash),
+        preferred=log_index,
+        fallbacks=fallbacks,
+        idempotency_key=idempotency_key,
     )
-    if existing is not None:
-        return
 
-    asset_u = asset.upper()
     amount_display = _format_decimal(amount)
     title = f"Échange {swap.from_asset.upper()} → {swap.to_asset.upper()}"
     subtitle_prefix = "−" if direction == PersonWalletDirection.DEBIT.value else "+"
@@ -131,7 +211,7 @@ def _create_swap_ledger_entry(
             "chain_type": "ethereum",
             "chain_id": chain_id,
             "tx_hash": swap.tx_hash,
-            "log_index": log_index,
+            "log_index": resolved_log_index,
             "block_number": None,
             "from_address": wallet.address,
             "to_address": wallet.address,
@@ -163,6 +243,7 @@ def _create_swap_ledger_entry(
     )
     delta = -amount if direction == PersonWalletDirection.DEBIT.value else amount
     balance_repo.increment_balance(db, balance_row, delta=delta, sync_source=sync_source)
+    return True
 
 
 def backfill_unsettled_confirmed_swaps(db: Session, *, person_id: UUID, limit: int = 20) -> int:
@@ -308,8 +389,8 @@ def apply_swap_settlement(
         asset=from_asset,
         amount=amount_in,
         chain_id=from_chain_id,
-        log_index=0,
-        idempotency_key=f"lifi-swap:{swap_id}:debit",
+        log_index=SWAP_LEDGER_LOG_INDEX_DEBIT_PREFERRED,
+        idempotency_key=swap_debit_idempotency_key(swap_id),
         sync_source=sync_source,
         settlement_meta=settlement_meta,
     )
@@ -322,7 +403,7 @@ def apply_swap_settlement(
         amount=amount_out,
         chain_id=to_chain_id,
         log_index=credit_log_index,
-        idempotency_key=f"lifi-swap:{swap_id}:credit",
+        idempotency_key=swap_credit_idempotency_key(swap_id),
         sync_source=sync_source,
         settlement_meta=settlement_meta,
     )

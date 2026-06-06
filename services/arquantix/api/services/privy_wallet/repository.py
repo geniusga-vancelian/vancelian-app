@@ -72,6 +72,38 @@ class PrivyWebhookEventRepository:
 class PersonWalletDepositRepository:
 
     @staticmethod
+    def find_by_deposit_idempotency_key(db: Session, key: str) -> PersonWalletDeposit | None:
+        normalized = str(key or "").strip()
+        if not normalized:
+            return None
+        return (
+            db.query(PersonWalletDeposit)
+            .filter(PersonWalletDeposit.idempotency_key == normalized)
+            .first()
+        )
+
+    @staticmethod
+    def find_swap_ledger_leg(
+        db: Session,
+        *,
+        person_id: UUID,
+        swap_id: str,
+        direction: str,
+        asset: str,
+    ) -> PersonWalletDeposit | None:
+        return (
+            db.query(PersonWalletDeposit)
+            .filter(
+                PersonWalletDeposit.person_id == person_id,
+                PersonWalletDeposit.direction == direction,
+                PersonWalletDeposit.asset == asset.upper(),
+                PersonWalletDeposit.metadata_json["swap_id"].astext == str(swap_id),
+            )
+            .order_by(PersonWalletDeposit.created_at.asc())
+            .first()
+        )
+
+    @staticmethod
     def find_by_chain_tx(
         db: Session,
         *,
