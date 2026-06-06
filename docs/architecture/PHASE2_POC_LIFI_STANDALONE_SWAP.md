@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1 ✅ mergé (#27) · S2 ⏸ en attente feu vert explicite « Go S2 » |
+| **Statut** | S1 ✅ (#27) · S2a ✅ (#29) · S2a.1 en cours · S2b ⏸ |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 acceptés · [Gouvernance TRANSACTION_ENGINE](../TRANSACTION_ENGINE_GOVERNANCE.md) mergée |
@@ -511,6 +511,16 @@ outbox event intent.created
 
 **Seul succès S2a** : Legacy + Orchestrateur **coexistent** — flag OFF = comportement identique à aujourd’hui.
 
+### S2a.1 — follow-up post-merge (#29)
+
+| # | Livrable | Détail |
+| --- | --- | --- |
+| 1 | Test échec LI.FI flag ON | intent + swap FAILED + outbox `intent.created` ; pas ledger/PE |
+| 2 | Assertions | `slippage_bps` / `expires_at` alignés swap ↔ intent |
+| 3 | Note technique | Bypass `lifi_intent_sync` **global** si flag ON → traiter avant S5 dual-run |
+
+**Verrou** : pas de S2b tant que S2a.1 non mergé.
+
 ### Verrou gouvernance
 
 ```
@@ -524,7 +534,8 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 ## Prochaine action
 
 1. ~~S1 fondation~~ — ✅ fait
-2. **Attendre « Go S2 »** — branche `feat/s2-lifi-intent-orchestrator` prête
-3. S3+ : settlement, controller, locks — **hors S2a**
+2. ~~S2a quote orchestrateur~~ — ✅ mergé (#29)
+3. **S2a.1** — tests + note bypass sync (avant S2b)
+4. S2b+ / S3+ : worker, settlement, controller, locks — **hors S2a.1**
 4. **S4** Product Locks avant staging final
 5. **S6** webhooks — après S5

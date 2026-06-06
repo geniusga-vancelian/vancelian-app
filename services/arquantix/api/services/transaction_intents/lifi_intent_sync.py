@@ -58,7 +58,13 @@ def sync_lifi_swap_intent(
     status: str | None = None,
     metadata_patch: dict[str, Any] | None = None,
 ) -> None:
-    """Upsert intent LI.FI — n'appelle jamais settlement ni balances."""
+    """Upsert intent LI.FI — n'appelle jamais settlement ni balances.
+
+    Note S2a (Phase 2) : si ``LIFI_INTENT_ORCHESTRATOR_ENABLED=true``, ce module
+    est un no-op global (quote, execute, refresh, maintenance). L'orchestrateur
+    possède intent + outbox. Avant S5 dual-run / activation staging : prévoir
+    chemins execute/refresh compatibles orchestrateur (hors scope S2a/S2a.1).
+    """
     from services.lifi.config import lifi_intent_orchestrator_enabled
 
     if lifi_intent_orchestrator_enabled():
