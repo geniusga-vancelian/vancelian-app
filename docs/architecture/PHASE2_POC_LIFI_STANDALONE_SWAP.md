@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Epic / chantier architecture transactionnelle |
 | **GitHub** | [Issue #25 — Phase 2 LI.FI Intent Orchestrator POC](https://github.com/geniusga-vancelian/vancelian-app/issues/25) |
-| **Statut** | S1–S2.5 ✅ (#27–#33) · S3/S3a/S3b ⏸ |
+| **Statut** | S1–S2.5 ✅ (#27–#33) · S3a en cours · S3b/S3 ⏸ |
 | **Branche S2** | `feat/s2-lifi-intent-orchestrator` (vide, prête) |
 | **Date** | 2026-06-07 |
 | **Prérequis** | ADR 001–004 · [Gouvernance](../TRANSACTION_ENGINE_GOVERNANCE.md) · [Settlement Contract v1](../SETTLEMENT_LAYER_CONTRACT_v1.md) avant Go S2b |
@@ -561,6 +561,31 @@ SettlementResult { SUCCESS | RETRYABLE_FAILURE | TERMINAL_FAILURE | NOOP_ALREADY
 | Review | Module `services/settlement/` supprimable sans impact économique |
 
 **Test review S2.5** : *Le module settlement peut-il être supprimé sans modifier une seule réalité économique ?* → **Oui**
+
+### S3a — Worker → Settlement NOOP branché (en cours)
+
+**Objectif** : brancher le câble `intent.settle` → `settle_transaction_intent_idempotently()` — **aucune écriture économique**.
+
+```
+outbox intent.settle
+      ↓
+settlement_worker (LIFI_OUTBOX_WORKER_ENABLED=false par défaut)
+      ↓
+settle_transaction_intent_idempotently()  (module S2.5 inchangé)
+      ↓
+SettlementResult → metadata settlement_receipt_hash + phase SETTLED_NOOP
+```
+
+| Règle S3a | Détail |
+| --- | --- |
+| Handler | `intent.settle` uniquement |
+| Settlement | `services/settlement/settle.py` — pas de remplacement |
+| Écritures autorisées | `transaction_intents`, `transaction_intent_transitions`, `transaction_outbox` |
+| Écritures interdites | ledger · PE · cost basis · legacy `apply_swap_settlement` |
+| Outcomes | SUCCESS → hash persisté ; NOOP_ALREADY_SETTLED → processed ; RETRYABLE → retry ; TERMINAL → failed |
+| Review | Supprimer handler `intent.settle` = réalité économique inchangée |
+
+**Test review S3a** : *Si on supprime le handler intent.settle, la réalité économique reste-t-elle identique ?* → **Oui**
 
 ### Découpage S3 (officiel — après S2.5)
 
