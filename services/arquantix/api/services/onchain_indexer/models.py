@@ -111,6 +111,14 @@ class TransactionIntent(Base):
     linked_id = Column(UUID(as_uuid=True), nullable=True)
     linked_reference_id = Column(String(80), nullable=True)
     metadata_json = Column(JSONB, nullable=True)
+    # Phase 2 S1 — orchestrateur (extensions non-breaking)
+    correlation_id = Column(UUID(as_uuid=True), nullable=False, server_default=func.gen_random_uuid())
+    current_phase = Column(String(64), nullable=False, server_default="created")
+    requested_action = Column(String(32), nullable=True)
+    assets_json = Column(JSONB, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    reconciliation_report_json = Column(JSONB, nullable=True)
+    blocked_assets_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),

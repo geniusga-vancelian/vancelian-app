@@ -19,6 +19,7 @@ import services.presentations.models as _PresentationDeckModels  # noqa: F401 �
 import services.test_clients.operation_statement_snapshot_model as _OperationStatementSnapshots  # noqa: F401 — PR5 ORM
 import services.portfolio_engine.bundle_ledger.models as _BundleLedgerModels  # noqa: F401 — Phase 4A ORM
 import services.cost_basis.models as _CostBasisModels  # noqa: F401 — Cost basis V2 ORM
+import services.transaction_outbox.models as _TransactionOutboxModels  # noqa: F401 — Phase 2 S1 ORM
 
 
 @pytest.fixture(scope="session", autouse=True)
