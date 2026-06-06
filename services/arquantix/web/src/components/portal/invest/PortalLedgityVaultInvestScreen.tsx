@@ -32,11 +32,12 @@ export function PortalLedgityVaultInvestScreen({ vaultId }: Props) {
       const payload = await fetchPortalLedgityVaults()
       setBeta(payload.beta ?? null)
       const needle = vaultId.trim()
+      const needleLower = needle.toLowerCase()
       const match =
         payload.vaults.find((row) => row.id === needle) ??
-        payload.vaults.find(
-          (row) => row.vaultAddress.trim().toLowerCase() === needle.toLowerCase(),
-        )
+        payload.vaults.find((row) => row.portalConfigId === needle) ??
+        payload.vaults.find((row) => row.vaultAddress.trim().toLowerCase() === needleLower) ??
+        payload.vaults.find((row) => row.id === needleLower)
       if (!match) {
         setError('This vault is not available.')
         setVault(null)

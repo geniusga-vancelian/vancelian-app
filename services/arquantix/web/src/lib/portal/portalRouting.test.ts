@@ -39,14 +39,15 @@ describe('isPublicPreviewPathname', () => {
 })
 
 describe('resolvePortalVaultProductInvestRoute', () => {
-  it('route un vault_simple Ledgity vers le flux DeFi dédié', () => {
+  it('route un vault_simple Ledgity par adresse on-chain', () => {
+    const address = '0x46db81f232df1884081368cd2aacc9e6ec6489a2'
     const href = resolvePortalVaultProductInvestRoute({
       slug: 'vancelianflexvault',
       vaultEngineConfigId: 'cfg-uuid',
-      vaultAddress: '0x46db81f232df1884081368cd2aacc9e6ec6489a2',
+      vaultAddress: address,
       integrationMode: 'ledgity_vault',
     })
-    assert.equal(href, portalLedgityVaultInvestRoute('cfg-uuid'))
+    assert.equal(href, portalLedgityVaultInvestRoute(address))
   })
 
   it('route un vault_simple Morpho par adresse', () => {
@@ -72,17 +73,18 @@ describe('resolvePortalVaultProductInvestRoute', () => {
 })
 
 describe('resolvePortalVaultEngineInvestRoute', () => {
-  it('route depuis un snapshot moteur Ledgity', () => {
+  it('route depuis un snapshot moteur Ledgity par adresse', () => {
+    const address = '0x46db81f232df1884081368cd2aacc9e6ec6489a2'
     const href = resolvePortalVaultEngineInvestRoute(
       {
         portal_config_id: 'cfg-uuid',
         integration_mode: 'ledgity_vault',
-        vault_address: '0x46db81f232df1884081368cd2aacc9e6ec6489a2',
+        vault_address: address,
       },
       'vancelianflexvault',
       'withdraw',
     )
-    assert.equal(href, portalLedgityVaultInvestRoute('cfg-uuid', 'withdraw'))
+    assert.equal(href, portalLedgityVaultInvestRoute(address, 'withdraw'))
   })
 })
 

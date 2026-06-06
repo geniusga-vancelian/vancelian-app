@@ -23,7 +23,7 @@ export default async function PortalVaultInvestPage({ params, searchParams }: Pr
     notFound()
   }
 
-  if (payload.vaultEngine?.portal_config_id && payload.vaultEngine.integration_mode) {
+  if (payload.vaultEngine?.vault_address && payload.vaultEngine.integration_mode) {
     redirect(resolvePortalVaultEngineInvestRoute(payload.vaultEngine, slug, mode))
   }
 

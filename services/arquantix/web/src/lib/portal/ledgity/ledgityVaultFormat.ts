@@ -37,6 +37,7 @@ export function mergeLedgityVaultConfigWithCatalog(
 
   return {
     id: normalizeVaultAddress(vaultAddress),
+    portalConfigId: config.id,
     vaultAddress,
     chainId: config.chainId,
     integrationMode: 'ledgity_vault',

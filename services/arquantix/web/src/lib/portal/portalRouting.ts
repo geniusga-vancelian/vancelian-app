@@ -233,7 +233,7 @@ export function resolvePortalDefiVaultFlowRoute(
 ): string {
   const base =
     vault.integrationMode === 'ledgity_vault'
-      ? portalLedgityVaultInvestRoute(vault.vaultId, mode)
+      ? portalLedgityVaultInvestRoute(vault.vaultAddress, mode)
       : portalMorphoVaultInvestRoute(vault.vaultAddress, mode)
   if (options?.returnTo === 'savings') {
     return `${base}${base.includes('?') ? '&' : '?'}from=savings`
@@ -261,18 +261,11 @@ export function resolvePortalVaultEngineInvestRoute(
   slug: string,
   mode: PortalVaultFlowMode = 'invest',
 ): string {
-  const configId = engine?.portal_config_id?.trim()
   const vaultAddress = engine?.vault_address?.trim().toLowerCase()
   const integrationMode = normalizePortalVaultIntegrationMode(engine?.integration_mode)
 
-  if (integrationMode && configId && vaultAddress) {
-    return resolvePortalDefiVaultFlowRoute(
-      { integrationMode, vaultAddress, vaultId: configId },
-      mode,
-    )
-  }
-  if (integrationMode === 'ledgity_vault' && configId) {
-    return portalLedgityVaultInvestRoute(configId, mode)
+  if (integrationMode === 'ledgity_vault' && vaultAddress) {
+    return portalLedgityVaultInvestRoute(vaultAddress, mode)
   }
   if (integrationMode === 'direct_morpho' && vaultAddress) {
     return portalMorphoVaultInvestRoute(vaultAddress, mode)
@@ -292,24 +285,14 @@ export function resolvePortalVaultProductInvestRoute(
   vault: PortalVaultProductRouteInput,
   mode: PortalVaultFlowMode = 'invest',
 ): string {
-  const configId = vault.vaultEngineConfigId?.trim()
   const vaultAddress = vault.vaultAddress?.trim().toLowerCase()
   const integrationMode = normalizePortalVaultIntegrationMode(vault.integrationMode)
 
-  if (integrationMode && configId && vaultAddress) {
-    return resolvePortalDefiVaultFlowRoute(
-      { integrationMode, vaultAddress, vaultId: configId },
-      mode,
-    )
-  }
-  if (integrationMode === 'ledgity_vault' && configId) {
-    return portalLedgityVaultInvestRoute(configId, mode)
+  if (integrationMode === 'ledgity_vault' && vaultAddress) {
+    return portalLedgityVaultInvestRoute(vaultAddress, mode)
   }
   if (integrationMode === 'direct_morpho' && vaultAddress) {
     return portalMorphoVaultInvestRoute(vaultAddress, mode)
-  }
-  if (configId) {
-    return portalLedgityVaultInvestRoute(configId, mode)
   }
   return portalVaultInvestRoute(vault.slug, mode)
 }

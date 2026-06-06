@@ -13,6 +13,8 @@ export type PortalLedgityAsset = {
 export type PortalLedgityVaultDetails = {
   /** Identifiant stable côté portail (adresse vault normalisée). */
   id: string
+  /** `portal_morpho_vault_configs.id` — compat deep links admin / catalogue. */
+  portalConfigId: string
   vaultAddress: string
   chainId: number
   integrationMode: PortalLedgityIntegrationMode
