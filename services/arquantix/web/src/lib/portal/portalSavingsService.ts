@@ -24,6 +24,12 @@ import {
 import type { MorphoVaultPositionRow } from '@/lib/portal/morphoGraphql'
 import { loadPrincipalNetRaw } from '@/lib/portal/morphoVaultLedger'
 import { getMorphoBetaPortalFlags } from '@/lib/portal/morphoUsdcBetaAccess'
+import {
+  resolveSavingsDisplayCurrency,
+  resolveSavingsPositionValue,
+  resolveStablecoinValuations,
+  SAVINGS_STABLECOIN_USD_TO_EUR,
+} from '@/lib/portal/portalSavingsFormat'
 import type {
   PortalDefiIntegrationMode,
   PortalDefiVaultDetails,
@@ -33,8 +39,6 @@ import type {
   PortalSavingsVaultTransaction,
 } from '@/lib/portal/portalSavingsTypes'
 import { isExternalWalletVerified } from '@/lib/wallet/externalWalletVerification'
-
-const STABLECOIN_USD_TO_EUR = 0.92
 
 type VaultAggregate = {
   vaultAddress: string
@@ -74,10 +78,13 @@ function resolvePositionUsd(row: PositionFetchRow): number {
   return Number.isFinite(human) ? human : 0
 }
 
-function toSummaryValues(totalUsd: number): Pick<NonNullable<PortalSavingsSummary>, 'total_value_eur' | 'total_value_usd'> {
+function toSummaryValues(
+  totalEur: number,
+  totalUsd: number,
+): Pick<NonNullable<PortalSavingsSummary>, 'total_value_eur' | 'total_value_usd'> {
   return {
+    total_value_eur: totalEur,
     total_value_usd: totalUsd,
-    total_value_eur: totalUsd * STABLECOIN_USD_TO_EUR,
   }
 }
 
@@ -102,8 +109,16 @@ function emptySummary(): PortalSavingsSummary {
 }
 
 function buildPositionRow(aggregate: VaultAggregate): PortalSavingsPosition {
-  const estimatedValueUsd = aggregate.assetsUsd
-  const estimatedValueEur = estimatedValueUsd * STABLECOIN_USD_TO_EUR
+  const humanAmount = Number(
+    formatEarnTokenAmount(aggregate.assetsRaw.toString(), aggregate.assetDecimals),
+  )
+  const valuations = resolveStablecoinValuations(
+    aggregate.assetSymbol,
+    Number.isFinite(humanAmount) ? humanAmount : aggregate.assetsUsd,
+    SAVINGS_STABLECOIN_USD_TO_EUR,
+  )
+  const estimatedValueUsd = valuations.estimatedValueUsd
+  const estimatedValueEur = valuations.estimatedValueEur
   const earnedYieldDisplay =
     aggregate.earnedYieldParts.length === 1
       ? aggregate.earnedYieldParts[0]!
@@ -305,11 +320,12 @@ async function loadLedgerBackedRows(
 
   const positions = [...aggregates.values()].map(buildPositionRow)
   const totalUsd = positions.reduce((sum, position) => sum + (position.estimatedValueUsd ?? 0), 0)
+  const totalEur = positions.reduce((sum, position) => sum + (position.estimatedValueEur ?? 0), 0)
 
   return {
     positions_count: positions.length,
     positions,
-    ...toSummaryValues(totalUsd),
+    ...toSummaryValues(totalEur, totalUsd),
   }
 }
 
@@ -402,12 +418,13 @@ async function loadLiveRows(
 
   const positions = [...aggregates.values()].map(buildPositionRow)
   const totalUsd = positions.reduce((sum, position) => sum + (position.estimatedValueUsd ?? 0), 0)
+  const totalEur = positions.reduce((sum, position) => sum + (position.estimatedValueEur ?? 0), 0)
 
   return {
     summary: {
       positions_count: positions.length,
       positions,
-      ...toSummaryValues(totalUsd),
+      ...toSummaryValues(totalEur, totalUsd),
     },
     partial,
   }
@@ -578,7 +595,7 @@ export async function loadPortalSavingsVaultDetail(args: {
   walletAddress?: string | null
   mapTransactions: (
     rows: LedgerTransactionRow[],
-    currentBalanceUsd: number,
+    currentBalanceReference: number,
   ) => {
     transactions: PortalSavingsVaultTransaction[]
     historyPoints: number[]
@@ -619,9 +636,10 @@ export async function loadPortalSavingsVaultDetail(args: {
     vaultAddress: normalizedVault,
     walletAddress,
   })
+  const displayCurrency = resolveSavingsDisplayCurrency(position.assetSymbol, args.currency)
   const { transactions, historyPoints } = args.mapTransactions(
     ledgerRows,
-    position.estimatedValueUsd ?? position.assetsUsd ?? 0,
+    resolveSavingsPositionValue(position, displayCurrency),
   )
 
   const beta =

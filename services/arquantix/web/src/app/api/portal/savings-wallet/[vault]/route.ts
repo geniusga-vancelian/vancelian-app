@@ -31,8 +31,8 @@ export async function GET(
     vaultAddress,
     currency,
     walletAddress,
-    mapTransactions: (rows, currentBalanceUsd) =>
-      mapPortalSavingsVaultTransactions(rows, currentBalanceUsd),
+    mapTransactions: (rows, currentBalanceReference) =>
+      mapPortalSavingsVaultTransactions(rows, currentBalanceReference),
   })
 
   if (!detail) {

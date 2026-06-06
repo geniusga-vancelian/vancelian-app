@@ -23,3 +23,13 @@ export function resolveCatalogSlugVaultAddress(slug: string | null | undefined):
   const address = CATALOG_SLUG_VAULT_ADDRESS[key]
   return address ? normalizeVaultAddress(address) : null
 }
+
+/** Slug catalogue depuis l’adresse on-chain (lien fiche produit position épargne). */
+export function resolveCatalogVaultSlugByAddress(vaultAddress: string | null | undefined): string | null {
+  const normalized = vaultAddress?.trim().toLowerCase()
+  if (!normalized) return null
+  for (const [slug, address] of Object.entries(CATALOG_SLUG_VAULT_ADDRESS)) {
+    if (normalizeVaultAddress(address) === normalized) return slug
+  }
+  return null
+}
