@@ -44,10 +44,16 @@ class SwapSettlementBlocked(Exception):
         super().__init__(message)
 
 
+_SETTLEMENT_DONE_EVENTS = frozenset({"swap_settled", "swap_reconciled_partial_settlement"})
+
+
 def swap_settlement_already_applied(swap) -> bool:
     audit = swap.audit_log
     if isinstance(audit, list):
-        return any(isinstance(entry, dict) and entry.get("event") == "swap_settled" for entry in audit)
+        return any(
+            isinstance(entry, dict) and entry.get("event") in _SETTLEMENT_DONE_EVENTS
+            for entry in audit
+        )
     return False
 
 

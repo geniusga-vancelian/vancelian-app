@@ -18,6 +18,48 @@ export function resolveSpendableSwapBalance(position: {
   return Math.min(ledger, onChain)
 }
 
+/** True si le solde on-chain a été lu pour ce wallet (spendable fiable). */
+export function isOnChainBalanceVerified(position: {
+  onChainBalance?: number
+} | null | undefined): boolean {
+  if (!position) return false
+  return position.onChainBalance != null && Number.isFinite(position.onChainBalance)
+}
+
+/** Montant max signable Privy = min(ledger, on-chain) si on-chain connu. */
+export function resolvePrivySwapSpendableCap(position: {
+  availableBalance?: number
+  balance?: number
+  onChainBalance?: number
+}): { spendable: number; onChainVerified: boolean; onChainBalance?: number } {
+  const ledger = position.availableBalance ?? position.balance ?? 0
+  const onChainVerified = isOnChainBalanceVerified(position)
+  const onChainBalance = onChainVerified ? position.onChainBalance : undefined
+  return {
+    spendable: resolveSpendableSwapBalance(position),
+    onChainVerified,
+    onChainBalance,
+  }
+}
+
+export function isSwapBlockedPendingOnChainVerification(
+  usesPrivyBalance: boolean,
+  onChainVerified: boolean,
+  balancePending: boolean,
+): boolean {
+  return usesPrivyBalance && !onChainVerified && !balancePending
+}
+
+export function isSwapAmountOverOnChainBalance(
+  parsed: number,
+  onChainBalance: number | undefined,
+  onChainVerified: boolean,
+): boolean {
+  if (!onChainVerified || onChainBalance == null || !Number.isFinite(onChainBalance)) return false
+  if (!Number.isFinite(parsed) || parsed <= 0) return false
+  return parsed > onChainBalance
+}
+
 /** Solde source swap à jour depuis les positions wallet (évite un state figé à 0). */
 export function resolveLiveSwapSourceBalance(
   fromAsset: string,
