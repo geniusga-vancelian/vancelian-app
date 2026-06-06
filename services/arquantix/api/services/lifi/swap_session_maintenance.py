@@ -259,6 +259,53 @@ def reconcile_confirmed_without_ledger(
     return report
 
 
+def reconcile_partial_settlements(
+    db: Session,
+    *,
+    dry_run: bool = True,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Réconcilie les swaps avec crédit destination sans débit source (webhook Privy / SUBMITTED bloqué)."""
+    from services.lifi.lifi_swap_reconciliation import (
+        find_partial_settlement_candidates,
+        settle_lifi_swap_idempotently,
+    )
+
+    report: dict[str, Any] = {
+        "dry_run": dry_run,
+        "candidates": 0,
+        "reconciled": 0,
+        "errors": 0,
+        "swap_ids": [],
+        "details": [],
+    }
+
+    for swap in find_partial_settlement_candidates(db, limit=limit):
+        report["candidates"] += 1
+        report["swap_ids"].append(str(swap.id))
+        try:
+            result = settle_lifi_swap_idempotently(db, swap, dry_run=dry_run)
+            report["details"].append(
+                {
+                    "swap_id": result.swap_id,
+                    "action": result.action,
+                    "would_write": result.would_write,
+                }
+            )
+            if result.action not in {"noop_already_settled", "noop_legs_complete"}:
+                report["reconciled"] += 1
+        except Exception as exc:
+            report["errors"] += 1
+            report["details"].append({"swap_id": str(swap.id), "error": str(exc)[:500]})
+            logger.warning(
+                "swap.partial_reconciliation.failed",
+                extra={"swap_id": str(swap.id)},
+                exc_info=True,
+            )
+
+    return report
+
+
 def run_swap_session_maintenance(
     db: Session,
     *,
@@ -272,4 +319,5 @@ def run_swap_session_maintenance(
             db, dry_run=dry_run, execute_service=execute_service
         ),
         "reconcile_ledger_gaps": reconcile_confirmed_without_ledger(db, dry_run=dry_run),
+        "reconcile_partial_settlements": reconcile_partial_settlements(db, dry_run=dry_run),
     }

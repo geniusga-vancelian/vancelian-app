@@ -25,6 +25,7 @@ _SWAP_TRACE_EVENT_MAP: dict[str, TraceEventType] = {
     "failed": TraceEventType.SWAP_FAILED,
     "expired": TraceEventType.SWAP_EXPIRED,
     "reconciliation_required": TraceEventType.SWAP_RECONCILIATION_REQUIRED,
+    "reconciliation_applied": TraceEventType.SWAP_RECONCILIATION_APPLIED,
 }
 
 

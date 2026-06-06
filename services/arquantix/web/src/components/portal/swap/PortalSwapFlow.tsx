@@ -22,6 +22,7 @@ import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portal
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import {
   resolveLiveSwapSourceBalance,
+  isOnChainBalanceVerified,
   resolveSpendableSwapBalance,
 } from '@/lib/portal/swapAmountValidation'
 import {
@@ -147,6 +148,21 @@ export function PortalSwapFlow() {
     if (hasPosition) return false
     return walletLoading || walletRefreshing
   }, [fromAsset, positions, walletLoading, walletRefreshing])
+
+  const sourcePosition = useMemo(() => {
+    if (!fromAsset) return undefined
+    return positions.find((row) => row.asset.toUpperCase() === fromAsset.toUpperCase())
+  }, [fromAsset, positions])
+
+  const sourceOnChainVerified = useMemo(
+    () => isOnChainBalanceVerified(sourcePosition),
+    [sourcePosition],
+  )
+
+  const sourceOnChainBalance = useMemo(() => {
+    if (!sourceOnChainVerified || sourcePosition?.onChainBalance == null) return undefined
+    return sourcePosition.onChainBalance
+  }, [sourceOnChainVerified, sourcePosition])
 
   useEffect(() => {
     if (step !== 'amount' || !fromAsset) return
@@ -478,6 +494,8 @@ export function PortalSwapFlow() {
             toChain={toChain}
             sourceBalance={displaySourceBalance}
             sourceBalancePending={sourceBalancePending}
+            sourceOnChainVerified={sourceOnChainVerified}
+            sourceOnChainBalance={sourceOnChainBalance}
             minAmount={fromMinAmount}
             fromOptions={swapFromOptions}
             toOptions={swapToOptions}

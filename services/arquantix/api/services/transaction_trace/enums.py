@@ -28,3 +28,4 @@ class TraceEventType(str, Enum):
     SWAP_FAILED = "failed"
     SWAP_EXPIRED = "expired"
     SWAP_RECONCILIATION_REQUIRED = "reconciliation_required"
+    SWAP_RECONCILIATION_APPLIED = "reconciliation_applied"

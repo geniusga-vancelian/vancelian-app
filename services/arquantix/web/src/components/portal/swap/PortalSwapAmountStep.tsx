@@ -8,7 +8,11 @@ import { PortalInvestChip } from '@/components/portal/invest/PortalInvestFlowPar
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import { PortalSwapAssetSelector } from '@/components/portal/swap/PortalSwapAssetSelector'
 import { PortalSwapTechDetails } from '@/components/portal/swap/PortalSwapTechDetails'
-import { isSwapAmountOverPrivyBalance } from '@/lib/portal/swapAmountValidation'
+import {
+  isSwapAmountOverOnChainBalance,
+  isSwapAmountOverPrivyBalance,
+  isSwapBlockedPendingOnChainVerification,
+} from '@/lib/portal/swapAmountValidation'
 import {
   formatSwapMinAmountError,
   isSwapAmountBelowCatalogMin,
@@ -34,6 +38,10 @@ type Props = {
   sourceBalance: number
   /** Solde wallet encore en cours de chargement (évite d'afficher 0 prématurément). */
   sourceBalancePending?: boolean
+  /** Solde on-chain vérifié (Privy) — sinon pas de Max fiable sur le ledger seul. */
+  sourceOnChainVerified?: boolean
+  /** Solde on-chain brut (si vérifié) pour bloquer un montant > on-chain. */
+  sourceOnChainBalance?: number
   /** `min_amount` catalogue API pour l'actif source (garde-fou UI avant quote). */
   minAmount?: string | null
   fromOptions: SwapFromOption[]
@@ -51,6 +59,8 @@ export function PortalSwapAmountStep({
   toChain,
   sourceBalance,
   sourceBalancePending = false,
+  sourceOnChainVerified = true,
+  sourceOnChainBalance,
   minAmount,
   fromOptions,
   toOptions,
@@ -78,12 +88,27 @@ export function PortalSwapAmountStep({
   const parsed = Number(amount.replace(',', '.'))
   const usesPrivyBalance = !isExternalWallet
   const overBalance = usesPrivyBalance && isSwapAmountOverPrivyBalance(parsed, sourceBalance)
+  const overOnChain =
+    usesPrivyBalance &&
+    isSwapAmountOverOnChainBalance(parsed, sourceOnChainBalance, sourceOnChainVerified)
+  const onChainPending = isSwapBlockedPendingOnChainVerification(
+    usesPrivyBalance,
+    sourceOnChainVerified,
+    sourceBalancePending,
+  )
   const belowMin =
     parsed > 0 && minAmount != null && isSwapAmountBelowCatalogMin(parsed, minAmount)
   const minAmountError =
     belowMin && minAmount ? formatSwapMinAmountError(fromAsset, minAmount) : null
   const canContinue =
-    parsed > 0 && !overBalance && !belowMin && quote !== null && !loading && !scopeLoading
+    parsed > 0 &&
+    !overBalance &&
+    !overOnChain &&
+    !onChainPending &&
+    !belowMin &&
+    quote !== null &&
+    !loading &&
+    !scopeLoading
 
   const fetchQuote = useCallback(async () => {
     if (parsed <= 0) {
@@ -179,7 +204,7 @@ export function PortalSwapAmountStep({
   }
 
   const applyMax = () => {
-    if (sourceBalance <= 0) return
+    if (onChainPending || sourceBalance <= 0) return
     setAmount(formatSwapCryptoAmount(sourceBalance, fromAsset))
   }
 
@@ -213,7 +238,13 @@ export function PortalSwapAmountStep({
                     ) : (
                       <>
                         Balance {formatSwapCryptoAmount(sourceBalance, fromAsset)} {fromAsset}
-                        {sourceBalance > 0 ? (
+                        {onChainPending ? (
+                          <span className="inv-io__balance-hint">
+                            {' '}
+                            · Balance on-chain verification pending. Please wait a few seconds.
+                          </span>
+                        ) : null}
+                        {sourceBalance > 0 && !onChainPending ? (
                           <button type="button" className="inv-io__max" onClick={applyMax}>
                             Max
                           </button>
@@ -305,7 +336,13 @@ export function PortalSwapAmountStep({
             </div>
           ) : null}
 
-          {overBalance ? (
+          {onChainPending ? (
+            <p className="inv-feedback inv-feedback--error">
+              Balance on-chain verification pending. Please wait a few seconds.
+            </p>
+          ) : null}
+
+          {overBalance || overOnChain ? (
             <p className="inv-feedback inv-feedback--error">
               {sourceBalance > 0
                 ? `Amount exceeds available balance (${formatSwapCryptoAmount(sourceBalance, fromAsset)} ${fromAsset}).`

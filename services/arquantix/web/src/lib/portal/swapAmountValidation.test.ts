@@ -2,8 +2,12 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  isOnChainBalanceVerified,
+  isSwapAmountOverOnChainBalance,
   isSwapAmountOverPrivyBalance,
+  isSwapBlockedPendingOnChainVerification,
   resolveLiveSwapSourceBalance,
+  resolvePrivySwapSpendableCap,
   resolveSpendableSwapBalance,
 } from '@/lib/portal/swapAmountValidation'
 
@@ -29,6 +33,31 @@ describe('swapAmountValidation', () => {
     assert.equal(resolveSpendableSwapBalance({ balance: 10, onChainBalance: 38 }), 10)
     assert.equal(resolveSpendableSwapBalance({ balance: 0, onChainBalance: 38 }), 38)
     assert.equal(resolveSpendableSwapBalance({ balance: 50 }), 50)
+  })
+
+  it('isOnChainBalanceVerified requires finite on-chain value', () => {
+    assert.equal(isOnChainBalanceVerified({ onChainBalance: 0.21 }), true)
+    assert.equal(isOnChainBalanceVerified({ onChainBalance: 0 }), true)
+    assert.equal(isOnChainBalanceVerified({}), false)
+    assert.equal(isOnChainBalanceVerified(null), false)
+  })
+
+  it('resolvePrivySwapSpendableCap uses min ledger/on-chain when verified', () => {
+    const cap = resolvePrivySwapSpendableCap({ balance: 0.211555, onChainBalance: 0.000001 })
+    assert.equal(cap.onChainVerified, true)
+    assert.equal(cap.spendable, 0.000001)
+  })
+
+  it('blocks continue when on-chain verification pending on privy wallet', () => {
+    assert.equal(isSwapBlockedPendingOnChainVerification(true, false, false), true)
+    assert.equal(isSwapBlockedPendingOnChainVerification(true, true, false), false)
+    assert.equal(isSwapBlockedPendingOnChainVerification(false, false, false), false)
+  })
+
+  it('rejects amount above verified on-chain balance', () => {
+    assert.equal(isSwapAmountOverOnChainBalance(0.21, 0.000001, true), true)
+    assert.equal(isSwapAmountOverOnChainBalance(0.000001, 0.21, true), false)
+    assert.equal(isSwapAmountOverOnChainBalance(0.21, 0.21, false), false)
   })
 
   it('resolveLiveSwapSourceBalance reads position and falls back when missing', () => {
