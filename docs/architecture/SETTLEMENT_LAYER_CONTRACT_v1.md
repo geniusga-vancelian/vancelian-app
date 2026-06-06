@@ -86,7 +86,7 @@ def settle_transaction_intent_idempotently(
 | `SUCCESS` | Projection économique complète et persistée | Continuer pipeline (ex. enqueue reconcile) |
 | `RETRYABLE_FAILURE` | Échec transitoire (lock, DB, dépendance) | Retry outbox selon ADR 002 |
 | `TERMINAL_FAILURE` | Intent non settleable (pré-condition, données invalides) | Transition intent → `failed` ; pas de retry settlement |
-| `NOOP_ALREADY_SETTLED` | Settlement déjà appliqué pour cet `intent_id` | Idempotent — continuer sans ré-écrire |
+| `NOOP_ALREADY_SETTLED` | Settlement déjà appliqué pour cet `intent_id` — **aucune écriture DB autorisée** (lecture seule + retour) | Idempotent — continuer sans ré-écrire |
 
 **Interdit** : inventer `PARTIAL_SUCCESS`, `SETTLED_WITH_WARNINGS`, `FORCE_SETTLED`, etc.
 
@@ -185,7 +185,7 @@ Le settlement **refuse** (`TERMINAL_FAILURE`) si l’une de ces conditions n’e
 | Q1 | Écritures économiques **persistées** (ledger + PE + cost basis) |
 | Q2 | `transaction_trace_events` **persistés** (lien `intent_id`) |
 | Q3 | `transaction_intents.status` mis à jour (ex. `confirmed` / état post-settlement produit — **pas** `COMPLETED`) |
-| Q4 | **Checksum économique** calculé et stocké (ex. `settlement_receipt_hash` dans `metadata_json` ou colonne dédiée) |
+| Q4 | **Checksum économique** calculé et stocké (ex. `settlement_receipt_hash` dans `metadata_json` ou colonne dédiée) — **déterministe** : deux projections identiques produisent le même hash (facilite audits et replays ; précision v1.1) |
 | Q5 | **Aucune action compensatoire** requise — pas de file d’attente « repair PE » |
 
 `COMPLETED` reste **exclusivement** au Reconciliation Controller (ADR 003, Governance Règle 4).
