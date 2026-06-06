@@ -21,7 +21,7 @@ export function PortalSavingsVaultProductLink({ slug, vaultName }: Props) {
         <p className="pos-product__sub">{vaultName} — description, méthodologie et conditions.</p>
       </div>
       <span className="pos-product__chv" aria-hidden="true">
-        <KalaiIcon name="arrow-up-right" size={18} />
+        <KalaiIcon name="arrow-up-right" size={16} />
       </span>
     </PortalNavLink>
   )
