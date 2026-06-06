@@ -85,6 +85,7 @@
     "test:normalize-article-blocks": "node --import tsx --test src/lib/blog/normalizeArticleBlocks.test.ts",
     "test:reading-time": "node --import tsx --test src/lib/blog/readingTime.test.ts",
     "test:article-block-schemas": "node --import tsx --test src/lib/blog/articleBlockDataSchemas.test.ts",
+    "test:markdown-blueprints": "node --import tsx --test src/lib/admin/markdownArticleBlocksBlueprint.test.ts src/lib/admin/markdownVaultModulesBlueprint.test.ts src/lib/admin/markdownArticleBlueprint.test.ts",
     "test:section-map-golden": "node --import tsx --test src/lib/sections/mapDataToComponentProps.golden.test.ts src/lib/sections/sectionRenderCoalesce.test.ts src/lib/sections/sectionSchemaStripSafety.test.ts",
     "test:section-i18n": "npm run test:translatable-path-expansion && npm run test:section-i18n-policy-coverage && npm run test:section-map-golden && npm run test:section-renderer-coverage && npm run test:section-structured-editor-coverage && npm run test:section-legacy-warnings && npm run scripts:section-dry-run && npm run test:page-check-language",
     "test:vault-no-hardcoded-strings": "node --import tsx --test src/lib/i18n/vaultHardcodedStringsScanner.test.ts",
