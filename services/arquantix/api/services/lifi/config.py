@@ -25,6 +25,10 @@ DEFAULT_SWAP_V1_PILOT_CHAINS = "base"
 # Mock local — pas d'appel LI.FI ni signature Privy (règlement ledger interne).
 DEFAULT_LIFI_SWAPS_MOCK = False
 
+# Phase 2 S2a — intent orchestrateur (défaut OFF : legacy Phase 7 inchangé).
+DEFAULT_LIFI_INTENT_ORCHESTRATOR_ENABLED = False
+DEFAULT_LIFI_OUTBOX_WORKER_ENABLED = False
+
 # Alias rétrocompat.
 LIFI_API_BASE_URL = DEFAULT_LIFI_BASE_URL
 
@@ -83,6 +87,23 @@ def default_slippage_bps() -> int:
 def swaps_enabled() -> bool:
     flag = (os.getenv("LIFI_SWAPS_ENABLED") or "1").strip().lower()
     return flag not in {"0", "false", "no", "off"}
+
+
+def lifi_intent_orchestrator_enabled() -> bool:
+    """Phase 2 S2a — quote crée intent orchestrateur + outbox (défaut false)."""
+    raw = (
+        os.getenv("LIFI_INTENT_ORCHESTRATOR_ENABLED")
+        or str(DEFAULT_LIFI_INTENT_ORCHESTRATOR_ENABLED)
+    ).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def lifi_outbox_worker_enabled() -> bool:
+    """Phase 2 S2a+ — poll outbox intent.created (défaut false, hors scope runtime S2a)."""
+    raw = (
+        os.getenv("LIFI_OUTBOX_WORKER_ENABLED") or str(DEFAULT_LIFI_OUTBOX_WORKER_ENABLED)
+    ).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def lifi_integrator_id() -> str:

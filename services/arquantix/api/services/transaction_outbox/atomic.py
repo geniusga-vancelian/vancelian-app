@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -37,6 +38,8 @@ def persist_intent_swap_outbox_atomic(
     amount_in: Decimal,
     correlation_id: UUID | None = None,
     swap_status: str = "PENDING",
+    slippage_bps: int | None = None,
+    expires_at: datetime | None = None,
     record_initial_transition: bool = True,
 ) -> IntentSwapOutboxBundle:
     """Crée intent orchestrateur + swap + outbox dans la session DB courante (une TX).
@@ -53,6 +56,8 @@ def persist_intent_swap_outbox_atomic(
         from_chain=from_chain,
         to_chain=to_chain,
         amount_in=amount_in,
+        slippage_bps=slippage_bps,
+        expires_at=expires_at,
         audit_log=[],
     )
     db.add(swap)
@@ -74,7 +79,8 @@ def persist_intent_swap_outbox_atomic(
             "from": {"asset": from_asset, "amount": str(amount_in)},
             "to": {"asset": to_asset},
         },
-        metadata_json={"phase2_orchestrator": True, "s1_foundation": True},
+        metadata_json={"phase2_orchestrator": True, "s2a_quote_bootstrap": True},
+        expires_at=expires_at,
     )
     db.add(intent)
     db.flush()

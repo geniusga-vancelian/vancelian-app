@@ -15,7 +15,7 @@ from config.supported_swap_assets import (
     human_amount_to_atomic,
     resolve_swap_token,
 )
-from services.lifi.config import QUOTE_TTL_SECONDS, swap_fee_bps
+from services.lifi.config import QUOTE_TTL_SECONDS, lifi_intent_orchestrator_enabled, swap_fee_bps
 from services.lifi.enums import SwapSessionStatus
 from services.lifi.lifi_client import LifiClient, LifiClientError
 from services.lifi.lifi_validation_service import SwapValidationError, validate_quote_request
@@ -82,7 +82,7 @@ class LifiQuoteService:
         )
 
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=QUOTE_TTL_SECONDS)
-        swap_row = self._swap_repo.create(
+        swap_row = self._bootstrap_swap_for_quote(
             db,
             person_id=person_id,
             from_asset=from_token.asset,
@@ -93,9 +93,6 @@ class LifiQuoteService:
             slippage_bps=slippage,
             expires_at=expires_at,
         )
-        from services.transaction_intents.lifi_intent_sync import on_swap_created
-
-        on_swap_created(db, swap_row)
         self._swap_repo.append_audit(
             swap_row,
             {
@@ -121,9 +118,7 @@ class LifiQuoteService:
                 fee_bps=swap_fee_bps(),
             )
         except LifiClientError as exc:
-            swap_row.status = SwapSessionStatus.FAILED.value
-            swap_row.error_message = str(exc)
-            self._swap_repo.append_audit(swap_row, {"event": "quote_failed", "code": exc.code})
+            self._mark_quote_failed(db, swap_row, exc=exc, event="quote_failed")
             db.commit()
             raise
 
@@ -152,10 +147,11 @@ class LifiQuoteService:
         swap_row.estimated_receive_min = simplified["estimated_receive_min"]
         swap_row.route_steps = [step.model_dump() for step in simplified["route_steps"]]
         self._swap_repo.append_audit(swap_row, {"event": "quote_received", "tool": swap_row.lifi_tool})
-        from services.transaction_intents.lifi_intent_sync import sync_lifi_swap_intent
         from services.lifi.swap_trace_service import log_swap_trace
+        from services.transaction_intents.lifi_intent_sync import sync_lifi_swap_intent
 
-        sync_lifi_swap_intent(db, swap_row)
+        if not lifi_intent_orchestrator_enabled():
+            sync_lifi_swap_intent(db, swap_row)
         log_swap_trace(
             db,
             swap_row,
@@ -174,6 +170,69 @@ class LifiQuoteService:
             signing_wallet_mode=resolved_mode,
             signing_wallet_address=from_address,
         )
+
+    def _bootstrap_swap_for_quote(
+        self,
+        db: Session,
+        *,
+        person_id: UUID,
+        from_asset: str,
+        to_asset: str,
+        from_chain: str,
+        to_chain: str,
+        amount_in: Decimal,
+        slippage_bps: int,
+        expires_at: datetime,
+    ):
+        if lifi_intent_orchestrator_enabled():
+            from services.transaction_outbox.atomic import persist_intent_swap_outbox_atomic
+
+            bundle = persist_intent_swap_outbox_atomic(
+                db,
+                person_id=person_id,
+                from_asset=from_asset,
+                to_asset=to_asset,
+                from_chain=from_chain,
+                to_chain=to_chain,
+                amount_in=amount_in,
+                slippage_bps=slippage_bps,
+                expires_at=expires_at,
+            )
+            return bundle.swap
+
+        swap_row = self._swap_repo.create(
+            db,
+            person_id=person_id,
+            from_asset=from_asset,
+            to_asset=to_asset,
+            from_chain=from_chain,
+            to_chain=to_chain,
+            amount_in=amount_in,
+            slippage_bps=slippage_bps,
+            expires_at=expires_at,
+        )
+        from services.transaction_intents.lifi_intent_sync import on_swap_created
+
+        on_swap_created(db, swap_row)
+        return swap_row
+
+    def _mark_quote_failed(
+        self, db: Session, swap_row, *, exc: LifiClientError, event: str
+    ) -> None:
+        from services.transaction_intents.enums import IntentStatus
+        from services.transaction_intents.repository import TransactionIntentRepository
+
+        swap_row.status = SwapSessionStatus.FAILED.value
+        swap_row.error_message = str(exc)
+        self._swap_repo.append_audit(swap_row, {"event": event, "code": exc.code})
+        if lifi_intent_orchestrator_enabled():
+            intent = TransactionIntentRepository.find_by_linked(
+                db,
+                linked_table="person_wallet_swaps",
+                linked_id=swap_row.id,
+            )
+            if intent is not None:
+                intent.status = IntentStatus.FAILED.value
 
     def refresh_quote(self, db: Session, *, person_id: UUID, swap_id: UUID) -> SwapQuoteResponse:
         """Ré-appelle LI.FI et met à jour la ligne swap existante (même swap_id)."""
