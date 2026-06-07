@@ -24,7 +24,7 @@ from services.settlement.preconditions import settlement_marker_present
 from services.settlement.result import SettlementOutcome
 from services.settlement.settle import settle_transaction_intent_idempotently
 from services.transaction_intents.enums import IntentStatus
-from services.transaction_outbox.enums import OutboxEventType
+from services.transaction_outbox.enums import OutboxEventStatus, OutboxEventType
 from services.transaction_outbox.intent_phases import IntentOrchestratorPhase
 from services.transaction_outbox.models import TransactionOutbox
 from services.transaction_outbox.repository import (
@@ -50,6 +50,10 @@ def _worker_instance_id() -> str:
 
 def handle_intent_settle_event(db: Session, outbox: TransactionOutbox) -> None:
     """Appelle settlement skeleton et applique effets S3a (metadata + phase, pas d'écriture économique)."""
+    from services.transaction_outbox.orchestrator_product_locks import (
+        release_orchestrator_product_locks_for_intent,
+    )
+
     result = settle_transaction_intent_idempotently(db, intent_id=outbox.intent_id)
 
     if result.outcome == SettlementOutcome.RETRYABLE_FAILURE:
@@ -72,6 +76,11 @@ def handle_intent_settle_event(db: Session, outbox: TransactionOutbox) -> None:
                 "error_code": result.error_code,
                 "error_message": result.error_message,
             },
+        )
+        release_orchestrator_product_locks_for_intent(
+            db,
+            intent,
+            reason="settlement_terminal_failure",
         )
         return
 
@@ -113,6 +122,11 @@ def handle_intent_settle_event(db: Session, outbox: TransactionOutbox) -> None:
         },
     )
     intent.current_phase = post_phase
+    release_orchestrator_product_locks_for_intent(
+        db,
+        intent,
+        reason="settlement_success",
+    )
 
 
 def process_transaction_outbox_intent_settle(
@@ -172,6 +186,16 @@ def process_transaction_outbox_intent_settle(
                 error=str(exc),
                 retry_delay_seconds=_RETRY_DELAY_SECONDS,
             )
+            if event.status == OutboxEventStatus.DEAD_LETTER.value and intent is not None:
+                from services.transaction_outbox.orchestrator_product_locks import (
+                    release_orchestrator_product_locks_for_intent,
+                )
+
+                release_orchestrator_product_locks_for_intent(
+                    db,
+                    intent,
+                    reason="outbox_dead_letter",
+                )
             failed += 1
             errors.append({"outbox_id": str(event.id), "error": str(exc)})
 

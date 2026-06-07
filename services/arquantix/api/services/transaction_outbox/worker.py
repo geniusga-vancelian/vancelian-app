@@ -40,9 +40,19 @@ def _worker_instance_id() -> str:
 
 def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:
     """CREATED → VALIDATED → QUEUED (phase uniquement — pas de gate balance S2b)."""
+    from services.transaction_outbox.orchestrator_product_locks import (
+        apply_orchestrator_product_locks_before_queued,
+        release_orchestrator_product_locks_for_intent,
+    )
+
     intent = db.query(TransactionIntent).filter(TransactionIntent.id == outbox.intent_id).one()
 
     if intent.status == IntentStatus.FAILED.value:
+        release_orchestrator_product_locks_for_intent(
+            db,
+            intent,
+            reason="intent_failed",
+        )
         return
 
     phase = (intent.current_phase or IntentOrchestratorPhase.CREATED.value).upper()
@@ -61,10 +71,6 @@ def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:
         metadata_json={"outbox_id": str(outbox.id), "s2b": True},
     )
     intent.current_phase = IntentOrchestratorPhase.VALIDATED.value
-
-    from services.transaction_outbox.orchestrator_product_locks import (
-        apply_orchestrator_product_locks_before_queued,
-    )
 
     apply_orchestrator_product_locks_before_queued(db, intent)
 
@@ -130,6 +136,16 @@ def process_transaction_outbox_intent_created(
                 error=str(exc),
                 retry_delay_seconds=_RETRY_DELAY_SECONDS,
             )
+            if event.status == OutboxEventStatus.DEAD_LETTER.value and intent is not None:
+                from services.transaction_outbox.orchestrator_product_locks import (
+                    release_orchestrator_product_locks_for_intent,
+                )
+
+                release_orchestrator_product_locks_for_intent(
+                    db,
+                    intent,
+                    reason="outbox_dead_letter",
+                )
             failed += 1
             errors.append({"outbox_id": str(event.id), "error": str(exc)})
 

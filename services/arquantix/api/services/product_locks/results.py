@@ -20,3 +20,11 @@ class ReleaseProductLockResult:
     skipped: bool
     idempotent: bool
     lock: TransactionProductLock | None
+
+
+@dataclass(frozen=True)
+class ReleaseProductLocksForIntentResult:
+    released_count: int
+    skipped: bool
+    idempotent: bool
+    already_released_count: int = 0

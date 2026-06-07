@@ -15,7 +15,11 @@ from services.product_locks.enums import ProductLockScope, ProductLockStatus
 from services.product_locks.exceptions import ProductLockConflict
 from services.product_locks.lock_key import build_lock_key
 from services.product_locks.models import TransactionProductLock
-from services.product_locks.results import AcquireProductLockResult, ReleaseProductLockResult
+from services.product_locks.results import (
+    AcquireProductLockResult,
+    ReleaseProductLockResult,
+    ReleaseProductLocksForIntentResult,
+)
 
 
 def _utcnow() -> datetime:
@@ -278,4 +282,64 @@ def release_product_lock(
         skipped=False,
         idempotent=False,
         lock=row,
+    )
+
+
+def release_product_locks_for_intent(
+    db: Session,
+    *,
+    intent_id: UUID,
+    reason: str | None = None,
+) -> ReleaseProductLocksForIntentResult:
+    """Libère tous les locks actifs liés à ``intent_id``.
+
+    Flag OFF → no-op strict (aucune écriture DB).
+    Idempotent : locks déjà ``released`` ne sont pas re-modifiés ;
+    un second appel après release complète retourne ``idempotent=True``.
+    ``reason`` est documentaire (logging) — pas de colonne metadata dédiée en L1.
+    """
+    if not transaction_product_locks_enabled():
+        return ReleaseProductLocksForIntentResult(
+            released_count=0,
+            skipped=True,
+            idempotent=False,
+        )
+
+    active_rows = (
+        db.query(TransactionProductLock)
+        .filter(
+            TransactionProductLock.intent_id == intent_id,
+            TransactionProductLock.status == ProductLockStatus.ACTIVE.value,
+            TransactionProductLock.released_at.is_(None),
+        )
+        .with_for_update()
+        .all()
+    )
+
+    if not active_rows:
+        already_released = (
+            db.query(TransactionProductLock)
+            .filter(
+                TransactionProductLock.intent_id == intent_id,
+                TransactionProductLock.status == ProductLockStatus.RELEASED.value,
+            )
+            .count()
+        )
+        return ReleaseProductLocksForIntentResult(
+            released_count=0,
+            skipped=False,
+            idempotent=already_released > 0,
+            already_released_count=already_released,
+        )
+
+    now = _utcnow()
+    for row in active_rows:
+        row.status = ProductLockStatus.RELEASED.value
+        row.released_at = now
+    db.flush()
+
+    return ReleaseProductLocksForIntentResult(
+        released_count=len(active_rows),
+        skipped=False,
+        idempotent=False,
     )
