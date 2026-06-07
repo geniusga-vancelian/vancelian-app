@@ -663,7 +663,7 @@ Réponse attendue : **Oui**.
 
 ### W3/W4 — Auto-enqueue `intent.settle` on CONFIRMED (prérequis Étape 3 pilot)
 
-**Statut** : PR dédiée · **non mergée** (pré-requis avant Go Pilot Prod Étape 3).
+**Statut** : ✅ mergé (#38 · `a13de0be`) · ✅ **déployé prod** (TD `:120` · migration 174)
 
 **Objectif** : fermer la boucle event-driven **sans enqueue manuel ops** :
 
@@ -696,7 +696,7 @@ settle_transaction_intent_idempotently()
 - Phase `ONCHAIN_CONFIRMED` via worker intermédiaire
 - Controller · `COMPLETED` · PE · cost basis
 
-**Verrou pilot** : **pas Go Étape 3** tant que W3/W4 n’est pas mergé + déployé en prod.
+**Verrou pilot** : **Go Étape 3** = feu vert explicite séparé (W3/W4 déployé — voir [GO_PILOT_PROD_W3W4_POST_DEPLOY_REPORT.md](GO_PILOT_PROD_W3W4_POST_DEPLOY_REPORT.md)).
 
 ### Découpage S3 (officiel — après S2.5)
 
@@ -728,7 +728,7 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 6. ~~**S2.5** Settlement Skeleton NOOP~~ — ✅ mergé (#33)
 7. ~~**S3a** Worker → Settlement NOOP branché~~ — ✅ mergé (#34)
 8. ~~**S3b** Premier settlement réel LI.FI ledger-only~~ — ✅ mergé (#35)
-9. **W3/W4** Auto-enqueue `intent.settle` on CONFIRMED — ⏳ PR (prérequis Étape 3 pilot)
+9. ~~**W3/W4** Auto-enqueue `intent.settle` on CONFIRMED~~ — ✅ mergé + déployé (#38 · TD `:120`)
 10. ~~**Activation checklist staging**~~ — [STAGING_ACTIVATION_EXECUTION_REPORT.md](STAGING_ACTIVATION_EXECUTION_REPORT.md) : **KO environnemental** (pas de staging Arquantix)
 11. **Controlled Production Pilot** — [CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md](CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md) + allowlist backend (Go Pilot Prod explicite requis)
 12. **S4** Product Locks — **avant tout élargissement** au-delà du compte pilote
