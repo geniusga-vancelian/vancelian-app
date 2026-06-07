@@ -83,6 +83,43 @@ def test_flag_on_allowlist_empty_fail_closed(db: Session, locks_on):
     assert product_locks_enabled_for_person(db, pe.person_id) is False
 
 
+def test_flag_on_allowlist_empty_orchestrator_worker_no_op(db: Session, monkeypatch, locks_on):
+    """Flag ON + allowlist absent/vide → Product Locks OFF pour tout le monde (worker inclus)."""
+    monkeypatch.delenv("TRANSACTION_PRODUCT_LOCKS_ALLOWED_PERSON_EMAILS", raising=False)
+    pe = make_linked_client(db, email="pilot-empty-allowlist@example.com")
+    enable_lifi_orchestrator_allowlist(monkeypatch, pe)
+    monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
+    monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
+    _wallet(db, pe)
+    bundle = persist_intent_swap_outbox_atomic(
+        db,
+        person_id=pe.person_id,
+        from_asset="USDC",
+        to_asset="ETH",
+        from_chain="base",
+        to_chain="base",
+        amount_in=Decimal("1"),
+    )
+    db.commit()
+
+    assert product_locks_allowlist_configured() is False
+    assert product_locks_enabled_for_person(db, pe.person_id) is False
+
+    apply_result = apply_orchestrator_product_locks_before_queued(db, bundle.intent)
+    assert apply_result.skipped is True
+    assert apply_result.reason == "product_locks_not_enabled_for_person"
+    assert (bundle.intent.metadata_json or {}).get("balance_snapshot") is None
+    assert db.query(TransactionProductLock).count() == 0
+
+    worker_result = process_transaction_outbox_intent_created(db)
+    assert worker_result["processed"] == 1
+    assert worker_result["failed"] == 0
+
+    db.refresh(bundle.intent)
+    assert (bundle.intent.metadata_json or {}).get("balance_snapshot") is None
+    assert db.query(TransactionProductLock).count() == 0
+
+
 def test_flag_on_user_allowlisted(db: Session, locks_on, monkeypatch):
     pe = make_linked_client(db, email="locks-pilot@example.com")
     enable_product_locks_allowlist(monkeypatch, pe)
