@@ -29,6 +29,7 @@ from services.portfolio_engine.positions.models import PositionAtom
 from services.privy_wallet.admin_service import PrivyWalletAdminService
 from services.privy_wallet.enums import PersonWalletDirection
 from services.privy_wallet.models import PersonWalletBalance, PersonWalletDeposit
+from services.privy_wallet.repository import PersonWalletBalanceRepository, PersonWalletDepositRepository
 from services.privy_wallet.schemas import PrivySimulateDepositRequest
 from services.settlement.constants import SETTLEMENT_RECEIPT_METADATA_KEY
 from services.settlement.lifi_ledger import count_swap_settlement_legs
@@ -154,6 +155,72 @@ def _seed_confirmed_swap_bundle(db: Session, monkeypatch=None):
     return pe, bundle, settle_outbox
 
 
+def _webhook_credit_idempotency_key(tx_hash: str) -> str:
+    return f"call_{tx_hash}_wallet.funds_deposited"
+
+
+def _seed_webhook_destination_credit(
+    db: Session,
+    *,
+    wallet,
+    swap: PersonWalletSwap,
+    amount: Decimal,
+    asset: str | None = None,
+    log_index: int = 1,
+) -> None:
+    """Crédit destination style webhook Privy (clé hors lifi-swap:)."""
+    asset_u = (asset or str(swap.to_asset)).upper()
+    tx_hash = str(swap.tx_hash or "").strip().lower()
+    PersonWalletDepositRepository().create(
+        db,
+        data={
+            "person_crypto_wallet_id": wallet.id,
+            "person_id": wallet.person_id,
+            "pe_client_id": wallet.pe_client_id,
+            "privy_webhook_event_id": None,
+            "transaction_kind": "privy_deposit_in",
+            "direction": PersonWalletDirection.CREDIT.value,
+            "asset": asset_u,
+            "amount": amount,
+            "chain_type": "ethereum",
+            "chain_id": 8453,
+            "tx_hash": tx_hash,
+            "log_index": log_index,
+            "from_address": "0xrouter",
+            "to_address": EVM_ADDR,
+            "confirmations": 1,
+            "status": "confirmed",
+            "idempotency_key": _webhook_credit_idempotency_key(tx_hash),
+            "title": f"Dépôt {asset_u}",
+            "subtitle": f"+{amount} {asset_u}",
+            "metadata_json": {
+                "event_source": "privy_webhook",
+                "privy_event_type": "wallet.funds_deposited",
+            },
+            "confirmed_at": datetime.now(timezone.utc),
+        },
+    )
+    balance_repo = PersonWalletBalanceRepository()
+    row = balance_repo.get_or_create_for_update(
+        db, wallet_id=wallet.id, person_id=wallet.person_id, asset=asset_u
+    )
+    balance_repo.increment_balance(db, row, delta=amount, sync_source="privy_webhook_sim")
+    db.commit()
+
+
+def _count_destination_credits_on_tx(db: Session, *, person_id, tx_hash: str, asset: str) -> int:
+    return (
+        db.query(PersonWalletDeposit)
+        .filter(
+            PersonWalletDeposit.person_id == person_id,
+            PersonWalletDeposit.tx_hash == tx_hash.strip().lower(),
+            PersonWalletDeposit.direction == PersonWalletDirection.CREDIT.value,
+            PersonWalletDeposit.asset == asset.upper(),
+        )
+        .count()
+    )
+
+
 def test_s3b_success_one_debit_one_credit(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
     pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
@@ -190,7 +257,7 @@ def test_s3b_second_passage_noop_already_settled(db: Session, monkeypatch):
     )
 
 
-def test_s3b_credit_already_present_no_double_credit(db: Session, monkeypatch):
+def test_s3b_lifi_swap_credit_key_already_present_no_double_credit(db: Session, monkeypatch):
     monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
     pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
     wallet = _seed_wallet(db, pe)
@@ -229,6 +296,135 @@ def test_s3b_credit_already_present_no_double_credit(db: Session, monkeypatch):
         .count()
     )
     assert credits == 1
+
+
+def test_s3b_webhook_credit_existing_creates_only_debit(db: Session, monkeypatch):
+    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
+    wallet = _seed_wallet(db, pe)
+    _seed_webhook_destination_credit(
+        db,
+        wallet=wallet,
+        swap=bundle.swap,
+        amount=Decimal("0.00475"),
+    )
+
+    result = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
+    db.commit()
+    assert result.outcome == SettlementOutcome.SUCCESS
+
+    legs = count_swap_settlement_legs(db, swap_id=bundle.swap.id, person_id=pe.person_id)
+    assert legs == {"debit": 1, "credit": 0}
+    assert (
+        _count_destination_credits_on_tx(
+            db, person_id=pe.person_id, tx_hash=TX_HASH, asset="ETH"
+        )
+        == 1
+    )
+    webhook_key = _webhook_credit_idempotency_key(TX_HASH)
+    assert (
+        db.query(PersonWalletDeposit)
+        .filter(PersonWalletDeposit.idempotency_key == webhook_key)
+        .count()
+        == 1
+    )
+
+
+def test_s3b_webhook_credit_and_debit_existing_no_new_legs(db: Session, monkeypatch):
+    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
+    wallet = _seed_wallet(db, pe)
+    _seed_webhook_destination_credit(
+        db,
+        wallet=wallet,
+        swap=bundle.swap,
+        amount=Decimal("0.00475"),
+    )
+
+    from services.lifi.lifi_swap_settlement import _create_swap_ledger_entry
+
+    _create_swap_ledger_entry(
+        db,
+        swap=bundle.swap,
+        wallet=wallet,
+        direction=PersonWalletDirection.DEBIT.value,
+        asset="USDC",
+        amount=Decimal("10"),
+        chain_id=8453,
+        log_index=0,
+        idempotency_key=swap_debit_idempotency_key(str(bundle.swap.id)),
+        sync_source="partial_settlement",
+    )
+    db.commit()
+    deposits_before = _economic_counts(db, pe.person_id)["deposits"]
+
+    result = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
+    db.commit()
+    assert result.outcome == SettlementOutcome.SUCCESS
+    assert _economic_counts(db, pe.person_id)["deposits"] == deposits_before
+
+    legs = count_swap_settlement_legs(db, swap_id=bundle.swap.id, person_id=pe.person_id)
+    assert legs == {"debit": 1, "credit": 0}
+    assert (
+        _count_destination_credits_on_tx(
+            db, person_id=pe.person_id, tx_hash=TX_HASH, asset="ETH"
+        )
+        == 1
+    )
+
+    second = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
+    assert second.outcome == SettlementOutcome.NOOP_ALREADY_SETTLED
+
+
+def test_s3b_webhook_credit_wrong_asset_terminal_failure(db: Session, monkeypatch):
+    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
+    wallet = _seed_wallet(db, pe)
+    _seed_webhook_destination_credit(
+        db,
+        wallet=wallet,
+        swap=bundle.swap,
+        amount=Decimal("0.00475"),
+        asset="AAVE",
+    )
+    before = _economic_counts(db, pe.person_id)
+
+    result = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
+    assert result.outcome == SettlementOutcome.TERMINAL_FAILURE
+    assert result.error_code == "settlement.credit_asset_mismatch"
+    assert count_swap_settlement_legs(db, swap_id=bundle.swap.id, person_id=pe.person_id) == {
+        "debit": 0,
+        "credit": 0,
+    }
+    assert _economic_counts(db, pe.person_id) == before
+
+
+def test_s3b_webhook_credit_wrong_amount_terminal_failure(db: Session, monkeypatch):
+    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
+    pe, bundle, _ = _seed_confirmed_swap_bundle(db, monkeypatch)
+    wallet = _seed_wallet(db, pe)
+    _seed_webhook_destination_credit(
+        db,
+        wallet=wallet,
+        swap=bundle.swap,
+        amount=Decimal("0.001"),
+    )
+    before = _economic_counts(db, pe.person_id)
+
+    result = settle_transaction_intent_idempotently(db, intent_id=bundle.intent.id)
+    assert result.outcome == SettlementOutcome.TERMINAL_FAILURE
+    assert result.error_code == "settlement.credit_amount_mismatch"
+    assert count_swap_settlement_legs(db, swap_id=bundle.swap.id, person_id=pe.person_id) == {
+        "debit": 0,
+        "credit": 0,
+    }
+    assert (
+        _count_destination_credits_on_tx(
+            db, person_id=pe.person_id, tx_hash=TX_HASH, asset="ETH"
+        )
+        == 1
+    )
+    assert _economic_counts(db, pe.person_id) == before
 
 
 def test_s3b_debit_already_present_no_double_debit(db: Session, monkeypatch):
