@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Plan d'exécution · PRs découplées |
 | **Date** | 2026-06-07 |
-| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · L4a ✅ prod · L4b ✅ prod · **L4c en cours** (PR) |
+| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · L4a ✅ prod · L4b ✅ prod · L4c ✅ prod · **L5a en cours** (PR) |
 | **Gouvernance** | [S4_PRODUCT_LOCKS_MATRIX.md](S4_PRODUCT_LOCKS_MATRIX.md) (validé CTO v1.1) |
 | **Jalon** | Tag `phase2-closed-s4-inventory-v1.1` |
 | **Références** | [ADR 001 §5bis](adr/001-intent-as-orchestrator.md) · [PHASE2 POC § S4](PHASE2_POC_LIFI_STANDALONE_SWAP.md) |
@@ -185,9 +185,9 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L4 — Middleware 409
 
-**Statut** : ✅ **L4a prod neutre** (PR #44 · TD `:131`) · ✅ **L4b prod neutre** (PR #45 · TD `:132`) · 🟡 **L4c en cours** (PR #TBD)
+**Statut** : ✅ **L4a prod neutre** (PR #44 · TD `:131`) · ✅ **L4b prod neutre** (PR #45 · TD `:132`) · ✅ **L4c prod neutre** (PR #46 · TD `:133`) · 🟡 **L5a en cours** (PR #TBD)
 
-> Product Locks restent **OFF en prod** jusqu'à Go explicite post-L4c.
+> Product Locks restent **OFF en prod** · Controlled Activation après merge L5a uniquement.
 
 > **L4a** : validation / exceptions 409 · non branché runtime.
 > **L4b** : hook worker ``intent.created`` · **branché mais flag OFF en prod** · release lock → L4c.
@@ -243,11 +243,39 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ### Livrables L4c
 
-- [ ] `release_product_locks_for_intent()` — idempotent · all active locks for intent
-- [ ] `release_orchestrator_product_locks_for_intent()` — gate orchestrateur + flag
-- [ ] hooks `worker.py` · `settlement_worker.py`
-- [ ] `tests/test_product_locks_l4c_release_lifecycle.py`
+- [x] `release_product_locks_for_intent()` — idempotent · all active locks for intent
+- [x] `release_orchestrator_product_locks_for_intent()` — gate orchestrateur + flag
+- [x] hooks `worker.py` · `settlement_worker.py`
+- [x] `tests/test_product_locks_l4c_release_lifecycle.py`
+- [x] PR review · merge · prod verify ([GO_S4_L4C_POST_DEPLOY_REPORT.md](GO_S4_L4C_POST_DEPLOY_REPORT.md))
+
+---
+
+## L5a — Product Locks Allowlist
+
+**Statut** : 🟡 **En cours** (PR #TBD) · prérequis **Controlled Activation**
+
+**Scope** : allowlist dédiée Product Locks · fail-closed · deploy neutre si flags OFF.
+
+| Env | Rôle |
+| --- | --- |
+| `TRANSACTION_PRODUCT_LOCKS_ENABLED` | Flag global (inchangé) |
+| `TRANSACTION_PRODUCT_LOCKS_ALLOWED_PERSON_EMAILS` | Allowlist comma-separated · lowercase |
+
+| Helper | Rôle |
+| --- | --- |
+| `product_locks_allowlist_configured()` | allowlist non vide |
+| `product_locks_enabled_for_person(db, person_id)` | flag ON + allowlist + email match |
+
+### Livrables L5a
+
+- [ ] `services/product_locks/allowlist.py`
+- [ ] `services/persons/contact_emails.py` (partagé LI.FI)
+- [ ] Gate `orchestrator_product_locks.py` → `product_locks_enabled_for_person`
+- [ ] `tests/test_product_locks_l5a_allowlist.py`
 - [ ] PR review · merge (flag OFF prod)
+
+**Après L5a** : [GO_S4_CONTROLLED_ACTIVATION_PLAN.md](GO_S4_CONTROLLED_ACTIVATION_PLAN.md)
 
 ---
 
@@ -416,6 +444,7 @@ L11 → allowlist (Go CTO)
 
 | Date | Version | Changement |
 | --- | --- | --- |
+| 2026-06-07 | v1.6 | L4c prod neutre · L5a product locks allowlist PR |
 | 2026-06-07 | v1.5 | L4b prod neutre · L4c release lock PR |
 | 2026-06-07 | v1.4 | L4a prod neutre · L4b runtime wiring PR |
 | 2026-06-07 | v1.3 | L4a middleware skeleton · L3 prod neutre |

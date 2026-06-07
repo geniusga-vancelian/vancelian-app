@@ -7,6 +7,12 @@ from services.product_locks.balance_snapshot import (
     compute_balance_snapshot_hash,
     resolve_available_from_pe_snapshot,
 )
+from services.product_locks.allowlist import (
+    is_person_product_locks_allowlisted,
+    product_locks_allowlist_configured,
+    product_locks_allowed_person_emails,
+    product_locks_enabled_for_person,
+)
 from services.product_locks.config import (
     default_product_lock_ttl_seconds,
     transaction_product_locks_enabled,
@@ -64,6 +70,10 @@ __all__ = [
     "compute_balance_snapshot_hash",
     "default_product_lock_ttl_seconds",
     "expire_product_locks",
+    "is_person_product_locks_allowlisted",
+    "product_locks_allowlist_configured",
+    "product_locks_allowed_person_emails",
+    "product_locks_enabled_for_person",
     "release_product_lock",
     "release_product_locks_for_intent",
     "resolve_available_from_pe_snapshot",

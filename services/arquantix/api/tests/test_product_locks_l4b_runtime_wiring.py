@@ -24,6 +24,7 @@ from services.transaction_outbox.orchestrator_product_locks import (
 from services.transaction_outbox.worker import process_transaction_outbox_intent_created
 from tests.conftest import make_linked_client
 from tests.lifi_orchestrator_test_utils import enable_lifi_orchestrator_allowlist
+from tests.product_locks_test_utils import enable_product_locks_allowlist
 from tests.test_product_locks_l2_engine import _migration_175_ready
 from tests.test_transaction_outbox_worker_s2b import _economic_counts, _migration_173_ready
 
@@ -60,6 +61,7 @@ def _wallet(db: Session, pe_client):
 def _seed_orchestrator_intent(db: Session, monkeypatch):
     pe = make_linked_client(db)
     enable_lifi_orchestrator_allowlist(monkeypatch, pe)
+    enable_product_locks_allowlist(monkeypatch, pe)
     monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
     _wallet(db, pe)
