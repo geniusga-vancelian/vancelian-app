@@ -485,6 +485,11 @@ def settle_lifi_swap_idempotently(
             },
         )
         on_swap_confirmed(db, swap)
+        from services.transaction_outbox.orchestrator_settle_enqueue import (
+            maybe_enqueue_orchestrator_intent_settle,
+        )
+
+        maybe_enqueue_orchestrator_intent_settle(db, swap)
         log_swap_trace(
             db,
             swap,

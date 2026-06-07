@@ -295,6 +295,12 @@ def apply_swap_settlement(
 ) -> None:
     """Débite l'actif source et crédite la destination (montant réel ``amount_actual`` uniquement)."""
     from services.lifi.orchestrator_allowlist import lifi_settlement_layer_ledger_enabled_for_person
+    from services.transaction_outbox.orchestrator_settle_enqueue import (
+        skip_legacy_swap_settlement_for_orchestrator,
+    )
+
+    if skip_legacy_swap_settlement_for_orchestrator(db, swap):
+        return
 
     if lifi_settlement_layer_ledger_enabled_for_person(db, swap.person_id):
         return

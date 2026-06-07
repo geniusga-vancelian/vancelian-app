@@ -5,8 +5,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from services.onchain_indexer.models import TransactionIntent
 from services.transaction_outbox.enums import OutboxEventStatus
 from services.transaction_outbox.models import TransactionIntentTransition, TransactionOutbox
 
@@ -46,6 +48,48 @@ class TransactionOutboxRepository:
         if event_type is not None:
             q = q.filter(TransactionOutbox.event_type == event_type)
         return q.order_by(TransactionOutbox.created_at.asc()).all()
+
+    @staticmethod
+    def insert_event_idempotent_per_intent_type(
+        db: Session,
+        *,
+        intent_id: UUID,
+        event_type: str,
+        payload_json: dict[str, Any] | None = None,
+        correlation_id: UUID | None = None,
+    ) -> tuple[TransactionOutbox, bool]:
+        """Insert at most one outbox row per (intent_id, event_type).
+
+        Sérialise via ``SELECT … FOR UPDATE`` sur ``transaction_intents`` puis
+        contrainte unique ``uq_outbox_intent_event_type`` en filet de sécurité.
+        """
+        db.query(TransactionIntent).filter(TransactionIntent.id == intent_id).with_for_update().one()
+
+        existing = TransactionOutboxRepository.find_by_intent(
+            db, intent_id, event_type=event_type
+        )
+        if existing:
+            return existing[0], False
+
+        savepoint = db.begin_nested()
+        try:
+            row = TransactionOutboxRepository.insert_event(
+                db,
+                intent_id=intent_id,
+                event_type=event_type,
+                payload_json=payload_json,
+                correlation_id=correlation_id,
+            )
+            savepoint.commit()
+            return row, True
+        except IntegrityError:
+            savepoint.rollback()
+            raced = TransactionOutboxRepository.find_by_intent(
+                db, intent_id, event_type=event_type
+            )
+            if not raced:
+                raise
+            return raced[0], False
 
     @staticmethod
     def count_all(db: Session) -> int:

@@ -35,6 +35,10 @@ from services.lifi.signing_wallet_service import (
 from services.lifi.swap_failure_enums import SwapFailureCode
 from services.lifi.swap_trace_service import log_swap_trace
 from services.lifi.swap_repository import PersonWalletSwapRepository
+from services.transaction_outbox.orchestrator_settle_enqueue import (
+    maybe_enqueue_orchestrator_intent_settle,
+    skip_legacy_swap_settlement_for_orchestrator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +59,11 @@ class LifiExecuteService:
     def __init__(self, *, lifi_client: Optional[LifiClient] = None):
         self._swap_repo = PersonWalletSwapRepository()
         self._lifi = lifi_client or LifiClient()
+
+    @staticmethod
+    def _on_swap_confirmed_orchestrator_side_effects(db: Session, swap) -> None:
+        """W3/W4 — enqueue ``intent.settle`` pour swaps orchestrateur standalone CONFIRMED."""
+        maybe_enqueue_orchestrator_intent_settle(db, swap)
 
     def prepare_execute(self, db: Session, *, person_id: UUID, swap_id: UUID) -> SwapExecuteResponse:
         swap = self._get_active_swap(db, person_id=person_id, swap_id=swap_id)
@@ -148,35 +157,11 @@ class LifiExecuteService:
             swap.status = SwapSessionStatus.CONFIRMED.value
             swap.tx_hash = clean_hash or f"0xmock{swap.id.hex[:16]}"
             swap.confirmed_at = datetime.now(timezone.utc)
-            try:
-                apply_swap_settlement(
-                    db,
-                    swap,
-                    sync_source="lifi_mock_swap",
-                    allow_mock_quote_amount=True,
-                )
-                self._swap_repo.append_audit(
-                    swap,
-                    {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_mock_swap"},
-                )
-            except SwapSettlementBlocked as exc:
-                self._swap_repo.append_audit(
-                    swap,
-                    {
-                        "event": "settlement_blocked",
-                        "reason": exc.code,
-                        "message": str(exc),
-                    },
-                )
-                from services.transaction_intents.lifi_intent_sync import on_swap_settlement_blocked
-
-                on_swap_settlement_blocked(db, swap, reason=exc.code)
-            else:
+            if skip_legacy_swap_settlement_for_orchestrator(db, swap):
+                self._on_swap_confirmed_orchestrator_side_effects(db, swap)
                 from services.transaction_intents.lifi_intent_sync import on_swap_confirmed
 
                 on_swap_confirmed(db, swap)
-                # Mock saute SUBMITTED sur le swap mais aligne Phase 2 comme refresh_lifi_status :
-                # submitted (create attempt) puis confirmed (même tx_hash, idempotent).
                 from services.transaction_attempts.dual_write import (
                     dual_write_lifi_swap_confirmed,
                     dual_write_lifi_swap_submitted,
@@ -184,6 +169,41 @@ class LifiExecuteService:
 
                 dual_write_lifi_swap_submitted(db, swap, tx_hash=swap.tx_hash)
                 dual_write_lifi_swap_confirmed(db, swap, tx_hash=swap.tx_hash)
+            else:
+                try:
+                    apply_swap_settlement(
+                        db,
+                        swap,
+                        sync_source="lifi_mock_swap",
+                        allow_mock_quote_amount=True,
+                    )
+                    self._swap_repo.append_audit(
+                        swap,
+                        {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_mock_swap"},
+                    )
+                except SwapSettlementBlocked as exc:
+                    self._swap_repo.append_audit(
+                        swap,
+                        {
+                            "event": "settlement_blocked",
+                            "reason": exc.code,
+                            "message": str(exc),
+                        },
+                    )
+                    from services.transaction_intents.lifi_intent_sync import on_swap_settlement_blocked
+
+                    on_swap_settlement_blocked(db, swap, reason=exc.code)
+                else:
+                    from services.transaction_intents.lifi_intent_sync import on_swap_confirmed
+
+                    on_swap_confirmed(db, swap)
+                    from services.transaction_attempts.dual_write import (
+                        dual_write_lifi_swap_confirmed,
+                        dual_write_lifi_swap_submitted,
+                    )
+
+                    dual_write_lifi_swap_submitted(db, swap, tx_hash=swap.tx_hash)
+                    dual_write_lifi_swap_confirmed(db, swap, tx_hash=swap.tx_hash)
             db.commit()
             db.refresh(swap)
             logger.info(
@@ -446,7 +466,18 @@ class LifiExecuteService:
             swap.status = SwapSessionStatus.CONFIRMED.value
             swap.confirmed_at = datetime.now(timezone.utc)
 
-            if not swap_settlement_already_applied(swap):
+            if skip_legacy_swap_settlement_for_orchestrator(db, swap):
+                self._on_swap_confirmed_orchestrator_side_effects(db, swap)
+                on_swap_confirmed(db, swap)
+                log_swap_trace(
+                    db,
+                    swap,
+                    event="confirmed",
+                    status=swap.status,
+                    tx_hash=swap.tx_hash,
+                    source="lifi_execute.refresh",
+                )
+            elif not swap_settlement_already_applied(swap):
                 try:
                     apply_swap_settlement(
                         db,
@@ -495,6 +526,7 @@ class LifiExecuteService:
                     )
             else:
                 on_swap_confirmed(db, swap)
+                self._on_swap_confirmed_orchestrator_side_effects(db, swap)
                 log_swap_trace(
                     db,
                     swap,

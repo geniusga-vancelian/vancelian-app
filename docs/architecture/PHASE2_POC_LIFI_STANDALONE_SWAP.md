@@ -661,6 +661,43 @@ Réponse attendue : **Oui**.
 
 **Discipline** : pas de S3 (controller) dans S3b · **pas de flag prod ON** · checklist d’activation staging séparée avant flag ON · atomicité savepoint validée (worker-path).
 
+### W3/W4 — Auto-enqueue `intent.settle` on CONFIRMED (prérequis Étape 3 pilot)
+
+**Statut** : PR dédiée · **non mergée** (pré-requis avant Go Pilot Prod Étape 3).
+
+**Objectif** : fermer la boucle event-driven **sans enqueue manuel ops** :
+
+```
+swap CONFIRMED + tx_hash (orchestrateur standalone)
+      ↓
+maybe_enqueue_orchestrator_intent_settle()   — outbox intent.settle pending
+      ↓
+worker intent.settle (S3a/S3b, flag ON)
+      ↓
+settle_transaction_intent_idempotently()
+```
+
+| Règle W3/W4 | Détail |
+| --- | --- |
+| Module | `services/transaction_outbox/orchestrator_settle_enqueue.py` |
+| Hook | `lifi_execute_service` (refresh LI.FI DONE · mock submit) · `lifi_swap_reconciliation` |
+| Détection | allowlist + `phase2_orchestrator` · phase `QUEUED`/`ONCHAIN_CONFIRMED` · `CONFIRMED` + `tx_hash` |
+| Exclusions | bundle interne · legacy non-orchestrateur · FAILED/EXPIRED · déjà settled |
+| Idempotence | `intent.settle` existant → no-op · **0 log** sur re-run |
+| Race refresh + reconciliation | `SELECT FOR UPDATE` sur intent + **unique `(intent_id, event_type)`** (migration 174) |
+| CONFIRMED avant QUEUED | enqueue différé → worker `intent.created` rappelle enqueue au passage **QUEUED** |
+| Écritures | **Outbox uniquement** — pas de ledger / PE / cost basis à l’enqueue |
+| Legacy guard | `apply_swap_settlement` skip si intent orchestrateur lié **et** orchestrateur actif (allowlist) |
+| Tests | `tests/test_orchestrator_intent_settle_enqueue_w3w4.py` (19 tests) |
+
+**Hors scope W3/W4** (milestones ultérieurs) :
+
+- Handler `intent.provider_submitted` dédié (poll séparé)
+- Phase `ONCHAIN_CONFIRMED` via worker intermédiaire
+- Controller · `COMPLETED` · PE · cost basis
+
+**Verrou pilot** : **pas Go Étape 3** tant que W3/W4 n’est pas mergé + déployé en prod.
+
 ### Découpage S3 (officiel — après S2.5)
 
 | Phase | Contenu | Écriture économique |
@@ -691,9 +728,10 @@ Le risque principal n’est plus de ne pas avancer assez vite — c’est d’**
 6. ~~**S2.5** Settlement Skeleton NOOP~~ — ✅ mergé (#33)
 7. ~~**S3a** Worker → Settlement NOOP branché~~ — ✅ mergé (#34)
 8. ~~**S3b** Premier settlement réel LI.FI ledger-only~~ — ✅ mergé (#35)
-9. ~~**Activation checklist staging**~~ — [STAGING_ACTIVATION_EXECUTION_REPORT.md](STAGING_ACTIVATION_EXECUTION_REPORT.md) : **KO environnemental** (pas de staging Arquantix)
-10. **Controlled Production Pilot** — [CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md](CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md) + allowlist backend (Go Pilot Prod explicite requis)
-11. **S4** Product Locks — **avant tout élargissement** au-delà du compte pilote
-12. **S5** Staging dual-run global — **pas Go** (remplacé par pilot allowlist pour validation initiale)
-13. **S3** Controller + reconciliation — ⏸ feu vert explicite **post-pilot + S4**
-14. **S6** webhooks Privy
+9. **W3/W4** Auto-enqueue `intent.settle` on CONFIRMED — ⏳ PR (prérequis Étape 3 pilot)
+10. ~~**Activation checklist staging**~~ — [STAGING_ACTIVATION_EXECUTION_REPORT.md](STAGING_ACTIVATION_EXECUTION_REPORT.md) : **KO environnemental** (pas de staging Arquantix)
+11. **Controlled Production Pilot** — [CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md](CONTROLLED_PROD_PILOT_LIFI_ORCHESTRATOR.md) + allowlist backend (Go Pilot Prod explicite requis)
+12. **S4** Product Locks — **avant tout élargissement** au-delà du compte pilote
+13. **S5** Staging dual-run global — **pas Go** (remplacé par pilot allowlist pour validation initiale)
+14. **S3** Controller + reconciliation — ⏸ feu vert explicite **post-pilot + S4**
+15. **S6** webhooks Privy
