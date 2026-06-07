@@ -8,6 +8,7 @@ import type {
   PortalPlacementsSummary,
   PortalWalletRow,
 } from '@/lib/portal/dashboardTypes'
+import { isExclusiveOfferLockedVault } from '@/lib/portal/ledgity/ledgityVaultProfiles'
 import type { PortalSavingsPosition, PortalSavingsSummary } from '@/lib/portal/portalSavingsTypes'
 import {
   buildPrivyWalletPositionsSummary,
@@ -180,6 +181,52 @@ export function resolveCryptoPortfolioTotal(
   )
 }
 
+function buildFilteredSavingsSummary(positions: PortalSavingsPosition[]): PortalSavingsSummary {
+  if (positions.length === 0) return null
+
+  const totalEur = positions.reduce((sum, position) => sum + toNumber(position.estimatedValueEur), 0)
+  const totalUsd = positions.reduce(
+    (sum, position) =>
+      sum + toNumber(position.estimatedValueUsd ?? position.assetsUsd ?? undefined),
+    0,
+  )
+
+  return {
+    positions_count: positions.length,
+    positions,
+    total_value_eur: totalEur,
+    total_value_usd: totalUsd,
+  }
+}
+
+/** Sépare les positions DeFi entre coffres simples (Savings) et offres exclusives lock-up. */
+export function splitSavingsSummaryForDashboard(savings: PortalSavingsSummary | null): {
+  savingsVaults: PortalSavingsSummary | null
+  exclusiveOfferVaults: PortalSavingsSummary | null
+} {
+  const positions = savings?.positions ?? []
+  if (positions.length === 0) {
+    return { savingsVaults: savings, exclusiveOfferVaults: null }
+  }
+
+  const simpleVaults: PortalSavingsPosition[] = []
+  const exclusiveVaults: PortalSavingsPosition[] = []
+
+  for (const position of positions) {
+    const vaultAddress = position.vaultAddress?.trim()
+    if (vaultAddress && isExclusiveOfferLockedVault(vaultAddress)) {
+      exclusiveVaults.push(position)
+    } else {
+      simpleVaults.push(position)
+    }
+  }
+
+  return {
+    savingsVaults: buildFilteredSavingsSummary(simpleVaults),
+    exclusiveOfferVaults: buildFilteredSavingsSummary(exclusiveVaults),
+  }
+}
+
 /** Somme des valorisations vaults DeFi — aligné hub épargne. */
 export function resolveSavingsPortfolioTotal(
   savings: PortalSavingsSummary,
@@ -206,6 +253,17 @@ export function resolveSavingsPortfolioTotal(
     savings.total_value_eur,
     savings.total_value_usd,
   )
+}
+
+/** Placements legacy lending + vaults offres exclusives DeFi. */
+export function resolveExclusiveOffersPortfolioTotal(
+  exclusiveOfferVaults: PortalSavingsSummary | null,
+  placements: PortalPlacementsSummary | null,
+  currency: string,
+): number {
+  const defiTotal = resolveSavingsPortfolioTotal(exclusiveOfferVaults, currency)
+  const legacyTotal = selectReferenceMoneyValue(currency, placements?.total_earn_value_eur)
+  return defiTotal + legacyTotal
 }
 
 function toPortalCryptoSummary(parsed: PortalCryptoPositionsSummary): PortalCryptoSummary {
@@ -261,10 +319,18 @@ export function buildWalletRows(
       (p) => p.portfolio_scope === 'privy' || p.portfolio_scope === 'merged',
     ).length ?? 0
   const cryptoValue = resolveCryptoPortfolioTotal(crypto, currency)
-  const placementsCount = placements?.positions_count ?? 0
-  const placementsValue = toNumber(placements?.total_earn_value_eur)
-  const savingsCount = savings?.positions_count ?? savings?.positions?.length ?? 0
-  const savingsValue = resolveSavingsPortfolioTotal(savings, currency)
+  const { savingsVaults, exclusiveOfferVaults } = splitSavingsSummaryForDashboard(savings)
+  const savingsCount = savingsVaults?.positions_count ?? savingsVaults?.positions?.length ?? 0
+  const savingsValue = resolveSavingsPortfolioTotal(savingsVaults, currency)
+  const exclusiveVaultsCount =
+    exclusiveOfferVaults?.positions_count ?? exclusiveOfferVaults?.positions?.length ?? 0
+  const legacyPlacementsCount = placements?.positions_count ?? 0
+  const placementsCount = exclusiveVaultsCount + legacyPlacementsCount
+  const placementsValue = resolveExclusiveOffersPortfolioTotal(
+    exclusiveOfferVaults,
+    placements,
+    currency,
+  )
 
   return [
     {
@@ -293,9 +359,9 @@ export function buildWalletRows(
       title: 'Exclusive offers',
       subtitle:
         placementsCount > 0
-          ? `${placementsCount} portfolio holding${placementsCount > 1 ? 's' : ''}`
+          ? `${placementsCount} exclusive offer${placementsCount > 1 ? 's' : ''}`
           : 'Discover our exclusive offers',
-      balance: formatPortalMoney(placementsValue, 'EUR'),
+      balance: formatPortalMoney(placementsValue, currency),
       numericBalance: placementsValue,
       iconKey: 'offers',
       iconTone: 'terracotta',
@@ -338,7 +404,11 @@ export function resolveHeaderBalance(
   }
 
   const sum = rows
-    .filter((r) => !r.locked && (r.id === 'euro' || r.id === 'crypto' || r.id === 'savings'))
+    .filter(
+      (r) =>
+        !r.locked &&
+        (r.id === 'euro' || r.id === 'crypto' || r.id === 'savings' || r.id === 'offers'),
+    )
     .reduce((acc, r) => acc + r.numericBalance, 0)
   return formatPortalMoney(sum, currency)
 }

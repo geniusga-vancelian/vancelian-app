@@ -7,10 +7,13 @@ import {
   isRegistrationComplete,
   resolveCryptoPortfolioTotal,
   resolveDashboardCryptoSummary,
+  resolveExclusiveOffersPortfolioTotal,
   resolveSavingsPortfolioTotal,
   shouldShowRegistrationResume,
   shouldShowUnlockEuroBanner,
+  splitSavingsSummaryForDashboard,
 } from './dashboardFormat'
+import { VANCELIAN_AXDUBAI_VAULT, VANCELIAN_VFEUR_VAULT } from '@/lib/portal/ledgity/ledgityConstants'
 import type { PortalDashboardCash, PortalDashboardProfile } from './dashboardTypes'
 
 const freshCryptoUser: PortalDashboardProfile = {
@@ -86,7 +89,74 @@ describe('resolveSavingsPortfolioTotal', () => {
   })
 })
 
+describe('splitSavingsSummaryForDashboard', () => {
+  it('separe coffres simples et offres exclusives lock-up', () => {
+    const { savingsVaults, exclusiveOfferVaults } = splitSavingsSummaryForDashboard({
+      positions_count: 2,
+      positions: [
+        { vaultAddress: VANCELIAN_VFEUR_VAULT, estimatedValueEur: 100 } as never,
+        { vaultAddress: VANCELIAN_AXDUBAI_VAULT, estimatedValueEur: 250 } as never,
+      ],
+    })
+
+    assert.equal(savingsVaults?.positions_count, 1)
+    assert.equal(exclusiveOfferVaults?.positions_count, 1)
+    assert.equal(
+      savingsVaults?.positions?.[0]?.vaultAddress?.toLowerCase(),
+      VANCELIAN_VFEUR_VAULT.toLowerCase(),
+    )
+    assert.equal(
+      exclusiveOfferVaults?.positions?.[0]?.vaultAddress?.toLowerCase(),
+      VANCELIAN_AXDUBAI_VAULT.toLowerCase(),
+    )
+  })
+})
+
+describe('resolveExclusiveOffersPortfolioTotal', () => {
+  it('additionne vaults exclusifs DeFi et placements legacy en devise de ref', () => {
+    const total = resolveExclusiveOffersPortfolioTotal(
+      {
+        positions_count: 1,
+        positions: [{ estimatedValueEur: 200, estimatedValueUsd: 220 } as never],
+      },
+      { total_earn_value_eur: 50, positions_count: 1 },
+      'EUR',
+    )
+    assert.equal(total, 250)
+  })
+})
+
 describe('buildWalletRows', () => {
+  it('formats savings balance from simple vault positions only', () => {
+    const rows = buildWalletRows(
+      null,
+      null,
+      null,
+      {
+        positions_count: 2,
+        positions: [
+          {
+            vaultAddress: VANCELIAN_VFEUR_VAULT,
+            estimatedValueEur: 920,
+            estimatedValueUsd: 1000,
+          } as never,
+          {
+            vaultAddress: VANCELIAN_AXDUBAI_VAULT,
+            estimatedValueEur: 500,
+            estimatedValueUsd: 550,
+          } as never,
+        ],
+      },
+      'EUR',
+    )
+    const savings = rows.find((r) => r.id === 'savings')
+    const offers = rows.find((r) => r.id === 'offers')
+    assert.equal(savings?.numericBalance, 920)
+    assert.match(savings?.subtitle ?? '', /1 DeFi vault/)
+    assert.equal(offers?.numericBalance, 500)
+    assert.match(offers?.subtitle ?? '', /1 exclusive offer/)
+  })
+
   it('formats savings balance from vault positions', () => {
     const rows = buildWalletRows(
       null,
@@ -105,7 +175,7 @@ describe('buildWalletRows', () => {
     )
     const savings = rows.find((r) => r.id === 'savings')
     assert.equal(savings?.numericBalance, 920)
-    assert.match(savings?.subtitle ?? '', /1 vault/)
+    assert.match(savings?.subtitle ?? '', /1 DeFi vault/)
   })
 
   it('formats crypto balance in reference currency', () => {

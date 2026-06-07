@@ -16,6 +16,7 @@ import {
   resolveHeaderBalance,
   resolvePerformanceChangeLabels,
   resolveReferenceCurrency,
+  splitSavingsSummaryForDashboard,
 } from '@/lib/portal/dashboardFormat'
 import type { PortalDashboardPayload } from '@/lib/portal/dashboardTypes'
 import { resolveCreditLineFromPositions } from '@/lib/portal/lombard/lombardCreditLineFormat'
@@ -68,6 +69,7 @@ export function PortalDashboardView({
     const walletLabel = portalWalletScopeShortLabel(walletScope)
     const filteredCrypto = filterCryptoSummaryByPortalScope(data.crypto, chain, walletScope)
     const savings = isPortalChainDeFiEnabled(chain) ? data.savings : null
+    const { savingsVaults, exclusiveOfferVaults } = splitSavingsSummaryForDashboard(savings)
 
     const rows = applyWalletRowAccess(
       buildWalletRows(data.cash, filteredCrypto, data.placements, savings, currency).map((row) => {
@@ -81,14 +83,29 @@ export function PortalDashboardView({
                 : `No assets · ${chainLabel} · ${walletLabel}`,
           }
         }
-        if (row.id === 'savings' && savings) {
-          const count = savings.positions_count ?? savings.positions?.length ?? 0
+        if (row.id === 'savings') {
+          const count = savingsVaults?.positions_count ?? savingsVaults?.positions?.length ?? 0
           return {
             ...row,
             subtitle:
               count > 0
                 ? `${count} vault${count === 1 ? '' : 's'} · ${chainLabel} · ${walletLabel}`
-                : `No vaults · ${chainLabel} · ${walletLabel}`,
+                : savings
+                  ? `No vaults · ${chainLabel} · ${walletLabel}`
+                  : row.subtitle,
+          }
+        }
+        if (row.id === 'offers') {
+          const defiCount =
+            exclusiveOfferVaults?.positions_count ?? exclusiveOfferVaults?.positions?.length ?? 0
+          const legacyCount = data.placements?.positions_count ?? 0
+          const count = defiCount + legacyCount
+          return {
+            ...row,
+            subtitle:
+              count > 0
+                ? `${count} exclusive offer${count === 1 ? '' : 's'} · ${chainLabel} · ${walletLabel}`
+                : row.subtitle,
           }
         }
         return row
