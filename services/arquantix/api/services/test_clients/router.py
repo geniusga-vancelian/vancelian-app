@@ -660,6 +660,22 @@ def get_direct_crypto_positions(
     person_id = getattr(client, "person_id", None)
     merged = merge_app_crypto_positions(enriched, db, person_id=person_id)
 
+    if person_id is not None:
+        from services.portfolio_engine.portfolio_breakdown import build_portfolio_breakdown
+
+        breakdown = build_portfolio_breakdown(db, person_id)
+        swappable_map = breakdown.get("swappable_by_asset") or {}
+        on_chain_map = {
+            str(row.get("symbol") or "").upper(): row.get("on_chain_balance_base")
+            for row in (breakdown.get("assets") or [])
+        }
+        for row in merged:
+            asset = str(row.get("asset") or "").upper()
+            if asset in swappable_map:
+                row["swappable_balance"] = swappable_map[asset]
+            if asset in on_chain_map and on_chain_map[asset] is not None:
+                row["on_chain_balance_base"] = on_chain_map[asset]
+
     total_value_eur = D("0")
     total_value_usd = D("0")
     for entry in merged:

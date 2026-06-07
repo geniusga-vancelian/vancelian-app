@@ -24,11 +24,13 @@ export function resolveSpendableSwapBalance(position: {
   return Math.min(ledger, onChain)
 }
 
-/** True si le solde on-chain a été lu pour ce wallet (spendable fiable). */
+/** True si le solde spendable swap est fiable (on-chain direct ou ``swappable_balance`` serveur). */
 export function isOnChainBalanceVerified(position: {
   onChainBalance?: number
+  swappableBalance?: number
 } | null | undefined): boolean {
   if (!position) return false
+  if (position.swappableBalance != null && Number.isFinite(position.swappableBalance)) return true
   return position.onChainBalance != null && Number.isFinite(position.onChainBalance)
 }
 

@@ -46,9 +46,10 @@ describe('swapAmountValidation', () => {
     assert.equal(resolveSpendableSwapBalance({ balance: 50 }), 50)
   })
 
-  it('isOnChainBalanceVerified requires finite on-chain value', () => {
+  it('isOnChainBalanceVerified requires finite on-chain value or server swappable_balance', () => {
     assert.equal(isOnChainBalanceVerified({ onChainBalance: 0.21 }), true)
     assert.equal(isOnChainBalanceVerified({ onChainBalance: 0 }), true)
+    assert.equal(isOnChainBalanceVerified({ swappableBalance: 62.64 }), true)
     assert.equal(isOnChainBalanceVerified({}), false)
     assert.equal(isOnChainBalanceVerified(null), false)
   })

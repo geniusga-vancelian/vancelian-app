@@ -80,6 +80,7 @@ export function parseCryptoPositionsPayload(raw: unknown): PortalCryptoPositions
       walletAddress:
         typeof item.wallet_address === 'string' ? item.wallet_address : undefined,
       swappableBalance: toOptionalNumber(item.swappable_balance),
+      onChainBalance: toOptionalNumber(item.on_chain_balance ?? item.on_chain_balance_base),
     }))
     .filter((p) => p.asset)
 
