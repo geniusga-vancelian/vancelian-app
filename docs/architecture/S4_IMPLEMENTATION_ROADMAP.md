@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Plan d'exécution · PRs découplées |
 | **Date** | 2026-06-07 |
-| **Statut** | L1 ✅ · L2 ✅ prod · **L3 en cours** (PR) |
+| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · **L4a en cours** (PR) |
 | **Gouvernance** | [S4_PRODUCT_LOCKS_MATRIX.md](S4_PRODUCT_LOCKS_MATRIX.md) (validé CTO v1.1) |
 | **Jalon** | Tag `phase2-closed-s4-inventory-v1.1` |
 | **Références** | [ADR 001 §5bis](adr/001-intent-as-orchestrator.md) · [PHASE2 POC § S4](PHASE2_POC_LIFI_STANDALONE_SWAP.md) |
@@ -153,12 +153,12 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L3 — Snapshot Balance
 
-**Statut** : 🟡 **En cours** (PR #TBD)
+**Statut** : ✅ **Merged + prod neutre** (PR #43 · merge `13f93df8` · TD `:130` · flag OFF)
 
-> **Non branché runtime** : aucune capture dans `transaction_intents.metadata_json` tant que L4/L5.
-> Flag `TRANSACTION_PRODUCT_LOCKS_ENABLED=false` → `build_balance_snapshot` no-op · aucune écriture DB.
+> **Non branché runtime** : aucune capture dans `transaction_intents.metadata_json`.
+> Post-deploy vérifié : `build_balance_snapshot` no-op · 0 intent avec clé `balance_snapshot`.
 
-**Scope** : metadata snapshot à capturer (futur L4) à `CREATED → VALIDATED` :
+**Scope** : metadata snapshot à capturer (futur L4b) à `CREATED → VALIDATED` :
 
 ```json
 {
@@ -177,26 +177,40 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ### Livrables L3
 
-- [ ] `services/product_locks/balance_snapshot.py` — `build_balance_snapshot` · `compute_balance_snapshot_hash`
-- [ ] `tests/test_product_locks_l3_balance_snapshot.py`
-- [ ] PR review · merge (flag OFF)
+- [x] `services/product_locks/balance_snapshot.py` — `build_balance_snapshot` · `compute_balance_snapshot_hash`
+- [x] `tests/test_product_locks_l3_balance_snapshot.py`
+- [x] PR review · merge · prod verify ([GO_S4_L3_POST_DEPLOY_REPORT.md](GO_S4_L3_POST_DEPLOY_REPORT.md))
 
 ---
 
 ## L4 — Middleware 409
 
-**Statut** : ⏸ Après L3
+**Statut** : 🟡 **L4a en cours** (PR #TBD) · **L4b** runtime wiring plus tard
 
-**Scope** : re-vérification snapshot + lock avant `PROCESSING`.
+> **L4a non branché runtime** : validation / exceptions 409 uniquement · zéro route HTTP · zéro LI.FI.
+> Flag `TRANSACTION_PRODUCT_LOCKS_ENABLED=false` → validate_* no-op.
 
-| Condition | Réponse |
-| --- | --- |
-| Version / hash drift | `409 BALANCE_CHANGED` |
-| Lock actif sur asset+scope | `409 PRODUCT_LOCK_CONFLICT` |
+### L4a — Validation skeleton (cette PR)
 
-**Règle** : aucune écriture ledger · intent reste `VALIDATED` ou passe `FAILED` selon politique produit.
+**Scope** : `validate_product_lock_or_raise` · `validate_balance_snapshot_or_raise` · error codes 409.
 
----
+| Condition | Code | Exception |
+| --- | --- | --- |
+| Lock actif autre intent | `PRODUCT_LOCK_CONFLICT` | `ProductLockConflict409` |
+| Hash snapshot drift | `BALANCE_CHANGED` | `BalanceChanged409` |
+| Version drift | `BALANCE_VERSION_MISMATCH` | `BalanceVersionMismatch409` |
+| Feature disabled (strict mode futur) | `PRODUCT_LOCK_DISABLED` | `ProductLockDisabled409` |
+
+### Livrables L4a
+
+- [ ] `services/product_locks/error_codes.py`
+- [ ] `services/product_locks/middleware.py`
+- [ ] `tests/test_product_locks_l4a_middleware.py`
+- [ ] PR review · merge (flag OFF)
+
+### L4b — Runtime wiring (PR séparée · plus tard)
+
+**Scope** : branchement sous flag aux transitions intent (LI.FI / Bundle / Vault) · **hors L4a**.
 
 ## L5 — Settlement Router
 
@@ -342,7 +356,7 @@ L11 → allowlist (Go CTO)
 
 | Paramètre | Valeur actuelle | Règle L1–L4 |
 | --- | --- | --- |
-| TD prod | `:129` | Pas de deploy L1–L4 sans review |
+| TD prod | `:130` | Pas de deploy L1–L4 sans review |
 | Worker / ledger | OFF | Inchangé |
 | Orchestrator LI.FI | ON (allowlist 1 user) | Inchangé |
 | `TRANSACTION_PRODUCT_LOCKS_ENABLED` | **absent / false** | Default `false` · L2 prod no-op |
@@ -363,5 +377,6 @@ L11 → allowlist (Go CTO)
 
 | Date | Version | Changement |
 | --- | --- | --- |
+| 2026-06-07 | v1.3 | L3 prod neutre · L4a middleware skeleton PR |
 | 2026-06-07 | v1.2 | L2 merged prod · L3 snapshot PR ouverte |
 | 2026-06-07 | v1.1 | L1 merged prod · L2 engine PR ouverte |

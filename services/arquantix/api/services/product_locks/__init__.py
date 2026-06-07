@@ -12,8 +12,21 @@ from services.product_locks.config import (
     transaction_product_locks_enabled,
 )
 from services.product_locks.enums import ProductLockScope, ProductLockStatus
-from services.product_locks.exceptions import ProductLockConflict
+from services.product_locks.error_codes import ProductLockErrorCode
+from services.product_locks.exceptions import (
+    BalanceChanged409,
+    BalanceVersionMismatch409,
+    ProductLockConflict,
+    ProductLockConflict409,
+    ProductLockDisabled409,
+    ProductLockMiddlewareError,
+)
 from services.product_locks.lock_key import build_lock_key
+from services.product_locks.middleware import (
+    ProductLockMiddlewareResult,
+    validate_balance_snapshot_or_raise,
+    validate_product_lock_or_raise,
+)
 from services.product_locks.models import TransactionProductLock
 from services.product_locks.results import AcquireProductLockResult, ReleaseProductLockResult
 from services.product_locks.service import (
@@ -25,9 +38,16 @@ from services.product_locks.service import (
 __all__ = [
     "AcquireProductLockResult",
     "BalanceAvailableResolver",
+    "BalanceChanged409",
     "BalanceSnapshot",
+    "BalanceVersionMismatch409",
     "BuildBalanceSnapshotResult",
     "ProductLockConflict",
+    "ProductLockConflict409",
+    "ProductLockDisabled409",
+    "ProductLockErrorCode",
+    "ProductLockMiddlewareError",
+    "ProductLockMiddlewareResult",
     "ProductLockScope",
     "ProductLockStatus",
     "ReleaseProductLockResult",
@@ -41,4 +61,6 @@ __all__ = [
     "release_product_lock",
     "resolve_available_from_pe_snapshot",
     "transaction_product_locks_enabled",
+    "validate_balance_snapshot_or_raise",
+    "validate_product_lock_or_raise",
 ]
