@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Plan d'exécution · PRs découplées |
 | **Date** | 2026-06-07 |
-| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · L4a ✅ prod · L4b ✅ prod · L4c ✅ prod · **L5a en cours** (PR) |
+| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · L4a–L4c ✅ prod · L5a ✅ prod · **S4d 🟡 PR** · Controlled Activation ✅ |
 | **Gouvernance** | [S4_PRODUCT_LOCKS_MATRIX.md](S4_PRODUCT_LOCKS_MATRIX.md) (validé CTO v1.1) |
 | **Jalon** | Tag `phase2-closed-s4-inventory-v1.1` |
 | **Références** | [ADR 001 §5bis](adr/001-intent-as-orchestrator.md) · [PHASE2 POC § S4](PHASE2_POC_LIFI_STANDALONE_SWAP.md) |
@@ -185,9 +185,9 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L4 — Middleware 409
 
-**Statut** : ✅ **L4a prod neutre** (PR #44 · TD `:131`) · ✅ **L4b prod neutre** (PR #45 · TD `:132`) · ✅ **L4c prod neutre** (PR #46 · TD `:133`) · 🟡 **L5a en cours** (PR #TBD)
+**Statut** : ✅ **L4a prod neutre** (PR #44 · TD `:131`) · ✅ **L4b prod neutre** (PR #45 · TD `:132`) · ✅ **L4c prod neutre** (PR #46 · TD `:133`) · ✅ **L5a prod neutre** (PR #47 · TD `:134`)
 
-> Product Locks restent **OFF en prod** · Controlled Activation après merge L5a uniquement.
+> Product Locks restent **OFF en prod** · Controlled Activation autorisée après rapport L5a.
 
 > **L4a** : validation / exceptions 409 · non branché runtime.
 > **L4b** : hook worker ``intent.created`` · **branché mais flag OFF en prod** · release lock → L4c.
@@ -253,7 +253,7 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L5a — Product Locks Allowlist
 
-**Statut** : 🟡 **En cours** (PR #TBD) · prérequis **Controlled Activation**
+**Statut** : ✅ **Prod neutre** (PR #47 · TD `:134`) · prérequis **Controlled Activation** satisfait
 
 **Scope** : allowlist dédiée Product Locks · fail-closed · deploy neutre si flags OFF.
 
@@ -269,13 +269,36 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ### Livrables L5a
 
-- [ ] `services/product_locks/allowlist.py`
-- [ ] `services/persons/contact_emails.py` (partagé LI.FI)
-- [ ] Gate `orchestrator_product_locks.py` → `product_locks_enabled_for_person`
-- [ ] `tests/test_product_locks_l5a_allowlist.py`
-- [ ] PR review · merge (flag OFF prod)
+- [x] `services/product_locks/allowlist.py`
+- [x] `services/persons/contact_emails.py` (partagé LI.FI)
+- [x] Gate `orchestrator_product_locks.py` → `product_locks_enabled_for_person`
+- [x] `tests/test_product_locks_l5a_allowlist.py` (incl. fail-closed worker integration)
+- [x] PR review · merge · prod verify ([GO_S4_L5A_POST_DEPLOY_REPORT.md](GO_S4_L5A_POST_DEPLOY_REPORT.md))
 
-**Après L5a** : [GO_S4_CONTROLLED_ACTIVATION_PLAN.md](GO_S4_CONTROLLED_ACTIVATION_PLAN.md)
+**Après L5a** : [GO_S4_CONTROLLED_ACTIVATION_PLAN.md](GO_S4_CONTROLLED_ACTIVATION_PLAN.md) · [GO_S4_CONTROLLED_ACTIVATION_REPORT.md](GO_S4_CONTROLLED_ACTIVATION_REPORT.md) · [GO_S4_CONTROLLED_ACTIVATION_RECOVERY_REPORT.md](GO_S4_CONTROLLED_ACTIVATION_RECOVERY_REPORT.md)
+
+---
+
+## S4d — Worker Queue Hardening
+
+**Statut** : 🟡 **PR ouverte** — pas de deploy prod sans Go
+
+**Scope** : file `intent.created` séquentielle par `lock_key` · reprise `VALIDATED` · retry 409 propre.
+
+| Composant | Rôle |
+| --- | --- |
+| `worker_queue_hardening.py` | Partition batch · `lock_key` · lock actif |
+| `worker.py` | `deferred_same_scope` · `requeued_lock_conflict` · reprise phase |
+| Tests | 3 intents USDC · assets parallèles · scopes distincts |
+
+### Livrables S4d
+
+- [x] [S4D_WORKER_QUEUE_HARDENING.md](S4D_WORKER_QUEUE_HARDENING.md)
+- [x] `services/transaction_outbox/worker_queue_hardening.py`
+- [x] `tests/test_product_locks_s4d_worker_queue_hardening.py`
+- [ ] PR review · merge (deploy neutre ou pilote — Go explicite)
+
+**Après S4d** : Bundle · Vault · Lombard · Controller
 
 ---
 
@@ -444,6 +467,8 @@ L11 → allowlist (Go CTO)
 
 | Date | Version | Changement |
 | --- | --- | --- |
+| 2026-06-07 | v1.8 | S4d worker queue hardening PR · Controlled Activation + recovery validés |
+| 2026-06-07 | v1.7 | L5a prod neutre · allowlist gate fail-closed · rapport post-deploy |
 | 2026-06-07 | v1.6 | L4c prod neutre · L5a product locks allowlist PR |
 | 2026-06-07 | v1.5 | L4b prod neutre · L4c release lock PR |
 | 2026-06-07 | v1.4 | L4a prod neutre · L4b runtime wiring PR |
