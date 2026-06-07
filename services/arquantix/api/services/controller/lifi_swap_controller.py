@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from services.controller.constants import (
     CONTROLLER_ACTOR,
+    CONTROLLER_VERSION,
+    PE_SNAPSHOT_WALLET_CHECK_SKIPPED,
     RECONCILIATION_REPORT_METADATA_KEY,
 )
 from services.controller.result import ReconciliationOutcome, ReconciliationResult
@@ -101,7 +103,7 @@ def _resolve_amount_out(intent: TransactionIntent, swap: PersonWalletSwap) -> De
 def _compute_report_hash(intent_id: UUID, projection: dict[str, Any]) -> str:
     payload = {
         "intent_id": str(intent_id),
-        "controller": "s3-lifi-swap-v1",
+        "controller": CONTROLLER_VERSION,
         "projection": projection,
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
@@ -244,6 +246,23 @@ def _external_net(external: list[dict[str, str]]) -> Decimal:
     return net
 
 
+def _is_wallet_dedicated_balance_snapshot(snapshot: dict[str, Any]) -> bool:
+    """Snapshot explicite wallet (futur) — check stricte wallet↔wallet autorisée."""
+    marker = str(snapshot.get("source") or snapshot.get("scope") or "").strip().lower()
+    return marker in {"wallet", "privy_wallet"}
+
+
+def _is_pe_product_lock_balance_snapshot(snapshot: dict[str, Any]) -> bool:
+    """Snapshot Product Lock S4 = PE trading_available (hash + version), pas balance Privy."""
+    if _is_wallet_dedicated_balance_snapshot(snapshot):
+        return False
+    return (
+        snapshot.get("version") is not None
+        and bool(str(snapshot.get("hash") or "").strip())
+        and bool(str(snapshot.get("asset") or "").strip())
+    )
+
+
 def _balance_variation_explained(
     db: Session,
     *,
@@ -253,20 +272,21 @@ def _balance_variation_explained(
     swap_debit_amount: Decimal,
     window_start: datetime,
     window_end: datetime,
-) -> tuple[bool, list[dict[str, str]], str | None]:
+) -> tuple[bool, list[dict[str, str]], str | None, dict[str, Any]]:
     meta = intent.metadata_json if isinstance(intent.metadata_json, dict) else {}
     snapshot = meta.get("balance_snapshot")
+    debug: dict[str, Any] = {}
     if not isinstance(snapshot, dict):
-        return True, [], "balance_snapshot_missing_warning"
+        return True, [], "balance_snapshot_missing_warning", debug
 
     snapshot_asset = str(snapshot.get("asset") or "").upper()
     if snapshot_asset and snapshot_asset != from_asset:
-        return True, [], "balance_snapshot_asset_mismatch_warning"
+        return True, [], "balance_snapshot_asset_mismatch_warning", debug
 
     try:
         start_available = Decimal(str(snapshot.get("available") or "0"))
     except Exception:
-        return False, [], "balance_snapshot_invalid"
+        return False, [], "balance_snapshot_invalid", debug
 
     external = _external_movements(
         db,
@@ -277,14 +297,48 @@ def _balance_variation_explained(
     )
     external_net = _external_net(external)
     expected_end = start_available - swap_debit_amount + external_net
+    debug.update(
+        {
+            "snapshot_available": str(start_available),
+            "swap_debit": str(swap_debit_amount),
+            "external_net": str(external_net),
+            "expected_end_wallet_formula": str(expected_end),
+        }
+    )
 
-    wallet = None
+    if _is_pe_product_lock_balance_snapshot(snapshot):
+        from services.lifi.lifi_swap_settlement import _resolve_swap_wallet
+
+        actual_end: str | None = None
+        try:
+            wallet = _resolve_swap_wallet(db, swap)
+            row = (
+                db.query(PersonWalletBalance)
+                .filter(
+                    PersonWalletBalance.person_crypto_wallet_id == wallet.id,
+                    PersonWalletBalance.asset == from_asset.upper(),
+                )
+                .first()
+            )
+            if row is not None:
+                actual_end = str(row.available_balance)
+        except Exception:
+            pass
+        debug.update(
+            {
+                "check_mode": "pe_snapshot_wallet_check_skipped",
+                "actual_end_wallet": actual_end,
+                "pe_snapshot_hash": snapshot.get("hash"),
+            }
+        )
+        return True, external, PE_SNAPSHOT_WALLET_CHECK_SKIPPED, debug
+
     from services.lifi.lifi_swap_settlement import _resolve_swap_wallet
 
     try:
         wallet = _resolve_swap_wallet(db, swap)
     except Exception:
-        return False, external, "wallet_unavailable_for_balance_check"
+        return False, external, "wallet_unavailable_for_balance_check", debug
 
     row = (
         db.query(PersonWalletBalance)
@@ -295,11 +349,13 @@ def _balance_variation_explained(
         .first()
     )
     if row is None:
-        return False, external, "balance_row_missing"
-    actual_end = Decimal(str(row.available_balance))
-    if not _amount_compatible(expected_end, actual_end):
-        return False, external, "balance_variation_unexplained"
-    return True, external, None
+        return False, external, "balance_row_missing", debug
+    actual_end_decimal = Decimal(str(row.available_balance))
+    debug["actual_end_wallet"] = str(actual_end_decimal)
+    debug["check_mode"] = "wallet_snapshot_strict"
+    if not _amount_compatible(expected_end, actual_end_decimal):
+        return False, external, "balance_variation_unexplained", debug
+    return True, external, None, debug
 
 
 def _build_projection(
@@ -641,7 +697,7 @@ def reconcile_lifi_swap_intent(db: Session, intent_id: UUID) -> ReconciliationRe
             )
             return result
 
-    balance_ok, external_movements, balance_issue = _balance_variation_explained(
+    balance_ok, external_movements, balance_issue, balance_debug = _balance_variation_explained(
         db,
         swap=swap,
         intent=intent,
@@ -651,11 +707,17 @@ def reconcile_lifi_swap_intent(db: Session, intent_id: UUID) -> ReconciliationRe
         window_end=window_end,
     )
     projection["external_movements"] = external_movements
-    if balance_issue == "balance_snapshot_missing_warning":
-        if "balance_snapshot_missing_warning" not in projection["warnings"]:
-            projection["warnings"].append(balance_issue)
-    elif balance_issue:
-        projection["balance_issue"] = balance_issue
+    if balance_debug:
+        projection["balance_reconciliation"] = balance_debug
+    if balance_issue:
+        if balance_issue.endswith("_warning") or balance_issue == PE_SNAPSHOT_WALLET_CHECK_SKIPPED:
+            if balance_issue not in projection["warnings"]:
+                projection["warnings"].append(balance_issue)
+        elif balance_issue == "balance_snapshot_missing_warning":
+            if balance_issue not in projection["warnings"]:
+                projection["warnings"].append(balance_issue)
+        else:
+            projection["balance_issue"] = balance_issue
 
     if not balance_ok:
         result = _terminal(

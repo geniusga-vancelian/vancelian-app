@@ -15,7 +15,10 @@ from services.auth.person_identity_bridge import (
     link_external_identity_to_person,
     upsert_person_crypto_wallet,
 )
-from services.controller.constants import RECONCILIATION_REPORT_METADATA_KEY
+from services.controller.constants import (
+    PE_SNAPSHOT_WALLET_CHECK_SKIPPED,
+    RECONCILIATION_REPORT_METADATA_KEY,
+)
 from services.controller.lifi_swap_controller import reconcile_lifi_swap_intent
 from services.controller.result import ReconciliationOutcome
 from services.cost_basis.models import CostBasisExecution
@@ -206,7 +209,19 @@ def _inject_balance_snapshot(intent, *, available: str = "50") -> None:
         "asset": "USDC",
         "available": available,
         "version": 1,
-        "hash": "sha256:test-snapshot",
+        "hash": "sha256:pe-product-lock-test-snapshot",
+    }
+    intent.metadata_json = meta
+
+
+def _inject_wallet_balance_snapshot(intent, *, available: str = "50") -> None:
+    meta = dict(intent.metadata_json or {})
+    meta["balance_snapshot"] = {
+        "asset": "USDC",
+        "available": available,
+        "version": 1,
+        "source": "wallet",
+        "hash": "sha256:wallet-dedicated-test-snapshot",
     }
     intent.metadata_json = meta
 
@@ -275,6 +290,44 @@ def test_controller_external_deposit_during_window_reconciled(db: Session, monke
     assert result.outcome == ReconciliationOutcome.RECONCILED
     assert result.projection is not None
     assert len(result.projection.get("external_movements") or []) >= 1
+
+
+def test_controller_pe_snapshot_wallet_mismatch_reconciled_with_warning(
+    db: Session, monkeypatch
+):
+    """PE Product Lock snapshot ≠ wallet balance — warning only (v1.2)."""
+    pe, bundle, _wallet = _seed_confirmed_swap_bundle(db, monkeypatch)
+    _inject_balance_snapshot(bundle.intent, available="100")
+    db.commit()
+    _advance_to_ledger_settled(db, bundle)
+
+    result = reconcile_lifi_swap_intent(db, intent_id=bundle.intent.id)
+    db.commit()
+    db.refresh(bundle.intent)
+
+    assert result.outcome == ReconciliationOutcome.RECONCILED
+    assert result.reconciliation_report_hash
+    assert bundle.intent.current_phase == IntentOrchestratorPhase.RECONCILED.value
+    assert result.projection is not None
+    assert PE_SNAPSHOT_WALLET_CHECK_SKIPPED in (result.projection.get("warnings") or [])
+    balance_debug = result.projection.get("balance_reconciliation") or {}
+    assert balance_debug.get("check_mode") == "pe_snapshot_wallet_check_skipped"
+
+
+def test_controller_wallet_dedicated_snapshot_strict_balance_terminal(
+    db: Session, monkeypatch
+):
+    """Snapshot wallet explicite — check stricte conservée."""
+    _pe, bundle, _wallet = _seed_confirmed_swap_bundle(db, monkeypatch)
+    _inject_wallet_balance_snapshot(bundle.intent, available="100")
+    db.commit()
+    _advance_to_ledger_settled(db, bundle)
+
+    result = reconcile_lifi_swap_intent(db, intent_id=bundle.intent.id)
+    db.commit()
+
+    assert result.outcome == ReconciliationOutcome.RECONCILIATION_TERMINAL_FAILURE
+    assert result.error_code == "controller.balance_unexplained"
 
 
 def test_controller_debit_missing_retryable(db: Session, monkeypatch):
