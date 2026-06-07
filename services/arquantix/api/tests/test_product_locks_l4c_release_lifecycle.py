@@ -263,6 +263,70 @@ def test_l4c_flag_off_release_is_no_op(db: Session, locks_off):
     assert orchestrator_result.reason == "product_locks_disabled"
 
 
+def test_l4c_flag_off_settlement_worker_hooks_no_op(db: Session, monkeypatch, locks_off):
+    pe, bundle = _seed_orchestrator_intent(db, monkeypatch)
+    bal_before, dep_before = _economic_counts(db, pe.person_id)
+
+    created = process_transaction_outbox_intent_created(db)
+    assert created["processed"] == 1
+
+    db.refresh(bundle.intent)
+    phase_before_settle = bundle.intent.current_phase
+    settle_outbox = TransactionOutboxRepository.insert_event(
+        db,
+        intent_id=bundle.intent.id,
+        event_type=OutboxEventType.INTENT_SETTLE.value,
+        payload_json={"l4c_flag_off": True},
+    )
+    db.commit()
+
+    settle = process_transaction_outbox_intent_settle(db)
+    assert settle["processed"] == 1
+
+    db.refresh(bundle.intent)
+    db.refresh(settle_outbox)
+    assert db.query(TransactionProductLock).count() == 0
+    assert bundle.intent.current_phase == IntentOrchestratorPhase.SETTLED_NOOP.value
+    assert phase_before_settle == IntentOrchestratorPhase.QUEUED.value
+    assert settle_outbox.status == OutboxEventStatus.PROCESSED.value
+    bal_after, dep_after = _economic_counts(db, pe.person_id)
+    assert bal_after == bal_before
+    assert dep_after == dep_before
+
+
+def test_l4c_flag_off_worker_failed_intent_hook_no_op(db: Session, monkeypatch, locks_off):
+    pe, bundle = _seed_orchestrator_intent(db, monkeypatch)
+    bundle.intent.status = IntentStatus.FAILED.value
+    db.commit()
+
+    handle_intent_created_event(db, bundle.outbox)
+
+    assert db.query(TransactionProductLock).count() == 0
+
+
+def test_l4c_flag_off_settle_terminal_failure_hook_no_op(db: Session, monkeypatch, locks_off):
+    pe, bundle = _seed_orchestrator_intent(db, monkeypatch)
+    assert process_transaction_outbox_intent_created(db)["processed"] == 1
+    bundle.intent.idempotency_key = "   "
+    settle_outbox = TransactionOutboxRepository.insert_event(
+        db,
+        intent_id=bundle.intent.id,
+        event_type=OutboxEventType.INTENT_SETTLE.value,
+    )
+    db.commit()
+    bal_before, dep_before = _economic_counts(db, pe.person_id)
+
+    result = process_transaction_outbox_intent_settle(db)
+    assert result["processed"] == 1
+
+    db.refresh(bundle.intent)
+    assert bundle.intent.status == IntentStatus.FAILED.value
+    assert db.query(TransactionProductLock).count() == 0
+    bal_after, dep_after = _economic_counts(db, pe.person_id)
+    assert bal_after == bal_before
+    assert dep_after == dep_before
+
+
 def test_l4c_release_after_settlement_success(db: Session, monkeypatch, locks_on):
     pe, bundle, lock, settle_outbox = _seed_queued_with_lock(db, monkeypatch)
     bal_before, dep_before = _economic_counts(db, pe.person_id)
