@@ -45,6 +45,7 @@ from services.transaction_outbox.worker import (
 )
 from tests.conftest import make_linked_client
 from tests.lifi_orchestrator_test_utils import enable_lifi_orchestrator_allowlist
+from tests.product_locks_test_utils import enable_product_locks_allowlist
 from tests.test_product_locks_l2_engine import _migration_175_ready
 from tests.test_transaction_outbox_worker_s2b import _economic_counts, _migration_173_ready
 
@@ -106,6 +107,7 @@ def _intent(db: Session, person_id) -> TransactionIntent:
 def _seed_orchestrator_intent(db: Session, monkeypatch):
     pe = make_linked_client(db)
     enable_lifi_orchestrator_allowlist(monkeypatch, pe)
+    enable_product_locks_allowlist(monkeypatch, pe)
     monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
     monkeypatch.setenv("LIFI_OUTBOX_WORKER_ENABLED", "true")
     _wallet(db, pe)
@@ -245,22 +247,20 @@ def test_l4c_other_intent_lock_untouched(db: Session, locks_on):
     )
 
 
-def test_l4c_flag_off_release_is_no_op(db: Session, locks_off):
-    pe = make_linked_client(db)
-    wallet = _wallet(db, pe)
-    intent = _intent(db, pe.person_id)
+def test_l4c_flag_off_release_is_no_op(db: Session, locks_off, monkeypatch):
+    pe, bundle = _seed_orchestrator_intent(db, monkeypatch)
 
     service_result = release_product_locks_for_intent(
-        db, intent_id=intent.id, reason="test"
+        db, intent_id=bundle.intent.id, reason="test"
     )
     assert service_result.skipped is True
     assert service_result.released_count == 0
 
     orchestrator_result = release_orchestrator_product_locks_for_intent(
-        db, intent, reason="test"
+        db, bundle.intent, reason="test"
     )
     assert orchestrator_result.skipped is True
-    assert orchestrator_result.reason == "product_locks_disabled"
+    assert orchestrator_result.reason == "product_locks_not_enabled_for_person"
 
 
 def test_l4c_flag_off_settlement_worker_hooks_no_op(db: Session, monkeypatch, locks_off):

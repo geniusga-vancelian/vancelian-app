@@ -10,8 +10,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from database import Person, PersonExternalIdentity
-from services.portfolio_engine.clients.models import Client
+from services.persons.contact_emails import person_contact_emails
 
 
 def lifi_orchestrator_allowed_person_emails() -> frozenset[str]:
@@ -26,23 +25,7 @@ def lifi_orchestrator_allowlist_configured() -> bool:
 
 
 def _person_contact_emails(db: Session, person_id: UUID) -> frozenset[str]:
-    emails: set[str] = set()
-    for row in db.query(Client).filter(Client.person_id == person_id).all():
-        if row.email:
-            emails.add(row.email.strip().lower())
-    for row in (
-        db.query(PersonExternalIdentity).filter(PersonExternalIdentity.person_id == person_id).all()
-    ):
-        if row.external_email:
-            emails.add(row.external_email.strip().lower())
-    person = db.query(Person).filter(Person.id == person_id).first()
-    if person and isinstance(person.profile_json, dict):
-        contact = person.profile_json.get("contact")
-        if isinstance(contact, dict):
-            collected = contact.get("collected_email")
-            if collected:
-                emails.add(str(collected).strip().lower())
-    return frozenset(emails)
+    return person_contact_emails(db, person_id)
 
 
 def is_person_lifi_orchestrator_allowlisted(db: Session, person_id: UUID | None) -> bool:

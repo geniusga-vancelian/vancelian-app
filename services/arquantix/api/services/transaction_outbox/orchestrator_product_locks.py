@@ -7,12 +7,11 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from services.lifi.orchestrator_allowlist import lifi_intent_orchestrator_enabled_for_person
 from services.onchain_indexer.models import TransactionIntent
 from services.portfolio_engine.internal_scope_movements.pe_reader import read_current_pe_scope_snapshot
 from services.privy_wallet.repository import PersonCryptoWalletRepository
+from services.product_locks.allowlist import product_locks_enabled_for_person
 from services.product_locks.balance_snapshot import build_balance_snapshot
-from services.product_locks.config import transaction_product_locks_enabled
 from services.product_locks.enums import ProductLockScope
 from services.product_locks.exceptions import (
     ProductLockConflict,
@@ -85,18 +84,17 @@ def apply_orchestrator_product_locks_before_queued(
 ) -> OrchestratorProductLockApplyResult:
     """Capture snapshot + acquire lock avant transition VALIDATED → QUEUED.
 
-    Flag OFF → no-op strict (comportement prod inchangé).
-    Scope L4b : intent orchestrateur LI.FI allowlisté uniquement.
-    Release lock : ``release_orchestrator_product_locks_for_intent`` (L4c).
+    Flag OFF ou allowlist Product Locks non match → no-op strict.
+    Scope : intent orchestrateur LI.FI uniquement.
     """
-    if not transaction_product_locks_enabled():
-        return OrchestratorProductLockApplyResult(skipped=True, reason="product_locks_disabled")
-
     if not _is_orchestrator_lifi_intent(intent):
         return OrchestratorProductLockApplyResult(skipped=True, reason="not_orchestrator_lifi")
 
-    if not lifi_intent_orchestrator_enabled_for_person(db, intent.person_id):
-        return OrchestratorProductLockApplyResult(skipped=True, reason="not_allowlisted")
+    if not product_locks_enabled_for_person(db, intent.person_id):
+        return OrchestratorProductLockApplyResult(
+            skipped=True,
+            reason="product_locks_not_enabled_for_person",
+        )
 
     wallet_id = _resolve_orchestrator_wallet_id(db, intent.person_id)
     asset = _source_asset(intent)
@@ -197,27 +195,20 @@ def release_orchestrator_product_locks_for_intent(
     *,
     reason: str,
 ) -> OrchestratorProductLockReleaseResult:
-    """Libère les locks actifs de l'intent orchestrateur LI.FI allowlisté.
+    """Libère les locks actifs de l'intent orchestrateur LI.FI.
 
-    Flag OFF → no-op strict (comportement prod inchangé).
-    Appelé aux transitions terminales (settlement, failure, dead_letter, etc.).
+    Flag OFF ou allowlist Product Locks non match → no-op strict.
     """
-    if not transaction_product_locks_enabled():
-        return OrchestratorProductLockReleaseResult(
-            skipped=True,
-            reason="product_locks_disabled",
-        )
-
     if not _is_orchestrator_lifi_intent(intent):
         return OrchestratorProductLockReleaseResult(
             skipped=True,
             reason="not_orchestrator_lifi",
         )
 
-    if not lifi_intent_orchestrator_enabled_for_person(db, intent.person_id):
+    if not product_locks_enabled_for_person(db, intent.person_id):
         return OrchestratorProductLockReleaseResult(
             skipped=True,
-            reason="not_allowlisted",
+            reason="product_locks_not_enabled_for_person",
         )
 
     result = release_product_locks_for_intent(db, intent_id=intent.id, reason=reason)
