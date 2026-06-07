@@ -55,7 +55,11 @@ Fichiers :
 
 Ne **pas** utiliser seulement `balance_before - balance_after`.
 
-Le Controller explique la variation :
+**v1.2 — snapshot Product Lock (PE)** : `metadata_json.balance_snapshot` capture la projection **PE trading_available** (S4), pas la balance wallet Privy. Le Controller **ne doit pas** produire de `RECONCILIATION_TERMINAL_FAILURE` en comparant PE snapshot vs wallet balance. Outcome : warning `balance_snapshot_pe_scope_wallet_check_skipped` + bloc debug `balance_reconciliation` dans la projection.
+
+**Snapshot wallet dédié** (futur : `source=wallet` ou `scope=privy_wallet`) : check stricte wallet↔wallet conservée.
+
+Formule debug (non bloquante pour PE snapshot) :
 
 ```
 expected_end = snapshot.available - swap_debit + external_net
@@ -63,11 +67,28 @@ expected_end = snapshot.available - swap_debit + external_net
 
 où `external_net` = crédits externes − débits externes sur la fenêtre `[swap.created_at, swap.confirmed_at]`, **hors** jambes swap.
 
-Un dépôt externe pendant le swap ne doit pas produire un faux « débit absent ».
+Un dépôt externe pendant le swap ne doit pas produire un faux « débit absent » lors d'une future check wallet stricte.
+
+**Long terme (Option B)** : réconciliation PE snapshot → PE courant (même scope), ou snapshot wallet dédié au lock.
+
+### Chain-aware (v1.2 — projection + warnings)
+
+Le Controller ne réconcilie **pas** uniquement par symbole d'asset : **USDC Base ≠ USDC Ethereum**.
+
+Projection canonique (incluse dans `reconciliation_report_hash`) :
+
+- `from_chain`, `to_chain`, `from_asset`, `to_asset`, `tx_hash`
+- `expected_debit.chain`, `expected_credit.chain`
+- `observed_* .chain_id` quand présent sur les deposits
+
+Warnings (non bloquants si legacy) :
+
+- `chain_dimension_missing_for_ledger_check` — jambes sans `chain_id` explicite
+- `chain_dimension_missing_for_balance_check` — `person_wallet_balances` sans dimension chain (schéma actuel)
+
+Pas de validation chain stricte en v1.2 — report + warnings uniquement.
 
 ### Hors scope écriture
-
-Autorisé :
 
 - `transaction_intents.current_phase`
 - `transaction_intent_transitions`
@@ -84,7 +105,7 @@ Interdit :
 |---------|-------|--------------|
 | `RECONCILED` | `RECONCILED` | 1 débit + 1 crédit, montants/assets OK |
 | `RECONCILIATION_RETRYABLE_FAILURE` | `RECONCILIATION_RETRYABLE_FAILURE` | `tx_hash` manquant, débit/crédit absent |
-| `RECONCILIATION_TERMINAL_FAILURE` | `RECONCILIATION_TERMINAL_FAILURE` | double crédit, mauvais asset/montant, balance inexpliquée |
+| `RECONCILIATION_TERMINAL_FAILURE` | `RECONCILIATION_TERMINAL_FAILURE` | double crédit, mauvais asset/montant, balance wallet inexpliquée (snapshot wallet dédié) |
 | `NOOP_ALREADY_RECONCILED` | (inchangé) | 2ᵉ appel sur intent déjà `RECONCILED` |
 
 ## Idempotence
@@ -115,7 +136,11 @@ Suite : `tests/test_controller_lifi_swap_v1.py`
 
 - Nominal → `RECONCILED`
 - Crédit webhook réutilisé → `RECONCILED`
-- Dépôt externe + snapshot → `RECONCILED`
+- Dépôt externe + snapshot PE → `RECONCILED`
+- PE snapshot ≠ wallet balance → `RECONCILED` + warning (v1.2)
+- Snapshot wallet dédié incohérent → terminal
+- Hash différent si `from_chain`/`to_chain` différents
+- Legacy sans `chain_id` sur legs → warnings, pas terminal
 - Débit/crédit absent → retryable
 - Double crédit / mauvais asset / mauvais montant → terminal
 - `tx_hash` manquant → retryable
