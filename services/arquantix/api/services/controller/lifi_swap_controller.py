@@ -12,6 +12,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.controller.constants import (
+    CHAIN_DIMENSION_MISSING_BALANCE,
+    CHAIN_DIMENSION_MISSING_LEDGER,
     CONTROLLER_ACTOR,
     CONTROLLER_VERSION,
     PE_SNAPSHOT_WALLET_CHECK_SKIPPED,
@@ -98,6 +100,51 @@ def _resolve_amount_out(intent: TransactionIntent, swap: PersonWalletSwap) -> De
         if amount > 0:
             return amount
     raise ValueError("amount_out_missing")
+
+
+def _swap_chain_context(swap: PersonWalletSwap) -> dict[str, str]:
+    """Contexte chain-aware canonique — USDC Base ≠ USDC Ethereum."""
+    return {
+        "from_chain": str(swap.from_chain or "").strip().lower(),
+        "to_chain": str(swap.to_chain or "").strip().lower(),
+        "from_asset": str(swap.from_asset).upper(),
+        "to_asset": str(swap.to_asset).upper(),
+        "tx_hash": str(swap.tx_hash or "").strip().lower(),
+    }
+
+
+def _deposit_chain_fields(deposit: PersonWalletDeposit | None) -> dict[str, Any]:
+    if deposit is None:
+        return {}
+    return {
+        "chain_id": deposit.chain_id,
+        "chain_type": str(deposit.chain_type or ""),
+    }
+
+
+def _collect_chain_dimension_warnings(
+    *,
+    debits: list[PersonWalletDeposit],
+    credits: list[PersonWalletDeposit],
+    include_balance_warning: bool,
+) -> list[str]:
+    """Warnings explicites — pas de validation chain stricte en v1.2."""
+    warnings: list[str] = []
+    legs = debits + credits
+    if legs and any(dep.chain_id is None for dep in legs):
+        warnings.append(CHAIN_DIMENSION_MISSING_LEDGER)
+    if include_balance_warning:
+        warnings.append(CHAIN_DIMENSION_MISSING_BALANCE)
+    return warnings
+
+
+def _merge_warnings(projection: dict[str, Any], extra: list[str]) -> None:
+    current = projection.get("warnings")
+    bucket = list(current) if isinstance(current, list) else []
+    for code in extra:
+        if code not in bucket:
+            bucket.append(code)
+    projection["warnings"] = bucket
 
 
 def _compute_report_hash(intent_id: UUID, projection: dict[str, Any]) -> str:
@@ -373,19 +420,33 @@ def _build_projection(
     observed_debit = debits[0] if debits else None
     observed_credit = credits[0] if credits else None
     legs = detect_swap_ledger_legs(db, swap)
+    chain = _swap_chain_context(swap)
     return {
         "intent_id": str(intent.id),
         "swap_id": str(swap.id),
-        "tx_hash": str(swap.tx_hash or ""),
+        "tx_hash": chain["tx_hash"],
+        "from_chain": chain["from_chain"],
+        "to_chain": chain["to_chain"],
+        "from_asset": chain["from_asset"],
+        "to_asset": chain["to_asset"],
         "settlement_receipt_hash": settlement_marker_present(intent),
-        "expected_debit": {"asset": str(swap.from_asset).upper(), "amount": str(amount_in)},
-        "expected_credit": {"asset": str(swap.to_asset).upper(), "amount": str(amount_out)},
+        "expected_debit": {
+            "asset": chain["from_asset"],
+            "amount": str(amount_in),
+            "chain": chain["from_chain"],
+        },
+        "expected_credit": {
+            "asset": chain["to_asset"],
+            "amount": str(amount_out),
+            "chain": chain["to_chain"],
+        },
         "observed_debit": (
             {
                 "deposit_id": str(observed_debit.id),
                 "asset": observed_debit.asset.upper(),
                 "amount": str(observed_debit.amount),
                 "tx_hash": str(observed_debit.tx_hash or ""),
+                **_deposit_chain_fields(observed_debit),
             }
             if observed_debit
             else None
@@ -397,6 +458,7 @@ def _build_projection(
                 "amount": str(observed_credit.amount),
                 "tx_hash": str(observed_credit.tx_hash or ""),
                 "source": legs.credit_source,
+                **_deposit_chain_fields(observed_credit),
             }
             if observed_credit
             else None
@@ -718,6 +780,15 @@ def reconcile_lifi_swap_intent(db: Session, intent_id: UUID) -> ReconciliationRe
                 projection["warnings"].append(balance_issue)
         else:
             projection["balance_issue"] = balance_issue
+
+    _merge_warnings(
+        projection,
+        _collect_chain_dimension_warnings(
+            debits=debits,
+            credits=credits,
+            include_balance_warning=True,
+        ),
+    )
 
     if not balance_ok:
         result = _terminal(

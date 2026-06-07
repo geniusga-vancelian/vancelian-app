@@ -8,6 +8,10 @@ RECONCILIATION_REPORT_METADATA_KEY = "reconciliation_report_hash"
 # Snapshot Product Lock S4 = projection PE trading_available (pas wallet Privy).
 PE_SNAPSHOT_WALLET_CHECK_SKIPPED = "balance_snapshot_pe_scope_wallet_check_skipped"
 
+# Chain dimension — legacy data may lack per-chain granularity on ledger/balance.
+CHAIN_DIMENSION_MISSING_LEDGER = "chain_dimension_missing_for_ledger_check"
+CHAIN_DIMENSION_MISSING_BALANCE = "chain_dimension_missing_for_balance_check"
+
 # Tolérance montants (alignée settlement S3b).
 _AMOUNT_RELATIVE_TOLERANCE = 0.02
 _AMOUNT_ABSOLUTE_TOLERANCE = 1e-12

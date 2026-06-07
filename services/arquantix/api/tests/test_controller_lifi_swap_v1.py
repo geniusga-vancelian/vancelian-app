@@ -16,10 +16,15 @@ from services.auth.person_identity_bridge import (
     upsert_person_crypto_wallet,
 )
 from services.controller.constants import (
+    CHAIN_DIMENSION_MISSING_BALANCE,
+    CHAIN_DIMENSION_MISSING_LEDGER,
     PE_SNAPSHOT_WALLET_CHECK_SKIPPED,
     RECONCILIATION_REPORT_METADATA_KEY,
 )
-from services.controller.lifi_swap_controller import reconcile_lifi_swap_intent
+from services.controller.lifi_swap_controller import (
+    _compute_report_hash,
+    reconcile_lifi_swap_intent,
+)
 from services.controller.result import ReconciliationOutcome
 from services.cost_basis.models import CostBasisExecution
 from services.lifi.enums import SwapSessionStatus
@@ -312,6 +317,70 @@ def test_controller_pe_snapshot_wallet_mismatch_reconciled_with_warning(
     assert PE_SNAPSHOT_WALLET_CHECK_SKIPPED in (result.projection.get("warnings") or [])
     balance_debug = result.projection.get("balance_reconciliation") or {}
     assert balance_debug.get("check_mode") == "pe_snapshot_wallet_check_skipped"
+
+
+def test_controller_report_hash_differs_by_chain(db: Session):
+    """Même asset/montant — hash différent si from_chain/to_chain diffèrent."""
+    from uuid import uuid4
+
+    intent_id = uuid4()
+    common = {
+        "tx_hash": "0xabc",
+        "from_asset": "USDC",
+        "to_asset": "ETH",
+        "expected_debit": {"asset": "USDC", "amount": "10", "chain": "base"},
+        "expected_credit": {"asset": "ETH", "amount": "0.01", "chain": "base"},
+    }
+    base_proj = {**common, "from_chain": "base", "to_chain": "base"}
+    eth_proj = {**common, "from_chain": "ethereum", "to_chain": "ethereum"}
+    assert _compute_report_hash(intent_id, base_proj) != _compute_report_hash(
+        intent_id, eth_proj
+    )
+
+
+def test_controller_projection_includes_from_chain_and_to_chain(db: Session, monkeypatch):
+    pe, bundle, _wallet = _seed_confirmed_swap_bundle(db, monkeypatch)
+    _advance_to_ledger_settled(db, bundle)
+
+    result = reconcile_lifi_swap_intent(db, intent_id=bundle.intent.id)
+    db.commit()
+
+    assert result.outcome == ReconciliationOutcome.RECONCILED
+    proj = result.projection or {}
+    assert proj.get("from_chain") == "base"
+    assert proj.get("to_chain") == "base"
+    assert proj.get("from_asset") == "USDC"
+    assert proj.get("to_asset") == "ETH"
+    assert proj.get("expected_debit", {}).get("chain") == "base"
+    assert proj.get("expected_credit", {}).get("chain") == "base"
+
+
+def test_controller_legacy_missing_chain_id_warning_not_blocking(db: Session, monkeypatch):
+    _pe, bundle, _wallet = _seed_confirmed_swap_bundle(db, monkeypatch)
+    _advance_to_ledger_settled(db, bundle)
+
+    for dep in (
+        db.query(PersonWalletDeposit)
+        .filter(
+            PersonWalletDeposit.idempotency_key.in_(
+                [
+                    swap_debit_idempotency_key(str(bundle.swap.id)),
+                    swap_credit_idempotency_key(str(bundle.swap.id)),
+                ]
+            )
+        )
+        .all()
+    ):
+        dep.chain_id = None
+    db.commit()
+
+    result = reconcile_lifi_swap_intent(db, intent_id=bundle.intent.id)
+    db.commit()
+
+    assert result.outcome == ReconciliationOutcome.RECONCILED
+    warnings = result.projection.get("warnings") or []
+    assert CHAIN_DIMENSION_MISSING_LEDGER in warnings
+    assert CHAIN_DIMENSION_MISSING_BALANCE in warnings
 
 
 def test_controller_wallet_dedicated_snapshot_strict_balance_terminal(

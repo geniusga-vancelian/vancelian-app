@@ -71,6 +71,23 @@ Un dépôt externe pendant le swap ne doit pas produire un faux « débit absent
 
 **Long terme (Option B)** : réconciliation PE snapshot → PE courant (même scope), ou snapshot wallet dédié au lock.
 
+### Chain-aware (v1.2 — projection + warnings)
+
+Le Controller ne réconcilie **pas** uniquement par symbole d'asset : **USDC Base ≠ USDC Ethereum**.
+
+Projection canonique (incluse dans `reconciliation_report_hash`) :
+
+- `from_chain`, `to_chain`, `from_asset`, `to_asset`, `tx_hash`
+- `expected_debit.chain`, `expected_credit.chain`
+- `observed_* .chain_id` quand présent sur les deposits
+
+Warnings (non bloquants si legacy) :
+
+- `chain_dimension_missing_for_ledger_check` — jambes sans `chain_id` explicite
+- `chain_dimension_missing_for_balance_check` — `person_wallet_balances` sans dimension chain (schéma actuel)
+
+Pas de validation chain stricte en v1.2 — report + warnings uniquement.
+
 ### Hors scope écriture
 
 - `transaction_intents.current_phase`
@@ -122,6 +139,8 @@ Suite : `tests/test_controller_lifi_swap_v1.py`
 - Dépôt externe + snapshot PE → `RECONCILED`
 - PE snapshot ≠ wallet balance → `RECONCILED` + warning (v1.2)
 - Snapshot wallet dédié incohérent → terminal
+- Hash différent si `from_chain`/`to_chain` différents
+- Legacy sans `chain_id` sur legs → warnings, pas terminal
 - Débit/crédit absent → retryable
 - Double crédit / mauvais asset / mauvais montant → terminal
 - `tx_hash` manquant → retryable
