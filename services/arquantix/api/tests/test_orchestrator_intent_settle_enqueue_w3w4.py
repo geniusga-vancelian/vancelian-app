@@ -24,6 +24,7 @@ from services.transaction_outbox.intent_phases import IntentOrchestratorPhase
 from services.transaction_outbox.orchestrator_settle_enqueue import (
     ENQUEUE_SOURCE,
     maybe_enqueue_orchestrator_intent_settle,
+    skip_legacy_swap_settlement_for_orchestrator,
 )
 from services.transaction_outbox.repository import TransactionOutboxRepository
 from services.transaction_outbox.worker import handle_intent_created_event
@@ -316,19 +317,91 @@ def test_w3w4_processed_settle_silent_rerun(db: Session, monkeypatch, caplog):
     assert "orchestrator_intent_settle_enqueued" not in caplog.text
 
 
-def test_w3w4_apply_swap_settlement_skipped_for_orchestrator(db: Session, monkeypatch):
+def test_w3w4_legacy_skipped_when_orchestrator_active_for_person(db: Session, monkeypatch):
+    """Allowlist + intent orchestrateur + flag ON → skip legacy."""
     pe, swap, _ = _seed_orchestrator_queued_swap(db, monkeypatch)
+    monkeypatch.setenv("LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED", "true")
+
+    assert skip_legacy_swap_settlement_for_orchestrator(db, swap) is True
+
     before_deposits = (
         db.query(PersonWalletDeposit).filter(PersonWalletDeposit.person_id == pe.person_id).count()
     )
-
     apply_swap_settlement(db, swap, sync_source="lifi_swap", allow_mock_quote_amount=True)
     db.commit()
-
     after_deposits = (
         db.query(PersonWalletDeposit).filter(PersonWalletDeposit.person_id == pe.person_id).count()
     )
     assert after_deposits == before_deposits
+
+
+def test_w3w4_residual_intent_non_allowlisted_does_not_skip_legacy(db: Session, monkeypatch):
+    """Intent Phase 2 résiduel hors allowlist → legacy s'exécute (pas de trou settlement)."""
+    monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
+    monkeypatch.setenv("LIFI_ORCHESTRATOR_ALLOWED_PERSON_EMAILS", "other-pilot@example.com")
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+
+    swap = PersonWalletSwap(
+        person_id=pe.person_id,
+        status=SwapSessionStatus.CONFIRMED.value,
+        from_asset="USDC",
+        to_asset="AAVE",
+        from_chain="base",
+        to_chain="base",
+        amount_in=Decimal("1"),
+        slippage_bps=50,
+        expires_at=datetime.now(timezone.utc),
+        tx_hash=TX_HASH,
+        confirmed_at=datetime.now(timezone.utc),
+        estimated_receive=Decimal("0.05"),
+        audit_log=[{"event": "quote_requested", "signing_wallet_address": EVM_ADDR}],
+    )
+    db.add(swap)
+    db.flush()
+    attach_orchestrator_intent_to_swap_atomic(db, person_id=pe.person_id, swap_id=swap.id)
+    db.commit()
+
+    assert skip_legacy_swap_settlement_for_orchestrator(db, swap) is False
+
+    enqueue = maybe_enqueue_orchestrator_intent_settle(db, swap)
+    assert enqueue.enqueued is False
+    assert enqueue.reason == "orchestrator_not_enabled"
+
+    before_deposits = (
+        db.query(PersonWalletDeposit).filter(PersonWalletDeposit.person_id == pe.person_id).count()
+    )
+    apply_swap_settlement(db, swap, sync_source="lifi_swap", allow_mock_quote_amount=True)
+    db.commit()
+    after_deposits = (
+        db.query(PersonWalletDeposit).filter(PersonWalletDeposit.person_id == pe.person_id).count()
+    )
+    assert after_deposits > before_deposits
+
+
+def test_w3w4_allowlist_removed_mid_flight_does_not_skip_legacy(db: Session, monkeypatch):
+    """Allowlist retirée après création intent → legacy reprend (pas de skip orphelin)."""
+    pe, swap, intent = _seed_orchestrator_queued_swap(db, monkeypatch)
+    assert skip_legacy_swap_settlement_for_orchestrator(db, swap) is True
+
+    monkeypatch.delenv("LIFI_ORCHESTRATOR_ALLOWED_PERSON_EMAILS", raising=False)
+
+    assert skip_legacy_swap_settlement_for_orchestrator(db, swap) is False
+
+    enqueue = maybe_enqueue_orchestrator_intent_settle(db, swap)
+    assert enqueue.enqueued is False
+    assert enqueue.reason == "orchestrator_not_enabled"
+
+    before_deposits = (
+        db.query(PersonWalletDeposit).filter(PersonWalletDeposit.person_id == pe.person_id).count()
+    )
+    apply_swap_settlement(db, swap, sync_source="lifi_swap", allow_mock_quote_amount=True)
+    db.commit()
+    after_deposits = (
+        db.query(PersonWalletDeposit).filter(PersonWalletDeposit.person_id == pe.person_id).count()
+    )
+    assert after_deposits > before_deposits
+    assert intent.current_phase == "QUEUED"
 
 
 def test_w3w4_refresh_lifi_status_done_enqueues_via_execute_service(db: Session, monkeypatch):

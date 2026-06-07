@@ -687,7 +687,7 @@ settle_transaction_intent_idempotently()
 | Race refresh + reconciliation | `SELECT FOR UPDATE` sur intent + **unique `(intent_id, event_type)`** (migration 174) |
 | CONFIRMED avant QUEUED | enqueue différé → worker `intent.created` rappelle enqueue au passage **QUEUED** |
 | Écritures | **Outbox uniquement** — pas de ledger / PE / cost basis à l’enqueue |
-| Legacy guard | `apply_swap_settlement` skip si intent orchestrateur lié |
+| Legacy guard | `apply_swap_settlement` skip si intent orchestrateur lié **et** orchestrateur actif (allowlist) |
 | Tests | `tests/test_orchestrator_intent_settle_enqueue_w3w4.py` (19 tests) |
 
 **Hors scope W3/W4** (milestones ultérieurs) :

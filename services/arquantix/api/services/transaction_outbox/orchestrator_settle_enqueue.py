@@ -68,8 +68,15 @@ def find_phase2_orchestrator_intent_for_swap(
 
 
 def skip_legacy_swap_settlement_for_orchestrator(db: Session, swap: Any) -> bool:
-    """Legacy ``apply_swap_settlement`` interdit si intent orchestrateur Phase 2 lié."""
-    return find_phase2_orchestrator_intent_for_swap(db, swap) is not None
+    """Legacy ``apply_swap_settlement`` interdit si le rail orchestrateur est actif pour la personne.
+
+    Ne skip pas sur un intent Phase 2 résiduel hors allowlist — évite un trou sans settlement.
+    """
+    intent = find_phase2_orchestrator_intent_for_swap(db, swap)
+    if intent is None:
+        return False
+    person_id = getattr(swap, "person_id", None) or intent.person_id
+    return lifi_intent_orchestrator_enabled_for_person(db, person_id)
 
 
 def _validate_enqueue_preconditions(
