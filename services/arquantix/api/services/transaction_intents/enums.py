@@ -10,8 +10,16 @@ class IntentProductType(str, Enum):
     LEDGITY_VAULT = "ledgity_vault"
     LOMBARD_BORROW = "lombard_borrow"
     BUNDLE_INVEST = "bundle_invest"
+    BUNDLE_LEG = "bundle_leg"
     BUNDLE_WITHDRAW = "bundle_withdraw"
     PRIVY_DEPOSIT = "privy_deposit"
+
+
+class IntentRole(str, Enum):
+    """Hiérarchie parent/child Bundle (B1 — colonnes DB, pas de wiring runtime)."""
+
+    PARENT = "parent"
+    CHILD = "child"
 
 
 class IntentOperationType(str, Enum):
