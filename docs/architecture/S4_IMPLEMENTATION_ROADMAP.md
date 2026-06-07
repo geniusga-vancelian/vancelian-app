@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Plan d'exécution · PRs découplées |
 | **Date** | 2026-06-07 |
-| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · L4a ✅ prod · **L4b en cours** (PR) |
+| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · L4a ✅ prod · L4b ✅ prod · **L4c en cours** (PR) |
 | **Gouvernance** | [S4_PRODUCT_LOCKS_MATRIX.md](S4_PRODUCT_LOCKS_MATRIX.md) (validé CTO v1.1) |
 | **Jalon** | Tag `phase2-closed-s4-inventory-v1.1` |
 | **Références** | [ADR 001 §5bis](adr/001-intent-as-orchestrator.md) · [PHASE2 POC § S4](PHASE2_POC_LIFI_STANDALONE_SWAP.md) |
@@ -185,7 +185,9 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L4 — Middleware 409
 
-**Statut** : ✅ **L4a prod neutre** (PR #44 · TD `:131`) · 🟡 **L4b en cours** (PR #TBD)
+**Statut** : ✅ **L4a prod neutre** (PR #44 · TD `:131`) · ✅ **L4b prod neutre** (PR #45 · TD `:132`) · 🟡 **L4c en cours** (PR #TBD)
+
+> Product Locks restent **OFF en prod** jusqu'à Go explicite post-L4c.
 
 > **L4a** : validation / exceptions 409 · non branché runtime.
 > **L4b** : hook worker ``intent.created`` · **branché mais flag OFF en prod** · release lock → L4c.
@@ -223,14 +225,29 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ### Livrables L4b
 
-- [ ] `services/transaction_outbox/orchestrator_product_locks.py`
-- [ ] hook `worker.py` (derrière flag)
-- [ ] `tests/test_product_locks_l4b_runtime_wiring.py`
+- [x] `services/transaction_outbox/orchestrator_product_locks.py`
+- [x] hook `worker.py` (derrière flag)
+- [x] `tests/test_product_locks_l4b_runtime_wiring.py`
+- [x] PR review · merge · prod verify ([GO_S4_L4B_POST_DEPLOY_REPORT.md](GO_S4_L4B_POST_DEPLOY_REPORT.md))
+
+### L4c — Release lock (cette PR)
+
+**Scope** : libération lock aux transitions terminales orchestrateur LI.FI · flag OFF prod.
+
+| Transition | Release reason |
+| --- | --- |
+| Settlement success (`SETTLED_NOOP` / `LEDGER_SETTLED`) | `settlement_success` |
+| Settlement terminal failure | `settlement_terminal_failure` |
+| Outbox `dead_letter` (worker / settle) | `outbox_dead_letter` |
+| Intent `FAILED` au worker `intent.created` | `intent_failed` |
+
+### Livrables L4c
+
+- [ ] `release_product_locks_for_intent()` — idempotent · all active locks for intent
+- [ ] `release_orchestrator_product_locks_for_intent()` — gate orchestrateur + flag
+- [ ] hooks `worker.py` · `settlement_worker.py`
+- [ ] `tests/test_product_locks_l4c_release_lifecycle.py`
 - [ ] PR review · merge (flag OFF prod)
-
-### L4c — Release lock (futur)
-
-**Scope** : libération lock aux phases terminales · hors L4b.
 
 ---
 
@@ -399,6 +416,7 @@ L11 → allowlist (Go CTO)
 
 | Date | Version | Changement |
 | --- | --- | --- |
+| 2026-06-07 | v1.5 | L4b prod neutre · L4c release lock PR |
 | 2026-06-07 | v1.4 | L4a prod neutre · L4b runtime wiring PR |
 | 2026-06-07 | v1.3 | L4a middleware skeleton · L3 prod neutre |
 | 2026-06-07 | v1.2 | L2 merged prod · L3 snapshot PR ouverte |

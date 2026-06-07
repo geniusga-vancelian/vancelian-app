@@ -28,11 +28,16 @@ from services.product_locks.middleware import (
     validate_product_lock_or_raise,
 )
 from services.product_locks.models import TransactionProductLock
-from services.product_locks.results import AcquireProductLockResult, ReleaseProductLockResult
+from services.product_locks.results import (
+    AcquireProductLockResult,
+    ReleaseProductLockResult,
+    ReleaseProductLocksForIntentResult,
+)
 from services.product_locks.service import (
     acquire_product_lock,
     expire_product_locks,
     release_product_lock,
+    release_product_locks_for_intent,
 )
 
 __all__ = [
@@ -50,6 +55,7 @@ __all__ = [
     "ProductLockMiddlewareResult",
     "ProductLockScope",
     "ProductLockStatus",
+    "ReleaseProductLocksForIntentResult",
     "ReleaseProductLockResult",
     "TransactionProductLock",
     "acquire_product_lock",
@@ -59,6 +65,7 @@ __all__ = [
     "default_product_lock_ttl_seconds",
     "expire_product_locks",
     "release_product_lock",
+    "release_product_locks_for_intent",
     "resolve_available_from_pe_snapshot",
     "transaction_product_locks_enabled",
     "validate_balance_snapshot_or_raise",

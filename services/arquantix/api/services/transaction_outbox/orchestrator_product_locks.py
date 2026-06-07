@@ -22,7 +22,7 @@ from services.product_locks.middleware import (
     validate_balance_snapshot_or_raise,
     validate_product_lock_or_raise,
 )
-from services.product_locks.service import acquire_product_lock
+from services.product_locks.service import acquire_product_lock, release_product_locks_for_intent
 from services.transaction_intents.enums import IntentProductType
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,14 @@ BALANCE_SNAPSHOT_VERSION = 1
 class OrchestratorProductLockApplyResult:
     skipped: bool
     applied: bool = False
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class OrchestratorProductLockReleaseResult:
+    skipped: bool
+    released_count: int = 0
+    idempotent: bool = False
     reason: str | None = None
 
 
@@ -79,7 +87,7 @@ def apply_orchestrator_product_locks_before_queued(
 
     Flag OFF → no-op strict (comportement prod inchangé).
     Scope L4b : intent orchestrateur LI.FI allowlisté uniquement.
-    Release lock : hors scope (L4c).
+    Release lock : ``release_orchestrator_product_locks_for_intent`` (L4c).
     """
     if not transaction_product_locks_enabled():
         return OrchestratorProductLockApplyResult(skipped=True, reason="product_locks_disabled")
@@ -181,3 +189,57 @@ def apply_orchestrator_product_locks_before_queued(
         },
     )
     return OrchestratorProductLockApplyResult(skipped=False, applied=True)
+
+
+def release_orchestrator_product_locks_for_intent(
+    db: Session,
+    intent: TransactionIntent,
+    *,
+    reason: str,
+) -> OrchestratorProductLockReleaseResult:
+    """Libère les locks actifs de l'intent orchestrateur LI.FI allowlisté.
+
+    Flag OFF → no-op strict (comportement prod inchangé).
+    Appelé aux transitions terminales (settlement, failure, dead_letter, etc.).
+    """
+    if not transaction_product_locks_enabled():
+        return OrchestratorProductLockReleaseResult(
+            skipped=True,
+            reason="product_locks_disabled",
+        )
+
+    if not _is_orchestrator_lifi_intent(intent):
+        return OrchestratorProductLockReleaseResult(
+            skipped=True,
+            reason="not_orchestrator_lifi",
+        )
+
+    if not lifi_intent_orchestrator_enabled_for_person(db, intent.person_id):
+        return OrchestratorProductLockReleaseResult(
+            skipped=True,
+            reason="not_allowlisted",
+        )
+
+    result = release_product_locks_for_intent(db, intent_id=intent.id, reason=reason)
+    if result.skipped:
+        return OrchestratorProductLockReleaseResult(
+            skipped=True,
+            reason="product_locks_disabled",
+        )
+
+    if result.released_count:
+        logger.info(
+            "orchestrator_product_lock_released",
+            extra={
+                "intent_id": str(intent.id),
+                "released_count": result.released_count,
+                "reason": reason,
+            },
+        )
+
+    return OrchestratorProductLockReleaseResult(
+        skipped=False,
+        released_count=result.released_count,
+        idempotent=result.idempotent,
+        reason=reason,
+    )
