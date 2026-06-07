@@ -137,10 +137,11 @@ def test_l4b_flag_on_second_intent_same_slot_conflict(db: Session, monkeypatch, 
 
     second_result = process_transaction_outbox_intent_created(db)
     assert second_result["processed"] == 0
-    assert second_result["failed"] == 1
+    assert second_result["failed"] == 0
+    assert second_result["deferred_same_scope"] == 1
 
     db.refresh(second.intent)
-    assert second.intent.current_phase == IntentOrchestratorPhase.VALIDATED.value
+    assert second.intent.current_phase == IntentOrchestratorPhase.CREATED.value
     assert (second.intent.metadata_json or {}).get("balance_snapshot") is None
     assert db.query(TransactionProductLock).count() == 1
 

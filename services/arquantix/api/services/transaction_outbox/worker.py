@@ -3,13 +3,13 @@
 Ne touche que ``transaction_intents``, ``transaction_intent_transitions``, ``transaction_outbox``.
 Pas de settlement, controller, provider_submitted, ni table économique directe.
 Product locks L4b : hook optionnel via ``TRANSACTION_PRODUCT_LOCKS_ENABLED`` (default OFF).
+S4d : partition séquentielle par ``lock_key`` · reprise ``VALIDATED`` · retry lock conflict.
 """
 from __future__ import annotations
 
 import logging
 import os
 import socket
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from services.lifi.config import lifi_outbox_worker_enabled
 from services.lifi.orchestrator_allowlist import lifi_outbox_worker_enabled_for_person
 from services.onchain_indexer.models import TransactionIntent
+from services.product_locks.exceptions import ProductLockConflict409
 from services.transaction_intents.enums import IntentStatus
 from services.transaction_outbox.enums import OutboxEventStatus, OutboxEventType
 from services.transaction_outbox.intent_phases import IntentOrchestratorPhase
@@ -25,11 +26,13 @@ from services.transaction_outbox.repository import (
     TransactionIntentTransitionRepository,
     TransactionOutboxRepository,
 )
+from services.transaction_outbox.worker_queue_hardening import partition_intent_created_events
 
 logger = logging.getLogger(__name__)
 
 WORKER_ACTOR = "outbox_worker_intent_created"
 _RETRY_DELAY_SECONDS = 30
+_LOCK_CONFLICT_RETRY_DELAY_SECONDS = 5
 
 
 def _worker_instance_id() -> str:
@@ -38,10 +41,53 @@ def _worker_instance_id() -> str:
     return f"{host}:{pid}"
 
 
-def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:
-    """CREATED → VALIDATED → QUEUED (phase uniquement — pas de gate balance S2b)."""
+def _transition_validated(db: Session, intent: TransactionIntent, outbox: TransactionOutbox) -> None:
+    TransactionIntentTransitionRepository.insert_transition(
+        db,
+        intent_id=intent.id,
+        from_status=intent.status,
+        to_status=intent.status,
+        phase=IntentOrchestratorPhase.VALIDATED.value,
+        actor=WORKER_ACTOR,
+        metadata_json={"outbox_id": str(outbox.id), "s2b": True},
+    )
+    intent.current_phase = IntentOrchestratorPhase.VALIDATED.value
+
+
+def _apply_locks_queue_and_enqueue_settle(
+    db: Session,
+    intent: TransactionIntent,
+    outbox: TransactionOutbox,
+) -> None:
     from services.transaction_outbox.orchestrator_product_locks import (
         apply_orchestrator_product_locks_before_queued,
+    )
+    from services.transaction_outbox.orchestrator_settle_enqueue import (
+        maybe_enqueue_orchestrator_intent_settle_after_worker_queued,
+    )
+
+    apply_orchestrator_product_locks_before_queued(db, intent)
+
+    TransactionIntentTransitionRepository.insert_transition(
+        db,
+        intent_id=intent.id,
+        from_status=intent.status,
+        to_status=intent.status,
+        phase=IntentOrchestratorPhase.QUEUED.value,
+        actor=WORKER_ACTOR,
+        metadata_json={"outbox_id": str(outbox.id), "s2b": True},
+    )
+    intent.current_phase = IntentOrchestratorPhase.QUEUED.value
+
+    maybe_enqueue_orchestrator_intent_settle_after_worker_queued(db, intent)
+
+
+def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:
+    """CREATED → VALIDATED → QUEUED (phase uniquement — pas de gate balance S2b).
+
+    S4d : reprise depuis ``VALIDATED`` si un lock conflict a interrompu le handler précédemment.
+    """
+    from services.transaction_outbox.orchestrator_product_locks import (
         release_orchestrator_product_locks_for_intent,
     )
 
@@ -58,38 +104,16 @@ def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:
     phase = (intent.current_phase or IntentOrchestratorPhase.CREATED.value).upper()
     if phase == IntentOrchestratorPhase.QUEUED.value:
         return
+
+    if phase == IntentOrchestratorPhase.VALIDATED.value:
+        _apply_locks_queue_and_enqueue_settle(db, intent, outbox)
+        return
+
     if phase != IntentOrchestratorPhase.CREATED.value:
         raise ValueError(f"intent_created_unexpected_phase:{phase}")
 
-    TransactionIntentTransitionRepository.insert_transition(
-        db,
-        intent_id=intent.id,
-        from_status=intent.status,
-        to_status=intent.status,
-        phase=IntentOrchestratorPhase.VALIDATED.value,
-        actor=WORKER_ACTOR,
-        metadata_json={"outbox_id": str(outbox.id), "s2b": True},
-    )
-    intent.current_phase = IntentOrchestratorPhase.VALIDATED.value
-
-    apply_orchestrator_product_locks_before_queued(db, intent)
-
-    TransactionIntentTransitionRepository.insert_transition(
-        db,
-        intent_id=intent.id,
-        from_status=intent.status,
-        to_status=intent.status,
-        phase=IntentOrchestratorPhase.QUEUED.value,
-        actor=WORKER_ACTOR,
-        metadata_json={"outbox_id": str(outbox.id), "s2b": True},
-    )
-    intent.current_phase = IntentOrchestratorPhase.QUEUED.value
-
-    from services.transaction_outbox.orchestrator_settle_enqueue import (
-        maybe_enqueue_orchestrator_intent_settle_after_worker_queued,
-    )
-
-    maybe_enqueue_orchestrator_intent_settle_after_worker_queued(db, intent)
+    _transition_validated(db, intent, outbox)
+    _apply_locks_queue_and_enqueue_settle(db, intent, outbox)
 
 
 def process_transaction_outbox_intent_created(
@@ -109,12 +133,17 @@ def process_transaction_outbox_intent_created(
         locked_by=locked_by,
     )
 
+    to_process, deferred_same_scope = partition_intent_created_events(db, events)
+    for event in deferred_same_scope:
+        TransactionOutboxRepository.release_processing_lock(db, event)
+
     processed = 0
     failed = 0
+    requeued_lock_conflict = 0
     skipped_allowlist = 0
     errors: list[dict[str, str]] = []
 
-    for event in events:
+    for event in to_process:
         intent = db.query(TransactionIntent).filter(TransactionIntent.id == event.intent_id).first()
         if intent is None or not lifi_outbox_worker_enabled_for_person(db, intent.person_id):
             TransactionOutboxRepository.release_processing_lock(db, event)
@@ -124,6 +153,19 @@ def process_transaction_outbox_intent_created(
             handle_intent_created_event(db, event)
             TransactionOutboxRepository.mark_processed(db, event)
             processed += 1
+        except ProductLockConflict409 as exc:
+            logger.info(
+                "outbox_intent_created_lock_conflict_requeue",
+                extra={"outbox_id": str(event.id), "intent_id": str(event.intent_id)},
+            )
+            TransactionOutboxRepository.mark_failure(
+                db,
+                event,
+                error=str(exc),
+                retry_delay_seconds=_LOCK_CONFLICT_RETRY_DELAY_SECONDS,
+            )
+            requeued_lock_conflict += 1
+            errors.append({"outbox_id": str(event.id), "error": str(exc), "requeued": "lock_conflict"})
         except Exception as exc:
             logger.warning(
                 "outbox_intent_created_handler_failed",
@@ -149,7 +191,7 @@ def process_transaction_outbox_intent_created(
             failed += 1
             errors.append({"outbox_id": str(event.id), "error": str(exc)})
 
-    if processed or failed or skipped_allowlist:
+    if processed or failed or requeued_lock_conflict or skipped_allowlist or deferred_same_scope:
         db.commit()
 
     return {
@@ -157,6 +199,8 @@ def process_transaction_outbox_intent_created(
         "polled": len(events),
         "processed": processed,
         "failed": failed,
+        "requeued_lock_conflict": requeued_lock_conflict,
+        "deferred_same_scope": len(deferred_same_scope),
         "skipped_allowlist": skipped_allowlist,
         "errors": errors,
     }
