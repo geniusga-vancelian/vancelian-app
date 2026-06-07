@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Plan d'exécution · PRs découplées |
 | **Date** | 2026-06-07 |
-| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · **L4a en cours** (PR) |
+| **Statut** | L1 ✅ · L2 ✅ prod · L3 ✅ prod · L4a ✅ prod · **L4b en cours** (PR) |
 | **Gouvernance** | [S4_PRODUCT_LOCKS_MATRIX.md](S4_PRODUCT_LOCKS_MATRIX.md) (validé CTO v1.1) |
 | **Jalon** | Tag `phase2-closed-s4-inventory-v1.1` |
 | **Références** | [ADR 001 §5bis](adr/001-intent-as-orchestrator.md) · [PHASE2 POC § S4](PHASE2_POC_LIFI_STANDALONE_SWAP.md) |
@@ -185,12 +185,12 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L4 — Middleware 409
 
-**Statut** : 🟡 **L4a en cours** (PR #TBD) · **L4b** runtime wiring plus tard
+**Statut** : ✅ **L4a prod neutre** (PR #44 · TD `:131`) · 🟡 **L4b en cours** (PR #TBD)
 
-> **L4a non branché runtime** : validation / exceptions 409 uniquement · zéro route HTTP · zéro LI.FI.
-> Flag `TRANSACTION_PRODUCT_LOCKS_ENABLED=false` → validate_* no-op.
+> **L4a** : validation / exceptions 409 · non branché runtime.
+> **L4b** : hook worker ``intent.created`` · **branché mais flag OFF en prod** · release lock → L4c.
 
-### L4a — Validation skeleton (cette PR)
+### L4a — Validation skeleton (merged)
 
 **Scope** : `validate_product_lock_or_raise` · `validate_balance_snapshot_or_raise` · error codes 409.
 
@@ -203,14 +203,36 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ### Livrables L4a
 
-- [ ] `services/product_locks/error_codes.py`
-- [ ] `services/product_locks/middleware.py`
-- [ ] `tests/test_product_locks_l4a_middleware.py`
-- [ ] PR review · merge (flag OFF)
+- [x] `services/product_locks/error_codes.py`
+- [x] `services/product_locks/middleware.py`
+- [x] `tests/test_product_locks_l4a_middleware.py`
+- [x] PR review · merge · prod verify ([GO_S4_L4A_POST_DEPLOY_REPORT.md](GO_S4_L4A_POST_DEPLOY_REPORT.md))
 
-### L4b — Runtime wiring (PR séparée · plus tard)
+### L4b — Runtime wiring (cette PR)
 
-**Scope** : branchement sous flag aux transitions intent (LI.FI / Bundle / Vault) · **hors L4a**.
+**Scope** : hook `handle_intent_created_event` · orchestrateur LI.FI allowlisté · flag OFF prod.
+
+| Étape (flag ON · tests) | Action |
+| --- | --- |
+| VALIDATED | `build_balance_snapshot` → `metadata_json.balance_snapshot` |
+| VALIDATED | `validate_product_lock_or_raise` + `acquire_product_lock` |
+| Conflit | `ProductLockConflict409` · outbox failure · pas de ledger |
+| Snapshot drift | `BalanceChanged409` · blocage avant QUEUED |
+
+**Release lock** : hors scope L4b → **L4c**.
+
+### Livrables L4b
+
+- [ ] `services/transaction_outbox/orchestrator_product_locks.py`
+- [ ] hook `worker.py` (derrière flag)
+- [ ] `tests/test_product_locks_l4b_runtime_wiring.py`
+- [ ] PR review · merge (flag OFF prod)
+
+### L4c — Release lock (futur)
+
+**Scope** : libération lock aux phases terminales · hors L4b.
+
+---
 
 ## L5 — Settlement Router
 
@@ -356,7 +378,7 @@ L11 → allowlist (Go CTO)
 
 | Paramètre | Valeur actuelle | Règle L1–L4 |
 | --- | --- | --- |
-| TD prod | `:130` | Pas de deploy L1–L4 sans review |
+| TD prod | `:131` | Pas de deploy L1–L4 sans review |
 | Worker / ledger | OFF | Inchangé |
 | Orchestrator LI.FI | ON (allowlist 1 user) | Inchangé |
 | `TRANSACTION_PRODUCT_LOCKS_ENABLED` | **absent / false** | Default `false` · L2 prod no-op |
@@ -377,6 +399,7 @@ L11 → allowlist (Go CTO)
 
 | Date | Version | Changement |
 | --- | --- | --- |
-| 2026-06-07 | v1.3 | L3 prod neutre · L4a middleware skeleton PR |
+| 2026-06-07 | v1.4 | L4a prod neutre · L4b runtime wiring PR |
+| 2026-06-07 | v1.3 | L4a middleware skeleton · L3 prod neutre |
 | 2026-06-07 | v1.2 | L2 merged prod · L3 snapshot PR ouverte |
 | 2026-06-07 | v1.1 | L1 merged prod · L2 engine PR ouverte |

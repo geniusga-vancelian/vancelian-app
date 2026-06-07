@@ -1,7 +1,8 @@
 """Worker outbox Phase 2 S2b — handler ``intent.created`` uniquement.
 
 Ne touche que ``transaction_intents``, ``transaction_intent_transitions``, ``transaction_outbox``.
-Pas de settlement, controller, locks, provider_submitted, ni table économique.
+Pas de settlement, controller, provider_submitted, ni table économique directe.
+Product locks L4b : hook optionnel via ``TRANSACTION_PRODUCT_LOCKS_ENABLED`` (default OFF).
 """
 from __future__ import annotations
 
@@ -60,6 +61,12 @@ def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:
         metadata_json={"outbox_id": str(outbox.id), "s2b": True},
     )
     intent.current_phase = IntentOrchestratorPhase.VALIDATED.value
+
+    from services.transaction_outbox.orchestrator_product_locks import (
+        apply_orchestrator_product_locks_before_queued,
+    )
+
+    apply_orchestrator_product_locks_before_queued(db, intent)
 
     TransactionIntentTransitionRepository.insert_transition(
         db,
