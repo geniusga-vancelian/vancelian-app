@@ -27,11 +27,8 @@ from services.portfolio_engine.bundle_execution.bundle_transaction_scope import 
     is_bundle_internal_swap,
 )
 from services.privy_wallet.enums import PersonWalletDepositStatus, PersonWalletDirection
-from services.privy_wallet.models import PersonWalletDeposit
-from services.privy_wallet.repository import (
-    PersonWalletBalanceRepository,
-    PersonWalletDepositRepository,
-)
+from services.privy_wallet.models import PersonWalletBalance, PersonWalletDeposit
+from services.privy_wallet.repository import PersonWalletDepositRepository
 from services.settlement.constants import SETTLEMENT_RECEIPT_METADATA_KEY
 from services.settlement.lifi_ledger import is_lifi_standalone_intent
 from services.settlement.preconditions import settlement_marker_present
@@ -289,13 +286,16 @@ def _balance_variation_explained(
     except Exception:
         return False, external, "wallet_unavailable_for_balance_check"
 
-    balance_repo = PersonWalletBalanceRepository()
-    row = balance_repo.get_or_create_for_update(
-        db,
-        wallet_id=wallet.id,
-        person_id=wallet.person_id,
-        asset=from_asset,
+    row = (
+        db.query(PersonWalletBalance)
+        .filter(
+            PersonWalletBalance.person_crypto_wallet_id == wallet.id,
+            PersonWalletBalance.asset == from_asset.upper(),
+        )
+        .first()
     )
+    if row is None:
+        return False, external, "balance_row_missing"
     actual_end = Decimal(str(row.available_balance))
     if not _amount_compatible(expected_end, actual_end):
         return False, external, "balance_variation_unexplained"

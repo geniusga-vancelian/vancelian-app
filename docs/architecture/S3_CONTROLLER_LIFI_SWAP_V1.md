@@ -75,7 +75,7 @@ Autorisé :
 
 Interdit :
 
-- Ledger, PE, cost basis, mutation balance wallet
+- Ledger, PE, cost basis, mutation balance wallet (lecture stricte `query().first()`, pas de `get_or_create`)
 - `COMPLETED`
 
 ## Outcomes
