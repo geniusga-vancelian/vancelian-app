@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Plan d'exécution · PRs découplées |
 | **Date** | 2026-06-07 |
-| **Statut** | L1 merged · **L2 en cours** (PR) |
+| **Statut** | L1 ✅ · L2 ✅ prod · **L3 en cours** (PR) |
 | **Gouvernance** | [S4_PRODUCT_LOCKS_MATRIX.md](S4_PRODUCT_LOCKS_MATRIX.md) (validé CTO v1.1) |
 | **Jalon** | Tag `phase2-closed-s4-inventory-v1.1` |
 | **Références** | [ADR 001 §5bis](adr/001-intent-as-orchestrator.md) · [PHASE2 POC § S4](PHASE2_POC_LIFI_STANDALONE_SWAP.md) |
@@ -124,11 +124,11 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L2 — Lock Acquisition Service
 
-**Statut** : 🟡 **En cours** (PR #TBD)
+**Statut** : ✅ **Merged + prod** (PR #42 · merge `d574b295` · TD `:129` · flag OFF)
 
 > **Non branché runtime** : aucun appel depuis LI.FI / outbox / worker / Bundle / Vault / Lombard.
 > Flag `TRANSACTION_PRODUCT_LOCKS_ENABLED=false` par défaut → no-op en prod jusqu'à Go explicite.
-> L3 snapshot balance reste une PR séparée.
+> Post-deploy vérifié : table vide · acquire/release/expire no-op · PE/CB/legs inchangés.
 
 **Scope** : `acquire_product_lock(...)` · `release_product_lock(...)` · `expire_product_locks(...)`.
 
@@ -140,10 +140,10 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ### Livrables L2
 
-- [ ] `services/product_locks/config.py` — flag + TTL
-- [ ] `services/product_locks/service.py` — acquire / release / expire
-- [ ] `tests/test_product_locks_l2_engine.py`
-- [ ] PR review · merge
+- [x] `services/product_locks/config.py` — flag + TTL
+- [x] `services/product_locks/service.py` — acquire / release / expire
+- [x] `tests/test_product_locks_l2_engine.py`
+- [x] PR review · merge · prod verify ([GO_S4_L2_POST_DEPLOY_REPORT.md](GO_S4_L2_POST_DEPLOY_REPORT.md))
 
 **Moment d'appel cible** (futur L4) : transition `VALIDATED → PROCESSING` (ADR 001).
 
@@ -153,9 +153,12 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L3 — Snapshot Balance
 
-**Statut** : ⏸ Après L2
+**Statut** : 🟡 **En cours** (PR #TBD)
 
-**Scope** : à `CREATED → VALIDATED`, capturer dans `metadata_json` :
+> **Non branché runtime** : aucune capture dans `transaction_intents.metadata_json` tant que L4/L5.
+> Flag `TRANSACTION_PRODUCT_LOCKS_ENABLED=false` → `build_balance_snapshot` no-op · aucune écriture DB.
+
+**Scope** : metadata snapshot à capturer (futur L4) à `CREATED → VALIDATED` :
 
 ```json
 {
@@ -168,9 +171,15 @@ Vault Deposit       → refusé (409 / lock conflict)
 }
 ```
 
-**Source** : même projection que Portfolio Breakdown (ADR 001 §5bis).
+**Source** : projection PE par scope (même buckets que Portfolio Breakdown · via `resolve_available_from_pe_snapshot`).
 
-**Flag** : peut partager `TRANSACTION_PRODUCT_LOCKS_ENABLED` ou flag dédié snapshot.
+**Flag** : `TRANSACTION_PRODUCT_LOCKS_ENABLED` (default `false` · partagé avec L2).
+
+### Livrables L3
+
+- [ ] `services/product_locks/balance_snapshot.py` — `build_balance_snapshot` · `compute_balance_snapshot_hash`
+- [ ] `tests/test_product_locks_l3_balance_snapshot.py`
+- [ ] PR review · merge (flag OFF)
 
 ---
 
@@ -333,10 +342,10 @@ L11 → allowlist (Go CTO)
 
 | Paramètre | Valeur actuelle | Règle L1–L4 |
 | --- | --- | --- |
-| TD prod | `:127` | Pas de deploy L1–L4 sans review |
+| TD prod | `:129` | Pas de deploy L1–L4 sans review |
 | Worker / ledger | OFF | Inchangé |
 | Orchestrator LI.FI | ON (allowlist 1 user) | Inchangé |
-| `TRANSACTION_PRODUCT_LOCKS_ENABLED` | *n'existe pas encore* | Default `false` à L2 |
+| `TRANSACTION_PRODUCT_LOCKS_ENABLED` | **absent / false** | Default `false` · L2 prod no-op |
 
 ---
 
@@ -354,4 +363,5 @@ L11 → allowlist (Go CTO)
 
 | Date | Version | Changement |
 | --- | --- | --- |
+| 2026-06-07 | v1.2 | L2 merged prod · L3 snapshot PR ouverte |
 | 2026-06-07 | v1.1 | L1 merged prod · L2 engine PR ouverte |
