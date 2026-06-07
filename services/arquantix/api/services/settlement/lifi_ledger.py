@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.lifi.enums import SwapSessionStatus
+from services.lifi.lifi_swap_reconciliation import detect_swap_ledger_legs
 from services.lifi.lifi_swap_settlement import (
     SWAP_LEDGER_LOG_INDEX_DEBIT_PREFERRED,
     _chain_id_for_swap,
@@ -26,6 +27,10 @@ from services.privy_wallet.enums import PersonWalletDirection
 from services.privy_wallet.repository import PersonWalletDepositRepository
 from services.settlement.constants import SETTLEMENT_LAYER_SYNC_SOURCE
 from services.transaction_intents.enums import IntentProductType
+
+# Tolérance montant crédit destination vs amount_out (slippage LI.FI / arrondi webhook).
+_CREDIT_AMOUNT_RELATIVE_TOLERANCE = Decimal("0.02")
+_CREDIT_AMOUNT_ABSOLUTE_TOLERANCE = Decimal("1e-12")
 
 
 class LifiStandaloneSettlementError(Exception):
@@ -87,6 +92,52 @@ def _ledger_leg_exists(db: Session, idempotency_key: str) -> bool:
     )
 
 
+def _credit_amount_compatible(expected: Decimal, actual: Decimal) -> bool:
+    if actual <= 0:
+        return False
+    diff = abs(expected - actual)
+    tolerance = max(
+        _CREDIT_AMOUNT_ABSOLUTE_TOLERANCE,
+        expected * _CREDIT_AMOUNT_RELATIVE_TOLERANCE,
+    )
+    return diff <= tolerance
+
+
+def _validate_existing_destination_credit(
+    db: Session,
+    swap: PersonWalletSwap,
+    *,
+    amount_out: Decimal,
+) -> None:
+    """Refuse un crédit destination incohérent déjà présent (webhook / backfill / lifi-swap)."""
+    legs = detect_swap_ledger_legs(db, swap)
+    to_asset = str(swap.to_asset).upper()
+
+    if legs.credit_exists:
+        if legs.credit_amount is None or not _credit_amount_compatible(amount_out, legs.credit_amount):
+            raise LifiStandaloneSettlementError(
+                "settlement.credit_amount_mismatch",
+                "Crédit destination existant incompatible avec amount_out",
+            )
+        return
+
+    tx_hash = str(swap.tx_hash or "").strip().lower()
+    if not tx_hash:
+        return
+
+    deposit_repo = PersonWalletDepositRepository()
+    for dep in deposit_repo.find_confirmed_by_tx_hash(
+        db, tx_hash=tx_hash, person_id=swap.person_id
+    ):
+        if dep.direction != PersonWalletDirection.CREDIT.value:
+            continue
+        if dep.asset.upper() != to_asset:
+            raise LifiStandaloneSettlementError(
+                "settlement.credit_asset_mismatch",
+                f"Crédit tx_hash asset {dep.asset} incompatible avec destination {to_asset}",
+            )
+
+
 def apply_lifi_standalone_ledger_settlement(
     db: Session,
     *,
@@ -126,8 +177,12 @@ def apply_lifi_standalone_ledger_settlement(
 
     debit_key = swap_debit_idempotency_key(swap_id)
     credit_key = swap_credit_idempotency_key(swap_id)
-    debit_exists = _ledger_leg_exists(db, debit_key)
-    credit_exists = _ledger_leg_exists(db, credit_key)
+
+    _validate_existing_destination_credit(db, swap, amount_out=amount_out)
+    legs = detect_swap_ledger_legs(db, swap)
+    debit_exists = legs.debit_exists
+    credit_exists = legs.credit_exists
+    credit_reused_existing = credit_exists and not _ledger_leg_exists(db, credit_key)
 
     settlement_meta = {
         "settlement_layer": "s3b",
@@ -181,7 +236,8 @@ def apply_lifi_standalone_ledger_settlement(
                 "Échec écriture crédit destination",
             )
 
-    if not _ledger_leg_exists(db, debit_key) or not _ledger_leg_exists(db, credit_key):
+    final_legs = detect_swap_ledger_legs(db, swap)
+    if not final_legs.debit_exists or not final_legs.credit_exists:
         raise LifiStandaloneSettlementError(
             "settlement.incomplete_legs",
             "Jambes ledger incomplètes après projection",
@@ -191,6 +247,8 @@ def apply_lifi_standalone_ledger_settlement(
         "swap_id": swap_id,
         "wrote_debit": wrote_debit,
         "wrote_credit": wrote_credit,
+        "credit_reused_existing": credit_reused_existing,
+        "credit_source": final_legs.credit_source,
         "debit_key": debit_key,
         "credit_key": credit_key,
     }
