@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Plan d'exécution · PRs découplées |
 | **Date** | 2026-06-07 |
-| **Statut** | Ouvert · L1 en cours |
+| **Statut** | L1 merged · **L2 en cours** (PR) |
 | **Gouvernance** | [S4_PRODUCT_LOCKS_MATRIX.md](S4_PRODUCT_LOCKS_MATRIX.md) (validé CTO v1.1) |
 | **Jalon** | Tag `phase2-closed-s4-inventory-v1.1` |
 | **Références** | [ADR 001 §5bis](adr/001-intent-as-orchestrator.md) · [PHASE2 POC § S4](PHASE2_POC_LIFI_STANDALONE_SWAP.md) |
@@ -62,7 +62,7 @@ flowchart LR
 
 ## L1 — Product Lock Table
 
-**Statut** : 🟡 **En cours** (PR #TBD)
+**Statut** : ✅ **Merged** (PR #41 · prod TD `:128` · migration 175)
 
 **Scope** : migration + modèle SQLAlchemy + enums · **pas de wiring runtime**.
 
@@ -111,7 +111,7 @@ Vault Deposit       → refusé (409 / lock conflict)
 - [x] Migration `175_transaction_product_locks_l1.py`
 - [x] `services/product_locks/` (enums, model, `build_lock_key`)
 - [x] Test schéma migration
-- [ ] PR review · merge
+- [x] PR review · merge · prod verify
 
 ### Risques L1
 
@@ -124,17 +124,28 @@ Vault Deposit       → refusé (409 / lock conflict)
 
 ## L2 — Lock Acquisition Service
 
-**Statut** : ⏸ Après merge L1
+**Statut** : 🟡 **En cours** (PR #TBD)
 
-**Scope** : `acquire_product_lock(...)` · `release_product_lock(...)` · `FOR UPDATE SKIP LOCKED`.
+> **Non branché runtime** : aucun appel depuis LI.FI / outbox / worker / Bundle / Vault / Lombard.
+> Flag `TRANSACTION_PRODUCT_LOCKS_ENABLED=false` par défaut → no-op en prod jusqu'à Go explicite.
+> L3 snapshot balance reste une PR séparée.
+
+**Scope** : `acquire_product_lock(...)` · `release_product_lock(...)` · `expire_product_locks(...)`.
 
 | Fonction | Comportement |
 | --- | --- |
 | `acquire_product_lock` | Insert si slot libre · sinon `ProductLockConflict` |
 | `release_product_lock` | `status=released` · `released_at=now()` |
-| `expire_stale_locks` | Cron / worker · `expires_at < now()` → `expired` |
+| `expire_product_locks` | Cron / worker · `expires_at < now()` → `expired` |
 
-**Moment d'appel cible** : transition `VALIDATED → PROCESSING` (ADR 001).
+### Livrables L2
+
+- [ ] `services/product_locks/config.py` — flag + TTL
+- [ ] `services/product_locks/service.py` — acquire / release / expire
+- [ ] `tests/test_product_locks_l2_engine.py`
+- [ ] PR review · merge
+
+**Moment d'appel cible** (futur L4) : transition `VALIDATED → PROCESSING` (ADR 001).
 
 **Flag** : `TRANSACTION_PRODUCT_LOCKS_ENABLED` (default `false`).
 
@@ -343,4 +354,4 @@ L11 → allowlist (Go CTO)
 
 | Date | Version | Changement |
 | --- | --- | --- |
-| 2026-06-07 | v1 | Roadmap ouverte · L1 démarré |
+| 2026-06-07 | v1.1 | L1 merged prod · L2 engine PR ouverte |

@@ -13,7 +13,7 @@ from database import Base
 class TransactionProductLock(Base):
     """Lock pessimiste produit / asset / scope (ADR 001 §5bis).
 
-    Acquisition / release implémentées en L2 — cette table est structure-only en L1.
+    Acquisition / release via ``services.product_locks.service`` (S4 L2).
     """
 
     __tablename__ = "transaction_product_locks"
