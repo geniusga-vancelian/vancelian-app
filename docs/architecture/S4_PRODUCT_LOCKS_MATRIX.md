@@ -18,7 +18,7 @@ Empêcher qu’un **Bundle**, un **Vault**, un **Lombard** ou un futur produit (
 Intent → Outbox → Worker → Settlement → Ledger → (Controller) → COMPLETED
 ```
 
-Ce document est la **matrice de gouvernance** (S4 inventaire). L’implémentation technique (`transaction_product_locks`, `balance_snapshot_hash`, middleware 409) reste une phase suivante — voir [PHASE2 POC § S4 checklist](PHASE2_POC_LIFI_STANDALONE_SWAP.md).
+Ce document est la **matrice de gouvernance** (S4 inventaire). L’implémentation technique (`transaction_product_locks`, `balance_snapshot_hash`, middleware 409) est découpée en PRs — voir [S4_IMPLEMENTATION_ROADMAP.md](S4_IMPLEMENTATION_ROADMAP.md) et [PHASE2 POC § S4 checklist](PHASE2_POC_LIFI_STANDALONE_SWAP.md).
 
 **Règle d’or** : si la matrice est bonne, Bundle / Lombard / Vault **réutilisent** le rail prouvé sur LI.FI ; ils ne réinventent pas la plomberie ledger.
 
