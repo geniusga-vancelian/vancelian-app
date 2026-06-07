@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
 
@@ -39,6 +39,7 @@ class TransactionOutbox(Base):
     __tablename__ = "transaction_outbox"
     __table_args__ = (
         Index("ix_outbox_intent_created", "intent_id", "created_at"),
+        UniqueConstraint("intent_id", "event_type", name="uq_outbox_intent_event_type"),
         {"schema": "public"},
     )
 

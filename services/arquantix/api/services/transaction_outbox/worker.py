@@ -72,6 +72,12 @@ def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:
     )
     intent.current_phase = IntentOrchestratorPhase.QUEUED.value
 
+    from services.transaction_outbox.orchestrator_settle_enqueue import (
+        maybe_enqueue_orchestrator_intent_settle_after_worker_queued,
+    )
+
+    maybe_enqueue_orchestrator_intent_settle_after_worker_queued(db, intent)
+
 
 def process_transaction_outbox_intent_created(
     db: Session,
