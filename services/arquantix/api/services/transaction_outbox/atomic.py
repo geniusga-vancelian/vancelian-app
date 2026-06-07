@@ -107,6 +107,86 @@ def persist_intent_swap_outbox_atomic(
     return IntentSwapOutboxBundle(intent=intent, swap=swap, outbox=outbox)
 
 
+def attach_orchestrator_intent_to_swap_atomic(
+    db: Session,
+    *,
+    person_id: UUID,
+    swap_id: UUID,
+    correlation_id: UUID | None = None,
+) -> IntentSwapOutboxBundle:
+    """Attache intent orchestrateur + outbox à un swap quote existant (S2a.2 — confirm).
+
+    Idempotent : si un intent ``phase2_orchestrator`` existe déjà pour ce swap, retourne
+    le bundle existant sans doublon intent/outbox.
+    """
+    from services.lifi.swap_repository import PersonWalletSwapRepository
+    from services.transaction_intents.repository import TransactionIntentRepository
+
+    swap_repo = PersonWalletSwapRepository()
+    swap = swap_repo.get_for_person(db, swap_id=swap_id, person_id=person_id)
+    if swap is None:
+        raise ValueError(f"swap_not_found:{swap_id}")
+
+    existing = TransactionIntentRepository.find_by_linked(
+        db,
+        linked_table="person_wallet_swaps",
+        linked_id=swap.id,
+    )
+    if existing is not None:
+        meta = existing.metadata_json if isinstance(existing.metadata_json, dict) else {}
+        if meta.get("phase2_orchestrator"):
+            events = TransactionOutboxRepository.find_by_intent(
+                db,
+                existing.id,
+                event_type=OutboxEventType.INTENT_CREATED.value,
+            )
+            outbox = events[0] if events else None
+            return IntentSwapOutboxBundle(intent=existing, swap=swap, outbox=outbox)
+
+    correlation = correlation_id or uuid4()
+    idempotency_key = f"lifi_swap:{swap.id}"
+    intent = TransactionIntent(
+        person_id=person_id,
+        product_type=IntentProductType.LIFI_SWAP.value,
+        operation_type=IntentOperationType.SWAP.value,
+        requested_action="swap",
+        idempotency_key=idempotency_key,
+        status=IntentStatus.CREATED.value,
+        current_phase="CREATED",
+        correlation_id=correlation,
+        linked_table="person_wallet_swaps",
+        linked_id=swap.id,
+        assets_json={
+            "from": {"asset": swap.from_asset, "amount": str(swap.amount_in)},
+            "to": {"asset": swap.to_asset},
+        },
+        metadata_json={"phase2_orchestrator": True, "s2a2_confirm_attach": True},
+        expires_at=swap.expires_at,
+    )
+    db.add(intent)
+    db.flush()
+
+    outbox = TransactionOutboxRepository.insert_event(
+        db,
+        intent_id=intent.id,
+        event_type=OutboxEventType.INTENT_CREATED.value,
+        payload_json={"swap_id": str(swap.id), "person_id": str(person_id)},
+        correlation_id=correlation,
+    )
+
+    TransactionIntentTransitionRepository.insert_transition(
+        db,
+        intent_id=intent.id,
+        from_status=None,
+        to_status=IntentStatus.CREATED.value,
+        phase="CREATED",
+        actor="confirm_attach",
+        metadata_json={"swap_id": str(swap.id), "s2a2": True},
+    )
+
+    return IntentSwapOutboxBundle(intent=intent, swap=swap, outbox=outbox)
+
+
 def bundle_coherence_checks(bundle: IntentSwapOutboxBundle) -> dict[str, Any]:
     """Vérifie correlation_id, linked_id et idempotency_key."""
     intent, swap, outbox = bundle.intent, bundle.swap, bundle.outbox

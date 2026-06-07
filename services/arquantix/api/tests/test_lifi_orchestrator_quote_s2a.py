@@ -1,5 +1,6 @@
-"""Phase 2 S2a — quote → intent orchestrateur → outbox intent.created (flag ON).
+"""Phase 2 S2a — quote orchestrateur (legacy + échec LI.FI).
 
+S2a.2 : intent+outbox au confirm_execute — voir test_lifi_orchestrator_confirm_s2a2.py.
 Legacy inchangé si LIFI_INTENT_ORCHESTRATOR_ENABLED=false (défaut).
 """
 from __future__ import annotations
@@ -126,15 +127,16 @@ def test_s2a_legacy_quote_no_orchestrator_outbox(
     assert TransactionOutboxRepository.count_all(db) == outbox_before
 
 
-def test_s2a_orchestrator_quote_creates_intent_and_outbox(
+def test_s2a_orchestrator_quote_creates_swap_only_no_intent(
     client: TestClient, db: Session, monkeypatch
 ):
-    """Flag ON — quote crée intent orchestrateur + outbox intent.created (même TX)."""
+    """S2a.2 — Flag ON : quote crée swap draft uniquement (pas intent/outbox)."""
     monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
     monkeypatch.setenv("LIFI_API_KEY", "test-key")
     pe = make_linked_client(db)
     enable_lifi_orchestrator_allowlist(monkeypatch, pe)
     _seed_wallet(db, pe)
+    outbox_before = TransactionOutboxRepository.count_all(db)
 
     slippage_bps = 75
     status_code, body = _post_quote(client, db, pe, slippage_bps=slippage_bps)
@@ -142,48 +144,33 @@ def test_s2a_orchestrator_quote_creates_intent_and_outbox(
     swap_id = UUID(str(body["swap_id"]))
 
     swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_id).one()
+    assert swap.slippage_bps == slippage_bps
+    assert swap.expires_at is not None
+    assert body["slippage_bps"] == slippage_bps
+
     intent = (
         db.query(TransactionIntent)
         .filter(
             TransactionIntent.linked_table == "person_wallet_swaps",
             TransactionIntent.linked_id == swap_id,
         )
-        .one()
+        .first()
     )
-    assert intent.status == "created"
-    assert intent.current_phase == "CREATED"
-    assert intent.idempotency_key == f"lifi_swap:{swap_id}"
-    assert (intent.metadata_json or {}).get("phase2_orchestrator") is True
-    assert (intent.metadata_json or {}).get("s2a_quote_bootstrap") is True
-
-    assert swap.slippage_bps == slippage_bps
-    assert intent.expires_at is not None
-    assert swap.expires_at is not None
-    assert intent.expires_at == swap.expires_at
-    assert body["slippage_bps"] == slippage_bps
-
-    events = TransactionOutboxRepository.find_by_intent(db, intent.id, event_type="intent.created")
-    assert len(events) == 1
-    outbox = events[0]
-    assert outbox.status == "pending"
-    assert outbox.correlation_id == intent.correlation_id
-    payload = outbox.payload_json or {}
-    assert payload.get("swap_id") == str(swap_id)
-    assert payload.get("person_id") == str(pe.person_id)
-
-    assert db.query(TransactionOutbox).filter(TransactionOutbox.intent_id == intent.id).count() == 1
+    assert intent is None
+    assert TransactionOutboxRepository.count_all(db) == outbox_before
 
 
-def test_s2a_orchestrator_quote_lifi_failure_persists_coherent_state(
+def test_s2a_orchestrator_quote_lifi_failure_swap_only_no_intent(
     client: TestClient, db: Session, monkeypatch
 ):
-    """Flag ON + échec LI.FI — intent FAILED, swap FAILED, outbox présente ; pas ledger/PE."""
+    """S2a.2 — Flag ON + échec LI.FI — swap FAILED, pas d'intent/outbox ; pas ledger/PE."""
     monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
     monkeypatch.setenv("LIFI_API_KEY", "test-key")
     pe = make_linked_client(db)
     enable_lifi_orchestrator_allowlist(monkeypatch, pe)
     _seed_wallet(db, pe)
     bal_before, dep_before = _economic_counts(db, pe.person_id)
+    outbox_before = TransactionOutboxRepository.count_all(db)
 
     status_code, _body = _post_quote(
         client,
@@ -196,6 +183,7 @@ def test_s2a_orchestrator_quote_lifi_failure_persists_coherent_state(
     bal_after, dep_after = _economic_counts(db, pe.person_id)
     assert bal_after == bal_before
     assert dep_after == dep_before
+    assert TransactionOutboxRepository.count_all(db) == outbox_before
 
     swap = (
         db.query(PersonWalletSwap)
@@ -213,15 +201,9 @@ def test_s2a_orchestrator_quote_lifi_failure_persists_coherent_state(
             TransactionIntent.linked_table == "person_wallet_swaps",
             TransactionIntent.linked_id == swap.id,
         )
-        .one()
+        .first()
     )
-    assert intent.status == "failed"
-    assert intent.idempotency_key == f"lifi_swap:{swap.id}"
-
-    events = TransactionOutboxRepository.find_by_intent(db, intent.id, event_type="intent.created")
-    assert len(events) == 1
-    assert events[0].status == "pending"
-    assert (events[0].payload_json or {}).get("swap_id") == str(swap.id)
+    assert intent is None
 
 
 def test_s2a_intent_sync_bypass_when_orchestrator_enabled(db: Session, monkeypatch):
