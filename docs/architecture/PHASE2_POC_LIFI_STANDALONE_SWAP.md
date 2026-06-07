@@ -158,7 +158,8 @@ COMMIT
 
 ### 4. Intent orchestrateur (API)
 
-- [ ] **I1** — `POST /swaps/quote` : créer intent orchestrateur (`CREATED`) + `person_wallet_swap` + outbox `intent.created` (même TX) si flag ON
+- [ ] **I1** — `POST /swaps/quote` : créer `person_wallet_swap` draft/quote uniquement (S2a.2 — **pas** d'intent orchestrateur)
+- [ ] **I1b** — `POST /swaps/confirm-execute` : attacher intent orchestrateur (`CREATED`) + outbox `intent.created` (idempotent) si flag ON + allowlist
 - [ ] **I2** — `POST /swaps/{id}/submit` : outbox `intent.provider_submitted` (même TX que `tx_hash`) si flag ON
 - [ ] **I3** — `transaction_intent_transitions` : INSERT à chaque transition
 - [ ] **I4** — `lifi_intent_sync.py` : bypass si `LIFI_INTENT_ORCHESTRATOR_ENABLED=true` (éviter double sync miroir)
@@ -229,7 +230,10 @@ COMMIT
 
 ```
 POST /swaps/quote
-  TX: intent (CREATED) + person_wallet_swap + outbox(intent.created)
+  TX: person_wallet_swap (QUOTE_RECEIVED) — draft uniquement (S2a.2)
+
+POST /swaps/confirm-execute
+  TX: intent (CREATED) + outbox(intent.created) attachés au swap (idempotent)
 
 Worker intent.created → VALIDATED → QUEUED
 
@@ -488,15 +492,20 @@ Prouver uniquement :
 ```
 POST /swaps/quote (LI.FI)
   ↓
-intent orchestrateur (même TX)
+person_wallet_swap draft (pas d'intent orchestrateur — S2a.2)
+
+POST /swaps/confirm-execute
+  ↓
+attach_orchestrator_intent_to_swap_atomic (idempotent)
   ↓
 outbox event intent.created
 ```
 
-| # | Livrable S2a | Détail |
+| # | Livrable S2a / S2a.2 | Détail |
 | --- | --- | --- |
 | 1 | Flag | `LIFI_INTENT_ORCHESTRATOR_ENABLED=false` (défaut) |
-| 2 | Quote | `lifi_quote_service` → `persist_intent_swap_outbox_atomic` si flag ON |
+| 2 | Quote (S2a.2) | `lifi_quote_service` → swap draft uniquement si flag ON |
+| 2b | Confirm (S2a.2) | `lifi_confirm_service` → `attach_orchestrator_intent_to_swap_atomic` |
 | 3 | Sync legacy | `lifi_intent_sync` bypass **seulement** si flag ON |
 | 4 | Worker minimal | `intent.created` (flag `LIFI_OUTBOX_WORKER_ENABLED=false` par défaut) |
 | 5 | Rollback | flag OFF → comportement Phase 7 **identique** |
@@ -518,7 +527,7 @@ outbox event intent.created
 
 | # | Livrable | Détail |
 | --- | --- | --- |
-| 1 | Test échec LI.FI flag ON | intent + swap FAILED + outbox `intent.created` ; pas ledger/PE |
+| 1 | Test échec LI.FI flag ON | swap FAILED à la quote ; **pas** d'intent/outbox (S2a.2) |
 | 2 | Assertions | `slippage_bps` / `expires_at` alignés swap ↔ intent |
 | 3 | Note technique | Bypass `lifi_intent_sync` **global** si flag ON → traiter avant S5 dual-run |
 

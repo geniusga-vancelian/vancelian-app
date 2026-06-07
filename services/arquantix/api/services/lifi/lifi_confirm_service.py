@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from services.lifi.lifi_execute_service import LifiExecuteService
 from services.lifi.lifi_quote_service import LifiQuoteService
 from services.lifi.lifi_validation_service import SwapPriceChangedError, SwapValidationError
+from services.lifi.orchestrator_allowlist import lifi_intent_orchestrator_enabled_for_person
 from services.lifi.schemas import SwapConfirmExecuteResponse
 from services.lifi.swap_quote_freshness import compare_receive_against_review
+from services.transaction_outbox.atomic import attach_orchestrator_intent_to_swap_atomic
 
 
 class LifiConfirmService:
@@ -57,6 +59,13 @@ class LifiConfirmService:
                     )
             except SwapValidationError:
                 raise
+
+        if lifi_intent_orchestrator_enabled_for_person(db, person_id):
+            attach_orchestrator_intent_to_swap_atomic(
+                db,
+                person_id=person_id,
+                swap_id=swap_id,
+            )
 
         execute = self._execute.prepare_execute(db, person_id=person_id, swap_id=swap_id)
         freshness = "refreshed" if comparison.delta_bps > 0 else "verified"

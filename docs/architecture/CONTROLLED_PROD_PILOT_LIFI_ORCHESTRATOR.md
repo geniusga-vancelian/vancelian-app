@@ -76,7 +76,7 @@ Résolution email → person : `clients.email`, `person_external_identities.exte
 
 | Variable | Valeur pilot | Effet si allowlist OK |
 | --- | --- | --- |
-| `LIFI_INTENT_ORCHESTRATOR_ENABLED` | `true` | Quote → intent orchestrateur + outbox `intent.created` |
+| `LIFI_INTENT_ORCHESTRATOR_ENABLED` | `true` | Confirm → intent orchestrateur + outbox `intent.created` (S2a.2 ; quote = draft seul) |
 | `LIFI_OUTBOX_WORKER_ENABLED` | `true` | Worker `intent.created` / `intent.settle` |
 | `LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED` | `true` | Settlement S3b : 1 débit + 1 crédit |
 
@@ -104,7 +104,7 @@ Résolution email → person : `clients.email`, `person_external_identities.exte
 - [ ] Optionnel : 1 swap legacy très petit sur compte pilote (contrôle régression)
 - [ ] **Go Étape 0**
 
-### Étape 1 — Allowlist + orchestrateur quote
+### Étape 1 — Allowlist + orchestrateur (confirm crée l'intent — S2a.2)
 
 ```bash
 LIFI_ORCHESTRATOR_ALLOWED_PERSON_EMAILS=gaelitier@gmail.com
@@ -113,11 +113,16 @@ LIFI_OUTBOX_WORKER_ENABLED=false
 LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED=false
 ```
 
+**Prérequis code** : PR **S2a.2** mergée (`intent at confirm`, pas au quote).
+
 - [ ] Redémarrer API prod
-- [ ] Quote `gaelitier@gmail.com` → intent + outbox `intent.created`
+- [ ] Quote seule → **0** intent / **0** outbox (swap draft uniquement)
+- [ ] `POST /confirm-execute` (clic Confirm) → **1** intent + **1** outbox `intent.created`
 - [ ] Autre user → **legacy** (pas d’outbox orchestrateur, pas de `phase2_orchestrator`)
 - [ ] Aucune écriture ledger
 - [ ] **Go Étape 1**
+
+> Artefacts pilot pré-S2a.2 (quotes UI) : intents/outbox existants ignorés — pas de suppression sans Go séparé.
 
 ### Étape 2 — Worker + settlement NOOP
 

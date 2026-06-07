@@ -186,9 +186,8 @@ class LifiQuoteService:
         expires_at: datetime,
     ):
         if lifi_intent_orchestrator_enabled_for_person(db, person_id):
-            from services.transaction_outbox.atomic import persist_intent_swap_outbox_atomic
-
-            bundle = persist_intent_swap_outbox_atomic(
+            # S2a.2 — quote/draft uniquement ; intent+outbox au confirm_execute.
+            return self._swap_repo.create(
                 db,
                 person_id=person_id,
                 from_asset=from_asset,
@@ -199,7 +198,6 @@ class LifiQuoteService:
                 slippage_bps=slippage_bps,
                 expires_at=expires_at,
             )
-            return bundle.swap
 
         swap_row = self._swap_repo.create(
             db,

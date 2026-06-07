@@ -107,6 +107,9 @@ def _post_quote(client: TestClient, db: Session, pe) -> tuple[int, dict]:
 def test_allowlisted_user_orchestrator_when_flags_on(
     client: TestClient, db: Session, monkeypatch
 ):
+    """S2a.2 — quote seul : pas d'intent ; confirm crée intent orchestrateur + outbox."""
+    from services.lifi.routes import _confirm_svc
+
     monkeypatch.setenv("LIFI_INTENT_ORCHESTRATOR_ENABLED", "true")
     monkeypatch.setenv("LIFI_API_KEY", "test-key")
     pe = make_linked_client(db, email="pilot-allowlisted@example.com")
@@ -115,6 +118,28 @@ def test_allowlisted_user_orchestrator_when_flags_on(
 
     status_code, body = _post_quote(client, db, pe)
     assert status_code == 200
+
+    intent_after_quote = (
+        db.query(TransactionIntent)
+        .filter(
+            TransactionIntent.linked_table == "person_wallet_swaps",
+            TransactionIntent.linked_id == body["swap_id"],
+        )
+        .first()
+    )
+    assert intent_after_quote is None
+
+    _confirm_svc._quote._lifi = _quote_svc._lifi
+    confirm_res = client.post(
+        "/api/swaps/confirm-execute",
+        headers=_auth_headers(db, pe),
+        json={
+            "swap_id": body["swap_id"],
+            "review_estimated_receive": body["estimated_receive"],
+            "review_amount_in": body["amount_in"],
+        },
+    )
+    assert confirm_res.status_code == 200, confirm_res.text
 
     intent = (
         db.query(TransactionIntent)
