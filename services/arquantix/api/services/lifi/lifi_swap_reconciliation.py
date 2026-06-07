@@ -205,6 +205,14 @@ def _credit_already_linked_to_swap(db: Session, swap, legs: SwapLedgerLegStatus)
     return str(meta.get("swap_id") or "") == _swap_id_str(swap)
 
 
+def _legacy_cost_basis_eligible(db: Session, swap) -> bool:
+    from services.transaction_outbox.orchestrator_settle_enqueue import (
+        skip_legacy_cost_basis_for_orchestrator,
+    )
+
+    return _cost_basis_missing(db, swap) and not skip_legacy_cost_basis_for_orchestrator(db, swap)
+
+
 def build_reconciliation_dry_run_summary(db: Session, swap) -> dict[str, Any]:
     """Résumé ops pour dry-run ciblé (swap prod 76830776…)."""
     legs = detect_swap_ledger_legs(db, swap)
@@ -228,7 +236,7 @@ def build_reconciliation_dry_run_summary(db: Session, swap) -> dict[str, Any]:
         f"would_create_credit_{to_asset}": would_credit,
         f"would_link_existing_credit_{to_asset}": would_link_credit,
         f"already_linked_credit_{to_asset}": credit_already_linked,
-        "would_create_cost_basis": _cost_basis_missing(db, swap),
+        "would_create_cost_basis": _legacy_cost_basis_eligible(db, swap),
         "no_double_write_risk": True,
         "on_chain_confirmed": on_chain_ok,
         "ledger_legs": {
@@ -407,12 +415,12 @@ def settle_lifi_swap_idempotently(
                 _link_existing_credit_to_swap(db, swap, dep)
                 credit_linked = True
 
-    would_create_cost_basis = _cost_basis_missing(db, swap)
+    would_create_cost_basis = _legacy_cost_basis_eligible(db, swap)
     if would_create_cost_basis:
         would_write.append({"table": "cost_basis_executions", "action": "create_if_missing"})
 
     cost_basis_applied = False
-    if not dry_run and (debit_applied or credit_applied or legs.credit_exists):
+    if not dry_run and (debit_applied or credit_applied or legs.credit_exists) and would_create_cost_basis:
         try:
             from services.cost_basis.ingest_lifi import ingest_lifi_swap_settlement
 

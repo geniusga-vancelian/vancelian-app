@@ -79,6 +79,15 @@ def skip_legacy_swap_settlement_for_orchestrator(db: Session, swap: Any) -> bool
     return lifi_intent_orchestrator_enabled_for_person(db, person_id)
 
 
+def skip_legacy_cost_basis_for_orchestrator(db: Session, swap: Any) -> bool:
+    """Ingest cost basis legacy interdit si le rail orchestrateur est actif pour la personne.
+
+    Même règle que ``skip_legacy_swap_settlement_for_orchestrator`` : intent Phase 2 +
+    allowlist + flag orchestrateur ON. Hors allowlist → legacy cost basis autorisé.
+    """
+    return skip_legacy_swap_settlement_for_orchestrator(db, swap)
+
+
 def _validate_enqueue_preconditions(
     db: Session,
     swap: Any,
