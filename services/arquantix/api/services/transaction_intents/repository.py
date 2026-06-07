@@ -29,6 +29,14 @@ def intent_to_dict(row: TransactionIntent) -> dict[str, Any]:
         "linked_table": row.linked_table,
         "linked_id": str(row.linked_id) if row.linked_id else None,
         "linked_reference_id": getattr(row, "linked_reference_id", None),
+        "parent_intent_id": (
+            str(row.parent_intent_id) if getattr(row, "parent_intent_id", None) else None
+        ),
+        "intent_role": getattr(row, "intent_role", None),
+        "leg_index": getattr(row, "leg_index", None),
+        "bundle_execution_id": (
+            str(row.bundle_execution_id) if getattr(row, "bundle_execution_id", None) else None
+        ),
         "metadata_json": row.metadata_json,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,

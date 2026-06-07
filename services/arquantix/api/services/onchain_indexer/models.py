@@ -86,10 +86,20 @@ class TransactionIntent(Base):
         Index("ix_transaction_intents_person_id", "person_id"),
         Index("ix_transaction_intents_tx_hash", "tx_hash"),
         Index("ix_transaction_intents_linked", "linked_table", "linked_id"),
+        Index("ix_transaction_intents_parent_intent_id", "parent_intent_id"),
+        Index("ix_transaction_intents_bundle_execution_id", "bundle_execution_id"),
         {"schema": "public"},
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
+    parent_intent_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.transaction_intents.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    intent_role = Column(String(16), nullable=True)
+    leg_index = Column(Integer, nullable=True)
+    bundle_execution_id = Column(UUID(as_uuid=True), nullable=True)
     person_id = Column(
         UUID(as_uuid=True),
         ForeignKey("public.persons.id", ondelete="SET NULL"),
