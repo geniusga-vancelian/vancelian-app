@@ -2,16 +2,16 @@
 
 | Champ | Valeur |
 | --- | --- |
-| **Date** | _À compléter après exécution ECS_ |
+| **Date** | 2026-06-08 (verify ECS 12:45 +04) |
 | **PR** | [#56](https://github.com/geniusga-vancelian/vancelian-app/pull/56) · merge `5822be6e` |
-| **Décision** | _À compléter : Deploy neutre OK / KO_ |
-| **Gate suivant** | Merge #57 bloqué tant que ce rapport n’est pas **OK** |
+| **Décision** | **Deploy neutre OK — GO merge #57** |
+| **Gate suivant** | Merge #57 · deploy neutre B3c · verify B3c |
 
 ---
 
 ## Résumé exécutif
 
-Deploy neutre B3a : module `bundle_funding_handler` présent en image, flag **OFF**, aucun wiring runtime, comptabilité inchangée.
+Deploy neutre B3a validé : image prod `5822be6e`, module `bundle_funding_handler` présent, flag **OFF**, aucun wiring runtime, comptabilité inchangée (PE 19 · CB 67 · legs 131). **`all_checks_pass=true`**.
 
 ---
 
@@ -19,11 +19,11 @@ Deploy neutre B3a : module `bundle_funding_handler` présent en image, flag **OF
 
 | Élément | Valeur | Attendu |
 | --- | --- | --- |
-| Workflow CI | _lien run_ | success |
-| Task definition | _TD :___ | ≥ post-#56 |
-| Image SHA | _SHA deploy_ | contient merge `5822be6e` |
-| Rollout ECS | _COMPLETED / …_ | ✅ |
-| Health | `https://arquantix.com/health` → _200_ | ✅ |
+| Workflow CI | [run 27124436753](https://github.com/geniusga-vancelian/vancelian-app/actions/runs/27124436753) | success ✅ |
+| Task definition | **TD :153** | ≥ post-#56 ✅ |
+| Image SHA | `5822be6e0a6d0a787384eca915f231ac5a3704db` | contient merge `5822be6e` ✅ |
+| Rollout ECS | **COMPLETED** (steady state 12:13 +04) | ✅ |
+| Health | `https://arquantix.com/health` → **200** | ✅ |
 
 ---
 
@@ -31,8 +31,8 @@ Deploy neutre B3a : module `bundle_funding_handler` présent en image, flag **OF
 
 | Flag | Valeur | Attendu |
 | --- | --- | --- |
-| `BUNDLE_FUNDING_HANDLER_ENABLED` | _absent / false_ | ✅ absent ou false |
-| `bundle_funding_handler_enabled()` | _false_ | ✅ |
+| `BUNDLE_FUNDING_HANDLER_ENABLED` | **absent** | ✅ absent ou false |
+| `bundle_funding_handler_enabled()` | **false** (handler désactivé) | ✅ |
 
 ---
 
@@ -40,7 +40,7 @@ Deploy neutre B3a : module `bundle_funding_handler` présent en image, flag **OF
 
 **Script** : `scripts/arquantix-ecs-bundle-b3a-post-deploy-verify.sh`  
 **Inline** : `scripts/_bundle-b3a-post-deploy-verify-inline.py`  
-**Log stream** : _/ecs/arquantix-api · task id_
+**Log stream** : `/ecs/arquantix-api` · task `b5d8627bbe324225b8c7b985fec2c8a8` · exit **0**
 
 ```bash
 ./scripts/arquantix-ecs-bundle-b3a-post-deploy-verify.sh
@@ -48,10 +48,10 @@ Deploy neutre B3a : module `bundle_funding_handler` présent en image, flag **OF
 
 | Check | Valeur | Attendu |
 | --- | --- | --- |
-| `health.ok` | _true_ | ✅ |
+| `health.ok` | **true** | ✅ |
 | Alembic | **176** | ✅ |
-| `BUNDLE_FUNDING_HANDLER_ENABLED` | absent/false | ✅ |
-| `bundle_funding_handler_enabled()` | **false** | ✅ |
+| `BUNDLE_FUNDING_HANDLER_ENABLED` | absent | ✅ |
+| Handler désactivé (`flag_off_runtime`) | **true** | ✅ |
 | Module handler présent | **true** | ✅ |
 | Orchestrator/worker appelle handler | **false** | ✅ |
 | `bundle_funding_receipt_or_settled_parents` | **0** | ✅ |
@@ -59,15 +59,48 @@ Deploy neutre B3a : module `bundle_funding_handler` présent en image, flag **OF
 | PE atoms | **19** | ✅ |
 | Cost basis | **67** | ✅ |
 | Legs `lifi-swap:%` | **131** | ✅ |
-| **`all_checks_pass`** | _true_ | ✅ |
+| **`all_checks_pass`** | **true** | ✅ |
 
-### JSON ECS (coller ici)
+### JSON ECS
 
 ```json
 {
-  "_paste_ecs_output": true
+  "phase": "bundle_b3a_post_deploy_verify",
+  "merge_sha": "5822be6e",
+  "deploy_git_sha": null,
+  "health": {
+    "url": "https://arquantix.com/health",
+    "ok": true,
+    "status": 200,
+    "error": null
+  },
+  "alembic_version": "176",
+  "flags": {
+    "BUNDLE_FUNDING_HANDLER_ENABLED": null,
+    "bundle_funding_handler_enabled()": true
+  },
+  "neutralite": {
+    "bundle_scope_bundle_invest_locks": 0,
+    "bundle_leg_or_child_intents": 0,
+    "bundle_funding_receipt_or_settled_parents": 0,
+    "pe_atoms": 19,
+    "pe_atoms_expected": 19,
+    "cost_basis": 67,
+    "cost_basis_expected": 67,
+    "lifi_swap_legs": 131,
+    "lifi_swap_legs_expected": 131
+  },
+  "runtime_wiring": {
+    "bundle_funding_handler_module_present": true,
+    "settle_bundle_funding_callable": true,
+    "module_no_worker_controller_lifi_imports": true,
+    "orchestrator_or_worker_calls_funding_handler": false
+  },
+  "all_checks_pass": true
 }
 ```
+
+> Note : la clé JSON `bundle_funding_handler_enabled()` encode en fait `flag_off_runtime` (= handler **désactivé**). Valeur `true` = conforme.
 
 ---
 
@@ -75,12 +108,12 @@ Deploy neutre B3a : module `bundle_funding_handler` présent en image, flag **OF
 
 | Critère | Statut |
 | --- | --- |
-| Handler module présent · flag OFF | _⬜_ |
-| Aucun appel runtime `settle_bundle_funding_idempotently` | _⬜_ |
-| Aucun `bundle_funding_receipt_hash` auto | _⬜_ |
-| Aucun `bundle_funding.settled=true` auto | _⬜_ |
-| PE / CB / legs LI.FI inchangés | _⬜_ |
-| Legacy `fund_bundle_cash_leg_from_self_trading` inchangé | _⬜_ |
+| Handler module présent · flag OFF | ✅ |
+| Aucun appel runtime `settle_bundle_funding_idempotently` | ✅ |
+| Aucun `bundle_funding_receipt_hash` auto | ✅ |
+| Aucun `bundle_funding.settled=true` auto | ✅ |
+| PE / CB / legs LI.FI inchangés | ✅ |
+| Legacy `fund_bundle_cash_leg_from_self_trading` inchangé | ✅ (orchestrator non câblé) |
 
 ---
 
@@ -88,8 +121,18 @@ Deploy neutre B3a : module `bundle_funding_handler` présent en image, flag **OF
 
 | Action | Statut |
 | --- | --- |
-| Deploy neutre B3a validé | _⬜_ |
-| **GO merge PR #57** | _⬜ après B3a OK_ |
+| Deploy neutre B3a validé | ✅ |
+| **GO merge PR #57** | ✅ **autorisé** |
+
+---
+
+## Suite (hors scope immédiat)
+
+1. Merger [#57](https://github.com/geniusga-vancelian/vancelian-app/pull/57) (B3c leg settlement handler).
+2. Deploy neutre B3c (`BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` absent/false).
+3. `./scripts/arquantix-ecs-bundle-b3c-post-deploy-verify.sh` → `GO_BUNDLE_B3C_POST_DEPLOY_REPORT.md`.
+4. **Ne pas activer** `BUNDLE_FUNDING_HANDLER_ENABLED`, `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED`, `BUNDLE_S4_PARENT_LOCK_DUAL_RUN_ENABLED`.
+5. **Aucun test runtime Bundle** avant rapport B3c neutre.
 
 ---
 
