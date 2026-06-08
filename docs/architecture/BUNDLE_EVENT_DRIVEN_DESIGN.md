@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Audit + design · **aucun code runtime** |
 | **Date** | 2026-06-07 |
-| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a/Global Lock V1/B4b ✅ · controlled test B4b **après** deploy neutre |
+| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a/Global Lock V1/B4b ✅ · [B4b controlled test GO](GO_BUNDLE_B4B_MINIMAL_CONTROLLED_TEST_REPORT.md) · **B5 en cours** |
 | **Prérequis validés** | Rail LI.FI standalone event-driven · Controller v1.2 chain-aware · GO manuel 3/3 RECONCILED |
 | **Interdictions** | Pas de migration · pas de changement settlement/locks/controller standalone · pas d’activation prod |
 
@@ -986,17 +986,32 @@ Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) —
 | PR | Scope | Runtime | Statut |
 | --- | --- | --- | --- |
 | **B4a** | `bundle_child_factory.py` · `create_bundle_child_intents_from_frozen_plan()` · 1 parent · 1 leg #0 BUY USDC→AAVE Base · `status=awaiting_swap` | ❌ Pure function · pas de worker/outbox | **✅ Mergée** (PR `#58`) · deploy neutre TD `:155` · [GO_BUNDLE_B4A_POST_DEPLOY_REPORT.md](GO_BUNDLE_B4A_POST_DEPLOY_REPORT.md) |
-| **B4b** | `bundle_b4b_runtime_bridge.py` · `run_bundle_b4b_minimal_bridge()` · parent FROZEN → lock → fresh swap → attach (`swap_attached`) → settle B3c · 1×1×1 BUY USDC→AAVE Base | Flag OFF `BUNDLE_B4B_RUNTIME_BRIDGE_ENABLED` | **✅ Mergée** (PR `#60`) · deploy neutre · [GO_BUNDLE_B4B_POST_DEPLOY_REPORT.md](GO_BUNDLE_B4B_POST_DEPLOY_REPORT.md) · controlled test **après** Go explicite |
+| **B4b** | `bundle_b4b_runtime_bridge.py` · `run_bundle_b4b_minimal_bridge()` · parent FROZEN → lock → fresh swap → attach (`swap_attached`) → settle B3c · 1×1×1 BUY USDC→AAVE Base | Flag OFF `BUNDLE_B4B_RUNTIME_BRIDGE_ENABLED` | **✅ Mergée** (PR `#60`) · [controlled test GO](GO_BUNDLE_B4B_MINIMAL_CONTROLLED_TEST_REPORT.md) · quote LI.FI réel · **pas** on-chain/Privy réel (shim mock job ECS) |
 | **B4c** | Events `bundle.fund` · worker route funding → `FUNDED` (ancien B4a outbox) | Flag OFF | ⏸ |
 | **B4d** | Finalize `bundle.finalize` · E.2 terminal statuses | Flag OFF | ⏸ |
 
-### Phase B5 — Controller Bundle
+### Phase B5 — Controller Bundle (scope minimal CTO 2026-06-08)
+
+> **Discipline** : agrégateur de preuves uniquement — **pas** de réparation · replanification · `COMPLETED` · logique métier sophistiquée.
+> Ordre : **B5 parent minimal** → test WebApp réel 1 USDC Base → **puis seulement** N legs / sell / rebalance / withdraw.
+
+```text
+Parent
+ ├─ Child #0  ─┐
+ ├─ Child #1   ├─ tous LEDGER_SETTLED (B3c)
+ └─ Child #N  ─┘
+        ↓
+Parent RECONCILED (+ parent_report_hash = agrégat child_report_hash[])
+```
 
 | PR | Scope | Runtime |
 | --- | --- | --- |
-| **B5a** | Controller **leg** spec + tests · `bundle_leg_controller.py` | No prod |
-| **B5b** | Controller **parent** spec + tests · vérifie rebalance_plan fidelity + allocation finale + residual | No prod |
-| **B5c** | Worker `bundle_leg.reconcile` + `intent.reconcile` parent · manual test 1 bundle pilote | Pilot only |
+| **B5** | `bundle_parent_controller.py` · `reconcile_bundle_parent_idempotently()` · vérifie N enfants = N legs plan · tous `LEDGER_SETTLED` · `plan_hash` cohérent · `parent_report_hash` | Flag OFF `BUNDLE_PARENT_CONTROLLER_ENABLED` |
+| **B5a** *(reporté)* | Controller **leg** · `bundle_leg_controller.py` | No prod |
+| **B5b** *(fusionné dans B5 minimal)* | Controller **parent** — pas allocation drift / residual v1 | No prod |
+| **B5c** | Worker `intent.reconcile` parent · controlled test post-B5 merge | Pilot only |
+
+**Hors scope B5 v1** : `COMPLETED` · finalize E.2 · partial fill policy · release product lock · allocation drift PE.
 
 ### Phase B6 — Migration & deprecation
 

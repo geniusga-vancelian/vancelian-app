@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 | --- | --- |
-| **Statut** | **NON EXÉCUTÉ — en attente relecture + Go explicite** |
+| **Statut** | **✅ EXÉCUTÉ — GO** ([rapport](GO_BUNDLE_B4B_MINIMAL_CONTROLLED_TEST_REPORT.md)) |
 | **Objectif** | Prouver le premier pont runtime Bundle : **parent FROZEN → child auto (B4a) → global lock → fresh swap LI.FI → attach → settle B3c → child LEDGER_SETTLED** |
 | **Prérequis code** | PR B4b mergée · TD **≥ :156** · image post-merge |
 | **Prérequis gate** | [GO_BUNDLE_B4A_POST_DEPLOY_REPORT.md](GO_BUNDLE_B4A_POST_DEPLOY_REPORT.md) ✅ · [GO_GLOBAL_USER_TRANSACTION_LOCK_CONTROLLED_TEST_REPORT.md](GO_GLOBAL_USER_TRANSACTION_LOCK_CONTROLLED_TEST_REPORT.md) ✅ · [GO_BUNDLE_B3C_CONTROLLED_TEST_REPORT.md](GO_BUNDLE_B3C_CONTROLLED_TEST_REPORT.md) ✅ |
