@@ -287,6 +287,25 @@ export async function resumeBundleInvest(portfolioId: string): Promise<BundleInv
   return data
 }
 
+export async function requoteExpiredBundleInvest(
+  portfolioId: string,
+): Promise<BundleInvestPayload> {
+  const res = await fetch('/api/portal/bundles/invest/requote-expired', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ portfolio_id: portfolioId }),
+  })
+  const data = (await res.json()) as BundleInvestPayload & { detail?: string; message?: string }
+  if (!res.ok) {
+    throw new Error(
+      (typeof data.detail === 'string' ? data.detail : null) ||
+        data.message ||
+        'Relance allocation impossible',
+    )
+  }
+  return data
+}
+
 export async function previewBundleRebalance(
   portfolioId: string,
 ): Promise<BundleRebalancePreviewPayload> {
