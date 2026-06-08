@@ -57,6 +57,26 @@ export type BundleInvestAlreadyPendingPayload = {
   message: string
 }
 
+export type BundleExpiredInvestLegsPayload = {
+  status: 'expired_invest_legs'
+  error_code: 'expired_invest_legs'
+  message: string
+  action: 're_quote_required' | 'cash_rebalance_required'
+  batch_id: string
+  expired_count: number
+  expired_assets: string[]
+}
+
+export class BundleExpiredInvestLegsError extends Error {
+  readonly payload: BundleExpiredInvestLegsPayload
+
+  constructor(payload: BundleExpiredInvestLegsPayload) {
+    super(payload.message)
+    this.name = 'BundleExpiredInvestLegsError'
+    this.payload = payload
+  }
+}
+
 export type BundleInvestActiveLockPayload = {
   status: 'none' | 'active'
   reconciled?: boolean
@@ -252,7 +272,11 @@ export async function resumeBundleInvest(portfolioId: string): Promise<BundleInv
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ portfolio_id: portfolioId }),
   })
-  const data = (await res.json()) as BundleInvestPayload & { detail?: string; message?: string }
+  const data = (await res.json()) as BundleInvestPayload &
+    BundleExpiredInvestLegsPayload & { detail?: string; message?: string }
+  if (res.status === 409 && data.error_code === 'expired_invest_legs') {
+    throw new BundleExpiredInvestLegsError(data)
+  }
   if (!res.ok) {
     throw new Error(
       (typeof data.detail === 'string' ? data.detail : null) ||

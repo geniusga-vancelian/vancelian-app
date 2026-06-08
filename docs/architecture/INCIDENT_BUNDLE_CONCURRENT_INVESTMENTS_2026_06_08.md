@@ -5,7 +5,7 @@
 | **Date** | 2026-06-08 |
 | **Compte** | gaelitier@gmail.com · `person_id` `8b0e0044-f1ef-47a5-99d4-370598a77492` |
 | **Sévérité** | Moyenne — pas de perte fonds · contention wallet / legs bloqués |
-| **Statut** | Mitigation Global Lock mergée · **P0 lock orphaning** en cours · flag prod **OFF** · recovery **suspendue** |
+| **Statut** | P0 lock orphaning **déployé** · expired legs fix en cours · flag prod **OFF** · recovery batch 1 en cours |
 
 ---
 
@@ -95,6 +95,24 @@ PR hotfix : `legacy_bundle_global_lock.py` + wiring dans :
 - Reconcile : **ne pas clear** si swaps bundle pending sur le portfolio (tous batches)
 - `update_invest_lock_status` / `resume` : **réacquisition** + audit `bundle.invest_lock_reacquired`
 - Recovery UI **après** deploy neutre + controlled test shape `470c964f`
+
+---
+
+## États legacy Bundle invest (3 cas)
+
+| État | Symptôme | Action |
+| --- | --- | --- |
+| **1. Pending signable** | swaps `AWAITING_SIGNATURE` / `SUBMITTED` | Resume normal |
+| **2. Pending hidden** | lock absent, swaps vivants | P0 `peek` read-only + réacquisition lock |
+| **3. Expired legs** | lock visible, swaps `EXPIRED` | `expired_invest_legs` + `re_quote_required` (pas `no_pending_invest_legs`) |
+
+### Batch `470c964f` — cas 3 (2026-06-08)
+
+- P0 : batch visible, lock réacquis, bouton Reprendre OK
+- Swaps CBBTC + CBETH passés `EXPIRED` (~19:30 UTC)
+- `resume` retournait `no_pending_invest_legs` (trompeur)
+- **Fix** : `expired_invest_legs` HTTP 409 + UI « Relancer l’allocation »
+- Décision CTO ensuite : re-quote legs · rebalance cash · abandon propre
 
 ---
 

@@ -74,6 +74,34 @@ class BundleOrchestratorError(Exception):
     pass
 
 
+class BundleExpiredInvestLegsError(BundleOrchestratorError):
+    """Batch invest legacy avec legs LI.FI expirées — action métier requise."""
+
+    def __init__(
+        self,
+        *,
+        batch_id: str,
+        expired_legs: list[dict[str, str]],
+        action: str = "re_quote_required",
+    ) -> None:
+        self.batch_id = batch_id
+        self.expired_legs = expired_legs
+        self.action = action
+        super().__init__("expired_invest_legs")
+
+    def to_response(self) -> dict:
+        assets = [str(leg.get("asset") or "") for leg in self.expired_legs if leg.get("asset")]
+        return {
+            "status": "expired_invest_legs",
+            "error_code": "expired_invest_legs",
+            "message": "This investment quote has expired. Please restart the allocation.",
+            "action": self.action,
+            "batch_id": self.batch_id,
+            "expired_count": len(self.expired_legs),
+            "expired_assets": assets,
+        }
+
+
 class BundleOrchestrator:
     """Orchestrates bundle investment with a true entry-asset cash leg.
 
@@ -859,6 +887,45 @@ class BundleOrchestrator:
             "invariant_g": invariant_g,
         }
 
+    @staticmethod
+    def _batch_allocation_swap_items(
+        db: Session,
+        *,
+        person_id: UUID,
+        batch_id: str,
+        statuses: set[str],
+    ) -> list[dict]:
+        """Swaps bundle allocation/invest pour un batch — filtre par statut LI.FI."""
+        from services.lifi.models import PersonWalletSwap
+        from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
+
+        if not statuses:
+            return []
+        blocking_actions = {"allocation", "invest", ""}
+        swaps = (
+            db.query(PersonWalletSwap)
+            .filter(
+                PersonWalletSwap.person_id == person_id,
+                PersonWalletSwap.status.in_(list(statuses)),
+            )
+            .all()
+        )
+        items: list[dict] = []
+        for swap in swaps:
+            ctx = bundle_context_from_swap_audit(swap)
+            if not ctx or str(ctx.get("batch_id")) != batch_id:
+                continue
+            action = str(ctx.get("bundle_action") or "")
+            if action not in blocking_actions:
+                continue
+            items.append({
+                "swap": swap,
+                "ctx": ctx,
+                "asset": str(swap.to_asset or ""),
+                "leg_id": str(ctx.get("leg_id") or ""),
+            })
+        return items
+
     def resume_lifi_invest_batch(
         self,
         db: Session,
@@ -867,10 +934,7 @@ class BundleOrchestrator:
         portfolio_id: UUID,
     ) -> dict:
         """Reconstruit le payload invest pour reprendre les legs LI.FI pending d'un batch."""
-        from uuid import UUID as _UUID
-
         from services.lifi.enums import SwapSessionStatus
-        from services.lifi.models import PersonWalletSwap
         from services.portfolio_engine.bundle_execution.bundle_funding import (
             resolve_bundle_cash_leg_available,
         )
@@ -878,7 +942,6 @@ class BundleOrchestrator:
             BundleLifiLegService,
         )
         from services.portfolio_engine.clients.models import Client as _Client
-        from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
 
         from services.portfolio_engine.bundles.bundle_invest_lock import (
             find_active_bundle_batch_ids_for_portfolio,
@@ -952,26 +1015,18 @@ class BundleOrchestrator:
             SwapSessionStatus.AWAITING_SIGNATURE.value,
             SwapSessionStatus.SUBMITTED.value,
         }
-        swaps = (
-            db.query(PersonWalletSwap)
-            .filter(
-                PersonWalletSwap.person_id == person_id,
-                PersonWalletSwap.status.in_(list(pending_statuses)),
-            )
-            .all()
+        pending_items = self._batch_allocation_swap_items(
+            db,
+            person_id=person_id,
+            batch_id=batch_id,
+            statuses=pending_statuses,
         )
         leg_svc = BundleLifiLegService()
         alloc_results: list[dict] = []
         pending = 0
-        for swap in swaps:
-            ctx = bundle_context_from_swap_audit(swap)
-            if not ctx or str(ctx.get("batch_id")) != batch_id:
-                continue
-            action = str(ctx.get("bundle_action") or "")
-            if action not in ("allocation", "invest", ""):
-                continue
-            leg_id = str(ctx.get("leg_id") or "")
-            asset = str(swap.to_asset or "")
+        for item in pending_items:
+            swap = item["swap"]
+            ctx = item["ctx"]
             signing = None
             try:
                 signing = leg_svc.prepare_signing(
@@ -980,18 +1035,36 @@ class BundleOrchestrator:
             except Exception:
                 signing = None
             alloc_results.append({
-                "asset": asset,
+                "asset": item["asset"],
                 "instrument_id": str(ctx.get("target_instrument_id") or ""),
                 "entry_asset_consumed": float(swap.amount_in or 0),
                 "crypto_received": float(swap.estimated_receive or 0),
                 "status": "pending",
                 "swap_id": str(swap.id),
-                "leg_id": leg_id,
+                "leg_id": item["leg_id"],
                 "signing": signing,
             })
             pending += 1
 
         if pending == 0:
+            expired_items = self._batch_allocation_swap_items(
+                db,
+                person_id=person_id,
+                batch_id=batch_id,
+                statuses={SwapSessionStatus.EXPIRED.value},
+            )
+            if expired_items:
+                raise BundleExpiredInvestLegsError(
+                    batch_id=batch_id,
+                    expired_legs=[
+                        {
+                            "asset": item["asset"],
+                            "swap_id": str(item["swap"].id),
+                            "leg_id": item["leg_id"],
+                        }
+                        for item in expired_items
+                    ],
+                )
             raise BundleOrchestratorError("no_pending_invest_legs")
 
         cash_leg_remaining = resolve_bundle_cash_leg_available(

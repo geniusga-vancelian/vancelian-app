@@ -2067,6 +2067,7 @@ def mobile_bundle_invest_resume(
 ):
     """Reprend un batch invest LI.FI en cours (legs pending, cash leg déjà alimenté)."""
     from services.portfolio_engine.bundles.orchestrator import (
+        BundleExpiredInvestLegsError,
         BundleOrchestrator,
         BundleOrchestratorError,
     )
@@ -2103,6 +2104,12 @@ def mobile_bundle_invest_resume(
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content=transaction_in_progress_response_body(exc),
+        )
+    except BundleExpiredInvestLegsError as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=exc.to_response(),
         )
     except BundleOrchestratorError as exc:
         db.rollback()

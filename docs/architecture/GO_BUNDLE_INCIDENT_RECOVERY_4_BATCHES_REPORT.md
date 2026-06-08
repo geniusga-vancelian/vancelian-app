@@ -6,7 +6,7 @@
 | **Compte** | gaelitier@gmail.com · `person_id` `8b0e0044-f1ef-47a5-99d4-370598a77492` |
 | **TD prod** | `arquantix-api:161` |
 | **Global Lock** | `GLOBAL_USER_TRANSACTION_LOCK_ENABLED` **absent/OFF** |
-| **Statut** | ⏸️ **Recovery suspendue** — correctif P0 lock orphaning avant reprise |
+| **Statut** | P0 **déployé** · recovery batch 1 (`94d810b4`) · `470c964f` = expired legs (cas 3) |
 
 ---
 
@@ -91,9 +91,11 @@ Script : `./scripts/arquantix-ecs-bundle-incident-4-batches-audit.sh`
 | CBBTC | AWAITING_SIGNATURE |
 | CBETH | AWAITING_SIGNATURE |
 
-**Action** : Reprendre · signer CBBTC puis CBETH · **nécessite P0 deploy** (lock absent en prod — resume via fallback post-fix).
+**Action** : ⏸️ **après batch 1** — décision CTO : re-quote / rebalance cash (pas resume classique).
 
-**Note audit** : lock metadata null — UI masquée (`PARTIAL_BATCH_HIDDEN`).
+**État actuel (post-P0)** : lock visible · swaps `EXPIRED` · `expired_invest_legs` (pas `no_pending_invest_legs`).
+
+**Historique** : `PARTIAL_BATCH_HIDDEN` (lock null) corrigé par P0 #62.
 
 ---
 
