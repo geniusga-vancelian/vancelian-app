@@ -192,9 +192,13 @@ def test_dual_run_flag_off_no_s4_lock_legacy_unchanged(
 
     assert result.dual_run_flag_on is False
     assert result.s4_attempted is False
+    assert result.skip_reason == "dual_run_flag_off"
     assert db.query(TransactionProductLock).count() == 0
     assert get_invest_lock(portfolio.metadata_) is not None
     assert get_invest_lock(portfolio.metadata_)["batch_id"] == batch_id
+    db.refresh(parent)
+    assert parent.metadata_json.get("bundle_parent_snapshot") is None
+    assert parent.metadata_json.get("dual_run_s4_active") is None
 
 
 def test_dual_run_on_creates_legacy_and_s4_lock(
