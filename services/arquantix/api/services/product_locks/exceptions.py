@@ -106,3 +106,23 @@ class ProductLockDisabled409(ProductLockMiddlewareError):
 
     def __init__(self, message: str = "product locks feature is disabled") -> None:
         super().__init__(message, error_code=ProductLockErrorCode.PRODUCT_LOCK_DISABLED)
+
+
+class TransactionInProgress409(ProductLockMiddlewareError):
+    """Utilisateur a déjà une transaction financière active (global lock V1)."""
+
+    def __init__(
+        self,
+        *,
+        lock_key: str,
+        existing_intent_id: UUID,
+        requested_intent_id: UUID,
+    ) -> None:
+        self.lock_key = lock_key
+        self.existing_intent_id = existing_intent_id
+        self.requested_intent_id = requested_intent_id
+        super().__init__(
+            f"transaction in progress on {lock_key}: "
+            f"held by intent {existing_intent_id}, requested {requested_intent_id}",
+            error_code=ProductLockErrorCode.TRANSACTION_IN_PROGRESS,
+        )
