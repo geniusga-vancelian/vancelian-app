@@ -7,6 +7,8 @@
 #     ./scripts/arquantix-ecs-bundle-b4b-minimal-test.sh create_frozen_parent
 #   BUNDLE_B4B_TEST_CONFIRM=1 PARENT_INTENT_ID=<uuid> \
 #     ./scripts/arquantix-ecs-bundle-b4b-minimal-test.sh run_b4b_bridge
+#   BUNDLE_B4B_TEST_CONFIRM=1 PARENT_INTENT_ID=<uuid> \
+#     ./scripts/arquantix-ecs-bundle-b4b-minimal-test.sh execute_fresh_swap
 #   PARENT_INTENT_ID=<uuid> \
 #     ./scripts/arquantix-ecs-bundle-b4b-minimal-test.sh audit
 #   BUNDLE_B4B_TEST_CONFIRM=1 PARENT_INTENT_ID=<uuid> \
@@ -23,7 +25,7 @@ ECS_CLUSTER="${ECS_CLUSTER:-arquantix-cluster}"
 S3_BUCKET="${ARQUANTIX_ECS_PAYLOAD_BUCKET:-arquantix-media-prod}"
 
 if [[ -z "$MODE" ]]; then
-  echo "Usage: $0 <baseline|create_frozen_parent|run_b4b_bridge|audit|rollback_or_cleanup>" >&2
+  echo "Usage: $0 <baseline|create_frozen_parent|run_b4b_bridge|execute_fresh_swap|audit|rollback_or_cleanup>" >&2
   exit 1
 fi
 shift || true
@@ -55,8 +57,14 @@ SUBNET=$(echo "$NET" | python3 -c "import json,sys; print(json.load(sys.stdin)['
 SG=$(echo "$NET" | python3 -c "import json,sys; print(json.load(sys.stdin)['securityGroups'][0])")
 PUBLIC_IP=$(echo "$NET" | python3 -c "import json,sys; print(json.load(sys.stdin).get('assignPublicIp','ENABLED'))")
 
+EXECUTE_MOCK="${BUNDLE_B4B_EXECUTE_MOCK:-}"
+if [[ "$MODE" == "execute_fresh_swap" ]]; then
+  EXECUTE_MOCK="${EXECUTE_MOCK:-1}"
+fi
+
 OVERRIDES=$(BUNDLE_B4B_TEST_MODE="$MODE" \
   BUNDLE_B4B_TEST_CONFIRM="${BUNDLE_B4B_TEST_CONFIRM:-}" \
+  BUNDLE_B4B_EXECUTE_MOCK="$EXECUTE_MOCK" \
   TEST_RUN_ID="${TEST_RUN_ID:-}" \
   PORTFOLIO_ID="${PORTFOLIO_ID:-}" \
   AMOUNT_USDC="${AMOUNT_USDC:-}" \
@@ -70,6 +78,7 @@ env = [{"name": "BUNDLE_B4B_PAYLOAD_URL", "value": os.environ["BUNDLE_B4B_PAYLOA
 for key in (
     "BUNDLE_B4B_TEST_MODE",
     "BUNDLE_B4B_TEST_CONFIRM",
+    "LIFI_SWAPS_MOCK",
     "TEST_RUN_ID",
     "PORTFOLIO_ID",
     "AMOUNT_USDC",
@@ -78,6 +87,9 @@ for key in (
     val = os.environ.get(key, "")
     if val:
         env.append({"name": key, "value": val})
+
+if os.environ.get("BUNDLE_B4B_EXECUTE_MOCK", "").strip() in {"1", "true", "yes", "on"}:
+    env.append({"name": "LIFI_SWAPS_MOCK", "value": "1"})
 
 bootstrap = (
     "import os,urllib.request,zlib,base64; "

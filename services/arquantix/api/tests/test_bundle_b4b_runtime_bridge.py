@@ -17,6 +17,7 @@ from services.onchain_indexer.models import TransactionIntent
 from services.portfolio_engine.bundle_execution.bundle_funding import sum_bundle_cash_leg_quantity
 from services.portfolio_engine.bundle_execution.bundle_transaction_scope import is_bundle_internal_swap
 from services.portfolio_engine.bundles.event_driven.bundle_b4b_runtime_bridge import (
+    CHILD_STATUS_SWAP_ATTACHED,
     BundleB4bBridgeError,
     run_bundle_b4b_minimal_bridge,
 )

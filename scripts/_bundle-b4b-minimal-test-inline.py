@@ -472,6 +472,98 @@ def mode_run_b4b_bridge(db) -> dict[str, Any]:
     }
 
 
+def mode_execute_fresh_swap(db) -> dict[str, Any]:
+    """Confirme le fresh swap LI.FI (quote réel) — shim on-chain job-only si ``LIFI_SWAPS_MOCK=1``."""
+    if not _confirm_required():
+        raise RuntimeError("execute_fresh_swap_requires_BUNDLE_B4B_TEST_CONFIRM=1")
+
+    parent_id = _env_uuid("PARENT_INTENT_ID")
+    if parent_id is None:
+        raise RuntimeError("PARENT_INTENT_ID_required")
+
+    child = find_bundle_leg(db, parent_intent_id=parent_id, leg_index=0)
+    if child is None or child.linked_id is None:
+        raise RuntimeError("child_with_linked_swap_required")
+
+    swap = db.get(PersonWalletSwap, child.linked_id)
+    if swap is None:
+        raise RuntimeError("linked_swap_not_found")
+
+    if (swap.status or "").upper() == SwapSessionStatus.CONFIRMED.value:
+        return {
+            "phase": "bundle_b4b_minimal_controlled_test",
+            "mode": "execute_fresh_swap",
+            "parent_intent_id": str(parent_id),
+            "child_intent_id": str(child.id),
+            "swap_id": str(swap.id),
+            "swap_status": swap.status,
+            "tx_hash": swap.tx_hash,
+            "already_confirmed": True,
+            "next_step": f"run_b4b_bridge CONFIRM=1 PARENT_INTENT_ID={parent_id}",
+        }
+
+    from services.lifi.lifi_confirm_service import LifiConfirmService
+    from services.lifi.lifi_execute_service import LifiExecuteService
+    from services.lifi.signing_wallet_service import read_signing_wallet_from_audit
+
+    mock_on = (os.environ.get("LIFI_SWAPS_MOCK") or "").strip().lower() in {"1", "true", "yes", "on"}
+    if not mock_on:
+        raise RuntimeError(
+            "execute_fresh_swap_requires_LIFI_SWAPS_MOCK=1_in_job_env_for_controlled_test_shim"
+        )
+
+    econ_before = _economic_snapshot(db)
+    confirm_svc = LifiConfirmService()
+    confirmed = confirm_svc.confirm_execute(
+        db,
+        person_id=PERSON_ID,
+        swap_id=swap.id,
+        review_estimated_receive=str(swap.estimated_receive or "0"),
+        review_amount_in=str(swap.amount_in),
+    )
+    _, signing_addr = read_signing_wallet_from_audit(swap.audit_log)
+    exec_svc = LifiExecuteService()
+    tx_hash = f"0xmock-b4b-{swap.id.hex[:32]}"
+    status_resp = exec_svc.submit_signed_tx(
+        db,
+        person_id=PERSON_ID,
+        swap_id=swap.id,
+        tx_hash=tx_hash,
+        signing_wallet_address=signing_addr,
+    )
+    db.commit()
+    db.refresh(swap)
+
+    active_lock = find_active_global_user_transaction_lock(db, person_id=PERSON_ID)
+    checks = {
+        "swap_confirmed": (swap.status or "").upper() == SwapSessionStatus.CONFIRMED.value,
+        "tx_hash_present": bool(str(swap.tx_hash or "").strip()),
+        "bundle_internal_preserved": is_bundle_internal_swap(swap),
+        "global_lock_still_held": active_lock is not None,
+        "no_child_settlement_yet": (
+            (child.metadata_json or {}).get(BUNDLE_LEG_SETTLEMENT_BLOCK_KEY) is None
+        ),
+    }
+
+    return {
+        "phase": "bundle_b4b_minimal_controlled_test",
+        "mode": "execute_fresh_swap",
+        "parent_intent_id": str(parent_id),
+        "child_intent_id": str(child.id),
+        "swap_id": str(swap.id),
+        "lifi_swaps_mock_job_only": True,
+        "confirm_freshness": confirmed.freshness,
+        "execute_status": status_resp.status,
+        "swap_snapshot": _swap_snapshot(db, swap.id),
+        "active_financial_lock": str(active_lock.intent_id) if active_lock else None,
+        "economic_before": econ_before,
+        "economic_after": _economic_snapshot(db),
+        "checks": checks,
+        "all_checks_pass": all(checks.values()),
+        "next_step": f"run_b4b_bridge CONFIRM=1 PARENT_INTENT_ID={parent_id}",
+    }
+
+
 def mode_audit(db) -> dict[str, Any]:
     parent_id = _env_uuid("PARENT_INTENT_ID")
     if parent_id is None:
@@ -575,6 +667,7 @@ def main() -> None:
         "baseline": mode_baseline,
         "create_frozen_parent": mode_create_frozen_parent,
         "run_b4b_bridge": mode_run_b4b_bridge,
+        "execute_fresh_swap": mode_execute_fresh_swap,
         "audit": mode_audit,
         "rollback_or_cleanup": mode_rollback_or_cleanup,
     }

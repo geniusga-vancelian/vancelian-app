@@ -268,10 +268,10 @@ def _validate_single_child_awaiting_swap(children: list[TransactionIntent]) -> T
     if _child_already_ledger_settled(child):
         return child
     status = _child_awaiting_swap_status(child)
-    if status and status != CHILD_STATUS_AWAITING_SWAP:
+    if status and status not in {CHILD_STATUS_AWAITING_SWAP, CHILD_STATUS_SWAP_ATTACHED}:
         raise BundleB4bBridgeError(
             "bundle.b4b.child_not_awaiting_swap",
-            f"child status={status!r} — awaiting_swap requis",
+            f"child status={status!r} — awaiting_swap ou swap_attached requis",
         )
     return child
 
