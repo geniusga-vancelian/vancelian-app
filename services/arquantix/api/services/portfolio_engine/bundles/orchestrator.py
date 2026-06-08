@@ -329,13 +329,22 @@ class BundleOrchestrator:
             funding_amount=str(funding_amount),
         )
 
+        from uuid import UUID as _UUID
+
+        from services.portfolio_engine.bundles.event_driven.bundle_dual_run_locks import (
+            build_planned_allocations_preview,
+            release_bundle_dual_run_locks,
+            try_acquire_s4_after_legacy_invest_lock,
+        )
         from services.portfolio_engine.clients.models import Client as _Client
+        from services.product_locks.exceptions import ProductLockConflict
         from services.transaction_intents.bundle_intent_sync import ensure_bundle_parent_intent
 
         _client_row = db.query(_Client).filter(_Client.id == client_id).first()
         person_id = _client_row.person_id if _client_row is not None else None
+        parent_intent_id: _UUID | None = None
         if person_id is not None:
-            ensure_bundle_parent_intent(
+            parent_info = ensure_bundle_parent_intent(
                 db,
                 person_id=person_id,
                 bundle_id=str(portfolio_id),
@@ -346,6 +355,29 @@ class BundleOrchestrator:
                     "portfolio_name": portfolio.name,
                 },
             )
+            if parent_info and parent_info.get("intent_id"):
+                parent_intent_id = _UUID(str(parent_info["intent_id"]))
+
+        planned_preview = build_planned_allocations_preview(
+            db,
+            allocations=allocations,
+            funding_amount=funding_amount,
+            normalize_asset_fn=self._normalize_asset_symbol,
+        )
+        try:
+            try_acquire_s4_after_legacy_invest_lock(
+                db,
+                person_id=person_id,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                portfolio=portfolio_locked,
+                batch_id=batch_id,
+                parent_intent_id=parent_intent_id,
+                funding_amount_usdc=funding_amount,
+                planned_allocations=planned_preview,
+            )
+        except ProductLockConflict as exc:
+            raise BundleOrchestratorError(str(exc)) from exc
 
         try:
             funding_result = fund_bundle_cash_leg_from_self_trading(
@@ -359,12 +391,14 @@ class BundleOrchestrator:
                 batch_id=batch_id,
             )
         except BundleFundingError as exc:
-            release_invest_lock(
+            release_bundle_dual_run_locks(
                 db,
+                person_id=person_id,
                 client_id=client_id,
                 portfolio_id=portfolio_id,
                 batch_id=batch_id,
-                terminal_status="failed",
+                parent_intent_id=parent_intent_id,
+                legacy_terminal="release_failed",
             )
             raise BundleOrchestratorError(str(exc)) from exc
 
@@ -478,36 +512,46 @@ class BundleOrchestrator:
             status = "failed"
 
         if status == "completed":
-            clear_invest_lock(
+            release_bundle_dual_run_locks(
                 db,
+                person_id=person_id,
                 client_id=client_id,
                 portfolio_id=portfolio_id,
                 batch_id=batch_id,
+                parent_intent_id=parent_intent_id,
+                legacy_terminal="clear",
             )
         elif status == "failed":
-            release_invest_lock(
+            release_bundle_dual_run_locks(
                 db,
+                person_id=person_id,
                 client_id=client_id,
                 portfolio_id=portfolio_id,
                 batch_id=batch_id,
-                terminal_status="failed",
+                parent_intent_id=parent_intent_id,
+                legacy_terminal="release_failed",
             )
         elif pending == 0:
             # État récupérable — partial ou échec sans legs en attente (cash leg intacte).
             if status == "partial" and succeeded > 0:
-                clear_invest_lock(
+                release_bundle_dual_run_locks(
                     db,
+                    person_id=person_id,
                     client_id=client_id,
                     portfolio_id=portfolio_id,
                     batch_id=batch_id,
+                    parent_intent_id=parent_intent_id,
+                    legacy_terminal="clear",
                 )
             else:
-                release_invest_lock(
+                release_bundle_dual_run_locks(
                     db,
+                    person_id=person_id,
                     client_id=client_id,
                     portfolio_id=portfolio_id,
                     batch_id=batch_id,
-                    terminal_status="failed",
+                    parent_intent_id=parent_intent_id,
+                    legacy_terminal="release_failed",
                 )
         else:
             update_invest_lock_status(
@@ -700,11 +744,27 @@ class BundleOrchestrator:
                 batch_id=batch_id,
             )
 
-        clear_invest_lock(
+        from services.portfolio_engine.bundles.event_driven.bundle_dual_run_locks import (
+            release_bundle_dual_run_locks,
+            resolve_bundle_parent_intent_id,
+        )
+
+        parent_intent_id = None
+        if _client_row is not None and _client_row.person_id is not None:
+            parent_intent_id = resolve_bundle_parent_intent_id(
+                db,
+                person_id=_client_row.person_id,
+                bundle_id=str(portfolio_id),
+                batch_id=batch_id,
+            )
+        release_bundle_dual_run_locks(
             db,
+            person_id=_client_row.person_id if _client_row is not None else None,
             client_id=client_id,
             portfolio_id=portfolio_id,
             batch_id=batch_id,
+            parent_intent_id=parent_intent_id,
+            legacy_terminal="clear",
         )
         reconcile_or_expire_idle_invest_lock(
             db,

@@ -588,8 +588,8 @@ Helpers (lecture seule) : `bundle_parent_child_repository.py` — `find_children
 
 | PR | Scope | Runtime | Statut |
 | --- | --- | --- | --- |
-| **B2** | `bundle_product_locks.py` · acquire/release parent scope `bundle` · snapshot PE · flag + allowlist | ❌ Module only · **non branché legacy** | **🟡 PR ouverte** |
-| **B2b** | Dual-run metadata lock + S4 lock · tests concurrence (swap vs bundle) | Staging | ⏸ |
+| **B2** | `bundle_product_locks.py` · acquire/release parent scope `bundle` · snapshot PE · flag + allowlist | ❌ Module only · **non branché legacy** | **✅ Mergée** (`176` · merge `68e3c062` · PR `#53` · deploy neutre TD `:150`) |
+| **B2b** | `bundle_dual_run_locks.py` · legacy puis S4 · rollback failure · flag `BUNDLE_S4_PARENT_LOCK_DUAL_RUN_ENABLED` | ❌ Dual-run only · **pas migration finale** | **🟡 PR ouverte** |
 
 **B2 livré (module)** :
 
@@ -605,6 +605,30 @@ Gating : `TRANSACTION_PRODUCT_LOCKS_ENABLED` **+** `TRANSACTION_PRODUCT_LOCKS_AL
 
 - `pe_portfolios.metadata.bundle_invest_lock` (legacy intact)
 - Orchestrateur Bundle legacy · child intents · settlement · Controller · PE writers
+
+### Phase B2b — Dual-run locks (legacy + S4)
+
+**Objectif** : prouver la coexistence sans lock zombie — le plus critique est le failure path (legacy acquis, S4 échoue → rollback legacy).
+
+| Flag | Défaut | Effet |
+| --- | --- | --- |
+| `BUNDLE_S4_PARENT_LOCK_DUAL_RUN_ENABLED` | `false` | OFF → legacy seul (comportement prod inchangé) |
+| `TRANSACTION_PRODUCT_LOCKS_ENABLED` + allowlist | OFF | S4 no-op même si dual-run ON |
+
+**Ordre dual-run (flag ON + allowlist OK)** :
+
+1. `acquire_invest_lock` (legacy metadata) — inchangé
+2. `ensure_bundle_parent_intent`
+3. `try_acquire_s4_after_legacy_invest_lock` → `acquire_bundle_parent_lock` scope `bundle`
+4. Échec S4 → `release_invest_lock(terminal_status=failed)` (anti-zombie)
+5. Terminal → `release_bundle_dual_run_locks` (legacy clear/failed + S4 release)
+
+**Conflits documentés** :
+
+- Deux `bundle_invest` même wallet/USDC/scope `bundle` → conflit S4 (409)
+- `bundle_invest` + swap standalone USDC : scopes **distincts** (`bundle` vs `trading_available`) — pas de blocage inter-produit aujourd'hui ; stratégie globale source USDC = futur (hors B2b)
+
+**B2b n'est pas** la migration finale metadata → S4 (cf. B6b). Dual-run staging uniquement — **ne pas activer en prod**.
 
 Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) — cf. [S4_IMPLEMENTATION_ROADMAP.md](S4_IMPLEMENTATION_ROADMAP.md) L6.
 
