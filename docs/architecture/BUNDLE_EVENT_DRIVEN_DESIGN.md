@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Audit + design · **aucun code runtime** |
 | **Date** | 2026-06-07 |
-| **Statut** | Design actif — B1/B2/B2b mergés · **B3b en cours** · B3a/B3c bloqués |
+| **Statut** | Design actif — B1/B2/B2b/B3b mergés · **B3a en cours** (funding handler · flag OFF) |
 | **Prérequis validés** | Rail LI.FI standalone event-driven · Controller v1.2 chain-aware · GO manuel 3/3 RECONCILED |
 | **Interdictions** | Pas de migration · pas de changement settlement/locks/controller standalone · pas d’activation prod |
 
@@ -701,9 +701,9 @@ Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) —
 
 | PR | Scope | Runtime | Statut |
 | --- | --- | --- | --- |
-| **B3a** | Handler `bundle_funding` · router L5 · receipt hash parent · phase `FUNDED` | Flag OFF | ⏸ **bloqué avant B3b merge** |
-| **B3b** | `rebalance_planner.py` · `plan_rebalance_after_funding()` · tests purs rebalance-to-target | ❌ Pure function only | **🟡 PR ouverte** |
-| **B3c** | Handler `bundle_leg` settlement · remplace `apply_swap_settlement` direct · idempotence | Flag OFF | ⏸ **bloqué avant B3b merge** |
+| **B3b** | `rebalance_planner.py` · `plan_rebalance_after_funding()` · tests purs rebalance-to-target | ❌ Pure function only | **✅ Mergée** (PR `#55`) |
+| **B3a** | `bundle_funding_handler.py` · `settle_bundle_funding_idempotently()` · trading_available → bundle_cash · receipt hash parent · metadata `funding_settled` / phase `FUNDED` | Flag OFF (`BUNDLE_FUNDING_HANDLER_ENABLED`) | **🟡 En cours** (handler only · pas runtime) |
+| **B3c** | Handler `bundle_leg` settlement · remplace `apply_swap_settlement` direct · idempotence | Flag OFF | **⏸ Bloqué** (après B3a merge) |
 | **B3d** | PE atoms + cost basis **via handlers only** · retire writers HTTP | Flag OFF | ⏸ **bloqué avant B3b merge** |
 
 **B3b livrable attendu** :
@@ -899,4 +899,4 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 | 5 | Dual-run prod ? | **Non** — B2b flag OFF · staging pilote uniquement |
 | 6 | LI.FI standalone ? | **Gelé** — aucune régression |
 
-**Prochaine action** : review **B3b PR** → merge → GO **B3a** funding handler (B3c settlement reste bloqué jusqu’à B3a).
+**Prochaine action** : finaliser **B3a** PR (handler funding · flag OFF) · puis **B3c** leg settlement · legs runtime sur `rebalance_plan_after_funding` (B4).
