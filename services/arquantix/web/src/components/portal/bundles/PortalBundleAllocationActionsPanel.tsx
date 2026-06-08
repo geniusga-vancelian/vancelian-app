@@ -7,6 +7,7 @@ import { useBundleLifiInvest } from '@/components/portal/bundles/useBundleLifiIn
 import { useBundleLifiRebalance } from '@/components/portal/bundles/useBundleLifiRebalance'
 import { AppButton } from '@/components/design-system/app/AppButton'
 import {
+  BundleExpiredInvestLegsError,
   previewBundleRebalance,
   resumeBundleInvest,
   type BundleInvestActiveLockPayload,
@@ -51,6 +52,7 @@ export function PortalBundleAllocationActionsPanel({
   const [legLabel, setLegLabel] = useState<string | null>(null)
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [swapMockMode, setSwapMockMode] = useState(false)
+  const [expiredLegs, setExpiredLegs] = useState(false)
 
   const { resumeSession: resumeInvest, inFlightRef: investInFlight } = useBundleLifiInvest(
     swapMockMode,
@@ -108,7 +110,14 @@ export function PortalBundleAllocationActionsPanel({
       onClose()
     } catch (err) {
       setExecutionPhase('failed')
-      setError(err instanceof Error ? err.message : 'Reprise impossible')
+      if (err instanceof BundleExpiredInvestLegsError) {
+        setExpiredLegs(true)
+        setError(
+          'Ce devis d’investissement a expiré. Relancez l’allocation pour continuer.',
+        )
+      } else {
+        setError(err instanceof Error ? err.message : 'Reprise impossible')
+      }
     } finally {
       setBusy(false)
       setLegLabel(null)
@@ -137,7 +146,7 @@ export function PortalBundleAllocationActionsPanel({
   }
 
   const lockActive = lockState?.status === 'active'
-  const canResume = lockActive && (lockState?.resume_available ?? true)
+  const canResume = lockActive && (lockState?.resume_available ?? true) && !expiredLegs
   const buyCount = preview?.buy_plan?.length ?? 0
 
   return (
@@ -155,6 +164,16 @@ export function PortalBundleAllocationActionsPanel({
         {canResume ? (
           <AppButton type="button" variant="primary" disabled={busy} onClick={() => void runResumeInvest()}>
             Reprendre l’investissement
+          </AppButton>
+        ) : null}
+        {expiredLegs ? (
+          <AppButton
+            type="button"
+            variant="primary"
+            disabled={busy || loadingPreview}
+            onClick={() => void runReallocate()}
+          >
+            Relancer l’allocation
           </AppButton>
         ) : null}
         {hasUnallocatedCash ? (
