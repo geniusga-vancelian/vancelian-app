@@ -6,7 +6,7 @@
 | **Compte** | gaelitier@gmail.com · `person_id` `8b0e0044-f1ef-47a5-99d4-370598a77492` |
 | **TD prod** | `arquantix-api:161` |
 | **Global Lock** | `GLOBAL_USER_TRANSACTION_LOCK_ENABLED` **absent/OFF** |
-| **Statut** | 🔴 **Recovery en cours** — 4/4 batches bloqués |
+| **Statut** | ⏸️ **Recovery suspendue** — correctif P0 lock orphaning avant reprise |
 
 ---
 
@@ -16,7 +16,15 @@
 - Flag **OFF** → parallélisme 2 portfolios **toujours possible** (comportement attendu).
 - Retest utilisateur ~21:32 locale : nouveaux batches `94d810b4` + `470c964f` en parallèle des anciens.
 
-**Interdictions actives** : aucun nouvel invest Bundle · recovery UI un batch à la fois · pas de cleanup DB auto.
+**Interdictions actives** : aucun nouvel invest Bundle · **pas de recovery UI** tant que P0 lock orphaning non déployé · pas de cleanup DB auto.
+
+### Blocage P0 — `PARTIAL_BATCH_HIDDEN` (batch `470c964f`)
+
+Audit 2026-06-08 : parent + swaps vivants mais `bundle_invest_lock` absent — cause = `GET active-lock` avec reconcile + `clear_invest_lock` silencieux.
+
+**Correctif requis avant recovery** : read-only GET · guard swaps pending portfolio-wide · resume fallback · tests `test_bundle_invest_lock_orphan_fix.py`.
+
+**Après deploy neutre + controlled test** : reprendre l’ordre 1→4 ci-dessous.
 
 ---
 
@@ -83,7 +91,9 @@ Script : `./scripts/arquantix-ecs-bundle-incident-4-batches-audit.sh`
 | CBBTC | AWAITING_SIGNATURE |
 | CBETH | AWAITING_SIGNATURE |
 
-**Action** : Reprendre · signer CBBTC puis CBETH · **ne pas** lancer batch 3 avant terminal ou décision CTO.
+**Action** : Reprendre · signer CBBTC puis CBETH · **nécessite P0 deploy** (lock absent en prod — resume via fallback post-fix).
+
+**Note audit** : lock metadata null — UI masquée (`PARTIAL_BATCH_HIDDEN`).
 
 ---
 

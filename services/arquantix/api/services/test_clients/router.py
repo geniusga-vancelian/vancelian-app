@@ -1924,52 +1924,21 @@ def mobile_bundle_invest_active_lock(
     db: Session = Depends(get_db),
     client: PeClient = Depends(mobile_app_client),
 ):
-    """Verrou investissement LI.FI en cours (reprise Portal après refresh)."""
+    """Verrou investissement LI.FI en cours (reprise Portal après refresh) — lecture seule."""
     from uuid import UUID as _UUID
 
-    from services.portfolio_engine.bundles.bundle_invest_lock import (
-        get_active_invest_lock_for_portfolio,
-        load_portfolio_for_invest_lock,
-        reconcile_or_expire_idle_invest_lock,
-    )
+    from services.portfolio_engine.bundles.bundle_invest_lock import peek_bundle_invest_lock_state
 
     try:
         pid = _UUID(str(portfolio_id))
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
 
-    portfolio = load_portfolio_for_invest_lock(
-        db, client_id=client.id, portfolio_id=pid,
-    )
-    reconciled = reconcile_or_expire_idle_invest_lock(
+    return peek_bundle_invest_lock_state(
         db,
         client_id=client.id,
         portfolio_id=pid,
-        portfolio=portfolio,
     )
-    if reconciled:
-        db.commit()
-        lock = get_active_invest_lock_for_portfolio(
-            db, client_id=client.id, portfolio_id=pid,
-        )
-        if lock is None:
-            return {"status": "none", "reconciled": True}
-        return {
-            "status": "active",
-            "lock": lock,
-            "reconciled": True,
-        }
-
-    lock = get_active_invest_lock_for_portfolio(
-        db, client_id=client.id, portfolio_id=pid,
-    )
-    if lock is None:
-        return {"status": "none"}
-    return {
-        "status": "active",
-        "lock": lock,
-        "resume_available": True,
-    }
 
 
 @bootstrap_router.get("/bundle/reconciliation-state")
