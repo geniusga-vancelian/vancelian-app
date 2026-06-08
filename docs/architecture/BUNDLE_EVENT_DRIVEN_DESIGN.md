@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Audit + design · **aucun code runtime** |
 | **Date** | 2026-06-07 |
-| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a mergés · **B4b prochain** (child runtime swap→settle · flag OFF) |
+| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a mergés · **Global User Transaction Lock V1** avant B4b · puis child runtime swap→settle |
 | **Prérequis validés** | Rail LI.FI standalone event-driven · Controller v1.2 chain-aware · GO manuel 3/3 RECONCILED |
 | **Interdictions** | Pas de migration · pas de changement settlement/locks/controller standalone · pas d’activation prod |
 
@@ -986,7 +986,7 @@ Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) —
 | PR | Scope | Runtime | Statut |
 | --- | --- | --- | --- |
 | **B4a** | `bundle_child_factory.py` · `create_bundle_child_intents_from_frozen_plan()` · 1 parent · 1 leg #0 BUY USDC→AAVE Base · `status=awaiting_swap` | ❌ Pure function · pas de worker/outbox | **✅ Mergée** (PR `#58`) · deploy neutre TD `:155` · [GO_BUNDLE_B4A_POST_DEPLOY_REPORT.md](GO_BUNDLE_B4A_POST_DEPLOY_REPORT.md) |
-| **B4b** | Child runtime : child auto → quote/sign swap → settlement B3c · wiring outbox/worker | Flag OFF | **🟡 prochain** |
+| **B4b** | Child runtime : child auto → quote/sign swap → settlement B3c · wiring outbox/worker | Flag OFF | ⏸ **après Global User Transaction Lock V1** |
 | **B4c** | Events `bundle.fund` · worker route funding → `FUNDED` (ancien B4a outbox) | Flag OFF | ⏸ |
 | **B4d** | Finalize `bundle.finalize` · E.2 terminal statuses | Flag OFF | ⏸ |
 
@@ -1180,6 +1180,7 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 
 **Prochaine action** :
 
-1. **B4b** — pont child auto → swap frais → settlement B3c (worker/outbox · flag OFF) · enrichir `entry/target_instrument_id`
-2. Deploy neutre B4b · pas de WebApp · pas de Controller
+1. **Global User Transaction Lock V1** — `financial_transaction` · flag `GLOBAL_USER_TRANSACTION_LOCK_ENABLED` OFF · deploy neutre · test 409/idempotence
+2. **B4b** — pont child auto → swap frais → settlement B3c (worker/outbox · flag OFF) · enrichir `entry/target_instrument_id`
+3. Deploy neutre B4b · pas de WebApp · pas de Controller
 3. Flags prod restent OFF : `BUNDLE_FUNDING_HANDLER_ENABLED` · `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` · `BUNDLE_S4_PARENT_LOCK_DUAL_RUN_ENABLED`

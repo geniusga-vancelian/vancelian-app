@@ -12,6 +12,7 @@ class ProductLockScope(str, Enum):
     VAULT = "vault"
     LOMBARD_COLLATERAL = "lombard_collateral"
     LOMBARD_BORROW = "lombard_borrow"
+    FINANCIAL_TRANSACTION = "financial_transaction"
 
 
 class ProductLockStatus(str, Enum):

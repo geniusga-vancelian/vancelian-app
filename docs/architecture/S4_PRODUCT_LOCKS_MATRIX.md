@@ -253,7 +253,7 @@ settle_transaction_intent_idempotently(db, intent_id)
 | Mécanisme | Clé | Moment |
 | --- | --- | --- |
 | Lock pessimiste | `person:{id}:wallet:{id}:asset:{symbol}` | VALIDATED → PROCESSING |
-| Lock scope | `…:scope:trading_available \| vault \| bundle \| lombard_collateral` | Idem |
+| Lock scope | `…:scope:trading_available \| vault \| bundle \| lombard_collateral \| financial_transaction` | Idem |
 | Snapshot | `metadata.balance_snapshot.{available, version, hash}` | À VALIDATED |
 | Re-check | `BALANCE_VERSION_MISMATCH` / `BALANCE_CHANGED` | Avant PROCESSING · avant settlement |
 
@@ -272,6 +272,36 @@ settle_transaction_intent_idempotently(db, intent_id)
 1. Matrice validée (ce document)
 2. Modèle de sous-phases / attempts documenté (ADR 001 + ADR 003)
 3. Settlement encapsule `lombard_funding.py` (plus d’appel direct routes)
+
+### 4.6 Global User Transaction Lock V1 (pré-B4b)
+
+> **Doctrine V1** : **1 user = 1 transaction financière active** (cross-produit).
+> **V2** (future) : optimisation par `wallet` / `asset` / scope fin — les locks fins S4 restent pour audit et granularité.
+
+| Champ | Valeur |
+| --- | --- |
+| **Module** | `services/product_locks/global_user_transaction_lock.py` |
+| **Scope** | `financial_transaction` |
+| **Clé logique** | `person:{id}:wallet:GLOBAL:asset:GLOBAL:scope:financial_transaction` |
+| **Flag** | `GLOBAL_USER_TRANSACTION_LOCK_ENABLED=false` (défaut OFF) |
+| **Indépendance** | Ne dépend **pas** de `TRANSACTION_PRODUCT_LOCKS_ENABLED` |
+| **Wiring** | **Aucun** en V1 — pas orchestrator · pas worker · pas settlement |
+
+**Comportement flag OFF** : no-op strict · aucune écriture `transaction_product_locks` · aucun 409.
+
+**Comportement flag ON** :
+
+| Cas | Résultat |
+| --- | --- |
+| Même `intent_id` | Idempotent |
+| Autre intent même `person_id` | `ProductLockConflict` → `409 transaction_in_progress` |
+| Autre `person_id` | Autorisé |
+| Release | Idempotent |
+| Lock expiré | Ignoré après cleanup · nouvel acquire autorisé |
+
+**Coexistence** : le lock global **ne remplace pas** les locks fins (`trading_available`, `bundle`, …) — les deux peuvent coexister sur le même user (orthogonalité par scope).
+
+**Gate Bundle** : **B4b** (premier pont blockchain) doit être branché **après** merge + deploy neutre de ce lock global.
 
 ### 4.5 Tests bloquants attendus (future PRs S4)
 
@@ -332,3 +362,4 @@ settle_transaction_intent_idempotently(db, intent_id)
 | --- | --- | --- |
 | 2026-06-07 | v1 | Inventaire initial post-clôture Étape 3 |
 | 2026-06-07 | v1.1 | Revue CTO · Lombard naming · S4 ≠ Controller |
+| 2026-06-08 | v1.2 | Global User Transaction Lock V1 · scope `financial_transaction` · pré-B4b |
