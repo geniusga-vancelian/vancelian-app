@@ -16,14 +16,17 @@
 #   BUNDLE_B3C_TEST_CONFIRM=1 PARENT_INTENT_ID=<uuid> CHILD_INTENT_ID=<uuid> \
 #     ./scripts/arquantix-ecs-bundle-b3c-controlled-test.sh rollback_or_cleanup
 #
-# Modes read-only : baseline · audit
-# Modes write     : setup_parent_child · attach_existing_swap · settle_child · rollback_or_cleanup
-#                   (exigent BUNDLE_B3C_TEST_CONFIRM=1)
+# Payload > 8 KiB ECS override : upload S3 + URL présignée (bootstrap court).
 #
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PAYLOAD="${ROOT_DIR}/scripts/arquantix-ecs-bundle-b3c-controlled-test.payload.b64"
 MODE="${1:-}"
+ECS_SERVICE="arquantix-api"
+CONTAINER_NAME="arquantix-api"
+AWS_REGION="${AWS_REGION:-us-east-1}"
+ECS_CLUSTER="${ECS_CLUSTER:-arquantix-cluster}"
+S3_BUCKET="${ARQUANTIX_ECS_PAYLOAD_BUCKET:-arquantix-media-prod}"
 
 if [[ -z "$MODE" ]]; then
   echo "Usage: $0 <baseline|setup_parent_child|attach_existing_swap|settle_child|audit|rollback_or_cleanup>" >&2
@@ -32,9 +35,33 @@ fi
 shift || true
 
 [[ -f "$PAYLOAD" ]] || { echo "Payload manquant: $PAYLOAD" >&2; exit 1; }
-B64="$(tr -d '\n' < "$PAYLOAD")"
 
-CMD=$(BUNDLE_B3C_TEST_MODE="$MODE" \
+PAYLOAD_SHA=$(shasum -a 256 "$PAYLOAD" | awk '{print $1}')
+S3_KEY="ops/ecs-payloads/bundle-b3c-controlled-test/${PAYLOAD_SHA}.payload.b64"
+
+echo "==> Upload payload S3 s3://${S3_BUCKET}/${S3_KEY}"
+aws s3 cp "$PAYLOAD" "s3://${S3_BUCKET}/${S3_KEY}" --region "$AWS_REGION" --only-show-errors
+PAYLOAD_URL=$(aws s3 presign "s3://${S3_BUCKET}/${S3_KEY}" --expires-in 3600 --region "$AWS_REGION")
+
+TASK_DEF=$(aws ecs describe-services \
+  --cluster "$ECS_CLUSTER" \
+  --services "$ECS_SERVICE" \
+  --region "$AWS_REGION" \
+  --query 'services[0].taskDefinition' \
+  --output text)
+
+NET=$(aws ecs describe-services \
+  --cluster "$ECS_CLUSTER" \
+  --services "$ECS_SERVICE" \
+  --region "$AWS_REGION" \
+  --query 'services[0].networkConfiguration.awsvpcConfiguration' \
+  --output json)
+
+SUBNET=$(echo "$NET" | python3 -c "import json,sys; print(json.load(sys.stdin)['subnets'][0])")
+SG=$(echo "$NET" | python3 -c "import json,sys; print(json.load(sys.stdin)['securityGroups'][0])")
+PUBLIC_IP=$(echo "$NET" | python3 -c "import json,sys; print(json.load(sys.stdin).get('assignPublicIp','ENABLED'))")
+
+OVERRIDES=$(BUNDLE_B3C_TEST_MODE="$MODE" \
   BUNDLE_B3C_TEST_CONFIRM="${BUNDLE_B3C_TEST_CONFIRM:-}" \
   BUNDLE_B3C_TEST_REPEAT="${BUNDLE_B3C_TEST_REPEAT:-}" \
   TEST_RUN_ID="${TEST_RUN_ID:-}" \
@@ -43,11 +70,12 @@ CMD=$(BUNDLE_B3C_TEST_MODE="$MODE" \
   PARENT_INTENT_ID="${PARENT_INTENT_ID:-}" \
   CHILD_INTENT_ID="${CHILD_INTENT_ID:-}" \
   SWAP_ID="${SWAP_ID:-}" \
-  B64="$B64" python3 - <<'PY'
-import json, os, shlex
-b64=os.environ["B64"]
-mode=os.environ["BUNDLE_B3C_TEST_MODE"]
-exports=[]
+  BUNDLE_B3C_PAYLOAD_URL="$PAYLOAD_URL" \
+  CONTAINER_NAME="$CONTAINER_NAME" \
+  python3 - <<'PY'
+import json, os
+
+env = [{"name": "BUNDLE_B3C_PAYLOAD_URL", "value": os.environ["BUNDLE_B3C_PAYLOAD_URL"]}]
 for key in (
     "BUNDLE_B3C_TEST_MODE",
     "BUNDLE_B3C_TEST_CONFIRM",
@@ -59,15 +87,79 @@ for key in (
     "CHILD_INTENT_ID",
     "SWAP_ID",
 ):
-    val=os.environ.get(key,"")
+    val = os.environ.get(key, "")
     if val:
-        exports.append(f"{key}={shlex.quote(val)}")
-prefix=" ".join(exports)
-code="import zlib,base64; exec(zlib.decompress(base64.b64decode("+json.dumps(b64)+")))"
-inner=f"{prefix} python3 -c {shlex.quote(code)}" if prefix else f"python3 -c {shlex.quote(code)}"
-print("cd /app && "+inner)
+        env.append({"name": key, "value": val})
+
+bootstrap = (
+    "import os,urllib.request,zlib,base64; "
+    "u=os.environ['BUNDLE_B3C_PAYLOAD_URL']; "
+    "b64=urllib.request.urlopen(u, timeout=60).read(); "
+    "exec(zlib.decompress(base64.b64decode(b64)))"
+)
+cmd = "cd /app && python3 -c " + json.dumps(bootstrap)
+print(json.dumps({
+    "containerOverrides": [{
+        "name": os.environ["CONTAINER_NAME"],
+        "command": ["sh", "-c", cmd],
+        "environment": env,
+    }]
+}))
 PY
 )
 
 echo "==> B3c controlled test mode=$MODE"
-exec "$ROOT_DIR/scripts/arquantix-ecs-run-job.sh" arquantix-api arquantix-api "$CMD"
+echo "  task definition : $TASK_DEF"
+echo "  payload s3      : s3://${S3_BUCKET}/${S3_KEY}"
+
+TASK_ARN=$(aws ecs run-task \
+  --region "$AWS_REGION" \
+  --cluster "$ECS_CLUSTER" \
+  --task-definition "$TASK_DEF" \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[$SUBNET],securityGroups=[$SG],assignPublicIp=$PUBLIC_IP}" \
+  --overrides "$OVERRIDES" \
+  --query 'tasks[0].taskArn' \
+  --output text)
+
+if [[ -z "$TASK_ARN" || "$TASK_ARN" == "None" ]]; then
+  echo "ERREUR: RunTask n'a pas démarré." >&2
+  exit 1
+fi
+
+TASK_ID="${TASK_ARN##*/}"
+echo "  task ARN        : $TASK_ARN"
+echo "  logs            : /ecs/$ECS_SERVICE (stream api/$ECS_SERVICE/$TASK_ID)"
+
+aws ecs wait tasks-stopped --region "$AWS_REGION" --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+
+EXIT_CODE=$(aws ecs describe-tasks \
+  --region "$AWS_REGION" \
+  --cluster "$ECS_CLUSTER" \
+  --tasks "$TASK_ARN" \
+  --query 'tasks[0].containers[0].exitCode' \
+  --output text)
+
+STOP_REASON=$(aws ecs describe-tasks \
+  --region "$AWS_REGION" \
+  --cluster "$ECS_CLUSTER" \
+  --tasks "$TASK_ARN" \
+  --query 'tasks[0].stoppedReason' \
+  --output text)
+
+echo "==> Fetch CloudWatch JSON"
+aws logs get-log-events \
+  --log-group-name "/ecs/${ECS_SERVICE}" \
+  --log-stream-name "api/${ECS_SERVICE}/${TASK_ID}" \
+  --region "$AWS_REGION" \
+  --query 'events[*].message' \
+  --output text 2>/dev/null \
+  | python3 -c "import sys,re,json; t=sys.stdin.read(); m=re.search(r'\{.*\"phase\"\s*:\s*\"bundle_b3c_controlled_test\".*\}', t, re.S); print(json.dumps(json.loads(m.group()), indent=2) if m else 'JSON_NOT_FOUND\n'+t[-2000:])" \
+  || true
+
+if [[ "$EXIT_CODE" != "0" ]]; then
+  echo "ERREUR: $ECS_SERVICE exit=$EXIT_CODE ($STOP_REASON)" >&2
+  exit 1
+fi
+
+echo "OK $ECS_SERVICE (exit 0)"

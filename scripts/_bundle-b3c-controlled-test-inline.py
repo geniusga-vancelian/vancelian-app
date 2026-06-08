@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -56,6 +58,18 @@ ECON_BASELINE = {"pe": 19, "cb": 67, "lifi_swap_legs": 131}
 FROM_ASSET = "USDC"
 TO_ASSET = "AAVE"
 CHAIN = "base"
+HEALTH_URL = os.environ.get("ARQUANTIX_HEALTH_URL", "https://arquantix.com/health")
+
+
+def _health_ok() -> tuple[bool, int | None, str | None]:
+    try:
+        req = urllib.request.Request(HEALTH_URL, method="GET")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status == 200, resp.status, None
+    except urllib.error.HTTPError as exc:
+        return False, exc.code, str(exc)
+    except Exception as exc:
+        return False, None, str(exc)
 
 
 def _utc_now_iso() -> str:
@@ -98,7 +112,8 @@ def _economic_snapshot(db) -> dict[str, Any]:
             """
             SELECT asset, available_balance::text, balance::text
             FROM person_wallet_balances
-            WHERE person_id = :pid AND wallet_id = :wid
+            WHERE person_id = :pid
+              AND person_crypto_wallet_id = :wid
             ORDER BY asset
             """
         ),
@@ -147,6 +162,33 @@ def _economic_snapshot(db) -> dict[str, Any]:
             ),
             {"pfx": f"{TEST_KEY_PREFIX}:%", "ver": TEST_VERSION},
         ).scalar(),
+        "bundle_leg_settlement_auto": db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM transaction_intents
+                WHERE product_type = 'bundle_leg'
+                  AND intent_role = 'child'
+                  AND (
+                    metadata_json ? 'settlement_receipt_hash'
+                    OR COALESCE(metadata_json->'bundle_leg_settlement'->>'settled', '') = 'true'
+                  )
+                """
+            )
+        ).scalar(),
+        "bundle_funding_settled_auto": db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM transaction_intents
+                WHERE product_type = 'bundle_invest'
+                  AND (
+                    metadata_json ? 'bundle_funding_receipt_hash'
+                    OR COALESCE(metadata_json->'bundle_funding'->>'settled', '') = 'true'
+                  )
+                """
+            )
+        ).scalar(),
         "wallet_balances": {
             row[0]: {"available": row[1], "balance": row[2]} for row in balances
         },
@@ -172,25 +214,36 @@ def _find_instruments(db) -> dict[str, Any]:
     return out
 
 
-def _find_bundle_portfolios(db) -> list[dict[str, Any]]:
+def _resolve_client_id(db) -> uuid.UUID | None:
+    row = db.execute(
+        text("SELECT id FROM pe_clients WHERE person_id = :pid LIMIT 1"),
+        {"pid": str(PERSON_ID)},
+    ).fetchone()
+    return uuid.UUID(str(row[0])) if row else None
+
+
+def _find_bundle_portfolios(db, *, client_id: uuid.UUID | None) -> list[dict[str, Any]]:
+    if client_id is None:
+        return []
     rows = db.execute(
         text(
             """
-            SELECT p.id, p.name, p.product_type,
-                   COALESCE(p.metadata_json->>'bundle_code', '') AS bundle_code
+            SELECT p.id, p.name, p.portfolio_type,
+                   COALESCE(p.metadata->>'bundle_code', '') AS bundle_code
             FROM pe_portfolios p
             WHERE p.client_id = :cid
-              AND p.product_type = 'crypto_bundle'
+              AND p.portfolio_type = 'bundle_portfolio'
+              AND p.status = 'active'
             ORDER BY p.created_at
             """
         ),
-        {"cid": str(CLIENT_ID)},
+        {"cid": str(client_id)},
     ).fetchall()
     return [
         {
             "portfolio_id": str(r[0]),
             "name": r[1],
-            "product_type": r[2],
+            "portfolio_type": r[2],
             "bundle_code": r[3],
         }
         for r in rows
@@ -311,16 +364,15 @@ def _baseline_checks(econ: dict[str, Any], flags: dict[str, Any]) -> dict[str, b
 
 
 def mode_baseline(db) -> dict[str, Any]:
+    health_ok, health_status, health_error = _health_ok()
     econ = _economic_snapshot(db)
     flags = _flags_snapshot()
     instruments = _find_instruments(db)
-    portfolios = _find_bundle_portfolios(db)
-    portfolio_id = (
-        os.environ.get("PORTFOLIO_ID", "").strip()
-        or (portfolios[0]["portfolio_id"] if len(portfolios) == 1 else None)
-    )
-    usdc_avail = (econ.get("wallet_balances") or {}).get("USDC", {}).get("available")
-    checks = _baseline_checks(econ, flags)
+    resolved_client_id = _resolve_client_id(db)
+    portfolios = _find_bundle_portfolios(db, client_id=resolved_client_id)
+    portfolio_id = os.environ.get("PORTFOLIO_ID", "").strip() or None
+    if not portfolio_id and len(portfolios) == 1:
+        portfolio_id = portfolios[0]["portfolio_id"]
     candidates = _candidate_swaps(db, portfolio_id=portfolio_id)
     attach_ready = [
         c
@@ -329,18 +381,36 @@ def mode_baseline(db) -> dict[str, Any]:
         and c["bundle_internal"]
         and c["portfolio_match"]
     ]
+    if not portfolio_id and attach_ready:
+        portfolio_id = str(attach_ready[0].get("portfolio_id_in_audit") or "")
+        portfolio_id = portfolio_id or None
+    usdc_avail = (econ.get("wallet_balances") or {}).get("USDC", {}).get("available")
+    checks = _baseline_checks(econ, flags)
     checks["usdc_wallet_available"] = usdc_avail is not None and Decimal(str(usdc_avail)) > 0
     checks["instruments_usdc_aave"] = "USDC" in instruments and "AAVE" in instruments
     checks["portfolio_found"] = portfolio_id is not None
-    checks["attach_candidate_exists"] = len(attach_ready) > 0
+    checks["health_ok"] = health_ok
+    checks["no_settlement_metadata_auto"] = (
+        econ["bundle_leg_settlement_auto"] == 0 and econ["bundle_funding_settled_auto"] == 0
+    )
+    optional = {
+        "attach_candidate_exists": len(attach_ready) > 0,
+    }
     return {
         "phase": "bundle_b3c_controlled_test",
         "mode": "baseline",
+        "baseline_ok": all(checks.values()),
+        "health": {
+            "url": HEALTH_URL,
+            "ok": health_ok,
+            "status": health_status,
+            "error": health_error,
+        },
         "merge_sha_b3c": MERGE_SHA_B3C,
         "min_td_revision": MIN_TD_REVISION,
         "deploy_git_sha": os.environ.get("GIT_SHA") or os.environ.get("GIT_COMMIT"),
         "person_id": str(PERSON_ID),
-        "client_id": str(CLIENT_ID),
+        "client_id": str(resolved_client_id) if resolved_client_id else None,
         "wallet_id": str(WALLET_ID),
         "flags": flags,
         "economic": econ,
@@ -352,6 +422,7 @@ def mode_baseline(db) -> dict[str, Any]:
         "candidate_swaps": candidates,
         "attach_ready_swaps": attach_ready,
         "checks": checks,
+        "optional_checks": optional,
         "all_checks_pass": all(checks.values()),
         "next_step": (
             "setup_parent_child avec CONFIRM=1 PORTFOLIO_ID=... AMOUNT_USDC=1"
@@ -368,12 +439,14 @@ def mode_setup_parent_child(db) -> dict[str, Any]:
     amount = _env_decimal("AMOUNT_USDC", "1")
     portfolio_id_raw = (os.environ.get("PORTFOLIO_ID") or "").strip()
     if not portfolio_id_raw:
-        portfolios = _find_bundle_portfolios(db)
-        if len(portfolios) != 1:
+        client_id = _resolve_client_id(db)
+        portfolios = _find_bundle_portfolios(db, client_id=client_id)
+        if len(portfolios) == 1:
+            portfolio_id_raw = portfolios[0]["portfolio_id"]
+        else:
             raise RuntimeError(
-                f"PORTFOLIO_ID_required:found={len(portfolios)} portfolios"
+                f"PORTFOLIO_ID_required:found={len(portfolios)} bundle_portfolios"
             )
-        portfolio_id_raw = portfolios[0]["portfolio_id"]
 
     instruments = _find_instruments(db)
     if "USDC" not in instruments or "AAVE" not in instruments:
