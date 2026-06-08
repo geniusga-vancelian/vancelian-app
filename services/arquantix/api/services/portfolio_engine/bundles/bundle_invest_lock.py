@@ -43,6 +43,32 @@ RECOVERABLE_INVEST_LOCK_STATUSES = frozenset({
     "expired",
 })
 
+AUDIT_ACTION_LOCK_REACQUIRED = "bundle.invest_lock_reacquired"
+AUDIT_ACTION_RECONCILE_SKIPPED = "bundle.invest_lock_reconcile_skipped_pending_work"
+
+BLOCKING_BUNDLE_SWAP_STATUSES = frozenset({
+    "PENDING",
+    "QUOTE_RECEIVED",
+    "AWAITING_SIGNATURE",
+    "SUBMITTED",
+    "CONFIRMING",
+    "PROCESSING",
+    "PARTIAL",
+})
+
+BLOCKING_BUNDLE_SWAP_ACTIONS = frozenset({"allocation", "invest", ""})
+
+
+class BundleInvestLockMissingWhileBatchActiveError(Exception):
+    """Lock metadata absent alors qu'un batch bundle a encore du travail pending."""
+
+    def __init__(self, *, batch_id: str, portfolio_id: str) -> None:
+        self.batch_id = batch_id
+        self.portfolio_id = portfolio_id
+        super().__init__(
+            f"invest_lock_missing_while_batch_active: portfolio={portfolio_id} batch={batch_id}",
+        )
+
 
 def invest_lock_ttl_minutes() -> int:
     raw = (os.environ.get("BUNDLE_INVEST_LOCK_TTL_MINUTES") or "120").strip()
@@ -178,6 +204,22 @@ def update_invest_lock_status(
     portfolio = load_portfolio_for_invest_lock(db, client_id=client_id, portfolio_id=portfolio_id)
     lock = get_invest_lock(portfolio.metadata_)
     if lock is None or str(lock.get("batch_id")) != batch_id:
+        if _batch_has_blocking_invest_work(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        ):
+            return reacquire_invest_lock_for_batch(
+                db,
+                portfolio=portfolio,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                status=status,
+                extra=extra,
+                reason="update_invest_lock_status",
+            )
         return None
     lock = dict(lock)
     lock["status"] = status
@@ -239,6 +281,280 @@ def _resolve_person_id(db: Session, client_id: UUID) -> Optional[UUID]:
 
     row = db.query(Client).filter(Client.id == client_id).first()
     return row.person_id if row is not None else None
+
+
+def _portfolio_pending_bundle_allocation_batch_ids(
+    db: Session,
+    *,
+    person_id: UUID,
+    portfolio_id: UUID,
+) -> set[str]:
+    """Batch_ids avec swaps bundle allocation encore non terminaux sur ce portfolio."""
+    from services.lifi.models import PersonWalletSwap
+    from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
+
+    portfolio_key = str(portfolio_id)
+    batch_ids: set[str] = set()
+    swaps = (
+        db.query(PersonWalletSwap)
+        .filter(
+            PersonWalletSwap.person_id == person_id,
+            PersonWalletSwap.status.in_(list(BLOCKING_BUNDLE_SWAP_STATUSES)),
+        )
+        .all()
+    )
+    for swap in swaps:
+        ctx = bundle_context_from_swap_audit(swap)
+        if not ctx:
+            continue
+        if str(ctx.get("portfolio_id") or "") != portfolio_key:
+            continue
+        if not ctx.get("bundle_execution"):
+            continue
+        action = str(ctx.get("bundle_action") or "")
+        if action not in BLOCKING_BUNDLE_SWAP_ACTIONS:
+            continue
+        bid = str(ctx.get("batch_id") or "").strip()
+        if bid:
+            batch_ids.add(bid)
+    return batch_ids
+
+
+def portfolio_has_pending_bundle_allocation_swaps(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> bool:
+    person_id = _resolve_person_id(db, client_id)
+    if person_id is None:
+        return False
+    return bool(
+        _portfolio_pending_bundle_allocation_batch_ids(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+        )
+    )
+
+
+def find_active_bundle_batch_ids_for_portfolio(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> list[str]:
+    """Batch_ids actifs (swaps allocation pending) pour un portfolio — ordre stable."""
+    person_id = _resolve_person_id(db, client_id)
+    if person_id is None:
+        return []
+    return sorted(
+        _portfolio_pending_bundle_allocation_batch_ids(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+        )
+    )
+
+
+def _batch_funding_hints(
+    db: Session,
+    *,
+    person_id: UUID,
+    portfolio_id: UUID,
+    batch_id: str,
+) -> dict[str, Any]:
+    from services.transaction_intents.repository import TransactionIntentRepository
+
+    row = TransactionIntentRepository.find_by_bundle_batch(
+        db,
+        person_id=person_id,
+        bundle_id=str(portfolio_id),
+        batch_id=batch_id,
+    )
+    if row is None:
+        return {}
+    meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+    return {
+        "funding_amount": meta.get("funding_amount"),
+        "funding_asset": meta.get("funding_asset"),
+        "entry_instrument_id": meta.get("entry_instrument_id"),
+    }
+
+
+def reacquire_invest_lock_for_batch(
+    db: Session,
+    *,
+    portfolio: Portfolio,
+    client_id: UUID,
+    portfolio_id: UUID,
+    batch_id: str,
+    status: str = "pending_signature",
+    extra: Optional[dict[str, Any]] = None,
+    reason: str = "batch_pending_work",
+) -> dict[str, Any]:
+    """Réécrit bundle_invest_lock quand le batch a encore du travail LI.FI actif."""
+    person_id = _resolve_person_id(db, client_id)
+    hints = (
+        _batch_funding_hints(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        )
+        if person_id is not None
+        else {}
+    )
+    now = _utc_now_iso()
+    lock = {
+        "bundle_action": BUNDLE_ACTION_INVEST,
+        "client_id": str(client_id),
+        "portfolio_id": str(portfolio_id),
+        "batch_id": batch_id,
+        "status": status,
+        "entry_instrument_id": hints.get("entry_instrument_id"),
+        "funding_asset": hints.get("funding_asset"),
+        "funding_amount": hints.get("funding_amount"),
+        "created_at": now,
+        "updated_at": now,
+        "reacquired": True,
+        "reacquired_reason": reason,
+    }
+    if extra:
+        lock.update(extra)
+    _write_lock(portfolio, lock)
+    db.add(portfolio)
+    db.flush()
+
+    from services.portfolio_engine.hardening.audit_service import AuditService
+
+    AuditService.log_success(
+        db,
+        entity_type="portfolio",
+        entity_id=str(portfolio_id),
+        action=AUDIT_ACTION_LOCK_REACQUIRED,
+        actor_id=f"bundle-invest-lock:{batch_id}",
+        metadata={
+            "client_id": str(client_id),
+            "portfolio_id": str(portfolio_id),
+            "batch_id": batch_id,
+            "status": status,
+            "reason": reason,
+        },
+    )
+    logger.info(
+        "bundle_invest_lock.reacquired batch=%s portfolio=%s reason=%s",
+        batch_id,
+        portfolio_id,
+        reason,
+    )
+    return dict(lock)
+
+
+def _build_recoverable_lock_snapshot(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    batch_id: str,
+) -> dict[str, Any]:
+    """Snapshot read-only du lock attendu pour un batch pending (sans écriture DB)."""
+    person_id = _resolve_person_id(db, client_id)
+    hints = (
+        _batch_funding_hints(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        )
+        if person_id is not None
+        else {}
+    )
+    now = _utc_now_iso()
+    return {
+        "bundle_action": BUNDLE_ACTION_INVEST,
+        "client_id": str(client_id),
+        "portfolio_id": str(portfolio_id),
+        "batch_id": batch_id,
+        "status": "pending_signature",
+        "entry_instrument_id": hints.get("entry_instrument_id"),
+        "funding_asset": hints.get("funding_asset"),
+        "funding_amount": hints.get("funding_amount"),
+        "created_at": now,
+        "updated_at": now,
+        "synthetic": True,
+    }
+
+
+def peek_bundle_invest_lock_state(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> dict[str, Any]:
+    """Lecture seule — aucune reconcile / clear / commit."""
+    lock = get_active_invest_lock_for_portfolio(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    if lock is not None:
+        return {
+            "status": "active",
+            "lock": lock,
+            "resume_available": True,
+            "read_only": True,
+        }
+
+    active_batches = find_active_bundle_batch_ids_for_portfolio(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    if not active_batches:
+        return {"status": "none", "read_only": True}
+    if len(active_batches) > 1:
+        return {
+            "status": "ambiguous",
+            "active_batches": active_batches,
+            "read_only": True,
+            "message": "multiple_active_bundle_batches",
+        }
+
+    batch_id = active_batches[0]
+    return {
+        "status": "active",
+        "lock": _build_recoverable_lock_snapshot(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        ),
+        "recovered_from_pending_batch": True,
+        "resume_available": True,
+        "read_only": True,
+    }
+
+
+def _log_reconcile_skipped_pending_work(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    batch_id: str,
+    pending_batches: set[str],
+) -> None:
+    from services.portfolio_engine.hardening.audit_service import AuditService
+
+    AuditService.log_success(
+        db,
+        entity_type="portfolio",
+        entity_id=str(portfolio_id),
+        action=AUDIT_ACTION_RECONCILE_SKIPPED,
+        actor_id=f"bundle-invest-lock:{batch_id}",
+        metadata={
+            "client_id": str(client_id),
+            "portfolio_id": str(portfolio_id),
+            "lock_batch_id": batch_id,
+            "pending_batches": sorted(pending_batches),
+        },
+    )
 
 
 def _reconcile_stale_intent_legs_for_batch(
@@ -510,6 +826,22 @@ def expire_stale_invest_lock_if_safe(
     ):
         return False
 
+    if person_id is not None:
+        pending_batches = _portfolio_pending_bundle_allocation_batch_ids(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+        )
+        if pending_batches:
+            _log_reconcile_skipped_pending_work(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                pending_batches=pending_batches,
+            )
+            return False
+
     release_invest_lock(
         db,
         client_id=client_id,
@@ -607,12 +939,45 @@ def reconcile_idle_invest_lock(
 
     batch_id = str(lock.get("batch_id") or "").strip()
     if not batch_id:
+        person_id = _resolve_person_id(db, client_id)
+        if person_id is not None:
+            pending_batches = _portfolio_pending_bundle_allocation_batch_ids(
+                db,
+                person_id=person_id,
+                portfolio_id=portfolio_id,
+            )
+            if pending_batches:
+                _log_reconcile_skipped_pending_work(
+                    db,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    batch_id="",
+                    pending_batches=pending_batches,
+                )
+                return False
         meta = dict(portfolio.metadata_ or {})
         meta.pop(BUNDLE_INVEST_LOCK_KEY, None)
         portfolio.metadata_ = meta
         db.add(portfolio)
         db.flush()
         return True
+
+    person_id = _resolve_person_id(db, client_id)
+    if person_id is not None:
+        pending_batches = _portfolio_pending_bundle_allocation_batch_ids(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+        )
+        if pending_batches:
+            _log_reconcile_skipped_pending_work(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                pending_batches=pending_batches,
+            )
+            return False
 
     if _batch_has_blocking_invest_work(
         db,

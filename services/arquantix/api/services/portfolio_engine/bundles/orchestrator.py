@@ -880,17 +880,41 @@ class BundleOrchestrator:
         from services.portfolio_engine.clients.models import Client as _Client
         from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
 
+        from services.portfolio_engine.bundles.bundle_invest_lock import (
+            find_active_bundle_batch_ids_for_portfolio,
+            reacquire_invest_lock_for_batch,
+        )
+
         portfolio = self._load_and_validate_portfolio(db, portfolio_id, client_id)
         portfolio_locked = load_portfolio_for_invest_lock(
             db, client_id=client_id, portfolio_id=portfolio_id,
         )
         lock = get_invest_lock(portfolio_locked.metadata_)
-        if lock is None:
-            raise BundleOrchestratorError("no_active_invest_lock")
+        recovered_from_pending_batch = False
 
-        batch_id = str(lock.get("batch_id") or "").strip()
-        if not batch_id:
-            raise BundleOrchestratorError("invalid_invest_lock_batch")
+        if lock is None:
+            active_batches = find_active_bundle_batch_ids_for_portfolio(
+                db, client_id=client_id, portfolio_id=portfolio_id,
+            )
+            if not active_batches:
+                raise BundleOrchestratorError("no_active_invest_lock")
+            if len(active_batches) > 1:
+                raise BundleOrchestratorError("multiple_active_bundle_batches")
+            batch_id = active_batches[0]
+            lock = reacquire_invest_lock_for_batch(
+                db,
+                portfolio=portfolio_locked,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                status="pending_signature",
+                reason="resume_lifi_invest_batch",
+            )
+            recovered_from_pending_batch = True
+        else:
+            batch_id = str(lock.get("batch_id") or "").strip()
+            if not batch_id:
+                raise BundleOrchestratorError("invalid_invest_lock_batch")
 
         product = self._load_product(db, portfolio)
         entry_config = self._resolve_entry_config(product)
@@ -978,7 +1002,7 @@ class BundleOrchestrator:
         funding_amount = lock.get("funding_amount")
         total_received = float(funding_amount) if funding_amount is not None else float(cash_leg_remaining)
 
-        return {
+        out = {
             "status": str(lock.get("status") or "pending_signature"),
             "batch_id": batch_id,
             "portfolio_id": str(portfolio_id),
@@ -994,6 +1018,9 @@ class BundleOrchestrator:
             "execution_provider": "lifi_base",
             "resumed": True,
         }
+        if recovered_from_pending_batch:
+            out["recovered_from_pending_batch"] = True
+        return out
 
     # ------------------------------------------------------------------
     # Public: preview (read-only, zero side-effects)
