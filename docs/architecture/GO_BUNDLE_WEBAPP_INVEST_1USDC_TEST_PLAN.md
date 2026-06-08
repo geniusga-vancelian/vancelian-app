@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 | --- | --- |
-| **Statut** | **🟡 EN COURS — Go « WebApp Bundle Invest 1 USDC »** · baseline ✅ |
+| **Statut** | **🟡 GO opérationnel partiel** — [rapport](GO_BUNDLE_WEBAPP_INVEST_1USDC_TEST_REPORT.md) |
 | **test_start_iso** | `2026-06-08T16:15:06.973194+00:00` |
 | **Objectif** | Prouver le **dernier ~5 %** : Privy réel · signature · swap Base · confirmation · settlement économique réel |
 | **Prérequis rails** | B4b ✅ · B5 ✅ · [GO_BUNDLE_B5_MINIMAL_CONTROLLED_TEST_REPORT.md](GO_BUNDLE_B5_MINIMAL_CONTROLLED_TEST_REPORT.md) |
