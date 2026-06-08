@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Audit + design · **aucun code runtime** |
 | **Date** | 2026-06-07 |
-| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a mergés · **Global User Transaction Lock V1** avant B4b · puis child runtime swap→settle |
+| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a/Global Lock V1 mergés · **test contrôlé lock** puis **B4b** child runtime |
 | **Prérequis validés** | Rail LI.FI standalone event-driven · Controller v1.2 chain-aware · GO manuel 3/3 RECONCILED |
 | **Interdictions** | Pas de migration · pas de changement settlement/locks/controller standalone · pas d’activation prod |
 
@@ -1180,7 +1180,7 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 
 **Prochaine action** :
 
-1. **Global User Transaction Lock V1** — `financial_transaction` · flag `GLOBAL_USER_TRANSACTION_LOCK_ENABLED` OFF · deploy neutre · test 409/idempotence
+1. **Test contrôlé Global Lock** — `scripts/arquantix-ecs-global-lock-controlled-test.sh` · flag ON job only · 409/idempotence
 2. **B4b** — pont child auto → swap frais → settlement B3c (worker/outbox · flag OFF) · enrichir `entry/target_instrument_id`
 3. Deploy neutre B4b · pas de WebApp · pas de Controller
 3. Flags prod restent OFF : `BUNDLE_FUNDING_HANDLER_ENABLED` · `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` · `BUNDLE_S4_PARENT_LOCK_DUAL_RUN_ENABLED`

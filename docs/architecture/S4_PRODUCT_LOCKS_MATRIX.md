@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Inventaire / gouvernance · **aucun code** |
 | **Date** | 2026-06-07 |
-| **Statut** | Validé CTO v1 — post-clôture Étape 3 LI.FI |
+| **Statut** | Validé CTO v1 — Global User Transaction Lock V1 mergé (PR #59 · deploy neutre TD :156) |
 | **Prérequis validés** | Rail event-driven LI.FI standalone prod (#37–#40) |
 | **Références** | [ADR 004](adr/004-ledger-authority.md) · [ADR 001 §5bis](adr/001-intent-as-orchestrator.md) · [SETTLEMENT_LAYER_CONTRACT_v1](SETTLEMENT_LAYER_CONTRACT_v1.md) · [PHASE2 POC](PHASE2_POC_LIFI_STANDALONE_SWAP.md) |
 
