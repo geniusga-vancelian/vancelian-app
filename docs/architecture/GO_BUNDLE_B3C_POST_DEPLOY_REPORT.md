@@ -2,16 +2,16 @@
 
 | Champ | Valeur |
 | --- | --- |
-| **Date** | _À compléter après exécution ECS_ |
-| **PR** | [#57](https://github.com/geniusga-vancelian/vancelian-app/pull/57) · merge _SHA à compléter_ |
-| **Décision** | _À compléter : Deploy neutre OK / KO_ |
-| **Prérequis** | Rapport [GO_BUNDLE_B3A_POST_DEPLOY_REPORT.md](GO_BUNDLE_B3A_POST_DEPLOY_REPORT.md) **OK** |
+| **Date** | 2026-06-08 (verify ECS 13:18 +04) |
+| **PR** | [#57](https://github.com/geniusga-vancelian/vancelian-app/pull/57) · merge `660b1964` |
+| **Décision** | **Deploy neutre OK — gate B3c validé** |
+| **Prérequis** | Rapport [GO_BUNDLE_B3A_POST_DEPLOY_REPORT.md](GO_BUNDLE_B3A_POST_DEPLOY_REPORT.md) **OK** ✅ |
 
 ---
 
 ## Résumé exécutif
 
-Deploy neutre B3c : module `bundle_leg_settlement_handler` présent en image, flag **OFF**, aucun wiring runtime, aucun child intent touché automatiquement.
+Deploy neutre B3c validé : image prod `660b1964`, module `bundle_leg_settlement_handler` présent, flag **OFF**, aucun wiring runtime, aucun child intent touché, comptabilité inchangée (PE 19 · CB 67 · legs 131). **`all_checks_pass=true`**.
 
 ---
 
@@ -19,11 +19,11 @@ Deploy neutre B3c : module `bundle_leg_settlement_handler` présent en image, fl
 
 | Élément | Valeur | Attendu |
 | --- | --- | --- |
-| Workflow CI | _lien run_ | success |
-| Task definition | _TD :___ | ≥ post-#57 |
-| Image SHA | _SHA deploy_ | contient merge B3c |
-| Rollout ECS | _COMPLETED / …_ | ✅ |
-| Health | `https://arquantix.com/health` → _200_ | ✅ |
+| Workflow CI | [run 27127279900](https://github.com/geniusga-vancelian/vancelian-app/actions/runs/27127279900) | success ✅ |
+| Task definition | **TD :154** | ≥ post-#57 ✅ |
+| Image SHA | `660b1964f46682fe79fa8fce26eca33a9dc996da` | contient merge `660b1964` ✅ |
+| Rollout ECS | **COMPLETED** | ✅ |
+| Health | `https://arquantix.com/health` → **200** | ✅ |
 
 ---
 
@@ -31,8 +31,8 @@ Deploy neutre B3c : module `bundle_leg_settlement_handler` présent en image, fl
 
 | Flag | Valeur | Attendu |
 | --- | --- | --- |
-| `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` | _absent / false_ | ✅ absent ou false |
-| `bundle_leg_settlement_handler_enabled()` | _false_ | ✅ |
+| `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` | **absent** | ✅ absent ou false |
+| `bundle_leg_settlement_handler_enabled()` | **false** (handler désactivé) | ✅ |
 
 ---
 
@@ -40,7 +40,7 @@ Deploy neutre B3c : module `bundle_leg_settlement_handler` présent en image, fl
 
 **Script** : `scripts/arquantix-ecs-bundle-b3c-post-deploy-verify.sh`  
 **Inline** : `scripts/_bundle-b3c-post-deploy-verify-inline.py`  
-**Log stream** : _/ecs/arquantix-api · task id_
+**Log stream** : `/ecs/arquantix-api` · task `cbf81ca07794428fa1fa4c6f886f8c13` · exit **0**
 
 ```bash
 ./scripts/arquantix-ecs-bundle-b3c-post-deploy-verify.sh
@@ -48,10 +48,10 @@ Deploy neutre B3c : module `bundle_leg_settlement_handler` présent en image, fl
 
 | Check | Valeur | Attendu |
 | --- | --- | --- |
-| `health.ok` | _true_ | ✅ |
+| `health.ok` | **true** | ✅ |
 | Alembic | **176** | ✅ |
-| `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` | absent/false | ✅ |
-| `bundle_leg_settlement_handler_enabled()` | **false** | ✅ |
+| `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` | absent | ✅ |
+| Handler désactivé (`flag_off_runtime`) | **true** | ✅ |
 | Module handler présent | **true** | ✅ |
 | Orchestrator/worker/LifiLeg appelle handler | **false** | ✅ |
 | `bundle_leg_settlement_metadata_auto` | **0** | ✅ |
@@ -60,15 +60,50 @@ Deploy neutre B3c : module `bundle_leg_settlement_handler` présent en image, fl
 | PE atoms | **19** | ✅ |
 | Cost basis | **67** | ✅ |
 | Legs `lifi-swap:%` | **131** | ✅ |
-| **`all_checks_pass`** | _true_ | ✅ |
+| **`all_checks_pass`** | **true** | ✅ |
 
-### JSON ECS (coller ici)
+### JSON ECS
 
 ```json
 {
-  "_paste_ecs_output": true
+  "phase": "bundle_b3c_post_deploy_verify",
+  "merge_sha": "8252e9c9",
+  "deploy_git_sha": null,
+  "health": {
+    "url": "https://arquantix.com/health",
+    "ok": true,
+    "status": 200,
+    "error": null
+  },
+  "alembic_version": "176",
+  "flags": {
+    "BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED": null,
+    "bundle_leg_settlement_handler_enabled()": true
+  },
+  "neutralite": {
+    "bundle_scope_bundle_invest_locks": 0,
+    "bundle_leg_or_child_intents": 0,
+    "bundle_leg_settlement_metadata_auto": 0,
+    "bundle_parents_leg_settlement_metadata": 0,
+    "pe_atoms": 19,
+    "pe_atoms_expected": 19,
+    "cost_basis": 67,
+    "cost_basis_expected": 67,
+    "lifi_swap_legs": 131,
+    "lifi_swap_legs_expected": 131
+  },
+  "runtime_wiring": {
+    "bundle_leg_settlement_handler_module_present": true,
+    "settle_bundle_leg_callable": true,
+    "module_no_worker_controller_lifi_imports": true,
+    "orchestrator_worker_or_lifi_leg_calls_handler": false,
+    "legacy_apply_post_confirmation_still_present": true
+  },
+  "all_checks_pass": true
 }
 ```
+
+> Note : la clé JSON `bundle_leg_settlement_handler_enabled()` encode `flag_off_runtime` (= handler **désactivé**). Valeur `true` = conforme.
 
 ---
 
@@ -76,13 +111,13 @@ Deploy neutre B3c : module `bundle_leg_settlement_handler` présent en image, fl
 
 | Critère | Statut |
 | --- | --- |
-| Handler module présent · flag OFF | _⬜_ |
-| Aucun appel runtime `settle_bundle_leg_idempotently` | _⬜_ |
-| Aucun child `bundle_leg` metadata settlement auto | _⬜_ |
-| Aucun `settlement_receipt_hash` bundle leg auto | _⬜_ |
-| Aucune mutation parent metadata | _⬜_ |
-| PE / CB / legs LI.FI inchangés | _⬜_ |
-| Legacy `_apply_post_confirmation` inchangé | _⬜_ |
+| Handler module présent · flag OFF | ✅ |
+| Aucun appel runtime `settle_bundle_leg_idempotently` | ✅ |
+| Aucun child `bundle_leg` metadata settlement auto | ✅ |
+| Aucun `settlement_receipt_hash` bundle leg auto | ✅ |
+| Aucune mutation parent metadata | ✅ |
+| PE / CB / legs LI.FI inchangés | ✅ |
+| Legacy `_apply_post_confirmation` inchangé | ✅ |
 
 ---
 
@@ -90,9 +125,29 @@ Deploy neutre B3c : module `bundle_leg_settlement_handler` présent en image, fl
 
 | Action | Statut |
 | --- | --- |
-| Deploy neutre B3c validé | _⬜_ |
-| **Ne pas activer B3c en prod** | _⬜_ |
-| Préparer test contrôlé 1×1×1 USDC→AAVE Base | _⬜_ |
+| Deploy neutre B3c validé | ✅ |
+| **Ne pas activer B3c en prod** | ✅ **maintenu** |
+| Préparer test contrôlé 1×1×1 USDC→AAVE Base | ⬜ prochaine étape |
+
+---
+
+## Flags interdits (maintenus OFF)
+
+| Flag | Statut prod |
+| --- | --- |
+| `BUNDLE_FUNDING_HANDLER_ENABLED` | absent ✅ |
+| `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` | absent ✅ |
+| `BUNDLE_S4_PARENT_LOCK_DUAL_RUN_ENABLED` | absent ✅ |
+
+**Aucun test runtime Bundle** lancé avant ce rapport.
+
+---
+
+## Suite
+
+1. Rédiger le plan de test contrôlé **1 parent · 1 child · 1 buy leg · USDC→AAVE · Base**.
+2. Activer les flags **uniquement** dans un environnement de test contrôlé, pas en prod.
+3. B3c v2 / webhook credit reuse S3b : hors scope v1.
 
 ---
 
