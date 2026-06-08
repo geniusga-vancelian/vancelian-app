@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Audit + design · **aucun code runtime** |
 | **Date** | 2026-06-07 |
-| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a/Global Lock V1 ✅ · **B4b** runtime bridge **en cours** |
+| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a/Global Lock V1/B4b ✅ · controlled test B4b **après** deploy neutre |
 | **Prérequis validés** | Rail LI.FI standalone event-driven · Controller v1.2 chain-aware · GO manuel 3/3 RECONCILED |
 | **Interdictions** | Pas de migration · pas de changement settlement/locks/controller standalone · pas d’activation prod |
 
@@ -986,7 +986,7 @@ Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) —
 | PR | Scope | Runtime | Statut |
 | --- | --- | --- | --- |
 | **B4a** | `bundle_child_factory.py` · `create_bundle_child_intents_from_frozen_plan()` · 1 parent · 1 leg #0 BUY USDC→AAVE Base · `status=awaiting_swap` | ❌ Pure function · pas de worker/outbox | **✅ Mergée** (PR `#58`) · deploy neutre TD `:155` · [GO_BUNDLE_B4A_POST_DEPLOY_REPORT.md](GO_BUNDLE_B4A_POST_DEPLOY_REPORT.md) |
-| **B4b** | `bundle_b4b_runtime_bridge.py` · `run_bundle_b4b_minimal_bridge()` · parent FROZEN → lock → fresh swap → attach → settle B3c · 1×1×1 BUY USDC→AAVE Base | Flag OFF `BUNDLE_B4B_RUNTIME_BRIDGE_ENABLED` | **🔄 En cours** · Global Lock V1 ✅ · [GO_BUNDLE_B4B_MINIMAL_TEST_PLAN.md](GO_BUNDLE_B4B_MINIMAL_TEST_PLAN.md) · WebApp test **après** controlled test GO |
+| **B4b** | `bundle_b4b_runtime_bridge.py` · `run_bundle_b4b_minimal_bridge()` · parent FROZEN → lock → fresh swap → attach (`swap_attached`) → settle B3c · 1×1×1 BUY USDC→AAVE Base | Flag OFF `BUNDLE_B4B_RUNTIME_BRIDGE_ENABLED` | **✅ Mergée** (PR `#60`) · deploy neutre · [GO_BUNDLE_B4B_POST_DEPLOY_REPORT.md](GO_BUNDLE_B4B_POST_DEPLOY_REPORT.md) · controlled test **après** Go explicite |
 | **B4c** | Events `bundle.fund` · worker route funding → `FUNDED` (ancien B4a outbox) | Flag OFF | ⏸ |
 | **B4d** | Finalize `bundle.finalize` · E.2 terminal statuses | Flag OFF | ⏸ |
 

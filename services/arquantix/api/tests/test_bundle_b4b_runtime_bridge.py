@@ -150,9 +150,14 @@ def _make_swap(
                 "bundle_execution": True,
                 "batch_id": str(parent_id),
                 "leg_id": "leg-0",
+                "leg_index": 0,
                 "portfolio_id": str(portfolio_id),
                 "bundle_action": "invest",
                 "leg_action": "rebalance_buy",
+                "parent_intent_id": str(parent_id),
+                "child_intent_id": str(child_id),
+                "plan_hash": PLAN_HASH,
+                "planner_version": PLANNER_VERSION,
             }
         )
     swap = PersonWalletSwap(
@@ -310,10 +315,15 @@ def test_fresh_swap_created_and_tagged_bundle_execution(db: Session, b4b_on, mon
     swap = created[0]
     assert is_bundle_internal_swap(swap) is True
     audit = swap.audit_log or []
-    assert any(
-        isinstance(e, dict) and e.get("event") == "bundle_leg_context" and e.get("bundle_execution") is True
-        for e in audit
-    )
+    ctx_events = [
+        e for e in audit if isinstance(e, dict) and e.get("event") == "bundle_leg_context"
+    ]
+    assert ctx_events
+    ctx = ctx_events[-1]
+    assert ctx.get("bundle_execution") is True
+    assert ctx.get("parent_intent_id")
+    assert ctx.get("child_intent_id")
+    assert ctx.get("leg_index") == 0
 
 
 @pytestmark_db
@@ -331,6 +341,7 @@ def test_swap_attached_to_child(db: Session, b4b_on, monkeypatch):
     assert meta.get("entry_instrument_id")
     assert meta.get("target_instrument_id")
     assert meta.get("planned_amount_in") == NOTIONAL
+    assert meta.get("status") == "swap_attached"
 
 
 @pytestmark_db

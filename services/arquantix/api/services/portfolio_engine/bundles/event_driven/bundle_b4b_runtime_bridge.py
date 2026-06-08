@@ -317,6 +317,9 @@ def _tag_swap_bundle_execution(
     parent_intent_id: UUID,
     child_intent_id: UUID,
     bundle_execution_id: UUID | None,
+    plan_hash: str,
+    planner_version: str,
+    leg_index: int = B4A_LEG_INDEX,
 ) -> None:
     batch_id = str(bundle_execution_id or parent_intent_id)
     PersonWalletSwapRepository().append_audit(
@@ -325,13 +328,16 @@ def _tag_swap_bundle_execution(
             "event": "bundle_leg_context",
             "bundle_execution": True,
             "batch_id": batch_id,
-            "leg_id": "leg-0",
+            "leg_id": f"leg-{leg_index}",
+            "leg_index": leg_index,
             "portfolio_id": str(portfolio_id),
             "bundle_action": "invest",
             "leg_action": "rebalance_buy",
             "execution_provider": "lifi_base",
             "parent_intent_id": str(parent_intent_id),
             "child_intent_id": str(child_intent_id),
+            "plan_hash": plan_hash,
+            "planner_version": planner_version,
         },
     )
 
@@ -345,6 +351,8 @@ def _create_fresh_bundle_swap(
     child_intent_id: UUID,
     notional_usdc: str,
     bundle_execution_id: UUID | None,
+    plan_hash: str,
+    planner_version: str,
 ) -> PersonWalletSwap:
     quote_svc = BundleLifiQuoteService()
     response = quote_svc.create_bundle_quote(
@@ -367,10 +375,15 @@ def _create_fresh_bundle_swap(
         parent_intent_id=parent_intent_id,
         child_intent_id=child_intent_id,
         bundle_execution_id=bundle_execution_id,
+        plan_hash=plan_hash,
+        planner_version=planner_version,
     )
     db.add(swap)
     db.flush()
     return swap
+
+
+CHILD_STATUS_SWAP_ATTACHED = "swap_attached"
 
 
 def _attach_swap_to_child(
@@ -393,6 +406,9 @@ def _attach_swap_to_child(
         planned_amount_in=planned_amount_in,
         swap=swap,
     )
+    meta = dict(_child_metadata(child))
+    meta["status"] = CHILD_STATUS_SWAP_ATTACHED
+    child.metadata_json = meta
     db.add(child)
     db.flush()
 
@@ -550,6 +566,8 @@ def run_bundle_b4b_minimal_bridge(
                 child_intent_id=child.id,
                 notional_usdc=notional,
                 bundle_execution_id=parent.bundle_execution_id,
+                plan_hash=parent_ctx["plan_hash"],
+                planner_version=parent_ctx["planner_version"],
             )
             if not is_bundle_internal_swap(swap):
                 raise BundleB4bBridgeError(
