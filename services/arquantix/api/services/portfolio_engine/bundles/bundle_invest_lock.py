@@ -273,6 +273,25 @@ def transition_invest_lock_recovery_batch(
     return dict(new_lock)
 
 
+def resolve_existing_recovery_batch(
+    metadata: Optional[dict],
+    *,
+    lock: dict[str, Any],
+) -> tuple[Optional[str], Optional[str]]:
+    """Retourne ``(source_batch_id, recovery_batch_id)`` si recovery déjà démarré."""
+    recovery_from = str(lock.get("recovery_from_batch_id") or "").strip()
+    current = str(lock.get("batch_id") or "").strip()
+    if recovery_from and current:
+        return recovery_from, current
+
+    recoveries = dict((metadata or {}).get(BUNDLE_BATCH_RECOVERY_KEY) or {})
+    if current in recoveries:
+        recovery_batch_id = str(recoveries[current].get("recovery_batch_id") or "").strip()
+        if recovery_batch_id:
+            return current, recovery_batch_id
+    return None, None
+
+
 def record_batch_recovery_status(
     portfolio: Portfolio,
     *,

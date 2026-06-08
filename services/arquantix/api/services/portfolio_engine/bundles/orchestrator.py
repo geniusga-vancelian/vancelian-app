@@ -1095,6 +1095,107 @@ class BundleOrchestrator:
             out["recovered_from_pending_batch"] = True
         return out
 
+    def _resume_existing_recovery_requote(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: UUID,
+        portfolio: Portfolio,
+        recovery_batch_id: str,
+        source_batch_id: str,
+        lock: dict,
+    ) -> dict:
+        """Idempotent — retourne le recovery batch existant sans créer de nouveaux swaps."""
+        from services.lifi.enums import SwapSessionStatus
+        from services.portfolio_engine.bundle_execution.bundle_funding import (
+            resolve_bundle_cash_leg_available,
+        )
+        from services.portfolio_engine.bundle_execution.bundle_lifi_leg_service import (
+            BundleLifiLegService,
+        )
+        from services.portfolio_engine.clients.models import Client as _Client
+
+        product = self._load_product(db, portfolio)
+        entry_config = self._resolve_entry_config(product)
+        entry_asset = entry_config["entry_asset_default"]
+        entry_instrument = self._resolve_or_create_instrument(db, entry_asset)
+
+        _client_row = db.query(_Client).filter(_Client.id == client_id).first()
+        person_id = _client_row.person_id if _client_row is not None else None
+        if person_id is None:
+            raise BundleOrchestratorError("client_has_no_person_id")
+
+        pending_statuses = {
+            SwapSessionStatus.PENDING.value,
+            SwapSessionStatus.QUOTE_RECEIVED.value,
+            SwapSessionStatus.AWAITING_SIGNATURE.value,
+            SwapSessionStatus.SUBMITTED.value,
+        }
+        pending_items = self._batch_allocation_swap_items(
+            db,
+            person_id=person_id,
+            batch_id=recovery_batch_id,
+            statuses=pending_statuses,
+        )
+        leg_svc = BundleLifiLegService()
+        alloc_results: list[dict] = []
+        pending = 0
+        for item in pending_items:
+            swap = item["swap"]
+            ctx = item["ctx"]
+            signing = None
+            try:
+                signing = leg_svc.prepare_signing(
+                    db, person_id=person_id, swap_id=swap.id,
+                ).model_dump()
+            except Exception:
+                signing = None
+            alloc_results.append({
+                "asset": item["asset"],
+                "instrument_id": str(ctx.get("target_instrument_id") or ""),
+                "entry_asset_consumed": float(swap.amount_in or 0),
+                "crypto_received": float(swap.estimated_receive or 0),
+                "status": "pending",
+                "swap_id": str(swap.id),
+                "leg_id": item["leg_id"],
+                "signing": signing,
+            })
+            pending += 1
+
+        cash_leg_remaining = resolve_bundle_cash_leg_available(
+            db,
+            portfolio_id=portfolio_id,
+            entry_instrument_id=entry_instrument.id,
+        )
+        funding_amount = lock.get("funding_amount")
+        total_received = (
+            float(funding_amount) if funding_amount is not None else float(cash_leg_remaining)
+        )
+        status = (
+            "pending_signature" if pending > 0
+            else str(lock.get("status") or "pending_signature")
+        )
+        return {
+            "status": status,
+            "batch_id": recovery_batch_id,
+            "portfolio_id": str(portfolio_id),
+            "entry_asset": entry_asset,
+            "entry_instrument_id": str(entry_instrument.id),
+            "total_entry_asset_received": total_received,
+            "total_entry_asset_consumed": 0.0,
+            "cash_leg_remaining": float(cash_leg_remaining),
+            "legs_succeeded": 0,
+            "legs_failed": 0,
+            "legs_pending": pending,
+            "allocation_details": alloc_results,
+            "execution_provider": "lifi_base",
+            "recovery_from_batch_id": source_batch_id,
+            "recovery_status": str(lock.get("recovery_status") or "recovery_started"),
+            "requoted": True,
+            "idempotent": True,
+        }
+
     def requote_expired_invest_legs(
         self,
         db: Session,
@@ -1105,6 +1206,7 @@ class BundleOrchestrator:
         """Re-quote buy-only du cash leg restant après legs LI.FI EXPIRED (legacy bundle).
 
         Ne touche pas aux positions confirmées, ne vend pas, ne refait pas de funding self-trading.
+        Idempotent : un second appel retourne le recovery batch existant sans nouveau swap.
         """
         import uuid as _uuid
         from datetime import datetime, timezone
@@ -1126,6 +1228,7 @@ class BundleOrchestrator:
         from services.portfolio_engine.bundles.bundle_invest_lock import (
             AUDIT_ACTION_EXPIRED_REQUOTE,
             record_batch_recovery_status,
+            resolve_existing_recovery_batch,
             transition_invest_lock_recovery_batch,
         )
         from services.portfolio_engine.clients.models import Client as _Client
@@ -1138,6 +1241,34 @@ class BundleOrchestrator:
         lock = get_invest_lock(portfolio_locked.metadata_)
         if lock is None:
             raise BundleOrchestratorError("no_active_invest_lock")
+
+        source_batch_id, recovery_batch_id = resolve_existing_recovery_batch(
+            portfolio_locked.metadata_,
+            lock=lock,
+        )
+        if source_batch_id and recovery_batch_id:
+            lock_batch_id = str(lock.get("batch_id") or "").strip()
+            if lock_batch_id == source_batch_id and lock_batch_id != recovery_batch_id:
+                lock = transition_invest_lock_recovery_batch(
+                    db,
+                    portfolio=portfolio_locked,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    old_batch_id=source_batch_id,
+                    new_batch_id=recovery_batch_id,
+                    status=str(lock.get("status") or "pending_signature"),
+                    funding_amount=lock.get("funding_amount"),
+                    extra={"recovery_reason": "expired_invest_legs"},
+                )
+            return self._resume_existing_recovery_requote(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                portfolio=portfolio,
+                recovery_batch_id=recovery_batch_id,
+                source_batch_id=source_batch_id,
+                lock=lock,
+            )
 
         old_batch_id = str(lock.get("batch_id") or "").strip()
         if not old_batch_id:

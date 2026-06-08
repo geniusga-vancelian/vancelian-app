@@ -287,3 +287,112 @@ def test_requote_marks_expired_swap_audit(db: Session, monkeypatch):
     events = [e.get("event") for e in (expired.audit_log or []) if isinstance(e, dict)]
     assert "bundle_expired_requoted" in events
     assert result["recovery_status"] == "recovery_started"
+
+
+def test_requote_expired_invest_legs_is_idempotent(db: Session, monkeypatch):
+    """Double-clic — 2e appel retourne le même recovery batch, 0 swap supplémentaire."""
+    monkeypatch.setenv("BUNDLE_ALLOC_EXECUTION_BUFFER_USDC", "0")
+    pe = make_linked_client(db)
+    old_batch_id = "470c964f-0000-4000-8000-000000000002"
+    portfolio, usdc = _bundle_with_allocations(
+        db, pe.id, {"BTC": Decimal("0.5"), "ETH": Decimal("0.5")},
+    )
+    p = db.query(Portfolio).filter(Portfolio.id == portfolio.id).first()
+    now = datetime.now(timezone.utc).isoformat()
+    p.metadata_ = {
+        "bundle_invest_lock": {
+            "bundle_action": "invest",
+            "client_id": str(pe.id),
+            "portfolio_id": str(portfolio.id),
+            "batch_id": old_batch_id,
+            "status": "signature_requested",
+            "created_at": now,
+            "updated_at": now,
+        }
+    }
+    db.add(p)
+    db.flush()
+    _credit_cash_leg(db, portfolio.id, usdc.id, "30.90")
+    _seed_swap(
+        db, pe, portfolio_id=str(portfolio.id), batch_id=old_batch_id,
+        status=SwapSessionStatus.EXPIRED.value, to_asset="CBBTC",
+    )
+    _seed_swap(
+        db, pe, portfolio_id=str(portfolio.id), batch_id=old_batch_id,
+        status=SwapSessionStatus.EXPIRED.value, to_asset="CBETH",
+    )
+    db.commit()
+
+    leg_calls = {"count": 0}
+
+    def _fake_run_leg(self, db, *, target_asset, batch_id, ext_ref, portfolio_id, **kwargs):
+        leg_calls["count"] += 1
+        swap = PersonWalletSwap(
+            person_id=pe.person_id,
+            status=SwapSessionStatus.AWAITING_SIGNATURE.value,
+            from_asset="USDC",
+            to_asset=target_asset,
+            from_chain="base",
+            to_chain="base",
+            amount_in=Decimal("10"),
+            estimated_receive=Decimal("0.0001"),
+            audit_log=[
+                {
+                    "event": "bundle_leg_context",
+                    "bundle_execution": True,
+                    "portfolio_id": str(portfolio_id),
+                    "batch_id": batch_id,
+                    "bundle_action": "allocation",
+                    "leg_action": "allocation",
+                    "leg_id": ext_ref,
+                }
+            ],
+        )
+        db.add(swap)
+        db.flush()
+        return {
+            "status": "pending",
+            "record": {
+                "asset": target_asset,
+                "status": "pending",
+                "swap_id": str(swap.id),
+                "leg_id": ext_ref,
+            },
+        }
+
+    _stub_resume_deps(monkeypatch)
+    monkeypatch.setattr(BundleOrchestrator, "_run_allocation_leg", _fake_run_leg)
+
+    orchestrator = BundleOrchestrator()
+    first = orchestrator.requote_expired_invest_legs(
+        db, client_id=pe.id, portfolio_id=portfolio.id,
+    )
+    db.commit()
+    assert first["requoted"] is True
+    assert first.get("idempotent") is not True
+    assert leg_calls["count"] == 2
+    recovery_batch_id = first["batch_id"]
+
+    second = orchestrator.requote_expired_invest_legs(
+        db, client_id=pe.id, portfolio_id=portfolio.id,
+    )
+    assert second["batch_id"] == recovery_batch_id
+    assert second["idempotent"] is True
+    assert second["recovery_from_batch_id"] == old_batch_id
+    assert leg_calls["count"] == 2
+    assert second["legs_pending"] == 2
+
+    recovery_swaps = (
+        db.query(PersonWalletSwap)
+        .filter(PersonWalletSwap.person_id == pe.person_id)
+        .all()
+    )
+    recovery_count = sum(
+        1 for s in recovery_swaps
+        if any(
+            isinstance(e, dict)
+            and e.get("batch_id") == recovery_batch_id
+            for e in (s.audit_log or [])
+        )
+    )
+    assert recovery_count == 2
