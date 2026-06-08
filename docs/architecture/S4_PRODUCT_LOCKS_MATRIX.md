@@ -33,7 +33,7 @@ Source code : `services/transaction_intents/enums.py` (`IntentProductType`, `Int
 | Produit métier | `product_type` (code) | `operation_type` typique | Statut rail orchestrateur | Notes |
 | --- | --- | --- | --- | --- |
 | **LI.FI Swap standalone** | `lifi_swap` | `swap` | ✅ **Prod validé** (allowlist) | Phase 2 orchestrateur · outbox `intent.created` / `intent.settle` |
-| **Bundle Invest** | `bundle_invest` | `invest` / `bundle_leg` | ⚠️ **Legacy PE** (hors outbox Phase 2) | `pe_portfolios.metadata.bundle_invest_lock` · legs LI.FI internes |
+| **Bundle Invest** | `bundle_invest` | `invest` / `bundle_leg` | ⚠️ **Legacy PE** (hors outbox Phase 2) | `bundle_invest_lock` (par portfolio) + **Global Lock** si flag ON (`legacy_bundle_global_lock.py`) |
 | **Bundle Withdraw** | `bundle_withdraw` | `withdraw` / `bundle_leg` | ⚠️ **Legacy PE** | Miroir invest lock |
 | **Morpho Vault (Earn)** | `morpho_earn` | `supply` / `withdraw` | 🔶 Intent sync existant · settlement legacy | `vault_funding.py` |
 | **Ledgity Vault** | `ledgity_vault` | `deposit` / `withdraw` | 🔶 Intent sync existant · settlement legacy | Idem |
@@ -285,7 +285,8 @@ settle_transaction_intent_idempotently(db, intent_id)
 | **Clé logique** | `person:{id}:wallet:GLOBAL:asset:GLOBAL:scope:financial_transaction` |
 | **Flag** | `GLOBAL_USER_TRANSACTION_LOCK_ENABLED=false` (défaut OFF) |
 | **Indépendance** | Ne dépend **pas** de `TRANSACTION_PRODUCT_LOCKS_ENABLED` |
-| **Wiring** | **Aucun** en V1 — pas orchestrator · pas worker · pas settlement |
+| **Wiring legacy WebApp** | `legacy_bundle_global_lock.py` → `BundleOrchestrator` LI.FI invest/resume · flag OFF par défaut |
+| **Wiring B4b** | `bundle_b4b_runtime_bridge.py` (controlled test · flag OFF prod) |
 
 **Comportement flag OFF** : no-op strict · aucune écriture `transaction_product_locks` · aucun 409.
 
@@ -363,3 +364,4 @@ settle_transaction_intent_idempotently(db, intent_id)
 | 2026-06-07 | v1 | Inventaire initial post-clôture Étape 3 |
 | 2026-06-07 | v1.1 | Revue CTO · Lombard naming · S4 ≠ Controller |
 | 2026-06-08 | v1.2 | Global User Transaction Lock V1 · scope `financial_transaction` · pré-B4b |
+| 2026-06-08 | v1.3 | Global Lock câblé legacy Bundle Invest WebApp (`legacy_bundle_global_lock.py`) · incident concurrent invests |
