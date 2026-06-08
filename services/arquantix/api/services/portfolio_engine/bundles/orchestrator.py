@@ -109,6 +109,15 @@ class BundleOrchestrator:
         from services.portfolio_engine.bundles.event_driven.bundle_dual_run_locks import (
             release_bundle_dual_run_locks,
         )
+        from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
+            release_legacy_bundle_global_lock_on_terminal,
+        )
+
+        release_legacy_bundle_global_lock_on_terminal(
+            db,
+            intent_id=parent_intent_id,
+            mode=mode,
+        )
 
         if bundle_s4_parent_lock_dual_run_enabled():
             legacy_terminal = "clear" if mode == "clear" else "release_failed"
@@ -366,22 +375,15 @@ class BundleOrchestrator:
         assert_no_active_invest_lock(portfolio_locked, client_id)
 
         batch_id = str(_uuid.uuid4())
-        acquire_invest_lock(
-            db,
-            portfolio_locked,
-            client_id=client_id,
-            batch_id=batch_id,
-            entry_instrument_id=str(entry_instrument.id),
-            status="pending_signature",
-            funding_asset=entry_asset.upper(),
-            funding_amount=str(funding_amount),
-        )
 
         from uuid import UUID as _UUID
 
         from services.portfolio_engine.bundles.event_driven.bundle_dual_run_locks import (
             build_planned_allocations_preview,
             try_acquire_s4_after_legacy_invest_lock,
+        )
+        from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
+            acquire_legacy_bundle_global_lock_or_raise,
         )
         from services.portfolio_engine.clients.models import Client as _Client
         from services.product_locks.exceptions import ProductLockConflict
@@ -404,6 +406,23 @@ class BundleOrchestrator:
             )
             if parent_info and parent_info.get("intent_id"):
                 parent_intent_id = _UUID(str(parent_info["intent_id"]))
+            if parent_intent_id is not None:
+                acquire_legacy_bundle_global_lock_or_raise(
+                    db,
+                    person_id=person_id,
+                    intent_id=parent_intent_id,
+                )
+
+        acquire_invest_lock(
+            db,
+            portfolio_locked,
+            client_id=client_id,
+            batch_id=batch_id,
+            entry_instrument_id=str(entry_instrument.id),
+            status="pending_signature",
+            funding_asset=entry_asset.upper(),
+            funding_amount=str(funding_amount),
+        )
 
         from services.portfolio_engine.bundles.event_driven.bundle_dual_run_config import (
             bundle_s4_parent_lock_dual_run_enabled,
@@ -429,6 +448,15 @@ class BundleOrchestrator:
                     planned_allocations=planned_preview,
                 )
             except ProductLockConflict as exc:
+                self._terminal_bundle_invest_lock(
+                    db,
+                    person_id=person_id,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    batch_id=batch_id,
+                    parent_intent_id=parent_intent_id,
+                    mode="release_failed",
+                )
                 raise BundleOrchestratorError(str(exc)) from exc
 
         try:
@@ -873,6 +901,26 @@ class BundleOrchestrator:
         person_id = _client_row.person_id if _client_row is not None else None
         if person_id is None:
             raise BundleOrchestratorError("client_has_no_person_id")
+
+        from services.portfolio_engine.bundles.event_driven.bundle_dual_run_locks import (
+            resolve_bundle_parent_intent_id,
+        )
+        from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
+            acquire_legacy_bundle_global_lock_or_raise,
+        )
+
+        parent_intent_id = resolve_bundle_parent_intent_id(
+            db,
+            person_id=person_id,
+            bundle_id=str(portfolio_id),
+            batch_id=batch_id,
+        )
+        if parent_intent_id is not None:
+            acquire_legacy_bundle_global_lock_or_raise(
+                db,
+                person_id=person_id,
+                intent_id=parent_intent_id,
+            )
 
         pending_statuses = {
             SwapSessionStatus.PENDING.value,

@@ -1198,4 +1198,5 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 1. **B4b** — pont `run_bundle_b4b_minimal_bridge` : child auto (B4a) → global lock → fresh swap LI.FI → attach → settle B3c → child LEDGER_SETTLED (flag OFF) · enrichir `entry/target_instrument_id`
 2. Controlled test prod B4b · [GO_BUNDLE_B4B_MINIMAL_TEST_PLAN.md](GO_BUNDLE_B4B_MINIMAL_TEST_PLAN.md) · **pas de WebApp avant GO**
 3. Deploy neutre B4b · pas de Controller parent
-3. Flags prod restent OFF : `BUNDLE_FUNDING_HANDLER_ENABLED` · `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` · `BUNDLE_S4_PARENT_LOCK_DUAL_RUN_ENABLED`
+3. Flags prod restent OFF : `BUNDLE_FUNDING_HANDLER_ENABLED` · `BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED` · `BUNDLE_S4_PARENT_LOCK_DUAL_RUN_ENABLED` · `GLOBAL_USER_TRANSACTION_LOCK_ENABLED`
+4. **WebApp legacy** protégée par Global Lock (`legacy_bundle_global_lock.py`) jusqu’à migration B4b — voir [INCIDENT_BUNDLE_CONCURRENT_INVESTMENTS_2026_06_08.md](INCIDENT_BUNDLE_CONCURRENT_INVESTMENTS_2026_06_08.md)

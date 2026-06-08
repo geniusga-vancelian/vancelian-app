@@ -2059,6 +2059,10 @@ def mobile_bundle_invest(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
 
     from services.portfolio_engine.bundles.bundle_invest_lock import BundleInvestAlreadyPendingError
+    from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
+        transaction_in_progress_response_body,
+    )
+    from services.product_locks.exceptions import TransactionInProgress409
 
     orchestrator = BundleOrchestrator()
     try:
@@ -2071,6 +2075,12 @@ def mobile_bundle_invest(
         )
         db.commit()
         return result
+    except TransactionInProgress409 as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=transaction_in_progress_response_body(exc),
+        )
     except BundleInvestAlreadyPendingError as exc:
         db.rollback()
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.to_response())
@@ -2105,6 +2115,11 @@ def mobile_bundle_invest_resume(
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
 
+    from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
+        transaction_in_progress_response_body,
+    )
+    from services.product_locks.exceptions import TransactionInProgress409
+
     orchestrator = BundleOrchestrator()
     try:
         result = orchestrator.resume_lifi_invest_batch(
@@ -2114,6 +2129,12 @@ def mobile_bundle_invest_resume(
         )
         db.commit()
         return result
+    except TransactionInProgress409 as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=transaction_in_progress_response_body(exc),
+        )
     except BundleOrchestratorError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
