@@ -37,14 +37,10 @@ def main() -> None:
         ).scalar()
 
         pe = db.execute(text("SELECT COUNT(*) FROM pe_position_atoms")).scalar()
-        cb = db.execute(text("SELECT COUNT(*) FROM pe_cost_basis_entries")).scalar()
+        cb = db.execute(text("SELECT COUNT(*) FROM cost_basis_executions")).scalar()
         legs = db.execute(
             text(
-                """
-                SELECT COUNT(*)
-                FROM person_wallet_swaps
-                WHERE audit_log::text LIKE '%bundle_leg_context%'
-                """
+                "SELECT COUNT(*) FROM person_wallet_deposits WHERE idempotency_key LIKE 'lifi-swap:%'"
             )
         ).scalar()
 
@@ -66,6 +62,9 @@ def main() -> None:
             "all_checks_pass": (
                 not _flag_on("GLOBAL_USER_TRANSACTION_LOCK_ENABLED")
                 and financial_tx_active == 0
+                and pe == BASELINE_PE_ATOMS
+                and cb == BASELINE_COST_BASIS
+                and legs == BASELINE_LIFI_LEGS
             ),
         }
         print(json.dumps(out, indent=2, default=str))
