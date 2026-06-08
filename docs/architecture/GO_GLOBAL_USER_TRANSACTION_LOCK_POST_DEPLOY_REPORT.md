@@ -67,31 +67,16 @@ Détails techniques (`existing_intent_id`, `lock_key`, `reasons`) : champs inter
 
 ---
 
-## Suite — test contrôlé lock
+## Test contrôlé lock
 
-**Script** : `scripts/arquantix-ecs-global-lock-controlled-test.sh`
-
-```bash
-# Flag ON dans le job ECS uniquement — TD prod reste OFF
-./scripts/arquantix-ecs-global-lock-controlled-test.sh full
-```
-
-Scénario attendu :
-
-1. acquire intent A → OK
-2. acquire intent B même user → `409 transaction_in_progress`
-3. release A → OK
-4. acquire B → OK
-5. cleanup release B
-6. PE/CB/legs inchangés · baseline locks `financial_transaction` restaurée
-
-**Pilote** : `gaelitier@gmail.com` (env `GLOBAL_LOCK_PILOT_EMAIL`)
+**✅ GO** — [GO_GLOBAL_USER_TRANSACTION_LOCK_CONTROLLED_TEST_REPORT.md](GO_GLOBAL_USER_TRANSACTION_LOCK_CONTROLLED_TEST_REPORT.md)  
+`test_run_id=2c1c0a513603427a9c72335d031b3857` · `all_checks_pass=true`
 
 ---
 
 ## Gate suivant
 
-**B4b minimal** — child `awaiting_swap` → fresh swap → attach → settlement B3c — **après** test contrôlé lock GO.
+**B4b minimal** — child `awaiting_swap` → global lock → fresh swap → attach → settlement B3c.
 
 ---
 

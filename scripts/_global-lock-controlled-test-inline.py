@@ -24,6 +24,9 @@ from services.product_locks.global_user_transaction_lock import (
 )
 
 PILOT_EMAIL = os.environ.get("GLOBAL_LOCK_PILOT_EMAIL", "gaelitier@gmail.com")
+# Compte pilote prod (aligné GO_BUNDLE_B3C / GO_PILOT)
+PERSON_ID = uuid.UUID("8b0e0044-f1ef-47a5-99d4-370598a77492")
+PE_CLIENT_ID = uuid.UUID("080358a8-4519-4acf-b5da-25485446c967")
 BASELINE_PE = int(os.environ.get("BUNDLE_BASELINE_PE_ATOMS", "19"))
 BASELINE_CB = int(os.environ.get("BUNDLE_BASELINE_COST_BASIS", "67"))
 BASELINE_LEGS = int(os.environ.get("BUNDLE_BASELINE_LIFI_LEGS", "131"))
@@ -34,25 +37,35 @@ def _expires_in(seconds: int = 3600) -> datetime:
 
 
 def _resolve_pilot(db):
+    env_person = (os.environ.get("GLOBAL_LOCK_PERSON_ID") or "").strip()
+    env_client = (os.environ.get("GLOBAL_LOCK_PE_CLIENT_ID") or "").strip()
+    person_id = uuid.UUID(env_person) if env_person else PERSON_ID
+    pe_client_id = uuid.UUID(env_client) if env_client else PE_CLIENT_ID
     row = db.execute(
-        text(
-            """
-            SELECT p.id AS person_id, pc.id AS pe_client_id
-            FROM persons p
-            JOIN person_identities pi ON pi.person_id = p.id
-            JOIN pe_clients pc ON pc.person_id = p.id
-            WHERE lower(pi.email) = lower(:email)
-            LIMIT 1
-            """
-        ),
-        {"email": PILOT_EMAIL},
-    ).mappings().first()
+        text("SELECT 1 FROM pe_clients WHERE id = :cid AND person_id = :pid LIMIT 1"),
+        {"cid": pe_client_id, "pid": person_id},
+    ).fetchone()
     if row is None:
-        raise RuntimeError(f"pilot_not_found email={PILOT_EMAIL}")
-    return row["person_id"], row["pe_client_id"]
+        raise RuntimeError(
+            f"pilot_not_found person_id={person_id} pe_client_id={pe_client_id} email={PILOT_EMAIL}"
+        )
+    return person_id, pe_client_id
 
 
 def _ensure_wallet(db, person_id, pe_client_id):
+    row = db.execute(
+        text(
+            """
+            SELECT id FROM person_crypto_wallets
+            WHERE person_id = :pid
+            ORDER BY created_at ASC
+            LIMIT 1
+            """
+        ),
+        {"pid": person_id},
+    ).fetchone()
+    if row is not None:
+        return row[0]
     return upsert_person_crypto_wallet(
         db,
         person_id=person_id,
@@ -97,11 +110,24 @@ def _baseline(db) -> dict:
         ),
         {"scope": ProductLockScope.FINANCIAL_TRANSACTION.value},
     ).scalar()
+    dead_letter = db.execute(
+        text("SELECT COUNT(*) FROM transaction_outbox WHERE status = 'dead_letter'")
+    ).scalar()
+    completed = db.execute(
+        text(
+            """
+            SELECT COUNT(*) FROM transaction_intents
+            WHERE LOWER(status) = 'completed' OR current_phase = 'COMPLETED'
+            """
+        )
+    ).scalar()
     return {
         "pe_atoms": pe,
         "cost_basis": cb,
         "lifi_swap_legs": legs,
         "active_financial_transaction_locks": active,
+        "dead_letter": dead_letter,
+        "completed": completed,
     }
 
 
@@ -227,6 +253,21 @@ def main() -> None:
 
         after = _baseline(db)
         result["baseline_after"] = after
+        result["checks"] = {
+            "acquire_a_success": result.get("acquire_a", {}).get("acquired") is True,
+            "acquire_b_conflict": result.get("acquire_b_conflict", {}).get("conflict_raised") is True,
+            "error_code_transaction_in_progress": (
+                result.get("acquire_b_conflict", {}).get("error_code") == "transaction_in_progress"
+            ),
+            "release_a_success": result.get("release_a", {}).get("released") is True,
+            "acquire_b_after_release_success": result.get("acquire_b_ok", {}).get("acquired") is True,
+            "active_locks_zero_end": after["active_financial_transaction_locks"] == 0,
+            "pe_unchanged": after["pe_atoms"] == BASELINE_PE,
+            "cb_unchanged": after["cost_basis"] == BASELINE_CB,
+            "legs_unchanged": after["lifi_swap_legs"] == BASELINE_LEGS,
+            "dead_letter_zero": after["dead_letter"] == 0,
+            "completed_zero": after["completed"] == 0,
+        }
         result["all_checks_pass"] = (
             before["pe_atoms"] == BASELINE_PE
             and after["pe_atoms"] == BASELINE_PE
@@ -234,15 +275,11 @@ def main() -> None:
             and after["cost_basis"] == BASELINE_CB
             and before["lifi_swap_legs"] == BASELINE_LEGS
             and after["lifi_swap_legs"] == BASELINE_LEGS
+            and after["dead_letter"] == 0
+            and after["completed"] == 0
             and (
                 mode != "full"
-                or (
-                    result.get("acquire_a", {}).get("acquired") is True
-                    and result.get("acquire_b_conflict", {}).get("mapped_ok") is True
-                    and result.get("release_a", {}).get("released") is True
-                    and result.get("acquire_b_ok", {}).get("acquired") is True
-                    and after["active_financial_transaction_locks"] == before["active_financial_transaction_locks"]
-                )
+                or all(result["checks"].values())
             )
         )
         print(json.dumps(result, indent=2, default=str))
