@@ -13,7 +13,11 @@ from database import engine
 from services.auth.person_identity_bridge import PROVIDER_PRIVY, upsert_person_crypto_wallet
 from services.onchain_indexer.models import TransactionIntent
 from services.product_locks.enums import ProductLockScope, ProductLockStatus
-from services.product_locks.exceptions import ProductLockConflict, TransactionInProgress409
+from services.product_locks.exceptions import (
+    TRANSACTION_IN_PROGRESS_USER_MESSAGE,
+    ProductLockConflict,
+    TransactionInProgress409,
+)
 from services.product_locks.global_user_transaction_lock import (
     GLOBAL_LOCK_ASSET,
     GLOBAL_LOCK_SCOPE,
@@ -348,10 +352,22 @@ def test_conflict_maps_to_transaction_in_progress_409(db: Session, global_lock_o
             expires_at=_expires_in(),
         )
 
-    mapped = transaction_in_progress_409_from_conflict(exc.value)
+    mapped = transaction_in_progress_409_from_conflict(
+        exc.value,
+        existing_reason="intent_a_active",
+        requested_reason="intent_b_blocked",
+    )
     assert isinstance(mapped, TransactionInProgress409)
     assert mapped.error_code == "transaction_in_progress"
     assert mapped.http_status == 409
+    assert str(mapped) == TRANSACTION_IN_PROGRESS_USER_MESSAGE
+    assert "held by intent" not in str(mapped)
+    assert "lock_key" not in str(mapped).lower()
+    assert mapped.existing_intent_id == intent_a.id
+    assert mapped.requested_intent_id == intent_b.id
+    assert mapped.lock_key == build_global_user_transaction_lock_key(person_id=pe.person_id)
+    assert mapped.existing_reason == "intent_a_active"
+    assert mapped.requested_reason == "intent_b_blocked"
 
 
 def test_no_settlement_worker_controller_imports_in_module_source():

@@ -108,6 +108,11 @@ class ProductLockDisabled409(ProductLockMiddlewareError):
         super().__init__(message, error_code=ProductLockErrorCode.PRODUCT_LOCK_DISABLED)
 
 
+TRANSACTION_IN_PROGRESS_USER_MESSAGE = (
+    "A transaction is already in progress. Please wait until it is completed."
+)
+
+
 class TransactionInProgress409(ProductLockMiddlewareError):
     """Utilisateur a déjà une transaction financière active (global lock V1)."""
 
@@ -117,12 +122,15 @@ class TransactionInProgress409(ProductLockMiddlewareError):
         lock_key: str,
         existing_intent_id: UUID,
         requested_intent_id: UUID,
+        existing_reason: str | None = None,
+        requested_reason: str | None = None,
     ) -> None:
         self.lock_key = lock_key
         self.existing_intent_id = existing_intent_id
         self.requested_intent_id = requested_intent_id
+        self.existing_reason = existing_reason
+        self.requested_reason = requested_reason
         super().__init__(
-            f"transaction in progress on {lock_key}: "
-            f"held by intent {existing_intent_id}, requested {requested_intent_id}",
+            TRANSACTION_IN_PROGRESS_USER_MESSAGE,
             error_code=ProductLockErrorCode.TRANSACTION_IN_PROGRESS,
         )

@@ -128,11 +128,18 @@ class ReleaseGlobalUserTransactionLockResult:
     reason: str | None = None
 
 
-def transaction_in_progress_409_from_conflict(exc: ProductLockConflict) -> TransactionInProgress409:
+def transaction_in_progress_409_from_conflict(
+    exc: ProductLockConflict,
+    *,
+    existing_reason: str | None = None,
+    requested_reason: str | None = None,
+) -> TransactionInProgress409:
     return TransactionInProgress409(
         lock_key=exc.lock_key,
         existing_intent_id=exc.existing_intent_id,
         requested_intent_id=exc.requested_intent_id,
+        existing_reason=existing_reason,
+        requested_reason=requested_reason,
     )
 
 
