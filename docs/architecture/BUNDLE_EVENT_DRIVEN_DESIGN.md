@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Audit + design · **aucun code runtime** |
 | **Date** | 2026-06-07 |
-| **Statut** | Design actif — B1/B2/B2b mergés · **B3b en cours** · B3a/B3c bloqués |
+| **Statut** | Design actif — B1/B2/B2b/B3b mergés · **B3a review OK** (merge + deploy neutre) · doctrine freeze formalisée · **GO B3c** (scope 1×1×1×1) |
 | **Prérequis validés** | Rail LI.FI standalone event-driven · Controller v1.2 chain-aware · GO manuel 3/3 RECONCILED |
 | **Interdictions** | Pas de migration · pas de changement settlement/locks/controller standalone · pas d’activation prod |
 
@@ -220,14 +220,153 @@ Ce modèle ignore : positions spot existantes · cash leg résiduel · drift · 
 
 **Gate avant runtime** : **ne pas** brancher outbox/worker/settlement bundle tant que B3b (spec + tests purs) n’est pas validé CTO — sinon on settlerait des legs générées par une logique trop simpliste.
 
+#### 4.0.1 Discipline S4 — séparation Décision / Exécution / Settlement / Contrôle
+
+Le succès S4/S4d ne vient pas des locks seuls, mais de la **séparation progressive** de quatre responsabilités, chacune **rejouable et auditée** :
+
+```text
+Décision     → quoi faire (plan figé · plan_hash)
+Exécution    → comment le faire on-chain (swap · submit · confirm)
+Settlement   → écritures autoritaires (Privy · PE · receipt)
+Contrôle     → le plan a-t-il été exécuté ? (Controller · RECONCILED)
+```
+
+**Anti-pattern à éviter** (legacy Bundle) : un seul handler HTTP qui mélange funding · calcul allocations · création legs · exécution · settlement.
+
+**Modèle cible** : une étape = un handler / un event / un receipt. Même philosophie que LI.FI standalone event-driven.
+
+#### 4.0.2 Machine à phases parent (metadata)
+
+Phases logiques du parent `bundle_invest` — **metadata `phase`** au début (pas de colonne DB dédiée en B3) :
+
+```text
+CREATED
+   ↓  (Product Lock · snapshot initial)
+FUNDED
+   ↓  (B3a funding handler · bundle_funding_receipt_hash)
+REBALANCE_PLAN_FROZEN
+   ↓  (B3b planner · plan_hash · planner_version — gel définitif)
+CHILD_LEGS_CREATED
+   ↓  (B4b · 1 row child intent par leg du plan)
+EXECUTING
+   ↓  (quote · sign · submit on-chain)
+SETTLING
+   ↓  (B3c settlement handler · receipt leg)
+RECONCILED
+   ↓  (B5 Controller parent · terminal)
+```
+
+| Phase | Qui écrit | Receipt / hash |
+| --- | --- | --- |
+| `CREATED` | API / orchestrateur | — |
+| `FUNDED` | `bundle_funding_handler` (B3a) | `bundle_funding_receipt_hash` |
+| `REBALANCE_PLAN_FROZEN` | planner step (B4a ou handler dédié) | `plan_hash` + `planner_version` |
+| `CHILD_LEGS_CREATED` | child factory (B4b) | child idempotency keys liés à `plan_hash` |
+| `EXECUTING` | leg executor | swap record · tx_hash |
+| `SETTLING` | `bundle_leg` settlement handler (B3c) | `settlement_receipt_hash` (leg) |
+| `RECONCILED` | Controller parent (B5) | `parent_report_hash` |
+
+Transitions **monotones** sauf abandon explicite du parent (`FAILED` · `SUPERSEDED`).
+
+#### 4.0.3 Gel du plan — `REBALANCE_PLAN_FROZEN`
+
+**Règle fondamentale** :
+
+> Après `REBALANCE_PLAN_FROZEN` = **interdiction de recalculer le plan** sauf abandon explicite du parent intent.
+
+Conséquences :
+
+| Autorisé | Interdit |
+| --- | --- |
+| Exécuter la leg #N du `plan_hash` X | Recalculer portefeuille cible |
+| Settlement + Controller de la leg | Recalculer les poids |
+| Retry / skip leg (E.2) | Nouvelle décision d’investissement |
+| Abandon parent → terminal + release lock | Re-planner mid-flight |
+
+**Contrat child intent** :
+
+```text
+Parent
+  plan_hash = X
+  planner_version = v1
+Child #0
+  execute leg 0 of plan X
+Child #1
+  execute leg 1 of plan X
+Child #N
+  execute leg N of plan X
+```
+
+Chaque child **référence** `parent_intent_id` · `leg_index` · `plan_hash` — jamais `plan_rebalance_after_funding()` au runtime leg.
+
+**Invariant** :
+
+> Pour un parent intent donné, le triplet `(parent_intent_id, planner_version, plan_hash)` identifie de manière unique le plan d’investissement. Tous les child intents créés à partir de ce parent doivent référencer **exactement** ce triplet. **Aucun child intent ne peut exister sans `plan_hash`.**
+
+**Gate B4b** : pas de child intent sans `REBALANCE_PLAN_FROZEN` + `plan_hash` présent en metadata parent.
+
+**Controller B5** : ne se demande plus « qu’aurait-on dû faire ? » — il vérifie « le plan X a-t-il été exécuté ? » (même philosophie que Controller LI.FI).
+
+#### 4.0.4 Plan versioning (`planner_version`)
+
+Le `plan_hash` seul ne suffit pas pour l’audit historique. Tout plan gelé inclut :
+
+```json
+{
+  "planner_version": "v1",
+  "plan_hash": "sha256:...",
+  "prices_used": { "...": "..." },
+  "rebalance_plan_after_funding": { "...": "..." },
+  "expected_portfolio_after_execution": { "...": "..." },
+  "frozen_at": "2026-06-08T12:00:00Z"
+}
+```
+
+| Champ | Rôle |
+| --- | --- |
+| `planner_version` | Version de la logique planner (drift · tolérances · min_trade · residual) |
+| `plan_hash` | Hash canonique du plan seul (indépendant du snapshot complet) |
+| `frozen_at` | Horodatage du gel — immuable |
+
+**Pourquoi** : dans 18 mois, drift · seuils · gestion cash résiduel · ventes automatiques évolueront. Pouvoir dire « ce bundle a été généré avec Planner v1 » vs v2 est indispensable pour audit · recalculs historiques · rebalancing périodique · withdraw partiel · multi-wallet · vaults · RWA (B7+).
+
+**Règle** : `plan_hash` est calculé sur le contenu canonique du plan **à une `planner_version` donnée**. Changer la version planner → nouveau hash même état portfolio.
+
+#### 4.0.5 Scope B3c minimal (discipline S4d)
+
+B3c est la **phase la plus sensible** du Bundle (blockchain · slippage · retry · confirmations · partial fills · multi-assets). Reproduire la discipline S4d : **cas simple jusqu’au bout** avant d’élargir.
+
+**B3c v1 — uniquement** :
+
+| Dimension | Scope B3c v1 | Hors scope B3c v1 |
+| --- | --- | --- |
+| Parent | 1 parent intent | N parents parallèles |
+| Child | 1 child intent | N child intents |
+| Leg | 1 leg (leg_index=0) | N legs · parallélisme |
+| Swap | 1 swap LI.FI interne | Multi-asset complexe |
+| Settlement | 1 settlement idempotent | Partial fill orchestration |
+| Controller | ❌ | Controller leg · Controller parent (B5) |
+| Runtime | Handler isolé · flag OFF | Worker / outbox branché |
+
+**Prérequis B3c** : doctrine `REBALANCE_PLAN_FROZEN` (§4.0.3) · B3a mergé · deploy neutre validé.
+
+**Frontière B3a vs B3c** :
+
+```text
+B3a : PE interne uniquement (trading_available → bundle_cash_leg)
+B3c : bundle_cash → swap LI.FI → wallet → settlement → PE atom → cost basis
+```
+
 ### 4.1 Principes directeurs
 
 1. **Bundle = orchestrateur multi-transactions**, pas N clones du handler LI.FI standalone.
-2. **Réutiliser la plomberie** outbox / worker / Settlement Layer **via router** `product_type` — pas réinventer ledger.
-3. **`is_bundle_internal_swap=true`** reste la frontière ; legs bundle **ne passent jamais** par `lifi_swap_controller` v1.
-4. **Intent parent** porte le cycle de vie global ; **chaque leg** a son propre pipeline settlement + controller leg (ou step interne équivalent).
-5. **Controller parent** = premier cas ADR 003 multi-leg — agrège enfants, allocations, residual, double spend.
-6. **Migration progressive** : dual-run sous flag ; LI.FI standalone **gelé** ; pas de régression prod pilote.
+2. **Séparation stricte** Décision → Exécution → Settlement → Contrôle (§4.0.1) — jamais mélangé dans un handler HTTP.
+3. **Décision unique** : plan gelé à `REBALANCE_PLAN_FROZEN` · legs n’exécutent que · ne décident pas (§4.0.3).
+4. **Réutiliser la plomberie** outbox / worker / Settlement Layer **via router** `product_type` — pas réinventer ledger.
+5. **`is_bundle_internal_swap=true`** reste la frontière ; legs bundle **ne passent jamais** par `lifi_swap_controller` v1.
+6. **Intent parent** porte le cycle de vie global ; **chaque leg** a son propre pipeline settlement + controller leg (ou step interne équivalent).
+7. **Controller parent** = premier cas ADR 003 multi-leg — vérifie exécution du `plan_hash`, pas re-décision.
+8. **Migration progressive** : dual-run sous flag ; LI.FI standalone **gelé** ; pas de régression prod pilote · discipline S4d (cas simple d’abord).
 
 ### 4.2 Architecture cible — Bundle Invest
 
@@ -249,13 +388,17 @@ Ce modèle ignore : positions spot existantes · cash leg résiduel · drift · 
 5. Funding interne (event / settlement step — B3a) :
      trading_available → bundle_cash_leg
      mouvement PE interne — pas swap externe
-     phase parent : FUNDED
-6. Rebalance planner (B3b — après funding, avant legs) :
+     phase parent : FUNDED · bundle_funding_receipt_hash
+6. Rebalance planner (B3b — après funding) :
      portfolio_after_funding + target → rebalance_plan_after_funding
-7. Créer bundle legs depuis le rebalance plan (B4) :
-     legs = trades du plan (buy/sell · pas split du dépôt)
-     chaque leg : child intent + swap record + lien parent
-8. Pour chaque leg (séquentiel ou parallèle contrôlé) :
+     planner_version · plan_hash · prices_used · expected_portfolio_after_execution
+7. Gel du plan (gate obligatoire — §4.0.3) :
+     phase parent : REBALANCE_PLAN_FROZEN
+     interdiction de re-planner sauf abandon parent
+8. Créer child intents depuis le plan gelé (B4b) :
+     phase parent : CHILD_LEGS_CREATED
+     chaque child = « exécuter leg #N du plan_hash X » — pas de décision locale
+9. Pour chaque leg (séquentiel en B3c pilote · parallèle contrôlé plus tard) :
      a. Enregistrer leg (child intent OU leg state machine)
      b. Quote LI.FI (bundle handler dédié)
      c. Submit on-chain
@@ -264,7 +407,7 @@ Ce modèle ignore : positions spot existantes · cash leg résiduel · drift · 
      f. PE atoms leg (via settlement handler — pas HTTP direct)
      g. Cost basis bundle-scoped
      h. Controller leg → RECONCILED (bundle_leg)
-9. Controller parent :
+10. Controller parent :
      - legs exécutées selon rebalance_plan (pas seulement count)
      - allocation finale ≈ target (tolérance drift)
      - residual USDC expliqué · drift résiduel dans tolérance
@@ -273,8 +416,8 @@ Ce modèle ignore : positions spot existantes · cash leg résiduel · drift · 
      - aucun double spend USDC
      - cash residual / dust documenté
      - agrégation report hash multi-leg
-9. Release Product Lock parent
-10. Phase parent finale :
+11. Release Product Lock parent
+12. Phase parent finale :
      RECONCILED | PARTIALLY_FILLED | FAILED | RETRYABLE
      (mapping sémantique E.2 : completed_full / completed_partial / failed_no_allocation)
 ```
@@ -701,9 +844,9 @@ Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) —
 
 | PR | Scope | Runtime | Statut |
 | --- | --- | --- | --- |
-| **B3a** | Handler `bundle_funding` · router L5 · receipt hash parent · phase `FUNDED` | Flag OFF | ⏸ **bloqué avant B3b merge** |
-| **B3b** | `rebalance_planner.py` · `plan_rebalance_after_funding()` · tests purs rebalance-to-target | ❌ Pure function only | **🟡 PR ouverte** |
-| **B3c** | Handler `bundle_leg` settlement · remplace `apply_swap_settlement` direct · idempotence | Flag OFF | ⏸ **bloqué avant B3b merge** |
+| **B3b** | `rebalance_planner.py` · `plan_rebalance_after_funding()` · tests purs rebalance-to-target | ❌ Pure function only | **✅ Mergée** (PR `#55`) |
+| **B3a** | `bundle_funding_handler.py` · `settle_bundle_funding_idempotently()` · trading_available → bundle_cash · receipt hash parent · phase `FUNDED` | Flag OFF (`BUNDLE_FUNDING_HANDLER_ENABLED`) | **✅ Review OK** (PR `#56` · merge + deploy neutre) |
+| **B3c** | Handler `bundle_leg` settlement · remplace `apply_swap_settlement` direct · idempotence | Flag OFF | **🟡 Prochaine** — scope minimal §4.0.5 |
 | **B3d** | PE atoms + cost basis **via handlers only** · retire writers HTTP | Flag OFF | ⏸ **bloqué avant B3b merge** |
 
 **B3b livrable attendu** :
@@ -715,7 +858,7 @@ Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) —
 | Tests purs | ≥ invest nouveau cash · rebalance drift-only · positions existantes · seuils min · hash stable |
 | Doc | Ce document §4.0 + §11 snapshot migré |
 
-**Ordre GO** : B3b spec/tests CTO ✅ → B3a funding handler → B3c leg settlement → B3d PE writers.
+**Ordre GO** : B3b ✅ → B3a merge + deploy neutre → **B3c scope minimal** (§4.0.5) → B3d PE writers → B4.
 
 ### Phase B4 — Outbox & worker Bundle
 
@@ -818,7 +961,10 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
     "min_trade_usdc": "5.00",
     "dust_retained_in_cash": true
   },
+  "planner_version": "v1",
   "plan_hash": "sha256:<canonical rebalance plan>",
+  "frozen_at": "2026-06-08T12:00:00.000Z",
+  "phase": "REBALANCE_PLAN_FROZEN",
   "balance_snapshot_hash": "sha256:<full snapshot canonical>"
 }
 ```
@@ -834,7 +980,10 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 | `rebalance_plan_after_funding` | **Source de vérité des legs** — remplace split-dépôt |
 | `expected_portfolio_after_execution` | Projection post-plan (Controller drift check) |
 | `prices_used` | Prix au moment du plan (audit · reproductibilité) |
-| `plan_hash` | Hash canonique du plan seul |
+| `planner_version` | Version logique planner (audit historique · §4.0.4) |
+| `plan_hash` | Hash canonique du plan seul — **gelé** à `REBALANCE_PLAN_FROZEN` |
+| `frozen_at` | Horodatage gel — immuable après freeze |
+| `phase` | Phase parent metadata (`REBALANCE_PLAN_FROZEN` avant child creation) |
 | `execution_buffer_usdc` | Buffer non alloué aux legs |
 | `residual_policy` | Règles dust · min_trade · cash retained |
 
@@ -864,6 +1013,10 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 - ❌ Aucun branchement worker bundle sans Go explicite
 - ❌ Ne pas traiter Bundle comme N× handler `reconcile_lifi_swap_intent`
 - ❌ Ne pas commencer Controller parent avant settlement leg stable + rebalance plan
+- ❌ **Ne pas re-planner** après `REBALANCE_PLAN_FROZEN` (sauf abandon parent explicite)
+- ❌ **Ne pas laisser un child intent** recalculer portefeuille · poids · ou décision d’investissement
+- ❌ **Ne pas démarrer B3c** avec scope N-legs / parallèle / Controller — scope minimal §4.0.5 d’abord
+- ❌ Ne pas mélanger funding · plan · legs · settlement dans un seul handler HTTP
 
 ---
 
@@ -894,9 +1047,15 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 | --- | --- | --- |
 | 1 | Child intents (A) vs leg table (B) ? | **A** — child intents (B1 ✅) |
 | 2 | Invest = split dépôt ou rebalance ? | **Rebalance-to-target** (doctrine CTO §4.0) |
-| 3 | Ordre B3 ? | **B3b planner d’abord** · puis B3a funding · B3c settlement |
-| 4 | Legs source ? | `rebalance_plan_after_funding` · pas `planned_allocations` split |
-| 5 | Dual-run prod ? | **Non** — B2b flag OFF · staging pilote uniquement |
-| 6 | LI.FI standalone ? | **Gelé** — aucune régression |
+| 3 | Ordre B3 ? | **B3b ✅** · B3a merge · **B3c scope 1×1×1×1** · B3d PE writers |
+| 4 | Legs source ? | `rebalance_plan_after_funding` gelé (`plan_hash`) · pas `planned_allocations` split |
+| 5 | Re-plan après invest ? | **Non** — gate `REBALANCE_PLAN_FROZEN` · abandon parent seul |
+| 6 | Plan versioning ? | **`planner_version`** obligatoire avec `plan_hash` (§4.0.4) |
+| 7 | Dual-run prod ? | **Non** — B2b flag OFF · staging pilote uniquement |
+| 8 | LI.FI standalone ? | **Gelé** — aucune régression |
 
-**Prochaine action** : review **B3b PR** → merge → GO **B3a** funding handler (B3c settlement reste bloqué jusqu’à B3a).
+**Prochaine action** :
+
+1. Merge **B3a** PR `#56` · deploy neutre (`BUNDLE_FUNDING_HANDLER_ENABLED` absent/false)
+2. Vérifier zéro call runtime · PE/CB/legs inchangés · aucun `bundle_funding_receipt_hash` auto
+3. **GO B3c** — handler `bundle_leg` settlement · scope minimal §4.0.5 (1 parent · 1 child · 1 leg · 1 swap · 1 settlement)
