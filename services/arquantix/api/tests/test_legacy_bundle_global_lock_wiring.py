@@ -284,8 +284,10 @@ def test_409_response_body_user_safe(db: Session, global_lock_on):
     assert body["status"] == "transaction_in_progress"
     assert body["error_code"] == "transaction_in_progress"
     assert body["message"] == TRANSACTION_IN_PROGRESS_USER_MESSAGE
-    assert body["existing_intent_id"] == str(intent_a.id)
-    assert body["requested_intent_id"] == str(intent_b.id)
+    assert "existing_intent_id" not in body
+    assert "requested_intent_id" not in body
+    assert exc_info.value.existing_intent_id == intent_a.id
+    assert exc_info.value.requested_intent_id == intent_b.id
 
 
 def test_release_after_first_allows_second(db: Session, global_lock_on):

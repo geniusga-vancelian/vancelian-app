@@ -74,10 +74,9 @@ def release_legacy_bundle_global_lock_on_terminal(
 
 
 def transaction_in_progress_response_body(exc: TransactionInProgress409) -> dict:
+    """Body public 409 — pas d'identifiants internes (intent_id réservés à l'exception/logs)."""
     return {
         "status": "transaction_in_progress",
         "error_code": exc.error_code,
         "message": str(exc),
-        "existing_intent_id": str(exc.existing_intent_id),
-        "requested_intent_id": str(exc.requested_intent_id),
     }
