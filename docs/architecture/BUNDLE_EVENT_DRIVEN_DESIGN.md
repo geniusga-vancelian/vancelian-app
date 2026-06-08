@@ -462,7 +462,7 @@ Les ventes introduisent PRU · cost basis · realised PnL · fiscalité — hors
   "planner_version": "v1",
   "leg_index": 0,
   "leg_direction": "buy",
-  "phase": "SETTLED"
+  "phase": "LEDGER_SETTLED"
 }
 ```
 
@@ -471,7 +471,7 @@ B5 agrégera `child_report_hash[]` → `parent_report_hash` sans migration metad
 **Critère de succès B3c** (pas « Bundle fonctionne ») :
 
 ```text
-Parent → FUNDED → FROZEN → Child #0 → USDC→AAVE → Settlement → Child SETTLED
+Parent → FUNDED → FROZEN → Child #0 → USDC→AAVE → Settlement → Child LEDGER_SETTLED
 ```
 
 avec : 0 dead_letter · 0 retry manuel · 0 correction manuelle · **0 parent dependency** dans le settlement handler.

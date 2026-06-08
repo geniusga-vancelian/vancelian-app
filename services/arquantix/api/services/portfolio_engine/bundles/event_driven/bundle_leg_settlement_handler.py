@@ -3,6 +3,9 @@
 Handler event-driven isolé — flag OFF par défaut.
 Settlement child-only : ne charge jamais le parent intent.
 Ne remplace pas ``BundleLifiLegService._apply_post_confirmation`` en runtime legacy.
+
+Privy idempotence : délègue à ``apply_swap_settlement`` (legacy bundle).
+Parité webhook credit reuse S3b hors scope B3c v1 — prévu handler v2 bundle_leg.
 """
 from __future__ import annotations
 
@@ -46,6 +49,7 @@ BUNDLE_LEG_CHILD_REPORT_KEY = "child_report_hash"
 BUNDLE_LEG_SETTLEMENT_BLOCK_KEY = "bundle_leg_settlement"
 CHILD_REPORT_VERSION = "v1"
 HANDLER_VERSION = "bundle_leg_settlement_v1"
+BUNDLE_LEG_CHILD_PHASE_LEDGER_SETTLED = "LEDGER_SETTLED"
 
 
 class BundleLegSettlementHandlerError(Exception):
@@ -72,6 +76,11 @@ def compute_bundle_leg_settlement_receipt_hash(
     *,
     child_intent_id: UUID,
     swap_id: UUID,
+    tx_hash: str,
+    from_asset: str,
+    to_asset: str,
+    from_chain: str,
+    to_chain: str,
     plan_hash: str,
     planner_version: str,
     leg_index: int,
@@ -79,12 +88,15 @@ def compute_bundle_leg_settlement_receipt_hash(
     payload = {
         "child_intent_id": str(child_intent_id),
         "swap_id": str(swap_id),
+        "tx_hash": str(tx_hash).strip().lower(),
+        "from_asset": str(from_asset).upper(),
+        "to_asset": str(to_asset).upper(),
+        "from_chain": str(from_chain).strip().lower(),
+        "to_chain": str(to_chain).strip().lower(),
         "plan_hash": plan_hash,
         "planner_version": planner_version,
         "leg_index": leg_index,
         "leg_direction": BUNDLE_LEG_DIRECTION_BUY,
-        "from_asset": BUNDLE_LEG_BUY_FROM_ASSET,
-        "to_asset": BUNDLE_LEG_BUY_TO_ASSET,
         "handler": HANDLER_VERSION,
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -141,6 +153,11 @@ def _validate_child_shape(intent: TransactionIntent) -> dict[str, Any]:
         raise BundleLegSettlementHandlerError(
             "bundle.leg.invalid_intent_role",
             f"intent_role={intent.intent_role}",
+        )
+    if intent.parent_intent_id is None:
+        raise BundleLegSettlementHandlerError(
+            "bundle.leg.missing_parent_intent_id",
+            "parent_intent_id requis sur child bundle_leg",
         )
 
     meta = _child_metadata(intent)
@@ -271,7 +288,7 @@ def _persist_child_settlement_metadata(
         "leg_direction": BUNDLE_LEG_DIRECTION_BUY,
         "swap_id": str(swap_id),
         "settled_at": _utc_now_iso(),
-        "phase": "SETTLED",
+        "phase": BUNDLE_LEG_CHILD_PHASE_LEDGER_SETTLED,
         "report_version": CHILD_REPORT_VERSION,
     }
     intent.metadata_json = meta
@@ -375,6 +392,11 @@ def settle_bundle_leg_idempotently(
     receipt_hash = compute_bundle_leg_settlement_receipt_hash(
         child_intent_id=child_intent_id,
         swap_id=swap.id,
+        tx_hash=str(swap.tx_hash),
+        from_asset=str(swap.from_asset),
+        to_asset=str(swap.to_asset),
+        from_chain=str(swap.from_chain),
+        to_chain=str(swap.to_chain),
         plan_hash=ctx["plan_hash"],
         planner_version=ctx["planner_version"],
         leg_index=ctx["leg_index"],

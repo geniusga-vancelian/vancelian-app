@@ -18,6 +18,7 @@ from services.portfolio_engine.assets.models import Asset
 from services.portfolio_engine.bundle_execution.bundle_funding import sum_bundle_cash_leg_quantity
 from services.portfolio_engine.bundles.event_driven.bundle_leg_settlement_handler import (
     BUNDLE_LEG_BUY_TO_ASSET,
+    BUNDLE_LEG_CHILD_PHASE_LEDGER_SETTLED,
     BundleLegSettlementHandlerError,
     compute_bundle_leg_settlement_receipt_hash,
     compute_child_report_hash,
@@ -116,14 +117,18 @@ def _insert_child_with_swap(
     db: Session,
     *,
     person_id: uuid.UUID,
-    parent_id: uuid.UUID,
+    parent_id: uuid.UUID | None,
     portfolio_id: uuid.UUID,
     usdc_instr: Instrument,
     aave_instr: Instrument,
     leg_direction: str = "buy",
     from_asset: str = "USDC",
     to_asset: str = "AAVE",
+    from_chain: str = "base",
+    to_chain: str = "base",
     wallet_address: str = EVM_ADDR,
+    swap_audit: list[dict] | None = None,
+    metadata_extra: dict | None = None,
 ) -> tuple[TransactionIntent, PersonWalletSwap]:
     swap_id = uuid.uuid4()
     swap = PersonWalletSwap(
@@ -132,12 +137,14 @@ def _insert_child_with_swap(
         status=SwapSessionStatus.CONFIRMED.value,
         from_asset=from_asset,
         to_asset=to_asset,
-        from_chain="base",
-        to_chain="base",
+        from_chain=from_chain,
+        to_chain=to_chain,
         amount_in=Decimal("50"),
         estimated_receive=Decimal("0.5"),
         tx_hash=f"0x{uuid.uuid4().hex}",
-        audit_log=[
+        audit_log=swap_audit
+        if swap_audit is not None
+        else [
             {
                 "event": "bundle_leg_context",
                 "bundle_execution": True,
@@ -158,7 +165,11 @@ def _insert_child_with_swap(
         person_id=person_id,
         product_type=IntentProductType.BUNDLE_LEG.value,
         operation_type=IntentOperationType.BUNDLE_LEG.value,
-        idempotency_key=bundle_child_idempotency_key(parent_intent_id=parent_id, leg_index=0),
+        idempotency_key=(
+            bundle_child_idempotency_key(parent_intent_id=parent_id, leg_index=0)
+            if parent_id is not None
+            else f"bundle-b3c-orphan-{uuid.uuid4().hex}"
+        ),
         status=IntentStatus.SUBMITTED.value,
         intent_role=IntentRole.CHILD.value,
         parent_intent_id=parent_id,
@@ -176,6 +187,7 @@ def _insert_child_with_swap(
             "entry_instrument_id": str(usdc_instr.id),
             "target_instrument_id": str(aave_instr.id),
             "planned_amount_in": "50",
+            **(metadata_extra or {}),
         },
     )
     db.add(child)
@@ -265,7 +277,7 @@ def test_nominal_buy_usdc_aave_settlement(db: Session, leg_settlement_handler_on
     meta = child.metadata_json or {}
     assert meta.get("settlement_receipt_hash") == result.settlement_receipt_hash
     assert meta.get("child_report_hash") == result.child_report_hash
-    assert (meta.get("bundle_leg_settlement") or {}).get("phase") == "SETTLED"
+    assert (meta.get("bundle_leg_settlement") or {}).get("phase") == BUNDLE_LEG_CHILD_PHASE_LEDGER_SETTLED
 
     privy_after = PersonWalletBalanceRepository().get_or_create_for_update(
         db, wallet_id=wallet.id, person_id=pe.person_id, asset="USDC",
@@ -381,6 +393,11 @@ def test_child_report_hash_stable(db: Session, leg_settlement_handler_on):
     receipt = compute_bundle_leg_settlement_receipt_hash(
         child_intent_id=child.id,
         swap_id=swap.id,
+        tx_hash=str(swap.tx_hash),
+        from_asset=str(swap.from_asset),
+        to_asset=str(swap.to_asset),
+        from_chain=str(swap.from_chain),
+        to_chain=str(swap.to_chain),
         plan_hash=PLAN_HASH,
         planner_version=PLANNER_VERSION,
         leg_index=0,
@@ -434,3 +451,175 @@ def test_legacy_bundle_lifi_leg_service_still_present():
     from services.portfolio_engine.bundle_execution import bundle_lifi_leg_service as legacy
 
     assert hasattr(legacy.BundleLifiLegService, "_apply_post_confirmation")
+
+
+@pytestmark_db
+def test_missing_planner_version_rejected(db: Session, leg_settlement_handler_on):
+    _, _, _, _, child, _, _ = _setup_child_rail(db)
+    meta = dict(child.metadata_json or {})
+    meta.pop("planner_version", None)
+    child.metadata_json = meta
+    db.add(child)
+    db.commit()
+
+    with pytest.raises(BundleLegSettlementHandlerError) as exc:
+        settle_bundle_leg_idempotently(db, child_intent_id=child.id)
+    assert exc.value.code == "bundle.leg.missing_planner_version"
+
+
+@pytestmark_db
+def test_missing_parent_intent_id_rejected(db: Session, leg_settlement_handler_on):
+    pe, usdc, aave, portfolio, _, _, _ = _setup_child_rail(db)
+    child, _ = _insert_child_with_swap(
+        db,
+        person_id=pe.person_id,
+        parent_id=None,
+        portfolio_id=portfolio.id,
+        usdc_instr=usdc,
+        aave_instr=aave,
+    )
+    db.commit()
+
+    with pytest.raises(BundleLegSettlementHandlerError) as exc:
+        settle_bundle_leg_idempotently(db, child_intent_id=child.id)
+    assert exc.value.code == "bundle.leg.missing_parent_intent_id"
+
+
+@pytestmark_db
+def test_parent_intent_rejected(db: Session, leg_settlement_handler_on):
+    pe, _, _, portfolio, _, _, _ = _setup_child_rail(db)
+    parent = TransactionIntent(
+        person_id=pe.person_id,
+        product_type=IntentProductType.BUNDLE_INVEST.value,
+        operation_type=IntentOperationType.INVEST.value,
+        idempotency_key=f"parent-b3c-{uuid.uuid4().hex}",
+        status=IntentStatus.CREATED.value,
+        intent_role=IntentRole.PARENT.value,
+        metadata_json={"bundle_id": str(portfolio.id), "plan_hash": PLAN_HASH},
+    )
+    db.add(parent)
+    db.commit()
+
+    with pytest.raises(BundleLegSettlementHandlerError) as exc:
+        settle_bundle_leg_idempotently(db, child_intent_id=parent.id)
+    assert exc.value.code == "bundle.leg.invalid_product_type"
+
+
+@pytestmark_db
+def test_standalone_lifi_swap_rejected(db: Session, leg_settlement_handler_on):
+    pe, _, _, _, _, _, _ = _setup_child_rail(db)
+    standalone = TransactionIntent(
+        person_id=pe.person_id,
+        product_type=IntentProductType.LIFI_SWAP.value,
+        operation_type=IntentOperationType.SWAP.value,
+        idempotency_key=f"lifi-standalone-{uuid.uuid4().hex}",
+        status=IntentStatus.SUBMITTED.value,
+        metadata_json={"plan_hash": PLAN_HASH, "planner_version": PLANNER_VERSION},
+    )
+    db.add(standalone)
+    db.commit()
+
+    with pytest.raises(BundleLegSettlementHandlerError) as exc:
+        settle_bundle_leg_idempotently(db, child_intent_id=standalone.id)
+    assert exc.value.code == "bundle.leg.invalid_product_type"
+
+
+@pytestmark_db
+def test_non_base_chain_rejected(db: Session, leg_settlement_handler_on):
+    pe, usdc, aave, portfolio, _, _, _ = _setup_child_rail(db)
+    parent_id = uuid.uuid4()
+    child, _ = _insert_child_with_swap(
+        db,
+        person_id=pe.person_id,
+        parent_id=parent_id,
+        portfolio_id=portfolio.id,
+        usdc_instr=usdc,
+        aave_instr=aave,
+        from_chain="ethereum",
+        to_chain="ethereum",
+    )
+    db.commit()
+
+    with pytest.raises(BundleLegSettlementHandlerError) as exc:
+        settle_bundle_leg_idempotently(db, child_intent_id=child.id)
+    assert exc.value.code == "bundle.leg.chain_not_base"
+
+
+@pytestmark_db
+def test_missing_bundle_execution_context_rejected(db: Session, leg_settlement_handler_on):
+    pe, usdc, aave, portfolio, _, _, _ = _setup_child_rail(db)
+    parent_id = uuid.uuid4()
+    child, _ = _insert_child_with_swap(
+        db,
+        person_id=pe.person_id,
+        parent_id=parent_id,
+        portfolio_id=portfolio.id,
+        usdc_instr=usdc,
+        aave_instr=aave,
+        swap_audit=[
+            {
+                "event": "bundle_leg_context",
+                "bundle_execution": False,
+                "batch_id": "batch-b3c",
+                "leg_action": "rebalance_buy",
+            },
+            {"event": "quote_requested", "signing_wallet_address": EVM_ADDR},
+        ],
+    )
+    db.commit()
+
+    with pytest.raises(BundleLegSettlementHandlerError) as exc:
+        settle_bundle_leg_idempotently(db, child_intent_id=child.id)
+    assert exc.value.code == "bundle.leg.not_bundle_internal_swap"
+
+
+@pytestmark_db
+def test_no_parent_metadata_mutation(db: Session, leg_settlement_handler_on):
+    pe, usdc, aave, portfolio, child, _, _ = _setup_child_rail(db)
+    parent = TransactionIntent(
+        id=child.parent_intent_id,
+        person_id=pe.person_id,
+        product_type=IntentProductType.BUNDLE_INVEST.value,
+        operation_type=IntentOperationType.INVEST.value,
+        idempotency_key=f"parent-real-{uuid.uuid4().hex}",
+        status=IntentStatus.CREATED.value,
+        intent_role=IntentRole.PARENT.value,
+        metadata_json={
+            "bundle_id": str(portfolio.id),
+            "plan_hash": PLAN_HASH,
+            "phase": "REBALANCE_PLAN_FROZEN",
+        },
+    )
+    db.add(parent)
+    db.commit()
+    parent_meta_before = dict(parent.metadata_json or {})
+
+    settle_bundle_leg_idempotently(db, child_intent_id=child.id)
+    db.commit()
+
+    db.refresh(parent)
+    assert parent.metadata_json == parent_meta_before
+
+
+def test_receipt_hash_differs_by_tx_hash_and_chain():
+    base_kwargs = dict(
+        child_intent_id=uuid.uuid4(),
+        swap_id=uuid.uuid4(),
+        from_asset="USDC",
+        to_asset="AAVE",
+        from_chain="base",
+        to_chain="base",
+        plan_hash=PLAN_HASH,
+        planner_version=PLANNER_VERSION,
+        leg_index=0,
+    )
+    h1 = compute_bundle_leg_settlement_receipt_hash(tx_hash="0xaaa", **base_kwargs)
+    h2 = compute_bundle_leg_settlement_receipt_hash(tx_hash="0xbbb", **base_kwargs)
+    h3 = compute_bundle_leg_settlement_receipt_hash(
+        tx_hash="0xaaa",
+        from_chain="ethereum",
+        to_chain="ethereum",
+        **{k: v for k, v in base_kwargs.items() if k not in {"from_chain", "to_chain"}},
+    )
+    assert h1 != h2
+    assert h1 != h3
