@@ -1095,6 +1095,304 @@ class BundleOrchestrator:
             out["recovered_from_pending_batch"] = True
         return out
 
+    def requote_expired_invest_legs(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: UUID,
+    ) -> dict:
+        """Re-quote buy-only du cash leg restant après legs LI.FI EXPIRED (legacy bundle).
+
+        Ne touche pas aux positions confirmées, ne vend pas, ne refait pas de funding self-trading.
+        """
+        import uuid as _uuid
+        from datetime import datetime, timezone
+
+        from services.lifi.enums import SwapSessionStatus
+        from services.portfolio_engine.bundle_execution.allocation_parallel import (
+            run_allocation_legs_parallel,
+            run_allocation_legs_sequential,
+        )
+        from services.portfolio_engine.bundle_execution.allocation_planner import (
+            plan_recovery_allocation_legs,
+        )
+        from services.portfolio_engine.bundle_execution.bundle_funding import (
+            resolve_bundle_cash_leg_available,
+        )
+        from services.portfolio_engine.bundle_execution.lifi_base_config import (
+            normalize_bundle_asset,
+        )
+        from services.portfolio_engine.bundles.bundle_invest_lock import (
+            AUDIT_ACTION_EXPIRED_REQUOTE,
+            record_batch_recovery_status,
+            transition_invest_lock_recovery_batch,
+        )
+        from services.portfolio_engine.clients.models import Client as _Client
+        from services.portfolio_engine.hardening.security.context import ActorContext
+
+        portfolio = self._load_and_validate_portfolio(db, portfolio_id, client_id)
+        portfolio_locked = load_portfolio_for_invest_lock(
+            db, client_id=client_id, portfolio_id=portfolio_id,
+        )
+        lock = get_invest_lock(portfolio_locked.metadata_)
+        if lock is None:
+            raise BundleOrchestratorError("no_active_invest_lock")
+
+        old_batch_id = str(lock.get("batch_id") or "").strip()
+        if not old_batch_id:
+            raise BundleOrchestratorError("invalid_invest_lock_batch")
+
+        product = self._load_product(db, portfolio)
+        entry_config = self._resolve_entry_config(product)
+        entry_asset = entry_config["entry_asset_default"]
+        entry_instrument = self._resolve_or_create_instrument(db, entry_asset)
+
+        _client_row = db.query(_Client).filter(_Client.id == client_id).first()
+        person_id = _client_row.person_id if _client_row is not None else None
+        if person_id is None:
+            raise BundleOrchestratorError("client_has_no_person_id")
+
+        pending_statuses = {
+            SwapSessionStatus.PENDING.value,
+            SwapSessionStatus.QUOTE_RECEIVED.value,
+            SwapSessionStatus.AWAITING_SIGNATURE.value,
+            SwapSessionStatus.SUBMITTED.value,
+        }
+        pending_items = self._batch_allocation_swap_items(
+            db,
+            person_id=person_id,
+            batch_id=old_batch_id,
+            statuses=pending_statuses,
+        )
+        if pending_items:
+            raise BundleOrchestratorError("pending_invest_legs_block_requote")
+
+        expired_items = self._batch_allocation_swap_items(
+            db,
+            person_id=person_id,
+            batch_id=old_batch_id,
+            statuses={SwapSessionStatus.EXPIRED.value},
+        )
+        if not expired_items:
+            raise BundleOrchestratorError("no_expired_invest_legs")
+
+        confirmed_items = self._batch_allocation_swap_items(
+            db,
+            person_id=person_id,
+            batch_id=old_batch_id,
+            statuses={SwapSessionStatus.CONFIRMED.value},
+        )
+        skip_lifi_targets = {
+            normalize_bundle_asset(str(item["asset"] or "").upper())
+            for item in confirmed_items
+            if item.get("asset")
+        }
+        only_lifi_targets = {
+            normalize_bundle_asset(str(item["asset"] or "").upper())
+            for item in expired_items
+            if item.get("asset")
+        }
+
+        cash_leg_available = resolve_bundle_cash_leg_available(
+            db,
+            portfolio_id=portfolio_id,
+            entry_instrument_id=entry_instrument.id,
+        )
+        if cash_leg_available <= Decimal("0"):
+            raise BundleOrchestratorError("insufficient_cash_leg_for_requote")
+
+        allocations = self._load_target_allocations(db, portfolio_id)
+        if not allocations:
+            raise BundleOrchestratorError("no_target_allocations_found")
+
+        new_batch_id = str(_uuid.uuid4())
+        planned_legs, allocatable, execution_buffer, plan_cash_remaining = (
+            plan_recovery_allocation_legs(
+                db,
+                allocations=allocations,
+                fund_amount=cash_leg_available,
+                batch_id=new_batch_id,
+                normalize_asset_fn=self._normalize_asset_symbol,
+                skip_lifi_targets=skip_lifi_targets,
+                only_lifi_targets=only_lifi_targets,
+            )
+        )
+        if not planned_legs or allocatable <= Decimal("0"):
+            raise BundleOrchestratorError("no_recovery_allocation_plan")
+
+        from services.portfolio_engine.bundles.event_driven.bundle_dual_run_locks import (
+            resolve_bundle_parent_intent_id,
+        )
+        from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
+            acquire_legacy_bundle_global_lock_or_raise,
+        )
+
+        parent_intent_id = resolve_bundle_parent_intent_id(
+            db,
+            person_id=person_id,
+            bundle_id=str(portfolio_id),
+            batch_id=old_batch_id,
+        )
+        if parent_intent_id is not None:
+            acquire_legacy_bundle_global_lock_or_raise(
+                db,
+                person_id=person_id,
+                intent_id=parent_intent_id,
+            )
+
+        for item in expired_items:
+            swap = item["swap"]
+            audit_log = list(swap.audit_log or [])
+            audit_log.append({
+                "event": "bundle_expired_requoted",
+                "old_batch_id": old_batch_id,
+                "recovery_batch_id": new_batch_id,
+                "requoted_at": datetime.now(timezone.utc).isoformat(),
+            })
+            swap.audit_log = audit_log
+            db.add(swap)
+
+        record_batch_recovery_status(
+            portfolio_locked,
+            old_batch_id=old_batch_id,
+            new_batch_id=new_batch_id,
+            status="requoted",
+            reason="expired_invest_legs",
+        )
+        transition_invest_lock_recovery_batch(
+            db,
+            portfolio=portfolio_locked,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            old_batch_id=old_batch_id,
+            new_batch_id=new_batch_id,
+            status="pending_signature",
+            funding_amount=str(cash_leg_available),
+            extra={"recovery_reason": "expired_invest_legs"},
+        )
+        db.add(portfolio_locked)
+
+        actor = ActorContext(
+            actor_type="system",
+            actor_id=f"bundle-orchestrator-requote-{portfolio_id}",
+        )
+        cash_available = plan_cash_remaining + execution_buffer
+        person_id_str = str(person_id)
+
+        from services.portfolio_engine.bundle_execution.allocation_config import (
+            bundle_alloc_parallel_quotes_enabled,
+        )
+        from services.portfolio_engine.bundle_execution.allocation_observability import (
+            log_allocation_event,
+        )
+
+        log_allocation_event(
+            "recovery_plan_created",
+            person_id=person_id_str,
+            portfolio_id=str(portfolio_id),
+            batch_id=new_batch_id,
+            fund_amount=float(cash_leg_available),
+            buffer_amount=float(execution_buffer),
+            allocatable_amount=float(allocatable),
+            legs_count=len(planned_legs),
+            parallel_enabled=bundle_alloc_parallel_quotes_enabled(),
+            recovery_from_batch_id=old_batch_id,
+        )
+
+        use_parallel = (
+            bundle_alloc_parallel_quotes_enabled()
+            and self._execution.provider_name == "lifi_base"
+            and len(planned_legs) > 1
+        )
+        if use_parallel:
+            alloc_results, leg_stats = run_allocation_legs_parallel(
+                self,
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                batch_id=new_batch_id,
+                actor=actor,
+                planned_legs=planned_legs,
+                initial_cash_available=allocatable,
+                person_id=person_id_str,
+                fund_amount=cash_leg_available,
+                buffer_amount=execution_buffer,
+                allocatable_amount=allocatable,
+            )
+        else:
+            alloc_results, leg_stats = run_allocation_legs_sequential(
+                self,
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                batch_id=new_batch_id,
+                actor=actor,
+                planned_legs=planned_legs,
+                initial_cash_available=allocatable,
+                execution_asset_from_planned=True,
+            )
+
+        succeeded = leg_stats.succeeded
+        failed = leg_stats.failed
+        pending = leg_stats.pending
+
+        AuditService.log_success(
+            db,
+            entity_type="bundle_investment",
+            entity_id=new_batch_id,
+            action=AUDIT_ACTION_EXPIRED_REQUOTE,
+            actor_type=actor.actor_type,
+            actor_id=actor.actor_id,
+            metadata={
+                "client_id": str(client_id),
+                "portfolio_id": str(portfolio_id),
+                "old_batch_id": old_batch_id,
+                "recovery_batch_id": new_batch_id,
+                "entry_asset": entry_asset,
+                "cash_leg_available": str(cash_leg_available),
+                "allocatable_amount": str(allocatable),
+                "execution_buffer": str(execution_buffer),
+                "skip_lifi_targets": sorted(skip_lifi_targets),
+                "only_lifi_targets": sorted(only_lifi_targets),
+                "legs_planned": len(planned_legs),
+                "legs_succeeded": succeeded,
+                "legs_failed": failed,
+                "legs_pending": pending,
+                "expired_swap_ids": [
+                    str(item["swap"].id) for item in expired_items
+                ],
+            },
+        )
+
+        cash_after_plan = cash_available
+        status = (
+            "pending_signature" if pending > 0
+            else ("completed" if failed == 0 else "partial")
+        )
+        return {
+            "status": status,
+            "batch_id": new_batch_id,
+            "portfolio_id": str(portfolio_id),
+            "entry_asset": entry_asset,
+            "entry_instrument_id": str(entry_instrument.id),
+            "total_entry_asset_received": float(cash_leg_available),
+            "total_entry_asset_consumed": float(leg_stats.total_entry_consumed),
+            "cash_leg_remaining": float(cash_after_plan),
+            "legs_succeeded": succeeded,
+            "legs_failed": failed,
+            "legs_pending": pending,
+            "allocation_details": alloc_results,
+            "execution_provider": "lifi_base",
+            "recovery_from_batch_id": old_batch_id,
+            "recovery_status": "recovery_started",
+            "requoted": True,
+        }
+
     # ------------------------------------------------------------------
     # Public: preview (read-only, zero side-effects)
     # ------------------------------------------------------------------

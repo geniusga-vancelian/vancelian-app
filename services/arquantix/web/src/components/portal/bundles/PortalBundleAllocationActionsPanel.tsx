@@ -9,6 +9,7 @@ import { AppButton } from '@/components/design-system/app/AppButton'
 import {
   BundleExpiredInvestLegsError,
   previewBundleRebalance,
+  requoteExpiredBundleInvest,
   resumeBundleInvest,
   type BundleInvestActiveLockPayload,
   type BundleRebalancePreviewPayload,
@@ -145,6 +146,36 @@ export function PortalBundleAllocationActionsPanel({
     }
   }
 
+  const runExpiredRequote = async () => {
+    if (busy || investInFlight.current) return
+    setBusy(true)
+    setError(null)
+    setExecutionPhase('preparing')
+    try {
+      const invest = await requoteExpiredBundleInvest(portfolioId)
+      const session: BundleInvestSession = {
+        portfolioId,
+        batchId: invest.batch_id,
+        fundingAsset: lockState?.lock?.funding_asset ?? invest.entry_asset,
+        fundingAmount: Number(invest.total_entry_asset_received),
+        invest,
+        savedAt: new Date().toISOString(),
+      }
+      saveBundleInvestSession(session)
+      await resumeInvest(session)
+      invalidatePortalCache('portal:crypto-wallet')
+      await onLockRefresh()
+      onRefresh()
+      onClose()
+    } catch (err) {
+      setExecutionPhase('failed')
+      setError(err instanceof Error ? err.message : 'Relance allocation impossible')
+    } finally {
+      setBusy(false)
+      setLegLabel(null)
+    }
+  }
+
   const lockActive = lockState?.status === 'active'
   const canResume = lockActive && (lockState?.resume_available ?? true) && !expiredLegs
   const buyCount = preview?.buy_plan?.length ?? 0
@@ -170,8 +201,8 @@ export function PortalBundleAllocationActionsPanel({
           <AppButton
             type="button"
             variant="primary"
-            disabled={busy || loadingPreview}
-            onClick={() => void runReallocate()}
+            disabled={busy}
+            onClick={() => void runExpiredRequote()}
           >
             Relancer l’allocation
           </AppButton>

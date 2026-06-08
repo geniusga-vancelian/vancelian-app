@@ -19,7 +19,10 @@ from services.portfolio_engine.portfolios.models import Portfolio
 logger = logging.getLogger(__name__)
 
 BUNDLE_INVEST_LOCK_KEY = "bundle_invest_lock"
+BUNDLE_BATCH_RECOVERY_KEY = "bundle_batch_recovery"
 BUNDLE_ACTION_INVEST = "invest"
+
+AUDIT_ACTION_EXPIRED_REQUOTE = "bundle.invest_expired_requote"
 
 ACTIVE_INVEST_LOCK_STATUSES = frozenset({
     "pending_signature",
@@ -230,6 +233,65 @@ def update_invest_lock_status(
     db.add(portfolio)
     db.flush()
     return lock
+
+
+def transition_invest_lock_recovery_batch(
+    db: Session,
+    *,
+    portfolio: Portfolio,
+    client_id: UUID,
+    portfolio_id: UUID,
+    old_batch_id: str,
+    new_batch_id: str,
+    status: str = "pending_signature",
+    funding_amount: Optional[str] = None,
+    extra: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Bascule le lock invest vers un batch recovery (re-quote expired legs)."""
+    lock = get_invest_lock(portfolio.metadata_)
+    if lock is None or str(lock.get("batch_id") or "").strip() != old_batch_id:
+        raise BundleInvestLockMissingWhileBatchActiveError(
+            batch_id=old_batch_id,
+            portfolio_id=str(portfolio_id),
+        )
+    now = _utc_now_iso()
+    new_lock = dict(lock)
+    new_lock.update({
+        "batch_id": new_batch_id,
+        "status": status,
+        "updated_at": now,
+        "recovery_from_batch_id": old_batch_id,
+        "recovery_status": "recovery_started",
+    })
+    if funding_amount is not None:
+        new_lock["funding_amount"] = funding_amount
+    if extra:
+        new_lock.update(extra)
+    _write_lock(portfolio, new_lock)
+    db.add(portfolio)
+    db.flush()
+    return dict(new_lock)
+
+
+def record_batch_recovery_status(
+    portfolio: Portfolio,
+    *,
+    old_batch_id: str,
+    new_batch_id: str,
+    status: str = "requoted",
+    reason: str = "expired_invest_legs",
+) -> None:
+    """Trace recovery sur le portfolio — pas de cleanup DB des swaps expirés."""
+    meta = dict(portfolio.metadata_ or {})
+    recoveries = dict(meta.get(BUNDLE_BATCH_RECOVERY_KEY) or {})
+    recoveries[old_batch_id] = {
+        "status": status,
+        "recovery_batch_id": new_batch_id,
+        "reason": reason,
+        "requoted_at": _utc_now_iso(),
+    }
+    meta[BUNDLE_BATCH_RECOVERY_KEY] = recoveries
+    portfolio.metadata_ = meta
 
 
 def release_invest_lock(

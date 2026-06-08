@@ -2116,6 +2116,56 @@ def mobile_bundle_invest_resume(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
+@bootstrap_router.post("/bundle/invest/requote-expired")
+def mobile_bundle_invest_requote_expired(
+    payload: dict,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Re-quote buy-only du cash leg après legs invest LI.FI expirées (legacy bundle)."""
+    from services.portfolio_engine.bundles.orchestrator import (
+        BundleOrchestrator,
+        BundleOrchestratorError,
+    )
+
+    portfolio_id = payload.get("portfolio_id")
+    if not portfolio_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="portfolio_id is required",
+        )
+
+    try:
+        from uuid import UUID as _UUID
+        pid = _UUID(str(portfolio_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
+        transaction_in_progress_response_body,
+    )
+    from services.product_locks.exceptions import TransactionInProgress409
+
+    orchestrator = BundleOrchestrator()
+    try:
+        result = orchestrator.requote_expired_invest_legs(
+            db,
+            client_id=client.id,
+            portfolio_id=pid,
+        )
+        db.commit()
+        return result
+    except TransactionInProgress409 as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=transaction_in_progress_response_body(exc),
+        )
+    except BundleOrchestratorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
 @bootstrap_router.post("/bundle/invest/preview")
 def mobile_bundle_invest_preview(
     payload: dict,

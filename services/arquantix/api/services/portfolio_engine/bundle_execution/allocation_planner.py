@@ -77,3 +77,76 @@ def plan_allocation_legs(
         cash_available -= alloc_entry_amount
 
     return planned, allocatable, buffer, cash_available
+
+
+def plan_recovery_allocation_legs(
+    db: Session,
+    *,
+    allocations: list[TargetAllocation],
+    fund_amount: Decimal,
+    batch_id: str,
+    normalize_asset_fn,
+    skip_lifi_targets: set[str],
+    only_lifi_targets: set[str] | None = None,
+) -> tuple[list[PlannedAllocationLeg], Decimal, Decimal, Decimal]:
+    """Plan buy-only recovery legs — cash restant vers cibles non encore confirmées.
+
+    ``skip_lifi_targets`` : assets déjà alloués (swaps CONFIRMED) — jamais re-quotés.
+    ``only_lifi_targets`` : si fourni, limite aux legs expirés / manquants (ex. CBETH seul).
+    """
+    eligible: list[tuple[TargetAllocation, str, str]] = []
+    for alloc in allocations:
+        instrument = alloc.instrument
+        if instrument is None:
+            instrument = db.query(Instrument).filter(
+                Instrument.id == alloc.instrument_id
+            ).first()
+        if instrument is None:
+            continue
+        asset_obj = db.query(Asset).filter(Asset.id == instrument.asset_id).first()
+        if asset_obj is None:
+            continue
+
+        target_asset = normalize_asset_fn(asset_obj.symbol.upper())
+        lifi_target = normalize_bundle_asset(target_asset)
+        if lifi_target in skip_lifi_targets:
+            continue
+        if only_lifi_targets is not None and lifi_target not in only_lifi_targets:
+            continue
+        eligible.append((alloc, target_asset, lifi_target))
+
+    if not eligible:
+        return [], Decimal("0"), Decimal("0"), Decimal("0")
+
+    weight_sum = sum((a.target_weight for a, _, _ in eligible), Decimal("0"))
+    if weight_sum <= 0:
+        return [], Decimal("0"), Decimal("0"), Decimal("0")
+
+    allocatable, buffer = compute_allocatable_amount(fund_amount)
+    cash_available = allocatable
+    planned: list[PlannedAllocationLeg] = []
+
+    for alloc, target_asset, lifi_target in eligible:
+        normalized_weight = (alloc.target_weight / weight_sum).quantize(
+            Decimal("0.000001"), rounding=ROUND_DOWN,
+        )
+        alloc_entry_amount = (allocatable * normalized_weight).quantize(
+            Decimal("0.000001"), rounding=ROUND_DOWN,
+        )
+        if alloc_entry_amount <= 0 or alloc_entry_amount > cash_available:
+            continue
+
+        ext_ref = f"bundle-recovery-{batch_id}-{lifi_target}"
+        planned.append(
+            PlannedAllocationLeg(
+                target_asset=target_asset,
+                lifi_target=lifi_target,
+                target_instrument_id=alloc.instrument_id,
+                target_weight=normalized_weight,
+                alloc_entry_amount=alloc_entry_amount,
+                ext_ref=ext_ref,
+            )
+        )
+        cash_available -= alloc_entry_amount
+
+    return planned, allocatable, buffer, cash_available
