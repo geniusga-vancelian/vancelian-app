@@ -557,7 +557,7 @@ Warnings non bloquants si tolérance : `bundle_residual_above_buffer`, `allocati
 
 | PR | Scope | Runtime | Statut |
 | --- | --- | --- | --- |
-| **B1** | Migration additive `parent_intent_id` · `intent_role` · `leg_index` · `bundle_execution_id` · enums `bundle_leg` · helpers lecture | ❌ Table + modèle only | **🟡 PR ouverte** (`176`) |
+| **B1** | Migration additive `parent_intent_id` · `intent_role` · `leg_index` · `bundle_execution_id` · enums `bundle_leg` · helpers lecture | ❌ Table + modèle only | **✅ Mergée** (`176` · merge `f8cd1c58` · TD `:149`) |
 
 **B1 livré (schema)** :
 
@@ -586,10 +586,25 @@ Helpers (lecture seule) : `bundle_parent_child_repository.py` — `find_children
 
 ### Phase B2 — Product Locks Bundle
 
-| PR | Scope | Runtime |
-| --- | --- | --- |
-| **B2** | Acquire/release S4 scope `bundle` on parent · snapshot bundle PE · flag OFF | Wiring behind flag |
-| **B2b** | Dual-run metadata lock + S4 lock · tests concurrence (swap vs bundle) | Staging |
+| PR | Scope | Runtime | Statut |
+| --- | --- | --- | --- |
+| **B2** | `bundle_product_locks.py` · acquire/release parent scope `bundle` · snapshot PE · flag + allowlist | ❌ Module only · **non branché legacy** | **🟡 PR ouverte** |
+| **B2b** | Dual-run metadata lock + S4 lock · tests concurrence (swap vs bundle) | Staging | ⏸ |
+
+**B2 livré (module)** :
+
+| Fonction | Rôle |
+| --- | --- |
+| `acquire_bundle_parent_lock` | Lock S4 `scope=bundle` · `asset=USDC` · `intent_id=parent` |
+| `release_bundle_parent_lock` | Release slot bundle parent |
+| `build_bundle_parent_snapshot` | Snapshot canonique (trading · bundle_cash · bundle_position · allocations · buffer · hash) |
+
+Gating : `TRANSACTION_PRODUCT_LOCKS_ENABLED` **+** `TRANSACTION_PRODUCT_LOCKS_ALLOWED_PERSON_EMAILS` (fail-closed L5a). Flag OFF ou hors allowlist → **no-op strict**.
+
+**Non modifié en B2** :
+
+- `pe_portfolios.metadata.bundle_invest_lock` (legacy intact)
+- Orchestrateur Bundle legacy · child intents · settlement · Controller · PE writers
 
 Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) — cf. [S4_IMPLEMENTATION_ROADMAP.md](S4_IMPLEMENTATION_ROADMAP.md) L6.
 
