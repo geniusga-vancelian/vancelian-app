@@ -2,7 +2,7 @@
 
 Tous les children du plan gelé doivent être ``LEDGER_SETTLED`` (B3c) avant
 transition parent ``RECONCILED``. Pas de ``COMPLETED`` · pas de réparation ·
-pas de replanification · pas de release lock v1.
+pas de replanification · pas de release lock · pas d'écriture économique.
 """
 from __future__ import annotations
 
@@ -20,12 +20,14 @@ from services.portfolio_engine.bundles.event_driven.bundle_leg_settlement_handle
     BUNDLE_LEG_CHILD_PHASE_LEDGER_SETTLED,
     BUNDLE_LEG_CHILD_REPORT_KEY,
     BUNDLE_LEG_SETTLEMENT_BLOCK_KEY,
+    BUNDLE_LEG_SETTLEMENT_RECEIPT_KEY,
 )
 from services.portfolio_engine.bundles.event_driven.bundle_parent_controller_config import (
     bundle_parent_controller_enabled,
 )
 from services.transaction_intents.bundle_parent_child_repository import (
     find_children,
+    is_bundle_child_intent,
     is_bundle_parent_intent,
 )
 
@@ -33,14 +35,28 @@ PHASE_CHILD_LEGS_CREATED = "CHILD_LEGS_CREATED"
 PHASE_RECONCILED = "RECONCILED"
 PHASE_COMPLETED = "COMPLETED"
 HANDLER_VERSION = "bundle_parent_controller_v1"
-PARENT_RECONCILIATION_BLOCK_KEY = "bundle_parent_reconciliation"
+PARENT_CONTROLLER_BLOCK_KEY = "bundle_parent_controller"
 PARENT_REPORT_HASH_KEY = "parent_report_hash"
+
+# Erreurs retryable (enfant pas prêt) vs terminal (données incohérentes).
+RETRYABLE_ERROR_CODES = frozenset(
+    {
+        "bundle.parent_controller.child_missing",
+        "bundle.parent_controller.child_not_settled",
+        "bundle.parent_controller.missing_child_report_hash",
+        "bundle.parent_controller.missing_settlement_receipt_hash",
+    }
+)
 
 
 class BundleParentControllerError(Exception):
     def __init__(self, code: str, message: str) -> None:
         self.code = code
         super().__init__(message)
+
+    @property
+    def retryable(self) -> bool:
+        return self.code in RETRYABLE_ERROR_CODES
 
 
 @dataclass(frozen=True)
@@ -108,15 +124,25 @@ def compute_parent_report_hash(
     parent_intent_id: UUID,
     plan_hash: str,
     planner_version: str,
-    child_reports: list[tuple[int, str]],
+    expected_leg_count: int,
+    child_proofs: list[tuple[int, str, str]],
 ) -> str:
+    """Hash canonique parent — preuves enfants triées par leg_index."""
     payload = {
         "parent_intent_id": str(parent_intent_id),
         "plan_hash": plan_hash,
         "planner_version": planner_version,
-        "child_reports": [
-            {"leg_index": leg_index, "child_report_hash": child_report_hash}
-            for leg_index, child_report_hash in sorted(child_reports, key=lambda item: item[0])
+        "expected_leg_count": expected_leg_count,
+        "child_proofs": [
+            {
+                "leg_index": leg_index,
+                "child_report_hash": child_report_hash,
+                "settlement_receipt_hash": settlement_receipt_hash,
+            }
+            for leg_index, child_report_hash, settlement_receipt_hash in sorted(
+                child_proofs,
+                key=lambda item: item[0],
+            )
         ],
         "handler": HANDLER_VERSION,
     }
@@ -168,14 +194,26 @@ def _validate_parent_shape(parent: TransactionIntent) -> dict[str, Any]:
     }
 
 
-def _collect_child_reports(
+def _collect_child_proofs(
     *,
+    parent_intent_id: UUID,
     children: list[TransactionIntent],
     planned_leg_indices: list[int],
     plan_hash: str,
-) -> list[tuple[int, str]]:
+    planner_version: str,
+) -> list[tuple[int, str, str]]:
     by_leg_index: dict[int, TransactionIntent] = {}
     for child in children:
+        if not is_bundle_child_intent(child):
+            raise BundleParentControllerError(
+                "bundle.parent_controller.invalid_child_shape",
+                f"child {child.id} — bundle_leg intent_role=child requis",
+            )
+        if child.parent_intent_id != parent_intent_id:
+            raise BundleParentControllerError(
+                "bundle.parent_controller.child_parent_mismatch",
+                f"child {child.id} parent_intent_id invalide",
+            )
         if child.leg_index is None:
             raise BundleParentControllerError(
                 "bundle.parent_controller.child_missing_leg_index",
@@ -189,7 +227,7 @@ def _collect_child_reports(
             )
         by_leg_index[leg_index] = child
 
-    reports: list[tuple[int, str]] = []
+    proofs: list[tuple[int, str, str]] = []
     for leg_index in planned_leg_indices:
         child = by_leg_index.get(leg_index)
         if child is None:
@@ -204,11 +242,27 @@ def _collect_child_reports(
                 "bundle.parent_controller.child_not_settled",
                 f"leg_index={leg_index} phase={child_phase!r} — LEDGER_SETTLED requis",
             )
-        child_plan_hash = str(settlement.get("plan_hash") or meta_plan_hash(child) or "").strip()
+        child_plan_hash = str(settlement.get("plan_hash") or _meta_plan_hash(child) or "").strip()
         if child_plan_hash != plan_hash:
             raise BundleParentControllerError(
                 "bundle.parent_controller.plan_hash_mismatch",
                 f"leg_index={leg_index} plan_hash child ≠ parent",
+            )
+        child_planner_version = str(
+            settlement.get("planner_version") or _parent_metadata(child).get("planner_version") or ""
+        ).strip()
+        if child_planner_version != planner_version:
+            raise BundleParentControllerError(
+                "bundle.parent_controller.planner_version_mismatch",
+                f"leg_index={leg_index} planner_version child ≠ parent",
+            )
+        settlement_receipt_hash = str(
+            settlement.get(BUNDLE_LEG_SETTLEMENT_RECEIPT_KEY) or ""
+        ).strip()
+        if not settlement_receipt_hash:
+            raise BundleParentControllerError(
+                "bundle.parent_controller.missing_settlement_receipt_hash",
+                f"leg_index={leg_index} settlement_receipt_hash requis",
             )
         child_report_hash = str(
             settlement.get(BUNDLE_LEG_CHILD_REPORT_KEY) or ""
@@ -218,7 +272,7 @@ def _collect_child_reports(
                 "bundle.parent_controller.missing_child_report_hash",
                 f"leg_index={leg_index} child_report_hash requis",
             )
-        reports.append((leg_index, child_report_hash))
+        proofs.append((leg_index, child_report_hash, settlement_receipt_hash))
 
     extra_indices = set(by_leg_index) - set(planned_leg_indices)
     if extra_indices:
@@ -227,10 +281,10 @@ def _collect_child_reports(
             f"children hors plan : {sorted(extra_indices)}",
         )
 
-    return reports
+    return proofs
 
 
-def meta_plan_hash(child: TransactionIntent) -> str | None:
+def _meta_plan_hash(child: TransactionIntent) -> str | None:
     meta = _parent_metadata(child)
     raw = meta.get("plan_hash")
     return str(raw).strip() if raw else None
@@ -241,11 +295,17 @@ def reconcile_bundle_parent_idempotently(
     *,
     parent_intent_id: UUID,
 ) -> BundleParentReconcileResult:
-    """Agrège les preuves child → parent RECONCILED — idempotent."""
+    """Agrège les preuves child → parent RECONCILED — idempotent · metadata only."""
     if not bundle_parent_controller_enabled():
-        raise BundleParentControllerError(
-            "bundle.parent_controller.disabled",
-            "BUNDLE_PARENT_CONTROLLER_ENABLED requis",
+        return BundleParentReconcileResult(
+            skipped=True,
+            idempotent=False,
+            reconciled=False,
+            parent_intent_id=parent_intent_id,
+            parent_report_hash=None,
+            plan_hash=None,
+            child_report_hashes=(),
+            reason="disabled",
         )
 
     parent = db.query(TransactionIntent).filter(TransactionIntent.id == parent_intent_id).first()
@@ -259,20 +319,24 @@ def reconcile_bundle_parent_idempotently(
     plan_hash = ctx["plan_hash"]
     planner_version = ctx["planner_version"]
     planned_leg_indices: list[int] = ctx["planned_leg_indices"]
+    expected_leg_count = len(planned_leg_indices)
 
     children = find_children(db, parent_intent_id=parent_intent_id)
-    child_reports = _collect_child_reports(
+    child_proofs = _collect_child_proofs(
+        parent_intent_id=parent_intent_id,
         children=children,
         planned_leg_indices=planned_leg_indices,
         plan_hash=plan_hash,
+        planner_version=planner_version,
     )
     parent_report_hash = compute_parent_report_hash(
         parent_intent_id=parent_intent_id,
         plan_hash=plan_hash,
         planner_version=planner_version,
-        child_reports=child_reports,
+        expected_leg_count=expected_leg_count,
+        child_proofs=child_proofs,
     )
-    child_report_hashes = tuple(hash_value for _, hash_value in sorted(child_reports))
+    child_report_hashes = tuple(proof[1] for proof in sorted(child_proofs))
 
     meta = dict(_parent_metadata(parent))
     existing_phase = str(meta.get("phase") or "").strip()
@@ -291,13 +355,18 @@ def reconcile_bundle_parent_idempotently(
 
     meta["phase"] = PHASE_RECONCILED
     meta[PARENT_REPORT_HASH_KEY] = parent_report_hash
-    meta[PARENT_RECONCILIATION_BLOCK_KEY] = {
+    meta[PARENT_CONTROLLER_BLOCK_KEY] = {
         "version": HANDLER_VERSION,
         "plan_hash": plan_hash,
         "planner_version": planner_version,
-        "child_report_hashes": [
-            {"leg_index": leg_index, "child_report_hash": child_report_hash}
-            for leg_index, child_report_hash in sorted(child_reports)
+        "expected_leg_count": expected_leg_count,
+        "child_proofs": [
+            {
+                "leg_index": leg_index,
+                "child_report_hash": child_report_hash,
+                "settlement_receipt_hash": settlement_receipt_hash,
+            }
+            for leg_index, child_report_hash, settlement_receipt_hash in sorted(child_proofs)
         ],
         "reconciled_at": _utc_now_iso(),
     }
