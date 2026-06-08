@@ -5,7 +5,7 @@
 | **Date** | 2026-06-08 |
 | **Module** | `bundle_parent_controller.py` |
 | **Question centrale** | Le Controller parent agrège-t-il uniquement les preuves des enfants sans modifier l'économie, sans replanifier et sans finaliser le parent ? |
-| **Décision review** | **✅ GO merge** (après correctifs review · commit post-`d418bb27`) |
+| **Décision review** | **✅ GO merge** · [controlled test GO](GO_BUNDLE_B5_MINIMAL_CONTROLLED_TEST_REPORT.md) |
 
 ---
 

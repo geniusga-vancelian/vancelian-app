@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Audit + design · **aucun code runtime** |
 | **Date** | 2026-06-07 |
-| **Statut** | Design actif — B1/B2/B2b/B3b/B3a/B3c/B4a/Global Lock V1/B4b ✅ · [B4b controlled test GO](GO_BUNDLE_B4B_MINIMAL_CONTROLLED_TEST_REPORT.md) · **B5 en cours** |
+| **Statut** | Design actif — B1→B5 ✅ controlled tests · [WebApp 1 USDC plan](GO_BUNDLE_WEBAPP_INVEST_1USDC_TEST_PLAN.md) **prochain jalon** |
 | **Prérequis validés** | Rail LI.FI standalone event-driven · Controller v1.2 chain-aware · GO manuel 3/3 RECONCILED |
 | **Interdictions** | Pas de migration · pas de changement settlement/locks/controller standalone · pas d’activation prod |
 
@@ -1006,7 +1006,7 @@ Parent RECONCILED (+ parent_report_hash = agrégat child_report_hash[])
 
 | PR | Scope | Runtime |
 | --- | --- | --- |
-| **B5** | `bundle_parent_controller.py` · `reconcile_bundle_parent_idempotently()` · vérifie N enfants = N legs plan · tous `LEDGER_SETTLED` · `plan_hash` cohérent · `parent_report_hash` | Flag OFF `BUNDLE_PARENT_CONTROLLER_ENABLED` |
+| **B5** | `bundle_parent_controller.py` · `reconcile_bundle_parent_idempotently()` · agrégateur preuves → parent `RECONCILED` | Flag OFF · [controlled test GO](GO_BUNDLE_B5_MINIMAL_CONTROLLED_TEST_REPORT.md) |
 | **B5a** *(reporté)* | Controller **leg** · `bundle_leg_controller.py` | No prod |
 | **B5b** *(fusionné dans B5 minimal)* | Controller **parent** — pas allocation drift / residual v1 | No prod |
 | **B5c** | Worker `intent.reconcile` parent · controlled test post-B5 merge | Pilot only |

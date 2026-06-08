@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 | --- | --- |
-| **Statut** | **NON EXÉCUTÉ — après deploy neutre B5** |
+| **Statut** | **✅ EXÉCUTÉ — GO** ([rapport](GO_BUNDLE_B5_MINIMAL_CONTROLLED_TEST_REPORT.md)) |
 | **Objectif** | Prouver l'agrégateur parent : tous children `LEDGER_SETTLED` → parent `RECONCILED` + `parent_report_hash` |
 | **Prérequis** | [GO_BUNDLE_B4B_MINIMAL_CONTROLLED_TEST_REPORT.md](GO_BUNDLE_B4B_MINIMAL_CONTROLLED_TEST_REPORT.md) ✅ · [GO_BUNDLE_B5_REVIEW.md](GO_BUNDLE_B5_REVIEW.md) ✅ |
 | **Parent cible** | `0ef6517e-10c1-453b-bce7-3e6ff08c866d` (B4b · child `38edba08…` déjà `LEDGER_SETTLED`) |
