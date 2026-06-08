@@ -4,7 +4,7 @@
 | --- | --- |
 | **Type** | Audit + design · **aucun code runtime** |
 | **Date** | 2026-06-07 |
-| **Statut** | Design actif — B1/B2/B2b/B3b mergés · **B3a review OK** (merge + deploy neutre) · doctrine freeze formalisée · **GO B3c** (scope 1×1×1×1) |
+| **Statut** | Design actif — B1/B2/B2b/B3b/B3a mergés · **B3c en cours** (PR · handler child-only · flag OFF · merge après deploy neutre B3a) |
 | **Prérequis validés** | Rail LI.FI standalone event-driven · Controller v1.2 chain-aware · GO manuel 3/3 RECONCILED |
 | **Interdictions** | Pas de migration · pas de changement settlement/locks/controller standalone · pas d’activation prod |
 
@@ -334,21 +334,54 @@ Le `plan_hash` seul ne suffit pas pour l’audit historique. Tout plan gelé inc
 
 #### 4.0.5 Scope B3c minimal (discipline S4d)
 
-B3c est la **phase la plus sensible** du Bundle (blockchain · slippage · retry · confirmations · partial fills · multi-assets). Reproduire la discipline S4d : **cas simple jusqu’au bout** avant d’élargir.
+B3c n’est **plus un chantier d’architecture** — c’est un **chantier d’exécution**. L’architecture est en place (B1–B3a · freeze · planner_version). B3c prouve le **rail** Parent → Child → Swap → Settlement, pas encore le Bundle complet.
+
+Reproduire la discipline S4d : **encore plus petit que le scope initial** — cas simple jusqu’au bout.
+
+**Flow B3c v1 — objectif** :
+
+```text
+FUNDED
+   ↓
+REBALANCE_PLAN_FROZEN
+   ↓
+child #0 (leg_index=0)
+   ↓
+swap USDC → AAVE (buy leg · Base uniquement)
+   ↓
+settlement (handler bundle_leg · idempotent)
+   ↓
+child SETTLED / receipt leg
+```
 
 **B3c v1 — uniquement** :
 
 | Dimension | Scope B3c v1 | Hors scope B3c v1 |
 | --- | --- | --- |
 | Parent | 1 parent intent | N parents parallèles |
-| Child | 1 child intent | N child intents |
-| Leg | 1 leg (leg_index=0) | N legs · parallélisme |
-| Swap | 1 swap LI.FI interne | Multi-asset complexe |
-| Settlement | 1 settlement idempotent | Partial fill orchestration |
-| Controller | ❌ | Controller leg · Controller parent (B5) |
+| Child | 1 child intent | 2+ child intents |
+| Leg | 1 buy leg (`leg_index=0`) | sell leg · rebalance complet · N legs |
+| Paire | **USDC → AAVE** | UNI · ETH · multi-asset |
+| Chain | **Base uniquement** | multi-chain |
+| Swap | 1 swap LI.FI interne | allocation multiple |
+| Settlement | 1 settlement idempotent | partial fill orchestration |
+| Controller | ❌ | Controller leg (B5a) · Controller parent (B5b) |
 | Runtime | Handler isolé · flag OFF | Worker / outbox branché |
+| Concurrence | Séquentiel · 1 child | 3 childs en parallèle |
 
-**Prérequis B3c** : doctrine `REBALANCE_PLAN_FROZEN` (§4.0.3) · B3a mergé · deploy neutre validé.
+**But B3c** : prouver le rail — **pas** prouver le Bundle multi-legs.
+
+**Échelle S4d (ne pas sauter d’étapes)** :
+
+```text
+1 child  → validation → GO
+2 childs → validation → GO
+N childs → validation → GO
+```
+
+Créer 3 childs + 3 swaps + 3 settlements + 1 parent dès B3c réintroduit immédiatement : concurrence · ordering · retry · partial completion · parent state machine. **Trop tôt.**
+
+**Prérequis B3c** : doctrine `REBALANCE_PLAN_FROZEN` (§4.0.3) · B3a mergé · **deploy neutre validé** · flag `BUNDLE_FUNDING_HANDLER_ENABLED` OFF.
 
 **Frontière B3a vs B3c** :
 
@@ -356,6 +389,92 @@ B3c est la **phase la plus sensible** du Bundle (blockchain · slippage · retry
 B3a : PE interne uniquement (trading_available → bundle_cash_leg)
 B3c : bundle_cash → swap LI.FI → wallet → settlement → PE atom → cost basis
 ```
+
+#### 4.0.6 Doctrine B3c — child = mini LI.FI standalone
+
+Le child intent bundle leg est traité comme un **mini LI.FI standalone** : même discipline settlement · receipt · idempotence — **sans** regarder le parent au moment du settlement.
+
+```text
+Parent Bundle (bundle_invest)
+   │
+   └── Child Intent (product_type = bundle_leg)
+          ├── parent_intent_id
+          ├── plan_hash          ← triplet invariant §4.0.3
+          ├── planner_version
+          ├── leg_index
+          └── swap LI.FI interne (is_bundle_internal_swap=true)
+```
+
+| Couche | Question | Scope |
+| --- | --- | --- |
+| **Settlement B3c** | « Cette leg a-t-elle été correctement exécutée ? » | Child seul · receipt leg · PE atom · cost basis leg |
+| **Controller B5** (plus tard) | « Toutes les legs du plan X ont-elles été exécutées ? » | Parent · agrégation child reports · plan fidelity |
+
+**Règle fondamentale** : le settlement handler **ne doit jamais regarder le parent**. Il settle une leg comme le ferait S3b pour un swap standalone — avec `product_type=bundle_leg` et tagging `bundle_leg_context`.
+
+**Interdit en B3c** : logique parent dans le settlement (re-plan · agrégation · partial parent · release lock parent).
+
+#### 4.0.7 Child Settlement Independence (contrainte B3c)
+
+**API handler — une seule entrée** :
+
+```python
+settle_bundle_leg_idempotently(db, *, child_intent_id: UUID)
+```
+
+Le handler **reconstruit tout depuis le child** (metadata · `linked_id` swap · audit `bundle_leg_context`). **Interdit** :
+
+```python
+settle_bundle_leg_idempotently(
+    db,
+    parent_intent_id=...,
+    plan_hash=...,
+    ...
+)
+```
+
+Sinon : couplage immédiat Settlement ↔ Parent orchestration — rôle réservé au Controller B5.
+
+**Rejouabilité child seul** :
+
+```text
+Child #0 → settle → settle → settle
+```
+
+sans jamais charger ni valider l’état du parent intent.
+
+**BUY ONLY (B3c v1)** :
+
+| Autorisé | Refusé |
+| --- | --- |
+| USDC → AAVE · `leg_direction=buy` · Base | AAVE → USDC (sell) |
+| | BTC → ETH · ETH → AAVE · toute paire hors pilote |
+
+Les ventes introduisent PRU · cost basis · realised PnL · fiscalité — hors premier rail.
+
+**Contrat `child_report_hash` (pré-B5)** — metadata child post-settlement :
+
+```json
+{
+  "child_report_hash": "sha256:...",
+  "settlement_receipt_hash": "sha256:...",
+  "plan_hash": "sha256:...",
+  "planner_version": "v1",
+  "leg_index": 0,
+  "leg_direction": "buy",
+  "phase": "LEDGER_SETTLED"
+}
+```
+
+B5 agrégera `child_report_hash[]` → `parent_report_hash` sans migration metadata.
+
+**Critère de succès B3c** (pas « Bundle fonctionne ») :
+
+```text
+Parent → FUNDED → FROZEN → Child #0 → USDC→AAVE → Settlement → Child LEDGER_SETTLED
+```
+
+avec : 0 dead_letter · 0 retry manuel · 0 correction manuelle · **0 parent dependency** dans le settlement handler.
 
 ### 4.1 Principes directeurs
 
@@ -845,8 +964,8 @@ Prérequis S4 : L1–L5 merged (table, engine, snapshot, middleware, router) —
 | PR | Scope | Runtime | Statut |
 | --- | --- | --- | --- |
 | **B3b** | `rebalance_planner.py` · `plan_rebalance_after_funding()` · tests purs rebalance-to-target | ❌ Pure function only | **✅ Mergée** (PR `#55`) |
-| **B3a** | `bundle_funding_handler.py` · `settle_bundle_funding_idempotently()` · trading_available → bundle_cash · receipt hash parent · phase `FUNDED` | Flag OFF (`BUNDLE_FUNDING_HANDLER_ENABLED`) | **✅ Review OK** (PR `#56` · merge + deploy neutre) |
-| **B3c** | Handler `bundle_leg` settlement · remplace `apply_swap_settlement` direct · idempotence | Flag OFF | **🟡 Prochaine** — scope minimal §4.0.5 |
+| **B3a** | `bundle_funding_handler.py` · `settle_bundle_funding_idempotently()` · trading_available → bundle_cash · phase `FUNDED` | Flag OFF (`BUNDLE_FUNDING_HANDLER_ENABLED`) | **✅ Mergée** (PR `#56`) |
+| **B3c** | `bundle_leg_settlement_handler.py` · `settle_bundle_leg_idempotently(child_intent_id)` · BUY USDC→AAVE Base · `child_report_hash` | Flag OFF (`BUNDLE_LEG_SETTLEMENT_HANDLER_ENABLED`) | **🟡 PR ouverte** — §4.0.5–§4.0.7 · merge après deploy neutre B3a |
 | **B3d** | PE atoms + cost basis **via handlers only** · retire writers HTTP | Flag OFF | ⏸ **bloqué avant B3b merge** |
 
 **B3b livrable attendu** :
@@ -1015,7 +1134,9 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 - ❌ Ne pas commencer Controller parent avant settlement leg stable + rebalance plan
 - ❌ **Ne pas re-planner** après `REBALANCE_PLAN_FROZEN` (sauf abandon parent explicite)
 - ❌ **Ne pas laisser un child intent** recalculer portefeuille · poids · ou décision d’investissement
-- ❌ **Ne pas démarrer B3c** avec scope N-legs / parallèle / Controller — scope minimal §4.0.5 d’abord
+- ❌ **Ne pas démarrer B3c** avec N-legs / parallèle / UNI·ETH / multi-chain / Controller — rail minimal §4.0.5 d’abord
+- ❌ **Ne pas faire regarder le parent** au settlement leg (§4.0.6) — B5 agrège plus tard
+- ❌ **Ne pas sauter l’échelle S4d** (1 child → 2 → N) — pas 3 childs parallèles en B3c v1
 - ❌ Ne pas mélanger funding · plan · legs · settlement dans un seul handler HTTP
 
 ---
@@ -1056,6 +1177,8 @@ Snapshot parent — **cible rebalance-to-target** (remplace `planned_allocations
 
 **Prochaine action** :
 
-1. Merge **B3a** PR `#56` · deploy neutre (`BUNDLE_FUNDING_HANDLER_ENABLED` absent/false)
-2. Vérifier zéro call runtime · PE/CB/legs inchangés · aucun `bundle_funding_receipt_hash` auto
-3. **GO B3c** — handler `bundle_leg` settlement · scope minimal §4.0.5 (1 parent · 1 child · 1 leg · 1 swap · 1 settlement)
+1. **Deploy neutre B3a** · `BUNDLE_FUNDING_HANDLER_ENABLED` absent/false
+2. Validation flag OFF · zéro call runtime · PE/CB/legs inchangés
+3. **GO B3c** — handler `bundle_leg` settlement · rail minimal §4.0.5–§4.0.6 :
+   - 1 parent · 1 child · 1 buy leg · **USDC → AAVE** · **Base**
+   - settlement child isolé (mini LI.FI) · flag OFF · pas de Controller
