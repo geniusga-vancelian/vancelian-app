@@ -62,6 +62,7 @@ class V3LegExecutionResult:
     leg_ids: list[str] = field(default_factory=list)
     swap_id: str | None = None
     error: str = ""
+    attempt_details: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -74,6 +75,7 @@ class V3LegExecutionResult:
             "leg_ids": list(self.leg_ids),
             "swap_id": self.swap_id,
             "error": self.error,
+            "attempt_details": list(self.attempt_details),
         }
 
 
@@ -482,6 +484,13 @@ class BundleRebalanceExecutor:
                 except Exception as exc:
                     leg_result.status = "failed"
                     leg_result.error = str(exc)[:500]
+                    leg_result.attempt_details.append({
+                        "attempt_index": attempt,
+                        "leg_id": leg_id,
+                        "status": "failed",
+                        "error_code": "execution_exception",
+                        "error": leg_result.error,
+                    })
                     if attempt >= MAX_SWAP_ATTEMPTS:
                         break
                     continue
@@ -489,16 +498,89 @@ class BundleRebalanceExecutor:
                 leg_result.swap_id = exec_result.provider_order_id
                 leg_result.status = self._map_leg_status(exec_result)
                 leg_result.error = ""
+                leg_result.attempt_details.append({
+                    "attempt_index": attempt,
+                    "leg_id": leg_id,
+                    "swap_id": leg_result.swap_id,
+                    "status": leg_result.status,
+                    "error_code": None,
+                })
 
                 if leg_result.status == "completed":
                     break
+
                 if leg_result.status == "pending":
-                    break
+                    resolved_status, resolved_error = self._resolve_pending_leg(
+                        db,
+                        leg_result=leg_result,
+                        exec_result=exec_result,
+                    )
+                    leg_result.status = resolved_status
+                    leg_result.error = resolved_error
+                    if leg_result.attempt_details:
+                        leg_result.attempt_details[-1]["status"] = resolved_status
+                        leg_result.attempt_details[-1]["error_code"] = resolved_error or None
+
+                    if resolved_status == "completed":
+                        break
+                    if resolved_status in ("expired", "failed"):
+                        if attempt >= MAX_SWAP_ATTEMPTS:
+                            break
+                        continue
+                    if attempt >= MAX_SWAP_ATTEMPTS:
+                        break
+                    continue
+
                 if attempt >= MAX_SWAP_ATTEMPTS:
                     break
 
             results.append(leg_result)
         return results
+
+    def _resolve_pending_leg(
+        self,
+        db: Session,
+        *,
+        leg_result: V3LegExecutionResult,
+        exec_result: ExecutionResult,
+    ) -> tuple[str, str]:
+        """Résout un leg pending (quote LI.FI) — retryable si quote non exécutée."""
+        from uuid import UUID
+
+        from services.lifi.enums import SwapSessionStatus
+        from services.lifi.models import PersonWalletSwap
+        from services.portfolio_engine.bundle_execution.pe_settlement import swap_confirmed
+
+        raw = exec_result.raw if isinstance(exec_result.raw, dict) else {}
+        swap_id = leg_result.swap_id or raw.get("swap_id")
+        if swap_id:
+            try:
+                swap_uuid = UUID(str(swap_id))
+            except (TypeError, ValueError):
+                swap_uuid = None
+            if swap_uuid is not None:
+                swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_uuid).first()
+                if swap is not None:
+                    if swap_confirmed(swap):
+                        return "completed", ""
+                    if swap.status in (
+                        SwapSessionStatus.EXPIRED.value,
+                        SwapSessionStatus.FAILED.value,
+                    ):
+                        return "expired", str(swap.status).lower()
+                    if swap.status in (
+                        SwapSessionStatus.QUOTE_RECEIVED.value,
+                        SwapSessionStatus.AWAITING_SIGNATURE.value,
+                        SwapSessionStatus.PENDING.value,
+                    ):
+                        return "expired", "quote_ttl_expired"
+                    if swap.status == SwapSessionStatus.SUBMITTED.value:
+                        return "pending", "awaiting_confirmation"
+
+        if raw.get("requires_client_signature"):
+            return "expired", "quote_ttl_expired"
+
+        return "expired", "quote_ttl_expired"
 
     def _sells_allow_buy_phase(self, sell_results: list[V3LegExecutionResult]) -> bool:
         if not sell_results:

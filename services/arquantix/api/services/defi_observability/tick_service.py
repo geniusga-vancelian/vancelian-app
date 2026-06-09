@@ -111,6 +111,25 @@ def compute_ops_alerts(
                 }
             )
 
+    try:
+        from services.portfolio_engine.bundles.bundle_v3_deposit_flow.config import (
+            bundle_v3_deposit_worker_enabled,
+        )
+        from services.portfolio_engine.bundles.bundle_v3_deposit_flow.ops_alerts import (
+            bundle_v3_ops_alerts_for_tick,
+        )
+
+        if bundle_v3_deposit_worker_enabled():
+            alerts.extend(bundle_v3_ops_alerts_for_tick(db))
+    except Exception as exc:
+        alerts.append(
+            {
+                "level": "warning",
+                "code": "bundle_v3_ops_audit_failed",
+                "message": str(exc)[:500],
+            }
+        )
+
     p0_threshold = _env_int("DEFI_OPS_OPEN_P0_THRESHOLD", 3)
     p1_threshold = _env_int("DEFI_OPS_OPEN_P1_THRESHOLD", 10)
     open_p0 = (

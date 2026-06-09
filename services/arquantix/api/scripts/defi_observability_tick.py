@@ -101,7 +101,13 @@ def main() -> int:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
         return _exit_code(summary)
     except Exception as exc:
-        db.rollback()
+        if not dry_run:
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+        else:
+            db.rollback()
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     finally:

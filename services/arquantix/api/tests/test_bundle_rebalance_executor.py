@@ -91,6 +91,9 @@ class _RecordingMockProvider:
         if status == "raise":
             raise RuntimeError(f"mock_fail:{leg.leg_id}")
 
+        raw: dict = {"mock": True}
+        if status == "pending":
+            raw["requires_client_signature"] = True
         return ExecutionResult(
             leg_id=leg.leg_id,
             status=status,  # type: ignore[arg-type]
@@ -99,7 +102,7 @@ class _RecordingMockProvider:
             amount_from=leg.amount_from,
             amount_to=leg.amount_from,
             provider_order_id=f"mock-swap-{leg.leg_id}",
-            raw={"mock": True},
+            raw=raw,
         )
 
 
@@ -276,7 +279,8 @@ def test_max_swap_attempts_two_no_third(db: Session):
     assert result["resume_required"] is False
 
 
-def test_timeout_pending_becomes_terminal_no_resume(db: Session):
+def test_timeout_pending_becomes_terminal_no_resume(db: Session, monkeypatch):
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
     pe = make_linked_client(db)
     portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
     plan = _majors_plan(db, pe, portfolio, usdc)
@@ -294,6 +298,93 @@ def test_timeout_pending_becomes_terminal_no_resume(db: Session):
     assert result["v3_status"] == "COMPLETED_WITH_RESIDUAL_CASH"
     assert result["resume_required"] is False
     assert all(r["status"] == "expired" for r in result["buy_results"])
+    assert all(r["attempts"] == 2 for r in result["buy_results"])
+    buy_calls = [c for c in provider.calls if c["action"] == "rebalance_buy"]
+    assert len(buy_calls) == len(result["buy_results"]) * 2
+
+
+def test_quote_ttl_expired_retry_success_on_attempt2(db: Session, monkeypatch):
+    """attempt 1 quote_ttl_expired → re-quote → attempt 2 success → COMPLETED."""
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = {
+        "status": "ok",
+        "plan_hash": f"sha256:ttl-retry-{uuid.uuid4().hex[:8]}",
+        "snapshot_hash": "sha256:snap",
+        "entry_asset": "USDC",
+        "weight_basis": "invested_assets",
+        "cash_funding_source": "separate",
+        "available_cash_usdc": "10",
+        "sell_plan": [],
+        "buy_plan": [{
+            "asset": "ETH",
+            "instrument_id": str(_instrument_for_asset(db, "ETH").id),
+            "amount_usdc": "5",
+            "action": "buy",
+            "funded_by": "cash_leg",
+        }],
+    }
+    provider = _RecordingMockProvider(
+        outcomes={"rebalance_buy": ["pending", "completed"]},
+    )
+    result = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert result["v3_status"] == "COMPLETED"
+    assert result["buy_results"][0]["attempts"] == 2
+    assert result["buy_results"][0]["status"] == "completed"
+    details = result["buy_results"][0]["attempt_details"]
+    assert len(details) == 2
+    assert details[0]["error_code"] == "quote_ttl_expired"
+    assert details[1]["status"] == "completed"
+    assert len(provider.calls) == 2
+
+
+def test_quote_ttl_expired_both_attempts_terminal_residual(db: Session, monkeypatch):
+    """attempt 1 + 2 quote_ttl_expired → COMPLETED_WITH_RESIDUAL_CASH, attempts never > 2."""
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = {
+        "status": "ok",
+        "plan_hash": f"sha256:ttl-fail2-{uuid.uuid4().hex[:8]}",
+        "snapshot_hash": "sha256:snap",
+        "entry_asset": "USDC",
+        "available_cash_usdc": "5",
+        "sell_plan": [],
+        "buy_plan": [{
+            "asset": "ETH",
+            "instrument_id": str(_instrument_for_asset(db, "ETH").id),
+            "amount_usdc": "5",
+            "action": "buy",
+            "funded_by": "cash_leg",
+        }],
+    }
+    provider = _RecordingMockProvider(default_status="pending")
+    pe_before, cb_before = _pe_cb_counts(db)
+    result = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+    pe_after, cb_after = _pe_cb_counts(db)
+
+    assert result["v3_status"] == "COMPLETED_WITH_RESIDUAL_CASH"
+    assert result["buy_results"][0]["attempts"] == 2
+    assert result["buy_results"][0]["error"] == "quote_ttl_expired"
+    assert len(provider.calls) == 2
+    assert pe_after == pe_before
+    assert cb_after == cb_before
 
 
 def test_idempotency_running_same_plan_hash(db: Session):
