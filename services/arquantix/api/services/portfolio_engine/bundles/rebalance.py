@@ -121,7 +121,29 @@ class BundleRebalanceOrchestrator:
     ) -> dict:
         """Compute a rebalance plan without executing anything."""
         plan = self._compute_plan(db, client_id=client_id, portfolio_id=portfolio_id)
-        return self._plan_to_dict(plan)
+        out = self._plan_to_dict(plan)
+        try:
+            from services.portfolio_engine.bundles.drift_engine import (
+                compute_bundle_drift_snapshot,
+            )
+
+            drift_snapshot = compute_bundle_drift_snapshot(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                exchange_service=self._exchange,
+            )
+            out["drift_snapshot"] = drift_snapshot
+            from services.portfolio_engine.bundles.rebalance_planner import (
+                plan_bundle_rebalance_from_drift,
+            )
+
+            out["drift_rebalance_plan"] = plan_bundle_rebalance_from_drift(
+                drift_snapshot,
+            )
+        except Exception as exc:
+            out["drift_snapshot_error"] = str(exc)[:500]
+        return out
 
     # ------------------------------------------------------------------
     # execute_rebalance
