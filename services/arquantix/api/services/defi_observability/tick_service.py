@@ -429,6 +429,34 @@ def run_defi_observability_tick(
                 exc_info=True,
             )
 
+        # 2e — Bundle V3 deposit outbox (bundle.v3_rebalance_requested — flag OFF par défaut)
+        try:
+            from services.portfolio_engine.bundles.bundle_v3_deposit_flow.config import (
+                bundle_v3_deposit_worker_enabled,
+            )
+            from services.portfolio_engine.bundles.bundle_v3_deposit_flow.worker import (
+                process_bundle_v3_deposit_outbox,
+            )
+
+            if bundle_v3_deposit_worker_enabled() and not dry_run:
+                bundle_v3_deposit_step = process_bundle_v3_deposit_outbox(db, limit=10)
+            else:
+                bundle_v3_deposit_step = {
+                    "skipped": True,
+                    "enabled": bundle_v3_deposit_worker_enabled(),
+                    "dry_run": dry_run,
+                }
+            summary["bundle_v3_deposit_outbox"] = bundle_v3_deposit_step
+            summary["steps"]["bundle_v3_deposit_outbox"] = bundle_v3_deposit_step
+        except Exception as exc:
+            summary["bundle_v3_deposit_outbox"] = {"error": str(exc)}
+            summary["steps"]["bundle_v3_deposit_outbox"] = {"error": str(exc)}
+            step_errors.append("bundle_v3_deposit_outbox_failed")
+            logger.warning(
+                "defi_observability.bundle_v3_deposit_outbox_failed",
+                exc_info=True,
+            )
+
         if _timeout_before("user_reconcile"):
             summary["alerts"] = compute_ops_alerts(db, summary=summary)
             _finalize_tick_summary(
