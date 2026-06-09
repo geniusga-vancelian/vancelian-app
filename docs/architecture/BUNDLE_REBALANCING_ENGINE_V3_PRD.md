@@ -466,7 +466,7 @@ Ensuite enchaîner PR-2 → PR-3 sur branche pilote avant de toucher lifecycle (
 
 ### Prochaine étape
 
-**PR-2** — Rebalancing Planner : `weight_basis = invested_assets`, cash séparé, `sell_plan` / `buy_plan` depuis drift.
+**PR-3** — Rebalancing Executor : exécuter `drift_rebalance_plan` via LI.FI (sell puis buy).
 
 ---
 
@@ -483,3 +483,43 @@ Ensuite enchaîner PR-2 → PR-3 sur branche pilote avant de toucher lifecycle (
 ### Règle cash résiduel
 
 Si `total_buy_need ≤ available_cash_usdc` → `sell_plan` vide (pas de trim BTC quand le cash finance les achats).
+
+---
+
+## PR-3 implementation notes
+
+| Champ | Valeur |
+| --- | --- |
+| **Statut** | **Implémenté** (executor contrôlé) |
+| **Module** | `rebalance_executor.py` — `execute_v3_bundle_rebalance()` |
+| **Tests** | `test_bundle_rebalance_executor.py` — **17 passed** (31 total drift+planner+executor) |
+| **API** | `POST .../rebalance/v3/execute` si `BUNDLE_V3_REBALANCE_EXECUTOR_ENABLED=true` |
+| **Legacy** | `POST .../rebalance` inchangé (v1 `_compute_plan`) |
+
+### Comportement
+
+- Entrée : `drift_rebalance_plan` + `plan_hash` + `trigger`
+- Un seul `RUNNING` / portfolio (audit `pe_audit_events`)
+- Sell phase → gate → buy phase
+- `MAX_SWAP_ATTEMPTS=2` · pending → `expired` en fin de cycle · `resume_required=false`
+- `MAX_EXECUTION_AGE_MINUTES=30` (défaut) · `terminalize_stale_v3_rebalance_execution()` — jamais RUNNING indéfini
+- Idempotence : `plan_hash` · reprise crash (`ACTION_V3_PROGRESS`) · même `execution_id` / `batch_id`
+- Buy-only échec quote (cash résiduel) → `COMPLETED_WITH_RESIDUAL_CASH` (pas `FAILED` global)
+- Statuts terminaux : `COMPLETED` · `COMPLETED_WITH_RESIDUAL_CASH` · `FAILED` · `NO_ACTION`
+- Pas de `resume_lifi_invest_batch` · pas de Global Lock · pas de B4b bridge
+
+### Garanties review CTO (PR #66)
+
+| # | Garantie | Test |
+| --- | --- | --- |
+| 1 | Timeout terminal (`MAX_EXECUTION_AGE_MINUTES`) | `test_stale_running_terminalized_not_indefinite` |
+| 2 | Idempotence après crash (même execution, pas de swaps dupliqués) | `test_crash_resume_same_execution_no_duplicate_swaps` |
+| 3 | Leg expiré buy-only + cash → `COMPLETED_WITH_RESIDUAL_CASH` | `test_expired_eth_only_residual_cash_not_failed` |
+| 4 | Triple POST execute → 1 batch / 1 set swaps | `test_triple_execute_same_plan_one_batch` |
+| 5 | Route flag OFF → 404 sans side effects | `test_v3_execute_route_flag_off_returns_404_no_side_effects` |
+
+### Post-merge
+
+1. Deploy avec flag **OFF** par défaut
+2. Audit ECS drift/planner (déjà GO_PR2)
+3. Test contrôlé mock LI.FI puis buy-only pilote (Kings ou Majors)

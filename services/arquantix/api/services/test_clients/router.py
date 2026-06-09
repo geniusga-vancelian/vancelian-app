@@ -2878,6 +2878,61 @@ def mobile_bundle_rebalance_execute(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@bootstrap_router.post("/bundle/{portfolio_id}/rebalance/v3/execute")
+def mobile_bundle_rebalance_v3_execute(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+    trigger: str = "manual",
+):
+    """Execute V3 drift rebalance plan (feature-flagged — n remplace pas /rebalance legacy)."""
+    import os
+    from uuid import UUID as _UUID
+
+    if os.getenv("BUNDLE_V3_REBALANCE_EXECUTOR_ENABLED", "").lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="v3_executor_disabled")
+
+    from services.portfolio_engine.bundles.drift_engine import compute_bundle_drift_snapshot
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        BundleRebalanceExecutorError,
+        execute_v3_bundle_rebalance,
+    )
+    from services.portfolio_engine.bundles.rebalance_planner import (
+        plan_bundle_rebalance_from_drift,
+    )
+
+    try:
+        pid = _UUID(portfolio_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    if trigger not in ("manual", "deposit", "recovery", "cron"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid_trigger")
+
+    try:
+        snap = compute_bundle_drift_snapshot(db, client_id=client.id, portfolio_id=pid)
+        plan = plan_bundle_rebalance_from_drift(snap)
+        result = execute_v3_bundle_rebalance(
+            db,
+            client_id=client.id,
+            portfolio_id=pid,
+            drift_rebalance_plan=plan,
+            trigger=trigger,  # type: ignore[arg-type]
+        )
+        db.commit()
+        return result
+    except BundleRebalanceExecutorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @bootstrap_router.post("/bundle/leg/{swap_id}/prepare-sign")
 def mobile_bundle_leg_prepare_sign(
     swap_id: str,
