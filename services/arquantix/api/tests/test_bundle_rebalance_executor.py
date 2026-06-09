@@ -14,7 +14,10 @@ from services.portfolio_engine.bundle_execution import BundleExecutionAdapter
 from services.portfolio_engine.bundle_execution.types import ExecutionLeg, ExecutionResult
 from services.portfolio_engine.bundles.drift_engine import compute_bundle_drift_snapshot
 from services.portfolio_engine.bundles.orchestrator import BundleOrchestrator
+from datetime import datetime, timedelta, timezone
+
 from services.portfolio_engine.bundles.rebalance_executor import (
+    ACTION_V3_PROGRESS,
     ACTION_V3_RUNNING,
     ACTION_V3_TERMINAL,
     ENTITY_TYPE_V3_REBALANCE,
@@ -22,6 +25,8 @@ from services.portfolio_engine.bundles.rebalance_executor import (
     BundleRebalanceExecutorError,
     execute_v3_bundle_rebalance,
     find_running_v3_rebalance_execution,
+    find_terminal_v3_rebalance_by_plan_hash,
+    terminalize_stale_v3_rebalance_execution,
 )
 from services.portfolio_engine.bundles.rebalance_planner import (
     plan_bundle_rebalance_from_drift,
@@ -285,7 +290,7 @@ def test_timeout_pending_becomes_terminal_no_resume(db: Session):
     )
     db.commit()
 
-    assert result["v3_status"] in ("FAILED", "COMPLETED_WITH_RESIDUAL_CASH")
+    assert result["v3_status"] == "COMPLETED_WITH_RESIDUAL_CASH"
     assert result["resume_required"] is False
     assert all(r["status"] == "expired" for r in result["buy_results"])
 
@@ -318,18 +323,6 @@ def test_idempotency_running_same_plan_hash(db: Session):
     assert found["plan_hash"] == plan["plan_hash"]
 
     provider = _RecordingMockProvider()
-    result = BundleRebalanceExecutor(
-        execution_adapter=_adapter(provider),
-    ).execute_drift_rebalance_plan(
-        db,
-        client_id=pe.id,
-        portfolio_id=portfolio.id,
-        drift_rebalance_plan=plan,
-        plan_hash=plan["plan_hash"],
-    )
-    assert result["rebalance_execution_id"] == execution_id
-    assert provider.calls == []
-
     other_plan = dict(plan)
     other_plan["plan_hash"] = "sha256:other-plan"
     with pytest.raises(BundleRebalanceExecutorError, match="portfolio_has_running"):
@@ -342,6 +335,32 @@ def test_idempotency_running_same_plan_hash(db: Session):
             drift_rebalance_plan=other_plan,
             plan_hash=other_plan["plan_hash"],
         )
+
+    result = BundleRebalanceExecutor(
+        execution_adapter=_adapter(provider),
+    ).execute_drift_rebalance_plan(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        plan_hash=plan["plan_hash"],
+    )
+    assert result["rebalance_execution_id"] == execution_id
+    assert len(provider.calls) > 0
+    calls_after_resume = len(provider.calls)
+    db.flush()
+
+    replay = BundleRebalanceExecutor(
+        execution_adapter=_adapter(provider),
+    ).execute_drift_rebalance_plan(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        plan_hash=plan["plan_hash"],
+    )
+    assert replay["rebalance_execution_id"] == execution_id
+    assert len(provider.calls) == calls_after_resume
 
 
 def test_no_side_effects_while_pending(db: Session):
@@ -414,6 +433,168 @@ def test_empty_sell_plan_skips_sells(db: Session):
     )
     db.commit()
     assert not any(c["action"] == "rebalance_sell" for c in provider.calls)
+
+
+def test_stale_running_terminalized_not_indefinite(db: Session, monkeypatch):
+    monkeypatch.setenv("MAX_EXECUTION_AGE_MINUTES", "5")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    execution_id = str(uuid.uuid4())
+    stale_start = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_RUNNING,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "started_at": stale_start,
+            "available_cash_usdc": plan["available_cash_usdc"],
+            "sell_results": [],
+            "buy_results": [{"asset": "ETH", "status": "pending", "attempts": 1}],
+        },
+    )
+    db.commit()
+
+    import importlib
+    import services.portfolio_engine.bundles.rebalance_executor as rex
+
+    importlib.reload(rex)
+    terminal = rex.terminalize_stale_v3_rebalance_execution(
+        db, portfolio_id=str(portfolio.id),
+    )
+    db.commit()
+
+    assert terminal is not None
+    assert terminal["v3_status"] in ("COMPLETED_WITH_RESIDUAL_CASH", "FAILED")
+    assert terminal.get("stale_terminalized") is True
+    assert rex.find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is None
+
+
+def test_crash_resume_same_execution_no_duplicate_swaps(db: Session):
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    execution_id = str(uuid.uuid4())
+
+    eth_leg = next(b for b in plan["buy_plan"] if b["asset"] == "ETH")
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_PROGRESS,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "available_cash_usdc": plan["available_cash_usdc"],
+            "sell_results": [],
+            "buy_results": [{
+                "asset": "ETH",
+                "instrument_id": eth_leg["instrument_id"],
+                "action": "buy",
+                "amount_usdc": eth_leg["amount_usdc"],
+                "status": "completed",
+                "attempts": 1,
+                "leg_ids": ["v3-rebal-crash-eth-a1"],
+            }],
+        },
+    )
+    db.commit()
+
+    provider = _RecordingMockProvider()
+    result = BundleRebalanceExecutor(
+        execution_adapter=_adapter(provider),
+    ).execute_drift_rebalance_plan(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        plan_hash=plan["plan_hash"],
+    )
+    db.commit()
+
+    assert result["rebalance_execution_id"] == execution_id
+    assert result["batch_id"] == execution_id
+    eth_calls = [c for c in provider.calls if c["action"] == "rebalance_buy" and "ETH" in c["leg_id"]]
+    assert eth_calls == []
+    assert any(c["action"] == "rebalance_buy" for c in provider.calls)
+
+
+def test_expired_eth_only_residual_cash_not_failed(db: Session):
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    eth_id = str(_instrument_for_asset(db, "ETH").id)
+
+    provider = _RecordingMockProvider(
+        outcomes={f"rebalance_buy:{eth_id}": ["raise", "raise"]},
+    )
+    plan_one_leg = dict(plan)
+    plan_one_leg["buy_plan"] = [b for b in plan["buy_plan"] if b["asset"] == "ETH"]
+    plan_one_leg["sell_plan"] = []
+
+    result = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan_one_leg,
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert result["buy_results"][0]["status"] == "failed"
+    assert result["v3_status"] == "COMPLETED_WITH_RESIDUAL_CASH"
+
+
+def test_triple_execute_same_plan_one_batch(db: Session):
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    provider = _RecordingMockProvider()
+
+    r1 = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        execution_adapter=_adapter(provider),
+    )
+    db.flush()
+    calls_after_first = len(provider.calls)
+
+    r2 = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        execution_adapter=_adapter(provider),
+    )
+    r3 = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert r1["rebalance_execution_id"] is not None
+    assert r2["rebalance_execution_id"] == r1["rebalance_execution_id"]
+    assert r3["rebalance_execution_id"] == r1["rebalance_execution_id"]
+    assert len(provider.calls) == calls_after_first
+    assert find_terminal_v3_rebalance_by_plan_hash(
+        db, portfolio_id=str(portfolio.id), plan_hash=plan["plan_hash"],
+    ) is not None
 
 
 def test_terminal_audit_written(db: Session):

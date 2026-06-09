@@ -29,10 +29,12 @@ logger = logging.getLogger(__name__)
 
 ENTITY_TYPE_V3_REBALANCE = "bundle_rebalance_v3"
 ACTION_V3_RUNNING = "v3_execution_running"
+ACTION_V3_PROGRESS = "v3_execution_progress"
 ACTION_V3_TERMINAL = "v3_execution_terminal"
 
 MAX_SWAP_ATTEMPTS = int(os.getenv("MAX_SWAP_ATTEMPTS", "2"))
 QUOTE_TTL_SECONDS = int(os.getenv("QUOTE_TTL_SECONDS", "120"))
+MAX_EXECUTION_AGE_MINUTES = int(os.getenv("MAX_EXECUTION_AGE_MINUTES", "30"))
 
 V3Trigger = Literal["manual", "deposit", "recovery", "cron"]
 
@@ -96,15 +98,42 @@ class BundleRebalanceExecutor:
         trigger: V3Trigger = "manual",
         plan_hash: str | None = None,
     ) -> dict[str, Any]:
-        """Exécute le plan V3. Idempotent si RUNNING existe déjà pour le même plan_hash."""
+        """Exécute le plan V3. Idempotent par plan_hash — pas de swaps dupliqués."""
         resolved_hash = plan_hash or str(drift_rebalance_plan.get("plan_hash") or "")
         if not resolved_hash:
             raise BundleRebalanceExecutorError("plan_hash_required")
 
+        stale = terminalize_stale_v3_rebalance_execution(
+            db, portfolio_id=str(portfolio_id),
+        )
+        if stale is not None:
+            logger.info(
+                "v3_rebalance_stale_terminalized portfolio=%s execution=%s status=%s",
+                portfolio_id,
+                stale.get("rebalance_execution_id"),
+                stale.get("v3_status"),
+            )
+
+        terminal_existing = find_terminal_v3_rebalance_by_plan_hash(
+            db,
+            portfolio_id=str(portfolio_id),
+            plan_hash=resolved_hash,
+        )
+        if terminal_existing is not None:
+            return terminal_existing
+
         existing = find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio_id))
         if existing is not None:
             if existing.get("plan_hash") == resolved_hash:
-                return existing
+                return self._resume_running_execution(
+                    db,
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
+                    running=existing,
+                    drift_rebalance_plan=drift_rebalance_plan,
+                    trigger=trigger,
+                    plan_hash=resolved_hash,
+                )
             raise BundleRebalanceExecutorError(
                 f"portfolio_has_running_rebalance:{portfolio_id}"
             )
@@ -163,6 +192,7 @@ class BundleRebalanceExecutor:
             "buy_results": [],
         }
         self._audit_running(db, execution_id, running_payload, actor)
+        db.flush()
 
         sell_results: list[V3LegExecutionResult] = []
         buy_results: list[V3LegExecutionResult] = []
@@ -195,6 +225,9 @@ class BundleRebalanceExecutor:
                 )
                 self._audit_terminal(db, execution_id, terminal, actor)
                 return terminal
+            self._update_running_progress(
+                db, execution_id, running_payload, sell_results, buy_results, actor,
+            )
 
         if buy_plan:
             buy_results = self._execute_plan_legs(
@@ -210,6 +243,9 @@ class BundleRebalanceExecutor:
                 actor=actor,
             )
 
+        self._update_running_progress(
+            db, execution_id, running_payload, sell_results, buy_results, actor,
+        )
         self._expire_pending_legs(sell_results + buy_results)
         terminal = self._build_terminal_response(
             execution_id=execution_id,
@@ -224,6 +260,146 @@ class BundleRebalanceExecutor:
         )
         self._audit_terminal(db, execution_id, terminal, actor)
         return terminal
+
+    def _resume_running_execution(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: UUID,
+        running: dict[str, Any],
+        drift_rebalance_plan: dict[str, Any],
+        trigger: V3Trigger,
+        plan_hash: str,
+    ) -> dict[str, Any]:
+        """Reprise après crash ou double-clic — même execution_id, legs déjà faits ignorés."""
+        execution_id = str(running["rebalance_execution_id"])
+        batch_id = str(running.get("batch_id") or execution_id)
+        started_at = str(running.get("started_at") or datetime.now(timezone.utc).isoformat())
+        actor = ActorContext(
+            actor_type="system",
+            actor_id=f"bundle-rebalance-v3-{portfolio_id}",
+        )
+
+        portfolio = BundleOrchestrator._load_and_validate_portfolio(
+            db, portfolio_id, client_id,
+        )
+        product = BundleOrchestrator._load_product(db, portfolio)
+        entry_config = BundleOrchestrator._resolve_entry_config(product)
+        entry_asset = str(
+            drift_rebalance_plan.get("entry_asset")
+            or entry_config["entry_asset_default"]
+        ).upper()
+        entry_instrument = BundleOrchestrator._resolve_or_create_instrument(db, entry_asset)
+
+        sell_results = _results_from_metadata(running.get("sell_results") or [])
+        buy_results = _results_from_metadata(running.get("buy_results") or [])
+
+        sell_plan = list(drift_rebalance_plan.get("sell_plan") or [])
+        buy_plan = list(drift_rebalance_plan.get("buy_plan") or [])
+
+        if sell_plan:
+            sell_results = self._execute_remaining_legs(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                execution_id=execution_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                plan_legs=sell_plan,
+                leg_action="rebalance_sell",
+                actor=actor,
+                existing_results=sell_results,
+            )
+            if not self._sells_allow_buy_phase(sell_results):
+                self._expire_pending_legs(sell_results)
+                terminal = self._build_terminal_response(
+                    execution_id=execution_id,
+                    batch_id=batch_id,
+                    portfolio_id=str(portfolio_id),
+                    plan_hash=plan_hash,
+                    trigger=trigger,
+                    drift_rebalance_plan=drift_rebalance_plan,
+                    sell_results=sell_results,
+                    buy_results=buy_results,
+                    started_at=started_at,
+                )
+                self._audit_terminal(db, execution_id, terminal, actor)
+                return terminal
+
+        if buy_plan:
+            buy_results = self._execute_remaining_legs(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+                execution_id=execution_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                plan_legs=buy_plan,
+                leg_action="rebalance_buy",
+                actor=actor,
+                existing_results=buy_results,
+            )
+
+        running_payload = dict(running)
+        self._expire_pending_legs(sell_results + buy_results)
+        terminal = self._build_terminal_response(
+            execution_id=execution_id,
+            batch_id=batch_id,
+            portfolio_id=str(portfolio_id),
+            plan_hash=plan_hash,
+            trigger=trigger,
+            drift_rebalance_plan=drift_rebalance_plan,
+            sell_results=sell_results,
+            buy_results=buy_results,
+            started_at=started_at,
+        )
+        self._audit_terminal(db, execution_id, terminal, actor)
+        return terminal
+
+    def _execute_remaining_legs(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: UUID,
+        batch_id: str,
+        execution_id: str,
+        entry_asset: str,
+        entry_instrument_id: UUID,
+        plan_legs: list[dict[str, Any]],
+        leg_action: str,
+        actor: ActorContext,
+        existing_results: list[V3LegExecutionResult],
+    ) -> list[V3LegExecutionResult]:
+        done_assets = {
+            r.asset
+            for r in existing_results
+            if r.status in ("completed", "pending")
+        }
+        remaining_plan = [
+            leg for leg in plan_legs if str(leg.get("asset") or "") not in done_assets
+        ]
+        if not remaining_plan:
+            return existing_results
+        new_results = self._execute_plan_legs(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+            execution_id=execution_id,
+            entry_asset=entry_asset,
+            entry_instrument_id=entry_instrument_id,
+            plan_legs=remaining_plan,
+            leg_action=leg_action,
+            actor=actor,
+        )
+        merged = {r.asset: r for r in existing_results}
+        for row in new_results:
+            merged[row.asset] = row
+        return sorted(merged.values(), key=lambda r: r.asset)
 
     def _execute_plan_legs(
         self,
@@ -351,7 +527,11 @@ class BundleRebalanceExecutor:
         if forced_status:
             v3_status: V3Status = forced_status
         else:
-            v3_status = self._resolve_terminal_status(sell_results, buy_results)
+            v3_status = self._resolve_terminal_status(
+                sell_results,
+                buy_results,
+                cash_remaining_usdc=drift_rebalance_plan.get("available_cash_usdc"),
+            )
 
         cash_remaining = drift_rebalance_plan.get("available_cash_usdc")
         return {
@@ -374,6 +554,7 @@ class BundleRebalanceExecutor:
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "max_swap_attempts": MAX_SWAP_ATTEMPTS,
             "quote_ttl_seconds": QUOTE_TTL_SECONDS,
+            "max_execution_age_minutes": MAX_EXECUTION_AGE_MINUTES,
             "execution_provider": self._execution.provider_name,
             "resume_required": False,
         }
@@ -390,6 +571,8 @@ class BundleRebalanceExecutor:
     def _resolve_terminal_status(
         sell_results: list[V3LegExecutionResult],
         buy_results: list[V3LegExecutionResult],
+        *,
+        cash_remaining_usdc: str | Decimal | None = None,
     ) -> V3Status:
         all_results = sell_results + buy_results
         if not all_results:
@@ -405,6 +588,14 @@ class BundleRebalanceExecutor:
         if completed and not expired_or_failed:
             return "COMPLETED"
         if expired_or_failed and not completed:
+            cash = Decimal(str(cash_remaining_usdc or "0"))
+            sell_blocked = any(
+                r.status in ("failed", "expired", "pending") for r in sell_results
+            )
+            if sell_blocked:
+                return "FAILED"
+            if cash > 0:
+                return "COMPLETED_WITH_RESIDUAL_CASH"
             return "FAILED"
         return "FAILED"
 
@@ -474,6 +665,29 @@ class BundleRebalanceExecutor:
         )
 
     @staticmethod
+    def _update_running_progress(
+        db: Session,
+        execution_id: str,
+        running_payload: dict[str, Any],
+        sell_results: list[V3LegExecutionResult],
+        buy_results: list[V3LegExecutionResult],
+        actor: ActorContext,
+    ) -> None:
+        payload = dict(running_payload)
+        payload["sell_results"] = [r.to_dict() for r in sell_results]
+        payload["buy_results"] = [r.to_dict() for r in buy_results]
+        AuditService.log_event(
+            db,
+            entity_type=ENTITY_TYPE_V3_REBALANCE,
+            entity_id=execution_id,
+            action=ACTION_V3_PROGRESS,
+            actor_type=actor.actor_type,
+            actor_id=actor.actor_id,
+            metadata=payload,
+        )
+        db.flush()
+
+    @staticmethod
     def _audit_terminal(
         db: Session,
         execution_id: str,
@@ -495,39 +709,187 @@ def _dec_str(value: Decimal) -> str:
     return format(value.quantize(Decimal("0.000001"), rounding=ROUND_DOWN), "f")
 
 
+def _latest_v3_metadata_by_execution(
+    db: Session,
+    *,
+    portfolio_id: str,
+) -> dict[str, dict[str, Any]]:
+    """Dernier snapshot par execution_id (running / progress / terminal)."""
+    rows = (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
+            AuditEvent.action.in_(
+                (ACTION_V3_RUNNING, ACTION_V3_PROGRESS, ACTION_V3_TERMINAL),
+            ),
+        )
+        .order_by(AuditEvent.created_at.desc())
+        .limit(500)
+        .all()
+    )
+    by_exec: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        meta = row.metadata_ or {}
+        if str(meta.get("portfolio_id")) != str(portfolio_id):
+            continue
+        exec_id = str(row.entity_id or "")
+        if not exec_id or exec_id in by_exec:
+            continue
+        snapshot = dict(meta)
+        snapshot["_audit_action"] = row.action
+        by_exec[exec_id] = snapshot
+    return by_exec
+
+
+def _terminal_execution_ids_for_portfolio(
+    db: Session,
+    *,
+    portfolio_id: str,
+) -> set[str]:
+    rows = (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
+            AuditEvent.action == ACTION_V3_TERMINAL,
+        )
+        .all()
+    )
+    terminal_ids: set[str] = set()
+    for row in rows:
+        meta = row.metadata_ or {}
+        if str(meta.get("portfolio_id")) != str(portfolio_id):
+            continue
+        exec_id = str(row.entity_id or meta.get("rebalance_execution_id") or "")
+        if exec_id:
+            terminal_ids.add(exec_id)
+    return terminal_ids
+
+
 def find_running_v3_rebalance_execution(
     db: Session,
     *,
     portfolio_id: str,
 ) -> dict[str, Any] | None:
-    """Retourne l'exécution RUNNING la plus récente pour un portfolio, si pas encore terminalisée."""
+    """Retourne l'exécution RUNNING la plus récente (snapshot progress le plus frais)."""
+    terminal_ids = _terminal_execution_ids_for_portfolio(db, portfolio_id=portfolio_id)
+    by_exec = _latest_v3_metadata_by_execution(db, portfolio_id=portfolio_id)
+    running_candidates: list[dict[str, Any]] = []
+    for snapshot in by_exec.values():
+        exec_id = str(snapshot.get("rebalance_execution_id") or "")
+        if exec_id in terminal_ids:
+            continue
+        if snapshot.get("_audit_action") == ACTION_V3_TERMINAL:
+            continue
+        if snapshot.get("v3_status") == "RUNNING":
+            running_candidates.append(snapshot)
+    if not running_candidates:
+        return None
+    running_candidates.sort(
+        key=lambda s: str(s.get("started_at") or ""),
+        reverse=True,
+    )
+    latest = running_candidates[0]
+    latest.pop("_audit_action", None)
+    return latest
+
+
+def find_terminal_v3_rebalance_by_plan_hash(
+    db: Session,
+    *,
+    portfolio_id: str,
+    plan_hash: str,
+) -> dict[str, Any] | None:
     rows = (
         db.query(AuditEvent)
         .filter(
             AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
-            AuditEvent.action.in_((ACTION_V3_RUNNING, ACTION_V3_TERMINAL)),
+            AuditEvent.action == ACTION_V3_TERMINAL,
         )
         .order_by(AuditEvent.created_at.desc())
         .limit(200)
         .all()
     )
-    terminal_ids: set[str] = set()
     for row in rows:
-        if row.action == ACTION_V3_TERMINAL and row.entity_id:
-            terminal_ids.add(str(row.entity_id))
-
-    for row in rows:
-        if row.action != ACTION_V3_RUNNING:
-            continue
         meta = row.metadata_ or {}
-        if str(meta.get("portfolio_id")) != str(portfolio_id):
-            continue
-        exec_id = str(row.entity_id or "")
-        if exec_id in terminal_ids:
-            continue
-        if meta.get("v3_status") == "RUNNING":
+        if (
+            str(meta.get("portfolio_id")) == str(portfolio_id)
+            and str(meta.get("plan_hash")) == str(plan_hash)
+        ):
             return dict(meta)
     return None
+
+
+def terminalize_stale_v3_rebalance_execution(
+    db: Session,
+    *,
+    portfolio_id: str,
+) -> dict[str, Any] | None:
+    """Force un cycle terminal si RUNNING > MAX_EXECUTION_AGE_MINUTES."""
+    running = find_running_v3_rebalance_execution(db, portfolio_id=portfolio_id)
+    if running is None:
+        return None
+
+    started_raw = running.get("started_at")
+    if not started_raw:
+        return None
+    try:
+        started = datetime.fromisoformat(str(started_raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    age_minutes = (
+        datetime.now(timezone.utc) - started.astimezone(timezone.utc)
+    ).total_seconds() / 60.0
+    if age_minutes < MAX_EXECUTION_AGE_MINUTES:
+        return None
+
+    execution_id = str(running["rebalance_execution_id"])
+    sell_results = _results_from_metadata(running.get("sell_results") or [])
+    buy_results = _results_from_metadata(running.get("buy_results") or [])
+    BundleRebalanceExecutor._expire_pending_legs(sell_results + buy_results)
+
+    v3_status = BundleRebalanceExecutor._resolve_terminal_status(
+        sell_results,
+        buy_results,
+        cash_remaining_usdc=running.get("available_cash_usdc"),
+    )
+    if v3_status == "RUNNING":
+        v3_status = "COMPLETED_WITH_RESIDUAL_CASH"
+
+    terminal = {
+        **running,
+        "v3_status": v3_status,
+        "sell_results": [r.to_dict() for r in sell_results],
+        "buy_results": [r.to_dict() for r in buy_results],
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "stale_terminalized": True,
+        "stale_age_minutes": round(age_minutes, 2),
+        "max_execution_age_minutes": MAX_EXECUTION_AGE_MINUTES,
+        "resume_required": False,
+    }
+    actor = ActorContext(actor_type="system", actor_id="bundle-rebalance-v3-stale")
+    BundleRebalanceExecutor._audit_terminal(db, execution_id, terminal, actor)
+    db.flush()
+    return terminal
+
+
+def _results_from_metadata(rows: list[dict[str, Any]]) -> list[V3LegExecutionResult]:
+    out: list[V3LegExecutionResult] = []
+    for row in rows:
+        out.append(
+            V3LegExecutionResult(
+                asset=str(row.get("asset") or ""),
+                instrument_id=str(row.get("instrument_id") or ""),
+                action=str(row.get("action") or ""),
+                amount_usdc=str(row.get("amount_usdc") or "0"),
+                status=str(row.get("status") or "failed"),
+                attempts=int(row.get("attempts") or 0),
+                leg_ids=list(row.get("leg_ids") or []),
+                swap_id=row.get("swap_id"),
+                error=str(row.get("error") or ""),
+            )
+        )
+    return out
 
 
 def find_v3_execution_by_plan_hash(
