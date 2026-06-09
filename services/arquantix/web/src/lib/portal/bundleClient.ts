@@ -297,13 +297,11 @@ export async function investBundle(body: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const data = (await res.json()) as BundleInvestPayload &
-    BundleInvestAlreadyPendingPayload &
-    BundleV3DepositQueuedPayload & { detail?: string }
+  const data = (await res.json()) as Record<string, unknown>
   if (res.status === 409 && data.status === 'already_pending') {
     return { kind: 'already_pending', payload: data as BundleInvestAlreadyPendingPayload }
   }
-  if (res.ok && isBundleV3DepositQueuedPayload(data as Record<string, unknown>)) {
+  if (res.ok && isBundleV3DepositQueuedPayload(data)) {
     return { kind: 'v3_queued', payload: data as BundleV3DepositQueuedPayload }
   }
   if (!res.ok) {
@@ -312,7 +310,7 @@ export async function investBundle(body: {
     }
     const message =
       (typeof data.detail === 'string' ? data.detail : null) ||
-      data.message ||
+      (typeof data.message === 'string' ? data.message : null) ||
       'Requête bundle impossible'
     throw new Error(message)
   }
