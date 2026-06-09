@@ -2128,6 +2128,29 @@ def mobile_bundle_invest_resume(
             },
         )
 
+    from services.portfolio_engine.bundles.bundle_invest_lock import (
+        get_active_invest_lock_for_portfolio,
+    )
+    from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
+        is_v3_deposit_batch,
+    )
+    from services.portfolio_engine.bundles.rebalancing_portfolio import (
+        cash_rebalance_required_body,
+    )
+
+    legacy_lock = get_active_invest_lock_for_portfolio(
+        db, client_id=client.id, portfolio_id=pid,
+    )
+    if legacy_lock is not None:
+        batch_id = str(legacy_lock.get("batch_id") or "").strip()
+        if batch_id and not is_v3_deposit_batch(
+            db, portfolio_id=pid, batch_id=batch_id,
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content=cash_rebalance_required_body(batch_id=batch_id),
+            )
+
     from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
         transaction_in_progress_response_body,
     )
@@ -2901,23 +2924,17 @@ def mobile_bundle_rebalance_execute(
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
 
-    from services.portfolio_engine.bundles.bundle_invest_lock import (
-        load_portfolio_for_invest_lock,
-        reconcile_or_expire_idle_invest_lock,
+    from services.portfolio_engine.bundles.rebalancing_portfolio import (
+        portfolio_rebalancing_required_body,
+        should_use_portfolio_rebalancing,
     )
 
-    portfolio = load_portfolio_for_invest_lock(
+    if should_use_portfolio_rebalancing(
         db, client_id=client.id, portfolio_id=pid,
-    )
-    if not reconcile_or_expire_idle_invest_lock(
-        db,
-        client_id=client.id,
-        portfolio_id=pid,
-        portfolio=portfolio,
     ):
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            detail="invest_lock_active",
+            content=portfolio_rebalancing_required_body(),
         )
 
     try:
@@ -2928,6 +2945,30 @@ def mobile_bundle_rebalance_execute(
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@bootstrap_router.post("/bundle/{portfolio_id}/rebalancing/preflight")
+def mobile_bundle_rebalancing_preflight(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Pre-flight rééquilibrage — drift, blockers, sans écriture."""
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundles.rebalancing_portfolio import (
+        preflight_rebalancing_portfolio,
+    )
+
+    try:
+        pid = _UUID(portfolio_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    try:
+        return preflight_rebalancing_portfolio(db, client_id=client.id, portfolio_id=pid)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @bootstrap_router.post("/bundle/{portfolio_id}/rebalancing/preview")
@@ -2963,6 +3004,9 @@ def mobile_bundle_rebalancing_execute(
     """Rééquilibrage portefeuille — intent transactionnel, abandon lock legacy si besoin."""
     from uuid import UUID as _UUID
 
+    from services.portfolio_engine.financial_operations.exceptions import (
+        PortfolioFinancialOperationInProgress409,
+    )
     from services.portfolio_engine.bundles.rebalancing_portfolio import (
         RebalancingPortfolioError,
         rebalancing_portfolio,
@@ -2977,6 +3021,12 @@ def mobile_bundle_rebalancing_execute(
         result = rebalancing_portfolio(db, client_id=client.id, portfolio_id=pid, trigger="manual")
         db.commit()
         return result
+    except PortfolioFinancialOperationInProgress409 as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=exc.to_response(),
+        )
     except RebalancingPortfolioError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code) from exc

@@ -141,7 +141,49 @@ def audit_bundle_v3_deposit_ops(db: Session) -> dict[str, Any]:
     }
 
 
+def audit_bundle_rebalancing_stale_state(db: Session) -> dict[str, Any]:
+    """Détecte invest_lock legacy + cash leg matériel sans rééquilibrage récent."""
+    legacy_lock_rows = db.execute(
+        text(
+            """
+            SELECT p.id::text AS portfolio_id,
+                   p.client_id::text,
+                   p.metadata_->'bundle_invest_lock'->>'batch_id' AS batch_id,
+                   p.metadata_->'bundle_invest_lock'->>'status' AS lock_status
+            FROM pe_portfolios p
+            WHERE p.metadata_ ? 'bundle_invest_lock'
+              AND (p.metadata_->'bundle_invest_lock') IS NOT NULL
+            ORDER BY p.updated_at DESC
+            LIMIT 50
+            """
+        ),
+    ).mappings().all()
+
+    alerts: list[dict[str, Any]] = []
+    for row in legacy_lock_rows:
+        alerts.append({
+            "level": "warning",
+            "code": "bundle_legacy_invest_lock_with_rebalancing_available",
+            "message": (
+                f"Portfolio {row['portfolio_id']} legacy invest_lock "
+                f"(batch={row['batch_id']}) — utiliser /rebalancing"
+            ),
+            "portfolio_id": row["portfolio_id"],
+            "batch_id": row["batch_id"],
+            "lock_status": row["lock_status"],
+        })
+
+    return {
+        "legacy_lock_count": len(legacy_lock_rows),
+        "alerts": alerts,
+        "legacy_locks": [dict(r) for r in legacy_lock_rows],
+    }
+
+
 def bundle_v3_ops_alerts_for_tick(db: Session) -> list[dict[str, Any]]:
     """Interface tick — retourne uniquement les alertes CRITICAL/WARNING."""
     audit = audit_bundle_v3_deposit_ops(db)
-    return list(audit.get("alerts") or [])
+    rebalancing_audit = audit_bundle_rebalancing_stale_state(db)
+    alerts = list(audit.get("alerts") or [])
+    alerts.extend(rebalancing_audit.get("alerts") or [])
+    return alerts

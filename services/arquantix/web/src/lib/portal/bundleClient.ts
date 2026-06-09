@@ -137,7 +137,7 @@ export class BundleExpiredInvestLegsError extends Error {
 }
 
 export type BundleInvestActiveLockPayload = {
-  status: 'none' | 'active'
+  status: 'none' | 'active' | 'ambiguous'
   reconciled?: boolean
   resume_available?: boolean
   lock?: {
@@ -194,8 +194,16 @@ export type PortfolioRebalancingPayload = BundleRebalancePayload & {
   asset_lines?: PortfolioRebalancingAssetLine[]
   v3_status?: string
   rebalance_execution_id?: string
+  financial_operation_execution_id?: string
   rebalance_plan?: { status?: string }
   legacy_lock_abandoned?: { abandoned?: boolean; batch_id?: string }
+}
+
+export type PortfolioRebalancingPreflightPayload = PortfolioRebalancingPayload & {
+  can_execute?: boolean
+  blockers?: Array<{ code: string; operation_type?: string; execution_id?: string }>
+  would_abandon_legacy_lock?: boolean
+  legacy_lock?: Record<string, unknown> | null
 }
 
 export type BundleInvestResult =
@@ -428,6 +436,16 @@ export async function previewPortfolioRebalancing(
   return parseJson(res)
 }
 
+export async function preflightPortfolioRebalancing(
+  portfolioId: string,
+): Promise<PortfolioRebalancingPreflightPayload> {
+  const res = await fetch(
+    `/api/portal/bundles/rebalancing/${encodeURIComponent(portfolioId)}/preflight`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+  )
+  return parseJson(res)
+}
+
 export async function executePortfolioRebalancing(
   portfolioId: string,
 ): Promise<PortfolioRebalancingPayload> {
@@ -443,8 +461,15 @@ export async function executePortfolioRebalancing(
   const data = (await res.json()) as PortfolioRebalancingPayload & {
     detail?: string
     message?: string
+    error_code?: string
+    status?: string
   }
   if (!res.ok) {
+    if (res.status === 409 && data.error_code === 'portfolio_financial_operation_in_progress') {
+      throw new Error(
+        'Une opération financière est déjà en cours sur ce portefeuille. Patientez quelques instants.',
+      )
+    }
     throw new Error(
       (typeof data.detail === 'string' ? data.detail : null) ||
         data.message ||

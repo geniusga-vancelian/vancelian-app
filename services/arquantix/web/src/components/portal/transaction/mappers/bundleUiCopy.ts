@@ -60,6 +60,12 @@ export const BUNDLE_INVEST_ERROR_MESSAGES: Record<string, string> = {
     'Impossible de transférer les fonds depuis Mon Trading. Vérifiez votre solde et réessayez.',
   v3_deposit_flow_resume_disabled:
     'Ce panier utilise le rééquilibrage automatique V3 — aucune reprise manuelle n’est nécessaire. Le traitement se poursuit en arrière-plan.',
+  cash_rebalance_required:
+    'La reprise invest est remplacée par le rééquilibrage portefeuille. Ouvrez le détail du panier et utilisez « Rééquilibrage ».',
+  portfolio_rebalancing_required:
+    'Utilisez le rééquilibrage portefeuille depuis le détail du panier (bouton Rééquilibrage).',
+  portfolio_financial_operation_in_progress:
+    'Une opération financière est déjà en cours sur ce portefeuille. Patientez quelques instants.',
 }
 
 export const BUNDLE_V3_REBALANCE_IN_PROGRESS_COPY: TransactionTerminalFailureCopy = {

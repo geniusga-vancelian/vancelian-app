@@ -1,21 +1,21 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { PortalLazyBundleAllocationActions } from '@/components/portal/bundles/PortalLazyBundleAllocationActions'
 import { AppButton } from '@/components/design-system/app/AppButton'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import {
   fetchActiveBundleInvestLock,
+  preflightPortfolioRebalancing,
   type BundleInvestActiveLockPayload,
 } from '@/lib/portal/bundleClient'
 import { formatCryptoMoney } from '@/lib/portal/cryptoWalletFormat'
-import type { PortalBundlePosition } from '@/lib/portal/cryptoWalletTypes'
 
 type Props = {
   portfolioId: string
   portfolioName: string
-  positions: PortalBundlePosition[] | undefined
+  positions?: unknown
   currency: string
   cashLegDisplayValue: number
   onRefresh: () => void
@@ -25,25 +25,20 @@ type Props = {
 export function PortalBundleAllocationReadOnlyPanel({
   portfolioId,
   portfolioName,
-  positions,
   currency,
   cashLegDisplayValue,
   onRefresh,
 }: Props) {
   const [lockState, setLockState] = useState<BundleInvestActiveLockPayload | null>(null)
   const [loadingLock, setLoadingLock] = useState(true)
+  const [loadingPreflight, setLoadingPreflight] = useState(false)
+  const [driftActionable, setDriftActionable] = useState(false)
+  const [preflightStatus, setPreflightStatus] = useState<string | null>(null)
   const [actionsOpen, setActionsOpen] = useState(false)
 
-  const spotNotional = useMemo(
-    () =>
-      (positions ?? [])
-        .filter((p) => p.positionType === 'spot' && p.quantity > 0)
-        .reduce((sum, p) => sum + (p.marketValue ?? p.costBasis ?? 0), 0),
-    [positions],
-  )
-
-  const hasUnallocatedCash = cashLegDisplayValue > 1 && spotNotional < cashLegDisplayValue * 0.25
   const legacyLockActive = lockState?.status === 'active'
+  const legacyLockAmbiguous = lockState?.status === 'ambiguous'
+  const hasMaterialCash = cashLegDisplayValue > 1
 
   const refreshLock = useCallback(async () => {
     setLoadingLock(true)
@@ -59,43 +54,78 @@ export function PortalBundleAllocationReadOnlyPanel({
     }
   }, [portfolioId])
 
+  const loadPreflight = useCallback(async () => {
+    setLoadingPreflight(true)
+    try {
+      const preflight = await preflightPortfolioRebalancing(portfolioId)
+      const planStatus = String(
+        preflight.rebalance_plan?.status ?? preflight.status ?? 'no_action',
+      )
+      setPreflightStatus(planStatus)
+      setDriftActionable(
+        Boolean(preflight.can_execute) ||
+          (planStatus === 'ok' && (preflight.blockers?.length ?? 0) === 0),
+      )
+    } catch {
+      setPreflightStatus(null)
+      setDriftActionable(false)
+    } finally {
+      setLoadingPreflight(false)
+    }
+  }, [portfolioId])
+
   useEffect(() => {
     void refreshLock()
   }, [refreshLock])
 
-  if (!hasUnallocatedCash && !legacyLockActive && !loadingLock) {
+  useEffect(() => {
+    if (hasMaterialCash || legacyLockActive || legacyLockAmbiguous) {
+      void loadPreflight()
+    }
+  }, [hasMaterialCash, legacyLockActive, legacyLockAmbiguous, loadPreflight])
+
+  const showRebalancingEntry =
+    driftActionable || legacyLockActive || legacyLockAmbiguous || hasMaterialCash
+
+  if (!showRebalancingEntry && !loadingLock && !loadingPreflight) {
     return null
   }
-
-  const showRebalancingEntry = hasUnallocatedCash || legacyLockActive
 
   return (
     <section className="flex w-full flex-col gap-3">
       <AppSectionHeader title="Allocation" />
-      {loadingLock ? (
-        <p className="m-0 font-ui text-[13px] text-v-fg-muted">Vérification de l’état du panier…</p>
+      {loadingLock || loadingPreflight ? (
+        <p className="m-0 font-ui text-[13px] text-v-fg-muted">Analyse du portefeuille…</p>
       ) : null}
 
-      {hasUnallocatedCash ? (
+      {hasMaterialCash ? (
         <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-          Cash leg non alloué : {formatCryptoMoney(cashLegDisplayValue, currency)} en attente de
-          répartition vers les actifs cibles.
+          Cash leg : {formatCryptoMoney(cashLegDisplayValue, currency)}
+          {driftActionable
+            ? ' — répartition vers les actifs cibles recommandée.'
+            : ' — en attente d’analyse drift.'}
         </p>
       ) : null}
 
-      {legacyLockActive ? (
+      {legacyLockActive || legacyLockAmbiguous ? (
         <div className="rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[13px] text-amber-900">
           <p className="m-0 font-medium">Allocation incomplète</p>
           <p className="mt-1 mb-0 text-[12px]">
-            Un ancien investissement legacy est en attente. Utilisez le rééquilibrage pour répartir le
-            cash leg — la reprise manuelle n’est plus proposée.
+            Un ancien investissement legacy bloque le portefeuille. Le rééquilibrage abandonne ce
+            batch et répartit le cash leg — la reprise manuelle n’est plus proposée.
           </p>
         </div>
       ) : null}
 
-      {showRebalancingEntry && !actionsOpen ? (
+      {preflightStatus === 'ok' && driftActionable && !actionsOpen ? (
         <AppButton type="button" variant="primary" onClick={() => setActionsOpen(true)}>
           Rééquilibrage
+        </AppButton>
+      ) : null}
+
+      {showRebalancingEntry && preflightStatus !== 'ok' && !actionsOpen && !loadingPreflight ? (
+        <AppButton type="button" variant="secondary" onClick={() => void loadPreflight()}>
+          Vérifier le rééquilibrage
         </AppButton>
       ) : null}
 
@@ -104,7 +134,7 @@ export function PortalBundleAllocationReadOnlyPanel({
           portfolioId={portfolioId}
           portfolioName={portfolioName}
           lockState={lockState}
-          hasUnallocatedCash={hasUnallocatedCash || legacyLockActive}
+          hasUnallocatedCash={driftActionable || legacyLockActive || hasMaterialCash}
           onRefresh={onRefresh}
           onLockRefresh={refreshLock}
           onClose={() => setActionsOpen(false)}
