@@ -19,6 +19,7 @@ import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 import {
   BUNDLE_TERMINAL_IMPOSSIBLE,
   BUNDLE_TERMINAL_RECONCILIATION,
+  resolveBundleInvestErrorMessage,
 } from '@/components/portal/transaction/mappers/bundleUiCopy'
 import type { TransactionStep, TransactionTerminalFailureCopy } from '@/components/portal/transaction/types'
 
@@ -354,7 +355,8 @@ export function resolveBundleFailureCopy(error: unknown): TransactionTerminalFai
   if (error == null) {
     return BUNDLE_TERMINAL_IMPOSSIBLE
   }
-  const msg = error instanceof Error ? error.message : String(error)
+  const raw = error instanceof Error ? error.message : String(error)
+  const msg = resolveBundleInvestErrorMessage(raw)
   if (FORBIDDEN_USER_PATTERN.test(msg)) {
     return BUNDLE_TERMINAL_IMPOSSIBLE
   }

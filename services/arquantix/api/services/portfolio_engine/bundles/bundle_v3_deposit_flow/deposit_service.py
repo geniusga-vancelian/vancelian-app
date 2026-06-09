@@ -211,7 +211,7 @@ def request_v3_bundle_deposit(
             batch_id=batch_id,
             failed=True,
         )
-        raise V3DepositFlowError(str(exc).split(":")[0] if ":" in str(exc) else "bundle_funding_failed", str(exc)) from exc
+        raise V3DepositFlowError(exc.code, str(exc)) from exc
 
     intent = _create_deposit_intent(
         db,

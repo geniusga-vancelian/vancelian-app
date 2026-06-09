@@ -1,3 +1,4 @@
+import { resolveBundleInvestErrorMessage } from '@/components/portal/transaction/mappers/bundleUiCopy'
 import type { SwapExecutePayload } from '@/lib/portal/swapClient'
 
 export type BundleAllocationLeg = {
@@ -308,10 +309,10 @@ export async function investBundle(body: {
     if (res.status === 401) {
       throw new Error('Session expirée — reconnectez-vous pour continuer.')
     }
-    const message =
-      (typeof data.detail === 'string' ? data.detail : null) ||
-      (typeof data.message === 'string' ? data.message : null) ||
-      'Requête bundle impossible'
+    const detail = typeof data.detail === 'string' ? data.detail : null
+    const message = resolveBundleInvestErrorMessage(
+      detail || (typeof data.message === 'string' ? data.message : null),
+    )
     throw new Error(message)
   }
   return { kind: 'success', payload: data as BundleInvestPayload }

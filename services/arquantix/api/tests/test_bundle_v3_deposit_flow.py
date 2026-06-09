@@ -136,6 +136,27 @@ def test_request_disabled_when_flag_off(db: Session, monkeypatch):
     assert exc_info.value.code == "v3_deposit_flow_disabled"
 
 
+def test_request_propagates_insufficient_self_trading_code(db: Session, v3_deposit_on):
+    from services.portfolio_engine.direct_overlay import ensure_direct_portfolio, sync_direct_atom
+
+    pe = make_linked_client(db)
+    pf = _bundle_portfolio(db, pe.id)
+    usdc = _usdc_instrument(db)
+    direct_pf = ensure_direct_portfolio(db, pe.id)
+    sync_direct_atom(db, direct_pf.id, usdc.id, Decimal("5"), Decimal("5"))
+    db.commit()
+
+    with pytest.raises(V3DepositFlowError) as exc_info:
+        request_v3_bundle_deposit(
+            db,
+            client_id=pe.id,
+            portfolio_id=pf.id,
+            funding_asset="USDC",
+            funding_amount=Decimal("20"),
+        )
+    assert exc_info.value.code == "bundle.funding.insufficient_self_trading"
+
+
 def test_request_funds_and_enqueues_outbox(db: Session, v3_deposit_on, monkeypatch):
     pe = make_linked_client(db)
     pf = _bundle_portfolio(db, pe.id)

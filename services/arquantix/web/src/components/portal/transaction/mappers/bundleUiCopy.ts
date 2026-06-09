@@ -51,6 +51,26 @@ export const BUNDLE_TERMINAL_IMPOSSIBLE: TransactionTerminalFailureCopy = {
   lines: ['Aucun portefeuille n’a été modifié.'],
 }
 
+/** Codes API bundle invest → message client (FR). */
+export const BUNDLE_INVEST_ERROR_MESSAGES: Record<string, string> = {
+  'bundle.funding.insufficient_self_trading':
+    'Solde Mon Trading insuffisant pour ce montant. Créditez votre compte ou réduisez le montant investi.',
+  'bundle.funding.invalid_amount': 'Montant d’investissement invalide.',
+  bundle_funding_failed:
+    'Impossible de transférer les fonds depuis Mon Trading. Vérifiez votre solde et réessayez.',
+}
+
+const BUNDLE_FUNDING_ERROR_FALLBACK =
+  'Impossible de transférer les fonds depuis Mon Trading. Vérifiez votre solde et réessayez.'
+
+export function resolveBundleInvestErrorMessage(detail: string | null | undefined): string {
+  const key = detail?.trim()
+  if (!key) return 'Requête bundle impossible'
+  if (BUNDLE_INVEST_ERROR_MESSAGES[key]) return BUNDLE_INVEST_ERROR_MESSAGES[key]!
+  if (key.startsWith('bundle.funding.')) return BUNDLE_FUNDING_ERROR_FALLBACK
+  return key
+}
+
 export const BUNDLE_TERMINAL_RECONCILIATION: TransactionTerminalFailureCopy = {
   title: 'Vérification nécessaire',
   lines: [

@@ -229,6 +229,14 @@ describe('bundleSteps', () => {
     assert.equal(copy.title, BUNDLE_TERMINAL_IMPOSSIBLE.title)
   })
 
+  it('maps insufficient self-trading API code to product copy', () => {
+    const copy = resolveBundleFailureCopy(
+      new Error('bundle.funding.insufficient_self_trading'),
+    )
+    assert.match(copy.lines[0]!, /Mon Trading insuffisant/)
+    assert.doesNotMatch(copy.lines[0]!, /bundle\.funding/)
+  })
+
   it('resume session opens processing when lock matches and legs are actionable', () => {
     const session = {
       portfolioId: 'p1',
