@@ -92,6 +92,36 @@ def _majors_rebalance_plan() -> dict:
     }
 
 
+def test_abandon_recovered_pending_batch_without_metadata_lock(db: Session, monkeypatch):
+    """Cas Majors : peek actif via swap CBETH pending, sans bundle_invest_lock en metadata."""
+    pe = make_linked_client(db)
+    portfolio = _bundle_portfolio(db, pe.id)
+    row = db.query(Portfolio).filter(Portfolio.id == portfolio.id).first()
+    row.metadata_ = {}
+    db.add(row)
+    db.commit()
+
+    legacy_batch = MAJORS_LEGACY_BATCH
+    with patch(
+        "services.portfolio_engine.bundles.rebalancing_portfolio.find_active_bundle_batch_ids_for_portfolio",
+        return_value=[legacy_batch],
+    ), patch(
+        "services.portfolio_engine.bundles.rebalancing_portfolio.is_v3_deposit_batch",
+        return_value=False,
+    ), patch(
+        "services.portfolio_engine.bundles.rebalancing_portfolio._expire_pending_swaps_for_legacy_batch",
+        return_value=["swap-cbeth-1"],
+    ) as expire_mock:
+        result = abandon_legacy_invest_lock_for_rebalancing(
+            db, client_id=pe.id, portfolio_id=portfolio.id,
+        )
+
+    assert result["abandoned"] is True
+    assert result["batch_id"] == legacy_batch
+    assert result["source"] == "recovered_pending_batch"
+    expire_mock.assert_called_once()
+
+
 def test_abandon_legacy_invest_lock(db: Session):
     pe = make_linked_client(db)
     batch_id = str(uuid.uuid4())

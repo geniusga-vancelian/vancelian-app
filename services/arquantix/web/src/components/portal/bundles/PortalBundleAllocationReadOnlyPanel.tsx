@@ -34,6 +34,7 @@ export function PortalBundleAllocationReadOnlyPanel({
   const [loadingPreflight, setLoadingPreflight] = useState(false)
   const [driftActionable, setDriftActionable] = useState(false)
   const [preflightStatus, setPreflightStatus] = useState<string | null>(null)
+  const [wouldAbandonLegacy, setWouldAbandonLegacy] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
 
   const legacyLockActive = lockState?.status === 'active'
@@ -62,6 +63,7 @@ export function PortalBundleAllocationReadOnlyPanel({
         preflight.rebalance_plan?.status ?? preflight.status ?? 'no_action',
       )
       setPreflightStatus(planStatus)
+      setWouldAbandonLegacy(Boolean(preflight.would_abandon_legacy_lock))
       setDriftActionable(
         Boolean(preflight.can_execute) ||
           (planStatus === 'ok' && (preflight.blockers?.length ?? 0) === 0),
@@ -107,19 +109,21 @@ export function PortalBundleAllocationReadOnlyPanel({
         </p>
       ) : null}
 
-      {legacyLockActive || legacyLockAmbiguous ? (
-        <div className="rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[13px] text-amber-900">
-          <p className="m-0 font-medium">Allocation incomplète</p>
+      {wouldAbandonLegacy || legacyLockActive || legacyLockAmbiguous ? (
+        <div className="rounded-v-input border border-sky-200 bg-sky-50 px-3 py-2 font-ui text-[13px] text-sky-950">
+          <p className="m-0 font-medium">Ancien investissement détecté</p>
           <p className="mt-1 mb-0 text-[12px]">
-            Un ancien investissement legacy bloque le portefeuille. Le rééquilibrage abandonne ce
-            batch et répartit le cash leg — la reprise manuelle n’est plus proposée.
+            Un batch legacy (ex. swap CBETH en attente) sera{' '}
+            <strong>automatiquement abandonné</strong> lors du rééquilibrage. Le cash leg (
+            {formatCryptoMoney(cashLegDisplayValue, currency)}) sera ensuite réparti vers les actifs
+            cibles — aucune reprise manuelle requise.
           </p>
         </div>
       ) : null}
 
       {preflightStatus === 'ok' && driftActionable && !actionsOpen ? (
         <AppButton type="button" variant="primary" onClick={() => setActionsOpen(true)}>
-          Rééquilibrage
+          {wouldAbandonLegacy ? 'Rééquilibrage (abandon legacy + déploiement cash)' : 'Rééquilibrage'}
         </AppButton>
       ) : null}
 

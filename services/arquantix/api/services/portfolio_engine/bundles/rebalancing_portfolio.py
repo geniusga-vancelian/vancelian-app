@@ -16,6 +16,7 @@ from services.lifi.enums import SwapSessionStatus
 from services.lifi.models import PersonWalletSwap
 from services.portfolio_engine.bundles.bundle_invest_lock import (
     clear_invest_lock,
+    find_active_bundle_batch_ids_for_portfolio,
     get_active_invest_lock_for_portfolio,
     release_invest_lock,
 )
@@ -96,15 +97,13 @@ def should_use_portfolio_rebalancing(
     portfolio_id: UUID,
 ) -> bool:
     """True si legacy /rebalance ou /invest/resume doit rediriger vers /rebalancing."""
-    lock = get_active_invest_lock_for_portfolio(
+    batch_id, source = _resolve_legacy_batch_for_rebalancing(
         db, client_id=client_id, portfolio_id=portfolio_id,
     )
-    if lock is not None:
-        batch_id = str(lock.get("batch_id") or "").strip()
-        if batch_id and not is_v3_deposit_batch(
-            db, portfolio_id=portfolio_id, batch_id=batch_id,
-        ):
-            return True
+    if batch_id and source != "ambiguous_batches" and not is_v3_deposit_batch(
+        db, portfolio_id=portfolio_id, batch_id=batch_id,
+    ):
+        return True
 
     preview = preview_rebalancing_portfolio(
         db, client_id=client_id, portfolio_id=portfolio_id,
@@ -120,16 +119,41 @@ def _resolve_person_id(db: Session, client_id: UUID) -> UUID | None:
     return row.person_id if row is not None else None
 
 
+def _resolve_legacy_batch_for_rebalancing(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> tuple[str | None, str]:
+    """Résout le batch legacy — metadata lock OU batch reconstitué depuis swaps pending."""
+    lock = get_active_invest_lock_for_portfolio(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    if lock is not None:
+        batch_id = str(lock.get("batch_id") or "").strip()
+        if batch_id:
+            return batch_id, "metadata_lock"
+
+    active_batches = find_active_bundle_batch_ids_for_portfolio(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    if len(active_batches) == 1:
+        return active_batches[0], "recovered_pending_batch"
+    if len(active_batches) > 1:
+        return None, "ambiguous_batches"
+    return None, "no_active_lock"
+
+
 def _would_abandon_legacy_lock(
     db: Session,
     *,
+    client_id: UUID,
     portfolio_id: UUID,
-    lock: dict[str, Any] | None,
 ) -> bool:
-    if lock is None:
-        return False
-    batch_id = str(lock.get("batch_id") or "").strip()
-    if not batch_id:
+    batch_id, reason = _resolve_legacy_batch_for_rebalancing(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    if not batch_id or reason == "ambiguous_batches":
         return False
     return not is_v3_deposit_batch(db, portfolio_id=portfolio_id, batch_id=batch_id)
 
@@ -169,16 +193,12 @@ def abandon_legacy_invest_lock_for_rebalancing(
     client_id: UUID,
     portfolio_id: UUID,
 ) -> dict[str, Any]:
-    """Abandonne un batch invest legacy bloqué (signature pending) avant rééquilibrage."""
-    lock = get_active_invest_lock_for_portfolio(
+    """Abandonne un batch invest legacy bloqué (metadata lock ou swap CBETH pending)."""
+    batch_id, source = _resolve_legacy_batch_for_rebalancing(
         db, client_id=client_id, portfolio_id=portfolio_id,
     )
-    if lock is None:
-        return {"abandoned": False, "reason": "no_active_lock"}
-
-    batch_id = str(lock.get("batch_id") or "").strip()
     if not batch_id:
-        return {"abandoned": False, "reason": "empty_batch_id"}
+        return {"abandoned": False, "reason": source}
 
     if is_v3_deposit_batch(db, portfolio_id=portfolio_id, batch_id=batch_id):
         return {"abandoned": False, "reason": "v3_deposit_batch", "batch_id": batch_id}
@@ -193,19 +213,23 @@ def abandon_legacy_invest_lock_for_rebalancing(
             batch_id=batch_id,
         )
 
-    release_invest_lock(
-        db,
-        client_id=client_id,
-        portfolio_id=portfolio_id,
-        batch_id=batch_id,
-        terminal_status="expired",
+    lock = get_active_invest_lock_for_portfolio(
+        db, client_id=client_id, portfolio_id=portfolio_id,
     )
-    clear_invest_lock(
-        db,
-        client_id=client_id,
-        portfolio_id=portfolio_id,
-        batch_id=batch_id,
-    )
+    if lock is not None and str(lock.get("batch_id") or "").strip() == batch_id:
+        release_invest_lock(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+            terminal_status="expired",
+        )
+        clear_invest_lock(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        )
 
     AuditService.log_success(
         db,
@@ -217,12 +241,14 @@ def abandon_legacy_invest_lock_for_rebalancing(
             "client_id": str(client_id),
             "portfolio_id": str(portfolio_id),
             "batch_id": batch_id,
+            "source": source,
             "expired_swap_ids": expired_swap_ids,
         },
     )
     return {
         "abandoned": True,
         "batch_id": batch_id,
+        "source": source,
         "expired_swap_ids": expired_swap_ids,
     }
 
@@ -358,6 +384,9 @@ def preflight_rebalancing_portfolio(
     lock = get_active_invest_lock_for_portfolio(
         db, client_id=client_id, portfolio_id=portfolio_id,
     )
+    legacy_batch_id, legacy_batch_source = _resolve_legacy_batch_for_rebalancing(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
     drift, plan = _compute_drift_and_plan(
         db, client_id=client_id, portfolio_id=portfolio_id,
     )
@@ -368,13 +397,16 @@ def preflight_rebalancing_portfolio(
     if fin_blocker is not None:
         blockers.append(fin_blocker)
 
-    if lock is not None:
-        batch_id = str(lock.get("batch_id") or "").strip()
-        if batch_id and is_v3_deposit_batch(db, portfolio_id=portfolio_id, batch_id=batch_id):
-            blockers.append({
-                "code": "v3_deposit_batch_in_progress",
-                "batch_id": batch_id,
-            })
+    if legacy_batch_source == "ambiguous_batches":
+        blockers.append({"code": "ambiguous_legacy_batches"})
+
+    if legacy_batch_id and is_v3_deposit_batch(
+        db, portfolio_id=portfolio_id, batch_id=legacy_batch_id,
+    ):
+        blockers.append({
+            "code": "v3_deposit_batch_in_progress",
+            "batch_id": legacy_batch_id,
+        })
 
     can_execute = plan_status == "ok" and not blockers
 
@@ -384,8 +416,10 @@ def preflight_rebalancing_portfolio(
         "can_execute": can_execute,
         "blockers": blockers,
         "would_abandon_legacy_lock": _would_abandon_legacy_lock(
-            db, portfolio_id=portfolio_id, lock=lock,
+            db, client_id=client_id, portfolio_id=portfolio_id,
         ),
+        "legacy_batch_id": legacy_batch_id,
+        "legacy_batch_source": legacy_batch_source if legacy_batch_id else None,
         "legacy_lock": dict(lock) if lock is not None else None,
         "drift_snapshot": drift,
         "rebalance_plan": plan,

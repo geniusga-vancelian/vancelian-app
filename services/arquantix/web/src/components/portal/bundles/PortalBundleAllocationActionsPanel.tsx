@@ -77,6 +77,11 @@ export function PortalBundleAllocationActionsPanel({
     }
   }
 
+  useEffect(() => {
+    void loadPreview()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount + portfolio change
+  }, [portfolioId])
+
   const runRebalancing = async () => {
     if (busy || inFlightRef.current) return
     setBusy(true)
