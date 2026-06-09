@@ -492,7 +492,7 @@ Si `total_buy_need ≤ available_cash_usdc` → `sell_plan` vide (pas de trim BT
 | --- | --- |
 | **Statut** | **Implémenté** (executor contrôlé) |
 | **Module** | `rebalance_executor.py` — `execute_v3_bundle_rebalance()` |
-| **Tests** | `test_bundle_rebalance_executor.py` — **15 passed** (29 total drift+planner+executor) |
+| **Tests** | `test_bundle_rebalance_executor.py` — **17 passed** (31 total drift+planner+executor) |
 | **API** | `POST .../rebalance/v3/execute` si `BUNDLE_V3_REBALANCE_EXECUTOR_ENABLED=true` |
 | **Legacy** | `POST .../rebalance` inchangé (v1 `_compute_plan`) |
 
@@ -516,6 +516,7 @@ Si `total_buy_need ≤ available_cash_usdc` → `sell_plan` vide (pas de trim BT
 | 2 | Idempotence après crash (même execution, pas de swaps dupliqués) | `test_crash_resume_same_execution_no_duplicate_swaps` |
 | 3 | Leg expiré buy-only + cash → `COMPLETED_WITH_RESIDUAL_CASH` | `test_expired_eth_only_residual_cash_not_failed` |
 | 4 | Triple POST execute → 1 batch / 1 set swaps | `test_triple_execute_same_plan_one_batch` |
+| 5 | Route flag OFF → 404 sans side effects | `test_v3_execute_route_flag_off_returns_404_no_side_effects` |
 
 ### Post-merge
 

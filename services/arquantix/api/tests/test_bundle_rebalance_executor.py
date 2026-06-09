@@ -31,11 +31,12 @@ from services.portfolio_engine.bundles.rebalance_executor import (
 from services.portfolio_engine.bundles.rebalance_planner import (
     plan_bundle_rebalance_from_drift,
 )
+from services.lifi.models import PersonWalletSwap
 from services.portfolio_engine.hardening.audit_models import AuditEvent
 from services.portfolio_engine.hardening.audit_service import AuditService
 from services.portfolio_engine.hardening.security.context import ActorContext
 
-from conftest import make_linked_client
+from conftest import make_linked_client, mobile_auth_headers
 from tests.test_bundle_allocation_phase5a import (
     _bundle_with_allocations,
     _instrument_for_asset,
@@ -623,3 +624,54 @@ def test_terminal_audit_written(db: Session):
     )
     assert terminal is not None
     assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is None
+
+
+def _v3_running_audit_count(db: Session) -> int:
+    return int(
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
+            AuditEvent.action == ACTION_V3_RUNNING,
+        )
+        .count()
+        or 0
+    )
+
+
+@pytest.mark.parametrize(
+    "flag_value",
+    [pytest.param(None, id="absent"), pytest.param("false", id="false")],
+)
+def test_v3_execute_route_flag_off_returns_404_no_side_effects(
+    client,
+    db: Session,
+    monkeypatch,
+    flag_value: str | None,
+):
+    """Route V3 inactive par défaut — 404 sans audit, batch, swap ni écriture PE/CB."""
+    if flag_value is None:
+        monkeypatch.delenv("BUNDLE_V3_REBALANCE_EXECUTOR_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("BUNDLE_V3_REBALANCE_EXECUTOR_ENABLED", flag_value)
+
+    pe = make_linked_client(db)
+    portfolio, _usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    db.commit()
+
+    pe_before, cb_before = _pe_cb_counts(db)
+    audit_before = _v3_running_audit_count(db)
+    swap_before = int(db.query(PersonWalletSwap).count() or 0)
+
+    response = client.post(
+        f"/api/app/bundle/{portfolio.id}/rebalance/v3/execute",
+        headers=mobile_auth_headers(db, pe),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "v3_executor_disabled"
+
+    pe_after, cb_after = _pe_cb_counts(db)
+    assert pe_after == pe_before
+    assert cb_after == cb_before
+    assert _v3_running_audit_count(db) == audit_before
+    assert int(db.query(PersonWalletSwap).count() or 0) == swap_before
