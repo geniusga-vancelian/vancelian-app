@@ -156,6 +156,15 @@ class BundleWithdrawOrchestrator:
                 raise BundleWithdrawOrchestratorError("withdraw_amount_exceeds_bundle")
 
         batch_id = str(uuid_mod.uuid4())
+        from services.portfolio_engine.financial_operations.wiring import (
+            acquire_bundle_withdraw_portfolio_operation,
+        )
+
+        acquire_bundle_withdraw_portfolio_operation(
+            db,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        )
         acquire_withdraw_lock(
             db,
             portfolio_locked,
@@ -467,6 +476,15 @@ class BundleWithdrawOrchestrator:
         clear_withdraw_lock(
             db,
             client_id=client_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        )
+        from services.portfolio_engine.financial_operations.wiring import (
+            release_bundle_withdraw_portfolio_operation,
+        )
+
+        release_bundle_withdraw_portfolio_operation(
+            db,
             portfolio_id=portfolio_id,
             batch_id=batch_id,
         )

@@ -17,3 +17,4 @@ class OutboxEventType(str, Enum):
     INTENT_SETTLE = "intent.settle"
     INTENT_RECONCILE = "intent.reconcile"
     DEPOSIT_OBSERVED = "deposit.observed"
+    BUNDLE_V3_REBALANCE_REQUESTED = "bundle.v3_rebalance_requested"
