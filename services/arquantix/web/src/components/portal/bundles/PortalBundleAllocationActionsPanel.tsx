@@ -3,22 +3,16 @@
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
-import { useBundleLifiInvest } from '@/components/portal/bundles/useBundleLifiInvest'
-import { useBundleLifiRebalance } from '@/components/portal/bundles/useBundleLifiRebalance'
+import {
+  assetLineLabel,
+  useBundlePortfolioRebalancing,
+} from '@/components/portal/bundles/useBundlePortfolioRebalancing'
 import { AppButton } from '@/components/design-system/app/AppButton'
 import {
-  BundleExpiredInvestLegsError,
-  previewBundleRebalance,
-  requoteExpiredBundleInvest,
-  resumeBundleInvest,
+  previewPortfolioRebalancing,
   type BundleInvestActiveLockPayload,
-  type BundleRebalancePreviewPayload,
+  type PortfolioRebalancingAssetLine,
 } from '@/lib/portal/bundleClient'
-import {
-  saveBundleInvestSession,
-  type BundleInvestSession,
-} from '@/lib/portal/bundleInvestSession'
-import type { PortalBundlePosition } from '@/lib/portal/cryptoWalletTypes'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
@@ -26,9 +20,6 @@ import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 type Props = {
   portfolioId: string
   portfolioName: string
-  positions: PortalBundlePosition[] | undefined
-  currency: string
-  cashLegDisplayValue: number
   lockState: BundleInvestActiveLockPayload | null
   hasUnallocatedCash: boolean
   onRefresh: () => void
@@ -36,37 +27,37 @@ type Props = {
   onClose: () => void
 }
 
-/** Resume / rebalance — hooks LI.FI montés sous PortalWeb3BoundaryLazy (R4.5-F5-B). */
+/** Rééquilibrage portefeuille — remplace reprise legacy LI.FI (R4.5 / V3 drift). */
 export function PortalBundleAllocationActionsPanel({
   portfolioId,
   portfolioName,
-  lockState,
   hasUnallocatedCash,
   onRefresh,
   onLockRefresh,
   onClose,
 }: Props) {
-  const [preview, setPreview] = useState<BundleRebalancePreviewPayload | null>(null)
-  const [loadingPreview, setLoadingPreview] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [legLabel, setLegLabel] = useState<string | null>(null)
+  const [assetLines, setAssetLines] = useState<PortfolioRebalancingAssetLine[]>([])
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [swapMockMode, setSwapMockMode] = useState(false)
-  const [expiredLegs, setExpiredLegs] = useState(false)
+  const [previewStatus, setPreviewStatus] = useState<string | null>(null)
 
-  const { resumeSession: resumeInvest, inFlightRef: investInFlight } = useBundleLifiInvest(
+  const { runPortfolioRebalancing, inFlightRef } = useBundlePortfolioRebalancing(
     swapMockMode,
     'USDC',
     setExecutionPhase,
-    (current, total, asset) => setLegLabel(`Leg ${current}/${total} — ${asset}`),
-  )
-
-  const { runRebalance, inFlightRef: rebalanceInFlight } = useBundleLifiRebalance(
-    swapMockMode,
-    'USDC',
-    setExecutionPhase,
-    (current, total, asset) => setLegLabel(`Leg ${current}/${total} — ${asset}`),
+    (asset, status) => {
+      setAssetLines((prev) => {
+        const idx = prev.findIndex((l) => l.asset === asset)
+        if (idx < 0) {
+          return [...prev, { asset, action: 'buy', amount_entry: '0', status }]
+        }
+        const next = [...prev]
+        next[idx] = { ...next[idx]!, status }
+        return next
+      })
+    },
   )
 
   useEffect(() => {
@@ -76,177 +67,90 @@ export function PortalBundleAllocationActionsPanel({
   }, [])
 
   const loadPreview = async () => {
-    setLoadingPreview(true)
     setError(null)
     try {
-      const result = await previewBundleRebalance(portfolioId)
-      setPreview(result)
+      const preview = await previewPortfolioRebalancing(portfolioId)
+      setPreviewStatus(String(preview.status ?? preview.rebalance_plan?.status ?? 'ok'))
+      setAssetLines(preview.asset_lines ?? [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Prévisualisation impossible')
-    } finally {
-      setLoadingPreview(false)
+      setError(err instanceof Error ? err.message : 'Estimation impossible')
     }
   }
 
-  const runResumeInvest = async () => {
-    if (busy || investInFlight.current) return
+  const runRebalancing = async () => {
+    if (busy || inFlightRef.current) return
     setBusy(true)
     setError(null)
     setExecutionPhase('preparing')
     try {
-      const invest = await resumeBundleInvest(portfolioId)
-      const session: BundleInvestSession = {
-        portfolioId,
-        batchId: invest.batch_id,
-        fundingAsset: lockState?.lock?.funding_asset ?? invest.entry_asset,
-        fundingAmount: Number(lockState?.lock?.funding_amount ?? invest.total_entry_asset_received),
-        invest,
-        savedAt: new Date().toISOString(),
+      if (assetLines.length === 0) {
+        await loadPreview()
       }
-      saveBundleInvestSession(session)
-      await resumeInvest(session)
+      const result = await runPortfolioRebalancing(portfolioId)
+      setAssetLines(result.asset_lines ?? assetLines)
       invalidatePortalCache('portal:crypto-wallet')
       await onLockRefresh()
       onRefresh()
       onClose()
     } catch (err) {
       setExecutionPhase('failed')
-      if (err instanceof BundleExpiredInvestLegsError) {
-        setExpiredLegs(true)
-        setError(
-          'Ce devis d’investissement a expiré. Relancez l’allocation pour continuer.',
-        )
-      } else {
-        setError(err instanceof Error ? err.message : 'Reprise impossible')
-      }
+      setError(err instanceof Error ? err.message : 'Rééquilibrage impossible')
     } finally {
       setBusy(false)
-      setLegLabel(null)
     }
   }
-
-  const runReallocate = async () => {
-    if (busy || rebalanceInFlight.current) return
-    setBusy(true)
-    setError(null)
-    setExecutionPhase('preparing')
-    try {
-      await runRebalance(portfolioId)
-      invalidatePortalCache('portal:crypto-wallet')
-      await onLockRefresh()
-      onRefresh()
-      setPreview(null)
-      onClose()
-    } catch (err) {
-      setExecutionPhase('failed')
-      setError(err instanceof Error ? err.message : 'Réallocation impossible')
-    } finally {
-      setBusy(false)
-      setLegLabel(null)
-    }
-  }
-
-  const runExpiredRequote = async () => {
-    if (busy || investInFlight.current) return
-    setBusy(true)
-    setError(null)
-    setExecutionPhase('preparing')
-    try {
-      const invest = await requoteExpiredBundleInvest(portfolioId)
-      const session: BundleInvestSession = {
-        portfolioId,
-        batchId: invest.batch_id,
-        fundingAsset: lockState?.lock?.funding_asset ?? invest.entry_asset,
-        fundingAmount: Number(invest.total_entry_asset_received),
-        invest,
-        savedAt: new Date().toISOString(),
-      }
-      saveBundleInvestSession(session)
-      await resumeInvest(session)
-      invalidatePortalCache('portal:crypto-wallet')
-      await onLockRefresh()
-      onRefresh()
-      onClose()
-    } catch (err) {
-      setExecutionPhase('failed')
-      setError(err instanceof Error ? err.message : 'Relance allocation impossible')
-    } finally {
-      setBusy(false)
-      setLegLabel(null)
-    }
-  }
-
-  const lockActive = lockState?.status === 'active'
-  const canResume = lockActive && (lockState?.resume_available ?? true) && !expiredLegs
-  const buyCount = preview?.buy_plan?.length ?? 0
 
   return (
     <div className="flex flex-col gap-3 rounded-v-input border border-v-border bg-v-card px-3 py-3">
       {busy ? (
         <div className="flex items-center gap-2 py-2">
           <Loader2 className="h-5 w-5 animate-spin text-v-fg-muted" />
-          <span className="font-ui text-[13px] text-v-fg">{legLabel ?? executionPhase}</span>
+          <span className="font-ui text-[13px] text-v-fg">
+            {executionPhase === 'signing'
+              ? 'Signature portefeuille…'
+              : executionPhase === 'submitting'
+                ? 'Confirmation on-chain…'
+                : 'Rééquilibrage en cours…'}
+          </span>
         </div>
       ) : null}
 
       {error ? <p className="m-0 font-ui text-[13px] text-v-error">{error}</p> : null}
 
+      {previewStatus ? (
+        <p className="m-0 font-ui text-[12px] text-v-fg-muted">Plan : {previewStatus}</p>
+      ) : null}
+
+      {assetLines.length > 0 ? (
+        <ul className="m-0 list-none space-y-1 p-0 font-ui text-[13px] text-v-fg-body">
+          {assetLines.map((line) => (
+            <li key={`${line.action}-${line.asset}`}>{assetLineLabel(line)}</li>
+          ))}
+        </ul>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
-        {canResume ? (
-          <AppButton type="button" variant="primary" disabled={busy} onClick={() => void runResumeInvest()}>
-            Reprendre l’investissement
-          </AppButton>
-        ) : null}
-        {expiredLegs ? (
-          <AppButton
-            type="button"
-            variant="primary"
-            disabled={busy}
-            onClick={() => void runExpiredRequote()}
-          >
-            Relancer l’allocation
-          </AppButton>
-        ) : null}
-        {hasUnallocatedCash ? (
-          <>
-            <AppButton
-              type="button"
-              variant="secondary"
-              disabled={busy || loadingPreview}
-              onClick={() => void loadPreview()}
-            >
-              {loadingPreview ? 'Estimation…' : 'Prévisualiser réallocation'}
-            </AppButton>
-            <AppButton
-              type="button"
-              variant="primary"
-              disabled={busy || (preview != null && buyCount === 0 && preview.status === 'no_action')}
-              onClick={() => void runReallocate()}
-            >
-              Réallouer le cash USDC
-            </AppButton>
-          </>
-        ) : null}
+        <AppButton
+          type="button"
+          variant="secondary"
+          disabled={busy}
+          onClick={() => void loadPreview()}
+        >
+          Estimer le plan
+        </AppButton>
+        <AppButton type="button" variant="primary" disabled={busy} onClick={() => void runRebalancing()}>
+          Rééquilibrage
+        </AppButton>
         <AppButton type="button" variant="secondary" disabled={busy} onClick={onClose}>
           Fermer
         </AppButton>
       </div>
 
-      {preview ? (
-        <div className="rounded-v-input border border-v-fg-10 bg-v-bg px-3 py-2 font-ui text-[12px] text-v-fg-body">
-          <p className="m-0">
-            Plan : {preview.status}
-            {buyCount > 0 ? ` · ${buyCount} achat${buyCount > 1 ? 's' : ''}` : ''}
-          </p>
-          {preview.warnings?.length ? (
-            <p className="mt-1 mb-0 text-amber-800">{preview.warnings.join(' · ')}</p>
-          ) : null}
-        </div>
-      ) : null}
-
       <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-        {portfolioName} — si l’allocation échoue, vous pouvez réallouer le cash leg ou retirer vers
-        Mon Trading ci-dessous.
+        {portfolioName}
+        {hasUnallocatedCash
+          ? ' — le cash leg sera réparti vers l’allocation cible (ventes puis achats, min. 1 USDC).'
+          : ' — ajustement des positions vers l’allocation cible.'}
       </p>
     </div>
   )

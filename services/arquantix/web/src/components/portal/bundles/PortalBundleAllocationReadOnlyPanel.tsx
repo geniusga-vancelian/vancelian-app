@@ -9,8 +9,6 @@ import {
   fetchActiveBundleInvestLock,
   type BundleInvestActiveLockPayload,
 } from '@/lib/portal/bundleClient'
-import { BUNDLE_V3_REBALANCE_IN_PROGRESS_COPY } from '@/components/portal/transaction/mappers/bundleUiCopy'
-import { bundleLockStatusLabel } from '@/lib/portal/bundleInvestLabels'
 import { formatCryptoMoney } from '@/lib/portal/cryptoWalletFormat'
 import type { PortalBundlePosition } from '@/lib/portal/cryptoWalletTypes'
 
@@ -23,7 +21,7 @@ type Props = {
   onRefresh: () => void
 }
 
-/** Allocation wallet bundle — lecture seule + CTA vers actions lazy (R4.5-F5-B). */
+/** Allocation wallet bundle — rééquilibrage uniquement (plus de reprise legacy LI.FI). */
 export function PortalBundleAllocationReadOnlyPanel({
   portfolioId,
   portfolioName,
@@ -45,6 +43,7 @@ export function PortalBundleAllocationReadOnlyPanel({
   )
 
   const hasUnallocatedCash = cashLegDisplayValue > 1 && spotNotional < cashLegDisplayValue * 0.25
+  const legacyLockActive = lockState?.status === 'active'
 
   const refreshLock = useCallback(async () => {
     setLoadingLock(true)
@@ -64,19 +63,17 @@ export function PortalBundleAllocationReadOnlyPanel({
     void refreshLock()
   }, [refreshLock])
 
-  if (!hasUnallocatedCash && lockState?.status !== 'active' && !loadingLock) {
+  if (!hasUnallocatedCash && !legacyLockActive && !loadingLock) {
     return null
   }
 
-  const lockActive = lockState?.status === 'active'
-  const canResume = lockActive && (lockState?.resume_available ?? true)
-  const showActionsEntry = canResume || hasUnallocatedCash
+  const showRebalancingEntry = hasUnallocatedCash || legacyLockActive
 
   return (
     <section className="flex w-full flex-col gap-3">
       <AppSectionHeader title="Allocation" />
       {loadingLock ? (
-        <p className="m-0 font-ui text-[13px] text-v-fg-muted">Vérification de l’état investissement…</p>
+        <p className="m-0 font-ui text-[13px] text-v-fg-muted">Vérification de l’état du panier…</p>
       ) : null}
 
       {hasUnallocatedCash ? (
@@ -86,34 +83,19 @@ export function PortalBundleAllocationReadOnlyPanel({
         </p>
       ) : null}
 
-      {lockActive && lockState?.lock ? (
+      {legacyLockActive ? (
         <div className="rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[13px] text-amber-900">
-          <p className="m-0 font-medium">
-            {canResume ? 'Investissement en cours' : BUNDLE_V3_REBALANCE_IN_PROGRESS_COPY.title}
+          <p className="m-0 font-medium">Allocation incomplète</p>
+          <p className="mt-1 mb-0 text-[12px]">
+            Un ancien investissement legacy est en attente. Utilisez le rééquilibrage pour répartir le
+            cash leg — la reprise manuelle n’est plus proposée.
           </p>
-          {canResume ? (
-            <p className="mt-1 mb-0 text-[12px]">
-              Batch {lockState.lock.batch_id.slice(0, 8)}… —{' '}
-              {bundleLockStatusLabel(lockState.lock.status)}
-            </p>
-          ) : (
-            <p className="mt-1 mb-0 text-[12px]">{BUNDLE_V3_REBALANCE_IN_PROGRESS_COPY.lines[0]}</p>
-          )}
-          {lockState.reconciled ? (
-            <p className="mt-1 mb-0 text-[12px]">Verrou obsolète nettoyé automatiquement.</p>
-          ) : null}
         </div>
       ) : null}
 
-      {showActionsEntry && !actionsOpen ? (
+      {showRebalancingEntry && !actionsOpen ? (
         <AppButton type="button" variant="primary" onClick={() => setActionsOpen(true)}>
-          {canResume && hasUnallocatedCash
-            ? 'Reprendre ou réallouer'
-            : canResume
-              ? 'Reprendre l’investissement'
-              : hasUnallocatedCash
-                ? 'Réallouer le cash'
-                : 'Voir les options'}
+          Rééquilibrage
         </AppButton>
       ) : null}
 
@@ -125,7 +107,7 @@ export function PortalBundleAllocationReadOnlyPanel({
           currency={currency}
           cashLegDisplayValue={cashLegDisplayValue}
           lockState={lockState}
-          hasUnallocatedCash={hasUnallocatedCash}
+          hasUnallocatedCash={hasUnallocatedCash || legacyLockActive}
           onRefresh={onRefresh}
           onLockRefresh={refreshLock}
           onClose={() => setActionsOpen(false)}
@@ -134,8 +116,7 @@ export function PortalBundleAllocationReadOnlyPanel({
 
       {!actionsOpen ? (
         <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-          {portfolioName} — les actions d’allocation chargent le portefeuille de signature uniquement
-          après confirmation.
+          {portfolioName} — rééquilibrage automatique vers l’allocation cible (ventes puis achats).
         </p>
       ) : null}
     </section>

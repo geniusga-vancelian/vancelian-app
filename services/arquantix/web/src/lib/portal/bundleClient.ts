@@ -179,6 +179,23 @@ export type BundleRebalancePayload = {
   message?: string
 }
 
+export type PortfolioRebalancingAssetLine = {
+  asset: string
+  action: 'sell' | 'buy' | string
+  amount_entry: string
+  status: string
+  swap_id?: string
+}
+
+export type PortfolioRebalancingPayload = BundleRebalancePayload & {
+  flow?: string
+  intent_id?: string
+  asset_lines?: PortfolioRebalancingAssetLine[]
+  v3_status?: string
+  rebalance_execution_id?: string
+  legacy_lock_abandoned?: { abandoned?: boolean; batch_id?: string }
+}
+
 export type BundleInvestResult =
   | { kind: 'success'; payload: BundleInvestPayload }
   | { kind: 'already_pending'; payload: BundleInvestAlreadyPendingPayload }
@@ -394,6 +411,42 @@ export async function executeBundleRebalance(portfolioId: string): Promise<Bundl
       (typeof data.detail === 'string' ? data.detail : null) ||
         data.message ||
         'Réallocation impossible',
+    )
+  }
+  return data
+}
+
+export async function previewPortfolioRebalancing(
+  portfolioId: string,
+): Promise<PortfolioRebalancingPayload> {
+  const res = await fetch(
+    `/api/portal/bundles/rebalancing/${encodeURIComponent(portfolioId)}/preview`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+  )
+  return parseJson(res)
+}
+
+export async function executePortfolioRebalancing(
+  portfolioId: string,
+): Promise<PortfolioRebalancingPayload> {
+  const res = await fetch(
+    `/api/portal/bundles/rebalancing/${encodeURIComponent(portfolioId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+      signal: AbortSignal.timeout(120_000),
+    },
+  )
+  const data = (await res.json()) as PortfolioRebalancingPayload & {
+    detail?: string
+    message?: string
+  }
+  if (!res.ok) {
+    throw new Error(
+      (typeof data.detail === 'string' ? data.detail : null) ||
+        data.message ||
+        'Rééquilibrage impossible',
     )
   }
   return data
