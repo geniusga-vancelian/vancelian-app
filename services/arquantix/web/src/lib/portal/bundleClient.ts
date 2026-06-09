@@ -193,6 +193,7 @@ export type PortfolioRebalancingPayload = BundleRebalancePayload & {
   asset_lines?: PortfolioRebalancingAssetLine[]
   v3_status?: string
   rebalance_execution_id?: string
+  rebalance_plan?: { status?: string }
   legacy_lock_abandoned?: { abandoned?: boolean; batch_id?: string }
 }
 

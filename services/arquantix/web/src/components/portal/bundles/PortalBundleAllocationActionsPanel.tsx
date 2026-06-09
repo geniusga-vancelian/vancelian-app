@@ -70,7 +70,7 @@ export function PortalBundleAllocationActionsPanel({
     setError(null)
     try {
       const preview = await previewPortfolioRebalancing(portfolioId)
-      setPreviewStatus(String(preview.status ?? preview.rebalance_plan?.status ?? 'ok'))
+      setPreviewStatus(String(preview.rebalance_plan?.status ?? preview.status ?? 'ok'))
       setAssetLines(preview.asset_lines ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Estimation impossible')
