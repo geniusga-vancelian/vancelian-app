@@ -2028,22 +2028,48 @@ def mobile_bundle_invest(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
 
     from services.portfolio_engine.bundles.bundle_invest_lock import BundleInvestAlreadyPendingError
+    from services.portfolio_engine.bundles.bundle_v3_deposit_flow import (
+        V3DepositFlowError,
+        bundle_v3_deposit_flow_enabled,
+        request_v3_bundle_deposit,
+    )
     from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
         transaction_in_progress_response_body,
+    )
+    from services.portfolio_engine.financial_operations.exceptions import (
+        PortfolioFinancialOperationInProgress409,
     )
     from services.product_locks.exceptions import TransactionInProgress409
 
     orchestrator = BundleOrchestrator()
     try:
-        result = orchestrator.invest_into_bundle(
-            db,
-            client_id=client.id,
-            portfolio_id=pid,
-            funding_asset=funding_asset,
-            funding_amount=_Dec(str(funding_amount)),
-        )
+        if bundle_v3_deposit_flow_enabled():
+            result = request_v3_bundle_deposit(
+                db,
+                client_id=client.id,
+                portfolio_id=pid,
+                funding_asset=funding_asset,
+                funding_amount=_Dec(str(funding_amount)),
+            )
+        else:
+            result = orchestrator.invest_into_bundle(
+                db,
+                client_id=client.id,
+                portfolio_id=pid,
+                funding_asset=funding_asset,
+                funding_amount=_Dec(str(funding_amount)),
+            )
         db.commit()
         return result
+    except V3DepositFlowError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code)
+    except PortfolioFinancialOperationInProgress409 as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=exc.to_response(),
+        )
     except TransactionInProgress409 as exc:
         db.rollback()
         return JSONResponse(
@@ -2066,11 +2092,24 @@ def mobile_bundle_invest_resume(
     client: PeClient = Depends(mobile_app_client),
 ):
     """Reprend un batch invest LI.FI en cours (legs pending, cash leg déjà alimenté)."""
+    from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
+        resume_disabled_for_v3_deposit_flow,
+    )
     from services.portfolio_engine.bundles.orchestrator import (
         BundleExpiredInvestLegsError,
         BundleOrchestrator,
         BundleOrchestratorError,
     )
+
+    if resume_disabled_for_v3_deposit_flow():
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "status": "v3_deposit_flow_resume_disabled",
+                "error_code": "v3_deposit_flow_resume_disabled",
+                "message": "Legacy resume is disabled for new V3 deposit flow.",
+            },
+        )
 
     portfolio_id = payload.get("portfolio_id")
     if not portfolio_id:
@@ -2238,6 +2277,9 @@ def mobile_bundle_withdraw(
     from services.portfolio_engine.bundles.bundle_withdraw_lock import (
         BundleWithdrawAlreadyPendingError,
     )
+    from services.portfolio_engine.financial_operations.exceptions import (
+        PortfolioFinancialOperationInProgress409,
+    )
 
     portfolio_id = payload.get("portfolio_id")
     withdraw_amount = payload.get("withdraw_amount")
@@ -2271,6 +2313,12 @@ def mobile_bundle_withdraw(
         )
         db.commit()
         return result
+    except PortfolioFinancialOperationInProgress409 as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=exc.to_response(),
+        )
     except BundleWithdrawAlreadyPendingError as exc:
         db.rollback()
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.to_response())
@@ -2913,7 +2961,30 @@ def mobile_bundle_rebalance_v3_execute(
     if trigger not in ("manual", "deposit", "recovery", "cron"):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid_trigger")
 
+    import uuid as _uuid_mod
+
+    from services.portfolio_engine.financial_operations.exceptions import (
+        PortfolioFinancialOperationInProgress409,
+    )
+    from services.portfolio_engine.financial_operations.wiring import (
+        acquire_bundle_rebalance_v3_portfolio_operation,
+        release_bundle_rebalance_v3_portfolio_operation,
+    )
+
+    execution_id = _uuid_mod.uuid4()
+    _TERMINAL_V3_STATUSES = frozenset({
+        "COMPLETED",
+        "COMPLETED_WITH_RESIDUAL_CASH",
+        "FAILED",
+        "NO_ACTION",
+    })
+
     try:
+        acquire_bundle_rebalance_v3_portfolio_operation(
+            db,
+            portfolio_id=pid,
+            execution_id=execution_id,
+        )
         snap = compute_bundle_drift_snapshot(db, client_id=client.id, portfolio_id=pid)
         plan = plan_bundle_rebalance_from_drift(snap)
         result = execute_v3_bundle_rebalance(
@@ -2923,12 +2994,38 @@ def mobile_bundle_rebalance_v3_execute(
             drift_rebalance_plan=plan,
             trigger=trigger,  # type: ignore[arg-type]
         )
+        v3_status = str(result.get("v3_status") or "")
+        if v3_status in _TERMINAL_V3_STATUSES:
+            release_bundle_rebalance_v3_portfolio_operation(
+                db,
+                portfolio_id=pid,
+                execution_id=execution_id,
+                failed=v3_status == "FAILED",
+            )
         db.commit()
         return result
+    except PortfolioFinancialOperationInProgress409 as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=exc.to_response(),
+        )
     except BundleRebalanceExecutorError as exc:
+        release_bundle_rebalance_v3_portfolio_operation(
+            db,
+            portfolio_id=pid,
+            execution_id=execution_id,
+            failed=True,
+        )
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
+        release_bundle_rebalance_v3_portfolio_operation(
+            db,
+            portfolio_id=pid,
+            execution_id=execution_id,
+            failed=True,
+        )
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
 

@@ -140,6 +140,16 @@ class BundleOrchestrator:
         from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
             release_legacy_bundle_global_lock_on_terminal,
         )
+        from services.portfolio_engine.financial_operations.wiring import (
+            release_bundle_invest_portfolio_operation,
+        )
+
+        release_bundle_invest_portfolio_operation(
+            db,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+            failed=mode == "release_failed",
+        )
 
         release_legacy_bundle_global_lock_on_terminal(
             db,
@@ -412,6 +422,15 @@ class BundleOrchestrator:
         )
         from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
             acquire_legacy_bundle_global_lock_or_raise,
+        )
+        from services.portfolio_engine.financial_operations.wiring import (
+            acquire_bundle_invest_portfolio_operation,
+        )
+
+        acquire_bundle_invest_portfolio_operation(
+            db,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
         )
         from services.portfolio_engine.clients.models import Client as _Client
         from services.product_locks.exceptions import ProductLockConflict
