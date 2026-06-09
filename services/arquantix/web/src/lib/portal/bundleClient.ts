@@ -335,16 +335,20 @@ export async function resumeBundleInvest(portfolioId: string): Promise<BundleInv
     body: JSON.stringify({ portfolio_id: portfolioId }),
   })
   const data = (await res.json()) as BundleInvestPayload &
-    BundleExpiredInvestLegsPayload & { detail?: string; message?: string }
+    BundleExpiredInvestLegsPayload & {
+      detail?: string
+      message?: string
+      error_code?: string
+    }
   if (res.status === 409 && data.error_code === 'expired_invest_legs') {
     throw new BundleExpiredInvestLegsError(data)
   }
   if (!res.ok) {
-    throw new Error(
+    const detail =
+      data.error_code ||
       (typeof data.detail === 'string' ? data.detail : null) ||
-        data.message ||
-        'Reprise investissement impossible',
-    )
+      (typeof data.message === 'string' ? data.message : null)
+    throw new Error(resolveBundleInvestErrorMessage(detail))
   }
   return data
 }

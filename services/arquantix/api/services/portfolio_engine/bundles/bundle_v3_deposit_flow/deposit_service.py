@@ -326,5 +326,88 @@ def process_v3_deposit_rebalance_outbox_event(
     }
 
 
-def resume_disabled_for_v3_deposit_flow() -> bool:
-    return bundle_v3_deposit_flow_enabled()
+def is_v3_deposit_batch(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    batch_id: str,
+) -> bool:
+    """True si le batch provient du flux V3 deposit (intent ou outbox), pas legacy LI.FI."""
+    from sqlalchemy import text
+
+    bid = str(batch_id or "").strip()
+    if not bid:
+        return False
+    pid = str(portfolio_id)
+    intent_row = db.execute(
+        text(
+            """
+            SELECT 1 FROM transaction_intents
+            WHERE product_type = :product
+              AND metadata_json->>'batch_id' = :batch
+              AND metadata_json->>'portfolio_id' = :portfolio
+            LIMIT 1
+            """
+        ),
+        {"product": V3_DEPOSIT_INTENT_PRODUCT, "batch": bid, "portfolio": pid},
+    ).fetchone()
+    if intent_row is not None:
+        return True
+    outbox_row = db.execute(
+        text(
+            """
+            SELECT 1 FROM transaction_outbox
+            WHERE event_type = :event_type
+              AND payload_json->>'batch_id' = :batch
+              AND payload_json->>'portfolio_id' = :portfolio
+            LIMIT 1
+            """
+        ),
+        {
+            "event_type": OutboxEventType.BUNDLE_V3_REBALANCE_REQUESTED.value,
+            "batch": bid,
+            "portfolio": pid,
+        },
+    ).fetchone()
+    return outbox_row is not None
+
+
+def legacy_resume_available_for_batch(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    batch_id: str,
+) -> bool:
+    """Legacy LI.FI resume autorisé pour les batches non-V3 même si le flag V3 est ON."""
+    if not bundle_v3_deposit_flow_enabled():
+        return True
+    return not is_v3_deposit_batch(db, portfolio_id=portfolio_id, batch_id=batch_id)
+
+
+def resume_disabled_for_v3_deposit_flow(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> bool:
+    """Bloque legacy resume seulement pour les dépôts V3 — pas les batches legacy (ex. Majors)."""
+    if not bundle_v3_deposit_flow_enabled():
+        return False
+    from services.portfolio_engine.bundles.bundle_invest_lock import peek_bundle_invest_lock_state
+
+    state = peek_bundle_invest_lock_state(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+    )
+    if state.get("status") != "active":
+        return True
+    lock = state.get("lock") or {}
+    batch_id = str(lock.get("batch_id") or "").strip()
+    if not batch_id:
+        return True
+    return not legacy_resume_available_for_batch(
+        db,
+        portfolio_id=portfolio_id,
+        batch_id=batch_id,
+    )

@@ -567,6 +567,23 @@ def _build_recoverable_lock_snapshot(
     }
 
 
+def _legacy_resume_available(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    batch_id: str,
+) -> bool:
+    from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
+        legacy_resume_available_for_batch,
+    )
+
+    return legacy_resume_available_for_batch(
+        db,
+        portfolio_id=portfolio_id,
+        batch_id=batch_id,
+    )
+
+
 def peek_bundle_invest_lock_state(
     db: Session,
     *,
@@ -578,10 +595,15 @@ def peek_bundle_invest_lock_state(
         db, client_id=client_id, portfolio_id=portfolio_id,
     )
     if lock is not None:
+        batch_id = str(lock.get("batch_id") or "").strip()
         return {
             "status": "active",
             "lock": lock,
-            "resume_available": True,
+            "resume_available": _legacy_resume_available(
+                db,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+            ),
             "read_only": True,
         }
 
@@ -608,7 +630,11 @@ def peek_bundle_invest_lock_state(
             batch_id=batch_id,
         ),
         "recovered_from_pending_batch": True,
-        "resume_available": True,
+        "resume_available": _legacy_resume_available(
+            db,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        ),
         "read_only": True,
     }
 

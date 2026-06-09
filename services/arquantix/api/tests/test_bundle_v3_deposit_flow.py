@@ -136,6 +136,87 @@ def test_request_disabled_when_flag_off(db: Session, monkeypatch):
     assert exc_info.value.code == "v3_deposit_flow_disabled"
 
 
+def test_legacy_resume_allowed_when_v3_flag_on_for_legacy_batch(db: Session, v3_deposit_on):
+    from datetime import datetime, timezone
+
+    from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
+        legacy_resume_available_for_batch,
+        resume_disabled_for_v3_deposit_flow,
+    )
+
+    pe = make_linked_client(db)
+    pf = _bundle_portfolio(db, pe.id)
+    legacy_batch = str(uuid.uuid4())
+    row = db.query(Portfolio).filter(Portfolio.id == pf.id).first()
+    now = datetime.now(timezone.utc).isoformat()
+    row.metadata_ = {
+        "bundle_invest_lock": {
+            "bundle_action": "invest",
+            "client_id": str(pe.id),
+            "portfolio_id": str(pf.id),
+            "batch_id": legacy_batch,
+            "status": "pending_signature",
+            "created_at": now,
+            "updated_at": now,
+        }
+    }
+    db.add(row)
+    db.commit()
+
+    assert legacy_resume_available_for_batch(
+        db, portfolio_id=pf.id, batch_id=legacy_batch,
+    )
+    assert not resume_disabled_for_v3_deposit_flow(
+        db, client_id=pe.id, portfolio_id=pf.id,
+    )
+
+
+def test_legacy_resume_blocked_for_v3_batch_when_flag_on(db: Session, v3_deposit_on):
+    from datetime import datetime, timezone
+
+    from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
+        _create_deposit_intent,
+        legacy_resume_available_for_batch,
+        resume_disabled_for_v3_deposit_flow,
+    )
+
+    pe = make_linked_client(db)
+    pf = _bundle_portfolio(db, pe.id)
+    deposit_execution_id = uuid.uuid4()
+    batch_id = str(deposit_execution_id)
+    _create_deposit_intent(
+        db,
+        person_id=pe.person_id,
+        portfolio_id=pf.id,
+        deposit_execution_id=deposit_execution_id,
+        funding_amount=Decimal("20"),
+        entry_asset="USDC",
+        batch_id=batch_id,
+    )
+    row = db.query(Portfolio).filter(Portfolio.id == pf.id).first()
+    now = datetime.now(timezone.utc).isoformat()
+    row.metadata_ = {
+        "bundle_invest_lock": {
+            "bundle_action": "invest",
+            "client_id": str(pe.id),
+            "portfolio_id": str(pf.id),
+            "batch_id": batch_id,
+            "status": "pending_signature",
+            "created_at": now,
+            "updated_at": now,
+        }
+    }
+    db.add(row)
+    db.commit()
+
+    assert not legacy_resume_available_for_batch(
+        db, portfolio_id=pf.id, batch_id=batch_id,
+    )
+    assert resume_disabled_for_v3_deposit_flow(
+        db, client_id=pe.id, portfolio_id=pf.id,
+    )
+
+
 def test_request_propagates_insufficient_self_trading_code(db: Session, v3_deposit_on):
     from services.portfolio_engine.direct_overlay import ensure_direct_portfolio, sync_direct_atom
 

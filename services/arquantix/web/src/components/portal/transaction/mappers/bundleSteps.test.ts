@@ -229,6 +229,11 @@ describe('bundleSteps', () => {
     assert.equal(copy.title, BUNDLE_TERMINAL_IMPOSSIBLE.title)
   })
 
+  it('maps v3 resume disabled code to product copy', () => {
+    const copy = resolveBundleFailureCopy(new Error('v3_deposit_flow_resume_disabled'))
+    assert.match(copy.lines[0]!, /rééquilibrage automatique V3/)
+  })
+
   it('maps insufficient self-trading API code to product copy', () => {
     const copy = resolveBundleFailureCopy(
       new Error('bundle.funding.insufficient_self_trading'),

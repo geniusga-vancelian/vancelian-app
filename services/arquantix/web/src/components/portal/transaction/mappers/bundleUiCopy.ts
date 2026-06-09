@@ -58,6 +58,16 @@ export const BUNDLE_INVEST_ERROR_MESSAGES: Record<string, string> = {
   'bundle.funding.invalid_amount': 'Montant d’investissement invalide.',
   bundle_funding_failed:
     'Impossible de transférer les fonds depuis Mon Trading. Vérifiez votre solde et réessayez.',
+  v3_deposit_flow_resume_disabled:
+    'Ce panier utilise le rééquilibrage automatique V3 — aucune reprise manuelle n’est nécessaire. Le traitement se poursuit en arrière-plan.',
+}
+
+export const BUNDLE_V3_REBALANCE_IN_PROGRESS_COPY: TransactionTerminalFailureCopy = {
+  title: 'Rééquilibrage automatique en cours',
+  lines: [
+    'Ce panier utilise le nouveau flux d’investissement. Le rééquilibrage se poursuit en arrière-plan — aucune signature manuelle n’est requise.',
+    'Si le cash leg reste non alloué après quelques minutes, utilisez « Réallouer le cash USDC ».',
+  ],
 }
 
 const BUNDLE_FUNDING_ERROR_FALLBACK =

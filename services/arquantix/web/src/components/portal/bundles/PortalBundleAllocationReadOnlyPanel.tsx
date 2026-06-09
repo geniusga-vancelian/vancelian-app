@@ -9,6 +9,7 @@ import {
   fetchActiveBundleInvestLock,
   type BundleInvestActiveLockPayload,
 } from '@/lib/portal/bundleClient'
+import { BUNDLE_V3_REBALANCE_IN_PROGRESS_COPY } from '@/components/portal/transaction/mappers/bundleUiCopy'
 import { bundleLockStatusLabel } from '@/lib/portal/bundleInvestLabels'
 import { formatCryptoMoney } from '@/lib/portal/cryptoWalletFormat'
 import type { PortalBundlePosition } from '@/lib/portal/cryptoWalletTypes'
@@ -87,11 +88,17 @@ export function PortalBundleAllocationReadOnlyPanel({
 
       {lockActive && lockState?.lock ? (
         <div className="rounded-v-input border border-amber-200 bg-amber-50 px-3 py-2 font-ui text-[13px] text-amber-900">
-          <p className="m-0 font-medium">Investissement en cours</p>
-          <p className="mt-1 mb-0 text-[12px]">
-            Batch {lockState.lock.batch_id.slice(0, 8)}… —{' '}
-            {bundleLockStatusLabel(lockState.lock.status)}
+          <p className="m-0 font-medium">
+            {canResume ? 'Investissement en cours' : BUNDLE_V3_REBALANCE_IN_PROGRESS_COPY.title}
           </p>
+          {canResume ? (
+            <p className="mt-1 mb-0 text-[12px]">
+              Batch {lockState.lock.batch_id.slice(0, 8)}… —{' '}
+              {bundleLockStatusLabel(lockState.lock.status)}
+            </p>
+          ) : (
+            <p className="mt-1 mb-0 text-[12px]">{BUNDLE_V3_REBALANCE_IN_PROGRESS_COPY.lines[0]}</p>
+          )}
           {lockState.reconciled ? (
             <p className="mt-1 mb-0 text-[12px]">Verrou obsolète nettoyé automatiquement.</p>
           ) : null}
@@ -104,7 +111,9 @@ export function PortalBundleAllocationReadOnlyPanel({
             ? 'Reprendre ou réallouer'
             : canResume
               ? 'Reprendre l’investissement'
-              : 'Réallouer le cash'}
+              : hasUnallocatedCash
+                ? 'Réallouer le cash'
+                : 'Voir les options'}
         </AppButton>
       ) : null}
 

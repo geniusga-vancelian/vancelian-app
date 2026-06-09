@@ -2101,16 +2101,6 @@ def mobile_bundle_invest_resume(
         BundleOrchestratorError,
     )
 
-    if resume_disabled_for_v3_deposit_flow():
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={
-                "status": "v3_deposit_flow_resume_disabled",
-                "error_code": "v3_deposit_flow_resume_disabled",
-                "message": "Legacy resume is disabled for new V3 deposit flow.",
-            },
-        )
-
     portfolio_id = payload.get("portfolio_id")
     if not portfolio_id:
         raise HTTPException(
@@ -2123,6 +2113,20 @@ def mobile_bundle_invest_resume(
         pid = _UUID(str(portfolio_id))
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    if resume_disabled_for_v3_deposit_flow(
+        db,
+        client_id=client.id,
+        portfolio_id=pid,
+    ):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "status": "v3_deposit_flow_resume_disabled",
+                "error_code": "v3_deposit_flow_resume_disabled",
+                "message": "Legacy resume is disabled for new V3 deposit flow.",
+            },
+        )
 
     from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
         transaction_in_progress_response_body,
