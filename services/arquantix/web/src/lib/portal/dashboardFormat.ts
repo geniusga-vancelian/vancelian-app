@@ -15,6 +15,10 @@ import {
   parseSelfTradingCryptoPositionsPayload,
 } from '@/lib/portal/cryptoWalletFormat'
 import type { PortalCryptoPositionsSummary } from '@/lib/portal/cryptoWalletTypes'
+import {
+  filterPortalWalletRows,
+  isPortalEuroFeaturesEnabled,
+} from '@/lib/portal/portalEuroVisibility'
 
 function toNumber(value: unknown, fallback = 0): number {
   if (value == null) return fallback
@@ -113,6 +117,7 @@ export function isRegistrationComplete(profile: PortalDashboardProfile): boolean
 }
 
 export function shouldShowUnlockEuroBanner(profile: PortalDashboardProfile): boolean {
+  if (!isPortalEuroFeaturesEnabled()) return false
   return shouldShowRegistrationResume(profile)
 }
 
@@ -332,16 +337,20 @@ export function buildWalletRows(
     currency,
   )
 
-  return [
-    {
-      id: 'euro',
-      title: 'Euro account',
-      subtitle: 'Euro current account',
-      balance: formatPortalMoney(eurBalance, 'EUR'),
-      numericBalance: eurBalance,
-      iconKey: 'euro',
-      iconTone: 'warm',
-    },
+  const rows: PortalWalletRow[] = [
+    ...(isPortalEuroFeaturesEnabled()
+      ? [
+          {
+            id: 'euro' as const,
+            title: 'Euro account',
+            subtitle: 'Euro current account',
+            balance: formatPortalMoney(eurBalance, 'EUR'),
+            numericBalance: eurBalance,
+            iconKey: 'euro' as const,
+            iconTone: 'warm' as const,
+          },
+        ]
+      : []),
     {
       id: 'savings',
       title: 'Savings',
@@ -388,6 +397,8 @@ export function buildWalletRows(
       iconTone: 'safran',
     },
   ]
+
+  return filterPortalWalletRows(rows)
 }
 
 export function resolveHeaderBalance(

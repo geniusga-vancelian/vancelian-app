@@ -3,6 +3,7 @@ import {
   isBaseSwapTradeAsset,
   type BaseSwapTradeAsset,
 } from '@/lib/portal/baseAllowedAssets'
+import { filterPortalEuroStablecoinSymbols } from '@/lib/portal/portalEuroVisibility'
 import type { SwapQuotePayload, SwapSupportedAssetsPayload } from '@/lib/portal/swapClient'
 import type { PortalCryptoPosition } from '@/lib/portal/cryptoWalletTypes'
 
@@ -54,7 +55,11 @@ export const SWAP_V1_SAME_CHAIN_ONLY = true
 export const SWAP_V1_PILOT_CHAINS = ['base'] as const
 export type SwapV1PilotChain = (typeof SWAP_V1_PILOT_CHAINS)[number]
 
-export const SWAP_V1_TOKENS = ['USDC', 'EURC', 'ETH'] as const
+const ALL_SWAP_V1_TOKENS = ['USDC', 'EURC', 'ETH'] as const
+
+export const SWAP_V1_TOKENS = filterPortalEuroStablecoinSymbols(
+  ALL_SWAP_V1_TOKENS,
+) as unknown as typeof ALL_SWAP_V1_TOKENS
 
 /** Actifs échangeables via le flow swap portail (Base / Li.FI). */
 export const PORTAL_SWAP_TRADE_ASSETS = BASE_SWAP_TRADE_ASSETS

@@ -12,6 +12,7 @@ import type { SwapCatalogAsset } from '@/lib/portal/swapFlowTypes'
 import { SWAP_V1_SAME_CHAIN_ONLY, SWAP_CHAIN_LABELS } from '@/lib/portal/swapFlowTypes'
 import type { PortalCryptoPosition } from '@/lib/portal/cryptoWalletTypes'
 import { tickerToProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
+import { resolvePortalSwapEligibleAssetsLabel } from '@/lib/portal/portalEuroVisibility'
 
 export type { SwapFromOption } from '@/lib/portal/swapFlowFormat'
 
@@ -54,7 +55,7 @@ export function PortalSwapFromStep({
             description ??
             (SWAP_V1_SAME_CHAIN_ONLY
               ? `Wallet and network are set in the navbar — swaps on ${chainHint} only.`
-              : 'Wallet and network are set in the navbar — Base assets eligible (USDC, EURC, ETH, etc.).')
+              : `Wallet and network are set in the navbar — Base assets eligible (${resolvePortalSwapEligibleAssetsLabel()}).`)
           }
         />
 

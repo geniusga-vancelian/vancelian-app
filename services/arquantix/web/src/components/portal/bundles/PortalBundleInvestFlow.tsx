@@ -37,9 +37,11 @@ import {
   formatBundleMinFundingHint,
   isBundleFundingBelowMin,
 } from '@/lib/portal/bundleMinFunding'
+import { filterPortalEuroStablecoinSymbols } from '@/lib/portal/portalEuroVisibility'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 
-const PILOT_ENTRY_ASSETS = ['USDC', 'EURC'] as const
+const ALL_PILOT_ENTRY_ASSETS = ['USDC', 'EURC'] as const
+const PILOT_ENTRY_ASSETS = filterPortalEuroStablecoinSymbols(ALL_PILOT_ENTRY_ASSETS)
 
 type Props = {
   bundle: PortalCryptoBundle
@@ -76,7 +78,7 @@ export function PortalBundleInvestFlow({ bundle, onExit }: Props) {
       : [...PILOT_ENTRY_ASSETS]
     return allowed
       .map((a) => a.toUpperCase())
-      .filter((a) => PILOT_ENTRY_ASSETS.includes(a as (typeof PILOT_ENTRY_ASSETS)[number]))
+      .filter((a) => PILOT_ENTRY_ASSETS.includes(a as (typeof ALL_PILOT_ENTRY_ASSETS)[number]))
   }, [bundle.entryAssetsAllowed])
 
   const portfolioReady = Boolean(bundle.portfolioId?.trim())

@@ -1,4 +1,5 @@
 import { assetPrecisionDisplay } from '@/lib/portal/cryptoWalletFormat'
+import { isPortalEuroFeaturesEnabled } from '@/lib/portal/portalEuroVisibility'
 import {
   SWAP_V1_PILOT_CHAINS,
   SWAP_V1_SAME_CHAIN_ONLY,
@@ -271,5 +272,6 @@ export function pickDefaultSwapToOption(
 
 function isSwapV1Stable(symbol: string): boolean {
   const sym = symbol.toUpperCase()
-  return sym === 'USDC' || sym === 'EURC'
+  if (sym === 'USDC') return true
+  return sym === 'EURC' && isPortalEuroFeaturesEnabled()
 }

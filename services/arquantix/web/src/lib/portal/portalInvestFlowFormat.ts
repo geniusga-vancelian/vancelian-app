@@ -1,6 +1,7 @@
 import type { ExclusiveOfferVaultPayload } from '@/lib/cms/exclusiveOfferVaultPage'
 import type { PortalLedgityVaultDetails } from '@/lib/portal/ledgity/ledgityVaultTypes'
 import type { PortalMorphoVaultDetails } from '@/lib/portal/morphoVaultTypes'
+import { isPortalEuroFeaturesEnabled } from '@/lib/portal/portalEuroVisibility'
 
 const USDC_RATE_TO_EUR = 0.924
 const BASE_CHAIN_ID = 8453
@@ -170,7 +171,7 @@ export function buildVaultInvestTarget(payload: ExclusiveOfferVaultPayload): Por
 }
 
 export function defaultInvestSources(): PortalInvestSource[] {
-  return [
+  const sources: PortalInvestSource[] = [
     {
       key: 'usdc',
       name: 'USDC',
@@ -200,6 +201,9 @@ export function defaultInvestSources(): PortalInvestSource[] {
       techSource: 'EURC (Circle)',
     },
   ]
+
+  if (isPortalEuroFeaturesEnabled()) return sources
+  return sources.filter((source) => source.key !== 'eur')
 }
 
 export function mergeSourceBalance(

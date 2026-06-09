@@ -16,6 +16,7 @@ import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/button'
 import type { SwapProcessingContext } from '@/components/portal/transaction/mappers/swapSteps'
 import { SWAP_FLOW_UI } from '@/components/portal/transaction/mappers/swapUiCopy'
+import { resolvePortalSwapPayWithLabel } from '@/lib/portal/portalEuroVisibility'
 import type { PortalCryptoWalletHubPayload } from '@/lib/portal/cryptoWalletTypes'
 import { filterCryptoPositionsSummaryByPortalScope } from '@/lib/portal/portalWalletScopeFilter'
 import { PORTAL_ROUTES, portalCryptoWalletAssetRoute } from '@/lib/portal/portalRouting'
@@ -454,7 +455,7 @@ export function PortalSwapFlow() {
           stepEyebrow={urlIntent.mode === 'buy' ? 'Step 1' : 'Step 2'}
           description={
             urlIntent.mode === 'buy'
-              ? `Pay with USDC, EURC or ETH on ${chainLabel} to buy ${toAsset}.`
+              ? resolvePortalSwapPayWithLabel(chainLabel, toAsset)
               : undefined
           }
           onBack={() => {

@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test'
+import { describe, it, afterEach, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   applyWalletRowAccess,
@@ -36,16 +36,30 @@ const registeredUser: PortalDashboardProfile = {
 }
 
 describe('shouldShowRegistrationResume', () => {
+  const prevEuroEnabled = process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED
+
+  afterEach(() => {
+    if (prevEuroEnabled === undefined) delete process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED
+    else process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED = prevEuroEnabled
+  })
+
   it('returns true for fresh Privy signup', () => {
+    process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED = 'true'
     assert.equal(shouldShowRegistrationResume(freshCryptoUser), true)
     assert.equal(isRegistrationComplete(freshCryptoUser), false)
     assert.equal(shouldShowUnlockEuroBanner(freshCryptoUser), true)
   })
 
   it('returns false when registration is complete', () => {
+    process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED = 'true'
     assert.equal(shouldShowRegistrationResume(registeredUser), false)
     assert.equal(isRegistrationComplete(registeredUser), true)
     assert.equal(shouldShowUnlockEuroBanner(registeredUser), false)
+  })
+
+  it('hides unlock euro banner when euro features are disabled', () => {
+    delete process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED
+    assert.equal(shouldShowUnlockEuroBanner(freshCryptoUser), false)
   })
 })
 
@@ -258,10 +272,29 @@ describe('resolveDashboardCryptoSummary', () => {
 })
 
 describe('applyWalletRowAccess', () => {
-  const baseRows = buildWalletRows(null, { summary: { total_value_eur: 120, positions_count: 1 } }, null, null, 'EUR')
+  const prevEuroEnabled = process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED
+
+  afterEach(() => {
+    if (prevEuroEnabled === undefined) delete process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED
+    else process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED = prevEuroEnabled
+  })
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_PORTAL_EURO_ENABLED = 'true'
+  })
+
+  function buildBaseRows() {
+    return buildWalletRows(
+      null,
+      { summary: { total_value_eur: 120, positions_count: 1 } },
+      null,
+      null,
+      'EUR',
+    )
+  }
 
   it('keeps crypto and other rows visible for fresh signup', () => {
-    const rows = applyWalletRowAccess(baseRows, freshCryptoUser, null)
+    const rows = applyWalletRowAccess(buildBaseRows(), freshCryptoUser, null)
     assert.equal(rows.find((r) => r.id === 'crypto')?.locked, undefined)
     assert.equal(rows.find((r) => r.id === 'savings')?.locked, undefined)
     assert.equal(rows.find((r) => r.id === 'offers')?.locked, undefined)
@@ -269,7 +302,7 @@ describe('applyWalletRowAccess', () => {
   })
 
   it('locks euro row with CTA before registration completes', () => {
-    const rows = applyWalletRowAccess(baseRows, freshCryptoUser, null)
+    const rows = applyWalletRowAccess(buildBaseRows(), freshCryptoUser, null)
     const euro = rows.find((r) => r.id === 'euro')
     assert.equal(euro?.locked, true)
     assert.equal(euro?.ctaLabel, 'Complete registration')
@@ -277,7 +310,7 @@ describe('applyWalletRowAccess', () => {
   })
 
   it('unlocks euro row after registration completes', () => {
-    const rows = applyWalletRowAccess(baseRows, registeredUser, null)
+    const rows = applyWalletRowAccess(buildBaseRows(), registeredUser, null)
     const euro = rows.find((r) => r.id === 'euro')
     assert.equal(euro?.locked, false)
     assert.match(euro?.balance ?? '', /0,00/)

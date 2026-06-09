@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import { resolveCryptoAvatarSources } from '@/lib/portal/cryptoInstrumentAssets'
 import { formatEvmNetworkLabel } from '@/lib/portal/evmNetworkLabel'
+import { isPortalEuroFeaturesEnabled } from '@/lib/portal/portalEuroVisibility'
 
 export type ChainFlowAsset = {
   id: string
@@ -10,12 +11,16 @@ export type ChainFlowAsset = {
   name: string
 }
 
-export const CHAIN_FLOW_ASSETS: ChainFlowAsset[] = [
+const ALL_CHAIN_FLOW_ASSETS: ChainFlowAsset[] = [
   { id: 'usdc', sym: 'USDC', name: 'USD Coin' },
   { id: 'eurc', sym: 'EURC', name: 'Euro Coin' },
   { id: 'eth', sym: 'ETH', name: 'Ethereum' },
   { id: 'usdt', sym: 'USDT', name: 'Tether' },
 ]
+
+export const CHAIN_FLOW_ASSETS: ChainFlowAsset[] = isPortalEuroFeaturesEnabled()
+  ? ALL_CHAIN_FLOW_ASSETS
+  : ALL_CHAIN_FLOW_ASSETS.filter((asset) => asset.sym !== 'EURC')
 
 export type ChainNetworkMeta = {
   time: string

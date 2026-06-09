@@ -20,6 +20,7 @@ import {
   portalCryptoInstrumentRoute,
   portalCryptoWalletAssetRoute,
 } from '@/lib/portal/portalRouting'
+import { resolvePortalEvmDepositAssetsLabel } from '@/lib/portal/portalEuroVisibility'
 import {
   fetchPortalSolanaWalletStatus,
   resolveSolanaExplorerAddressUrl,
@@ -266,7 +267,7 @@ export function PortalSolanaDepositScreen() {
           <section className="rounded-v-card border border-v-fg-10 bg-v-fg-05 px-4 py-4 sm:px-5">
             <p className="m-0 font-ui text-[13px] leading-relaxed text-v-fg-body">
               <strong className="font-semibold text-v-fg">Besoin d’ETH ou de stablecoins ?</strong>{' '}
-              Utilisez la page de dépôt EVM pour recevoir ETH, USDC, USDT ou EURC sur Ethereum
+              Utilisez la page de dépôt EVM pour recevoir {resolvePortalEvmDepositAssetsLabel()} sur Ethereum
               mainnet — adresse différente de votre wallet Solana.
             </p>
             <Button type="button" variant="outline" size="sm" className="mt-3 gap-1.5" asChild>
