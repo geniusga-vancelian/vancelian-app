@@ -67,6 +67,7 @@ pytestmark = pytest.mark.skipif(
 def ecs_env(monkeypatch):
     monkeypatch.setenv("BUNDLE_V3_DEPOSIT_FLOW_ENABLED", "true")
     monkeypatch.setenv("BUNDLE_V3_DEPOSIT_WORKER_ENABLED", "true")
+    monkeypatch.setenv("BUNDLE_V3_DEPOSIT_IMMEDIATE_KICK_ENABLED", "false")
     monkeypatch.setenv("PORTFOLIO_FINANCIAL_OPERATION_GUARD_ENABLED", "true")
     monkeypatch.setenv("BUNDLE_V3_REBALANCE_EXECUTOR_ENABLED", "true")
 

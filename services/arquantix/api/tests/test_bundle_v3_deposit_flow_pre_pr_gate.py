@@ -7,6 +7,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import patch
 
@@ -182,7 +183,11 @@ def _active_guard_count(db: Session) -> int:
 
 
 def _deposit_and_queue(db: Session, pe, portfolio: Portfolio, amount: str = "20"):
-    with _fund_patch():
+    """Enqueue seul — kick immédiat off pour tests worker/cron explicites."""
+    with _fund_patch(), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.bundle_v3_deposit_immediate_kick_enabled",
+        return_value=False,
+    ):
         return request_v3_bundle_deposit(
             db,
             client_id=pe.id,
@@ -190,6 +195,28 @@ def _deposit_and_queue(db: Session, pe, portfolio: Portfolio, amount: str = "20"
             funding_asset="USDC",
             funding_amount=Decimal(amount),
         )
+
+
+@contextmanager
+def _terminal_execute_patches(*, v3_status: str = "COMPLETED", plan_hash: str | None = None):
+    ph = plan_hash or f"sha256:gate-{uuid.uuid4().hex[:8]}"
+    terminal = {
+        "v3_status": v3_status,
+        "rebalance_execution_id": str(uuid.uuid4()),
+        "plan_hash": ph,
+        "resume_required": False,
+    }
+    with patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.execute_v3_bundle_rebalance",
+        return_value=terminal,
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.compute_bundle_drift_snapshot",
+        return_value={"portfolio_id": "x"},
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.plan_bundle_rebalance_from_drift",
+        return_value={"status": "ok", "plan_hash": ph, "buy_plan": [], "sell_plan": []},
+    ):
+        yield
 
 
 def _run_worker_with_terminal(
@@ -228,32 +255,34 @@ def test_gate_01_kings_deposit_full_lifecycle(db: Session, gate_env):
     _usdc_instrument(db)
     _seed_wallet_usdc(db, pe)
 
-    queued = _deposit_and_queue(db, pe, kings)
-    assert queued["status"] == "queued"
+    with _fund_patch(), _terminal_execute_patches(v3_status="COMPLETED"):
+        result = request_v3_bundle_deposit(
+            db,
+            client_id=pe.id,
+            portfolio_id=kings.id,
+            funding_asset="USDC",
+            funding_amount=Decimal("20"),
+        )
 
-    guard_active = find_active_portfolio_financial_operation(db, portfolio_id=kings.id)
-    assert guard_active is not None
-    assert guard_active.status == PortfolioFinancialOperationStatus.ACTIVE.value
-
-    outbox_before = TransactionOutboxRepository.find_by_intent(
-        db,
-        uuid.UUID(queued["intent_id"]),
-        event_type=OutboxEventType.BUNDLE_V3_REBALANCE_REQUESTED.value,
-    )
-    assert len(outbox_before) == 1
-    assert outbox_before[0].status == OutboxEventStatus.PENDING.value
-
-    tick = _run_worker_with_terminal(db, v3_status="COMPLETED")
-    assert tick.processed == 1
+    assert result["status"] == "completed"
+    assert result["worker_immediate_kick"] == "success"
+    assert result["v3_status"] == "COMPLETED"
 
     guard_after = find_active_portfolio_financial_operation(db, portfolio_id=kings.id)
     assert guard_after is None
+
+    outbox_after = TransactionOutboxRepository.find_by_intent(
+        db,
+        uuid.UUID(result["intent_id"]),
+        event_type=OutboxEventType.BUNDLE_V3_REBALANCE_REQUESTED.value,
+    )
+    assert outbox_after[0].status == OutboxEventStatus.PROCESSED.value
 
     released = (
         db.query(PortfolioFinancialOperation)
         .filter(
             PortfolioFinancialOperation.portfolio_id == kings.id,
-            PortfolioFinancialOperation.execution_id == uuid.UUID(queued["deposit_execution_id"]),
+            PortfolioFinancialOperation.execution_id == uuid.UUID(result["deposit_execution_id"]),
         )
         .first()
     )
@@ -275,7 +304,10 @@ def test_gate_02_double_kings_deposit_second_409(db: Session, gate_env):
 
     swaps_before = _swap_count(db, pe.person_id)
 
-    with _fund_patch():
+    with _fund_patch(), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.bundle_v3_deposit_immediate_kick_enabled",
+        return_value=False,
+    ):
         first = request_v3_bundle_deposit(
             db, client_id=pe.id, portfolio_id=kings.id,
             funding_asset="USDC", funding_amount=Decimal("20"),
@@ -353,6 +385,15 @@ def test_gate_04_worker_crash_after_funding_idempotent_resume(db: Session, gate_
     with patch(
         "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.fund_bundle_cash_leg_from_self_trading",
         side_effect=_counting_fund,
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.execute_v3_bundle_rebalance",
+        side_effect=_execute_maybe_crash,
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.compute_bundle_drift_snapshot",
+        return_value={"portfolio_id": str(kings.id)},
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.plan_bundle_rebalance_from_drift",
+        return_value={"status": "ok", "plan_hash": "sha256:crash-recovery", "buy_plan": [], "sell_plan": []},
     ):
         queued = request_v3_bundle_deposit(
             db, client_id=pe.id, portfolio_id=kings.id,
@@ -360,6 +401,8 @@ def test_gate_04_worker_crash_after_funding_idempotent_resume(db: Session, gate_
         )
 
     assert len(fund_calls) == 1
+    assert queued["worker_immediate_kick"] == "failed"
+    assert len(execute_calls) == 1
 
     with patch(
         "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.execute_v3_bundle_rebalance",
@@ -372,19 +415,13 @@ def test_gate_04_worker_crash_after_funding_idempotent_resume(db: Session, gate_
         return_value={"status": "ok", "plan_hash": "sha256:crash-recovery", "buy_plan": [], "sell_plan": []},
     ):
         tick1 = tick_bundle_v3_deposit_worker(db)
-        assert tick1.failed == 1
-        assert tick1.processed == 0
+        assert tick1.processed == 1
 
         outbox = TransactionOutboxRepository.find_by_intent(
             db, uuid.UUID(queued["intent_id"]),
             event_type=OutboxEventType.BUNDLE_V3_REBALANCE_REQUESTED.value,
         )
-        assert outbox[0].status == OutboxEventStatus.PENDING.value
-        outbox[0].next_retry_at = datetime.now(timezone.utc) - timedelta(seconds=1)
-        db.flush()
-
-        tick2 = tick_bundle_v3_deposit_worker(db)
-        assert tick2.processed == 1
+        assert outbox[0].status == OutboxEventStatus.PROCESSED.value
 
     assert len(fund_calls) == 1
     assert len(execute_calls) == 2

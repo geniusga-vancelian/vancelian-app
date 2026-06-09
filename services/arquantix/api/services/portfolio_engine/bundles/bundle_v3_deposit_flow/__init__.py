@@ -2,6 +2,7 @@
 
 from services.portfolio_engine.bundles.bundle_v3_deposit_flow.config import (
     bundle_v3_deposit_flow_enabled,
+    bundle_v3_deposit_immediate_kick_enabled,
     bundle_v3_deposit_worker_enabled,
 )
 from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
@@ -12,6 +13,7 @@ from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service im
 
 __all__ = [
     "bundle_v3_deposit_flow_enabled",
+    "bundle_v3_deposit_immediate_kick_enabled",
     "bundle_v3_deposit_worker_enabled",
     "V3DepositFlowError",
     "request_v3_bundle_deposit",

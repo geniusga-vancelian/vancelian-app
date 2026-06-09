@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -16,6 +17,7 @@ from services.portfolio_engine.bundle_execution.bundle_funding import (
 )
 from services.portfolio_engine.bundles.bundle_v3_deposit_flow.config import (
     bundle_v3_deposit_flow_enabled,
+    bundle_v3_deposit_immediate_kick_enabled,
 )
 from services.portfolio_engine.bundles.drift_engine import compute_bundle_drift_snapshot
 from services.portfolio_engine.bundles.orchestrator import BundleOrchestrator, BundleOrchestratorError
@@ -43,6 +45,69 @@ _TERMINAL_V3 = frozenset({
     "FAILED",
     "NO_ACTION",
 })
+
+_STATUS_BY_V3_TERMINAL = {
+    "COMPLETED": "completed",
+    "COMPLETED_WITH_RESIDUAL_CASH": "completed_with_residual_cash",
+    "FAILED": "failed",
+    "NO_ACTION": "completed",
+}
+
+
+def _deposit_status_from_v3(v3_status: str | None) -> str:
+    if not v3_status:
+        return "queued"
+    return _STATUS_BY_V3_TERMINAL.get(str(v3_status), "queued")
+
+
+def _record_immediate_kick_failure(db: Session, outbox: TransactionOutbox, exc: Exception) -> None:
+    """Outbox repasse PENDING — retry immédiat possible via cron/worker."""
+    outbox.attempt_count = int(outbox.attempt_count or 0) + 1
+    outbox.last_error = str(exc)[:2000]
+    outbox.locked_by = None
+    outbox.locked_at = None
+    if outbox.attempt_count >= int(outbox.max_attempts or 10):
+        outbox.status = OutboxEventStatus.DEAD_LETTER.value
+    else:
+        outbox.status = OutboxEventStatus.PENDING.value
+        # Pas de délai : le cron (ou un 2e appel worker) peut reprendre tout de suite.
+        outbox.next_retry_at = datetime.now(timezone.utc)
+    db.flush()
+
+
+def kick_v3_deposit_rebalance_immediately(
+    db: Session,
+    *,
+    outbox: TransactionOutbox,
+) -> dict[str, Any]:
+    """Exécute drift+rebalance V3 dès l'enqueue — filet cron si échec."""
+    if not bundle_v3_deposit_immediate_kick_enabled():
+        return {"worker_immediate_kick": "skipped"}
+
+    try:
+        result = process_v3_deposit_rebalance_outbox_event(db, outbox=outbox)
+    except Exception as exc:
+        logger.warning(
+            "bundle_v3_deposit_immediate_kick_failed outbox=%s error=%s",
+            outbox.id,
+            exc,
+            exc_info=True,
+        )
+        _record_immediate_kick_failure(db, outbox, exc)
+        return {
+            "worker_immediate_kick": "failed",
+            "worker_error": str(exc)[:500],
+        }
+
+    v3_status = str(result.get("v3_status") or "")
+    terminal = bool(result.get("terminal"))
+    return {
+        "worker_immediate_kick": "success" if terminal else "deferred",
+        "v3_status": v3_status or None,
+        "rebalance_execution_id": result.get("rebalance_execution_id"),
+        "plan_hash": result.get("plan_hash"),
+        "terminal": terminal,
+    }
 
 
 class V3DepositFlowError(Exception):
@@ -176,8 +241,21 @@ def request_v3_bundle_deposit(
         correlation_id=deposit_execution_id,
     )
 
-    return {
-        "status": "queued",
+    kick = kick_v3_deposit_rebalance_immediately(db, outbox=outbox_row)
+    v3_status = kick.get("v3_status")
+    status = _deposit_status_from_v3(v3_status) if kick.get("worker_immediate_kick") == "success" else "queued"
+    if kick.get("worker_immediate_kick") == "skipped":
+        message = "Deposit funded; V3 rebalance queued"
+    elif kick.get("worker_immediate_kick") == "success":
+        message = f"Deposit funded; V3 rebalance terminal ({v3_status})"
+    elif kick.get("worker_immediate_kick") == "deferred":
+        message = "Deposit funded; V3 rebalance in progress"
+        status = "processing"
+    else:
+        message = "Deposit funded; V3 rebalance queued (immediate kick failed, cron retry)"
+
+    response: dict[str, Any] = {
+        "status": status,
         "flow": "bundle_v3_deposit",
         "deposit_execution_id": str(deposit_execution_id),
         "batch_id": batch_id,
@@ -186,8 +264,10 @@ def request_v3_bundle_deposit(
         "outbox_id": str(outbox_row.id),
         "outbox_created": created,
         "funding": funding_result,
-        "message": "Deposit funded; V3 rebalance queued",
+        "message": message,
+        **kick,
     }
+    return response
 
 
 def process_v3_deposit_rebalance_outbox_event(

@@ -174,6 +174,7 @@ def test_request_funds_and_enqueues_outbox(db: Session, v3_deposit_on, monkeypat
         )
 
     assert result["status"] == "queued"
+    assert result["worker_immediate_kick"] == "skipped"
     assert result["flow"] == "bundle_v3_deposit"
     outbox = TransactionOutboxRepository.find_by_intent(
         db,
@@ -183,7 +184,10 @@ def test_request_funds_and_enqueues_outbox(db: Session, v3_deposit_on, monkeypat
     assert len(outbox) == 1
 
 
-def test_worker_processes_outbox_terminal(db: Session, v3_deposit_on, v3_worker_on, monkeypatch):
+def test_worker_processes_outbox_terminal(db: Session, v3_deposit_on, monkeypatch):
+    """Worker cron seul — kick immédiat désactivé."""
+    monkeypatch.setenv("BUNDLE_V3_DEPOSIT_IMMEDIATE_KICK_ENABLED", "false")
+    monkeypatch.setenv("BUNDLE_V3_DEPOSIT_WORKER_ENABLED", "true")
     pe = make_linked_client(db)
     pf = _bundle_portfolio(db, pe.id)
     _usdc_instrument(db)
@@ -206,6 +210,8 @@ def test_worker_processes_outbox_terminal(db: Session, v3_deposit_on, v3_worker_
             funding_amount=Decimal("20"),
         )
 
+    assert queued["worker_immediate_kick"] == "skipped"
+
     with patch(
         "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.execute_v3_bundle_rebalance",
         return_value=terminal_result,
@@ -225,4 +231,107 @@ def test_worker_processes_outbox_terminal(db: Session, v3_deposit_on, v3_worker_
         uuid.UUID(queued["intent_id"]),
         event_type=OutboxEventType.BUNDLE_V3_REBALANCE_REQUESTED.value,
     )
+    assert outbox[0].status == "processed"
+
+
+def test_immediate_kick_completes_without_cron(db: Session, v3_deposit_on, v3_worker_on, monkeypatch):
+    """Kick post-dépôt — terminal sans tick ECS."""
+    pe = make_linked_client(db)
+    pf = _bundle_portfolio(db, pe.id)
+    _usdc_instrument(db)
+
+    terminal_result = {
+        "v3_status": "COMPLETED",
+        "rebalance_execution_id": str(uuid.uuid4()),
+        "plan_hash": "sha256:immediate",
+        "resume_required": False,
+    }
+
+    with patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.fund_bundle_cash_leg_from_self_trading",
+        return_value={"funded": True},
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.execute_v3_bundle_rebalance",
+        return_value=terminal_result,
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.compute_bundle_drift_snapshot",
+        return_value={"portfolio_id": str(pf.id)},
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.plan_bundle_rebalance_from_drift",
+        return_value={"status": "ok", "plan_hash": "sha256:immediate", "buy_plan": [], "sell_plan": []},
+    ):
+        result = request_v3_bundle_deposit(
+            db,
+            client_id=pe.id,
+            portfolio_id=pf.id,
+            funding_asset="USDC",
+            funding_amount=Decimal("20"),
+        )
+
+    assert result["status"] == "completed"
+    assert result["worker_immediate_kick"] == "success"
+    assert result["v3_status"] == "COMPLETED"
+
+    outbox = TransactionOutboxRepository.find_by_intent(
+        db,
+        uuid.UUID(result["intent_id"]),
+        event_type=OutboxEventType.BUNDLE_V3_REBALANCE_REQUESTED.value,
+    )
+    assert outbox[0].status == "processed"
+
+    tick = tick_bundle_v3_deposit_worker(db)
+    assert tick.polled == 0
+    assert tick.processed == 0
+
+
+def test_immediate_kick_failure_leaves_pending_for_cron(db: Session, v3_deposit_on, v3_worker_on):
+    """Échec kick immédiat — outbox PENDING, cron peut reprendre."""
+    pe = make_linked_client(db)
+    pf = _bundle_portfolio(db, pe.id)
+    _usdc_instrument(db)
+
+    terminal_result = {
+        "v3_status": "COMPLETED",
+        "rebalance_execution_id": str(uuid.uuid4()),
+        "plan_hash": "sha256:retry-cron",
+    }
+
+    with patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.fund_bundle_cash_leg_from_self_trading",
+        return_value={"funded": True},
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.execute_v3_bundle_rebalance",
+        side_effect=RuntimeError("simulated_kick_fail"),
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.compute_bundle_drift_snapshot",
+        return_value={"portfolio_id": str(pf.id)},
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.plan_bundle_rebalance_from_drift",
+        return_value={"status": "ok", "plan_hash": "sha256:retry-cron", "buy_plan": [], "sell_plan": []},
+    ):
+        result = request_v3_bundle_deposit(
+            db,
+            client_id=pe.id,
+            portfolio_id=pf.id,
+            funding_asset="USDC",
+            funding_amount=Decimal("20"),
+        )
+
+    assert result["status"] == "queued"
+    assert result["worker_immediate_kick"] == "failed"
+
+    outbox = TransactionOutboxRepository.find_by_intent(
+        db,
+        uuid.UUID(result["intent_id"]),
+        event_type=OutboxEventType.BUNDLE_V3_REBALANCE_REQUESTED.value,
+    )
+    assert outbox[0].status == "pending"
+
+    with patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.execute_v3_bundle_rebalance",
+        return_value=terminal_result,
+    ):
+        tick = tick_bundle_v3_deposit_worker(db)
+
+    assert tick.processed == 1
     assert outbox[0].status == "processed"
