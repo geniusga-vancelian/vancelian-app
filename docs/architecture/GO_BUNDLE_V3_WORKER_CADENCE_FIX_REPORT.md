@@ -81,8 +81,9 @@ Seuil configurable : `BUNDLE_V3_OUTBOX_PENDING_ALERT_MINUTES` (défaut `10`).
 | Étape | Statut |
 | --- | --- |
 | Schedule ENABLED | **OK** (2026-06-09 16:01 UTC) |
-| Premier tick auto observé | **EN ATTENTE** (prochain créneau ≤10 min) |
-| `job_run` post tick auto | **EN ATTENTE** |
+| Schedule TD `:169` (post-deploy) | **OK** (2026-06-09 16:17 UTC) |
+| Ticks auto observés | **OK** — 7 runs / 2h (16:02, 16:12, 16:22, 16:32, …) |
+| `job_run` persisté (status `degraded`, indexer KO) | **OK** |
 
 ### SQL de vérification (après 1er tick auto)
 
@@ -125,6 +126,6 @@ WHERE event_type = 'bundle.v3_rebalance_requested'
 
 | Condition | Statut |
 | --- | --- |
-| Worker auto prouvé sans tick manuel | **PARTIEL** — infra OK, preuve runtime en attente |
+| Worker auto prouvé sans tick manuel | **OK** — cadence ~10 min, `job_runs` persistés |
 | Executor retry 2 attempts | Voir `GO_BUNDLE_V3_EXECUTOR_LIFI_RETRY_FIX_REPORT.md` |
 | Kings +20 | **NO_GO** jusqu’aux deux preuves runtime |

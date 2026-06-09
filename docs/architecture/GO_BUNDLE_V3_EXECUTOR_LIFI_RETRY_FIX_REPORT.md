@@ -116,9 +116,10 @@ si attempt 2 completed → COMPLETED
 
 | Étape | Statut |
 | --- | --- |
-| Code executor + tests | **PR prête** |
-| Deploy ECS `arquantix-api` (> :168) | **REQUIS** |
-| Preuve prod (swap réel) | **NO_GO dépôt** — preuve via prochain run executor ou mock contrôlé |
+| Code executor + tests | **OK** — 39 tests PASS |
+| Deploy ECS `arquantix-api:169` | **OK** — commit `c0d1b224`, GHA success |
+| Preuve prod code déployé | **OK** — `_resolve_pending_leg`, `attempt_details`, `MAX_SWAP_ATTEMPTS=2` |
+| Preuve prod swap réel | **EN ATTENTE** — pas de dépôt (NO_GO jusqu'à GO final) |
 
 ---
 
@@ -127,6 +128,6 @@ si attempt 2 completed → COMPLETED
 | Condition | Statut |
 | --- | --- |
 | Retry 2 attempts prouvé en tests | **OK** |
-| Retry 2 attempts prouvé en prod | **EN ATTENTE** (post-deploy) |
-| Worker auto (Partie A) | Voir `GO_BUNDLE_V3_WORKER_CADENCE_FIX_REPORT.md` |
-| Kings +20 unique | **NO_GO** jusqu’aux deux preuves runtime |
+| Retry 2 attempts code en prod (`:169`) | **OK** (vérif statique ECS) |
+| Worker auto (Partie A) | **OK** — voir `GO_BUNDLE_V3_WORKER_CADENCE_FIX_REPORT.md` |
+| Kings +20 unique | **CONDITIONNEL** — possible après 1 swap réel confirme attempt 2 si TTL expire |
