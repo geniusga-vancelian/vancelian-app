@@ -74,6 +74,19 @@ describe('bundleInvestOrchestration E.2-B', () => {
     assert.equal(status, 'completed_partial_allocation')
   })
 
+  it('v3_deposit_queued maps to v3_deposit_queued variant', () => {
+    assert.equal(mapTerminalStatusToResultVariant('v3_deposit_queued'), 'v3_deposit_queued')
+    const invest = {
+      ...baseInvest,
+      allocation_details: [],
+      total_entry_asset_received: 20,
+    }
+    assert.equal(
+      resolveBundleInvestResultVariant(invest, undefined, 'v3_deposit_queued'),
+      'v3_deposit_queued',
+    )
+  })
+
   it('no funding/no useful effect → failed_no_allocation', () => {
     const invest = {
       ...baseInvest,

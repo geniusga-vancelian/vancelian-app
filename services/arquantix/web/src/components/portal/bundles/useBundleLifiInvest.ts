@@ -4,6 +4,7 @@ import { useCallback, useRef } from 'react'
 
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import {
+  bundleV3QueuedToInvestShim,
   fetchActiveBundleInvestLock,
   finalizeBundleBatch,
   investBundle,
@@ -12,6 +13,7 @@ import {
   type BundleFinalizePayload,
   type BundleInvestPayload,
   type BundleInvestResult,
+  type BundleV3DepositQueuedPayload,
 } from '@/lib/portal/bundleClient'
 import {
   BundleLegSkippableError,
@@ -47,6 +49,7 @@ export type BundleInvestRunResult = {
   terminalStatus: BundleInvestTerminalStatus
   legOutcomes: BundleLegOutcome[]
   backendLockPending?: boolean
+  v3Deposit?: BundleV3DepositQueuedPayload
 }
 
 async function tryExecuteSingleLeg(
@@ -319,6 +322,25 @@ export function useBundleLifiInvest(
         const outcome = await investBundle(body)
         if (outcome.kind === 'already_pending') {
           return outcome
+        }
+
+        if (outcome.kind === 'v3_queued') {
+          onProcessingProgress?.({
+            stage: 'completed',
+            entryAsset: body.funding_asset,
+            allocationAssets: [],
+            allocationLegTotal: 0,
+          })
+          clearBundleInvestSession(body.portfolio_id)
+          return {
+            invest: bundleV3QueuedToInvestShim(outcome.payload, {
+              fundingAsset: body.funding_asset,
+              fundingAmount: body.funding_amount,
+            }),
+            terminalStatus: 'v3_deposit_queued',
+            legOutcomes: [],
+            v3Deposit: outcome.payload,
+          }
         }
 
         const invest = outcome.payload

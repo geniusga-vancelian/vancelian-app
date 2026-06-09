@@ -273,9 +273,12 @@ function PortalBundleWeb3ExecutionRunner({
         setResultVariant(variant)
         if (
           runResult?.terminalStatus &&
-          ['completed_full_allocation', 'completed_partial_allocation', 'failed_no_allocation'].includes(
-            runResult.terminalStatus,
-          )
+          [
+            'completed_full_allocation',
+            'completed_partial_allocation',
+            'failed_no_allocation',
+            'v3_deposit_queued',
+          ].includes(runResult.terminalStatus)
         ) {
           clearBundleInvestSession(bundle.portfolioId!)
         }
@@ -420,6 +423,39 @@ function PortalBundleWeb3ExecutionRunner({
           subtitle={BUNDLE_FLOW_UI.successSubtitle}
           stepsTitle="Étapes réalisées"
           steps={successSteps}
+          summary={[
+            { k: BUNDLE_REVIEW_UI.bundle, v: bundle.title },
+            { k: BUNDLE_REVIEW_UI.youInvest, v: `${formatBundleUsdcAmount(resultAmount)} ${fundingAsset}` },
+          ]}
+          primaryAction={{
+            label: BUNDLE_FLOW_UI.viewBasketCta,
+            onClick: onViewBasket,
+          }}
+          onClose={onResultClose}
+        />
+      ) : null}
+      {resultVariant === 'v3_deposit_queued' ? (
+        <TransactionResultPage
+          variant="success"
+          layout="full"
+          title={BUNDLE_FLOW_UI.v3QueuedTitle}
+          lead={
+            <>
+              <b className="v-tnum">
+                {formatBundleUsdcAmount(resultAmount)} {fundingAsset}
+              </b>{' '}
+              ont été transférés vers {bundle.title}.
+            </>
+          }
+          subtitle={BUNDLE_FLOW_UI.v3QueuedSubtitle}
+          stepsTitle="Étapes réalisées"
+          steps={[
+            { name: 'Transfert des fonds', body: 'Vos fonds ont été crédités sur le panier.' },
+            {
+              name: 'Rééquilibrage automatique',
+              body: 'Le rééquilibrage V3 se poursuit en arrière-plan (quelques minutes).',
+            },
+          ]}
           summary={[
             { k: BUNDLE_REVIEW_UI.bundle, v: bundle.title },
             { k: BUNDLE_REVIEW_UI.youInvest, v: `${formatBundleUsdcAmount(resultAmount)} ${fundingAsset}` },

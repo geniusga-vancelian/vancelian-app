@@ -38,6 +38,9 @@ export const BUNDLE_FLOW_UI = {
     `Votre investissement de ${amountLabel} vers ${bundleLabel} est en cours. Ne fermez pas cette fenêtre.`,
   successTitle: 'Portefeuille créé',
   successSubtitle: 'Votre allocation a été mise à jour.',
+  v3QueuedTitle: 'Investissement enregistré',
+  v3QueuedSubtitle:
+    'Vos fonds ont été transférés vers le panier. Le rééquilibrage automatique se poursuit en arrière-plan — vous pouvez fermer cette page.',
   viewBasketCta: 'Voir mon panier',
   partialPreviewNote:
     'Certains actifs peuvent ne pas être entièrement disponibles — l’allocation pourrait être partielle.',

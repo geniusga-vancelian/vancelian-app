@@ -22,6 +22,7 @@ export type BundleInvestTerminalStatus =
   | 'completed_partial_allocation'
   | 'failed_no_allocation'
   | 'reconciliation_required'
+  | 'v3_deposit_queued'
 
 /** Erreur leg récupérable par skip — ne termine pas tout le batch. */
 export class BundleLegSkippableError extends Error {
@@ -160,6 +161,8 @@ export function mapTerminalStatusToResultVariant(
       return 'impossible'
     case 'reconciliation_required':
       return 'reconciliation_required'
+    case 'v3_deposit_queued':
+      return 'v3_deposit_queued'
     default:
       return 'impossible'
   }

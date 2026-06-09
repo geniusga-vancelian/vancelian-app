@@ -57,6 +57,64 @@ export type BundleInvestAlreadyPendingPayload = {
   message: string
 }
 
+/** Réponse API V3 Deposit Flow — funding OK, rebalance asynchrone via worker. */
+export type BundleV3DepositQueuedPayload = {
+  status: 'queued'
+  flow: 'bundle_v3_deposit'
+  deposit_execution_id: string
+  batch_id: string
+  portfolio_id: string
+  intent_id: string
+  outbox_id: string
+  outbox_created?: boolean
+  funding?: {
+    amount?: number | string
+    funded?: boolean
+    [key: string]: unknown
+  }
+  message?: string
+}
+
+export function isBundleV3DepositQueuedPayload(
+  data: Record<string, unknown>,
+): data is BundleV3DepositQueuedPayload {
+  return (
+    data.flow === 'bundle_v3_deposit' &&
+    String(data.status ?? '').toLowerCase() === 'queued' &&
+    typeof data.batch_id === 'string'
+  )
+}
+
+export function bundleV3QueuedFundingAmount(
+  payload: BundleV3DepositQueuedPayload,
+  fallback: number,
+): number {
+  const raw = payload.funding?.amount
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+export function bundleV3QueuedToInvestShim(
+  payload: BundleV3DepositQueuedPayload,
+  options: { fundingAsset: string; fundingAmount: number },
+): BundleInvestPayload {
+  const { fundingAsset, fundingAmount } = options
+  const received = bundleV3QueuedFundingAmount(payload, fundingAmount)
+  return {
+    status: 'queued',
+    batch_id: payload.batch_id,
+    portfolio_id: payload.portfolio_id,
+    entry_asset: fundingAsset,
+    total_entry_asset_received: received,
+    total_entry_asset_consumed: 0,
+    cash_leg_remaining: received,
+    legs_pending: 0,
+    legs_succeeded: 0,
+    legs_failed: 0,
+    allocation_details: [],
+  }
+}
+
 export type BundleExpiredInvestLegsPayload = {
   status: 'expired_invest_legs'
   error_code: 'expired_invest_legs'
@@ -123,6 +181,7 @@ export type BundleRebalancePayload = {
 export type BundleInvestResult =
   | { kind: 'success'; payload: BundleInvestPayload }
   | { kind: 'already_pending'; payload: BundleInvestAlreadyPendingPayload }
+  | { kind: 'v3_queued'; payload: BundleV3DepositQueuedPayload }
 
 export type BundleFinalizePayload = {
   batch_id: string
@@ -239,9 +298,13 @@ export async function investBundle(body: {
     body: JSON.stringify(body),
   })
   const data = (await res.json()) as BundleInvestPayload &
-    BundleInvestAlreadyPendingPayload & { detail?: string }
+    BundleInvestAlreadyPendingPayload &
+    BundleV3DepositQueuedPayload & { detail?: string }
   if (res.status === 409 && data.status === 'already_pending') {
     return { kind: 'already_pending', payload: data as BundleInvestAlreadyPendingPayload }
+  }
+  if (res.ok && isBundleV3DepositQueuedPayload(data as Record<string, unknown>)) {
+    return { kind: 'v3_queued', payload: data as BundleV3DepositQueuedPayload }
   }
   if (!res.ok) {
     if (res.status === 401) {

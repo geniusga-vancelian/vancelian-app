@@ -8,3 +8,4 @@ export type PortalBundleInvestResultVariant =
   | 'completed_partial_allocation'
   | 'impossible'
   | 'reconciliation_required'
+  | 'v3_deposit_queued'
