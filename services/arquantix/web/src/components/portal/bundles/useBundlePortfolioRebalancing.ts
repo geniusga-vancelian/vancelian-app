@@ -16,11 +16,7 @@ import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 type PendingLeg = BundleRebalanceLeg & { side: 'buy' | 'sell' }
 
 function v3Snapshot(leg: PendingLeg) {
-  const amount = String(
-    (leg as BundleRebalanceLeg & { amount_usdc?: string }).amount_usdc ??
-      (leg.side === 'sell' ? leg.quantity_sold : leg.entry_asset_spent) ??
-      '0',
-  )
+  const amount = String(leg.amount_usdc ?? '0')
   return {
     review_amount_in: amount,
     review_estimated_receive: '0',

@@ -99,13 +99,10 @@ export function PortalBundleAllocationReadOnlyPanel({
         </AppButton>
       ) : null}
 
-      {actionsOpen && lockState !== null ? (
+      {actionsOpen ? (
         <PortalLazyBundleAllocationActions
           portfolioId={portfolioId}
           portfolioName={portfolioName}
-          positions={positions}
-          currency={currency}
-          cashLegDisplayValue={cashLegDisplayValue}
           lockState={lockState}
           hasUnallocatedCash={hasUnallocatedCash || legacyLockActive}
           onRefresh={onRefresh}

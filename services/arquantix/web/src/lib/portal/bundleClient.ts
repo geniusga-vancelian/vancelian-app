@@ -164,6 +164,7 @@ export type BundleRebalancePreviewPayload = {
 export type BundleRebalanceLeg = {
   asset: string
   status: string
+  amount_usdc?: string
   swap_id?: string
   leg_id?: string
   signing?: Record<string, unknown> | null
