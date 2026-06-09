@@ -3035,6 +3035,39 @@ def mobile_bundle_rebalancing_execute(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@bootstrap_router.post("/bundle/{portfolio_id}/rebalancing/resume")
+def mobile_bundle_rebalancing_resume(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Reprise rééquilibrage — après signature LI.FI d'un leg (quote suivant ou terminal)."""
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundles.rebalancing_portfolio import (
+        RebalancingPortfolioError,
+        resume_rebalancing_portfolio,
+    )
+
+    try:
+        pid = _UUID(portfolio_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    try:
+        result = resume_rebalancing_portfolio(
+            db, client_id=client.id, portfolio_id=pid, trigger="manual",
+        )
+        db.commit()
+        return result
+    except RebalancingPortfolioError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.code) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @bootstrap_router.post("/bundle/{portfolio_id}/rebalance/v3/execute")
 def mobile_bundle_rebalance_v3_execute(
     portfolio_id: str,

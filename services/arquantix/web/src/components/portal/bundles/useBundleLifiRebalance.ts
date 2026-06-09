@@ -9,10 +9,8 @@ import {
   type BundleRebalanceLeg,
   type BundleRebalancePayload,
 } from '@/lib/portal/bundleClient'
-import {
-  bundleLegConfirmAndPrepare,
-  snapshotFromRebalanceLeg,
-} from '@/lib/portal/bundleLegQuoteConfirm'
+import { snapshotFromRebalanceLeg } from '@/lib/portal/bundleLegQuoteConfirm'
+import { executeBundleTrade } from '@/lib/portal/executeBundleTrade'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 type PendingRebalanceLeg = BundleRebalanceLeg & {
@@ -65,11 +63,11 @@ export function useBundleLifiRebalance(
           if (!snapshot) {
             throw new Error(`Estimation manquante pour ${leg.asset} — rechargez et réessayez.`)
           }
-          const exec = await bundleLegConfirmAndPrepare(swapId, snapshot, { onPhaseChange })
-          onPhaseChange?.('signing')
-          await signAndSubmit(exec)
-          onPhaseChange?.('submitting')
-          await pollUntilTerminal(swapId)
+          await executeBundleTrade(swapId, snapshot, {
+            signAndSubmit,
+            pollUntilTerminal,
+            onPhaseChange,
+          })
         }
         onPhaseChange?.('completed')
         return result

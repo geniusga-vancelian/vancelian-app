@@ -291,6 +291,7 @@ def test_timeout_pending_becomes_terminal_no_resume(db: Session, monkeypatch):
         client_id=pe.id,
         portfolio_id=portfolio.id,
         drift_rebalance_plan=plan,
+        trigger="cron",
         execution_adapter=_adapter(provider),
     )
     db.commit()
@@ -301,6 +302,46 @@ def test_timeout_pending_becomes_terminal_no_resume(db: Session, monkeypatch):
     assert all(r["attempts"] == 2 for r in result["buy_results"])
     buy_calls = [c for c in provider.calls if c["action"] == "rebalance_buy"]
     assert len(buy_calls) == len(result["buy_results"]) * 2
+
+
+def test_manual_trigger_returns_running_with_pending_swap(db: Session, monkeypatch):
+    """manual/deposit : quote leg → RUNNING + pending (pas d'expiration immédiate)."""
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = {
+        "status": "ok",
+        "plan_hash": f"sha256:manual-pending-{uuid.uuid4().hex[:8]}",
+        "snapshot_hash": "sha256:snap",
+        "entry_asset": "USDC",
+        "available_cash_usdc": "10",
+        "sell_plan": [],
+        "buy_plan": [{
+            "asset": "ETH",
+            "instrument_id": str(_instrument_for_asset(db, "ETH").id),
+            "amount_usdc": "5",
+            "action": "buy",
+            "funded_by": "cash_leg",
+        }],
+    }
+    provider = _RecordingMockProvider(default_status="pending")
+    result = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        trigger="manual",
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert result["v3_status"] == "RUNNING"
+    assert result["resume_required"] is True
+    assert result["client_signature_required"] is True
+    assert len(result["buy_results"]) == 1
+    assert result["buy_results"][0]["status"] == "pending"
+    assert result["buy_results"][0]["swap_id"]
+    assert len(provider.calls) == 1
 
 
 def test_quote_ttl_expired_retry_success_on_attempt2(db: Session, monkeypatch):
@@ -333,6 +374,7 @@ def test_quote_ttl_expired_retry_success_on_attempt2(db: Session, monkeypatch):
         client_id=pe.id,
         portfolio_id=portfolio.id,
         drift_rebalance_plan=plan,
+        trigger="cron",
         execution_adapter=_adapter(provider),
     )
     db.commit()
@@ -374,6 +416,7 @@ def test_quote_ttl_expired_both_attempts_terminal_residual(db: Session, monkeypa
         client_id=pe.id,
         portfolio_id=portfolio.id,
         drift_rebalance_plan=plan,
+        trigger="cron",
         execution_adapter=_adapter(provider),
     )
     db.commit()

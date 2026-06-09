@@ -27,6 +27,8 @@ from services.portfolio_engine.bundles.drift_engine import compute_bundle_drift_
 from services.portfolio_engine.bundles.rebalance_executor import (
     BundleRebalanceExecutorError,
     execute_v3_bundle_rebalance,
+    find_running_v3_rebalance_execution,
+    resume_v3_bundle_rebalance_execution,
 )
 from services.portfolio_engine.bundles.rebalance_planner import plan_bundle_rebalance_from_drift
 from services.portfolio_engine.financial_operations.wiring import (
@@ -285,20 +287,32 @@ def _create_rebalance_intent(
 
 def _asset_lines_from_plan(plan: dict[str, Any]) -> list[dict[str, str]]:
     lines: list[dict[str, str]] = []
+    entry_asset = str(plan.get("entry_asset") or "USDC")
+
+    def _append_line(leg: dict[str, Any], *, action: str) -> None:
+        row: dict[str, str] = {
+            "asset": str(leg.get("asset") or ""),
+            "action": action,
+            "amount_entry": str(leg.get("amount_usdc") or "0"),
+            "entry_asset": entry_asset,
+            "status": "planned",
+        }
+        for field in (
+            "current_value_usdc",
+            "target_value_usdc",
+            "price_usdc",
+            "amount_crypto",
+            "funded_by",
+        ):
+            value = leg.get(field)
+            if value is not None and str(value) != "":
+                row[field] = str(value)
+        lines.append(row)
+
     for leg in plan.get("sell_plan") or []:
-        lines.append({
-            "asset": str(leg.get("asset") or ""),
-            "action": "sell",
-            "amount_entry": str(leg.get("amount_usdc") or "0"),
-            "status": "planned",
-        })
+        _append_line(leg, action="sell")
     for leg in plan.get("buy_plan") or []:
-        lines.append({
-            "asset": str(leg.get("asset") or ""),
-            "action": "buy",
-            "amount_entry": str(leg.get("amount_usdc") or "0"),
-            "status": "planned",
-        })
+        _append_line(leg, action="buy")
     return lines
 
 
@@ -521,13 +535,131 @@ def rebalancing_portfolio(
     intent.metadata_json = meta
     db.add(intent)
 
-    return {
+    return _build_rebalancing_response(
+        result=result,
+        intent=intent,
+        execution_id=execution_id,
+        drift=drift,
+        plan=plan,
+        asset_lines=asset_lines,
+        legacy_lock_abandoned=abandoned,
+    )
+
+
+def resume_rebalancing_portfolio(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    trigger: str = "manual",
+) -> dict[str, Any]:
+    """Reprise après signature LI.FI — quote leg suivant ou clôture terminal."""
+    running = find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio_id))
+    if running is None:
+        raise RebalancingPortfolioError(
+            "no_running_rebalance",
+            "no_running_rebalance",
+        )
+
+    drift, plan = _compute_drift_and_plan(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    running_plan_hash = str(running.get("plan_hash") or "")
+    current_plan_hash = str(plan.get("plan_hash") or "")
+    if running_plan_hash and current_plan_hash and running_plan_hash != current_plan_hash:
+        raise RebalancingPortfolioError(
+            "plan_hash_changed",
+            "plan_hash_changed",
+        )
+
+    try:
+        result = resume_v3_bundle_rebalance_execution(
+            db,
+            client_id=client_id,
+            portfolio_id=portfolio_id,
+            drift_rebalance_plan=plan,
+            trigger=trigger,  # type: ignore[arg-type]
+        )
+    except BundleRebalanceExecutorError as exc:
+        raise RebalancingPortfolioError("rebalancing_execution_failed", str(exc)) from exc
+
+    v3_status = str(result.get("v3_status") or "")
+    if v3_status in _TERMINAL_V3_STATUSES:
+        from services.portfolio_engine.financial_operations import (
+            find_active_portfolio_financial_operation,
+        )
+
+        active_guard = find_active_portfolio_financial_operation(
+            db, portfolio_id=portfolio_id,
+        )
+        if active_guard is not None:
+            release_bundle_rebalance_v3_portfolio_operation(
+                db,
+                portfolio_id=portfolio_id,
+                execution_id=active_guard.execution_id,
+                failed=(v3_status == "FAILED"),
+            )
+
+    asset_lines = _asset_lines_from_execution(result)
+    rebalance_exec_id = str(
+        result.get("rebalance_execution_id") or running.get("rebalance_execution_id") or "",
+    )
+    intent = None
+    if rebalance_exec_id:
+        candidates = (
+            db.query(TransactionIntent)
+            .filter(TransactionIntent.product_type == REBALANCE_PORTFOLIO_INTENT_PRODUCT)
+            .order_by(TransactionIntent.created_at.desc())
+            .limit(20)
+            .all()
+        )
+        for row in candidates:
+            meta = row.metadata_json or {}
+            if str(meta.get("rebalance_execution_id") or "") == rebalance_exec_id:
+                intent = row
+                break
+
+    execution_id = UUID(rebalance_exec_id) if rebalance_exec_id else uuid.uuid4()
+    if intent is not None:
+        intent.status = str(result.get("v3_status") or "running").lower()
+        meta = dict(intent.metadata_json or {})
+        meta.update({
+            "v3_status": result.get("v3_status"),
+            "asset_lines": asset_lines,
+        })
+        intent.metadata_json = meta
+        db.add(intent)
+
+    return _build_rebalancing_response(
+        result=result,
+        intent=intent,
+        execution_id=execution_id,
+        drift=drift,
+        plan=plan,
+        asset_lines=asset_lines,
+        legacy_lock_abandoned=None,
+    )
+
+
+def _build_rebalancing_response(
+    *,
+    result: dict[str, Any],
+    intent: TransactionIntent | None,
+    execution_id: UUID,
+    drift: dict[str, Any],
+    plan: dict[str, Any],
+    asset_lines: list[dict[str, str]],
+    legacy_lock_abandoned: dict[str, Any] | None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "flow": REBALANCE_PORTFOLIO_FLOW_VERSION,
-        "intent_id": str(intent.id),
+        "intent_id": str(intent.id) if intent is not None else None,
         "financial_operation_execution_id": str(execution_id),
-        "legacy_lock_abandoned": abandoned,
         "drift_snapshot": drift,
         "rebalance_plan": plan,
         "asset_lines": asset_lines,
         **result,
     }
+    if legacy_lock_abandoned is not None:
+        payload["legacy_lock_abandoned"] = legacy_lock_abandoned
+    return payload

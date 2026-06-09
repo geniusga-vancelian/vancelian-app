@@ -36,10 +36,8 @@ import {
   type BundleInvestSession,
 } from '@/lib/portal/bundleInvestSession'
 import type { BundleInvestProcessingProgress } from '@/components/portal/transaction/mappers/bundleSteps'
-import {
-  bundleLegConfirmAndPrepare,
-  snapshotFromInvestLeg,
-} from '@/lib/portal/bundleLegQuoteConfirm'
+import { snapshotFromInvestLeg } from '@/lib/portal/bundleLegQuoteConfirm'
+import { executeBundleTrade } from '@/lib/portal/executeBundleTrade'
 import { SwapPriceChangedError } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
@@ -57,6 +55,7 @@ async function tryExecuteSingleLeg(
   leg: NonNullable<BundleInvestPayload['allocation_details']>[number],
   deps: {
     signAndSubmit: ReturnType<typeof useLifiSwapExecution>['signAndSubmit']
+    pollUntilTerminal: ReturnType<typeof useLifiSwapExecution>['pollUntilTerminal']
     onPhaseChange?: (phase: SwapExecutionPhase) => void
   },
 ): Promise<{ entryDelta: number; txHash?: string | null }> {
@@ -65,14 +64,11 @@ async function tryExecuteSingleLeg(
   if (!snapshot) {
     throw new Error(`Estimation manquante pour ${leg.asset} — rechargez et réessayez.`)
   }
-  const exec = await bundleLegConfirmAndPrepare(swapId, snapshot, deps)
-  deps.onPhaseChange?.('signing')
-  await deps.signAndSubmit(exec)
-  deps.onPhaseChange?.('submitting')
-  const terminal = await pollBundleLegUntilTerminal(swapId, { invest, asset: leg.asset })
+  const trade = await executeBundleTrade(swapId, snapshot, deps)
+  await pollBundleLegUntilTerminal(swapId, { invest, asset: leg.asset })
   return {
     entryDelta: Number(leg.entry_asset_consumed ?? 0),
-    txHash: terminal.tx_hash ?? null,
+    txHash: trade.txHash ?? null,
   }
 }
 
@@ -85,6 +81,7 @@ async function executePendingLegs(
   invest: BundleInvestPayload,
   deps: {
     signAndSubmit: ReturnType<typeof useLifiSwapExecution>['signAndSubmit']
+    pollUntilTerminal: ReturnType<typeof useLifiSwapExecution>['pollUntilTerminal']
     onLegProgress?: (current: number, total: number, asset: string) => void
     onPhaseChange?: (phase: SwapExecutionPhase) => void
     onProcessingProgress?: (progress: BundleInvestProcessingProgress) => void
@@ -255,7 +252,7 @@ export function useBundleLifiInvest(
   onProcessingProgress?: (progress: BundleInvestProcessingProgress) => void,
 ) {
   const inFlightRef = useRef(false)
-  const { signAndSubmit } = useLifiSwapExecution(
+  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
     swapMockMode,
     onPhaseChange,
     entryAsset,
@@ -287,6 +284,7 @@ export function useBundleLifiInvest(
 
       const outcome = await executePendingLegs(invest, {
         signAndSubmit,
+        pollUntilTerminal,
         onLegProgress,
         onPhaseChange,
         onProcessingProgress,
@@ -301,7 +299,7 @@ export function useBundleLifiInvest(
         backendLockPending: outcome.backendLockPending,
       }
     },
-    [onLegProgress, onPhaseChange, onProcessingProgress, signAndSubmit],
+    [onLegProgress, onPhaseChange, onProcessingProgress, pollUntilTerminal, signAndSubmit],
   )
 
   const runInvest = useCallback(

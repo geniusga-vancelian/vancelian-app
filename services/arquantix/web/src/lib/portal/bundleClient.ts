@@ -184,8 +184,14 @@ export type PortfolioRebalancingAssetLine = {
   asset: string
   action: 'sell' | 'buy' | string
   amount_entry: string
+  entry_asset?: string
   status: string
   swap_id?: string
+  current_value_usdc?: string
+  target_value_usdc?: string
+  price_usdc?: string
+  amount_crypto?: string
+  funded_by?: string
 }
 
 export type PortfolioRebalancingPayload = BundleRebalancePayload & {
@@ -296,6 +302,7 @@ async function parseJson<T>(res: Response): Promise<T> {
       (typeof detail === 'object' && detail?.message) ||
       (typeof detail === 'string' ? detail : null) ||
       (data as { message?: string }).message ||
+      (data as { error?: string }).error ||
       'Requête bundle impossible'
     throw new Error(message)
   }
@@ -442,6 +449,21 @@ export async function preflightPortfolioRebalancing(
   const res = await fetch(
     `/api/portal/bundles/rebalancing/${encodeURIComponent(portfolioId)}/preflight`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+  )
+  return parseJson(res)
+}
+
+export async function resumePortfolioRebalancing(
+  portfolioId: string,
+): Promise<PortfolioRebalancingPayload> {
+  const res = await fetch(
+    `/api/portal/bundles/rebalancing/${encodeURIComponent(portfolioId)}/resume`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+      signal: AbortSignal.timeout(120_000),
+    },
   )
   return parseJson(res)
 }

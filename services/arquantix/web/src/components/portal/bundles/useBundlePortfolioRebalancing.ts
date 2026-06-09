@@ -5,12 +5,13 @@ import { useCallback, useRef } from 'react'
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import {
   executePortfolioRebalancing,
+  resumePortfolioRebalancing,
   submitBundleLegTx,
   type BundleRebalanceLeg,
   type PortfolioRebalancingAssetLine,
   type PortfolioRebalancingPayload,
 } from '@/lib/portal/bundleClient'
-import { bundleLegConfirmAndPrepare } from '@/lib/portal/bundleLegQuoteConfirm'
+import { executeBundleTrade } from '@/lib/portal/executeBundleTrade'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 type PendingLeg = BundleRebalanceLeg & { side: 'buy' | 'sell' }
@@ -33,6 +34,26 @@ function pendingLegs(result: PortfolioRebalancingPayload): PendingLeg[] {
   return [...sells, ...buys]
 }
 
+function formatUsdcAmount(value: string | undefined): string | null {
+  if (!value) return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n)
+}
+
+function formatCryptoQty(value: string | undefined): string | null {
+  if (!value) return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  if (n >= 1) {
+    return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(n)
+  }
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 8 }).format(n)
+}
+
 export function assetLineLabel(line: PortfolioRebalancingAssetLine): string {
   const action = line.action === 'sell' ? 'Vente' : 'Achat'
   const status =
@@ -45,7 +66,29 @@ export function assetLineLabel(line: PortfolioRebalancingAssetLine): string {
           : line.status === 'planned'
             ? 'Planifié'
             : line.status
-  return `${line.asset} — ${action} — ${status}`
+  const entryAsset = line.entry_asset ?? 'USDC'
+  const execUsdc = formatUsdcAmount(line.amount_entry)
+  const execCrypto = formatCryptoQty(line.amount_crypto)
+  const targetUsdc = formatUsdcAmount(line.target_value_usdc)
+  const currentUsdc = formatUsdcAmount(line.current_value_usdc)
+
+  const execPart = execUsdc
+    ? execCrypto
+      ? `${execUsdc} ${entryAsset} (~${execCrypto} ${line.asset})`
+      : `${execUsdc} ${entryAsset}`
+    : null
+  const targetPart =
+    targetUsdc && currentUsdc
+      ? `cible ${targetUsdc} ${entryAsset} (actuel ${currentUsdc})`
+      : targetUsdc
+        ? `cible ${targetUsdc} ${entryAsset}`
+        : null
+
+  const parts = [`${line.asset}`, action]
+  if (execPart) parts.push(execPart)
+  if (targetPart) parts.push(targetPart)
+  parts.push(status)
+  return parts.join(' — ')
 }
 
 export function useBundlePortfolioRebalancing(
@@ -53,6 +96,7 @@ export function useBundlePortfolioRebalancing(
   entryAsset?: string,
   onPhaseChange?: (phase: SwapExecutionPhase) => void,
   onAssetStatus?: (asset: string, status: string) => void,
+  onLegProgress?: (current: number, total: number, asset: string) => void,
 ) {
   const inFlightRef = useRef(false)
   const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
@@ -60,6 +104,41 @@ export function useBundlePortfolioRebalancing(
     onPhaseChange,
     entryAsset,
     { submitTx: submitBundleLegTx },
+  )
+
+  const runChainedTrades = useCallback(
+    async (initial: PortfolioRebalancingPayload): Promise<PortfolioRebalancingPayload> => {
+      let result = initial
+      const tradeDeps = {
+        signAndSubmit,
+        pollUntilTerminal,
+        onPhaseChange,
+      }
+
+      while (result.v3_status === 'RUNNING' || pendingLegs(result).length > 0) {
+        const pending = pendingLegs(result)
+        const total = pending.length
+        for (let i = 0; i < pending.length; i += 1) {
+          const leg = pending[i]!
+          onLegProgress?.(i + 1, total, leg.asset)
+          onAssetStatus?.(leg.asset, 'signing')
+          await executeBundleTrade(leg.swap_id!, v3Snapshot(leg), tradeDeps)
+          onAssetStatus?.(leg.asset, 'completed')
+        }
+
+        if (result.v3_status !== 'RUNNING') {
+          break
+        }
+
+        result = await resumePortfolioRebalancing(result.portfolio_id)
+        for (const line of result.asset_lines ?? []) {
+          onAssetStatus?.(line.asset, line.status)
+        }
+      }
+
+      return result
+    },
+    [onAssetStatus, onLegProgress, onPhaseChange, pollUntilTerminal, signAndSubmit],
   )
 
   const runPortfolioRebalancing = useCallback(
@@ -70,31 +149,16 @@ export function useBundlePortfolioRebalancing(
       inFlightRef.current = true
       try {
         onPhaseChange?.('preparing')
-        const result = await executePortfolioRebalancing(portfolioId)
-        for (const line of result.asset_lines ?? []) {
+        const initial = await executePortfolioRebalancing(portfolioId)
+        for (const line of initial.asset_lines ?? []) {
           onAssetStatus?.(line.asset, line.status)
         }
-
-        const pending = pendingLegs(result)
-        for (const leg of pending) {
-          onAssetStatus?.(leg.asset, 'signing')
-          const swapId = leg.swap_id!
-          const exec = await bundleLegConfirmAndPrepare(swapId, v3Snapshot(leg), {
-            onPhaseChange,
-          })
-          onPhaseChange?.('signing')
-          await signAndSubmit(exec)
-          onPhaseChange?.('submitting')
-          await pollUntilTerminal(swapId)
-          onAssetStatus?.(leg.asset, 'completed')
-        }
-        onPhaseChange?.('completed')
-        return result
+        return await runChainedTrades(initial)
       } finally {
         inFlightRef.current = false
       }
     },
-    [onAssetStatus, onPhaseChange, pollUntilTerminal, signAndSubmit],
+    [onAssetStatus, onPhaseChange, runChainedTrades],
   )
 
   return { runPortfolioRebalancing, inFlightRef }

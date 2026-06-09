@@ -315,6 +315,11 @@ def process_v3_deposit_rebalance_outbox_event(
         )
         outbox.status = OutboxEventStatus.PROCESSED.value
         db.flush()
+    elif v3_status == "RUNNING":
+        # Legs en attente signature client — ne pas re-kick le worker.
+        outbox.status = OutboxEventStatus.PROCESSED.value
+        outbox.last_error = None
+        db.flush()
 
     return {
         "deposit_execution_id": deposit_execution_id,
@@ -322,6 +327,7 @@ def process_v3_deposit_rebalance_outbox_event(
         "rebalance_execution_id": result.get("rebalance_execution_id"),
         "plan_hash": result.get("plan_hash"),
         "terminal": v3_status in _TERMINAL_V3,
+        "awaiting_client_signature": v3_status == "RUNNING",
         "result": result,
     }
 

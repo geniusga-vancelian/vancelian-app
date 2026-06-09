@@ -164,6 +164,61 @@ def test_plan_hash_deterministic(db: Session):
     assert plan1["plan_hash"].startswith("sha256:")
 
 
+def test_kings_cash_dominant_deploys_portfolio_value_targets():
+    """Cash leg >> investi → achats BTC+ETH sur NAV totale (pas drift 1,5 USDC)."""
+    snap = {
+        "snapshot_hash": "kings-snap",
+        "entry_asset": "USDC",
+        "weight_basis": "invested_assets",
+        "invested_value_usdc": "35.158969",
+        "cash_value_usdc": "125.685470",
+        "portfolio_value_usdc": "160.844439",
+        "target_assets": [
+            {
+                "asset": "BTC",
+                "instrument_id": "btc-id",
+                "target_weight_bps": 7000,
+                "current_value_usdc": "26.184873",
+                "target_value_usdc": "24.611278",
+                "delta_value_usdc": "-1.573595",
+                "drift_bps": 447,
+                "price_usdc": "61570.903020",
+            },
+            {
+                "asset": "ETH",
+                "instrument_id": "eth-id",
+                "target_weight_bps": 3000,
+                "current_value_usdc": "8.974096",
+                "target_value_usdc": "10.547690",
+                "delta_value_usdc": "1.573594",
+                "drift_bps": -448,
+                "price_usdc": "1633.613579",
+            },
+        ],
+        "non_target_assets": [],
+    }
+    plan = plan_bundle_rebalance_from_drift(snap)
+
+    assert plan["planning_mode"] == "portfolio_value_cash_deploy"
+    assert plan["status"] == "ok"
+    assert plan["sell_plan"] == []
+
+    buys = {row["asset"]: row for row in plan["buy_plan"]}
+    assert "BTC" in buys
+    assert "ETH" in buys
+
+    total_buy = sum(Decimal(r["amount_usdc"]) for r in plan["buy_plan"])
+    assert total_buy <= Decimal(snap["cash_value_usdc"])
+    assert total_buy >= Decimal("120")
+
+    btc_buy = Decimal(buys["BTC"]["amount_usdc"])
+    eth_buy = Decimal(buys["ETH"]["amount_usdc"])
+    assert btc_buy > eth_buy
+    assert "target_value_usdc" in buys["BTC"]
+    assert "amount_crypto" in buys["BTC"]
+    assert Decimal(buys["BTC"]["target_value_usdc"]) > Decimal("100")
+
+
 def test_deltas_below_min_ignored(db: Session):
     pe = make_linked_client(db)
     portfolio, usdc = _bundle_with_allocations(

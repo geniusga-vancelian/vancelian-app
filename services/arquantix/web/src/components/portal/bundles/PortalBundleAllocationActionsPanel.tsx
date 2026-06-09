@@ -42,6 +42,7 @@ export function PortalBundleAllocationActionsPanel({
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [swapMockMode, setSwapMockMode] = useState(false)
   const [previewStatus, setPreviewStatus] = useState<string | null>(null)
+  const [planningMode, setPlanningMode] = useState<string | null>(null)
 
   const { runPortfolioRebalancing, inFlightRef } = useBundlePortfolioRebalancing(
     swapMockMode,
@@ -70,7 +71,11 @@ export function PortalBundleAllocationActionsPanel({
     setError(null)
     try {
       const preview = await previewPortfolioRebalancing(portfolioId)
-      setPreviewStatus(String(preview.rebalance_plan?.status ?? preview.status ?? 'ok'))
+      const plan = preview.rebalance_plan as
+        | { status?: string; planning_mode?: string }
+        | undefined
+      setPreviewStatus(String(plan?.status ?? preview.status ?? 'ok'))
+      setPlanningMode(plan?.planning_mode ?? null)
       setAssetLines(preview.asset_lines ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Estimation impossible')
@@ -123,7 +128,12 @@ export function PortalBundleAllocationActionsPanel({
       {error ? <p className="m-0 font-ui text-[13px] text-v-error">{error}</p> : null}
 
       {previewStatus ? (
-        <p className="m-0 font-ui text-[12px] text-v-fg-muted">Plan : {previewStatus}</p>
+        <p className="m-0 font-ui text-[12px] text-v-fg-muted">
+          Plan : {previewStatus}
+          {planningMode === 'portfolio_value_cash_deploy'
+            ? ' — déploiement cash leg vers allocation cible (NAV totale)'
+            : null}
+        </p>
       ) : null}
 
       {assetLines.length > 0 ? (

@@ -37,6 +37,12 @@ QUOTE_TTL_SECONDS = int(os.getenv("QUOTE_TTL_SECONDS", "120"))
 MAX_EXECUTION_AGE_MINUTES = int(os.getenv("MAX_EXECUTION_AGE_MINUTES", "30"))
 
 V3Trigger = Literal["manual", "deposit", "recovery", "cron"]
+CLIENT_SIGNATURE_TRIGGERS: frozenset[V3Trigger] = frozenset({"manual", "deposit"})
+
+
+def _uses_client_signature(trigger: V3Trigger) -> bool:
+    """Triggers où chaque leg LI.FI est signé côté client (confirm → sign → poll)."""
+    return trigger in CLIENT_SIGNATURE_TRIGGERS
 
 V3Status = Literal[
     "RUNNING",
@@ -211,10 +217,11 @@ class BundleRebalanceExecutor:
                 plan_legs=sell_plan,
                 leg_action="rebalance_sell",
                 actor=actor,
+                trigger=trigger,
             )
             if not self._sells_allow_buy_phase(sell_results):
-                self._expire_pending_legs(sell_results)
-                terminal = self._build_terminal_response(
+                return self._complete_execution_cycle(
+                    db,
                     execution_id=execution_id,
                     batch_id=batch_id,
                     portfolio_id=str(portfolio_id),
@@ -224,12 +231,25 @@ class BundleRebalanceExecutor:
                     sell_results=sell_results,
                     buy_results=[],
                     started_at=started_at,
+                    running_payload=running_payload,
+                    actor=actor,
                 )
-                self._audit_terminal(db, execution_id, terminal, actor)
-                return terminal
-            self._update_running_progress(
-                db, execution_id, running_payload, sell_results, buy_results, actor,
+            running_resp = self._maybe_running_after_legs(
+                db,
+                execution_id=execution_id,
+                batch_id=batch_id,
+                portfolio_id=str(portfolio_id),
+                plan_hash=resolved_hash,
+                trigger=trigger,
+                drift_rebalance_plan=drift_rebalance_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+                started_at=started_at,
+                running_payload=running_payload,
+                actor=actor,
             )
+            if running_resp is not None:
+                return running_resp
 
         if buy_plan:
             buy_results = self._execute_plan_legs(
@@ -243,13 +263,11 @@ class BundleRebalanceExecutor:
                 plan_legs=buy_plan,
                 leg_action="rebalance_buy",
                 actor=actor,
+                trigger=trigger,
             )
 
-        self._update_running_progress(
-            db, execution_id, running_payload, sell_results, buy_results, actor,
-        )
-        self._expire_pending_legs(sell_results + buy_results)
-        terminal = self._build_terminal_response(
+        return self._complete_execution_cycle(
+            db,
             execution_id=execution_id,
             batch_id=batch_id,
             portfolio_id=str(portfolio_id),
@@ -259,9 +277,9 @@ class BundleRebalanceExecutor:
             sell_results=sell_results,
             buy_results=buy_results,
             started_at=started_at,
+            running_payload=running_payload,
+            actor=actor,
         )
-        self._audit_terminal(db, execution_id, terminal, actor)
-        return terminal
 
     def _resume_running_execution(
         self,
@@ -297,8 +315,13 @@ class BundleRebalanceExecutor:
         sell_results = _results_from_metadata(running.get("sell_results") or [])
         buy_results = _results_from_metadata(running.get("buy_results") or [])
 
+        if _uses_client_signature(trigger):
+            sell_results = self._sync_leg_results_from_swaps(db, sell_results)
+            buy_results = self._sync_leg_results_from_swaps(db, buy_results)
+
         sell_plan = list(drift_rebalance_plan.get("sell_plan") or [])
         buy_plan = list(drift_rebalance_plan.get("buy_plan") or [])
+        running_payload = dict(running)
 
         if sell_plan:
             sell_results = self._execute_remaining_legs(
@@ -313,10 +336,11 @@ class BundleRebalanceExecutor:
                 leg_action="rebalance_sell",
                 actor=actor,
                 existing_results=sell_results,
+                trigger=trigger,
             )
             if not self._sells_allow_buy_phase(sell_results):
-                self._expire_pending_legs(sell_results)
-                terminal = self._build_terminal_response(
+                return self._complete_execution_cycle(
+                    db,
                     execution_id=execution_id,
                     batch_id=batch_id,
                     portfolio_id=str(portfolio_id),
@@ -326,9 +350,25 @@ class BundleRebalanceExecutor:
                     sell_results=sell_results,
                     buy_results=buy_results,
                     started_at=started_at,
+                    running_payload=running_payload,
+                    actor=actor,
                 )
-                self._audit_terminal(db, execution_id, terminal, actor)
-                return terminal
+            running_resp = self._maybe_running_after_legs(
+                db,
+                execution_id=execution_id,
+                batch_id=batch_id,
+                portfolio_id=str(portfolio_id),
+                plan_hash=plan_hash,
+                trigger=trigger,
+                drift_rebalance_plan=drift_rebalance_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+                started_at=started_at,
+                running_payload=running_payload,
+                actor=actor,
+            )
+            if running_resp is not None:
+                return running_resp
 
         if buy_plan:
             buy_results = self._execute_remaining_legs(
@@ -343,11 +383,11 @@ class BundleRebalanceExecutor:
                 leg_action="rebalance_buy",
                 actor=actor,
                 existing_results=buy_results,
+                trigger=trigger,
             )
 
-        running_payload = dict(running)
-        self._expire_pending_legs(sell_results + buy_results)
-        terminal = self._build_terminal_response(
+        return self._complete_execution_cycle(
+            db,
             execution_id=execution_id,
             batch_id=batch_id,
             portfolio_id=str(portfolio_id),
@@ -357,9 +397,9 @@ class BundleRebalanceExecutor:
             sell_results=sell_results,
             buy_results=buy_results,
             started_at=started_at,
+            running_payload=running_payload,
+            actor=actor,
         )
-        self._audit_terminal(db, execution_id, terminal, actor)
-        return terminal
 
     def _execute_remaining_legs(
         self,
@@ -375,6 +415,7 @@ class BundleRebalanceExecutor:
         leg_action: str,
         actor: ActorContext,
         existing_results: list[V3LegExecutionResult],
+        trigger: V3Trigger,
     ) -> list[V3LegExecutionResult]:
         done_assets = {
             r.asset
@@ -397,6 +438,7 @@ class BundleRebalanceExecutor:
             plan_legs=remaining_plan,
             leg_action=leg_action,
             actor=actor,
+            trigger=trigger,
         )
         merged = {r.asset: r for r in existing_results}
         for row in new_results:
@@ -416,7 +458,9 @@ class BundleRebalanceExecutor:
         plan_legs: list[dict[str, Any]],
         leg_action: str,
         actor: ActorContext,
+        trigger: V3Trigger,
     ) -> list[V3LegExecutionResult]:
+        client_signature = _uses_client_signature(trigger)
         results: list[V3LegExecutionResult] = []
         sorted_legs = sorted(
             plan_legs,
@@ -510,10 +554,17 @@ class BundleRebalanceExecutor:
                     break
 
                 if leg_result.status == "pending":
+                    if client_signature:
+                        leg_result.error = "awaiting_client_signature"
+                        if leg_result.attempt_details:
+                            leg_result.attempt_details[-1]["error_code"] = None
+                        break
+
                     resolved_status, resolved_error = self._resolve_pending_leg(
                         db,
                         leg_result=leg_result,
                         exec_result=exec_result,
+                        trigger=trigger,
                     )
                     leg_result.status = resolved_status
                     leg_result.error = resolved_error
@@ -535,6 +586,8 @@ class BundleRebalanceExecutor:
                     break
 
             results.append(leg_result)
+            if client_signature and leg_result.status == "pending":
+                break
         return results
 
     def _resolve_pending_leg(
@@ -543,6 +596,7 @@ class BundleRebalanceExecutor:
         *,
         leg_result: V3LegExecutionResult,
         exec_result: ExecutionResult,
+        trigger: V3Trigger,
     ) -> tuple[str, str]:
         """Résout un leg pending (quote LI.FI) — retryable si quote non exécutée."""
         from uuid import UUID
@@ -568,19 +622,223 @@ class BundleRebalanceExecutor:
                         SwapSessionStatus.FAILED.value,
                     ):
                         return "expired", str(swap.status).lower()
-                    if swap.status in (
-                        SwapSessionStatus.QUOTE_RECEIVED.value,
-                        SwapSessionStatus.AWAITING_SIGNATURE.value,
-                        SwapSessionStatus.PENDING.value,
-                    ):
-                        return "expired", "quote_ttl_expired"
-                    if swap.status == SwapSessionStatus.SUBMITTED.value:
-                        return "pending", "awaiting_confirmation"
+                    if _uses_client_signature(trigger):
+                        if swap.status in (
+                            SwapSessionStatus.QUOTE_RECEIVED.value,
+                            SwapSessionStatus.AWAITING_SIGNATURE.value,
+                            SwapSessionStatus.PENDING.value,
+                        ):
+                            return "pending", "awaiting_client_signature"
+                        if swap.status == SwapSessionStatus.SUBMITTED.value:
+                            return "pending", "awaiting_confirmation"
+                    else:
+                        if swap.status in (
+                            SwapSessionStatus.QUOTE_RECEIVED.value,
+                            SwapSessionStatus.AWAITING_SIGNATURE.value,
+                            SwapSessionStatus.PENDING.value,
+                        ):
+                            return "expired", "quote_ttl_expired"
+                        if swap.status == SwapSessionStatus.SUBMITTED.value:
+                            return "pending", "awaiting_confirmation"
 
         if raw.get("requires_client_signature"):
+            if _uses_client_signature(trigger):
+                return "pending", "awaiting_client_signature"
             return "expired", "quote_ttl_expired"
 
         return "expired", "quote_ttl_expired"
+
+    def _sync_leg_results_from_swaps(
+        self,
+        db: Session,
+        results: list[V3LegExecutionResult],
+    ) -> list[V3LegExecutionResult]:
+        """Met à jour le statut leg depuis le swap LI.FI (post-signature client)."""
+        from services.lifi.enums import SwapSessionStatus
+        from services.lifi.models import PersonWalletSwap
+        from services.portfolio_engine.bundle_execution.pe_settlement import swap_confirmed
+
+        for row in results:
+            if not row.swap_id:
+                continue
+            try:
+                swap_uuid = UUID(str(row.swap_id))
+            except (TypeError, ValueError):
+                continue
+            swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_uuid).first()
+            if swap is None:
+                continue
+            if swap_confirmed(swap):
+                row.status = "completed"
+                row.error = ""
+            elif swap.status in (
+                SwapSessionStatus.EXPIRED.value,
+                SwapSessionStatus.FAILED.value,
+            ):
+                row.status = "expired"
+                row.error = str(swap.status).lower()
+            elif swap.status == SwapSessionStatus.SUBMITTED.value:
+                row.status = "pending"
+                row.error = "awaiting_confirmation"
+            elif swap.status in (
+                SwapSessionStatus.QUOTE_RECEIVED.value,
+                SwapSessionStatus.AWAITING_SIGNATURE.value,
+                SwapSessionStatus.PENDING.value,
+            ):
+                row.status = "pending"
+                row.error = "awaiting_client_signature"
+        return results
+
+    def _maybe_running_after_legs(
+        self,
+        db: Session,
+        *,
+        execution_id: str,
+        batch_id: str,
+        portfolio_id: str,
+        plan_hash: str,
+        trigger: V3Trigger,
+        drift_rebalance_plan: dict[str, Any],
+        sell_results: list[V3LegExecutionResult],
+        buy_results: list[V3LegExecutionResult],
+        started_at: str,
+        running_payload: dict[str, Any],
+        actor: ActorContext,
+    ) -> dict[str, Any] | None:
+        if not _uses_client_signature(trigger):
+            return None
+        if any(r.status == "pending" for r in sell_results + buy_results):
+            return self._build_running_response(
+                execution_id=execution_id,
+                batch_id=batch_id,
+                portfolio_id=portfolio_id,
+                plan_hash=plan_hash,
+                trigger=trigger,
+                drift_rebalance_plan=drift_rebalance_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+                started_at=started_at,
+                running_payload=running_payload,
+                actor=actor,
+                db=db,
+            )
+        return None
+
+    def _complete_execution_cycle(
+        self,
+        db: Session,
+        *,
+        execution_id: str,
+        batch_id: str,
+        portfolio_id: str,
+        plan_hash: str,
+        trigger: V3Trigger,
+        drift_rebalance_plan: dict[str, Any],
+        sell_results: list[V3LegExecutionResult],
+        buy_results: list[V3LegExecutionResult],
+        started_at: str,
+        running_payload: dict[str, Any],
+        actor: ActorContext,
+    ) -> dict[str, Any]:
+        client_signature = _uses_client_signature(trigger)
+        if client_signature:
+            sell_results = self._sync_leg_results_from_swaps(db, sell_results)
+            buy_results = self._sync_leg_results_from_swaps(db, buy_results)
+
+        self._update_running_progress(
+            db, execution_id, running_payload, sell_results, buy_results, actor,
+        )
+
+        if client_signature and any(
+            r.status == "pending" for r in sell_results + buy_results
+        ):
+            return self._build_running_response(
+                execution_id=execution_id,
+                batch_id=batch_id,
+                portfolio_id=portfolio_id,
+                plan_hash=plan_hash,
+                trigger=trigger,
+                drift_rebalance_plan=drift_rebalance_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+                started_at=started_at,
+                running_payload=running_payload,
+                actor=actor,
+                db=db,
+            )
+
+        if not client_signature:
+            self._expire_pending_legs(sell_results + buy_results)
+
+        terminal = self._build_terminal_response(
+            execution_id=execution_id,
+            batch_id=batch_id,
+            portfolio_id=portfolio_id,
+            plan_hash=plan_hash,
+            trigger=trigger,
+            drift_rebalance_plan=drift_rebalance_plan,
+            sell_results=sell_results,
+            buy_results=buy_results,
+            started_at=started_at,
+        )
+        self._audit_terminal(db, execution_id, terminal, actor)
+        return terminal
+
+    def _build_running_response(
+        self,
+        *,
+        execution_id: str,
+        batch_id: str,
+        portfolio_id: str,
+        plan_hash: str,
+        trigger: V3Trigger,
+        drift_rebalance_plan: dict[str, Any],
+        sell_results: list[V3LegExecutionResult],
+        buy_results: list[V3LegExecutionResult],
+        started_at: str,
+        running_payload: dict[str, Any],
+        actor: ActorContext,
+        db: Session,
+    ) -> dict[str, Any]:
+        payload = dict(running_payload)
+        payload.update({
+            "rebalance_execution_id": execution_id,
+            "batch_id": batch_id,
+            "portfolio_id": portfolio_id,
+            "plan_hash": plan_hash,
+            "trigger": trigger,
+            "v3_status": "RUNNING",
+            "sell_results": [r.to_dict() for r in sell_results],
+            "buy_results": [r.to_dict() for r in buy_results],
+            "started_at": started_at,
+            "resume_required": True,
+            "client_signature_required": True,
+        })
+        self._update_running_progress(
+            db, execution_id, payload, sell_results, buy_results, actor,
+        )
+        return {
+            "rebalance_execution_id": execution_id,
+            "batch_id": batch_id,
+            "portfolio_id": portfolio_id,
+            "plan_hash": plan_hash,
+            "snapshot_hash": drift_rebalance_plan.get("snapshot_hash"),
+            "trigger": trigger,
+            "v3_status": "RUNNING",
+            "weight_basis": drift_rebalance_plan.get("weight_basis"),
+            "cash_funding_source": drift_rebalance_plan.get("cash_funding_source"),
+            "available_cash_usdc": drift_rebalance_plan.get("available_cash_usdc"),
+            "sell_plan": drift_rebalance_plan.get("sell_plan") or [],
+            "buy_plan": drift_rebalance_plan.get("buy_plan") or [],
+            "sell_results": [r.to_dict() for r in sell_results],
+            "buy_results": [r.to_dict() for r in buy_results],
+            "started_at": started_at,
+            "resume_required": True,
+            "client_signature_required": True,
+            "max_swap_attempts": MAX_SWAP_ATTEMPTS,
+            "quote_ttl_seconds": QUOTE_TTL_SECONDS,
+            "execution_provider": self._execution.provider_name,
+        }
 
     def _sells_allow_buy_phase(self, sell_results: list[V3LegExecutionResult]) -> bool:
         if not sell_results:
@@ -1021,6 +1279,34 @@ def execute_v3_bundle_rebalance(
         db,
         client_id=client_id,
         portfolio_id=portfolio_id,
+        drift_rebalance_plan=drift_rebalance_plan,
+        trigger=trigger,
+        plan_hash=plan_hash,
+    )
+
+
+def resume_v3_bundle_rebalance_execution(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+    drift_rebalance_plan: dict[str, Any],
+    trigger: V3Trigger = "manual",
+    execution_adapter: Optional[BundleExecutionAdapter] = None,
+) -> dict[str, Any]:
+    """Reprise après signature client — sync swaps, quote leg suivant ou terminal."""
+    executor = BundleRebalanceExecutor(execution_adapter=execution_adapter)
+    running = find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio_id))
+    if running is None:
+        raise BundleRebalanceExecutorError("no_running_rebalance")
+    plan_hash = str(
+        running.get("plan_hash") or drift_rebalance_plan.get("plan_hash") or "",
+    )
+    return executor._resume_running_execution(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        running=running,
         drift_rebalance_plan=drift_rebalance_plan,
         trigger=trigger,
         plan_hash=plan_hash,

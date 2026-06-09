@@ -17,6 +17,11 @@ MIN_REBALANCE_DELTA_USDC = Decimal(
     os.getenv("MIN_REBALANCE_DELTA_USDC", "1"),
 )
 MIN_DRIFT_BPS = int(os.getenv("MIN_DRIFT_BPS", "200"))
+BPS_SCALE = Decimal("10000")
+# Cash > invested × ratio → plan sur NAV totale (déploiement cash leg dominant).
+CASH_DOMINANT_INVESTED_RATIO = Decimal(
+    os.getenv("CASH_DOMINANT_INVESTED_RATIO", "1"),
+)
 
 
 def _dec(value: Decimal | str | float) -> Decimal:
@@ -43,6 +48,184 @@ def _plan_hash(
     return f"sha256:{digest}"
 
 
+def _should_use_portfolio_value_plan(*, invested: Decimal, cash: Decimal) -> bool:
+    return invested > 0 and cash > invested * CASH_DOMINANT_INVESTED_RATIO
+
+
+def _leg_with_preview_fields(
+    *,
+    asset: str,
+    instrument_id: str,
+    amount_usdc: Decimal,
+    delta_usdc: str,
+    action: str,
+    funded_by: str | None = None,
+    current_value_usdc: Decimal | None = None,
+    target_value_usdc: Decimal | None = None,
+    price_usdc: Decimal | None = None,
+) -> dict[str, Any]:
+    leg: dict[str, Any] = {
+        "asset": asset,
+        "instrument_id": instrument_id,
+        "amount_usdc": _dec_str(amount_usdc),
+        "delta_usdc": delta_usdc,
+        "action": action,
+    }
+    if funded_by:
+        leg["funded_by"] = funded_by
+    if current_value_usdc is not None:
+        leg["current_value_usdc"] = _dec_str(current_value_usdc)
+    if target_value_usdc is not None:
+        leg["target_value_usdc"] = _dec_str(target_value_usdc)
+    if price_usdc is not None and price_usdc > 0:
+        leg["price_usdc"] = _dec_str(price_usdc)
+        leg["amount_crypto"] = _dec_str(
+            (amount_usdc / price_usdc).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN),
+        )
+    return leg
+
+
+def _plan_portfolio_value_cash_deploy(
+    drift_snapshot: dict[str, Any],
+    *,
+    invested: Decimal,
+    cash: Decimal,
+    entry_asset: str,
+    snapshot_hash: str,
+    weight_basis: str,
+) -> dict[str, Any]:
+    """Déploie le cash leg dominant vers les cibles pondérées sur la NAV totale."""
+    warnings: list[str] = ["planning_mode_portfolio_value_cash_deploy"]
+    portfolio_value = invested + cash
+    target_rows = list(drift_snapshot.get("target_assets") or [])
+    non_target_rows = list(drift_snapshot.get("non_target_assets") or [])
+
+    sell_candidates: list[dict[str, Any]] = []
+    buy_candidates: list[dict[str, Any]] = []
+
+    for row in target_rows:
+        weight_bps = int(row.get("target_weight_bps") or 0)
+        current = _dec(row.get("current_value_usdc") or "0")
+        target_val = (
+            portfolio_value * Decimal(weight_bps) / BPS_SCALE
+        ).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
+        delta = (target_val - current).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
+        asset = str(row.get("asset") or "")
+        instrument_id = str(row.get("instrument_id") or "")
+        price_usdc = _dec(row.get("price_usdc") or "0")
+
+        if delta <= -MIN_REBALANCE_DELTA_USDC:
+            sell_candidates.append({
+                "asset": asset,
+                "instrument_id": instrument_id,
+                "delta_usdc": _dec_str(delta),
+                "ideal_amount_usdc": abs(delta),
+                "current_value_usdc": current,
+                "target_value_usdc": target_val,
+                "price_usdc": price_usdc,
+            })
+        elif delta >= MIN_REBALANCE_DELTA_USDC:
+            buy_candidates.append({
+                "asset": asset,
+                "instrument_id": instrument_id,
+                "delta_usdc": _dec_str(delta),
+                "ideal_amount_usdc": delta,
+                "current_value_usdc": current,
+                "target_value_usdc": target_val,
+                "price_usdc": price_usdc,
+            })
+
+    for row in non_target_rows:
+        value = _dec(row.get("current_value_usdc") or "0")
+        if value >= MIN_REBALANCE_DELTA_USDC:
+            sell_candidates.append({
+                "asset": str(row.get("asset") or ""),
+                "instrument_id": str(row.get("instrument_id") or ""),
+                "delta_usdc": _dec_str(-value),
+                "ideal_amount_usdc": value,
+                "current_value_usdc": value,
+                "target_value_usdc": Decimal("0"),
+                "price_usdc": _dec(row.get("price_usdc") or "0"),
+                "non_target": True,
+            })
+
+    sell_candidates.sort(key=lambda r: _dec(r["ideal_amount_usdc"]), reverse=True)
+    buy_candidates.sort(key=lambda r: _dec(r["ideal_amount_usdc"]), reverse=True)
+
+    available_cash = cash
+    sell_plan: list[dict[str, Any]] = []
+    buy_plan: list[dict[str, Any]] = []
+
+    total_buy_need = sum(_dec(c["ideal_amount_usdc"]) for c in buy_candidates)
+    if buy_candidates and total_buy_need > available_cash and sell_candidates:
+        funding_gap = total_buy_need - available_cash
+        funding_left = funding_gap
+        for cand in sell_candidates:
+            if funding_left <= 0:
+                break
+            sell_amount = min(_dec(cand["ideal_amount_usdc"]), funding_left)
+            if sell_amount < MIN_REBALANCE_DELTA_USDC:
+                continue
+            sell_plan.append(_leg_with_preview_fields(
+                asset=cand["asset"],
+                instrument_id=cand["instrument_id"],
+                amount_usdc=sell_amount,
+                delta_usdc=cand["delta_usdc"],
+                action="sell",
+                current_value_usdc=cand.get("current_value_usdc"),
+                target_value_usdc=cand.get("target_value_usdc"),
+                price_usdc=cand.get("price_usdc"),
+            ))
+            funding_left -= sell_amount
+        if funding_left > MIN_REBALANCE_DELTA_USDC:
+            warnings.append("insufficient_overweight_to_fund_buys")
+
+    total_funding = available_cash + sum(_dec(s["amount_usdc"]) for s in sell_plan)
+    if buy_candidates and total_buy_need > 0:
+        scale = min(Decimal("1"), total_funding / total_buy_need)
+        for cand in buy_candidates:
+            amount = (_dec(cand["ideal_amount_usdc"]) * scale).quantize(
+                Decimal("0.000001"), rounding=ROUND_DOWN,
+            )
+            if amount < MIN_REBALANCE_DELTA_USDC:
+                continue
+            funded_by = "cash_leg_and_sell_proceeds" if sell_plan else "cash_leg"
+            buy_plan.append(_leg_with_preview_fields(
+                asset=cand["asset"],
+                instrument_id=cand["instrument_id"],
+                amount_usdc=amount,
+                delta_usdc=cand["delta_usdc"],
+                action="buy",
+                funded_by=funded_by,
+                current_value_usdc=cand.get("current_value_usdc"),
+                target_value_usdc=cand.get("target_value_usdc"),
+                price_usdc=cand.get("price_usdc"),
+            ))
+
+    status = "no_action" if not sell_plan and not buy_plan else "ok"
+    return {
+        "weight_basis": weight_basis,
+        "planning_mode": "portfolio_value_cash_deploy",
+        "cash_funding_source": "separate",
+        "entry_asset": entry_asset,
+        "invested_value_usdc": _dec_str(invested),
+        "portfolio_value_usdc": _dec_str(portfolio_value),
+        "available_cash_usdc": _dec_str(available_cash),
+        "min_rebalance_delta_usdc": _dec_str(MIN_REBALANCE_DELTA_USDC),
+        "min_drift_bps": MIN_DRIFT_BPS,
+        "sell_plan": sell_plan,
+        "buy_plan": buy_plan,
+        "plan_hash": _plan_hash(
+            snapshot_hash=snapshot_hash,
+            sell_plan=sell_plan,
+            buy_plan=buy_plan,
+        ),
+        "snapshot_hash": snapshot_hash,
+        "status": status,
+        "warnings": warnings,
+    }
+
+
 def plan_bundle_rebalance_from_drift(drift_snapshot: dict[str, Any]) -> dict[str, Any]:
     """Construit sell_plan / buy_plan depuis un BundleDriftSnapshot (read-only)."""
     warnings: list[str] = []
@@ -51,6 +234,16 @@ def plan_bundle_rebalance_from_drift(drift_snapshot: dict[str, Any]) -> dict[str
     cash = _dec(drift_snapshot.get("cash_value_usdc") or "0")
     entry_asset = str(drift_snapshot.get("entry_asset") or "USDC")
     snapshot_hash = str(drift_snapshot.get("snapshot_hash") or "")
+
+    if _should_use_portfolio_value_plan(invested=invested, cash=cash):
+        return _plan_portfolio_value_cash_deploy(
+            drift_snapshot,
+            invested=invested,
+            cash=cash,
+            entry_asset=entry_asset,
+            snapshot_hash=snapshot_hash,
+            weight_basis=weight_basis,
+        )
 
     target_rows = list(drift_snapshot.get("target_assets") or [])
     non_target_rows = list(drift_snapshot.get("non_target_assets") or [])
@@ -228,9 +421,11 @@ def plan_bundle_rebalance_from_drift(drift_snapshot: dict[str, Any]) -> dict[str
 
     return {
         "weight_basis": weight_basis,
+        "planning_mode": "invested_drift",
         "cash_funding_source": "separate",
         "entry_asset": entry_asset,
         "invested_value_usdc": _dec_str(invested),
+        "portfolio_value_usdc": _dec_str(invested + cash),
         "available_cash_usdc": _dec_str(available_cash),
         "min_rebalance_delta_usdc": _dec_str(MIN_REBALANCE_DELTA_USDC),
         "min_drift_bps": MIN_DRIFT_BPS,
