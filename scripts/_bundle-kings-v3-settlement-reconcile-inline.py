@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
@@ -18,9 +19,9 @@ from services.portfolio_engine.bundle_execution.bundle_swap_pe_settlement import
     try_settle_confirmed_bundle_swap,
 )
 from services.portfolio_engine.bundle_execution.bundle_funding import resolve_bundle_cash_leg_available
+from services.portfolio_engine.bundle_execution.bundle_cost_basis import reference_cost_basis_eur
 from services.portfolio_engine.bundle_execution.pe_settlement import (
     apply_rebalance_buy_atoms,
-    reference_cost_basis_eur,
     swap_confirmed,
 )
 from services.portfolio_engine.bundles.orchestrator import BundleOrchestrator
@@ -174,7 +175,13 @@ def main() -> None:
             )
             report["guard_released"] = released
 
-        db.commit()
+        if os.environ.get("BUNDLE_KINGS_SETTLEMENT_RECONCILE_CONFIRM") == "1":
+            db.commit()
+            report["committed"] = True
+        else:
+            db.rollback()
+            report["committed"] = False
+            report["mode"] = "dry_run"
 
         report["after"] = {
             "atoms": _pe_atoms(db, PORTFOLIO_ID),
