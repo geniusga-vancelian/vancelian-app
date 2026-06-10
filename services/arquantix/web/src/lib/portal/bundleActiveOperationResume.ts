@@ -1,7 +1,9 @@
-import { executeBundleTrade } from '@/lib/portal/executeBundleTrade'
+import {
+  executeBundleTrade,
+  type ExecuteBundleTradeDeps,
+} from '@/lib/portal/executeBundleTrade'
 import {
   resumePortfolioRebalancing,
-  submitBundleLegTx,
   type BundleRebalanceLeg,
   type PortfolioRebalancingAssetLine,
   type PortfolioRebalancingPayload,
@@ -9,14 +11,6 @@ import {
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 type PendingLeg = BundleRebalanceLeg & { side: 'buy' | 'sell' }
-
-type SignDeps = {
-  signAndSubmit: (
-    swapId: string,
-    snapshot: { review_amount_in: string; review_estimated_receive: string },
-  ) => Promise<unknown>
-  pollUntilTerminal: (swapId: string) => Promise<unknown>
-}
 
 function pendingLegs(result: PortfolioRebalancingPayload): PendingLeg[] {
   const sells = (result.sell_results ?? [])
@@ -38,10 +32,7 @@ function v3Snapshot(leg: PendingLeg) {
 
 async function runChainedTrades(
   initial: PortfolioRebalancingPayload,
-  deps: {
-    signAndSubmit: SignDeps['signAndSubmit']
-    pollUntilTerminal: SignDeps['pollUntilTerminal']
-    onPhaseChange?: (phase: SwapExecutionPhase) => void
+  deps: ExecuteBundleTradeDeps & {
     onAssetStatus?: (asset: string, status: string) => void
   },
 ): Promise<PortfolioRebalancingPayload> {
@@ -75,8 +66,8 @@ async function runChainedTrades(
 
 export async function resumeActiveBundleOperation(params: {
   initial: PortfolioRebalancingPayload
-  signAndSubmit: SignDeps['signAndSubmit']
-  pollUntilTerminal: SignDeps['pollUntilTerminal']
+  signAndSubmit: ExecuteBundleTradeDeps['signAndSubmit']
+  pollUntilTerminal: ExecuteBundleTradeDeps['pollUntilTerminal']
   onPhaseChange?: (phase: SwapExecutionPhase) => void
   onAssetLines?: (lines: PortfolioRebalancingAssetLine[]) => void
 }): Promise<PortfolioRebalancingPayload> {

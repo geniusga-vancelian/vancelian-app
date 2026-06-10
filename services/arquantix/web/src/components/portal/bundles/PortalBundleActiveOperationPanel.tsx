@@ -272,7 +272,7 @@ export function PortalBundleActiveOperationPanel({
             : BUNDLE_FLOW_UI.processingTitle
         }
         lead={lead}
-        steps={steps.map((step) => ({ name: step.label, body: step.subtext }))}
+        steps={steps}
         progressIndex={progressIndex}
         completedProgressIndex={Math.max(0, progressIndex - 1)}
         onClose={() => undefined}
