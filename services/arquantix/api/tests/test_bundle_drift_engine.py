@@ -96,7 +96,7 @@ def test_golden_crypto_majors_drift_audit_shape(db: Session):
         price_resolver=resolver,
     )
 
-    assert snap["weight_basis"] == "invested_assets"
+    assert snap["weight_basis"] == "portfolio_value"
     assert Decimal(snap["cash_value_usdc"]) == 0
     assert Decimal(snap["invested_value_usdc"]) > 0
     assert Decimal(snap["portfolio_value_usdc"]) == Decimal(snap["invested_value_usdc"])
@@ -143,7 +143,7 @@ def test_pilot_cash_residual_included_in_portfolio_value(db: Session):
     snap = compute_bundle_drift_snapshot(
         db, client_id=pe.id, portfolio_id=portfolio.id, price_resolver=resolver,
     )
-    assert snap["weight_basis"] == "invested_assets"
+    assert snap["weight_basis"] == "portfolio_value"
     assert snap["cash_value_usdc"] == "29.866638"
     assert Decimal(snap["invested_value_usdc"]) > 0
     assert Decimal(snap["portfolio_value_usdc"]) == (
@@ -285,6 +285,6 @@ def test_preview_rebalance_includes_drift_snapshot(db: Session, monkeypatch):
     preview = orch.preview_rebalance(db, client_id=pe.id, portfolio_id=portfolio.id)
     assert "drift_snapshot" in preview
     assert preview["drift_snapshot"]["portfolio_id"] == str(portfolio.id)
-    assert preview["drift_snapshot"]["weight_basis"] == "invested_assets"
+    assert preview["drift_snapshot"]["weight_basis"] == "portfolio_value"
     assert "drift_rebalance_plan" in preview
-    assert preview["drift_rebalance_plan"]["weight_basis"] == "invested_assets"
+    assert preview["drift_rebalance_plan"]["weight_basis"] == "portfolio_value"

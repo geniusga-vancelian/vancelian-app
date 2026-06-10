@@ -130,8 +130,8 @@ export function PortalBundleAllocationActionsPanel({
       {previewStatus ? (
         <p className="m-0 font-ui text-[12px] text-v-fg-muted">
           Plan : {previewStatus}
-          {planningMode === 'portfolio_value_cash_deploy'
-            ? ' — déploiement cash leg vers allocation cible (NAV totale)'
+          {planningMode === 'portfolio_drift' || planningMode === 'portfolio_value_cash_deploy'
+            ? ' — déploiement sur NAV totale (cash leg inclus)'
             : null}
         </p>
       ) : null}

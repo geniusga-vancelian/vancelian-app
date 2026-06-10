@@ -28,11 +28,13 @@ quote initiale (optionnelle) → confirm (re-quote fraîche) → sign Privy → 
 
 **Décision** : un bundle côté UX reste un **produit** ; côté runtime c’est une **succession de trades atomiques**, chacun passant par la primitive `executeBundleTrade` (web) et le cycle serveur `quote → RUNNING → resume`.
 
-### 1.2 Deuxième bug : plan drift vs cash dominant
+### 1.2 Deuxième bug : plan drift vs cash leg (corrigé PR-2.1)
 
-Le planner (`invested_drift`) ne corrigeait que le drift sur la **base investie** (~35 USDC Kings), ignorant le déploiement du **cash leg massif** (~125 USDC).
+Le drift utilisait `invested_assets` comme dénominateur alors que la NAV affichée inclut le cash leg. Plans partiels (ex. Kings ~3,6 USDC ETH avec ~6,4 USDC cash).
 
-**Décision** : si `cash > invested × CASH_DOMINANT_INVESTED_RATIO` (défaut `1`), basculer en **`portfolio_value_cash_deploy`** — cibles calculées sur **NAV totale** (investi + cash).
+**Décision actuelle** : `weight_basis = portfolio_value` dans `drift_engine.py` — une seule base NAV pour tous les cas. Le planner expose `planning_mode = portfolio_drift`. Voir [`BUNDLE_V3_PORTFOLIO_VALUE_DRIFT_AND_ACTIVE_OPERATION_ARCHITECTURE.md`](BUNDLE_V3_PORTFOLIO_VALUE_DRIFT_AND_ACTIVE_OPERATION_ARCHITECTURE.md).
+
+*(Historique : commit `4ca4dabb` introduisait `portfolio_value_cash_deploy` si `cash > invested` — remplacé par drift NAV unifié.)*
 
 ---
 
@@ -55,13 +57,14 @@ Un **batch V3** n’est pas un workflow à reprise cross-swap : c’est un **rap
 
 ---
 
-## 3. Modes du planner (`rebalance_planner.py`)
+## 3. Planner (`rebalance_planner.py`) — `portfolio_drift`
 
-| Mode | Condition | Comportement |
-| --- | --- | --- |
-| `invested_drift` | `cash ≤ invested` (ex. Crypto Majors) | Drift sur base investie ; buys financés par cash leg jusqu’au `total_buy_need` |
-| `portfolio_value_cash_deploy` | `cash > invested` (ex. Kings post-dépôts) | Cibles = `portfolio_value × weight` ; buys/ventes pour rejoindre la NAV |
-| Cash-only deploy | `invested = 0` et `cash > 0` | Répartition cash par `target_weight_bps` (inchangé) |
+| Élément | Comportement |
+| --- | --- |
+| Drift (`drift_engine`) | `weight_basis = portfolio_value` — cibles = `portfolio_value × weight` |
+| `planning_mode` | **`portfolio_drift`** (unique) |
+| Cash-only | `invested = 0` et `cash > 0` → répartition cash par `target_weight_bps` |
+| Financement | Cash leg = source séparée ; sells si besoin de cash pour buys |
 
 Champs enrichis sur chaque leg du plan (preview UI) :
 

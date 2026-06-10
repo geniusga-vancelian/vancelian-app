@@ -1,6 +1,6 @@
 """Bundle Rebalancing Planner — V3 PR-2.
 
-Drift sur actifs investis ; cash leg = source de financement séparée.
+Drift sur NAV totale (``portfolio_value``) ; cash leg = source de financement.
 Produit sell_plan puis buy_plan, déterministe et idempotent.
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ import os
 from decimal import Decimal, ROUND_DOWN
 from typing import Any
 
-from services.portfolio_engine.bundles.drift_engine import WEIGHT_BASIS_INVESTED_ASSETS
+from services.portfolio_engine.bundles.drift_engine import WEIGHT_BASIS_PORTFOLIO_VALUE
 
 MIN_REBALANCE_DELTA_USDC = Decimal(
     os.getenv("MIN_REBALANCE_DELTA_USDC", "1"),
@@ -229,21 +229,11 @@ def _plan_portfolio_value_cash_deploy(
 def plan_bundle_rebalance_from_drift(drift_snapshot: dict[str, Any]) -> dict[str, Any]:
     """Construit sell_plan / buy_plan depuis un BundleDriftSnapshot (read-only)."""
     warnings: list[str] = []
-    weight_basis = str(drift_snapshot.get("weight_basis") or WEIGHT_BASIS_INVESTED_ASSETS)
+    weight_basis = str(drift_snapshot.get("weight_basis") or WEIGHT_BASIS_PORTFOLIO_VALUE)
     invested = _dec(drift_snapshot.get("invested_value_usdc") or "0")
     cash = _dec(drift_snapshot.get("cash_value_usdc") or "0")
     entry_asset = str(drift_snapshot.get("entry_asset") or "USDC")
     snapshot_hash = str(drift_snapshot.get("snapshot_hash") or "")
-
-    if _should_use_portfolio_value_plan(invested=invested, cash=cash):
-        return _plan_portfolio_value_cash_deploy(
-            drift_snapshot,
-            invested=invested,
-            cash=cash,
-            entry_asset=entry_asset,
-            snapshot_hash=snapshot_hash,
-            weight_basis=weight_basis,
-        )
 
     target_rows = list(drift_snapshot.get("target_assets") or [])
     non_target_rows = list(drift_snapshot.get("non_target_assets") or [])
@@ -421,7 +411,7 @@ def plan_bundle_rebalance_from_drift(drift_snapshot: dict[str, Any]) -> dict[str
 
     return {
         "weight_basis": weight_basis,
-        "planning_mode": "invested_drift",
+        "planning_mode": "portfolio_drift",
         "cash_funding_source": "separate",
         "entry_asset": entry_asset,
         "invested_value_usdc": _dec_str(invested),

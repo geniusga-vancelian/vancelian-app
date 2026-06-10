@@ -18,6 +18,7 @@ import { AppMetricsRow } from '@/components/design-system/app/AppMetricsRow'
 import { AppSectionHeader } from '@/components/design-system/app/AppSectionHeader'
 import { PortalTransactionHistory } from '@/components/portal/PortalTransactionHistory'
 import { PortalBundleAllocationReadOnlyPanel } from '@/components/portal/bundles/PortalBundleAllocationReadOnlyPanel'
+import { PortalLazyBundleActiveOperation } from '@/components/portal/bundles/PortalLazyBundleActiveOperation'
 import { PortalCryptoAvatar } from '@/components/portal/markets/PortalCryptoAvatar'
 import { PortalDashboardLayout } from '@/components/portal/dashboard/PortalDashboardLayout'
 import { PortalNavLink } from '@/components/portal/PortalNavLink'
@@ -281,6 +282,14 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
         ) : null}
 
         <PortalReveal index={3}>
+          <PortalLazyBundleActiveOperation
+            portfolioId={id}
+            portfolioName={bundle.portfolioName}
+            onRefresh={() => void refresh()}
+          />
+        </PortalReveal>
+
+        <PortalReveal index={4}>
           <PortalBundleAllocationReadOnlyPanel
             portfolioId={id}
             portfolioName={bundle.portfolioName}
@@ -291,7 +300,7 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
           />
         </PortalReveal>
 
-        <PortalReveal index={4}>
+        <PortalReveal index={5}>
           <section className="flex w-full flex-col gap-3">
             <AppSectionHeader title="Withdraw" />
             <p className="m-0 font-ui text-[13px] text-v-fg-muted">
@@ -312,7 +321,7 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={5}>
+        <PortalReveal index={6}>
           <section className="flex w-full flex-col gap-3">
             <AppSectionHeader title="Activity" size="sm" />
             {transactionPreview.length > 0 ? (

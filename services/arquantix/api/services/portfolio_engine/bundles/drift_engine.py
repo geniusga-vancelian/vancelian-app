@@ -1,6 +1,7 @@
 """Portfolio Drift Engine — lecture seule (Bundle V3 PR-1).
 
 Le portefeuille (PE spot + cash leg + allocations cibles) est la seule vérité métier.
+Drift et cibles calculés sur la NAV totale (``portfolio_value`` = spot + cash leg).
 Aucun batch, swap ou leg historique n'entre dans le calcul.
 """
 from __future__ import annotations
@@ -28,8 +29,10 @@ from services.portfolio_engine.positions.models import PositionAtom
 
 BPS_SCALE = 10_000
 PRICE_SOURCE_EXCHANGE_EUR = "exchange_service_eur_to_entry_asset"
+WEIGHT_BASIS_PORTFOLIO_VALUE = "portfolio_value"
+"""Poids et cibles sur la NAV totale (spot + cash leg). Le cash leg n'a pas de poids cible mais entre dans le dénominateur."""
 WEIGHT_BASIS_INVESTED_ASSETS = "invested_assets"
-"""Poids calculés sur les actifs investis ; le cash leg n'est pas une allocation cible."""
+"""Alias historique — préférer WEIGHT_BASIS_PORTFOLIO_VALUE."""
 
 
 class PriceResolver(Protocol):
@@ -114,7 +117,7 @@ class BundleDriftSnapshot:
     invested_value_usdc: Decimal
     cash_value_usdc: Decimal
     entry_asset: str
-    weight_basis: str = WEIGHT_BASIS_INVESTED_ASSETS
+    weight_basis: str = WEIGHT_BASIS_PORTFOLIO_VALUE
     target_assets: list[BundleDriftAsset] = field(default_factory=list)
     non_target_assets: list[BundleDriftNonTargetAsset] = field(default_factory=list)
     cash_asset: dict[str, str] = field(default_factory=dict)
@@ -160,8 +163,13 @@ def _value_bps(part: Decimal, whole: Decimal) -> int:
     return int((part * BPS_SCALE / whole).to_integral_value(rounding=ROUND_DOWN))
 
 
-def _action_hint(delta: Decimal, *, invested_value_usdc: Decimal, target_weight_bps: int) -> str:
-    if invested_value_usdc <= 0 and target_weight_bps > 0:
+def _action_hint(
+    delta: Decimal,
+    *,
+    portfolio_value_usdc: Decimal,
+    target_weight_bps: int,
+) -> str:
+    if portfolio_value_usdc <= 0 and target_weight_bps > 0:
         return "buy"
     if delta > 0:
         return "buy"
@@ -338,7 +346,7 @@ def compute_bundle_drift_snapshot(
 
     invested_value_usdc = total_spot_usdc
     portfolio_value_usdc = invested_value_usdc + cash_value_usdc
-    weight_denominator = invested_value_usdc
+    weight_denominator = portfolio_value_usdc
 
     for row in target_rows:
         if weight_denominator > 0:
@@ -357,7 +365,7 @@ def compute_bundle_drift_snapshot(
         row.drift_bps = row.current_weight_bps - row.target_weight_bps
         row.action_hint = _action_hint(
             delta,
-            invested_value_usdc=invested_value_usdc,
+            portfolio_value_usdc=portfolio_value_usdc,
             target_weight_bps=row.target_weight_bps,
         )
 
@@ -386,10 +394,7 @@ def compute_bundle_drift_snapshot(
                 price_usdc=_dec_str(
                     _eur_to_entry_asset(price_eur, entry_price_eur) if price_eur > 0 else Decimal("0")
                 ),
-                current_weight_bps=_value_bps(
-                    value_usdc,
-                    weight_denominator if weight_denominator > 0 else portfolio_value_usdc,
-                ),
+                current_weight_bps=_value_bps(value_usdc, weight_denominator),
             )
         )
 
@@ -410,7 +415,7 @@ def compute_bundle_drift_snapshot(
         invested_value_usdc=invested_value_usdc,
         cash_value_usdc=cash_value_usdc,
         entry_asset=entry_asset,
-        weight_basis=WEIGHT_BASIS_INVESTED_ASSETS,
+        weight_basis=WEIGHT_BASIS_PORTFOLIO_VALUE,
         target_assets=target_rows,
         non_target_assets=non_target,
         cash_asset={
@@ -444,7 +449,7 @@ def compute_bundle_drift_snapshot(
         portfolio_id=str(portfolio_id),
         client_id=str(client_id),
         entry_asset=entry_asset,
-        weight_basis=WEIGHT_BASIS_INVESTED_ASSETS,
+        weight_basis=WEIGHT_BASIS_PORTFOLIO_VALUE,
         invested_value_usdc=_dec_str(invested_value_usdc),
         cash_value_usdc=_dec_str(cash_value_usdc),
         target_assets=hash_payload_targets,

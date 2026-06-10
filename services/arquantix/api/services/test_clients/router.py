@@ -2947,6 +2947,27 @@ def mobile_bundle_rebalance_execute(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@bootstrap_router.get("/bundle/{portfolio_id}/active-operation")
+def mobile_bundle_active_operation(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Worker bundle en cours (dépôt V3 / rééquilibrage) — reprise UI au chargement."""
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundles.rebalancing_portfolio import (
+        get_active_bundle_operation,
+    )
+
+    try:
+        pid = _UUID(portfolio_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    return get_active_bundle_operation(db, client_id=client.id, portfolio_id=pid)
+
+
 @bootstrap_router.post("/bundle/{portfolio_id}/rebalancing/preflight")
 def mobile_bundle_rebalancing_preflight(
     portfolio_id: str,

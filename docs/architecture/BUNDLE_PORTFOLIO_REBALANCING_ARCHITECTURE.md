@@ -84,9 +84,13 @@ Sur `trigger ∈ {cron, recovery}` (sans client) : expiration quote + retry `MAX
 
 Pas de resume cross-batch sur un batch **terminal** ; une exécution `RUNNING` reprend via `/rebalancing/resume` sur le **même** `rebalance_execution_id`.
 
-### 2.5 Cash dominant (NAV totale)
+### 2.5 Drift sur NAV totale (`portfolio_value`)
 
-Si `cash > invested` (ratio configurable via `CASH_DOMINANT_INVESTED_RATIO`), le planner bascule en `portfolio_value_cash_deploy` — voir doc trade chain §3.
+Le drift engine calcule poids et deltas sur **`portfolio_value_usdc`** (spot + cash leg). Le cash leg n’a pas de poids cible mais entre dans le dénominateur. Planner : `planning_mode = portfolio_drift`. Voir [`BUNDLE_V3_PORTFOLIO_VALUE_DRIFT_AND_ACTIVE_OPERATION_ARCHITECTURE.md`](BUNDLE_V3_PORTFOLIO_VALUE_DRIFT_AND_ACTIVE_OPERATION_ARCHITECTURE.md).
+
+### 2.6 Reprise worker UI (page bundle wallet)
+
+`GET /bundle/{id}/active-operation` + panneau portail `PortalLazyBundleActiveOperation` — stepper invest, polling, reprise legs LI.FI au chargement / refresh.
 
 ---
 

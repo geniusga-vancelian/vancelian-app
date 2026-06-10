@@ -316,6 +316,67 @@ def _asset_lines_from_plan(plan: dict[str, Any]) -> list[dict[str, str]]:
     return lines
 
 
+def _asset_lines_from_running_snapshot(snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    """Fusionne plan + résultats partiels pour l'UI (worker en cours)."""
+    lines: list[dict[str, str]] = []
+    entry_asset = str(snapshot.get("entry_asset") or "USDC")
+
+    def _append_from_bucket(
+        *,
+        results_key: str,
+        plan_key: str,
+        action: str,
+    ) -> None:
+        results = {
+            str(row.get("asset") or ""): row
+            for row in (snapshot.get(results_key) or [])
+            if isinstance(row, dict)
+        }
+        plan_legs = snapshot.get(plan_key) or []
+        if plan_legs:
+            for leg in plan_legs:
+                if not isinstance(leg, dict):
+                    continue
+                asset = str(leg.get("asset") or "")
+                result = results.get(asset) or {}
+                row: dict[str, str] = {
+                    "asset": asset,
+                    "action": action,
+                    "amount_entry": str(
+                        result.get("amount_usdc") or leg.get("amount_usdc") or "0",
+                    ),
+                    "entry_asset": entry_asset,
+                    "status": str(result.get("status") or "planned"),
+                }
+                for field in (
+                    "current_value_usdc",
+                    "target_value_usdc",
+                    "price_usdc",
+                    "amount_crypto",
+                    "funded_by",
+                    "swap_id",
+                ):
+                    value = result.get(field) if field in result else leg.get(field)
+                    if value is not None and str(value) != "":
+                        row[field] = str(value)
+                lines.append(row)
+            return
+        for row in snapshot.get(results_key) or []:
+            if not isinstance(row, dict):
+                continue
+            lines.append({
+                "asset": str(row.get("asset") or ""),
+                "action": action,
+                "amount_entry": str(row.get("amount_usdc") or "0"),
+                "entry_asset": entry_asset,
+                "status": str(row.get("status") or "unknown"),
+            })
+
+    _append_from_bucket(results_key="sell_results", plan_key="sell_plan", action="sell")
+    _append_from_bucket(results_key="buy_results", plan_key="buy_plan", action="buy")
+    return lines
+
+
 def _asset_lines_from_execution(result: dict[str, Any]) -> list[dict[str, str]]:
     lines: list[dict[str, str]] = []
     for bucket, action in (("sell_results", "sell"), ("buy_results", "buy")):
@@ -367,6 +428,66 @@ def _active_financial_operation_blocker(
         "operation_type": str(active.operation_type),
         "execution_id": str(active.execution_id),
     }
+
+
+def get_active_bundle_operation(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> dict[str, Any]:
+    """Opération bundle en cours (dépôt V3 ou rééquilibrage) — lecture seule pour reprise UI."""
+    pid = str(portfolio_id)
+    running = find_running_v3_rebalance_execution(db, portfolio_id=pid)
+    if running is not None:
+        trigger = str(running.get("trigger") or "manual")
+        operation_type = (
+            "v3_deposit_rebalance" if trigger == "deposit" else "portfolio_rebalancing"
+        )
+        asset_lines = _asset_lines_from_running_snapshot(running)
+        if not asset_lines:
+            asset_lines = _asset_lines_from_execution(running)
+        return {
+            "status": "active",
+            "operation_type": operation_type,
+            "portfolio_id": pid,
+            "v3_status": str(running.get("v3_status") or "RUNNING"),
+            "rebalance_execution_id": running.get("rebalance_execution_id"),
+            "batch_id": running.get("batch_id"),
+            "trigger": trigger,
+            "asset_lines": asset_lines,
+            "sell_results": running.get("sell_results") or [],
+            "buy_results": running.get("buy_results") or [],
+            "sell_plan": running.get("sell_plan") or [],
+            "buy_plan": running.get("buy_plan") or [],
+            "planning_mode": running.get("planning_mode"),
+        }
+
+    lock = get_active_invest_lock_for_portfolio(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    if lock is not None:
+        batch_id = str(lock.get("batch_id") or "").strip()
+        if batch_id and is_v3_deposit_batch(
+            db, portfolio_id=portfolio_id, batch_id=batch_id,
+        ):
+            return {
+                "status": "active",
+                "operation_type": "v3_deposit_rebalance",
+                "portfolio_id": pid,
+                "v3_status": "QUEUED",
+                "batch_id": batch_id,
+                "trigger": "deposit",
+                "funding_amount": str(
+                    lock.get("funding_amount")
+                    or lock.get("planned_entry_total")
+                    or "",
+                ),
+                "asset_lines": [],
+                "message": "Dépôt enregistré — rééquilibrage en cours de démarrage.",
+            }
+
+    return {"status": "none", "portfolio_id": pid}
 
 
 def preview_rebalancing_portfolio(

@@ -136,6 +136,24 @@ export class BundleExpiredInvestLegsError extends Error {
   }
 }
 
+export type BundleActiveOperationPayload = {
+  status: 'none' | 'active'
+  operation_type?: 'v3_deposit_rebalance' | 'portfolio_rebalancing' | string
+  portfolio_id: string
+  v3_status?: string
+  rebalance_execution_id?: string
+  batch_id?: string
+  trigger?: string
+  funding_amount?: string
+  message?: string
+  asset_lines?: PortfolioRebalancingAssetLine[]
+  sell_results?: BundleRebalanceLeg[]
+  buy_results?: BundleRebalanceLeg[]
+  sell_plan?: Array<Record<string, unknown>>
+  buy_plan?: Array<Record<string, unknown>>
+  planning_mode?: string
+}
+
 export type BundleInvestActiveLockPayload = {
   status: 'none' | 'active' | 'ambiguous'
   reconciled?: boolean
@@ -350,6 +368,16 @@ export async function investBundle(body: {
     throw new Error(message)
   }
   return { kind: 'success', payload: data as BundleInvestPayload }
+}
+
+export async function fetchActiveBundleOperation(
+  portfolioId: string,
+): Promise<BundleActiveOperationPayload> {
+  const res = await fetch(
+    `/api/portal/bundles/active-operation/${encodeURIComponent(portfolioId)}`,
+    { cache: 'no-store' },
+  )
+  return parseJson(res)
 }
 
 export async function fetchActiveBundleInvestLock(

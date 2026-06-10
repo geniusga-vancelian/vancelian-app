@@ -50,7 +50,7 @@ def _seed_majors_spot(db: Session, portfolio_id) -> None:
     _credit_spot(db, portfolio_id, _instrument_for_asset(db, "UNI").id, "0.6230000000")
 
 
-def test_drift_uses_invested_assets_weight_basis(db: Session):
+def test_drift_uses_portfolio_value_weight_basis(db: Session):
     pe = make_linked_client(db)
     portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
     resolver = _FixedPriceResolver(_majors_prices())
@@ -61,7 +61,7 @@ def test_drift_uses_invested_assets_weight_basis(db: Session):
     snap = compute_bundle_drift_snapshot(
         db, client_id=pe.id, portfolio_id=portfolio.id, price_resolver=resolver,
     )
-    assert snap["weight_basis"] == "invested_assets"
+    assert snap["weight_basis"] == "portfolio_value"
     assert Decimal(snap["cash_value_usdc"]) == Decimal("29.866638")
     assert Decimal(snap["invested_value_usdc"]) > 0
     assert Decimal(snap["portfolio_value_usdc"]) == (
@@ -69,7 +69,7 @@ def test_drift_uses_invested_assets_weight_basis(db: Session):
     )
 
     by_asset = {r["asset"]: r for r in snap["target_assets"]}
-    assert by_asset["BTC"]["action_hint"] == "sell"
+    assert by_asset["BTC"]["action_hint"] == "buy"
     assert by_asset["ETH"]["action_hint"] == "buy"
     assert Decimal(by_asset["ETH"]["delta_value_usdc"]) > 0
 
@@ -89,13 +89,13 @@ def test_cash_residual_sell_plan_empty_buy_eth_uni(db: Session):
 
     assert plan["status"] == "ok"
     assert plan["sell_plan"] == []
-    assert plan["weight_basis"] == "invested_assets"
+    assert plan["weight_basis"] == "portfolio_value"
     assert plan["cash_funding_source"] == "separate"
 
     buy_assets = {row["asset"] for row in plan["buy_plan"]}
     assert "ETH" in buy_assets
     assert "UNI" in buy_assets
-    assert "BTC" not in buy_assets
+    assert "BTC" in buy_assets
 
     total_buy = sum(Decimal(r["amount_usdc"]) for r in plan["buy_plan"])
     assert total_buy <= Decimal(snap["cash_value_usdc"])
@@ -165,11 +165,11 @@ def test_plan_hash_deterministic(db: Session):
 
 
 def test_kings_cash_dominant_deploys_portfolio_value_targets():
-    """Cash leg >> investi → achats BTC+ETH sur NAV totale (pas drift 1,5 USDC)."""
+    """Cash leg >> investi → achats BTC+ETH sur NAV totale (drift portfolio_value)."""
     snap = {
         "snapshot_hash": "kings-snap",
         "entry_asset": "USDC",
-        "weight_basis": "invested_assets",
+        "weight_basis": "portfolio_value",
         "invested_value_usdc": "35.158969",
         "cash_value_usdc": "125.685470",
         "portfolio_value_usdc": "160.844439",
@@ -179,9 +179,9 @@ def test_kings_cash_dominant_deploys_portfolio_value_targets():
                 "instrument_id": "btc-id",
                 "target_weight_bps": 7000,
                 "current_value_usdc": "26.184873",
-                "target_value_usdc": "24.611278",
-                "delta_value_usdc": "-1.573595",
-                "drift_bps": 447,
+                "target_value_usdc": "112.591107",
+                "delta_value_usdc": "86.406234",
+                "drift_bps": -5373,
                 "price_usdc": "61570.903020",
             },
             {
@@ -189,9 +189,9 @@ def test_kings_cash_dominant_deploys_portfolio_value_targets():
                 "instrument_id": "eth-id",
                 "target_weight_bps": 3000,
                 "current_value_usdc": "8.974096",
-                "target_value_usdc": "10.547690",
-                "delta_value_usdc": "1.573594",
-                "drift_bps": -448,
+                "target_value_usdc": "48.253332",
+                "delta_value_usdc": "39.279236",
+                "drift_bps": -2442,
                 "price_usdc": "1633.613579",
             },
         ],
@@ -199,7 +199,7 @@ def test_kings_cash_dominant_deploys_portfolio_value_targets():
     }
     plan = plan_bundle_rebalance_from_drift(snap)
 
-    assert plan["planning_mode"] == "portfolio_value_cash_deploy"
+    assert plan["planning_mode"] == "portfolio_drift"
     assert plan["status"] == "ok"
     assert plan["sell_plan"] == []
 
@@ -214,9 +214,47 @@ def test_kings_cash_dominant_deploys_portfolio_value_targets():
     btc_buy = Decimal(buys["BTC"]["amount_usdc"])
     eth_buy = Decimal(buys["ETH"]["amount_usdc"])
     assert btc_buy > eth_buy
-    assert "target_value_usdc" in buys["BTC"]
-    assert "amount_crypto" in buys["BTC"]
-    assert Decimal(buys["BTC"]["target_value_usdc"]) > Decimal("100")
+
+
+def test_kings_partial_cash_deploys_eth_on_portfolio_nav():
+    """Kings ~6.38 USDC cash — drift NAV → achat ETH ~5.5 USDC (pas drift investi 3.59)."""
+    snap = {
+        "snapshot_hash": "kings-partial",
+        "entry_asset": "USDC",
+        "weight_basis": "portfolio_value",
+        "invested_value_usdc": "11.976075",
+        "cash_value_usdc": "6.379815",
+        "portfolio_value_usdc": "18.355890",
+        "target_assets": [
+            {
+                "asset": "BTC",
+                "instrument_id": "btc-id",
+                "target_weight_bps": 7000,
+                "current_value_usdc": "11.976075",
+                "target_value_usdc": "12.849123",
+                "delta_value_usdc": "0.873048",
+                "drift_bps": -474,
+            },
+            {
+                "asset": "ETH",
+                "instrument_id": "eth-id",
+                "target_weight_bps": 3000,
+                "current_value_usdc": "0.000000",
+                "target_value_usdc": "5.506767",
+                "delta_value_usdc": "5.506767",
+                "drift_bps": -3000,
+            },
+        ],
+        "non_target_assets": [],
+    }
+    plan = plan_bundle_rebalance_from_drift(snap)
+
+    assert plan["planning_mode"] == "portfolio_drift"
+    assert plan["status"] == "ok"
+    assert plan["sell_plan"] == []
+    assert len(plan["buy_plan"]) == 1
+    assert plan["buy_plan"][0]["asset"] == "ETH"
+    assert Decimal(plan["buy_plan"][0]["amount_usdc"]) >= Decimal("5.5")
 
 
 def test_deltas_below_min_ignored(db: Session):

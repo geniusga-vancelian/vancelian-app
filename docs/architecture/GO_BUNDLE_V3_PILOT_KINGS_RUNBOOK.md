@@ -180,22 +180,26 @@ BUNDLE_V3_DEPOSIT_FLOW_ENABLED=false
 
 ---
 
-## Rééquilibrage Kings — post-deploy `4ca4dabb`
+## Rééquilibrage Kings — drift NAV `portfolio_value`
 
-Deploy : **plan cash dominant** + **exécution LI.FI en chaîne de trades** (pas de `quote_ttl_expired` immédiat).
+Deploy : drift sur **NAV totale** (spot + cash leg) + **chaîne LI.FI** + **reprise worker UI** au chargement page bundle.
 
 | Action | Route |
 | --- | --- |
+| Worker en cours (read-only) | `GET /bundle/daea3720-…/active-operation` |
 | Preview | `POST /bundle/daea3720-…/rebalancing/preview` |
 | Démarrer | `POST /bundle/daea3720-…/rebalancing` → `v3_status=RUNNING` |
 | Après chaque signature | `POST /bundle/daea3720-…/rebalancing/resume` |
 
-**Attendu Kings** (cash ~125 USDC, investi ~35 USDC) :
+**Attendu Kings — cash dominant** (cash ~125 USDC, investi ~35 USDC) :
 
-- Preview : `planning_mode=portfolio_value_cash_deploy` · achats **BTC ~86 USDC** + **ETH ~39 USDC**.
-- Exécution : **2 signatures** (une par leg) · terminal `COMPLETED` si swaps confirmés.
+- Preview : `planning_mode=portfolio_drift` · `weight_basis=portfolio_value` · achats **BTC ~86 USDC** + **ETH ~39 USDC**.
 
-Architecture détaillée : **[`BUNDLE_V3_TRADE_CHAIN_EXECUTION_ARCHITECTURE.md`](BUNDLE_V3_TRADE_CHAIN_EXECUTION_ARCHITECTURE.md)**.
+**Attendu Kings — cash résiduel** (cash ~6,4 USDC, investi ~12 USDC, NAV ~18,4 USDC) :
+
+- Preview : achat **ETH ~5,5 USDC** (pas ~3,6 sur base investie seule).
+
+Architecture : **[`BUNDLE_V3_PORTFOLIO_VALUE_DRIFT_AND_ACTIVE_OPERATION_ARCHITECTURE.md`](BUNDLE_V3_PORTFOLIO_VALUE_DRIFT_AND_ACTIVE_OPERATION_ARCHITECTURE.md)** · **[`BUNDLE_V3_TRADE_CHAIN_EXECUTION_ARCHITECTURE.md`](BUNDLE_V3_TRADE_CHAIN_EXECUTION_ARCHITECTURE.md)**.
 
 Validation ECS :
 
@@ -237,7 +241,7 @@ Portfolio **Crypto Majors** (`ab4ae920-f3e8-481b-8f82-a41a81d5779d`) : hors V3 d
 | Exécution | `POST /bundle/{portfolio_id}/rebalancing` · bouton portail **Rééquilibrage** |
 | Reprise post-signature | `POST /bundle/{portfolio_id}/rebalancing/resume` |
 
-**Comportement nominal Majors** : mode planner `invested_drift` (cash < investi) → achats cibles depuis cash ~29,87 USDC · chaque swap = `executeBundleTrade` · `resume` entre les legs · terminal sans batch mort cross-swap.
+**Comportement nominal Majors** : `planning_mode=portfolio_drift` · drift sur NAV (cash dilue les surpondérations spot) · achats depuis cash leg · `executeBundleTrade` + `resume` entre legs.
 
 Workflow logique, formules de drift/plan et comptabilité PE : **[`BUNDLE_PORTFOLIO_REBALANCING_ARCHITECTURE.md`](BUNDLE_PORTFOLIO_REBALANCING_ARCHITECTURE.md)**.
 

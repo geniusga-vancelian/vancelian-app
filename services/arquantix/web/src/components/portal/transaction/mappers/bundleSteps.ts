@@ -198,6 +198,98 @@ export function bundleInvestDynamicProcessingProgressIndex(
   }
 }
 
+const TERMINAL_V3_STATUSES = new Set([
+  'COMPLETED',
+  'COMPLETED_WITH_RESIDUAL_CASH',
+  'FAILED',
+  'NO_ACTION',
+])
+
+export function isTerminalBundleV3Status(status: string | undefined | null): boolean {
+  if (!status) return false
+  return TERMINAL_V3_STATUSES.has(status.toUpperCase())
+}
+
+/** Stepper bundle — dépôt V3 / rééquilibrage en cours (reprise page détail). */
+export function buildBundleActiveOperationSteps(params: {
+  bundleLabel: string
+  operationType: string
+  allocationAssets: string[]
+  includeFundingStep: boolean
+}): TransactionStep[] {
+  const { bundleLabel, operationType, allocationAssets, includeFundingStep } = params
+  const steps: TransactionStep[] = []
+
+  if (includeFundingStep) {
+    steps.push({
+      label: 'Transfert des fonds',
+      subtext: `Crédit du cash leg sur ${bundleLabel}.`,
+    })
+  }
+
+  steps.push({
+    label:
+      operationType === 'portfolio_rebalancing'
+        ? 'Rééquilibrage du portefeuille'
+        : 'Allocation du portefeuille',
+    subtext:
+      allocationAssets.length > 0
+        ? 'Répartition vers les actifs cibles.'
+        : 'Préparation du plan de rééquilibrage…',
+  })
+
+  for (const asset of allocationAssets) {
+    const label = displayBundleAssetLabel(asset)
+    steps.push({
+      label: `Allocation · ${label}`,
+      subtext: `Ajustement de la position ${label}.`,
+    })
+  }
+
+  steps.push({
+    label: 'Mise à jour du portefeuille',
+    subtext: 'Synchronisation de votre position.',
+  })
+
+  return steps
+}
+
+export function bundleActiveOperationProgressIndex(params: {
+  v3Status: string | undefined
+  assetLines: Array<{ asset: string; status: string }>
+  stepCount: number
+  includeFundingStep: boolean
+}): number {
+  const { v3Status, assetLines, stepCount, includeFundingStep } = params
+  const lastIndex = Math.max(0, stepCount - 1)
+  const fundingOffset = includeFundingStep ? 1 : 0
+
+  if (v3Status === 'QUEUED') {
+    return Math.min(fundingOffset, lastIndex)
+  }
+
+  if (!assetLines.length) {
+    return Math.min(fundingOffset + 1, lastIndex)
+  }
+
+  const completed = assetLines.filter((line) =>
+    ['completed', 'confirmed', 'success'].includes(String(line.status).toLowerCase()),
+  ).length
+  const hasPending = assetLines.some((line) =>
+    ['pending', 'signing', 'running', 'planned'].includes(String(line.status).toLowerCase()),
+  )
+
+  if (isTerminalBundleV3Status(v3Status)) {
+    return stepCount
+  }
+
+  if (hasPending) {
+    return Math.min(fundingOffset + 1 + Math.max(1, completed + 1), lastIndex)
+  }
+
+  return Math.min(fundingOffset + 1 + completed, lastIndex)
+}
+
 export const BUNDLE_WITHDRAW_REVIEW_STEP_DEFS: Array<{
   label: string
   defaultSub: (ctx: BundleProcessingContext) => string
