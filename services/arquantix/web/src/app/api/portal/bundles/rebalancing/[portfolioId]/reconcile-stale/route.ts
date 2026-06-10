@@ -4,7 +4,7 @@ import { parsePortalUpstreamJson, portalUpstreamFetch } from '@/lib/portal/porta
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { portfolioId: string } },
 ) {
   try {
@@ -14,12 +14,13 @@ export async function POST(
     }
 
     const portfolioId = (params.portfolioId ?? '').trim()
+    const body = await request.json().catch(() => ({}))
     const res = await portalUpstreamFetch(
       `/api/app/bundle/${encodeURIComponent(portfolioId)}/rebalancing/reconcile-stale`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(60_000),
       },
     )

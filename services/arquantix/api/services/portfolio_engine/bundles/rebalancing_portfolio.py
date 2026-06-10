@@ -450,6 +450,7 @@ def reconcile_stale_bundle_portfolio_state(
     *,
     client_id: UUID,
     portfolio_id: UUID,
+    force_signable_v3_close: bool = False,
 ) -> dict[str, Any]:
     """Nettoie zombies bundle (V3, lock legacy, intent) — appelé au chargement page wallet."""
     from services.portfolio_engine.bundles.bundle_invest_lock import (
@@ -467,6 +468,25 @@ def reconcile_stale_bundle_portfolio_state(
     _drift, current_plan = _compute_drift_and_plan(
         db, client_id=client_id, portfolio_id=portfolio_id,
     )
+
+    if force_signable_v3_close:
+        from services.portfolio_engine.bundles.rebalance_executor import (
+            force_close_stale_signable_v3_rebalance,
+        )
+
+        signable_closed = force_close_stale_signable_v3_rebalance(
+            db,
+            portfolio_id=pid,
+            client_id=client_id,
+            drift_rebalance_plan=current_plan,
+            reason="reconcile_stale_force_signable",
+            max_age_minutes=0,
+        )
+        if signable_closed is not None:
+            actions.append({
+                "kind": "v3_signable_force_closed",
+                "v3_status": signable_closed.get("v3_status"),
+            })
 
     terminal = reconcile_running_v3_rebalance_execution(
         db,

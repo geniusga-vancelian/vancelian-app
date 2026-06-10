@@ -8,7 +8,7 @@ import logging
 import os
 import uuid as uuid_mod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_DOWN
 from typing import Any, Literal, Optional
 from uuid import UUID
@@ -35,6 +35,14 @@ ACTION_V3_TERMINAL = "v3_execution_terminal"
 MAX_SWAP_ATTEMPTS = int(os.getenv("MAX_SWAP_ATTEMPTS", "2"))
 QUOTE_TTL_SECONDS = int(os.getenv("QUOTE_TTL_SECONDS", "120"))
 MAX_EXECUTION_AGE_MINUTES = int(os.getenv("MAX_EXECUTION_AGE_MINUTES", "30"))
+
+
+def client_signature_stale_minutes() -> int:
+    raw = (os.environ.get("CLIENT_SIGNATURE_STALE_MINUTES") or "10").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 10
 
 V3Trigger = Literal["manual", "deposit", "recovery", "cron"]
 CLIENT_SIGNATURE_TRIGGERS: frozenset[V3Trigger] = frozenset({"manual"})
@@ -1352,6 +1360,72 @@ def _release_v3_rebalance_guard(
     )
 
 
+def _expire_stale_client_signature_pending_legs(
+    db: Session,
+    results: list[V3LegExecutionResult],
+    *,
+    max_age_minutes: int | None = None,
+) -> bool:
+    """Pending awaiting_client_signature → expired si swap AWAITING_SIGNATURE trop vieux."""
+    from services.lifi.enums import SwapSessionStatus
+    from services.lifi.models import PersonWalletSwap
+    from services.lifi.swap_repository import PersonWalletSwapRepository
+
+    ttl = client_signature_stale_minutes() if max_age_minutes is None else max(0, max_age_minutes)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=ttl) if ttl > 0 else None
+    repo = PersonWalletSwapRepository()
+    changed = False
+
+    for row in results:
+        if row.status != "pending":
+            continue
+        if row.error not in (
+            "awaiting_client_signature",
+            "awaiting_wallet_signature",
+            "awaiting_confirmation",
+        ):
+            continue
+        if not row.swap_id:
+            continue
+        try:
+            swap_uuid = UUID(str(row.swap_id))
+        except (TypeError, ValueError):
+            continue
+        swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_uuid).first()
+        if swap is None:
+            row.status = "expired"
+            row.error = "swap_missing"
+            changed = True
+            continue
+        if swap.status not in (
+            SwapSessionStatus.AWAITING_SIGNATURE.value,
+            SwapSessionStatus.QUOTE_RECEIVED.value,
+            SwapSessionStatus.PENDING.value,
+        ):
+            continue
+        ref = swap.updated_at or swap.created_at
+        if cutoff is not None and ref is not None and ref > cutoff:
+            continue
+        swap.status = SwapSessionStatus.EXPIRED.value
+        swap.error_message = "Signature expirée — reprise impossible."
+        repo.append_audit(
+            swap,
+            {
+                "event": "client_signature_stale_expired",
+                "max_age_minutes": ttl,
+                "leg_asset": row.asset,
+            },
+        )
+        db.add(swap)
+        row.status = "expired"
+        row.error = "client_signature_stale"
+        changed = True
+
+    if changed:
+        db.flush()
+    return changed
+
+
 def _expire_unrecoverable_pending_legs(
     db: Session,
     results: list[V3LegExecutionResult],
@@ -1447,6 +1521,7 @@ def reconcile_running_v3_rebalance_execution(
         sell_results = executor._sync_leg_results_from_swaps(db, sell_results)
         buy_results = executor._sync_leg_results_from_swaps(db, buy_results)
 
+    _expire_stale_client_signature_pending_legs(db, sell_results + buy_results)
     _expire_unrecoverable_pending_legs(db, sell_results + buy_results)
 
     all_results = sell_results + buy_results
@@ -1509,6 +1584,75 @@ def reconcile_running_v3_rebalance_execution(
         actor,
     )
     db.flush()
+    return None
+
+
+def force_close_stale_signable_v3_rebalance(
+    db: Session,
+    *,
+    portfolio_id: str,
+    client_id: UUID | None = None,
+    drift_rebalance_plan: dict[str, Any] | None = None,
+    reason: str = "signable_force_close",
+    max_age_minutes: int = 0,
+) -> dict[str, Any] | None:
+    """Expire les legs signature stale (ou immédiat si max_age=0) puis terminalise V3."""
+    running = find_running_v3_rebalance_execution(db, portfolio_id=portfolio_id)
+    if running is None:
+        return None
+
+    sell_results = _results_from_metadata(running.get("sell_results") or [])
+    buy_results = _results_from_metadata(running.get("buy_results") or [])
+    _expire_stale_client_signature_pending_legs(
+        db,
+        sell_results + buy_results,
+        max_age_minutes=max_age_minutes,
+    )
+    _expire_unrecoverable_pending_legs(db, sell_results + buy_results)
+
+    running_payload = {
+        **running,
+        "sell_results": [r.to_dict() for r in sell_results],
+        "buy_results": [r.to_dict() for r in buy_results],
+    }
+    has_pending = any(
+        r.status == "pending" for r in sell_results + buy_results
+    )
+    if not has_pending:
+        terminal = _force_terminalize_running_snapshot(
+            db,
+            running=running_payload,
+            actor_id="bundle-rebalance-v3-signable-force-close",
+            extra={"signable_force_closed": True, "reason": reason},
+        )
+        _release_v3_rebalance_guard(db, portfolio_id=portfolio_id, terminal=terminal)
+        return terminal
+
+    if client_id is not None and drift_rebalance_plan is not None:
+        terminal = reconcile_running_v3_rebalance_execution(
+            db,
+            portfolio_id=portfolio_id,
+            client_id=client_id,
+            drift_rebalance_plan=drift_rebalance_plan,
+            auto_progress=False,
+        )
+        if terminal is not None:
+            return terminal
+
+    if max_age_minutes == 0:
+        terminal = _force_terminalize_running_snapshot(
+            db,
+            running=running_payload,
+            actor_id="bundle-rebalance-v3-signable-force-close",
+            extra={
+                "signable_force_closed": True,
+                "reason": reason,
+                "forced_with_pending": True,
+            },
+        )
+        _release_v3_rebalance_guard(db, portfolio_id=portfolio_id, terminal=terminal)
+        return terminal
+
     return None
 
 

@@ -2968,9 +2968,14 @@ def mobile_bundle_active_operation(
     return get_active_bundle_operation(db, client_id=client.id, portfolio_id=pid)
 
 
+class BundleReconcileStaleRequest(BaseModel):
+    force_signable_v3_close: bool = False
+
+
 @bootstrap_router.post("/bundle/{portfolio_id}/rebalancing/reconcile-stale")
 def mobile_bundle_rebalancing_reconcile_stale(
     portfolio_id: str,
+    body: BundleReconcileStaleRequest | None = None,
     db: Session = Depends(get_db),
     client: PeClient = Depends(mobile_app_client),
 ):
@@ -2986,9 +2991,14 @@ def mobile_bundle_rebalancing_reconcile_stale(
     except (ValueError, AttributeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
 
+    force_signable = bool(body.force_signable_v3_close) if body is not None else False
+
     try:
         result = reconcile_stale_bundle_portfolio_state(
-            db, client_id=client.id, portfolio_id=pid,
+            db,
+            client_id=client.id,
+            portfolio_id=pid,
+            force_signable_v3_close=force_signable,
         )
         db.commit()
         return result

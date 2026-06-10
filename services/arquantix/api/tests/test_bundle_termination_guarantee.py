@@ -163,6 +163,43 @@ def test_tick_bundle_stale_reconcile_disabled(monkeypatch):
     assert bundle_stale_reconcile_cron_enabled() is False
 
 
+def test_expire_stale_client_signature_pending_leg(db: Session, monkeypatch):
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        V3LegExecutionResult,
+        _expire_stale_client_signature_pending_legs,
+    )
+
+    pe = make_linked_client(db)
+    portfolio = _bundle_portfolio(db, pe.id)
+    batch_id = str(uuid.uuid4())
+    swap = _stuck_swap(
+        db,
+        pe,
+        portfolio_id=str(portfolio.id),
+        batch_id=batch_id,
+        status=SwapSessionStatus.AWAITING_SIGNATURE.value,
+        age_minutes=999,
+    )
+    leg = V3LegExecutionResult(
+        asset="BTC",
+        instrument_id="x",
+        action="buy",
+        amount_usdc="10",
+        status="pending",
+        swap_id=str(swap.id),
+        error="awaiting_client_signature",
+    )
+    monkeypatch.setattr(
+        "services.portfolio_engine.bundles.rebalance_executor.client_signature_stale_minutes",
+        lambda: 1,
+    )
+    changed = _expire_stale_client_signature_pending_legs(db, [leg], max_age_minutes=1)
+    assert changed is True
+    assert leg.status == "expired"
+    db.refresh(swap)
+    assert swap.status == SwapSessionStatus.EXPIRED.value
+
+
 def test_tick_bundle_stale_reconcile_dry_run(db: Session, monkeypatch):
     monkeypatch.setenv("BUNDLE_STALE_RECONCILE_CRON_ENABLED", "true")
     pe = make_linked_client(db)

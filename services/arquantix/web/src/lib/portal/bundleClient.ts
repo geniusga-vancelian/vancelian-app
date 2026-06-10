@@ -539,10 +539,17 @@ export type BundleReconcileStalePayload = {
 
 export async function reconcileStaleBundlePortfolioState(
   portfolioId: string,
+  options?: { forceSignableV3Close?: boolean },
 ): Promise<BundleReconcileStalePayload> {
   const res = await fetch(
     `/api/portal/bundles/rebalancing/${encodeURIComponent(portfolioId)}/reconcile-stale`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        force_signable_v3_close: Boolean(options?.forceSignableV3Close),
+      }),
+    },
   )
   return parseJson(res)
 }

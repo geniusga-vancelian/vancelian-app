@@ -16,12 +16,14 @@ import {
 import { BUNDLE_FLOW_UI } from '@/components/portal/transaction/mappers/bundleUiCopy'
 import {
   fetchActiveBundleOperation,
+  reconcileStaleBundlePortfolioState,
   resumePortfolioRebalancing,
   submitBundleLegTx,
   type BundleActiveOperationPayload,
   type PortfolioRebalancingAssetLine,
   type PortfolioRebalancingPayload,
 } from '@/lib/portal/bundleClient'
+import { abandonSwap } from '@/lib/portal/swapClient'
 import { resumeActiveBundleOperation } from '@/lib/portal/bundleActiveOperationResume'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
@@ -205,7 +207,38 @@ export function PortalBundleActiveOperationPanel({
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Reprise impossible'
-        if (message !== 'plan_hash_changed') {
+        const isSigningTimeout =
+          /timed out|timeout|délai|abort/i.test(message) ||
+          executionPhase === 'signing'
+        if (isSigningTimeout) {
+          const pendingLeg = [...(initial.sell_results ?? []), ...(initial.buy_results ?? [])].find(
+            (leg) => leg.status === 'pending' && leg.swap_id,
+          )
+          try {
+            if (pendingLeg?.swap_id) {
+              await abandonSwap(pendingLeg.swap_id, {
+                reason: 'client_signature_timeout',
+                failure_phase: 'sign',
+              })
+            }
+            const reconciled = await reconcileStaleBundlePortfolioState(portfolioId, {
+              forceSignableV3Close: true,
+            })
+            if (
+              reconciled.active_operation?.status === 'none' ||
+              isTerminalBundleV3Status(reconciled.active_operation?.v3_status)
+            ) {
+              setActive(reconciled.active_operation)
+              handleTerminal()
+              setError(null)
+            } else {
+              setError('Signature expirée — opération clôturée partiellement.')
+              await loadActive()
+            }
+          } catch {
+            setError(message)
+          }
+        } else if (message !== 'plan_hash_changed') {
           setError(message)
         }
         resumeStartedRef.current = false
