@@ -13,6 +13,7 @@ _BUNDLE_INTERNAL_ACTIONS = frozenset(
     {
         "allocation",
         "rebalance",
+        "rebalance_v3",
         "rebalance_buy",
         "rebalance_sell",
         "withdraw_sell",

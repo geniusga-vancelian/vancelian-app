@@ -352,6 +352,14 @@ class LifiExecuteService:
             self.refresh_lifi_status(db, swap)
             db.refresh(swap)
 
+        if swap.status == SwapSessionStatus.CONFIRMED.value:
+            from services.portfolio_engine.bundle_execution.bundle_swap_pe_settlement import (
+                try_settle_confirmed_bundle_swap,
+            )
+
+            try_settle_confirmed_bundle_swap(db, swap)
+            db.refresh(swap)
+
         return self._build_status_response(swap)
 
     def refresh_lifi_status(self, db: Session, swap) -> None:

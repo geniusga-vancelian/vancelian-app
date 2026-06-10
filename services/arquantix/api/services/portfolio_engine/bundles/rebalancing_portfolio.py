@@ -28,6 +28,7 @@ from services.portfolio_engine.bundles.rebalance_executor import (
     BundleRebalanceExecutorError,
     execute_v3_bundle_rebalance,
     find_running_v3_rebalance_execution,
+    force_terminalize_running_v3_rebalance_on_plan_drift,
     resume_v3_bundle_rebalance_execution,
 )
 from services.portfolio_engine.bundles.rebalance_planner import plan_bundle_rebalance_from_drift
@@ -447,6 +448,21 @@ def get_active_bundle_operation(
         asset_lines = _asset_lines_from_running_snapshot(running)
         if not asset_lines:
             asset_lines = _asset_lines_from_execution(running)
+
+        drift, current_plan = _compute_drift_and_plan(
+            db, client_id=client_id, portfolio_id=portfolio_id,
+        )
+        running_plan_hash = str(running.get("plan_hash") or "")
+        current_plan_hash = str(current_plan.get("plan_hash") or "")
+        plan_stale = bool(
+            running_plan_hash
+            and current_plan_hash
+            and running_plan_hash != current_plan_hash
+        )
+        current_asset_lines = (
+            _asset_lines_from_plan(current_plan) if plan_stale else None
+        )
+
         return {
             "status": "active",
             "operation_type": operation_type,
@@ -461,6 +477,11 @@ def get_active_bundle_operation(
             "sell_plan": running.get("sell_plan") or [],
             "buy_plan": running.get("buy_plan") or [],
             "planning_mode": running.get("planning_mode"),
+            "plan_hash": running_plan_hash or None,
+            "current_plan_hash": current_plan_hash or None,
+            "plan_stale": plan_stale,
+            "current_asset_lines": current_asset_lines,
+            "current_planning_mode": current_plan.get("planning_mode"),
         }
 
     lock = get_active_invest_lock_for_portfolio(
@@ -687,20 +708,39 @@ def resume_rebalancing_portfolio(
     )
     running_plan_hash = str(running.get("plan_hash") or "")
     current_plan_hash = str(plan.get("plan_hash") or "")
-    if running_plan_hash and current_plan_hash and running_plan_hash != current_plan_hash:
-        raise RebalancingPortfolioError(
-            "plan_hash_changed",
-            "plan_hash_changed",
+    plan_stale = bool(
+        running_plan_hash
+        and current_plan_hash
+        and running_plan_hash != current_plan_hash
+    )
+    plan_replanned = False
+
+    if plan_stale:
+        force_terminalize_running_v3_rebalance_on_plan_drift(
+            db,
+            portfolio_id=str(portfolio_id),
+            reason="plan_hash_changed",
         )
+        plan_replanned = True
 
     try:
-        result = resume_v3_bundle_rebalance_execution(
-            db,
-            client_id=client_id,
-            portfolio_id=portfolio_id,
-            drift_rebalance_plan=plan,
-            trigger=trigger,  # type: ignore[arg-type]
-        )
+        if plan_replanned:
+            result = execute_v3_bundle_rebalance(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                drift_rebalance_plan=plan,
+                trigger=trigger,  # type: ignore[arg-type]
+                plan_hash=current_plan_hash or None,
+            )
+        else:
+            result = resume_v3_bundle_rebalance_execution(
+                db,
+                client_id=client_id,
+                portfolio_id=portfolio_id,
+                drift_rebalance_plan=plan,
+                trigger=trigger,  # type: ignore[arg-type]
+            )
     except BundleRebalanceExecutorError as exc:
         raise RebalancingPortfolioError("rebalancing_execution_failed", str(exc)) from exc
 
@@ -751,7 +791,7 @@ def resume_rebalancing_portfolio(
         intent.metadata_json = meta
         db.add(intent)
 
-    return _build_rebalancing_response(
+    payload = _build_rebalancing_response(
         result=result,
         intent=intent,
         execution_id=execution_id,
@@ -760,6 +800,10 @@ def resume_rebalancing_portfolio(
         asset_lines=asset_lines,
         legacy_lock_abandoned=None,
     )
+    if plan_replanned:
+        payload["plan_replanned"] = True
+        payload["plan_stale"] = True
+    return payload
 
 
 def _build_rebalancing_response(

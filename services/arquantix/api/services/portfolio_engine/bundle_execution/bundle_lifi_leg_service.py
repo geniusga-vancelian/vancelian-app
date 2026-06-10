@@ -345,13 +345,47 @@ class BundleLifiLegService:
         )
 
     def _pe_atoms_already_applied(self, swap) -> bool:
+        from .bundle_swap_pe_settlement import (
+            SETTLEMENT_RECEIPT_EVENT,
+            swap_has_pe_settlement_receipt,
+        )
+
         audit = swap.audit_log
-        if isinstance(audit, list):
-            return any(
-                isinstance(e, dict) and e.get("event") == "bundle_pe_atoms_applied"
-                for e in audit
-            )
+        if not isinstance(audit, list):
+            return False
+        has_flag = any(
+            isinstance(e, dict) and e.get("event") == "bundle_pe_atoms_applied"
+            for e in audit
+        )
+        if not has_flag:
+            return False
+        if swap_has_pe_settlement_receipt(swap):
+            return True
+        for entry in reversed(audit):
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("event") != SETTLEMENT_RECEIPT_EVENT:
+                continue
+            amount_in = Decimal(str(entry.get("amount_in") or "0"))
+            amount_out = Decimal(str(entry.get("amount_out") or "0"))
+            return amount_in > 0 and amount_out > 0
         return False
+
+    def _validate_settlement_amounts(
+        self,
+        *,
+        leg: ExecutionLeg,
+        amount_in: Decimal,
+        amount_out: Decimal,
+    ) -> None:
+        if leg.action in ("rebalance_buy", "allocation"):
+            if amount_in <= 0:
+                raise BundlePeSettlementError("settlement_amount_in_invalid")
+            if amount_out <= 0:
+                raise BundlePeSettlementError("settlement_amount_out_invalid")
+        elif leg.action == "rebalance_sell":
+            if amount_in <= 0 or amount_out <= 0:
+                raise BundlePeSettlementError("settlement_amount_invalid")
 
     def _apply_post_confirmation(self, db: Session, *, leg: ExecutionLeg, swap) -> None:
         """Privy ledger puis atoms PE — jamais avant CONFIRMED."""
@@ -360,6 +394,13 @@ class BundleLifiLegService:
 
         if self._pe_atoms_already_applied(swap):
             return
+
+        settlement_preview = self._resolve_settlement_amounts(db, leg=leg, swap=swap)
+        self._validate_settlement_amounts(
+            leg=leg,
+            amount_in=settlement_preview.amount_in,
+            amount_out=settlement_preview.amount_out,
+        )
 
         if not swap_settlement_already_applied(swap):
             apply_swap_settlement(db, swap, sync_source="bundle_lifi_leg")
@@ -370,8 +411,37 @@ class BundleLifiLegService:
 
         self._apply_pe_atoms_for_leg(db, leg=leg, swap=swap)
         self._swap_repo.append_audit(swap, {"event": "bundle_pe_atoms_applied", "leg_id": leg.leg_id})
+        self._swap_repo.append_audit(
+            swap,
+            {
+                "event": "bundle_pe_settlement_receipt",
+                "leg_id": leg.leg_id,
+                "leg_action": leg.action,
+                "amount_in": str(settlement_preview.amount_in),
+                "amount_out": str(settlement_preview.amount_out),
+                "amount_in_source": settlement_preview.amount_in_source,
+                "amount_out_source": settlement_preview.amount_out_source,
+            },
+        )
         self._ingest_bundle_cost_basis(db, leg=leg, swap=swap)
         db.commit()
+
+    def _resolve_settlement_amounts(self, db: Session, *, leg: ExecutionLeg, swap):
+        from services.lifi.config import swaps_mock_mode
+
+        from .allocation_settlement import resolve_allocation_leg_settlement_amounts
+
+        meta = leg.metadata or {}
+        planned_in_raw = meta.get("planned_amount_in")
+        planned_in = (
+            Decimal(str(planned_in_raw)) if planned_in_raw is not None else Decimal(str(swap.amount_in))
+        )
+        return resolve_allocation_leg_settlement_amounts(
+            db,
+            swap,
+            planned_amount_in=planned_in,
+            allow_mock_quote_amount=swaps_mock_mode(),
+        )
 
     def _ingest_bundle_cost_basis(self, db: Session, *, leg: ExecutionLeg, swap) -> None:
         """PRU scoped bundle pour charts / statistics (idempotent)."""

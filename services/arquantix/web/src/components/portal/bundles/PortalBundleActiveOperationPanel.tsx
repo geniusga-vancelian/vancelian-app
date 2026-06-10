@@ -111,8 +111,12 @@ export function PortalBundleActiveOperationPanel({
     try {
       const payload = await fetchActiveBundleOperation(portfolioId)
       setActive(payload)
-      if (payload.asset_lines?.length) {
-        setAssetLines(payload.asset_lines)
+      const lines =
+        payload.plan_stale && payload.current_asset_lines?.length
+          ? payload.current_asset_lines
+          : payload.asset_lines
+      if (lines?.length) {
+        setAssetLines(lines)
       }
       if (payload.status === 'none' || isTerminalBundleV3Status(payload.v3_status)) {
         if (payload.status === 'active' && isTerminalBundleV3Status(payload.v3_status)) {
@@ -146,14 +150,19 @@ export function PortalBundleActiveOperationPanel({
         setExecutionPhase('preparing')
         let result: PortfolioRebalancingPayload
 
-        if (hasPendingClientLegs(initial)) {
-          result = await resumeActiveBundleOperation({
-            initial,
-            signAndSubmit,
-            pollUntilTerminal,
-            onPhaseChange: setExecutionPhase,
-            onAssetLines: setAssetLines,
-          })
+        if (payload.plan_stale || hasPendingClientLegs(initial)) {
+          if (payload.plan_stale) {
+            result = await resumePortfolioRebalancing(portfolioId)
+            setAssetLines(result.asset_lines ?? [])
+          } else {
+            result = await resumeActiveBundleOperation({
+              initial,
+              signAndSubmit,
+              pollUntilTerminal,
+              onPhaseChange: setExecutionPhase,
+              onAssetLines: setAssetLines,
+            })
+          }
         } else {
           result = await resumePortfolioRebalancing(portfolioId)
           setAssetLines(result.asset_lines ?? [])
@@ -289,6 +298,12 @@ export function PortalBundleActiveOperationPanel({
             <li key={`${line.action}-${line.asset}`}>{assetLineLabel(line)}</li>
           ))}
         </ul>
+      ) : null}
+
+      {active?.plan_stale ? (
+        <p className="m-0 font-ui text-[12px] text-v-fg-muted">
+          Plan de rééquilibrage mis à jour — reprise avec les montants courants (cash leg inclus).
+        </p>
       ) : null}
 
       {error ? <p className="m-0 font-ui text-[13px] text-v-error">{error}</p> : null}

@@ -152,6 +152,11 @@ export type BundleActiveOperationPayload = {
   sell_plan?: Array<Record<string, unknown>>
   buy_plan?: Array<Record<string, unknown>>
   planning_mode?: string
+  plan_hash?: string | null
+  current_plan_hash?: string | null
+  plan_stale?: boolean
+  current_asset_lines?: PortfolioRebalancingAssetLine[] | null
+  current_planning_mode?: string
 }
 
 export type BundleInvestActiveLockPayload = {
@@ -310,7 +315,17 @@ export type BundleWithdrawResult =
   | { kind: 'already_pending'; payload: BundleWithdrawAlreadyPendingPayload }
 
 async function parseJson<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T & { detail?: string | { message?: string } }
+  const text = await res.text()
+  let data: T & { detail?: string | { message?: string } }
+  try {
+    data = JSON.parse(text) as T & { detail?: string | { message?: string } }
+  } catch {
+    throw new Error(
+      res.ok
+        ? 'Réponse serveur invalide — réessayez dans un instant.'
+        : `Erreur serveur (${res.status}) — réessayez dans un instant.`,
+    )
+  }
   if (!res.ok) {
     if (res.status === 401) {
       throw new Error('Session expirée — reconnectez-vous pour continuer.')

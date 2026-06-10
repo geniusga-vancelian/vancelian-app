@@ -142,9 +142,21 @@ class BundleRebalanceExecutor:
                     trigger=trigger,
                     plan_hash=resolved_hash,
                 )
-            raise BundleRebalanceExecutorError(
-                f"portfolio_has_running_rebalance:{portfolio_id}"
+            terminated = force_terminalize_running_v3_rebalance_on_plan_drift(
+                db,
+                portfolio_id=str(portfolio_id),
+                reason="plan_hash_mismatch",
             )
+            if terminated is not None:
+                logger.info(
+                    "v3_rebalance_plan_drift_terminalized portfolio=%s execution=%s "
+                    "old_hash=%s new_hash=%s status=%s",
+                    portfolio_id,
+                    terminated.get("rebalance_execution_id"),
+                    existing.get("plan_hash"),
+                    resolved_hash,
+                    terminated.get("v3_status"),
+                )
 
         if drift_rebalance_plan.get("status") == "no_action":
             return self._no_action_response(
@@ -655,9 +667,14 @@ class BundleRebalanceExecutor:
     ) -> list[V3LegExecutionResult]:
         """Met à jour le statut leg depuis le swap LI.FI (post-signature client)."""
         from services.lifi.enums import SwapSessionStatus
+        from services.lifi.lifi_execute_service import LifiExecuteService
         from services.lifi.models import PersonWalletSwap
+        from services.portfolio_engine.bundle_execution.bundle_swap_pe_settlement import (
+            try_settle_confirmed_bundle_swap,
+        )
         from services.portfolio_engine.bundle_execution.pe_settlement import swap_confirmed
 
+        lifi_execute = LifiExecuteService()
         for row in results:
             if not row.swap_id:
                 continue
@@ -668,7 +685,12 @@ class BundleRebalanceExecutor:
             swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_uuid).first()
             if swap is None:
                 continue
+            if swap.status == SwapSessionStatus.SUBMITTED.value:
+                lifi_execute.refresh_lifi_status(db, swap)
+                db.refresh(swap)
             if swap_confirmed(swap):
+                try_settle_confirmed_bundle_swap(db, swap)
+                db.refresh(swap)
                 row.status = "completed"
                 row.error = ""
             elif swap.status in (
@@ -1159,6 +1181,42 @@ def find_terminal_v3_rebalance_by_plan_hash(
     return None
 
 
+def _force_terminalize_running_snapshot(
+    db: Session,
+    *,
+    running: dict[str, Any],
+    actor_id: str,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Clôture forcée d’un cycle RUNNING — expire les legs pending."""
+    execution_id = str(running["rebalance_execution_id"])
+    sell_results = _results_from_metadata(running.get("sell_results") or [])
+    buy_results = _results_from_metadata(running.get("buy_results") or [])
+    BundleRebalanceExecutor._expire_pending_legs(sell_results + buy_results)
+
+    v3_status = BundleRebalanceExecutor._resolve_terminal_status(
+        sell_results,
+        buy_results,
+        cash_remaining_usdc=running.get("available_cash_usdc"),
+    )
+    if v3_status == "RUNNING":
+        v3_status = "COMPLETED_WITH_RESIDUAL_CASH"
+
+    terminal = {
+        **running,
+        "v3_status": v3_status,
+        "sell_results": [r.to_dict() for r in sell_results],
+        "buy_results": [r.to_dict() for r in buy_results],
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "resume_required": False,
+        **(extra or {}),
+    }
+    actor = ActorContext(actor_type="system", actor_id=actor_id)
+    BundleRebalanceExecutor._audit_terminal(db, execution_id, terminal, actor)
+    db.flush()
+    return terminal
+
+
 def terminalize_stale_v3_rebalance_execution(
     db: Session,
     *,
@@ -1183,34 +1241,37 @@ def terminalize_stale_v3_rebalance_execution(
     if age_minutes < MAX_EXECUTION_AGE_MINUTES:
         return None
 
-    execution_id = str(running["rebalance_execution_id"])
-    sell_results = _results_from_metadata(running.get("sell_results") or [])
-    buy_results = _results_from_metadata(running.get("buy_results") or [])
-    BundleRebalanceExecutor._expire_pending_legs(sell_results + buy_results)
-
-    v3_status = BundleRebalanceExecutor._resolve_terminal_status(
-        sell_results,
-        buy_results,
-        cash_remaining_usdc=running.get("available_cash_usdc"),
+    return _force_terminalize_running_snapshot(
+        db,
+        running=running,
+        actor_id="bundle-rebalance-v3-stale",
+        extra={
+            "stale_terminalized": True,
+            "stale_age_minutes": round(age_minutes, 2),
+            "max_execution_age_minutes": MAX_EXECUTION_AGE_MINUTES,
+        },
     )
-    if v3_status == "RUNNING":
-        v3_status = "COMPLETED_WITH_RESIDUAL_CASH"
 
-    terminal = {
-        **running,
-        "v3_status": v3_status,
-        "sell_results": [r.to_dict() for r in sell_results],
-        "buy_results": [r.to_dict() for r in buy_results],
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-        "stale_terminalized": True,
-        "stale_age_minutes": round(age_minutes, 2),
-        "max_execution_age_minutes": MAX_EXECUTION_AGE_MINUTES,
-        "resume_required": False,
-    }
-    actor = ActorContext(actor_type="system", actor_id="bundle-rebalance-v3-stale")
-    BundleRebalanceExecutor._audit_terminal(db, execution_id, terminal, actor)
-    db.flush()
-    return terminal
+
+def force_terminalize_running_v3_rebalance_on_plan_drift(
+    db: Session,
+    *,
+    portfolio_id: str,
+    reason: str = "plan_hash_changed",
+) -> dict[str, Any] | None:
+    """Clôture RUNNING dont le plan_hash ne correspond plus au drift courant."""
+    running = find_running_v3_rebalance_execution(db, portfolio_id=portfolio_id)
+    if running is None:
+        return None
+    return _force_terminalize_running_snapshot(
+        db,
+        running=running,
+        actor_id="bundle-rebalance-v3-plan-drift",
+        extra={
+            "plan_drift_terminalized": True,
+            "plan_drift_reason": reason,
+        },
+    )
 
 
 def _results_from_metadata(rows: list[dict[str, Any]]) -> list[V3LegExecutionResult]:

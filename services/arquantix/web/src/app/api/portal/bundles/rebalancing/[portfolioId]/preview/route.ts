@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
+import { parsePortalUpstreamJson, portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 
 export async function POST(
@@ -23,10 +23,17 @@ export async function POST(
         signal: AbortSignal.timeout(60_000),
       },
     )
-    const data = await res.json()
+    const { data, parseError } = await parsePortalUpstreamJson(res)
+    if (parseError) {
+      console.error(
+        '[api/portal/bundles/rebalancing/preview POST] upstream parse error',
+        parseError,
+      )
+    }
     return NextResponse.json(data, { status: res.status })
   } catch (error) {
     console.error('[api/portal/bundles/rebalancing/preview POST]', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

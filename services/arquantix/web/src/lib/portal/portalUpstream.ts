@@ -35,3 +35,35 @@ export async function portalUpstreamFetch(
     cache: 'no-store',
   })
 }
+
+/** Parse une réponse upstream en JSON — évite les erreurs opaques si le gateway renvoie du HTML. */
+export async function parsePortalUpstreamJson(
+  res: Response,
+): Promise<{ data: unknown; parseError: string | null }> {
+  const text = await res.text()
+  const contentType = res.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 160)
+    return {
+      data: {
+        error: 'upstream_non_json',
+        upstream_status: res.status,
+        detail: snippet || 'empty response',
+      },
+      parseError: snippet || 'empty response',
+    }
+  }
+  try {
+    return { data: JSON.parse(text) as unknown, parseError: null }
+  } catch {
+    const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 160)
+    return {
+      data: {
+        error: 'upstream_invalid_json',
+        upstream_status: res.status,
+        detail: snippet || 'invalid json',
+      },
+      parseError: snippet || 'invalid json',
+    }
+  }
+}

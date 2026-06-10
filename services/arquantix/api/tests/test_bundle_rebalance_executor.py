@@ -458,19 +458,6 @@ def test_idempotency_running_same_plan_hash(db: Session):
     assert found["plan_hash"] == plan["plan_hash"]
 
     provider = _RecordingMockProvider()
-    other_plan = dict(plan)
-    other_plan["plan_hash"] = "sha256:other-plan"
-    with pytest.raises(BundleRebalanceExecutorError, match="portfolio_has_running"):
-        BundleRebalanceExecutor(
-            execution_adapter=_adapter(provider),
-        ).execute_drift_rebalance_plan(
-            db,
-            client_id=pe.id,
-            portfolio_id=portfolio.id,
-            drift_rebalance_plan=other_plan,
-            plan_hash=other_plan["plan_hash"],
-        )
-
     result = BundleRebalanceExecutor(
         execution_adapter=_adapter(provider),
     ).execute_drift_rebalance_plan(
@@ -496,6 +483,46 @@ def test_idempotency_running_same_plan_hash(db: Session):
     )
     assert replay["rebalance_execution_id"] == execution_id
     assert len(provider.calls) == calls_after_resume
+
+
+def test_plan_hash_mismatch_terminalizes_running_and_starts_new(db: Session):
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    execution_id = str(uuid.uuid4())
+
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_RUNNING,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "sell_plan": [],
+            "buy_plan": plan["buy_plan"],
+        },
+    )
+    db.commit()
+
+    provider = _RecordingMockProvider()
+    other_plan = dict(plan)
+    other_plan["plan_hash"] = "sha256:other-plan"
+    other_result = BundleRebalanceExecutor(
+        execution_adapter=_adapter(provider),
+    ).execute_drift_rebalance_plan(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=other_plan,
+        plan_hash=other_plan["plan_hash"],
+    )
+    assert other_result["rebalance_execution_id"] != execution_id
+    assert other_result["plan_hash"] == "sha256:other-plan"
+    assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is None
 
 
 def test_no_side_effects_while_pending(db: Session):
