@@ -416,6 +416,168 @@ def _active_financial_operation_blocker(
     }
 
 
+def _close_orphan_bundle_transaction_intent_if_v3_absent(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    client_id: UUID,
+) -> dict[str, Any] | None:
+    """Intent bundle RUNNING sans audit V3 RUNNING — clôture si terminal connu ou FAILED."""
+    from services.portfolio_engine.bundles.bundle_transaction_intent import (
+        finalize_bundle_transaction_after_v3_terminal,
+        find_running_bundle_transaction_intent_for_portfolio,
+    )
+    from services.portfolio_engine.hardening.audit_models import AuditEvent
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        ACTION_V3_TERMINAL,
+        ENTITY_TYPE_V3_REBALANCE,
+    )
+
+    pid = str(portfolio_id)
+    if find_running_v3_rebalance_execution(db, portfolio_id=pid) is not None:
+        return None
+
+    intent = find_running_bundle_transaction_intent_for_portfolio(
+        db, portfolio_id=portfolio_id,
+    )
+    if intent is None:
+        return None
+
+    meta = dict(intent.metadata_json or {})
+    batch_id = str(
+        meta.get("rebalance_execution_id") or meta.get("batch_id") or "",
+    ).strip()
+    terminal_payload: dict[str, Any] | None = None
+    if batch_id:
+        rows = (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
+                AuditEvent.action == ACTION_V3_TERMINAL,
+            )
+            .order_by(AuditEvent.created_at.desc())
+            .limit(100)
+            .all()
+        )
+        for row in rows:
+            audit_meta = row.metadata_ or {}
+            if (
+                str(audit_meta.get("portfolio_id") or "") == pid
+                and str(audit_meta.get("batch_id") or audit_meta.get("rebalance_execution_id") or "")
+                == batch_id
+            ):
+                terminal_payload = dict(audit_meta)
+                break
+
+    if terminal_payload is None:
+        terminal_payload = {
+            "v3_status": "FAILED",
+            "rebalance_execution_id": batch_id or None,
+            "batch_id": batch_id or None,
+            "portfolio_id": pid,
+            "orphan_intent_closed": True,
+            "orphan_reason": "no_running_v3_audit",
+        }
+
+    finalized = finalize_bundle_transaction_after_v3_terminal(
+        db,
+        portfolio_id=portfolio_id,
+        terminal=terminal_payload,
+    )
+    if finalized is None:
+        return None
+    return {
+        "intent_id": str(finalized.id),
+        "v3_status": terminal_payload.get("v3_status"),
+        "batch_id": batch_id or None,
+    }
+
+
+def reconcile_stale_bundle_portfolio_state(
+    db: Session,
+    *,
+    client_id: UUID,
+    portfolio_id: UUID,
+) -> dict[str, Any]:
+    """Nettoie zombies bundle (V3, lock legacy, intent) — appelé au chargement page wallet."""
+    from services.portfolio_engine.bundles.bundle_invest_lock import (
+        _reconcile_stale_intent_legs_for_batch,
+        reconcile_or_expire_idle_invest_lock,
+    )
+    from services.portfolio_engine.bundles.orchestrator import BundleOrchestrator
+
+    pid = str(portfolio_id)
+    actions: list[dict[str, Any]] = []
+
+    portfolio = BundleOrchestrator._load_and_validate_portfolio(
+        db, portfolio_id, client_id,
+    )
+    _drift, current_plan = _compute_drift_and_plan(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+
+    terminal = reconcile_running_v3_rebalance_execution(
+        db,
+        portfolio_id=pid,
+        client_id=client_id,
+        drift_rebalance_plan=current_plan,
+        auto_progress=False,
+    )
+    if terminal is not None:
+        actions.append({
+            "kind": "v3_reconcile_terminal",
+            "v3_status": terminal.get("v3_status"),
+        })
+
+    orphan = _close_orphan_bundle_transaction_intent_if_v3_absent(
+        db, portfolio_id=portfolio_id, client_id=client_id,
+    )
+    if orphan is not None:
+        actions.append({"kind": "orphan_intent_closed", **orphan})
+
+    person_id = _resolve_person_id(db, client_id)
+    batch_id, source = _resolve_legacy_batch_for_rebalancing(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    if (
+        person_id is not None
+        and batch_id
+        and source != "ambiguous_batches"
+        and not is_v3_deposit_batch(db, portfolio_id=portfolio_id, batch_id=batch_id)
+    ):
+        _reconcile_stale_intent_legs_for_batch(
+            db,
+            person_id=person_id,
+            bundle_id=pid,
+            batch_id=batch_id,
+        )
+        actions.append({"kind": "legacy_intent_legs_reconciled", "batch_id": batch_id})
+        if _would_abandon_legacy_lock(db, client_id=client_id, portfolio_id=portfolio_id):
+            abandoned = abandon_legacy_invest_lock_for_rebalancing(
+                db, client_id=client_id, portfolio_id=portfolio_id,
+            )
+            if abandoned.get("abandoned"):
+                actions.append({"kind": "legacy_lock_abandoned", **abandoned})
+
+    if reconcile_or_expire_idle_invest_lock(
+        db,
+        client_id=client_id,
+        portfolio_id=portfolio_id,
+        portfolio=portfolio,
+    ):
+        actions.append({"kind": "invest_lock_reconciled"})
+
+    active = get_active_bundle_operation(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    return {
+        "portfolio_id": pid,
+        "reconciled": True,
+        "actions": actions,
+        "active_operation": active,
+    }
+
+
 def get_active_bundle_operation(
     db: Session,
     *,
@@ -432,7 +594,7 @@ def get_active_bundle_operation(
         portfolio_id=pid,
         client_id=client_id,
         drift_rebalance_plan=current_plan,
-        auto_progress=True,
+        auto_progress=False,
     )
     running = find_running_v3_rebalance_execution(db, portfolio_id=pid)
     if running is None:

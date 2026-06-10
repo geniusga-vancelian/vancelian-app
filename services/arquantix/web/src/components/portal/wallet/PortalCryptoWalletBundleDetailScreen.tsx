@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, PieChart } from 'lucide-react'
 import {
   AppBalanceCardVariantB,
@@ -45,6 +45,7 @@ import {
   portalBundleInvestRoute,
   portalCryptoWalletAssetRoute,
 } from '@/lib/portal/portalRouting'
+import { reconcileStaleBundlePortfolioState } from '@/lib/portal/bundleClient'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
 
 type Props = {
@@ -71,6 +72,43 @@ function bundlePositionValue(position: PortalBundlePosition, currency: string): 
 export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
   const id = portfolioId.trim()
   const [hasActiveBundleOperation, setHasActiveBundleOperation] = useState(false)
+  const [staleReconciled, setStaleReconciled] = useState(false)
+  const activeOpStableRef = useRef({ value: false, streak: 0 })
+
+  const handleActiveOperationChange = useCallback((active: boolean) => {
+    const prev = activeOpStableRef.current
+    if (prev.value === active) {
+      prev.streak += 1
+    } else {
+      activeOpStableRef.current = { value: active, streak: 1 }
+    }
+    if (activeOpStableRef.current.streak >= 2) {
+      setHasActiveBundleOperation(active)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    activeOpStableRef.current = { value: false, streak: 0 }
+    setStaleReconciled(false)
+    setHasActiveBundleOperation(false)
+
+    void reconcileStaleBundlePortfolioState(id)
+      .then((result) => {
+        if (cancelled) return
+        const active = result.active_operation?.status === 'active'
+        activeOpStableRef.current = { value: active, streak: 2 }
+        setHasActiveBundleOperation(active)
+        setStaleReconciled(true)
+      })
+      .catch(() => {
+        if (!cancelled) setStaleReconciled(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [id])
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletBundleDetailPayload>({
       cacheKey: `portal:crypto-wallet:bundle:${id}`,
@@ -282,16 +320,18 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
           </PortalReveal>
         ) : null}
 
-        <PortalReveal index={3}>
-          <PortalLazyBundleActiveOperation
-            portfolioId={id}
-            portfolioName={bundle.portfolioName}
-            onRefresh={() => void refresh()}
-            onActiveChange={setHasActiveBundleOperation}
-          />
-        </PortalReveal>
+        {staleReconciled ? (
+          <PortalReveal index={3}>
+            <PortalLazyBundleActiveOperation
+              portfolioId={id}
+              portfolioName={bundle.portfolioName}
+              onRefresh={() => void refresh()}
+              onActiveChange={handleActiveOperationChange}
+            />
+          </PortalReveal>
+        ) : null}
 
-        {!hasActiveBundleOperation ? (
+        {staleReconciled && !hasActiveBundleOperation ? (
           <PortalReveal index={4}>
             <PortalBundleAllocationReadOnlyPanel
               portfolioId={id}

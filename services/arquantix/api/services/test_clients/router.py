@@ -2968,6 +2968,35 @@ def mobile_bundle_active_operation(
     return get_active_bundle_operation(db, client_id=client.id, portfolio_id=pid)
 
 
+@bootstrap_router.post("/bundle/{portfolio_id}/rebalancing/reconcile-stale")
+def mobile_bundle_rebalancing_reconcile_stale(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    client: PeClient = Depends(mobile_app_client),
+):
+    """Nettoie états bundle zombies (trade/lock/intent bloqués) — signalé par le front au chargement."""
+    from uuid import UUID as _UUID
+
+    from services.portfolio_engine.bundles.rebalancing_portfolio import (
+        reconcile_stale_bundle_portfolio_state,
+    )
+
+    try:
+        pid = _UUID(portfolio_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid portfolio_id")
+
+    try:
+        result = reconcile_stale_bundle_portfolio_state(
+            db, client_id=client.id, portfolio_id=pid,
+        )
+        db.commit()
+        return result
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @bootstrap_router.post("/bundle/{portfolio_id}/rebalancing/preflight")
 def mobile_bundle_rebalancing_preflight(
     portfolio_id: str,

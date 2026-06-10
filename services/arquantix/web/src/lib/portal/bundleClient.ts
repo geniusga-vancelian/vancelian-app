@@ -530,6 +530,23 @@ export async function previewPortfolioRebalancing(
   return parseJson(res)
 }
 
+export type BundleReconcileStalePayload = {
+  portfolio_id: string
+  reconciled: boolean
+  actions: Array<Record<string, unknown>>
+  active_operation: BundleActiveOperationPayload
+}
+
+export async function reconcileStaleBundlePortfolioState(
+  portfolioId: string,
+): Promise<BundleReconcileStalePayload> {
+  const res = await fetch(
+    `/api/portal/bundles/rebalancing/${encodeURIComponent(portfolioId)}/reconcile-stale`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+  )
+  return parseJson(res)
+}
+
 export async function preflightPortfolioRebalancing(
   portfolioId: string,
 ): Promise<PortfolioRebalancingPreflightPayload> {
