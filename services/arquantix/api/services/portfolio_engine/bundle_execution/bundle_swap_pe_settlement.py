@@ -97,4 +97,6 @@ def settle_swaps_for_v3_leg_results(
         swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_uuid).first()
         if swap is None:
             continue
-        try_settle_confirmed_bundle_swap(db, swap)
+        from services.settlement.swap_router import settle_confirmed_swap
+
+        settle_confirmed_swap(db, swap)

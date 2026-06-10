@@ -22,8 +22,6 @@ from services.lifi.lifi_actual_receive import (
     resolve_lifi_actual_receive_amount,
 )
 from services.lifi.lifi_swap_settlement import (
-    SwapSettlementBlocked,
-    apply_swap_settlement,
     swap_settlement_already_applied,
 )
 from services.lifi.lifi_validation_service import SwapValidationError
@@ -170,33 +168,33 @@ class LifiExecuteService:
                 dual_write_lifi_swap_submitted(db, swap, tx_hash=swap.tx_hash)
                 dual_write_lifi_swap_confirmed(db, swap, tx_hash=swap.tx_hash)
             else:
-                try:
-                    apply_swap_settlement(
-                        db,
-                        swap,
-                        sync_source="lifi_mock_swap",
-                        allow_mock_quote_amount=True,
-                    )
+                from services.settlement.swap_router import settle_confirmed_swap
+
+                settle_result = settle_confirmed_swap(
+                    db,
+                    swap,
+                    sync_source="lifi_mock_swap",
+                    allow_mock_quote_amount=True,
+                )
+                if settle_result.settled:
                     self._swap_repo.append_audit(
                         swap,
                         {"event": "swap_settled", "tx_hash": swap.tx_hash, "source": "lifi_mock_swap"},
                     )
-                except SwapSettlementBlocked as exc:
+                    from services.transaction_intents.lifi_intent_sync import on_swap_confirmed
+
+                    on_swap_confirmed(db, swap)
+                elif settle_result.skipped and settle_result.reason:
                     self._swap_repo.append_audit(
                         swap,
                         {
                             "event": "settlement_blocked",
-                            "reason": exc.code,
-                            "message": str(exc),
+                            "reason": settle_result.reason,
                         },
                     )
                     from services.transaction_intents.lifi_intent_sync import on_swap_settlement_blocked
 
-                    on_swap_settlement_blocked(db, swap, reason=exc.code)
-                else:
-                    from services.transaction_intents.lifi_intent_sync import on_swap_confirmed
-
-                    on_swap_confirmed(db, swap)
+                    on_swap_settlement_blocked(db, swap, reason=settle_result.reason)
                     from services.transaction_attempts.dual_write import (
                         dual_write_lifi_swap_confirmed,
                         dual_write_lifi_swap_submitted,
@@ -356,11 +354,9 @@ class LifiExecuteService:
             db.refresh(swap)
 
         if swap.status == SwapSessionStatus.CONFIRMED.value:
-            from services.portfolio_engine.bundle_execution.bundle_swap_pe_settlement import (
-                try_settle_confirmed_bundle_swap,
-            )
+            from services.settlement.swap_router import settle_confirmed_swap
 
-            try_settle_confirmed_bundle_swap(db, swap)
+            settle_confirmed_swap(db, swap)
             db.refresh(swap)
 
         return self._build_status_response(swap)
@@ -489,14 +485,16 @@ class LifiExecuteService:
                     source="lifi_execute.refresh",
                 )
             elif not swap_settlement_already_applied(swap):
-                try:
-                    apply_swap_settlement(
-                        db,
-                        swap,
-                        sync_source="lifi_swap",
-                        actual_receive=actual,
-                        lifi_status_payload=payload,
-                    )
+                from services.settlement.swap_router import settle_confirmed_swap
+
+                settle_result = settle_confirmed_swap(
+                    db,
+                    swap,
+                    sync_source="lifi_swap",
+                    actual_receive=actual,
+                    lifi_status_payload=payload,
+                )
+                if settle_result.settled:
                     self._swap_repo.append_audit(
                         swap,
                         {
@@ -516,22 +514,21 @@ class LifiExecuteService:
                         tx_hash=swap.tx_hash,
                         source="lifi_execute.refresh",
                     )
-                except SwapSettlementBlocked as exc:
+                elif settle_result.skipped and settle_result.reason:
                     self._swap_repo.append_audit(
                         swap,
                         {
                             "event": "settlement_blocked",
-                            "reason": exc.code,
-                            "message": str(exc),
+                            "reason": settle_result.reason,
                         },
                     )
-                    on_swap_settlement_blocked(db, swap, reason=exc.code)
+                    on_swap_settlement_blocked(db, swap, reason=settle_result.reason)
                     log_swap_trace(
                         db,
                         swap,
                         event="reconciliation_required",
                         status=swap.status,
-                        error_code=exc.code,
+                        error_code=settle_result.reason,
                         tx_hash=swap.tx_hash,
                         source="lifi_execute.refresh",
                     )

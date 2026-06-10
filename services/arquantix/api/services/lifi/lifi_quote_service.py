@@ -57,119 +57,22 @@ class LifiQuoteService:
         signing_wallet_mode: str | None = None,
         signing_wallet_address: str | None = None,
     ) -> SwapQuoteResponse:
-        parsed_amount, slippage = validate_quote_request(
-            from_asset=from_asset,
-            to_asset=to_asset,
-            amount=amount,
-            from_chain=from_chain,
-            to_chain=to_chain,
-            slippage_bps=slippage_bps,
-        )
-        from_token = resolve_swap_token(from_asset, from_chain)
-        to_token = resolve_swap_token(to_asset, to_chain)
-        resolved_mode, from_address = resolve_swap_signing_wallet(
+        from services.swap_core import QuotePolicy, SwapCore, SwapQuoteContext
+
+        return SwapCore(quote_helpers=self).quote(
             db,
-            person_id=person_id,
-            chain_key=from_token.chain_key,
-            signing_wallet_mode=signing_wallet_mode,
-            signing_wallet_address=signing_wallet_address,
-        )
-        _, to_address = resolve_swap_signing_wallet(
-            db,
-            person_id=person_id,
-            chain_key=to_token.chain_key,
-            signing_wallet_mode=signing_wallet_mode,
-            signing_wallet_address=signing_wallet_address if resolved_mode == "external_evm" else None,
-        )
-
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=QUOTE_TTL_SECONDS)
-        swap_row = self._bootstrap_swap_for_quote(
-            db,
-            person_id=person_id,
-            from_asset=from_token.asset,
-            to_asset=to_token.asset,
-            from_chain=from_token.chain_key,
-            to_chain=to_token.chain_key,
-            amount_in=parsed_amount,
-            slippage_bps=slippage,
-            expires_at=expires_at,
-        )
-        self._swap_repo.append_audit(
-            swap_row,
-            {
-                "event": "quote_requested",
-                "signing_wallet_mode": resolved_mode,
-                "signing_wallet_address": from_address,
-            },
-        )
-
-        atomic_amount = human_amount_to_atomic(parsed_amount, from_token.decimals)
-        slippage_ratio = slippage / 10_000
-
-        try:
-            lifi_quote = self._lifi.get_quote(
-                from_chain=from_token.lifi_chain_id,
-                to_chain=to_token.lifi_chain_id,
-                from_token=from_token.token_address,
-                to_token=to_token.token_address,
-                from_amount=atomic_amount,
-                from_address=from_address,
-                to_address=to_address,
-                slippage=slippage_ratio,
-                fee_bps=swap_fee_bps(),
-            )
-        except LifiClientError as exc:
-            self._mark_quote_failed(db, swap_row, exc=exc, event="quote_failed")
-            db.commit()
-            raise
-
-        simplified = self._simplify_quote(
-            lifi_quote,
-            amount_in=parsed_amount,
-            from_asset=from_token.asset,
-            to_asset=to_token.asset,
-            to_decimals=to_token.decimals,
-        )
-        if resolved_mode == "privy_embedded":
-            simplified["network_fee"] = Decimal("0")
-            simplified["network_fee_asset"] = None
-            simplified["network_fee_usd"] = None
-
-        swap_row.status = SwapSessionStatus.QUOTE_RECEIVED.value
-        swap_row.lifi_quote_id = str(lifi_quote.get("id") or "")
-        swap_row.lifi_tool = str(lifi_quote.get("tool") or "")
-        swap_row.lifi_quote_raw = lifi_quote
-        swap_row.transaction_request = lifi_quote.get("transactionRequest")
-        swap_row.vancelian_fee = simplified["vancelian_fee"]
-        swap_row.vancelian_fee_bps = swap_fee_bps()
-        swap_row.network_fee = simplified["network_fee"]
-        swap_row.network_fee_asset = simplified["network_fee_asset"]
-        swap_row.estimated_receive = simplified["estimated_receive"]
-        swap_row.estimated_receive_min = simplified["estimated_receive_min"]
-        swap_row.route_steps = [step.model_dump() for step in simplified["route_steps"]]
-        self._swap_repo.append_audit(swap_row, {"event": "quote_received", "tool": swap_row.lifi_tool})
-        from services.lifi.swap_trace_service import log_swap_trace
-        from services.transaction_intents.lifi_intent_sync import sync_lifi_swap_intent
-
-        if not lifi_intent_orchestrator_enabled_for_person(db, person_id):
-            sync_lifi_swap_intent(db, swap_row)
-        log_swap_trace(
-            db,
-            swap_row,
-            event="quote_received",
-            status=swap_row.status,
-            source="lifi_quote.create",
-        )
-        db.commit()
-        db.refresh(swap_row)
-
-        return self._build_quote_response(
-            swap_row,
-            simplified=simplified,
-            expires_at=expires_at,
-            slippage_bps=slippage,
-            signing_wallet_mode=resolved_mode,
-            signing_wallet_address=from_address,
+            SwapQuoteContext(
+                person_id=person_id,
+                from_asset=from_asset,
+                to_asset=to_asset,
+                amount=amount,
+                policy=QuotePolicy.STANDALONE,
+                from_chain=from_chain,
+                to_chain=to_chain,
+                slippage_bps=slippage_bps,
+                signing_wallet_mode=signing_wallet_mode,
+                signing_wallet_address=signing_wallet_address,
+            ),
         )
 
     def _bootstrap_swap_for_quote(

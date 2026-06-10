@@ -192,7 +192,7 @@ def test_refresh_lifi_status_partial_does_not_confirm(submitted_swap):
     svc = LifiExecuteService(lifi_client=mock_client)
     db = MagicMock()
 
-    with patch("services.lifi.lifi_execute_service.apply_swap_settlement") as mock_settle:
+    with patch("services.settlement.swap_router.settle_confirmed_swap") as mock_settle:
         svc.refresh_lifi_status(db, submitted_swap)
 
     assert submitted_swap.status == SwapSessionStatus.SUBMITTED.value
@@ -216,7 +216,7 @@ def test_refresh_lifi_status_completed_without_amount_blocks_settlement(submitte
         "services.lifi.lifi_execute_service.resolve_lifi_actual_receive_amount",
         return_value=None,
     ):
-        with patch("services.lifi.lifi_execute_service.apply_swap_settlement") as mock_settle:
+        with patch("services.settlement.swap_router.settle_confirmed_swap") as mock_settle:
             svc.refresh_lifi_status(db, submitted_swap)
 
     assert submitted_swap.status == SwapSessionStatus.CONFIRMED.value
@@ -242,7 +242,7 @@ def test_refresh_lifi_status_completed_settles_actual_amount(submitted_swap):
         "services.lifi.lifi_execute_service.resolve_lifi_actual_receive_amount",
         return_value=actual,
     ):
-        with patch("services.lifi.lifi_execute_service.apply_swap_settlement") as mock_settle:
+        with patch("services.settlement.swap_router.settle_confirmed_swap") as mock_settle:
             svc.refresh_lifi_status(db, submitted_swap)
 
     assert submitted_swap.status == SwapSessionStatus.CONFIRMED.value
@@ -261,7 +261,7 @@ def test_refresh_lifi_status_failed_no_settlement(submitted_swap):
     svc = LifiExecuteService(lifi_client=mock_client)
     db = MagicMock()
 
-    with patch("services.lifi.lifi_execute_service.apply_swap_settlement") as mock_settle:
+    with patch("services.settlement.swap_router.settle_confirmed_swap") as mock_settle:
         svc.refresh_lifi_status(db, submitted_swap)
 
     assert submitted_swap.status == SwapSessionStatus.FAILED.value

@@ -57,7 +57,8 @@ def test_refresh_lifi_status_confirmed(submitted_swap):
         "services.lifi.lifi_execute_service.resolve_lifi_actual_receive_amount",
         return_value=actual,
     ):
-        with patch("services.lifi.lifi_execute_service.apply_swap_settlement") as mock_settle:
+        with patch("services.settlement.swap_router.settle_confirmed_swap") as mock_settle:
+            mock_settle.return_value = MagicMock(settled=True, skipped=False, reason=None)
             svc.refresh_lifi_status(db, submitted_swap)
 
     assert submitted_swap.status == SwapSessionStatus.CONFIRMED.value

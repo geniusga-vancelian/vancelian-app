@@ -673,10 +673,8 @@ class BundleRebalanceExecutor:
         from services.lifi.enums import SwapSessionStatus
         from services.lifi.lifi_execute_service import LifiExecuteService
         from services.lifi.models import PersonWalletSwap
-        from services.portfolio_engine.bundle_execution.bundle_swap_pe_settlement import (
-            try_settle_confirmed_bundle_swap,
-        )
         from services.portfolio_engine.bundle_execution.pe_settlement import swap_confirmed
+        from services.settlement.swap_router import settle_confirmed_swap
 
         lifi_execute = LifiExecuteService()
         for row in results:
@@ -693,7 +691,7 @@ class BundleRebalanceExecutor:
                 lifi_execute.refresh_lifi_status(db, swap)
                 db.refresh(swap)
             if swap_confirmed(swap):
-                try_settle_confirmed_bundle_swap(db, swap)
+                settle_confirmed_swap(db, swap)
                 db.refresh(swap)
                 row.status = "completed"
                 row.error = ""
