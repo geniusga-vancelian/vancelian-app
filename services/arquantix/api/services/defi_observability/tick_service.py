@@ -476,6 +476,30 @@ def run_defi_observability_tick(
                 exc_info=True,
             )
 
+        # 2f — Reconcile-stale bundle portfolios (background — locks/intents/V3 zombies)
+        try:
+            from services.portfolio_engine.bundles.bundle_stale_reconcile_worker import (
+                tick_bundle_stale_reconcile,
+            )
+
+            bundle_stale_step = tick_bundle_stale_reconcile(db, dry_run=dry_run)
+            summary["bundle_stale_reconcile"] = bundle_stale_step
+            summary["steps"]["bundle_stale_reconcile"] = {
+                "enabled": bundle_stale_step.get("enabled"),
+                "targets": bundle_stale_step.get("targets"),
+                "reconciled": bundle_stale_step.get("reconciled"),
+                "dead_letter_swept": bundle_stale_step.get("dead_letter_swept"),
+                "errors": bundle_stale_step.get("errors"),
+            }
+        except Exception as exc:
+            summary["bundle_stale_reconcile"] = {"error": str(exc)}
+            summary["steps"]["bundle_stale_reconcile"] = {"error": str(exc)}
+            step_errors.append("bundle_stale_reconcile_failed")
+            logger.warning(
+                "defi_observability.bundle_stale_reconcile_failed",
+                exc_info=True,
+            )
+
         if _timeout_before("user_reconcile"):
             summary["alerts"] = compute_ops_alerts(db, summary=summary)
             _finalize_tick_summary(

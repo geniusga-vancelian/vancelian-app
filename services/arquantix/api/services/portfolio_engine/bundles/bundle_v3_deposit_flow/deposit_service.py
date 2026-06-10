@@ -81,11 +81,128 @@ def _record_immediate_kick_failure(db: Session, outbox: TransactionOutbox, exc: 
     outbox.locked_at = None
     if outbox.attempt_count >= int(outbox.max_attempts or 10):
         outbox.status = OutboxEventStatus.DEAD_LETTER.value
+        finalize_v3_deposit_outbox_dead_letter(
+            db,
+            outbox=outbox,
+            reason=f"immediate_kick_max_attempts:{exc}",
+        )
     else:
         outbox.status = OutboxEventStatus.PENDING.value
         # Pas de délai : le cron (ou un 2e appel worker) peut reprendre tout de suite.
         outbox.next_retry_at = datetime.now(timezone.utc)
     db.flush()
+
+
+def finalize_v3_deposit_outbox_dead_letter(
+    db: Session,
+    *,
+    outbox: TransactionOutbox,
+    reason: str,
+) -> dict[str, Any]:
+    """Clôture forcée V3 + libère intent/locks quand l'outbox dépôt est DEAD_LETTER."""
+    from services.portfolio_engine.bundles.bundle_transaction_intent import (
+        finalize_bundle_transaction_after_v3_terminal,
+    )
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        ENTITY_TYPE_V3_REBALANCE,
+        ACTION_V3_TERMINAL,
+        find_running_v3_rebalance_execution,
+        terminalize_stale_v3_rebalance_execution,
+    )
+    from services.portfolio_engine.hardening.audit_models import AuditEvent
+
+    payload = outbox.payload_json if isinstance(outbox.payload_json, dict) else {}
+    client_id = UUID(str(payload.get("client_id") or "00000000-0000-0000-0000-000000000000"))
+    portfolio_id = UUID(str(payload.get("portfolio_id") or "00000000-0000-0000-0000-000000000000"))
+    deposit_execution_id = str(payload.get("deposit_execution_id") or "")
+    batch_id = str(payload.get("batch_id") or deposit_execution_id).strip()
+    pid = str(portfolio_id)
+
+    terminal_payload: dict[str, Any] | None = None
+    stale = terminalize_stale_v3_rebalance_execution(db, portfolio_id=pid)
+    if stale is not None:
+        terminal_payload = dict(stale)
+    else:
+        running = find_running_v3_rebalance_execution(db, portfolio_id=pid)
+        if running is not None:
+            from services.portfolio_engine.bundles.rebalance_executor import (
+                _force_terminalize_running_snapshot,
+            )
+
+            terminal_payload = _force_terminalize_running_snapshot(
+                db,
+                running=running,
+                actor_id="bundle-v3-dead-letter",
+                extra={
+                    "dead_letter_finalized": True,
+                    "dead_letter_reason": reason,
+                    "forced_v3_status": "FAILED",
+                },
+            )
+            terminal_payload["v3_status"] = "FAILED"
+
+    if terminal_payload is None and batch_id:
+        rows = (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
+                AuditEvent.action == ACTION_V3_TERMINAL,
+            )
+            .order_by(AuditEvent.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        for row in rows:
+            meta = row.metadata_ or {}
+            if str(meta.get("portfolio_id") or "") != pid:
+                continue
+            audit_batch = str(
+                meta.get("batch_id") or meta.get("rebalance_execution_id") or "",
+            )
+            if audit_batch == batch_id:
+                terminal_payload = dict(meta)
+                break
+
+    if terminal_payload is None:
+        terminal_payload = {
+            "v3_status": "FAILED",
+            "rebalance_execution_id": batch_id or None,
+            "batch_id": batch_id or None,
+            "portfolio_id": pid,
+            "dead_letter_finalized": True,
+            "dead_letter_reason": reason,
+        }
+
+    if str(terminal_payload.get("v3_status") or "") not in _TERMINAL_V3:
+        terminal_payload["v3_status"] = "FAILED"
+
+    finalized = finalize_bundle_transaction_after_v3_terminal(
+        db,
+        portfolio_id=portfolio_id,
+        terminal=terminal_payload,
+    )
+    try:
+        release_bundle_transaction_v3_portfolio_operation(
+            db,
+            portfolio_id=portfolio_id,
+            execution_id=batch_id or deposit_execution_id,
+            failed=True,
+        )
+    except Exception:
+        logger.warning(
+            "bundle_v3_deposit.dead_letter_portfolio_guard_release_failed portfolio=%s batch=%s",
+            portfolio_id,
+            batch_id,
+            exc_info=True,
+        )
+
+    return {
+        "portfolio_id": pid,
+        "batch_id": batch_id or None,
+        "intent_id": str(finalized.id) if finalized is not None else None,
+        "v3_status": terminal_payload.get("v3_status"),
+        "reason": reason,
+    }
 
 
 def kick_v3_deposit_rebalance_immediately(
@@ -294,14 +411,13 @@ def process_v3_deposit_rebalance_outbox_event(
             trigger="deposit",
         )
     except BundleRebalanceExecutorError as exc:
-        release_bundle_transaction_v3_portfolio_operation(
-            db,
-            portfolio_id=portfolio_id,
-            execution_id=batch_id,
-            failed=True,
-        )
         outbox.status = OutboxEventStatus.DEAD_LETTER.value
         outbox.last_error = str(exc)
+        finalize_v3_deposit_outbox_dead_letter(
+            db,
+            outbox=outbox,
+            reason=f"executor_error:{exc}",
+        )
         db.flush()
         raise
 

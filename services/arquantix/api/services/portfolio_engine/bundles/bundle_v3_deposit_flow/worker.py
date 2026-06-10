@@ -14,6 +14,7 @@ from services.portfolio_engine.bundles.bundle_v3_deposit_flow.config import (
     bundle_v3_deposit_worker_enabled,
 )
 from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
+    finalize_v3_deposit_outbox_dead_letter,
     process_v3_deposit_rebalance_outbox_event,
 )
 from services.transaction_outbox.enums import OutboxEventStatus, OutboxEventType
@@ -65,6 +66,11 @@ def _process_polled_rows(db: Session, rows: list) -> tuple[int, int]:
             row.locked_at = None
             if row.attempt_count >= int(row.max_attempts or 10):
                 row.status = OutboxEventStatus.DEAD_LETTER.value
+                finalize_v3_deposit_outbox_dead_letter(
+                    db,
+                    outbox=row,
+                    reason=f"worker_max_attempts:{exc}",
+                )
             else:
                 row.status = OutboxEventStatus.PENDING.value
                 row.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=30)

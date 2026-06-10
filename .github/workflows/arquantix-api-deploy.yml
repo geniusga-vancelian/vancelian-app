@@ -102,7 +102,7 @@ jobs:
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
-          wait-for-minutes: 10
+          wait-for-minutes: 20
 
       - name: Ensure Binance market WS worker service exists
         run: |
@@ -126,4 +126,4 @@ jobs:
           service: ${{ env.ECS_MARKET_WS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
-          wait-for-minutes: 10
+          wait-for-minutes: 20

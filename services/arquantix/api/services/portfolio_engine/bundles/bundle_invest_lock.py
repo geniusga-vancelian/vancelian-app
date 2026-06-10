@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import os
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -79,6 +79,101 @@ def invest_lock_ttl_minutes() -> int:
         return max(1, int(raw))
     except ValueError:
         return 120
+
+
+def stuck_bundle_swap_ttl_minutes() -> int:
+    """TTL max pour swaps bundle bloqués en CONFIRMING/PROCESSING avant expiration forcée."""
+    raw = (os.environ.get("BUNDLE_STUCK_SWAP_TTL_MINUTES") or "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return invest_lock_ttl_minutes()
+
+
+_STUCK_BUNDLE_SWAP_STATUSES = frozenset({
+    "CONFIRMING",
+    "PROCESSING",
+    "PARTIAL",
+})
+
+
+def force_expire_stuck_bundle_allocation_swaps(
+    db: Session,
+    *,
+    person_id: UUID,
+    portfolio_id: UUID | str | None = None,
+    batch_id: str | None = None,
+) -> list[str]:
+    """Expire les swaps bundle CONFIRMING/PROCESSING/PARTIAL au-delà du TTL stuck."""
+    from services.lifi.enums import SwapSessionStatus
+    from services.lifi.lifi_execute_service import LifiExecuteService
+    from services.lifi.models import PersonWalletSwap
+    from services.lifi.swap_repository import PersonWalletSwapRepository
+    from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
+
+    ttl_minutes = stuck_bundle_swap_ttl_minutes()
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=ttl_minutes)
+    portfolio_key = str(portfolio_id) if portfolio_id is not None else None
+    batch_key = str(batch_id or "").strip() or None
+
+    swaps = (
+        db.query(PersonWalletSwap)
+        .filter(
+            PersonWalletSwap.person_id == person_id,
+            PersonWalletSwap.status.in_(list(_STUCK_BUNDLE_SWAP_STATUSES)),
+        )
+        .all()
+    )
+    repo = PersonWalletSwapRepository()
+    svc = LifiExecuteService()
+    expired_ids: list[str] = []
+
+    for swap in swaps:
+        ctx = bundle_context_from_swap_audit(swap)
+        if not ctx or not ctx.get("bundle_execution"):
+            continue
+        if portfolio_key and str(ctx.get("portfolio_id") or "") != portfolio_key:
+            continue
+        if batch_key and str(ctx.get("batch_id") or "") != batch_key:
+            continue
+        ref = swap.updated_at or swap.created_at
+        if ref is None or ref > cutoff:
+            continue
+
+        if swap.status in ("CONFIRMING", "PROCESSING", SwapSessionStatus.SUBMITTED.value):
+            try:
+                svc.refresh_lifi_status(db, swap)
+                db.refresh(swap)
+            except Exception:
+                logger.warning(
+                    "bundle_invest_lock.stuck_swap_refresh_failed swap=%s",
+                    swap.id,
+                    exc_info=True,
+                )
+
+        if swap.status not in _STUCK_BUNDLE_SWAP_STATUSES:
+            continue
+
+        swap.status = SwapSessionStatus.EXPIRED.value
+        swap.error_message = "Swap bundle bloqué — expiration forcée (TTL stuck)."
+        repo.append_audit(
+            swap,
+            {
+                "event": "bundle_stuck_swap_force_expired",
+                "reason": "stuck_confirming_processing_ttl",
+                "ttl_minutes": ttl_minutes,
+                "batch_id": batch_key,
+                "portfolio_id": portfolio_key,
+            },
+        )
+        db.add(swap)
+        expired_ids.append(str(swap.id))
+
+    if expired_ids:
+        db.flush()
+    return expired_ids
 
 
 class BundleInvestAlreadyPendingError(Exception):
@@ -723,6 +818,12 @@ def close_stale_bundle_invest_intents_for_portfolio(
 
         batch_id = str(meta.get("batch_id") or "").strip()
         if batch_id:
+            force_expire_stuck_bundle_allocation_swaps(
+                db,
+                person_id=person_id,
+                portfolio_id=portfolio_id,
+                batch_id=batch_id,
+            )
             _reconcile_stale_intent_legs_for_batch(
                 db,
                 person_id=person_id,
@@ -949,6 +1050,12 @@ def _batch_has_blocking_invest_work(
     person_id = _resolve_person_id(db, client_id)
     if person_id is None:
         return False
+    force_expire_stuck_bundle_allocation_swaps(
+        db,
+        person_id=person_id,
+        portfolio_id=portfolio_id,
+        batch_id=batch_id,
+    )
     _reconcile_stale_intent_legs_for_batch(
         db,
         person_id=person_id,
@@ -1049,6 +1156,13 @@ def expire_stale_invest_lock_if_safe(
         return False
 
     person_id = _resolve_person_id(db, client_id)
+    if person_id is not None:
+        force_expire_stuck_bundle_allocation_swaps(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        )
     if person_id is not None and _swap_batch_has_live_invest_work(
         db,
         person_id=person_id,
