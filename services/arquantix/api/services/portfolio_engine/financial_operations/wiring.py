@@ -103,6 +103,74 @@ def acquire_bundle_withdraw_portfolio_operation(
     )
 
 
+def acquire_bundle_transaction_v3_portfolio_operation(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    execution_id: UUID | str,
+) -> AcquirePortfolioFinancialOperationResult:
+    return acquire_portfolio_financial_operation(
+        db,
+        portfolio_id=portfolio_id,
+        operation_type=PortfolioFinancialOperationType.BUNDLE_TRANSACTION_V3,
+        execution_id=execution_id,
+    )
+
+
+def release_bundle_transaction_v3_portfolio_operation(
+    db: Session,
+    *,
+    portfolio_id: UUID,
+    execution_id: UUID | str,
+    failed: bool = False,
+) -> bool:
+    from services.portfolio_engine.financial_operations.enums import (
+        PortfolioFinancialOperationStatus,
+    )
+
+    terminal = (
+        PortfolioFinancialOperationStatus.FAILED.value
+        if failed
+        else PortfolioFinancialOperationStatus.RELEASED.value
+    )
+    return release_portfolio_financial_operation(
+        db,
+        portfolio_id=portfolio_id,
+        execution_id=execution_id,
+        terminal_status=terminal,
+    )
+
+
+def release_active_bundle_portfolio_operation(
+    db: Session,
+    *,
+    portfolio_id: UUID | str,
+    failed: bool = False,
+) -> bool:
+    """Libère l'opération ACTIVE du portefeuille (tout type bundle)."""
+    from services.portfolio_engine.financial_operations.enums import (
+        PortfolioFinancialOperationStatus,
+    )
+    from services.portfolio_engine.financial_operations.service import (
+        find_active_portfolio_financial_operation,
+    )
+
+    active = find_active_portfolio_financial_operation(db, portfolio_id=portfolio_id)
+    if active is None:
+        return False
+    terminal = (
+        PortfolioFinancialOperationStatus.FAILED.value
+        if failed
+        else PortfolioFinancialOperationStatus.RELEASED.value
+    )
+    return release_portfolio_financial_operation(
+        db,
+        portfolio_id=portfolio_id,
+        execution_id=active.execution_id,
+        terminal_status=terminal,
+    )
+
+
 def release_bundle_withdraw_portfolio_operation(
     db: Session,
     *,

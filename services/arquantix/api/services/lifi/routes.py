@@ -41,6 +41,10 @@ from services.lifi.schemas import (
     SwapSupportedAssetsResponse,
 )
 from services.lifi.swap_failure_service import record_swap_failure
+from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
+    transaction_in_progress_response_body,
+)
+from services.product_locks.exceptions import TransactionInProgress409
 from config.supported_swap_assets import (
     list_supported_chains_public,
     list_supported_destination_assets_public,
@@ -183,6 +187,11 @@ def post_swap_confirm_execute(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    except TransactionInProgress409 as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=transaction_in_progress_response_body(exc),
         ) from exc
 
 

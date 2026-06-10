@@ -202,7 +202,13 @@ def on_swap_settlement_blocked(db: Session, swap, *, reason: str) -> None:
 
 def on_swap_confirmed(db: Session, swap) -> None:
     sync_lifi_swap_intent(db, swap, status=IntentStatus.CONFIRMED.value)
+    from services.lifi.lifi_swap_global_lock import release_lifi_swap_global_lock_on_terminal
+
+    release_lifi_swap_global_lock_on_terminal(db, swap)
 
 
 def on_swap_failed(db: Session, swap) -> None:
     sync_lifi_swap_intent(db, swap, status=IntentStatus.FAILED.value)
+    from services.lifi.lifi_swap_global_lock import release_lifi_swap_global_lock_on_terminal
+
+    release_lifi_swap_global_lock_on_terminal(db, swap)

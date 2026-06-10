@@ -67,6 +67,14 @@ class LifiConfirmService:
                 swap_id=swap_id,
             )
 
+        from services.lifi.lifi_swap_global_lock import acquire_lifi_swap_global_lock_or_raise
+
+        acquire_lifi_swap_global_lock_or_raise(
+            db,
+            person_id=person_id,
+            swap_id=swap_id,
+        )
+
         execute = self._execute.prepare_execute(db, person_id=person_id, swap_id=swap_id)
         freshness = "refreshed" if comparison.delta_bps > 0 else "verified"
         return SwapConfirmExecuteResponse(

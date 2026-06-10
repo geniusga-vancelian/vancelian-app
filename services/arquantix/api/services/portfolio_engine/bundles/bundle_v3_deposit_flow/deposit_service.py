@@ -10,7 +10,6 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from services.onchain_indexer.models import TransactionIntent
 from services.portfolio_engine.bundle_execution.bundle_funding import (
     BundleFundingError,
     fund_bundle_cash_leg_from_self_trading,
@@ -25,10 +24,24 @@ from services.portfolio_engine.bundles.rebalance_executor import (
     BundleRebalanceExecutorError,
     execute_v3_bundle_rebalance,
 )
+from services.portfolio_engine.bundles.bundle_transaction_global_lock import (
+    acquire_bundle_transaction_global_lock_or_raise,
+    release_bundle_transaction_global_lock_on_v3_terminal,
+)
+from services.portfolio_engine.bundles.bundle_transaction_intent import (
+    BUNDLE_TRANSACTION_INTENT_PRODUCT,
+    BUNDLE_TRANSACTION_OPERATION_DEPOSIT_REBALANCE,
+    LEGACY_DEPOSIT_INTENT_PRODUCT,
+    PHASE_FUNDING,
+    PHASE_REBALANCING,
+    create_bundle_transaction_intent,
+    set_bundle_transaction_phase,
+    sync_bundle_transaction_rebalancing,
+)
 from services.portfolio_engine.bundles.rebalance_planner import plan_bundle_rebalance_from_drift
 from services.portfolio_engine.financial_operations.wiring import (
-    acquire_bundle_invest_portfolio_operation,
-    release_bundle_invest_portfolio_operation,
+    acquire_bundle_transaction_v3_portfolio_operation,
+    release_bundle_transaction_v3_portfolio_operation,
 )
 from services.transaction_outbox.enums import OutboxEventStatus, OutboxEventType
 from services.transaction_outbox.models import TransactionOutbox
@@ -36,7 +49,7 @@ from services.transaction_outbox.repository import TransactionOutboxRepository
 
 logger = logging.getLogger(__name__)
 
-V3_DEPOSIT_INTENT_PRODUCT = "bundle_deposit_v3"
+V3_DEPOSIT_INTENT_PRODUCT = LEGACY_DEPOSIT_INTENT_PRODUCT
 V3_DEPOSIT_FLOW_VERSION = "bundle_v3_deposit_flow_v1"
 
 _TERMINAL_V3 = frozenset({
@@ -121,36 +134,6 @@ def _ensure_v3_deposit_flow_active() -> None:
         raise V3DepositFlowError("v3_deposit_flow_disabled", "BUNDLE_V3_DEPOSIT_FLOW_ENABLED is off")
 
 
-def _create_deposit_intent(
-    db: Session,
-    *,
-    person_id: UUID,
-    portfolio_id: UUID,
-    deposit_execution_id: UUID,
-    funding_amount: Decimal,
-    entry_asset: str,
-    batch_id: str,
-) -> TransactionIntent:
-    intent = TransactionIntent(
-        person_id=person_id,
-        product_type=V3_DEPOSIT_INTENT_PRODUCT,
-        operation_type="deposit",
-        idempotency_key=f"v3-deposit-{deposit_execution_id}",
-        status="created",
-        metadata_json={
-            "flow_version": V3_DEPOSIT_FLOW_VERSION,
-            "portfolio_id": str(portfolio_id),
-            "deposit_execution_id": str(deposit_execution_id),
-            "batch_id": batch_id,
-            "funding_asset": entry_asset.upper(),
-            "funding_amount": str(funding_amount),
-        },
-    )
-    db.add(intent)
-    db.flush()
-    return intent
-
-
 def request_v3_bundle_deposit(
     db: Session,
     *,
@@ -186,10 +169,10 @@ def request_v3_bundle_deposit(
     deposit_execution_id = uuid.uuid4()
     batch_id = str(deposit_execution_id)
 
-    acquire_bundle_invest_portfolio_operation(
+    acquire_bundle_transaction_v3_portfolio_operation(
         db,
         portfolio_id=portfolio_id,
-        batch_id=batch_id,
+        execution_id=deposit_execution_id,
     )
 
     entry_instrument = orchestrator._resolve_or_create_instrument(db, entry_asset)
@@ -205,22 +188,39 @@ def request_v3_bundle_deposit(
             batch_id=batch_id,
         )
     except BundleFundingError as exc:
-        release_bundle_invest_portfolio_operation(
+        release_bundle_transaction_v3_portfolio_operation(
             db,
             portfolio_id=portfolio_id,
-            batch_id=batch_id,
+            execution_id=deposit_execution_id,
             failed=True,
         )
         raise V3DepositFlowError(exc.code, str(exc)) from exc
 
-    intent = _create_deposit_intent(
+    intent = create_bundle_transaction_intent(
         db,
         person_id=person_id,
         portfolio_id=portfolio_id,
-        deposit_execution_id=deposit_execution_id,
-        funding_amount=funding_amount,
-        entry_asset=entry_asset,
-        batch_id=batch_id,
+        transaction_execution_id=deposit_execution_id,
+        operation_type=BUNDLE_TRANSACTION_OPERATION_DEPOSIT_REBALANCE,
+        phase=PHASE_FUNDING,
+        idempotency_suffix=f"deposit-{deposit_execution_id}",
+        extra_metadata={
+            "flow_version": V3_DEPOSIT_FLOW_VERSION,
+            "deposit_execution_id": str(deposit_execution_id),
+            "funding_asset": entry_asset.upper(),
+            "funding_amount": str(funding_amount),
+            "funding_status": "completed",
+        },
+    )
+    acquire_bundle_transaction_global_lock_or_raise(
+        db,
+        person_id=person_id,
+        intent_id=intent.id,
+    )
+    set_bundle_transaction_phase(
+        intent,
+        phase=PHASE_REBALANCING,
+        extra={"funding_status": "completed"},
     )
 
     outbox_payload = {
@@ -294,10 +294,10 @@ def process_v3_deposit_rebalance_outbox_event(
             trigger="deposit",
         )
     except BundleRebalanceExecutorError as exc:
-        release_bundle_invest_portfolio_operation(
+        release_bundle_transaction_v3_portfolio_operation(
             db,
             portfolio_id=portfolio_id,
-            batch_id=batch_id,
+            execution_id=batch_id,
             failed=True,
         )
         outbox.status = OutboxEventStatus.DEAD_LETTER.value
@@ -305,12 +305,26 @@ def process_v3_deposit_rebalance_outbox_event(
         db.flush()
         raise
 
+    intent_id = outbox.intent_id
+    if intent_id is not None:
+        from services.onchain_indexer.models import TransactionIntent
+
+        intent = db.query(TransactionIntent).filter(TransactionIntent.id == intent_id).first()
+        if intent is not None:
+            sync_bundle_transaction_rebalancing(intent, result=result)
+            release_bundle_transaction_global_lock_on_v3_terminal(
+                db,
+                intent_id=intent.id,
+                v3_status=str(result.get("v3_status") or ""),
+            )
+            db.add(intent)
+
     v3_status = str(result.get("v3_status") or "")
     if v3_status in _TERMINAL_V3:
-        release_bundle_invest_portfolio_operation(
+        release_bundle_transaction_v3_portfolio_operation(
             db,
             portfolio_id=portfolio_id,
-            batch_id=batch_id,
+            execution_id=batch_id,
             failed=v3_status == "FAILED",
         )
         outbox.status = OutboxEventStatus.PROCESSED.value
@@ -349,13 +363,18 @@ def is_v3_deposit_batch(
         text(
             """
             SELECT 1 FROM transaction_intents
-            WHERE product_type = :product
+            WHERE product_type IN (:product_legacy, :product_unified)
               AND metadata_json->>'batch_id' = :batch
               AND metadata_json->>'portfolio_id' = :portfolio
             LIMIT 1
             """
         ),
-        {"product": V3_DEPOSIT_INTENT_PRODUCT, "batch": bid, "portfolio": pid},
+        {
+            "product_legacy": V3_DEPOSIT_INTENT_PRODUCT,
+            "product_unified": BUNDLE_TRANSACTION_INTENT_PRODUCT,
+            "batch": bid,
+            "portfolio": pid,
+        },
     ).fetchone()
     if intent_row is not None:
         return True

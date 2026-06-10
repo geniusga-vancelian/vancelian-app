@@ -161,7 +161,7 @@ def test_preview_returns_asset_lines(db: Session):
     ):
         out = preview_rebalancing_portfolio(db, client_id=pe.id, portfolio_id=portfolio.id)
 
-    assert out["flow"] == "bundle_portfolio_rebalance_v1"
+    assert out["flow"] == "bundle_transaction_v1"
     assert len(out["asset_lines"]) == 1
     assert out["asset_lines"][0]["asset"] == "ETH"
 

@@ -344,6 +344,9 @@ class LifiExecuteService:
 
         if self._swap_repo.mark_expired_if_needed(swap):
             self._swap_repo.append_audit(swap, {"event": "expired"})
+            from services.lifi.lifi_swap_global_lock import release_lifi_swap_global_lock_on_terminal
+
+            release_lifi_swap_global_lock_on_terminal(db, swap)
             db.commit()
             db.refresh(swap)
             return self._build_status_response(swap)

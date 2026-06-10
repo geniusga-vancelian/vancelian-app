@@ -20,6 +20,19 @@ from services.portfolio_engine.bundles.bundle_invest_lock import (
     get_active_invest_lock_for_portfolio,
     release_invest_lock,
 )
+from services.portfolio_engine.bundles.bundle_transaction_global_lock import (
+    acquire_bundle_transaction_global_lock_or_raise,
+    release_bundle_transaction_global_lock_on_v3_terminal,
+)
+from services.portfolio_engine.bundles.bundle_transaction_intent import (
+    BUNDLE_TRANSACTION_FLOW_VERSION,
+    BUNDLE_TRANSACTION_OPERATION_REBALANCE,
+    LEGACY_REBALANCE_INTENT_PRODUCT,
+    PHASE_REBALANCING,
+    create_bundle_transaction_intent,
+    find_bundle_transaction_intent_by_rebalance_execution_id,
+    sync_bundle_transaction_rebalancing,
+)
 from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
     is_v3_deposit_batch,
 )
@@ -34,15 +47,16 @@ from services.portfolio_engine.bundles.rebalance_executor import (
 )
 from services.portfolio_engine.bundles.rebalance_planner import plan_bundle_rebalance_from_drift
 from services.portfolio_engine.financial_operations.wiring import (
-    acquire_bundle_rebalance_v3_portfolio_operation,
-    release_bundle_rebalance_v3_portfolio_operation,
+    acquire_bundle_transaction_v3_portfolio_operation,
+    release_active_bundle_portfolio_operation,
+    release_bundle_transaction_v3_portfolio_operation,
 )
 from services.portfolio_engine.hardening.audit_service import AuditService
 from services.onchain_indexer.models import TransactionIntent
 from services.transaction_intents.bundle_intent_sync import bundle_context_from_swap_audit
 
-REBALANCE_PORTFOLIO_INTENT_PRODUCT = "bundle_portfolio_rebalance_v1"
-REBALANCE_PORTFOLIO_FLOW_VERSION = "bundle_portfolio_rebalance_v1"
+REBALANCE_PORTFOLIO_INTENT_PRODUCT = LEGACY_REBALANCE_INTENT_PRODUCT
+REBALANCE_PORTFOLIO_FLOW_VERSION = BUNDLE_TRANSACTION_FLOW_VERSION
 
 PORTFOLIO_REBALANCING_REQUIRED_CODE = "portfolio_rebalancing_required"
 CASH_REBALANCE_REQUIRED_CODE = "cash_rebalance_required"
@@ -255,36 +269,6 @@ def abandon_legacy_invest_lock_for_rebalancing(
         "source": source,
         "expired_swap_ids": expired_swap_ids,
     }
-
-
-def _create_rebalance_intent(
-    db: Session,
-    *,
-    person_id: UUID,
-    portfolio_id: UUID,
-    execution_id: UUID,
-    plan_hash: str,
-    snapshot_hash: str,
-) -> TransactionIntent:
-    intent = TransactionIntent(
-        person_id=person_id,
-        product_type=REBALANCE_PORTFOLIO_INTENT_PRODUCT,
-        operation_type="rebalance",
-        idempotency_key=f"portfolio-rebalance-{execution_id}",
-        status="created",
-        metadata_json={
-            "flow_version": REBALANCE_PORTFOLIO_FLOW_VERSION,
-            "portfolio_id": str(portfolio_id),
-            "rebalance_execution_id": str(execution_id),
-            "batch_id": str(execution_id),
-            "plan_hash": plan_hash,
-            "snapshot_hash": snapshot_hash,
-            "asset_lines": [],
-        },
-    )
-    db.add(intent)
-    db.flush()
-    return intent
 
 
 def _asset_lines_from_plan(plan: dict[str, Any]) -> list[dict[str, str]]:
@@ -602,14 +586,14 @@ def rebalancing_portfolio(
     """Rééquilibrage nominal : guard PE → abandon lock legacy → drift → sell → buy."""
     execution_id = uuid.uuid4()
 
-    acquire_bundle_rebalance_v3_portfolio_operation(
+    acquire_bundle_transaction_v3_portfolio_operation(
         db,
         portfolio_id=portfolio_id,
         execution_id=execution_id,
     )
 
     def _release_guard(*, failed: bool = False) -> None:
-        release_bundle_rebalance_v3_portfolio_operation(
+        release_bundle_transaction_v3_portfolio_operation(
             db,
             portfolio_id=portfolio_id,
             execution_id=execution_id,
@@ -640,13 +624,24 @@ def rebalancing_portfolio(
     plan_hash = str(plan.get("plan_hash") or "")
     snapshot_hash = str(plan.get("snapshot_hash") or drift.get("snapshot_hash") or "")
 
-    intent = _create_rebalance_intent(
+    intent = create_bundle_transaction_intent(
         db,
         person_id=person_id,
         portfolio_id=portfolio_id,
-        execution_id=execution_id,
-        plan_hash=plan_hash,
-        snapshot_hash=snapshot_hash,
+        transaction_execution_id=execution_id,
+        operation_type=BUNDLE_TRANSACTION_OPERATION_REBALANCE,
+        phase=PHASE_REBALANCING,
+        idempotency_suffix=f"rebalance-{execution_id}",
+        extra_metadata={
+            "rebalance_execution_id": str(execution_id),
+            "plan_hash": plan_hash,
+            "snapshot_hash": snapshot_hash,
+        },
+    )
+    acquire_bundle_transaction_global_lock_or_raise(
+        db,
+        person_id=person_id,
+        intent_id=intent.id,
     )
 
     try:
@@ -670,15 +665,16 @@ def rebalancing_portfolio(
     v3_status = str(result.get("v3_status") or "")
     if v3_status in _TERMINAL_V3_STATUSES:
         _release_guard(failed=(v3_status == "FAILED"))
+        release_bundle_transaction_global_lock_on_v3_terminal(
+            db,
+            intent_id=intent.id,
+            v3_status=v3_status,
+        )
 
     asset_lines = _asset_lines_from_execution(result)
-    intent.status = str(result.get("v3_status") or result.get("status") or "completed").lower()
+    sync_bundle_transaction_rebalancing(intent, result=result, asset_lines=asset_lines)
     meta = dict(intent.metadata_json or {})
     meta.update({
-        "v3_status": result.get("v3_status"),
-        "rebalance_execution_id": result.get("rebalance_execution_id"),
-        "batch_id": result.get("batch_id"),
-        "asset_lines": asset_lines,
         "legacy_lock_abandoned": abandoned,
         "financial_operation_execution_id": str(execution_id),
     })
@@ -761,49 +757,29 @@ def resume_rebalancing_portfolio(
 
     v3_status = str(result.get("v3_status") or "")
     if v3_status in _TERMINAL_V3_STATUSES:
-        from services.portfolio_engine.financial_operations import (
-            find_active_portfolio_financial_operation,
+        release_active_bundle_portfolio_operation(
+            db,
+            portfolio_id=portfolio_id,
+            failed=(v3_status == "FAILED"),
         )
-
-        active_guard = find_active_portfolio_financial_operation(
-            db, portfolio_id=portfolio_id,
-        )
-        if active_guard is not None:
-            release_bundle_rebalance_v3_portfolio_operation(
-                db,
-                portfolio_id=portfolio_id,
-                execution_id=active_guard.execution_id,
-                failed=(v3_status == "FAILED"),
-            )
 
     asset_lines = _asset_lines_from_execution(result)
     rebalance_exec_id = str(
         result.get("rebalance_execution_id") or running.get("rebalance_execution_id") or "",
     )
-    intent = None
-    if rebalance_exec_id:
-        candidates = (
-            db.query(TransactionIntent)
-            .filter(TransactionIntent.product_type == REBALANCE_PORTFOLIO_INTENT_PRODUCT)
-            .order_by(TransactionIntent.created_at.desc())
-            .limit(20)
-            .all()
-        )
-        for row in candidates:
-            meta = row.metadata_json or {}
-            if str(meta.get("rebalance_execution_id") or "") == rebalance_exec_id:
-                intent = row
-                break
+    intent = find_bundle_transaction_intent_by_rebalance_execution_id(
+        db,
+        rebalance_execution_id=rebalance_exec_id,
+    )
 
     execution_id = UUID(rebalance_exec_id) if rebalance_exec_id else uuid.uuid4()
     if intent is not None:
-        intent.status = str(result.get("v3_status") or "running").lower()
-        meta = dict(intent.metadata_json or {})
-        meta.update({
-            "v3_status": result.get("v3_status"),
-            "asset_lines": asset_lines,
-        })
-        intent.metadata_json = meta
+        sync_bundle_transaction_rebalancing(intent, result=result, asset_lines=asset_lines)
+        release_bundle_transaction_global_lock_on_v3_terminal(
+            db,
+            intent_id=intent.id,
+            v3_status=v3_status,
+        )
         db.add(intent)
 
     payload = _build_rebalancing_response(

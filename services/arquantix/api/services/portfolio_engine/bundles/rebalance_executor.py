@@ -1303,24 +1303,17 @@ def _release_v3_rebalance_guard(
     portfolio_id: str,
     terminal: dict[str, Any],
 ) -> None:
-    from services.portfolio_engine.financial_operations import (
-        find_active_portfolio_financial_operation,
-    )
     from services.portfolio_engine.financial_operations.wiring import (
-        release_bundle_rebalance_v3_portfolio_operation,
+        release_active_bundle_portfolio_operation,
     )
 
     try:
         pid = UUID(str(portfolio_id))
     except (TypeError, ValueError):
         return
-    guard = find_active_portfolio_financial_operation(db, portfolio_id=pid)
-    if guard is None:
-        return
-    release_bundle_rebalance_v3_portfolio_operation(
+    release_active_bundle_portfolio_operation(
         db,
         portfolio_id=pid,
-        execution_id=guard.execution_id,
         failed=str(terminal.get("v3_status") or "") == "FAILED",
     )
 

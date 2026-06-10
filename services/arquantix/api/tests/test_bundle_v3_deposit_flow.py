@@ -174,8 +174,12 @@ def test_legacy_resume_allowed_when_v3_flag_on_for_legacy_batch(db: Session, v3_
 def test_legacy_resume_blocked_for_v3_batch_when_flag_on(db: Session, v3_deposit_on):
     from datetime import datetime, timezone
 
+    from services.portfolio_engine.bundles.bundle_transaction_intent import (
+        BUNDLE_TRANSACTION_OPERATION_DEPOSIT_REBALANCE,
+        PHASE_FUNDING,
+        create_bundle_transaction_intent,
+    )
     from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
-        _create_deposit_intent,
         legacy_resume_available_for_batch,
         resume_disabled_for_v3_deposit_flow,
     )
@@ -184,14 +188,18 @@ def test_legacy_resume_blocked_for_v3_batch_when_flag_on(db: Session, v3_deposit
     pf = _bundle_portfolio(db, pe.id)
     deposit_execution_id = uuid.uuid4()
     batch_id = str(deposit_execution_id)
-    _create_deposit_intent(
+    create_bundle_transaction_intent(
         db,
         person_id=pe.person_id,
         portfolio_id=pf.id,
-        deposit_execution_id=deposit_execution_id,
-        funding_amount=Decimal("20"),
-        entry_asset="USDC",
-        batch_id=batch_id,
+        transaction_execution_id=deposit_execution_id,
+        operation_type=BUNDLE_TRANSACTION_OPERATION_DEPOSIT_REBALANCE,
+        phase=PHASE_FUNDING,
+        extra_metadata={
+            "deposit_execution_id": str(deposit_execution_id),
+            "funding_asset": "USDC",
+            "funding_amount": "20",
+        },
     )
     row = db.query(Portfolio).filter(Portfolio.id == pf.id).first()
     now = datetime.now(timezone.utc).isoformat()
