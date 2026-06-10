@@ -14,7 +14,6 @@ import {
   type BundleInvestActiveLockPayload,
   type PortfolioRebalancingAssetLine,
 } from '@/lib/portal/bundleClient'
-import { isTerminalBundleV3Status } from '@/components/portal/transaction/mappers/bundleSteps'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
