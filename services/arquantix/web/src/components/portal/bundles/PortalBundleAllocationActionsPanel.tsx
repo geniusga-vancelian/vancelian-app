@@ -21,6 +21,7 @@ type Props = {
   portfolioId: string
   portfolioName: string
   lockState: BundleInvestActiveLockPayload | null
+  canExecute?: boolean
   hasUnallocatedCash: boolean
   onRefresh: () => void
   onLockRefresh: () => Promise<BundleInvestActiveLockPayload | null>
@@ -31,6 +32,7 @@ type Props = {
 export function PortalBundleAllocationActionsPanel({
   portfolioId,
   portfolioName,
+  canExecute = true,
   hasUnallocatedCash,
   onRefresh,
   onLockRefresh,
@@ -130,6 +132,9 @@ export function PortalBundleAllocationActionsPanel({
       {previewStatus ? (
         <p className="m-0 font-ui text-[12px] text-v-fg-muted">
           Plan : {previewStatus}
+          {previewStatus === 'no_action'
+            ? ' — drift sous le minimum (1 USDC par leg), visualisation seule.'
+            : null}
           {planningMode === 'portfolio_drift' || planningMode === 'portfolio_value_cash_deploy'
             ? ' — déploiement sur NAV totale (cash leg inclus)'
             : null}
@@ -153,7 +158,12 @@ export function PortalBundleAllocationActionsPanel({
         >
           Estimer le plan
         </AppButton>
-        <AppButton type="button" variant="primary" disabled={busy} onClick={() => void runRebalancing()}>
+        <AppButton
+          type="button"
+          variant="primary"
+          disabled={busy || !canExecute || previewStatus === 'no_action'}
+          onClick={() => void runRebalancing()}
+        >
           Rééquilibrage
         </AppButton>
         <AppButton type="button" variant="secondary" disabled={busy} onClick={onClose}>

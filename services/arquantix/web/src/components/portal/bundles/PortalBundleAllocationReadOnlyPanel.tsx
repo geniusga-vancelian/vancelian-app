@@ -9,6 +9,7 @@ import {
   fetchActiveBundleInvestLock,
   preflightPortfolioRebalancing,
   type BundleInvestActiveLockPayload,
+  type PortfolioRebalancingPreflightPayload,
 } from '@/lib/portal/bundleClient'
 import { formatCryptoMoney } from '@/lib/portal/cryptoWalletFormat'
 
@@ -21,7 +22,26 @@ type Props = {
   onRefresh: () => void
 }
 
-/** Allocation wallet bundle — rééquilibrage uniquement (plus de reprise legacy LI.FI). */
+function blockerMessage(
+  blockers: PortfolioRebalancingPreflightPayload['blockers'],
+): string | null {
+  const codes = (blockers ?? []).map((b) => b.code)
+  if (codes.includes('portfolio_financial_operation_in_progress')) {
+    return 'Une opération financière est déjà en cours sur ce portefeuille.'
+  }
+  if (codes.includes('ambiguous_legacy_batches')) {
+    return 'Batch legacy ambigu — contactez le support avant rééquilibrage.'
+  }
+  if (codes.includes('v3_deposit_batch_in_progress')) {
+    return 'Un dépôt V3 est encore en cours sur ce bundle.'
+  }
+  if (codes.length > 0) {
+    return `Blocage : ${codes.join(', ')}`
+  }
+  return null
+}
+
+/** Allocation wallet bundle — entrée rééquilibrage toujours visible (estimation + exécution). */
 export function PortalBundleAllocationReadOnlyPanel({
   portfolioId,
   portfolioName,
@@ -31,15 +51,21 @@ export function PortalBundleAllocationReadOnlyPanel({
 }: Props) {
   const [lockState, setLockState] = useState<BundleInvestActiveLockPayload | null>(null)
   const [loadingLock, setLoadingLock] = useState(true)
-  const [loadingPreflight, setLoadingPreflight] = useState(false)
-  const [driftActionable, setDriftActionable] = useState(false)
-  const [preflightStatus, setPreflightStatus] = useState<string | null>(null)
-  const [wouldAbandonLegacy, setWouldAbandonLegacy] = useState(false)
+  const [loadingPreflight, setLoadingPreflight] = useState(true)
+  const [preflight, setPreflight] = useState<PortfolioRebalancingPreflightPayload | null>(null)
+  const [preflightError, setPreflightError] = useState<string | null>(null)
   const [actionsOpen, setActionsOpen] = useState(false)
 
   const legacyLockActive = lockState?.status === 'active'
   const legacyLockAmbiguous = lockState?.status === 'ambiguous'
-  const hasMaterialCash = cashLegDisplayValue > 1
+  const hasCashLeg = cashLegDisplayValue > 0.001
+
+  const planStatus = String(
+    preflight?.rebalance_plan?.status ?? preflight?.status ?? 'unknown',
+  )
+  const canExecute = Boolean(preflight?.can_execute)
+  const wouldAbandonLegacy = Boolean(preflight?.would_abandon_legacy_lock)
+  const blockerText = blockerMessage(preflight?.blockers)
 
   const refreshLock = useCallback(async () => {
     setLoadingLock(true)
@@ -57,20 +83,13 @@ export function PortalBundleAllocationReadOnlyPanel({
 
   const loadPreflight = useCallback(async () => {
     setLoadingPreflight(true)
+    setPreflightError(null)
     try {
-      const preflight = await preflightPortfolioRebalancing(portfolioId)
-      const planStatus = String(
-        preflight.rebalance_plan?.status ?? preflight.status ?? 'no_action',
-      )
-      setPreflightStatus(planStatus)
-      setWouldAbandonLegacy(Boolean(preflight.would_abandon_legacy_lock))
-      setDriftActionable(
-        Boolean(preflight.can_execute) ||
-          (planStatus === 'ok' && (preflight.blockers?.length ?? 0) === 0),
-      )
-    } catch {
-      setPreflightStatus(null)
-      setDriftActionable(false)
+      const result = await preflightPortfolioRebalancing(portfolioId)
+      setPreflight(result)
+    } catch (err) {
+      setPreflight(null)
+      setPreflightError(err instanceof Error ? err.message : 'Analyse drift impossible')
     } finally {
       setLoadingPreflight(false)
     }
@@ -78,35 +97,48 @@ export function PortalBundleAllocationReadOnlyPanel({
 
   useEffect(() => {
     void refreshLock()
-  }, [refreshLock])
+    void loadPreflight()
+  }, [loadPreflight, refreshLock])
 
-  useEffect(() => {
-    if (hasMaterialCash || legacyLockActive || legacyLockAmbiguous) {
-      void loadPreflight()
+  const cashLegHint = (() => {
+    if (loadingPreflight) return 'analyse en cours…'
+    if (preflightError) return 'analyse indisponible — utilisez « Estimer le plan ».'
+    if (planStatus === 'ok' && canExecute) {
+      return 'répartition vers les actifs cibles recommandée.'
     }
-  }, [hasMaterialCash, legacyLockActive, legacyLockAmbiguous, loadPreflight])
-
-  const showRebalancingEntry =
-    driftActionable || legacyLockActive || legacyLockAmbiguous || hasMaterialCash
-
-  if (!showRebalancingEntry && !loadingLock && !loadingPreflight) {
-    return null
-  }
+    if (planStatus === 'no_action') {
+      return 'drift sous le minimum (1 USDC par leg) — estimation du plan toujours disponible.'
+    }
+    if (planStatus === 'ok' && !canExecute) {
+      return 'plan calculé — exécution bloquée (voir message ci-dessous).'
+    }
+    return 'estimation du plan disponible pour visualiser le drift.'
+  })()
 
   return (
     <section className="flex w-full flex-col gap-3">
       <AppSectionHeader title="Allocation" />
+
       {loadingLock || loadingPreflight ? (
         <p className="m-0 font-ui text-[13px] text-v-fg-muted">Analyse du portefeuille…</p>
       ) : null}
 
-      {hasMaterialCash ? (
+      {hasCashLeg ? (
         <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-          Cash leg : {formatCryptoMoney(cashLegDisplayValue, currency)}
-          {driftActionable
-            ? ' — répartition vers les actifs cibles recommandée.'
-            : ' — en attente d’analyse drift.'}
+          Cash leg : {formatCryptoMoney(cashLegDisplayValue, currency)} — {cashLegHint}
         </p>
+      ) : (
+        <p className="m-0 font-ui text-[13px] text-v-fg-muted">
+          Ajustement des positions vers l&apos;allocation cible — estimation disponible.
+        </p>
+      )}
+
+      {preflightError ? (
+        <p className="m-0 font-ui text-[13px] text-v-error">{preflightError}</p>
+      ) : null}
+
+      {blockerText ? (
+        <p className="m-0 font-ui text-[13px] text-amber-800">{blockerText}</p>
       ) : null}
 
       {wouldAbandonLegacy || legacyLockActive || legacyLockAmbiguous ? (
@@ -121,16 +153,30 @@ export function PortalBundleAllocationReadOnlyPanel({
         </div>
       ) : null}
 
-      {preflightStatus === 'ok' && driftActionable && !actionsOpen ? (
-        <AppButton type="button" variant="primary" onClick={() => setActionsOpen(true)}>
-          {wouldAbandonLegacy ? 'Rééquilibrage (abandon legacy + déploiement cash)' : 'Rééquilibrage'}
-        </AppButton>
+      {!actionsOpen && !loadingPreflight ? (
+        <div className="flex flex-wrap gap-2">
+          <AppButton type="button" variant="secondary" onClick={() => setActionsOpen(true)}>
+            Estimer le plan
+          </AppButton>
+          <AppButton
+            type="button"
+            variant="primary"
+            disabled={!canExecute}
+            onClick={() => canExecute && setActionsOpen(true)}
+          >
+            {wouldAbandonLegacy
+              ? 'Rééquilibrage (abandon legacy + déploiement cash)'
+              : 'Rééquilibrage'}
+          </AppButton>
+        </div>
       ) : null}
 
-      {showRebalancingEntry && preflightStatus !== 'ok' && !actionsOpen && !loadingPreflight ? (
-        <AppButton type="button" variant="secondary" onClick={() => void loadPreflight()}>
-          Vérifier le rééquilibrage
-        </AppButton>
+      {!canExecute && !loadingPreflight && !actionsOpen ? (
+        <p className="m-0 font-ui text-[12px] text-v-fg-muted">
+          {planStatus === 'no_action'
+            ? 'Exécution désactivée : aucune leg ≥ 1 USDC. « Estimer le plan » affiche quand même le drift.'
+            : 'Exécution désactivée — « Estimer le plan » reste disponible pour visualiser le drift.'}
+        </p>
       ) : null}
 
       {actionsOpen ? (
@@ -138,7 +184,8 @@ export function PortalBundleAllocationReadOnlyPanel({
           portfolioId={portfolioId}
           portfolioName={portfolioName}
           lockState={lockState}
-          hasUnallocatedCash={driftActionable || legacyLockActive || hasMaterialCash}
+          canExecute={canExecute}
+          hasUnallocatedCash={hasCashLeg || canExecute || legacyLockActive}
           onRefresh={onRefresh}
           onLockRefresh={refreshLock}
           onClose={() => setActionsOpen(false)}
@@ -147,7 +194,8 @@ export function PortalBundleAllocationReadOnlyPanel({
 
       {!actionsOpen ? (
         <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-          {portfolioName} — rééquilibrage automatique vers l’allocation cible (ventes puis achats).
+          {portfolioName} — rééquilibrage automatique vers l&apos;allocation cible (ventes puis
+          achats, min. 1 USDC par leg).
         </p>
       ) : null}
     </section>
