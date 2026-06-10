@@ -29,6 +29,7 @@ from services.portfolio_engine.bundles.rebalance_executor import (
     execute_v3_bundle_rebalance,
     find_running_v3_rebalance_execution,
     force_terminalize_running_v3_rebalance_on_plan_drift,
+    reconcile_running_v3_rebalance_execution,
     resume_v3_bundle_rebalance_execution,
 )
 from services.portfolio_engine.bundles.rebalance_planner import plan_bundle_rebalance_from_drift
@@ -439,6 +440,16 @@ def get_active_bundle_operation(
 ) -> dict[str, Any]:
     """Opération bundle en cours (dépôt V3 ou rééquilibrage) — lecture seule pour reprise UI."""
     pid = str(portfolio_id)
+    drift, current_plan = _compute_drift_and_plan(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    reconcile_running_v3_rebalance_execution(
+        db,
+        portfolio_id=pid,
+        client_id=client_id,
+        drift_rebalance_plan=current_plan,
+        auto_progress=True,
+    )
     running = find_running_v3_rebalance_execution(db, portfolio_id=pid)
     if running is not None:
         trigger = str(running.get("trigger") or "manual")
@@ -449,9 +460,6 @@ def get_active_bundle_operation(
         if not asset_lines:
             asset_lines = _asset_lines_from_execution(running)
 
-        drift, current_plan = _compute_drift_and_plan(
-            db, client_id=client_id, portfolio_id=portfolio_id,
-        )
         running_plan_hash = str(running.get("plan_hash") or "")
         current_plan_hash = str(current_plan.get("plan_hash") or "")
         plan_stale = bool(
@@ -696,16 +704,23 @@ def resume_rebalancing_portfolio(
     trigger: str = "manual",
 ) -> dict[str, Any]:
     """Reprise après signature LI.FI — quote leg suivant ou clôture terminal."""
+    drift, plan = _compute_drift_and_plan(
+        db, client_id=client_id, portfolio_id=portfolio_id,
+    )
+    reconcile_running_v3_rebalance_execution(
+        db,
+        portfolio_id=str(portfolio_id),
+        client_id=client_id,
+        drift_rebalance_plan=plan,
+        auto_progress=False,
+        terminalize_plan_drift=False,
+    )
     running = find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio_id))
     if running is None:
         raise RebalancingPortfolioError(
             "no_running_rebalance",
             "no_running_rebalance",
         )
-
-    drift, plan = _compute_drift_and_plan(
-        db, client_id=client_id, portfolio_id=portfolio_id,
-    )
     running_plan_hash = str(running.get("plan_hash") or "")
     current_plan_hash = str(plan.get("plan_hash") or "")
     plan_stale = bool(

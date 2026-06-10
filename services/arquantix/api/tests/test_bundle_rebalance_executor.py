@@ -16,6 +16,7 @@ from services.portfolio_engine.bundles.drift_engine import compute_bundle_drift_
 from services.portfolio_engine.bundles.orchestrator import BundleOrchestrator
 from datetime import datetime, timedelta, timezone
 
+from services.lifi.enums import SwapSessionStatus
 from services.portfolio_engine.bundles.rebalance_executor import (
     ACTION_V3_PROGRESS,
     ACTION_V3_RUNNING,
@@ -26,6 +27,7 @@ from services.portfolio_engine.bundles.rebalance_executor import (
     execute_v3_bundle_rebalance,
     find_running_v3_rebalance_execution,
     find_terminal_v3_rebalance_by_plan_hash,
+    reconcile_running_v3_rebalance_execution,
     terminalize_stale_v3_rebalance_execution,
 )
 from services.portfolio_engine.bundles.rebalance_planner import (
@@ -836,3 +838,119 @@ def test_v3_execute_route_flag_off_returns_404_no_side_effects(
     assert cb_after == cb_before
     assert _v3_running_audit_count(db) == audit_before
     assert int(db.query(PersonWalletSwap).count() or 0) == swap_before
+
+
+def test_reconcile_completed_legs_terminalizes(db: Session):
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    execution_id = str(uuid.uuid4())
+
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_PROGRESS,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "trigger": "manual",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "available_cash_usdc": plan["available_cash_usdc"],
+            "sell_results": [],
+            "buy_results": [{
+                "asset": "ETH",
+                "instrument_id": str(_instrument_for_asset(db, "ETH").id),
+                "action": "buy",
+                "amount_usdc": "5",
+                "status": "completed",
+                "attempts": 1,
+                "leg_ids": ["v3-rebal-done-eth-a1"],
+            }],
+        },
+    )
+    db.commit()
+
+    terminal = reconcile_running_v3_rebalance_execution(
+        db,
+        portfolio_id=str(portfolio.id),
+        client_id=pe.id,
+        drift_rebalance_plan=plan,
+        auto_progress=False,
+    )
+    db.commit()
+
+    assert terminal is not None
+    assert terminal["v3_status"] in ("COMPLETED", "COMPLETED_WITH_RESIDUAL_CASH")
+    assert terminal.get("reconciled_terminalized") is True
+    assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is None
+
+
+def test_reconcile_expired_swap_pending_terminalizes(db: Session):
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    execution_id = str(uuid.uuid4())
+    swap_id = uuid.uuid4()
+
+    db.add(
+        PersonWalletSwap(
+            id=swap_id,
+            person_id=pe.person_id,
+            from_asset="AAVE",
+            to_asset="USDC",
+            from_chain="base",
+            to_chain="base",
+            amount_in=Decimal("1"),
+            estimated_receive=Decimal("4"),
+            status=SwapSessionStatus.EXPIRED.value,
+            audit_log=[],
+        ),
+    )
+    db.flush()
+
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_PROGRESS,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "trigger": "manual",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "available_cash_usdc": plan["available_cash_usdc"],
+            "sell_results": [{
+                "asset": "AAVE",
+                "instrument_id": str(_instrument_for_asset(db, "AAVE").id),
+                "action": "sell",
+                "amount_usdc": "4",
+                "status": "pending",
+                "attempts": 1,
+                "leg_ids": ["v3-rebal-exp-aave-a1"],
+                "swap_id": str(swap_id),
+                "error": "awaiting_client_signature",
+            }],
+            "buy_results": [],
+        },
+    )
+    db.commit()
+
+    terminal = reconcile_running_v3_rebalance_execution(
+        db,
+        portfolio_id=str(portfolio.id),
+        client_id=pe.id,
+        drift_rebalance_plan=plan,
+        auto_progress=False,
+    )
+    db.commit()
+
+    assert terminal is not None
+    assert terminal["v3_status"] in ("COMPLETED_WITH_RESIDUAL_CASH", "FAILED")
+    assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is None

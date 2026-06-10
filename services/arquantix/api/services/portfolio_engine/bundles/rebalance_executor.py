@@ -432,7 +432,11 @@ class BundleRebalanceExecutor:
         done_assets = {
             r.asset
             for r in existing_results
-            if r.status in ("completed", "pending")
+            if r.status == "completed"
+            or (
+                r.status == "pending"
+                and r.error in ("awaiting_client_signature", "awaiting_confirmation")
+            )
         }
         remaining_plan = [
             leg for leg in plan_legs if str(leg.get("asset") or "") not in done_assets
@@ -1291,6 +1295,191 @@ def _results_from_metadata(rows: list[dict[str, Any]]) -> list[V3LegExecutionRes
             )
         )
     return out
+
+
+def _release_v3_rebalance_guard(
+    db: Session,
+    *,
+    portfolio_id: str,
+    terminal: dict[str, Any],
+) -> None:
+    from services.portfolio_engine.financial_operations import (
+        find_active_portfolio_financial_operation,
+    )
+    from services.portfolio_engine.financial_operations.wiring import (
+        release_bundle_rebalance_v3_portfolio_operation,
+    )
+
+    try:
+        pid = UUID(str(portfolio_id))
+    except (TypeError, ValueError):
+        return
+    guard = find_active_portfolio_financial_operation(db, portfolio_id=pid)
+    if guard is None:
+        return
+    release_bundle_rebalance_v3_portfolio_operation(
+        db,
+        portfolio_id=pid,
+        execution_id=guard.execution_id,
+        failed=str(terminal.get("v3_status") or "") == "FAILED",
+    )
+
+
+def _expire_unrecoverable_pending_legs(
+    db: Session,
+    results: list[V3LegExecutionResult],
+) -> bool:
+    """Pending → expired si le swap est terminal ou introuvable."""
+    from services.lifi.enums import SwapSessionStatus
+    from services.lifi.models import PersonWalletSwap
+    from services.portfolio_engine.bundle_execution.pe_settlement import swap_confirmed
+
+    changed = False
+    for row in results:
+        if row.status != "pending":
+            continue
+        if not row.swap_id:
+            row.status = "expired"
+            row.error = row.error or "quote_ttl_expired"
+            changed = True
+            continue
+        try:
+            swap_uuid = UUID(str(row.swap_id))
+        except (TypeError, ValueError):
+            row.status = "expired"
+            row.error = "swap_id_invalid"
+            changed = True
+            continue
+        swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_uuid).first()
+        if swap is None:
+            row.status = "expired"
+            row.error = "swap_missing"
+            changed = True
+            continue
+        if swap_confirmed(swap):
+            row.status = "completed"
+            row.error = ""
+            changed = True
+        elif swap.status in (
+            SwapSessionStatus.EXPIRED.value,
+            SwapSessionStatus.FAILED.value,
+        ):
+            row.status = "expired"
+            row.error = str(swap.status).lower()
+            changed = True
+    return changed
+
+
+def _has_signable_pending_legs(results: list[V3LegExecutionResult]) -> bool:
+    return any(
+        r.status == "pending"
+        and r.error in ("awaiting_client_signature", "awaiting_confirmation")
+        for r in results
+    )
+
+
+def reconcile_running_v3_rebalance_execution(
+    db: Session,
+    *,
+    portfolio_id: str,
+    client_id: UUID | None = None,
+    drift_rebalance_plan: dict[str, Any] | None = None,
+    auto_progress: bool = True,
+    terminalize_plan_drift: bool = True,
+) -> dict[str, Any] | None:
+    """Réconciliation read-path : sync swaps, expire legs mortes, terminalise ou progresse."""
+    running = find_running_v3_rebalance_execution(db, portfolio_id=portfolio_id)
+    if running is None:
+        return None
+
+    stale = terminalize_stale_v3_rebalance_execution(db, portfolio_id=portfolio_id)
+    if stale is not None:
+        _release_v3_rebalance_guard(db, portfolio_id=portfolio_id, terminal=stale)
+        return stale
+
+    if terminalize_plan_drift and drift_rebalance_plan:
+        current_hash = str(drift_rebalance_plan.get("plan_hash") or "")
+        running_hash = str(running.get("plan_hash") or "")
+        if current_hash and running_hash and current_hash != running_hash:
+            terminal = force_terminalize_running_v3_rebalance_on_plan_drift(
+                db,
+                portfolio_id=portfolio_id,
+                reason="plan_hash_changed_on_reconcile",
+            )
+            if terminal is not None:
+                _release_v3_rebalance_guard(db, portfolio_id=portfolio_id, terminal=terminal)
+            return terminal
+
+    executor = BundleRebalanceExecutor()
+    trigger = str(running.get("trigger") or "manual")
+    sell_results = _results_from_metadata(running.get("sell_results") or [])
+    buy_results = _results_from_metadata(running.get("buy_results") or [])
+
+    if _uses_client_signature(trigger):  # type: ignore[arg-type]
+        sell_results = executor._sync_leg_results_from_swaps(db, sell_results)
+        buy_results = executor._sync_leg_results_from_swaps(db, buy_results)
+
+    _expire_unrecoverable_pending_legs(db, sell_results + buy_results)
+
+    all_results = sell_results + buy_results
+    has_pending = any(r.status == "pending" for r in all_results)
+    signable_pending = _has_signable_pending_legs(all_results)
+
+    execution_id = str(running["rebalance_execution_id"])
+    actor = ActorContext(actor_type="system", actor_id="bundle-rebalance-v3-reconcile")
+    running_payload = {
+        **running,
+        "sell_results": [r.to_dict() for r in sell_results],
+        "buy_results": [r.to_dict() for r in buy_results],
+    }
+
+    if not has_pending:
+        terminal = _force_terminalize_running_snapshot(
+            db,
+            running=running_payload,
+            actor_id="bundle-rebalance-v3-reconcile",
+            extra={"reconciled_terminalized": True},
+        )
+        _release_v3_rebalance_guard(db, portfolio_id=portfolio_id, terminal=terminal)
+        return terminal
+
+    if (
+        auto_progress
+        and not signable_pending
+        and client_id is not None
+        and drift_rebalance_plan is not None
+    ):
+        try:
+            result = executor._resume_running_execution(
+                db,
+                client_id=client_id,
+                portfolio_id=UUID(str(portfolio_id)),
+                running=running_payload,
+                drift_rebalance_plan=drift_rebalance_plan,
+                trigger=trigger,  # type: ignore[arg-type]
+                plan_hash=str(running.get("plan_hash") or ""),
+            )
+            v3_status = str(result.get("v3_status") or "")
+            if v3_status in ("COMPLETED", "COMPLETED_WITH_RESIDUAL_CASH", "FAILED", "NO_ACTION"):
+                _release_v3_rebalance_guard(db, portfolio_id=portfolio_id, terminal=result)
+            return result
+        except Exception:
+            logger.exception(
+                "v3_rebalance_reconcile_auto_progress_failed portfolio=%s execution=%s",
+                portfolio_id,
+                execution_id,
+            )
+
+    BundleRebalanceExecutor._update_running_progress(
+        db,
+        execution_id,
+        running_payload,
+        sell_results,
+        buy_results,
+        actor,
+    )
+    db.flush()
+    return None
 
 
 def find_v3_execution_by_plan_hash(

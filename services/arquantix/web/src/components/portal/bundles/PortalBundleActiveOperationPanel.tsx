@@ -66,13 +66,21 @@ function toResumePayload(
   }
 }
 
-function hasPendingClientLegs(payload: PortfolioRebalancingPayload | null): boolean {
+function hasSignablePendingLegs(
+  payload: PortfolioRebalancingPayload | BundleActiveOperationPayload | null,
+): boolean {
   if (!payload) return false
   const legs = [...(payload.sell_results ?? []), ...(payload.buy_results ?? [])]
-  return legs.some((leg) => leg.status === 'pending' && Boolean(leg.swap_id))
+  return legs.some(
+    (leg) =>
+      leg.status === 'pending' &&
+      Boolean(leg.swap_id) &&
+      (leg.error === 'awaiting_client_signature' ||
+        leg.error === 'awaiting_confirmation'),
+  )
 }
 
-/** Suivi d’une opération bundle en cours — reprise manuelle uniquement (pas d’auto-signature). */
+/** Suivi d’une opération bundle en cours — steps persistés côté worker, reprise signature manuelle. */
 export function PortalBundleActiveOperationPanel({
   portfolioId,
   portfolioName,
@@ -158,7 +166,7 @@ export function PortalBundleActiveOperationPanel({
         setExecutionPhase('preparing')
         let result: PortfolioRebalancingPayload
 
-        if (payload.plan_stale || hasPendingClientLegs(initial)) {
+        if (hasSignablePendingLegs(initial)) {
           if (payload.plan_stale) {
             result = await resumePortfolioRebalancing(portfolioId)
             setAssetLines(result.asset_lines ?? [])
@@ -191,7 +199,7 @@ export function PortalBundleActiveOperationPanel({
 
         if (isTerminalBundleV3Status(result.v3_status)) {
           handleTerminal()
-        } else if (hasPendingClientLegs(result)) {
+        } else if (hasSignablePendingLegs(result)) {
           resumeStartedRef.current = false
         }
       } catch (err) {
@@ -235,8 +243,12 @@ export function PortalBundleActiveOperationPanel({
     active?.status === 'active' &&
     !isTerminalBundleV3Status(active.v3_status)
 
+  const prevShowPanelRef = useRef(false)
   useEffect(() => {
-    onActiveChange?.(showPanel)
+    if (prevShowPanelRef.current !== showPanel) {
+      prevShowPanelRef.current = showPanel
+      onActiveChange?.(showPanel)
+    }
   }, [onActiveChange, showPanel])
 
   const allocationAssets = useMemo(
@@ -268,10 +280,7 @@ export function PortalBundleActiveOperationPanel({
     [active?.v3_status, assetLines, includeFundingStep, steps.length],
   )
 
-  const resumePayload = active ? toResumePayload(active) : null
-  const needsUserResume =
-    active?.operation_type === 'portfolio_rebalancing' &&
-    (Boolean(active.plan_stale) || hasPendingClientLegs(resumePayload))
+  const needsUserResume = hasSignablePendingLegs(active)
 
   if (!showPanel) {
     return null
@@ -313,13 +322,6 @@ export function PortalBundleActiveOperationPanel({
         </ul>
       ) : null}
 
-      {active?.plan_stale ? (
-        <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-          Le plan de rééquilibrage a changé depuis la dernière tentative — les montants affichés
-          correspondent au portefeuille actuel.
-        </p>
-      ) : null}
-
       {needsUserResume && !resuming ? (
         <AppButton
           type="button"
@@ -327,8 +329,14 @@ export function PortalBundleActiveOperationPanel({
           disabled={resuming}
           onClick={() => active && void tryResume(active)}
         >
-          {active?.plan_stale ? 'Actualiser et reprendre' : 'Reprendre la signature'}
+          Reprendre la signature
         </AppButton>
+      ) : null}
+
+      {!needsUserResume && active?.v3_status === 'RUNNING' && !resuming ? (
+        <p className="m-0 font-ui text-[12px] text-v-fg-muted">
+          Traitement en cours — les étapes se mettent à jour automatiquement.
+        </p>
       ) : null}
 
       {resuming ? (
