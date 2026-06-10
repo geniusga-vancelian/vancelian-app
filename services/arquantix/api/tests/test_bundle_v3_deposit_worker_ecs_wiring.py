@@ -109,6 +109,55 @@ def _mock_indexer_result(*, dry_run: bool) -> ContinuousIndexerRunResult:
     )
 
 
+def test_deposit_running_keeps_outbox_pending_for_worker_retry(db: Session, ecs_env):
+    pe = make_linked_client(db)
+    kings = _bundle_portfolio(db, pe.id, name="Two Crypto Kings")
+    _usdc_instrument(db)
+    _seed_wallet_usdc(db, pe)
+
+    queued = _deposit_and_queue(db, pe, kings)
+    outbox_rows = TransactionOutboxRepository.find_by_intent(
+        db,
+        uuid.UUID(queued["intent_id"]),
+        event_type=OutboxEventType.BUNDLE_V3_REBALANCE_REQUESTED.value,
+    )
+    outbox = outbox_rows[0]
+    outbox.locked_by = "test-worker"
+    outbox.locked_at = datetime.now(timezone.utc)
+    db.flush()
+
+    running = {
+        "v3_status": "RUNNING",
+        "rebalance_execution_id": str(uuid.uuid4()),
+        "batch_id": str(uuid.uuid4()),
+        "plan_hash": "sha256:deposit-running",
+        "resume_required": True,
+    }
+    with patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.execute_v3_bundle_rebalance",
+        return_value=running,
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.compute_bundle_drift_snapshot",
+        return_value={"portfolio_id": str(kings.id)},
+    ), patch(
+        "services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service.plan_bundle_rebalance_from_drift",
+        return_value={
+            "status": "ok",
+            "plan_hash": running["plan_hash"],
+            "buy_plan": [],
+            "sell_plan": [],
+        },
+    ):
+        result = process_v3_deposit_rebalance_outbox_event(db, outbox=outbox)
+
+    assert result["terminal"] is False
+    assert result["awaiting_wallet_signature"] is True
+    db.refresh(outbox)
+    assert outbox.status == OutboxEventStatus.PENDING.value
+    assert outbox.locked_by is None
+    assert outbox.next_retry_at is not None
+
+
 # ---------------------------------------------------------------------------
 # A — outbox PENDING → worker → PROCESSED
 # ---------------------------------------------------------------------------

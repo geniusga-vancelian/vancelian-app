@@ -435,6 +435,41 @@ def get_active_bundle_operation(
         auto_progress=True,
     )
     running = find_running_v3_rebalance_execution(db, portfolio_id=pid)
+    if running is None:
+        from services.portfolio_engine.bundles.bundle_transaction_intent import (
+            find_running_bundle_transaction_intent_for_portfolio,
+        )
+
+        orphan_intent = find_running_bundle_transaction_intent_for_portfolio(
+            db, portfolio_id=portfolio_id,
+        )
+        if orphan_intent is not None:
+            meta = orphan_intent.metadata_json or {}
+            op_type = str(meta.get("operation_type") or "")
+            operation_type = (
+                "v3_deposit_rebalance"
+                if op_type == "deposit_rebalance"
+                else "portfolio_rebalancing"
+            )
+            return {
+                "status": "active",
+                "operation_type": operation_type,
+                "portfolio_id": pid,
+                "v3_status": str(meta.get("v3_status") or "RUNNING"),
+                "rebalance_execution_id": meta.get("rebalance_execution_id"),
+                "batch_id": meta.get("batch_id"),
+                "trigger": "deposit" if operation_type == "v3_deposit_rebalance" else "manual",
+                "asset_lines": meta.get("asset_lines") or [],
+                "sell_results": [],
+                "buy_results": [],
+                "sell_plan": [],
+                "buy_plan": [],
+                "plan_hash": meta.get("plan_hash"),
+                "current_plan_hash": str(current_plan.get("plan_hash") or ""),
+                "plan_stale": False,
+                "message": "Opération bundle en cours — reprise en cours.",
+            }
+
     if running is not None:
         trigger = str(running.get("trigger") or "manual")
         operation_type = (

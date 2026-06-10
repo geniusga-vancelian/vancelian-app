@@ -76,6 +76,7 @@ function hasSignablePendingLegs(
       leg.status === 'pending' &&
       Boolean(leg.swap_id) &&
       (leg.error === 'awaiting_client_signature' ||
+        leg.error === 'awaiting_wallet_signature' ||
         leg.error === 'awaiting_confirmation'),
   )
 }
@@ -233,10 +234,13 @@ export function PortalBundleActiveOperationPanel({
         pollRef.current = setInterval(() => {
           void loadActive()
         }, POLL_MS)
+        if (hasSignablePendingLegs(payload)) {
+          void tryResume(payload)
+        }
       }
     })
     return () => clearPoll()
-  }, [clearPoll, loadActive, portfolioId])
+  }, [clearPoll, loadActive, portfolioId, tryResume])
 
   const showPanel =
     !loading &&

@@ -330,8 +330,10 @@ def process_v3_deposit_rebalance_outbox_event(
         outbox.status = OutboxEventStatus.PROCESSED.value
         db.flush()
     elif v3_status == "RUNNING":
-        # Legs en attente signature client — ne pas re-kick le worker.
-        outbox.status = OutboxEventStatus.PROCESSED.value
+        # Reprise worker/cron — legs en cours (wallet ou confirmation on-chain).
+        TransactionOutboxRepository.release_processing_lock(db, outbox)
+        outbox.status = OutboxEventStatus.PENDING.value
+        outbox.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=30)
         outbox.last_error = None
         db.flush()
 
@@ -341,7 +343,7 @@ def process_v3_deposit_rebalance_outbox_event(
         "rebalance_execution_id": result.get("rebalance_execution_id"),
         "plan_hash": result.get("plan_hash"),
         "terminal": v3_status in _TERMINAL_V3,
-        "awaiting_client_signature": v3_status == "RUNNING",
+        "awaiting_wallet_signature": v3_status == "RUNNING",
         "result": result,
     }
 

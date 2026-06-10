@@ -954,3 +954,153 @@ def test_reconcile_expired_swap_pending_terminalizes(db: Session):
     assert terminal is not None
     assert terminal["v3_status"] in ("COMPLETED_WITH_RESIDUAL_CASH", "FAILED")
     assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is None
+
+
+def test_deposit_not_in_client_signature_triggers():
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        CLIENT_SIGNATURE_TRIGGERS,
+        PAUSE_ON_PENDING_TRIGGERS,
+        WORKER_RESUME_TRIGGERS,
+    )
+
+    assert CLIENT_SIGNATURE_TRIGGERS == frozenset({"manual"})
+    assert "deposit" in PAUSE_ON_PENDING_TRIGGERS
+    assert "deposit" in WORKER_RESUME_TRIGGERS
+    assert "deposit" not in CLIENT_SIGNATURE_TRIGGERS
+
+
+def test_reconcile_deposit_skips_plan_drift_terminalize(db: Session):
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    execution_id = str(uuid.uuid4())
+    drift_plan = dict(plan)
+    drift_plan["plan_hash"] = "sha256:post_deposit_drift"
+
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_PROGRESS,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "trigger": "deposit",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "available_cash_usdc": plan["available_cash_usdc"],
+            "sell_results": [],
+            "buy_results": [{
+                "asset": "ETH",
+                "instrument_id": str(_instrument_for_asset(db, "ETH").id),
+                "action": "buy",
+                "amount_usdc": "5",
+                "status": "pending",
+                "attempts": 1,
+                "leg_ids": ["v3-rebal-dep-eth-a1"],
+                "error": "awaiting_wallet_signature",
+            }],
+        },
+    )
+    db.commit()
+
+    terminal = reconcile_running_v3_rebalance_execution(
+        db,
+        portfolio_id=str(portfolio.id),
+        client_id=pe.id,
+        drift_rebalance_plan=drift_plan,
+        auto_progress=False,
+    )
+    db.commit()
+
+    assert terminal is None
+    assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is not None
+
+
+@pytest.fixture
+def global_lock_on(monkeypatch):
+    monkeypatch.setenv("GLOBAL_USER_TRANSACTION_LOCK_ENABLED", "true")
+
+
+def test_reconcile_terminalize_releases_intent_and_global_lock(db: Session, global_lock_on):
+    from services.portfolio_engine.bundles.bundle_transaction_intent import (
+        BUNDLE_TRANSACTION_OPERATION_DEPOSIT_REBALANCE,
+        PHASE_REBALANCING,
+        create_bundle_transaction_intent,
+    )
+    from services.portfolio_engine.bundles.bundle_transaction_global_lock import (
+        acquire_bundle_transaction_global_lock_or_raise,
+    )
+    from services.product_locks.global_user_transaction_lock import (
+        find_active_global_user_transaction_lock,
+    )
+
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+    execution_id = str(uuid.uuid4())
+    tx_exec_id = uuid.uuid4()
+
+    intent = create_bundle_transaction_intent(
+        db,
+        person_id=pe.person_id,
+        portfolio_id=portfolio.id,
+        transaction_execution_id=tx_exec_id,
+        operation_type=BUNDLE_TRANSACTION_OPERATION_DEPOSIT_REBALANCE,
+        phase=PHASE_REBALANCING,
+        extra_metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "v3_status": "RUNNING",
+        },
+    )
+    intent.status = "running"
+    acquire_bundle_transaction_global_lock_or_raise(
+        db, person_id=pe.person_id, intent_id=intent.id,
+    )
+    db.flush()
+
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_PROGRESS,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "trigger": "manual",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "available_cash_usdc": plan["available_cash_usdc"],
+            "sell_results": [],
+            "buy_results": [{
+                "asset": "ETH",
+                "instrument_id": str(_instrument_for_asset(db, "ETH").id),
+                "action": "buy",
+                "amount_usdc": "5",
+                "status": "completed",
+                "attempts": 1,
+                "leg_ids": ["v3-rebal-done-eth-a1"],
+            }],
+        },
+    )
+    db.commit()
+
+    terminal = reconcile_running_v3_rebalance_execution(
+        db,
+        portfolio_id=str(portfolio.id),
+        client_id=pe.id,
+        drift_rebalance_plan=plan,
+        auto_progress=False,
+    )
+    db.commit()
+
+    assert terminal is not None
+    assert terminal["v3_status"] in ("COMPLETED", "COMPLETED_WITH_RESIDUAL_CASH")
+    db.refresh(intent)
+    assert str(intent.status).lower() in ("completed", "completed_with_residual_cash")
+    assert find_active_global_user_transaction_lock(db, person_id=pe.person_id) is None

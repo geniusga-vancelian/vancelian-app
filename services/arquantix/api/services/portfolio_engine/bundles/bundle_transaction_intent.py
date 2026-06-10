@@ -113,6 +113,73 @@ def sync_bundle_transaction_rebalancing(
         intent.status = str(result.get("status")).lower()
 
 
+_TERMINAL_V3 = frozenset({
+    "COMPLETED",
+    "COMPLETED_WITH_RESIDUAL_CASH",
+    "FAILED",
+    "NO_ACTION",
+})
+
+
+def find_running_bundle_transaction_intent_for_portfolio(
+    db: Session,
+    *,
+    portfolio_id: UUID | str,
+) -> TransactionIntent | None:
+    """Intent bundle_transaction_v1 encore RUNNING (filet si audit V3 absent)."""
+    pid = str(portfolio_id)
+    rows = (
+        db.query(TransactionIntent)
+        .filter(TransactionIntent.product_type.in_(_BUNDLE_TRANSACTION_PRODUCTS))
+        .order_by(TransactionIntent.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    for row in rows:
+        meta = row.metadata_json or {}
+        if str(meta.get("portfolio_id") or "") != pid:
+            continue
+        v3 = str(meta.get("v3_status") or "").upper()
+        if v3 == "RUNNING" or str(row.status or "").lower() == "running":
+            return row
+    return None
+
+
+def finalize_bundle_transaction_after_v3_terminal(
+    db: Session,
+    *,
+    portfolio_id: UUID | str,
+    terminal: dict[str, Any],
+) -> TransactionIntent | None:
+    """Sync intent + libère lock global après clôture V3 (reconcile / terminalize)."""
+    from services.portfolio_engine.bundles.bundle_transaction_global_lock import (
+        release_bundle_transaction_global_lock_on_v3_terminal,
+    )
+
+    v3_status = str(terminal.get("v3_status") or "")
+    exec_id = str(terminal.get("rebalance_execution_id") or terminal.get("batch_id") or "")
+    intent = find_bundle_transaction_intent_by_rebalance_execution_id(
+        db,
+        rebalance_execution_id=exec_id,
+    )
+    if intent is None:
+        intent = find_running_bundle_transaction_intent_for_portfolio(
+            db, portfolio_id=portfolio_id,
+        )
+    if intent is None:
+        return None
+
+    sync_bundle_transaction_rebalancing(intent, result=terminal)
+    if v3_status in _TERMINAL_V3:
+        release_bundle_transaction_global_lock_on_v3_terminal(
+            db,
+            intent_id=intent.id,
+            v3_status=v3_status,
+        )
+    db.add(intent)
+    return intent
+
+
 def find_bundle_transaction_intent_by_rebalance_execution_id(
     db: Session,
     *,
