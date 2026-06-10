@@ -41,6 +41,7 @@ from services.portfolio_engine.bundles.drift_engine import compute_bundle_drift_
 from services.portfolio_engine.bundles.rebalance_executor import (
     BundleRebalanceExecutorError,
     execute_v3_bundle_rebalance,
+    find_latest_terminal_v3_rebalance_for_portfolio,
     find_running_v3_rebalance_execution,
     force_terminalize_running_v3_rebalance_on_plan_drift,
     reconcile_running_v3_rebalance_execution,
@@ -436,6 +437,16 @@ def _close_stale_bundle_operation_intents(
 
     person_id = _resolve_person_id(db, client_id)
     if person_id is not None:
+        from services.portfolio_engine.bundles.bundle_invest_lock import (
+            close_orphan_bundle_invest_intents_after_v3_terminal,
+        )
+
+        for closed in close_orphan_bundle_invest_intents_after_v3_terminal(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+        ):
+            actions.append({"kind": "orphan_invest_after_v3_terminal", **closed})
         for closed in close_stale_bundle_invest_intents_for_portfolio(
             db,
             person_id=person_id,
@@ -848,6 +859,36 @@ def resume_rebalancing_portfolio(
     )
     running = find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio_id))
     if running is None:
+        terminal = find_latest_terminal_v3_rebalance_for_portfolio(
+            db, portfolio_id=str(portfolio_id),
+        )
+        if terminal is not None:
+            rebalance_exec_id = str(
+                terminal.get("rebalance_execution_id")
+                or terminal.get("batch_id")
+                or "",
+            )
+            intent = (
+                find_bundle_transaction_intent_by_rebalance_execution_id(
+                    db,
+                    rebalance_execution_id=rebalance_exec_id,
+                )
+                if rebalance_exec_id
+                else None
+            )
+            asset_lines = _asset_lines_from_execution(terminal)
+            execution_id = (
+                UUID(rebalance_exec_id) if rebalance_exec_id else uuid.uuid4()
+            )
+            return _build_rebalancing_response(
+                result=terminal,
+                intent=intent,
+                execution_id=execution_id,
+                drift=drift,
+                plan=plan,
+                asset_lines=asset_lines,
+                legacy_lock_abandoned=None,
+            )
         raise RebalancingPortfolioError(
             "no_running_rebalance",
             "no_running_rebalance",

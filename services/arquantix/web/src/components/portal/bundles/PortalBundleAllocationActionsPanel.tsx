@@ -10,9 +10,11 @@ import {
 import { AppButton } from '@/components/design-system/app/AppButton'
 import {
   previewPortfolioRebalancing,
+  reconcileStaleBundlePortfolioState,
   type BundleInvestActiveLockPayload,
   type PortfolioRebalancingAssetLine,
 } from '@/lib/portal/bundleClient'
+import { isTerminalBundleV3Status } from '@/components/portal/transaction/mappers/bundleSteps'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
@@ -69,7 +71,7 @@ export function PortalBundleAllocationActionsPanel({
       .catch(() => setSwapMockMode(false))
   }, [])
 
-  const loadPreview = async () => {
+  const loadPreview = async (options?: { throwOnError?: boolean }) => {
     setError(null)
     try {
       const preview = await previewPortfolioRebalancing(portfolioId)
@@ -79,8 +81,14 @@ export function PortalBundleAllocationActionsPanel({
       setPreviewStatus(String(plan?.status ?? preview.status ?? 'ok'))
       setPlanningMode(plan?.planning_mode ?? null)
       setAssetLines(preview.asset_lines ?? [])
+      return preview
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Estimation impossible')
+      const message = err instanceof Error ? err.message : 'Estimation impossible'
+      if (options?.throwOnError) {
+        throw err instanceof Error ? err : new Error(message)
+      }
+      setError(message)
+      return null
     }
   }
 
@@ -96,17 +104,32 @@ export function PortalBundleAllocationActionsPanel({
     setExecutionPhase('preparing')
     try {
       if (assetLines.length === 0) {
-        await loadPreview()
+        await loadPreview({ throwOnError: true })
       }
       const result = await runPortfolioRebalancing(portfolioId)
       setAssetLines(result.asset_lines ?? assetLines)
+      if (result.v3_status === 'RUNNING') {
+        throw new Error(
+          'Rééquilibrage interrompu — rouvrez le panier pour reprendre la signature.',
+        )
+      }
       invalidatePortalCache('portal:crypto-wallet')
       await onLockRefresh()
       onRefresh()
       onClose()
     } catch (err) {
       setExecutionPhase('failed')
-      setError(err instanceof Error ? err.message : 'Rééquilibrage impossible')
+      const message = err instanceof Error ? err.message : 'Rééquilibrage impossible'
+      setError(message)
+      try {
+        await reconcileStaleBundlePortfolioState(portfolioId, {
+          forceSignableV3Close: /timed out|timeout|indisponible|signature/i.test(message),
+        })
+      } catch {
+        // best-effort cleanup
+      }
+      await onLockRefresh()
+      onRefresh()
     } finally {
       setBusy(false)
     }

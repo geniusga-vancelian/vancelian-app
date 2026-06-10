@@ -1210,6 +1210,33 @@ def find_running_v3_rebalance_execution(
     return latest
 
 
+def find_latest_terminal_v3_rebalance_for_portfolio(
+    db: Session,
+    *,
+    portfolio_id: str,
+    max_age_minutes: int = 60,
+) -> dict[str, Any] | None:
+    """Dernier cycle V3 terminal récent — reprise UI quand RUNNING déjà clôturé."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(1, max_age_minutes))
+    rows = (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
+            AuditEvent.action == ACTION_V3_TERMINAL,
+            AuditEvent.created_at >= cutoff,
+        )
+        .order_by(AuditEvent.created_at.desc())
+        .limit(80)
+        .all()
+    )
+    pid = str(portfolio_id)
+    for row in rows:
+        meta = row.metadata_ or {}
+        if str(meta.get("portfolio_id") or "") == pid:
+            return dict(meta)
+    return None
+
+
 def find_terminal_v3_rebalance_by_plan_hash(
     db: Session,
     *,

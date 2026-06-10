@@ -11,6 +11,7 @@ import {
   type PortfolioRebalancingAssetLine,
   type PortfolioRebalancingPayload,
 } from '@/lib/portal/bundleClient'
+import { isTerminalBundleV3Status } from '@/components/portal/transaction/mappers/bundleSteps'
 import { executeBundleTrade } from '@/lib/portal/executeBundleTrade'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
@@ -130,7 +131,21 @@ export function useBundlePortfolioRebalancing(
           break
         }
 
-        result = await resumePortfolioRebalancing(result.portfolio_id)
+        try {
+          result = await resumePortfolioRebalancing(result.portfolio_id)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : ''
+          if (
+            /no_running_rebalance|no running rebalance/i.test(msg) &&
+            pendingLegs(result).length === 0
+          ) {
+            break
+          }
+          throw err
+        }
+        if (isTerminalBundleV3Status(result.v3_status)) {
+          break
+        }
         for (const line of result.asset_lines ?? []) {
           onAssetStatus?.(line.asset, line.status)
         }

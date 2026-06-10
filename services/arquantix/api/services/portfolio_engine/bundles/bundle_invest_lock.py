@@ -759,6 +759,104 @@ def _log_reconcile_skipped_pending_work(
     )
 
 
+def close_orphan_bundle_invest_intents_after_v3_terminal(
+    db: Session,
+    *,
+    person_id: UUID,
+    portfolio_id: UUID,
+) -> list[dict[str, Any]]:
+    """Ferme bundle_invest orphelins quand le batch V3 est déjà terminal (pas de RUNNING)."""
+    from services.onchain_indexer.models import TransactionIntent
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        ACTION_V3_TERMINAL,
+        ENTITY_TYPE_V3_REBALANCE,
+        find_running_v3_rebalance_execution,
+    )
+    from services.portfolio_engine.hardening.audit_models import AuditEvent
+    from services.transaction_intents.enums import IntentProductType, IntentStatus
+
+    if find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio_id)) is not None:
+        return []
+
+    pid = str(portfolio_id)
+    terminal_batches: set[str] = set()
+    rows = (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
+            AuditEvent.action == ACTION_V3_TERMINAL,
+        )
+        .order_by(AuditEvent.created_at.desc())
+        .limit(40)
+        .all()
+    )
+    for row in rows:
+        meta = row.metadata_ or {}
+        if str(meta.get("portfolio_id") or "") != pid:
+            continue
+        bid = str(
+            meta.get("batch_id") or meta.get("rebalance_execution_id") or "",
+        ).strip()
+        if bid:
+            terminal_batches.add(bid)
+
+    if not terminal_batches:
+        return []
+
+    open_statuses = frozenset({
+        IntentStatus.AWAITING_SIGNATURE.value,
+        IntentStatus.SUBMITTED.value,
+        IntentStatus.CREATED.value,
+        IntentStatus.PARTIAL.value,
+        "pending",
+        "running",
+    })
+    intents = (
+        db.query(TransactionIntent)
+        .filter(
+            TransactionIntent.person_id == person_id,
+            TransactionIntent.product_type == IntentProductType.BUNDLE_INVEST.value,
+        )
+        .order_by(TransactionIntent.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    closed: list[dict[str, Any]] = []
+    for row in intents:
+        meta = row.metadata_json or {}
+        if str(meta.get("bundle_id") or "") != pid:
+            continue
+        batch_id = str(meta.get("batch_id") or "").strip()
+        if not batch_id or batch_id not in terminal_batches:
+            continue
+        if str(row.status or "").lower() not in open_statuses:
+            continue
+        force_expire_stuck_bundle_allocation_swaps(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+            batch_id=batch_id,
+        )
+        _reconcile_stale_intent_legs_for_batch(
+            db,
+            person_id=person_id,
+            bundle_id=pid,
+            batch_id=batch_id,
+        )
+        row.status = IntentStatus.FAILED.value
+        meta = dict(row.metadata_json or {})
+        meta["orphan_after_v3_terminal"] = True
+        meta["stale_invest_closed_at"] = _utc_now_iso()
+        row.metadata_json = meta
+        db.add(row)
+        closed.append({
+            "intent_id": str(row.id),
+            "batch_id": batch_id,
+            "terminal_status": IntentStatus.FAILED.value,
+        })
+    return closed
+
+
 def close_stale_bundle_invest_intents_for_portfolio(
     db: Session,
     *,
