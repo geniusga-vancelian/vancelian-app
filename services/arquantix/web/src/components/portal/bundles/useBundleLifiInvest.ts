@@ -347,12 +347,12 @@ export function useBundleLifiInvest(
           })
           clearBundleInvestSession(body.portfolio_id)
           if (v3Result && isTerminalBundleV3Status(v3Result.v3_status)) {
-            const terminalStatus =
+            const terminalStatus: BundleInvestTerminalStatus =
               v3Result.v3_status === 'COMPLETED'
-                ? 'success'
+                ? 'completed_full_allocation'
                 : v3Result.v3_status === 'COMPLETED_WITH_RESIDUAL_CASH'
                   ? 'completed_partial_allocation'
-                  : 'failed'
+                  : 'failed_no_allocation'
             return {
               invest: bundleV3QueuedToInvestShim(outcome.payload, {
                 fundingAsset: body.funding_asset,
