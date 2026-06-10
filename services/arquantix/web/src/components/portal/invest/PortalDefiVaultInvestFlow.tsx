@@ -33,9 +33,8 @@ import {
   invFmtAmount,
   invParseAmount,
   parseVaultPositionAmount,
-  resolveEurcBalance,
-  resolveInvestSourceKeyFromAssetSymbol,
-  resolveVaultDepositUsdcBalance,
+  resolveVaultDepositFundingBalance,
+  VAULT_DEPOSIT_FUNDING_ASSET,
   type PortalInvestSource,
   type PortalInvestTarget,
 } from '@/lib/portal/portalInvestFlowFormat'
@@ -114,10 +113,10 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const [amount, setAmount] = useState('')
   const vaultAssetSymbol = vault.asset.symbol
   const [sources, setSources] = useState<PortalInvestSource[]>(() => [
-    buildLockedInvestSource(vaultAssetSymbol, 0),
+    buildLockedInvestSource(VAULT_DEPOSIT_FUNDING_ASSET, 0),
   ])
   const [source, setSource] = useState<PortalInvestSource>(() =>
-    buildLockedInvestSource(vaultAssetSymbol, 0),
+    buildLockedInvestSource(VAULT_DEPOSIT_FUNDING_ASSET, 0),
   )
   const [target, setTarget] = useState<PortalInvestTarget>(() =>
     buildDefiVaultInvestTarget(
@@ -145,19 +144,16 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   })
 
   useEffect(() => {
-    const positions = walletData?.positions?.positions ?? []
-    const assetKey = resolveInvestSourceKeyFromAssetSymbol(vaultAssetSymbol)
-    const fromDirect = walletData?.tradingAvailableUsdc
-    const balance =
-      assetKey === 'eur'
-        ? resolveEurcBalance(positions)
-        : fromDirect != null && Number.isFinite(fromDirect)
-          ? Math.max(0, fromDirect)
-          : resolveVaultDepositUsdcBalance(positions)
-    const next = buildLockedInvestSource(vaultAssetSymbol, balance)
+    if (!walletData) return
+    const positions = walletData.positions?.positions ?? []
+    const balance = resolveVaultDepositFundingBalance({
+      tradingAvailableUsdc: walletData.tradingAvailableUsdc,
+      positions,
+    })
+    const next = buildLockedInvestSource(VAULT_DEPOSIT_FUNDING_ASSET, balance)
     setSources([next])
     setSource(next)
-  }, [vaultAssetSymbol, walletData])
+  }, [walletData])
 
   const loadPosition = useCallback(
     async (address: string, options?: { background?: boolean }) => {

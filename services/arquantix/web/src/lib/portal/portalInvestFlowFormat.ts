@@ -170,8 +170,8 @@ export function buildVaultInvestTarget(payload: ExclusiveOfferVaultPayload): Por
   }
 }
 
-export function defaultInvestSources(): PortalInvestSource[] {
-  const sources: PortalInvestSource[] = [
+function allInvestSourceTemplates(): PortalInvestSource[] {
+  return [
     {
       key: 'usdc',
       name: 'USDC',
@@ -201,7 +201,10 @@ export function defaultInvestSources(): PortalInvestSource[] {
       techSource: 'EURC (Circle)',
     },
   ]
+}
 
+export function defaultInvestSources(): PortalInvestSource[] {
+  const sources = allInvestSourceTemplates()
   if (isPortalEuroFeaturesEnabled()) return sources
   return sources.filter((source) => source.key !== 'eur')
 }
@@ -249,14 +252,37 @@ export function resolveVaultDepositAssetSymbol(args: {
   return 'USDC'
 }
 
-/** Une seule source verrouillée sur l’actif du vault (pas de sélecteur devise). */
+/** Actif affiché côté « je place » pour un dépôt vault (PE trading_available USDC). */
+export const VAULT_DEPOSIT_FUNDING_ASSET = 'USDC'
+
+/** Solde max déposable vault — aligné sur assertPortalVaultDepositTradingAvailable. */
+export function resolveVaultDepositFundingBalance(args: {
+  tradingAvailableUsdc?: number
+  positions: Array<{
+    asset: string
+    balance?: number
+    availableBalance?: number
+    platformBalance?: number
+    tradingAvailable?: number
+    chainId?: number | null
+  }>
+}): number {
+  const fromDirect = args.tradingAvailableUsdc
+  if (fromDirect != null && Number.isFinite(fromDirect)) {
+    return Math.max(0, fromDirect)
+  }
+  return resolveVaultDepositUsdcBalance(args.positions)
+}
+
+/** Une seule source verrouillée (pas de sélecteur devise). */
 export function buildLockedInvestSource(
   assetSymbol: string,
   balance = 0,
 ): PortalInvestSource {
   const key = resolveInvestSourceKeyFromAssetSymbol(assetSymbol)
   const template =
-    defaultInvestSources().find((source) => source.key === key) ?? defaultInvestSources()[0]!
+    allInvestSourceTemplates().find((source) => source.key === key) ??
+    allInvestSourceTemplates()[0]!
   return mergeSourceBalance([template], key, balance)[0]!
 }
 
