@@ -314,12 +314,63 @@ export type BundleWithdrawResult =
   | { kind: 'success'; payload: BundleWithdrawPayload }
   | { kind: 'already_pending'; payload: BundleWithdrawAlreadyPendingPayload }
 
+function looksLikeHtmlPayload(value: string): boolean {
+  const trimmed = value.trim().toLowerCase()
+  return trimmed.startsWith('<!doctype html') || trimmed.startsWith('<html')
+}
+
+function resolveBundleApiErrorMessage(
+  data: Record<string, unknown>,
+  status: number,
+): string {
+  const upstreamStatus =
+    typeof data.upstream_status === 'number' ? data.upstream_status : status
+  const errorCode = typeof data.error === 'string' ? data.error : null
+
+  if (errorCode === 'upstream_non_json' || errorCode === 'upstream_invalid_json') {
+    return `Service temporairement indisponible (${upstreamStatus}) — réessayez dans un instant.`
+  }
+
+  const detail = data.detail
+  if (typeof detail === 'object' && detail && 'message' in detail) {
+    const nested = (detail as { message?: string }).message
+    if (typeof nested === 'string' && nested.trim()) {
+      return nested
+    }
+  }
+  if (typeof detail === 'string' && detail.trim()) {
+    if (looksLikeHtmlPayload(detail)) {
+      return `Service temporairement indisponible (${upstreamStatus}) — réessayez dans un instant.`
+    }
+    return detail
+  }
+
+  const message = typeof data.message === 'string' ? data.message : null
+  if (message?.trim()) {
+    if (looksLikeHtmlPayload(message)) {
+      return `Service temporairement indisponible (${upstreamStatus}) — réessayez dans un instant.`
+    }
+    return message
+  }
+
+  if (errorCode && errorCode !== 'upstream_non_json' && errorCode !== 'upstream_invalid_json') {
+    return errorCode.replace(/_/g, ' ')
+  }
+
+  return 'Requête bundle impossible'
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
   const text = await res.text()
   let data: T & { detail?: string | { message?: string } }
   try {
     data = JSON.parse(text) as T & { detail?: string | { message?: string } }
   } catch {
+    if (!res.ok && looksLikeHtmlPayload(text)) {
+      throw new Error(
+        `Service temporairement indisponible (${res.status}) — réessayez dans un instant.`,
+      )
+    }
     throw new Error(
       res.ok
         ? 'Réponse serveur invalide — réessayez dans un instant.'
@@ -330,14 +381,7 @@ async function parseJson<T>(res: Response): Promise<T> {
     if (res.status === 401) {
       throw new Error('Session expirée — reconnectez-vous pour continuer.')
     }
-    const detail = data.detail
-    const message =
-      (typeof detail === 'object' && detail?.message) ||
-      (typeof detail === 'string' ? detail : null) ||
-      (data as { message?: string }).message ||
-      (data as { error?: string }).error ||
-      'Requête bundle impossible'
-    throw new Error(message)
+    throw new Error(resolveBundleApiErrorMessage(data as Record<string, unknown>, res.status))
   }
   return data
 }
@@ -523,11 +567,24 @@ export async function executePortfolioRebalancing(
       signal: AbortSignal.timeout(120_000),
     },
   )
-  const data = (await res.json()) as PortfolioRebalancingPayload & {
+  const text = await res.text()
+  let data: PortfolioRebalancingPayload & {
     detail?: string
     message?: string
     error_code?: string
     status?: string
+    error?: string
+    upstream_status?: number
+  }
+  try {
+    data = JSON.parse(text) as typeof data
+  } catch {
+    if (!res.ok && looksLikeHtmlPayload(text)) {
+      throw new Error(
+        `Service temporairement indisponible (${res.status}) — réessayez dans un instant.`,
+      )
+    }
+    throw new Error('Rééquilibrage impossible — réponse serveur invalide.')
   }
   if (!res.ok) {
     if (res.status === 409 && data.error_code === 'portfolio_financial_operation_in_progress') {
@@ -535,11 +592,7 @@ export async function executePortfolioRebalancing(
         'Une opération financière est déjà en cours sur ce portefeuille. Patientez quelques instants.',
       )
     }
-    throw new Error(
-      (typeof data.detail === 'string' ? data.detail : null) ||
-        data.message ||
-        'Rééquilibrage impossible',
-    )
+    throw new Error(resolveBundleApiErrorMessage(data as Record<string, unknown>, res.status))
   }
   return data
 }

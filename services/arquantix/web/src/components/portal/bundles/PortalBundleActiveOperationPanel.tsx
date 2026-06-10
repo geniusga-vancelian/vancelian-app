@@ -6,6 +6,7 @@ import {
   assetLineLabel,
   useBundlePortfolioRebalancing,
 } from '@/components/portal/bundles/useBundlePortfolioRebalancing'
+import { AppButton } from '@/components/design-system/app/AppButton'
 import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
 import {
   buildBundleActiveOperationSteps,
@@ -27,12 +28,13 @@ import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
-const POLL_MS = 4000
+const POLL_MS = 5000
 
 type Props = {
   portfolioId: string
   portfolioName: string
   onRefresh: () => void
+  onActiveChange?: (active: boolean) => void
 }
 
 function allocationAssetsFromLines(lines: PortfolioRebalancingAssetLine[]): string[] {
@@ -70,20 +72,23 @@ function hasPendingClientLegs(payload: PortfolioRebalancingPayload | null): bool
   return legs.some((leg) => leg.status === 'pending' && Boolean(leg.swap_id))
 }
 
-/** Reprise automatique d’un worker bundle (dépôt V3 ou rééquilibrage) — même UX que l’invest. */
+/** Suivi d’une opération bundle en cours — reprise manuelle uniquement (pas d’auto-signature). */
 export function PortalBundleActiveOperationPanel({
   portfolioId,
   portfolioName,
   onRefresh,
+  onActiveChange,
 }: Props) {
   const [active, setActive] = useState<BundleActiveOperationPayload | null>(null)
   const [assetLines, setAssetLines] = useState<PortfolioRebalancingAssetLine[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [resuming, setResuming] = useState(false)
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [swapMockMode, setSwapMockMode] = useState(false)
   const resumeStartedRef = useRef(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const terminalHandledRef = useRef(false)
 
   const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
     swapMockMode,
@@ -102,6 +107,8 @@ export function PortalBundleActiveOperationPanel({
   }, [])
 
   const handleTerminal = useCallback(() => {
+    if (terminalHandledRef.current) return
+    terminalHandledRef.current = true
     clearPoll()
     invalidatePortalCache('portal:crypto-wallet')
     onRefresh()
@@ -136,7 +143,7 @@ export function PortalBundleActiveOperationPanel({
 
   const tryResume = useCallback(
     async (payload: BundleActiveOperationPayload) => {
-      if (resumeStartedRef.current || inFlightRef.current) return
+      if (resumeStartedRef.current || inFlightRef.current || resuming) return
       if (payload.v3_status !== 'RUNNING') return
 
       const initial = toResumePayload(payload)
@@ -144,6 +151,7 @@ export function PortalBundleActiveOperationPanel({
 
       resumeStartedRef.current = true
       inFlightRef.current = true
+      setResuming(true)
       setError(null)
 
       try {
@@ -176,6 +184,7 @@ export function PortalBundleActiveOperationPanel({
                 asset_lines: result.asset_lines,
                 sell_results: result.sell_results,
                 buy_results: result.buy_results,
+                plan_stale: false,
               }
             : prev,
         )
@@ -184,13 +193,6 @@ export function PortalBundleActiveOperationPanel({
           handleTerminal()
         } else if (hasPendingClientLegs(result)) {
           resumeStartedRef.current = false
-          void tryResume({
-            ...payload,
-            v3_status: result.v3_status,
-            asset_lines: result.asset_lines,
-            sell_results: result.sell_results,
-            buy_results: result.buy_results,
-          })
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Reprise impossible'
@@ -200,9 +202,10 @@ export function PortalBundleActiveOperationPanel({
         resumeStartedRef.current = false
       } finally {
         inFlightRef.current = false
+        setResuming(false)
       }
     },
-    [handleTerminal, inFlightRef, pollUntilTerminal, portfolioId, signAndSubmit],
+    [handleTerminal, inFlightRef, pollUntilTerminal, portfolioId, resuming, signAndSubmit],
   )
 
   useEffect(() => {
@@ -213,23 +216,28 @@ export function PortalBundleActiveOperationPanel({
 
   useEffect(() => {
     resumeStartedRef.current = false
+    terminalHandledRef.current = false
     setLoading(true)
+    setError(null)
     void loadActive().then((payload) => {
       if (payload?.status === 'active' && !isTerminalBundleV3Status(payload.v3_status)) {
         clearPoll()
         pollRef.current = setInterval(() => {
           void loadActive()
         }, POLL_MS)
-        void tryResume(payload)
       }
     })
     return () => clearPoll()
-  }, [clearPoll, loadActive, portfolioId, tryResume])
+  }, [clearPoll, loadActive, portfolioId])
 
   const showPanel =
     !loading &&
     active?.status === 'active' &&
     !isTerminalBundleV3Status(active.v3_status)
+
+  useEffect(() => {
+    onActiveChange?.(showPanel)
+  }, [onActiveChange, showPanel])
 
   const allocationAssets = useMemo(
     () => allocationAssetsFromLines(assetLines),
@@ -259,6 +267,11 @@ export function PortalBundleActiveOperationPanel({
       }),
     [active?.v3_status, assetLines, includeFundingStep, steps.length],
   )
+
+  const resumePayload = active ? toResumePayload(active) : null
+  const needsUserResume =
+    active?.operation_type === 'portfolio_rebalancing' &&
+    (Boolean(active.plan_stale) || hasPendingClientLegs(resumePayload))
 
   if (!showPanel) {
     return null
@@ -302,8 +315,24 @@ export function PortalBundleActiveOperationPanel({
 
       {active?.plan_stale ? (
         <p className="m-0 font-ui text-[12px] text-v-fg-muted">
-          Plan de rééquilibrage mis à jour — reprise avec les montants courants (cash leg inclus).
+          Le plan de rééquilibrage a changé depuis la dernière tentative — les montants affichés
+          correspondent au portefeuille actuel.
         </p>
+      ) : null}
+
+      {needsUserResume && !resuming ? (
+        <AppButton
+          type="button"
+          variant="primary"
+          disabled={resuming}
+          onClick={() => active && void tryResume(active)}
+        >
+          {active?.plan_stale ? 'Actualiser et reprendre' : 'Reprendre la signature'}
+        </AppButton>
+      ) : null}
+
+      {resuming ? (
+        <p className="m-0 font-ui text-[13px] text-v-fg-muted">Reprise en cours…</p>
       ) : null}
 
       {error ? <p className="m-0 font-ui text-[13px] text-v-error">{error}</p> : null}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeft, PieChart } from 'lucide-react'
 import {
   AppBalanceCardVariantB,
@@ -70,6 +70,7 @@ function bundlePositionValue(position: PortalBundlePosition, currency: string): 
 
 export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
   const id = portfolioId.trim()
+  const [hasActiveBundleOperation, setHasActiveBundleOperation] = useState(false)
   const { data, loading, refreshing, error, refresh } =
     usePortalCachedScreen<PortalCryptoWalletBundleDetailPayload>({
       cacheKey: `portal:crypto-wallet:bundle:${id}`,
@@ -286,19 +287,22 @@ export function PortalCryptoWalletBundleDetailScreen({ portfolioId }: Props) {
             portfolioId={id}
             portfolioName={bundle.portfolioName}
             onRefresh={() => void refresh()}
+            onActiveChange={setHasActiveBundleOperation}
           />
         </PortalReveal>
 
-        <PortalReveal index={4}>
-          <PortalBundleAllocationReadOnlyPanel
-            portfolioId={id}
-            portfolioName={bundle.portfolioName}
-            positions={bundle.positions}
-            currency={currency}
-            cashLegDisplayValue={holdingsSplit.cashLegDisplayValue}
-            onRefresh={() => void refresh()}
-          />
-        </PortalReveal>
+        {!hasActiveBundleOperation ? (
+          <PortalReveal index={4}>
+            <PortalBundleAllocationReadOnlyPanel
+              portfolioId={id}
+              portfolioName={bundle.portfolioName}
+              positions={bundle.positions}
+              currency={currency}
+              cashLegDisplayValue={holdingsSplit.cashLegDisplayValue}
+              onRefresh={() => void refresh()}
+            />
+          </PortalReveal>
+        ) : null}
 
         <PortalReveal index={5}>
           <section className="flex w-full flex-col gap-3">

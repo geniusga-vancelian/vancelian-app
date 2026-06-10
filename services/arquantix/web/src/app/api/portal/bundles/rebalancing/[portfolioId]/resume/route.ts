@@ -26,6 +26,14 @@ export async function POST(
     const { data, parseError } = await parsePortalUpstreamJson(res)
     if (parseError) {
       console.error('[api/portal/bundles/rebalancing/resume POST] upstream parse error', parseError)
+      return NextResponse.json(
+        {
+          error: 'upstream_unavailable',
+          message: 'Service temporairement indisponible — réessayez dans un instant.',
+          upstream_status: res.status,
+        },
+        { status: res.status >= 400 ? res.status : 502 },
+      )
     }
     return NextResponse.json(data, { status: res.status })
   } catch (error) {
