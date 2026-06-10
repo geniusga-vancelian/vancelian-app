@@ -11,8 +11,12 @@ Index des décisions d’architecture pour l’évolution de Vancelian vers un m
 | [002](002-postgresql-outbox-canonical-queue.md) | PostgreSQL Outbox as Canonical Queue | Accepté |
 | [003](003-final-reconciliation-controller.md) | Final Reconciliation Controller | Accepté |
 | [004](004-ledger-authority.md) | **Ledger Authority (constitution)** | Accepté |
+| [005](005-economic-event-model.md) | Economic Event Model | Accepté |
+| [006](006-accounting-event-schema.md) | Accounting Event Schema | Accepté |
+| [007](007-swap-core-settlement-router.md) | **Swap Core + Settlement Router** | Accepté |
 
-> **Hiérarchie opérationnelle** : ADR 004 > ADR 001 > ADR 002 > ADR 003. Si ADR 004 est violé, les autres ADR deviennent inopérants.
+> **Hiérarchie opérationnelle** : ADR 004 > ADR 001 > ADR 002 > ADR 003. Si ADR 004 est violé, les autres ADR deviennent inopérants.  
+> **Rail LI.FI / portefeuilles** : ADR 007 complète ADR 004 — Swap Core exécute, Settlement Router écrit (jamais l’inverse).
 
 **Documents liés** : [**Gouvernance transaction engine**](../TRANSACTION_ENGINE_GOVERNANCE.md) · `docs/arquantix/TRANSACTION_INTENTS_DEFI.md` (historique Phase 7) · [PHASE2 POC ticket](../PHASE2_POC_LIFI_STANDALONE_SWAP.md) · [S1 Review Report](../S1_REVIEW_REPORT.md).
 

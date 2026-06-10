@@ -266,7 +266,11 @@ Scripts : `./scripts/arquantix-ecs-bundle-drift-engine-audit.sh`, `./scripts/arq
 
 ---
 
-## 13. Références code
+## 13. Références
+
+**ADR** : [007 — Swap Core + Settlement Router](adr/007-swap-core-settlement-router.md) — doctrine plateforme (rail LI.FI unique · routage comptable par scope).
+
+### Code
 
 | Composant | Chemin |
 | --- | --- |
