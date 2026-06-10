@@ -37,7 +37,9 @@ import {
 } from '@/lib/portal/bundleInvestSession'
 import type { BundleInvestProcessingProgress } from '@/components/portal/transaction/mappers/bundleSteps'
 import { snapshotFromInvestLeg } from '@/lib/portal/bundleLegQuoteConfirm'
+import { completeV3DepositRebalance } from '@/lib/portal/bundleActiveOperationResume'
 import { executeBundleTrade } from '@/lib/portal/executeBundleTrade'
+import { isTerminalBundleV3Status } from '@/components/portal/transaction/mappers/bundleSteps'
 import { SwapPriceChangedError } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
@@ -324,12 +326,43 @@ export function useBundleLifiInvest(
 
         if (outcome.kind === 'v3_queued') {
           onProcessingProgress?.({
-            stage: 'completed',
+            stage: 'allocating',
             entryAsset: body.funding_asset,
             allocationAssets: [],
-            allocationLegTotal: 0,
+            allocationLegTotal: 1,
+          })
+          const v3Result = await completeV3DepositRebalance({
+            portfolioId: body.portfolio_id,
+            signAndSubmit,
+            pollUntilTerminal,
+            onPhaseChange,
+            onAssetLines: (lines) => {
+              onProcessingProgress?.({
+                stage: 'allocating',
+                entryAsset: body.funding_asset,
+                allocationAssets: lines.map((line) => line.asset).filter(Boolean),
+                allocationLegTotal: lines.length || 1,
+              })
+            },
           })
           clearBundleInvestSession(body.portfolio_id)
+          if (v3Result && isTerminalBundleV3Status(v3Result.v3_status)) {
+            const terminalStatus =
+              v3Result.v3_status === 'COMPLETED'
+                ? 'success'
+                : v3Result.v3_status === 'COMPLETED_WITH_RESIDUAL_CASH'
+                  ? 'completed_partial_allocation'
+                  : 'failed'
+            return {
+              invest: bundleV3QueuedToInvestShim(outcome.payload, {
+                fundingAsset: body.funding_asset,
+                fundingAmount: body.funding_amount,
+              }),
+              terminalStatus,
+              legOutcomes: [],
+              v3Deposit: outcome.payload,
+            }
+          }
           return {
             invest: bundleV3QueuedToInvestShim(outcome.payload, {
               fundingAsset: body.funding_asset,

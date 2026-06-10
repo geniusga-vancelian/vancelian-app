@@ -156,15 +156,33 @@ class BundleRebalanceExecutor:
 
         existing = find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio_id))
         if existing is not None:
-            if existing.get("plan_hash") == resolved_hash:
+            existing_hash = str(existing.get("plan_hash") or "")
+            if existing_hash == resolved_hash or _skip_plan_drift_terminalize(trigger):
+                resume_plan = dict(drift_rebalance_plan)
+                resume_hash = existing_hash or resolved_hash
+                if _skip_plan_drift_terminalize(trigger) and existing_hash != resolved_hash:
+                    resume_plan = {
+                        **resume_plan,
+                        "plan_hash": resume_hash,
+                        "sell_plan": list(existing.get("sell_plan") or resume_plan.get("sell_plan") or []),
+                        "buy_plan": list(existing.get("buy_plan") or resume_plan.get("buy_plan") or []),
+                    }
+                    logger.info(
+                        "v3_rebalance_deposit_resume_frozen_plan portfolio=%s execution=%s "
+                        "running_hash=%s fresh_hash=%s",
+                        portfolio_id,
+                        existing.get("rebalance_execution_id"),
+                        existing_hash,
+                        resolved_hash,
+                    )
                 return self._resume_running_execution(
                     db,
                     client_id=client_id,
                     portfolio_id=portfolio_id,
                     running=existing,
-                    drift_rebalance_plan=drift_rebalance_plan,
+                    drift_rebalance_plan=resume_plan,
                     trigger=trigger,
-                    plan_hash=resolved_hash,
+                    plan_hash=resume_hash,
                 )
             terminated = force_terminalize_running_v3_rebalance_on_plan_drift(
                 db,
@@ -177,7 +195,7 @@ class BundleRebalanceExecutor:
                     "old_hash=%s new_hash=%s status=%s",
                     portfolio_id,
                     terminated.get("rebalance_execution_id"),
-                    existing.get("plan_hash"),
+                    existing_hash,
                     resolved_hash,
                     terminated.get("v3_status"),
                 )

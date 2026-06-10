@@ -76,13 +76,26 @@ export type BundleV3DepositQueuedPayload = {
   message?: string
 }
 
+const V3_DEPOSIT_IN_PROGRESS_STATUSES = new Set([
+  'queued',
+  'processing',
+  'completed',
+  'completed_with_residual_cash',
+  'failed',
+])
+
+export function isBundleV3DepositFlowPayload(
+  data: Record<string, unknown>,
+): data is BundleV3DepositQueuedPayload & Record<string, unknown> {
+  return data.flow === 'bundle_v3_deposit' && typeof data.batch_id === 'string'
+}
+
 export function isBundleV3DepositQueuedPayload(
   data: Record<string, unknown>,
 ): data is BundleV3DepositQueuedPayload {
   return (
-    data.flow === 'bundle_v3_deposit' &&
-    String(data.status ?? '').toLowerCase() === 'queued' &&
-    typeof data.batch_id === 'string'
+    isBundleV3DepositFlowPayload(data) &&
+    V3_DEPOSIT_IN_PROGRESS_STATUSES.has(String(data.status ?? '').toLowerCase())
   )
 }
 

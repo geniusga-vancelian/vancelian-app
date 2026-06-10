@@ -1019,6 +1019,46 @@ def test_reconcile_deposit_skips_plan_drift_terminalize(db: Session):
     assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is not None
 
 
+def test_deposit_worker_resume_ignores_fresh_plan_hash_drift(db: Session, monkeypatch):
+    """Retry worker outbox : plan_hash frais ≠ running → resume, pas nouvelle exécution."""
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    plan = _majors_plan(db, pe, portfolio, usdc)
+
+    provider = _RecordingMockProvider(default_status="pending")
+    first = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        trigger="deposit",
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert first["v3_status"] == "RUNNING"
+    execution_id = first["rebalance_execution_id"]
+    assert len(provider.calls) == 1
+
+    drift_plan = dict(plan)
+    drift_plan["plan_hash"] = "sha256:post_deposit_drift_retry"
+
+    second = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=drift_plan,
+        trigger="deposit",
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert second["rebalance_execution_id"] == execution_id
+    assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is not None
+    assert len(provider.calls) == 1
+
+
 @pytest.fixture
 def global_lock_on(monkeypatch):
     monkeypatch.setenv("GLOBAL_USER_TRANSACTION_LOCK_ENABLED", "true")
