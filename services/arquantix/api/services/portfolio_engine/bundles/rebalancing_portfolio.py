@@ -16,6 +16,7 @@ from services.lifi.enums import SwapSessionStatus
 from services.lifi.models import PersonWalletSwap
 from services.portfolio_engine.bundles.bundle_invest_lock import (
     clear_invest_lock,
+    close_stale_bundle_invest_intents_for_portfolio,
     find_active_bundle_batch_ids_for_portfolio,
     get_active_invest_lock_for_portfolio,
     release_invest_lock,
@@ -416,81 +417,32 @@ def _active_financial_operation_blocker(
     }
 
 
-def _close_orphan_bundle_transaction_intent_if_v3_absent(
+def _close_stale_bundle_operation_intents(
     db: Session,
     *,
-    portfolio_id: UUID,
     client_id: UUID,
-) -> dict[str, Any] | None:
-    """Intent bundle RUNNING sans audit V3 RUNNING — clôture si terminal connu ou FAILED."""
+    portfolio_id: UUID,
+) -> list[dict[str, Any]]:
+    """Clôture intents bundle zombies (rebalance V3 orphelins + invest stale)."""
     from services.portfolio_engine.bundles.bundle_transaction_intent import (
-        finalize_bundle_transaction_after_v3_terminal,
-        find_running_bundle_transaction_intent_for_portfolio,
-    )
-    from services.portfolio_engine.hardening.audit_models import AuditEvent
-    from services.portfolio_engine.bundles.rebalance_executor import (
-        ACTION_V3_TERMINAL,
-        ENTITY_TYPE_V3_REBALANCE,
+        close_orphan_bundle_transaction_intents_for_portfolio,
     )
 
-    pid = str(portfolio_id)
-    if find_running_v3_rebalance_execution(db, portfolio_id=pid) is not None:
-        return None
-
-    intent = find_running_bundle_transaction_intent_for_portfolio(
+    actions: list[dict[str, Any]] = []
+    for closed in close_orphan_bundle_transaction_intents_for_portfolio(
         db, portfolio_id=portfolio_id,
-    )
-    if intent is None:
-        return None
+    ):
+        actions.append({"kind": "orphan_intent_closed", **closed})
 
-    meta = dict(intent.metadata_json or {})
-    batch_id = str(
-        meta.get("rebalance_execution_id") or meta.get("batch_id") or "",
-    ).strip()
-    terminal_payload: dict[str, Any] | None = None
-    if batch_id:
-        rows = (
-            db.query(AuditEvent)
-            .filter(
-                AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
-                AuditEvent.action == ACTION_V3_TERMINAL,
-            )
-            .order_by(AuditEvent.created_at.desc())
-            .limit(100)
-            .all()
-        )
-        for row in rows:
-            audit_meta = row.metadata_ or {}
-            if (
-                str(audit_meta.get("portfolio_id") or "") == pid
-                and str(audit_meta.get("batch_id") or audit_meta.get("rebalance_execution_id") or "")
-                == batch_id
-            ):
-                terminal_payload = dict(audit_meta)
-                break
-
-    if terminal_payload is None:
-        terminal_payload = {
-            "v3_status": "FAILED",
-            "rebalance_execution_id": batch_id or None,
-            "batch_id": batch_id or None,
-            "portfolio_id": pid,
-            "orphan_intent_closed": True,
-            "orphan_reason": "no_running_v3_audit",
-        }
-
-    finalized = finalize_bundle_transaction_after_v3_terminal(
-        db,
-        portfolio_id=portfolio_id,
-        terminal=terminal_payload,
-    )
-    if finalized is None:
-        return None
-    return {
-        "intent_id": str(finalized.id),
-        "v3_status": terminal_payload.get("v3_status"),
-        "batch_id": batch_id or None,
-    }
+    person_id = _resolve_person_id(db, client_id)
+    if person_id is not None:
+        for closed in close_stale_bundle_invest_intents_for_portfolio(
+            db,
+            person_id=person_id,
+            portfolio_id=portfolio_id,
+        ):
+            actions.append({"kind": "stale_invest_intent_closed", **closed})
+    return actions
 
 
 def reconcile_stale_bundle_portfolio_state(
@@ -529,11 +481,11 @@ def reconcile_stale_bundle_portfolio_state(
             "v3_status": terminal.get("v3_status"),
         })
 
-    orphan = _close_orphan_bundle_transaction_intent_if_v3_absent(
-        db, portfolio_id=portfolio_id, client_id=client_id,
+    actions.extend(
+        _close_stale_bundle_operation_intents(
+            db, client_id=client_id, portfolio_id=portfolio_id,
+        ),
     )
-    if orphan is not None:
-        actions.append({"kind": "orphan_intent_closed", **orphan})
 
     person_id = _resolve_person_id(db, client_id)
     batch_id, source = _resolve_legacy_batch_for_rebalancing(
@@ -597,40 +549,6 @@ def get_active_bundle_operation(
         auto_progress=False,
     )
     running = find_running_v3_rebalance_execution(db, portfolio_id=pid)
-    if running is None:
-        from services.portfolio_engine.bundles.bundle_transaction_intent import (
-            find_running_bundle_transaction_intent_for_portfolio,
-        )
-
-        orphan_intent = find_running_bundle_transaction_intent_for_portfolio(
-            db, portfolio_id=portfolio_id,
-        )
-        if orphan_intent is not None:
-            meta = orphan_intent.metadata_json or {}
-            op_type = str(meta.get("operation_type") or "")
-            operation_type = (
-                "v3_deposit_rebalance"
-                if op_type == "deposit_rebalance"
-                else "portfolio_rebalancing"
-            )
-            return {
-                "status": "active",
-                "operation_type": operation_type,
-                "portfolio_id": pid,
-                "v3_status": str(meta.get("v3_status") or "RUNNING"),
-                "rebalance_execution_id": meta.get("rebalance_execution_id"),
-                "batch_id": meta.get("batch_id"),
-                "trigger": "deposit" if operation_type == "v3_deposit_rebalance" else "manual",
-                "asset_lines": meta.get("asset_lines") or [],
-                "sell_results": [],
-                "buy_results": [],
-                "sell_plan": [],
-                "buy_plan": [],
-                "plan_hash": meta.get("plan_hash"),
-                "current_plan_hash": str(current_plan.get("plan_hash") or ""),
-                "plan_stale": False,
-                "message": "Opération bundle en cours — reprise en cours.",
-            }
 
     if running is not None:
         trigger = str(running.get("trigger") or "manual")

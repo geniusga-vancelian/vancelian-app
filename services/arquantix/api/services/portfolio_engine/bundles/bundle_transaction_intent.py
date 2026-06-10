@@ -120,13 +120,73 @@ _TERMINAL_V3 = frozenset({
     "NO_ACTION",
 })
 
+_TERMINAL_INTENT_STATUS = frozenset({
+    "failed",
+    "completed",
+    "completed_with_residual_cash",
+    "confirmed",
+    "no_action",
+})
+
+
+def intent_marked_running(row: TransactionIntent) -> bool:
+    """True si l'intent est encore étiqueté RUNNING côté DB."""
+    meta = row.metadata_json or {}
+    v3 = str(meta.get("v3_status") or "").upper()
+    status = str(row.status or "").lower()
+    if v3 in _TERMINAL_V3 or status in _TERMINAL_INTENT_STATUS:
+        return False
+    return v3 == "RUNNING" or status in ("running", "created", "queued")
+
+
+def _terminal_payload_for_orphan_intent(
+    db: Session,
+    *,
+    portfolio_id: str,
+    batch_id: str,
+) -> dict[str, Any]:
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        ACTION_V3_TERMINAL,
+        ENTITY_TYPE_V3_REBALANCE,
+    )
+    from services.portfolio_engine.hardening.audit_models import AuditEvent
+
+    if batch_id:
+        rows = (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == ENTITY_TYPE_V3_REBALANCE,
+                AuditEvent.action == ACTION_V3_TERMINAL,
+            )
+            .order_by(AuditEvent.created_at.desc())
+            .limit(100)
+            .all()
+        )
+        for row in rows:
+            meta = row.metadata_ or {}
+            if str(meta.get("portfolio_id") or "") != portfolio_id:
+                continue
+            audit_batch = str(
+                meta.get("batch_id") or meta.get("rebalance_execution_id") or "",
+            )
+            if audit_batch == batch_id:
+                return dict(meta)
+    return {
+        "v3_status": "FAILED",
+        "rebalance_execution_id": batch_id or None,
+        "batch_id": batch_id or None,
+        "portfolio_id": portfolio_id,
+        "orphan_intent_closed": True,
+        "orphan_reason": "no_running_v3_audit",
+    }
+
 
 def find_running_bundle_transaction_intent_for_portfolio(
     db: Session,
     *,
     portfolio_id: UUID | str,
 ) -> TransactionIntent | None:
-    """Intent bundle_transaction_v1 encore RUNNING (filet si audit V3 absent)."""
+    """Intent bundle encore RUNNING — uniquement si réellement non terminal."""
     pid = str(portfolio_id)
     rows = (
         db.query(TransactionIntent)
@@ -139,10 +199,63 @@ def find_running_bundle_transaction_intent_for_portfolio(
         meta = row.metadata_json or {}
         if str(meta.get("portfolio_id") or "") != pid:
             continue
-        v3 = str(meta.get("v3_status") or "").upper()
-        if v3 == "RUNNING" or str(row.status or "").lower() == "running":
+        if intent_marked_running(row):
             return row
     return None
+
+
+def close_orphan_bundle_transaction_intents_for_portfolio(
+    db: Session,
+    *,
+    portfolio_id: UUID | str,
+) -> list[dict[str, Any]]:
+    """Clôture tous les intents bundle RUNNING sans exécution V3 RUNNING correspondante."""
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        find_running_v3_rebalance_execution,
+    )
+
+    pid = str(portfolio_id)
+    if find_running_v3_rebalance_execution(db, portfolio_id=pid) is not None:
+        return []
+
+    closed: list[dict[str, Any]] = []
+    rows = (
+        db.query(TransactionIntent)
+        .filter(TransactionIntent.product_type.in_(_BUNDLE_TRANSACTION_PRODUCTS))
+        .order_by(TransactionIntent.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    for row in rows:
+        meta = row.metadata_json or {}
+        if str(meta.get("portfolio_id") or "") != pid:
+            continue
+        if not intent_marked_running(row):
+            continue
+        batch_id = str(
+            meta.get("rebalance_execution_id") or meta.get("batch_id") or "",
+        ).strip()
+        terminal = _terminal_payload_for_orphan_intent(
+            db, portfolio_id=pid, batch_id=batch_id,
+        )
+        sync_bundle_transaction_rebalancing(row, result=terminal)
+        if str(terminal.get("v3_status") or "") in _TERMINAL_V3:
+            from services.portfolio_engine.bundles.bundle_transaction_global_lock import (
+                release_bundle_transaction_global_lock_on_v3_terminal,
+            )
+
+            release_bundle_transaction_global_lock_on_v3_terminal(
+                db,
+                intent_id=row.id,
+                v3_status=str(terminal.get("v3_status") or "FAILED"),
+            )
+        db.add(row)
+        closed.append({
+            "intent_id": str(row.id),
+            "v3_status": terminal.get("v3_status"),
+            "batch_id": batch_id or None,
+        })
+    return closed
 
 
 def finalize_bundle_transaction_after_v3_terminal(

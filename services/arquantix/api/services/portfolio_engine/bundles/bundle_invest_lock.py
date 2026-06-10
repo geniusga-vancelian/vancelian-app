@@ -664,6 +664,137 @@ def _log_reconcile_skipped_pending_work(
     )
 
 
+def close_stale_bundle_invest_intents_for_portfolio(
+    db: Session,
+    *,
+    person_id: UUID,
+    portfolio_id: UUID,
+    min_age_minutes: int | None = None,
+) -> list[dict[str, Any]]:
+    """Ferme les intents bundle_invest bloqués dont tous les legs/swaps sont terminaux."""
+    from services.onchain_indexer.models import TransactionIntent
+    from services.lifi.models import PersonWalletSwap
+    from services.transaction_intents.bundle_intent_sync import (
+        LEG_CONFIRMED,
+        LEG_FAILED,
+        _normalize_legs,
+    )
+    from services.transaction_intents.enums import IntentProductType, IntentStatus
+
+    ttl = min_age_minutes if min_age_minutes is not None else invest_lock_ttl_minutes()
+    pid = str(portfolio_id)
+    now = datetime.now(timezone.utc)
+    open_intent_statuses = frozenset({
+        IntentStatus.AWAITING_SIGNATURE.value,
+        IntentStatus.SUBMITTED.value,
+        IntentStatus.CREATED.value,
+        IntentStatus.PARTIAL.value,
+        IntentStatus.CONFIRMING.value,
+        IntentStatus.RECONCILIATION_REQUIRED.value,
+        "pending",
+        "running",
+    })
+    rows = (
+        db.query(TransactionIntent)
+        .filter(
+            TransactionIntent.person_id == person_id,
+            TransactionIntent.product_type == IntentProductType.BUNDLE_INVEST.value,
+        )
+        .order_by(TransactionIntent.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    closed: list[dict[str, Any]] = []
+    for row in rows:
+        meta = row.metadata_json or {}
+        if str(meta.get("bundle_id") or "") != pid:
+            continue
+        status = str(row.status or "").lower()
+        if status in {
+            IntentStatus.FAILED.value,
+            IntentStatus.CONFIRMED.value,
+            IntentStatus.FAILED_FINAL.value,
+            IntentStatus.SUPERSEDED.value,
+            "completed",
+        }:
+            continue
+        if status not in open_intent_statuses:
+            continue
+
+        batch_id = str(meta.get("batch_id") or "").strip()
+        if batch_id:
+            _reconcile_stale_intent_legs_for_batch(
+                db,
+                person_id=person_id,
+                bundle_id=pid,
+                batch_id=batch_id,
+            )
+            meta = dict(row.metadata_json or {})
+
+        legs = _normalize_legs(meta.get("legs"))
+        age_min = (
+            (now - row.created_at).total_seconds() / 60.0
+            if row.created_at is not None
+            else 0.0
+        )
+
+        has_live_leg = False
+        confirmed_count = 0
+        for leg in legs:
+            leg_status = str(leg.get("status") or "pending")
+            if leg_status == LEG_CONFIRMED:
+                confirmed_count += 1
+                continue
+            if leg_status == LEG_FAILED:
+                continue
+            swap_id_raw = str(leg.get("swap_id") or "").strip()
+            if not swap_id_raw:
+                continue
+            try:
+                swap_uuid = UUID(swap_id_raw)
+            except ValueError:
+                continue
+            swap = (
+                db.query(PersonWalletSwap)
+                .filter(
+                    PersonWalletSwap.id == swap_uuid,
+                    PersonWalletSwap.person_id == person_id,
+                )
+                .first()
+            )
+            if swap is None:
+                continue
+            if swap.status in BLOCKING_BUNDLE_SWAP_STATUSES:
+                has_live_leg = True
+                break
+
+        if has_live_leg:
+            continue
+        if not legs:
+            if age_min < ttl:
+                continue
+            terminal_status = IntentStatus.FAILED.value
+        elif confirmed_count == len(legs):
+            terminal_status = IntentStatus.CONFIRMED.value
+        elif confirmed_count > 0:
+            terminal_status = IntentStatus.PARTIAL.value
+        else:
+            terminal_status = IntentStatus.FAILED.value
+
+        row.status = terminal_status
+        meta = dict(meta)
+        meta["stale_invest_closed"] = True
+        meta["stale_invest_closed_at"] = _utc_now_iso()
+        row.metadata_json = meta
+        db.add(row)
+        closed.append({
+            "intent_id": str(row.id),
+            "batch_id": batch_id or None,
+            "terminal_status": terminal_status,
+        })
+    return closed
+
+
 def _reconcile_stale_intent_legs_for_batch(
     db: Session,
     *,
