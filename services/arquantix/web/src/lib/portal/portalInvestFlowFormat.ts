@@ -252,21 +252,83 @@ export function resolveVaultDepositAssetSymbol(args: {
   return 'USDC'
 }
 
-/** Actif affiché côté « je place » pour un dépôt vault (PE trading_available USDC). */
-export const VAULT_DEPOSIT_FUNDING_ASSET = 'USDC'
+type VaultDepositBalanceRow = {
+  asset: string
+  balance?: number
+  availableBalance?: number
+  platformBalance?: number
+  tradingAvailable?: number
+  chainId?: number | null
+}
 
-/** Solde max déposable vault — aligné sur assertPortalVaultDepositTradingAvailable. */
-export function resolveVaultDepositFundingBalance(args: {
-  tradingAvailableUsdc?: number
-  positions: Array<{
+/**
+ * EURC max investissable en vault — trading_available PE (même logique que USDC).
+ */
+export function resolveVaultDepositEurcFromRows(
+  rows: Array<{
     asset: string
-    balance?: number
-    availableBalance?: number
-    platformBalance?: number
-    tradingAvailable?: number
     chainId?: number | null
-  }>
-}): number {
+    tradingAvailable?: number
+    platformBalance?: number
+  }>,
+): number {
+  const onBase = rows.filter(
+    (row) =>
+      row.asset.trim().toUpperCase() === 'EURC' &&
+      (row.chainId == null || row.chainId === BASE_CHAIN_ID),
+  )
+  const eurcRows =
+    onBase.length > 0 ? onBase : rows.filter((row) => row.asset.trim().toUpperCase() === 'EURC')
+  if (eurcRows.length === 0) return 0
+
+  let maxTrading: number | undefined
+  let maxPlatform = 0
+
+  for (const row of eurcRows) {
+    if (row.tradingAvailable != null && Number.isFinite(row.tradingAvailable)) {
+      maxTrading =
+        maxTrading == null ? row.tradingAvailable : Math.max(maxTrading, row.tradingAvailable)
+    }
+    if (row.platformBalance != null && row.platformBalance > 0) {
+      maxPlatform = Math.max(maxPlatform, row.platformBalance)
+    }
+  }
+
+  if (maxTrading != null && maxTrading > 0) return maxTrading
+  if (maxPlatform > 0) return maxPlatform
+  if (maxTrading != null) return 0
+  return 0
+}
+
+export function resolveVaultDepositEurcBalance(positions: VaultDepositBalanceRow[]): number {
+  return resolveVaultDepositEurcFromRows(
+    positions.map((row) => ({
+      asset: row.asset,
+      chainId: row.chainId,
+      tradingAvailable: row.tradingAvailable,
+      platformBalance: row.platformBalance,
+    })),
+  )
+}
+
+/** Solde max déposable vault — actif de référence ERC-4626 (USDC ou EURC). */
+export function resolveVaultDepositBalanceForAsset(
+  assetSymbol: string,
+  args: {
+    tradingAvailableUsdc?: number
+    tradingAvailableEurc?: number
+    positions: VaultDepositBalanceRow[]
+  },
+): number {
+  const key = resolveInvestSourceKeyFromAssetSymbol(assetSymbol)
+  if (key === 'eur') {
+    const fromDirect = args.tradingAvailableEurc
+    if (fromDirect != null && Number.isFinite(fromDirect)) {
+      return Math.max(0, fromDirect)
+    }
+    return resolveVaultDepositEurcBalance(args.positions)
+  }
+
   const fromDirect = args.tradingAvailableUsdc
   if (fromDirect != null && Number.isFinite(fromDirect)) {
     return Math.max(0, fromDirect)

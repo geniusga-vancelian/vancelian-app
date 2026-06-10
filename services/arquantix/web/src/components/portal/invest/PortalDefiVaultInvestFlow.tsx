@@ -33,8 +33,7 @@ import {
   invFmtAmount,
   invParseAmount,
   parseVaultPositionAmount,
-  resolveVaultDepositFundingBalance,
-  VAULT_DEPOSIT_FUNDING_ASSET,
+  resolveVaultDepositBalanceForAsset,
   type PortalInvestSource,
   type PortalInvestTarget,
 } from '@/lib/portal/portalInvestFlowFormat'
@@ -113,10 +112,10 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   const [amount, setAmount] = useState('')
   const vaultAssetSymbol = vault.asset.symbol
   const [sources, setSources] = useState<PortalInvestSource[]>(() => [
-    buildLockedInvestSource(VAULT_DEPOSIT_FUNDING_ASSET, 0),
+    buildLockedInvestSource(vaultAssetSymbol, 0),
   ])
   const [source, setSource] = useState<PortalInvestSource>(() =>
-    buildLockedInvestSource(VAULT_DEPOSIT_FUNDING_ASSET, 0),
+    buildLockedInvestSource(vaultAssetSymbol, 0),
   )
   const [target, setTarget] = useState<PortalInvestTarget>(() =>
     buildDefiVaultInvestTarget(
@@ -146,14 +145,15 @@ export function PortalDefiVaultInvestFlow({ vault, beta, mode = 'invest', onClos
   useEffect(() => {
     if (!walletData) return
     const positions = walletData.positions?.positions ?? []
-    const balance = resolveVaultDepositFundingBalance({
+    const balance = resolveVaultDepositBalanceForAsset(vaultAssetSymbol, {
       tradingAvailableUsdc: walletData.tradingAvailableUsdc,
+      tradingAvailableEurc: walletData.tradingAvailableEurc,
       positions,
     })
-    const next = buildLockedInvestSource(VAULT_DEPOSIT_FUNDING_ASSET, balance)
+    const next = buildLockedInvestSource(vaultAssetSymbol, balance)
     setSources([next])
     setSource(next)
-  }, [walletData])
+  }, [vaultAssetSymbol, walletData])
 
   const loadPosition = useCallback(
     async (address: string, options?: { background?: boolean }) => {

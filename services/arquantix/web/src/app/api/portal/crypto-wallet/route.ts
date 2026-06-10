@@ -5,7 +5,10 @@ import {
   parseWalletHistoryPoints,
   parseWalletHistoryPerformance,
 } from '@/lib/portal/cryptoWalletFormat'
-import { resolveTradingAvailableUsdcFromDirectPayload } from '@/lib/portal/vaultDepositValidation'
+import {
+  resolveTradingAvailableEurcFromDirectPayload,
+  resolveTradingAvailableUsdcFromDirectPayload,
+} from '@/lib/portal/vaultDepositValidation'
 import {
   maybeApplyLombardWalletOverlay,
   resolveLombardOverlayWalletAddress,
@@ -84,6 +87,7 @@ export async function GET(request: NextRequest) {
   const performance = history.ok ? parseWalletHistoryPerformance(history.data) : null
   const bundles = bundlesRes.ok ? parseMyBundles(bundlesRes.data) : []
   const tradingAvailableUsdc = resolveTradingAvailableUsdcFromDirectPayload(directRes.data)
+  const tradingAvailableEurc = resolveTradingAvailableEurcFromDirectPayload(directRes.data)
 
   return NextResponse.json({
     currency,
@@ -92,6 +96,7 @@ export async function GET(request: NextRequest) {
     historyPoints,
     performance,
     tradingAvailableUsdc,
+    tradingAvailableEurc,
     source: 'direct',
     partial: !history.ok || !bundlesRes.ok,
   })

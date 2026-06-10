@@ -1,4 +1,8 @@
-import { invParseAmount, resolveVaultDepositUsdcFromRows } from '@/lib/portal/portalInvestFlowFormat'
+import {
+  invParseAmount,
+  resolveVaultDepositEurcFromRows,
+  resolveVaultDepositUsdcFromRows,
+} from '@/lib/portal/portalInvestFlowFormat'
 
 export class VaultDepositLimitError extends Error {
   readonly code = 'vault.deposit.insufficient_trading_available'
@@ -20,11 +24,10 @@ function toNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-/** Lit trading_available USDC depuis la réponse `/api/app/crypto-positions/direct`. */
-export function resolveTradingAvailableUsdcFromDirectPayload(raw: unknown): number {
+function readTradingAvailableRowsFromDirectPayload(raw: unknown) {
   const root = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const list = Array.isArray(root.positions) ? root.positions : []
-  const rows = list
+  return list
     .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
     .map((row) => ({
       asset: String(row.asset ?? ''),
@@ -32,7 +35,16 @@ export function resolveTradingAvailableUsdcFromDirectPayload(raw: unknown): numb
       tradingAvailable: toNumber(row.trading_available),
       platformBalance: toNumber(row.platform_balance),
     }))
-  return resolveVaultDepositUsdcFromRows(rows)
+}
+
+/** Lit trading_available USDC depuis la réponse `/api/app/crypto-positions/direct`. */
+export function resolveTradingAvailableUsdcFromDirectPayload(raw: unknown): number {
+  return resolveVaultDepositUsdcFromRows(readTradingAvailableRowsFromDirectPayload(raw))
+}
+
+/** Lit trading_available EURC depuis la réponse `/api/app/crypto-positions/direct`. */
+export function resolveTradingAvailableEurcFromDirectPayload(raw: unknown): number {
+  return resolveVaultDepositEurcFromRows(readTradingAvailableRowsFromDirectPayload(raw))
 }
 
 export function assertVaultDepositWithinTradingAvailable(args: {

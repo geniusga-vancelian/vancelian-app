@@ -101,8 +101,10 @@ export type PortalCryptoWalletHubPayload = {
   } | null
   /** Source des positions affichées (hub = direct_portfolio PE / Mon Trading). */
   source?: 'direct' | 'privy'
-  /** PE trading_available USDC (avant overlay Lombard) — max déposable vault. */
+  /** PE trading_available USDC (avant overlay Lombard) — max déposable vault USDC. */
   tradingAvailableUsdc?: number
+  /** PE trading_available EURC (avant overlay Lombard) — max déposable vault EURC. */
+  tradingAvailableEurc?: number
   partial?: boolean
 }
 
