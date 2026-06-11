@@ -199,6 +199,10 @@ export function useLifiSwapExecution(
           { phase: 'swap', assetSymbol: approvalAsset },
         )
         hash = result.hash
+        trace('privy_embedded_tx_done', {
+          phase: 'submitting',
+          detail: `tx_hash=${hash.slice(0, 12)}`,
+        })
       } catch (error) {
         trace('privy_embedded_tx_failed', {
           phase: 'signing',
@@ -206,10 +210,6 @@ export function useLifiSwapExecution(
         })
         wrapPhaseError(error, 'signing')
       }
-      trace('privy_embedded_tx_done', {
-        phase: 'submitting',
-        detail: hash ? `tx_hash=${hash.slice(0, 12)}` : undefined,
-      })
 
       onPhaseChange?.('submitting')
       try {
