@@ -108,7 +108,7 @@ export async function resumeActiveBundleOperation(params: {
   onPhaseChange?: (phase: SwapExecutionPhase) => void
   onAssetLines?: (lines: PortfolioRebalancingAssetLine[]) => void
 }): Promise<PortfolioRebalancingPayload> {
-  const { payload: result } = await runSequentialTrades({
+  const { payload: result, lastResumeError } = await runSequentialTrades({
     initial: params.initial,
     tradeDeps: {
       signAndSubmit: params.signAndSubmit,
@@ -126,6 +126,9 @@ export async function resumeActiveBundleOperation(params: {
   })
   if (result.asset_lines?.length) {
     params.onAssetLines?.(result.asset_lines)
+  }
+  if (lastResumeError) {
+    throw new Error(lastResumeError)
   }
   return result
 }

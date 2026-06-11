@@ -100,7 +100,11 @@ export function useBundlePortfolioRebalancing(
         for (const line of initial.asset_lines ?? []) {
           onAssetStatus?.(line.asset, line.status)
         }
-        return await runChainedTrades(initial)
+        const chained = await runChainedTrades(initial)
+        if (chained.lastResumeError) {
+          throw new Error(chained.lastResumeError)
+        }
+        return chained.payload
       } finally {
         inFlightRef.current = false
       }

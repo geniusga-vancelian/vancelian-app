@@ -3,9 +3,18 @@
  * Un leg en échec n'arrête pas les suivants — même stratégie que bundle invest legacy.
  */
 import { executeTrade, type ExecuteTradeDeps } from '@/lib/portal/executeTrade'
+import { normalizeBundleResumeError } from '@/lib/portal/bundleResumeError'
 import type { BundleLegQuoteSnapshot } from '@/lib/portal/bundleLegQuoteConfirm'
 import type { BundleRebalanceLeg, PortfolioRebalancingPayload } from '@/lib/portal/bundleClient'
 import { isTerminalBundleV3Status } from '@/components/portal/transaction/mappers/bundleSteps'
+
+const RESUME_RETRY_DELAY_MS = 800
+const RESUME_MAX_ATTEMPTS = 2
+const MAX_RESUME_ROUNDS = 12
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 export type PendingRebalanceLeg = BundleRebalanceLeg & { side: 'buy' | 'sell' }
 
@@ -61,9 +70,41 @@ export type RunSequentialTradesOptions = {
   resumeFn?: (portfolioId: string) => Promise<PortfolioRebalancingPayload>
 }
 
+export type ResumeOutcome = {
+  status: 'ok' | 'failed'
+  attempts: number
+  errorMessage?: string
+}
+
 export type RunSequentialTradesResult = {
   payload: PortfolioRebalancingPayload
   legOutcomes: TradeLegOutcome[]
+  resumeOutcomes: ResumeOutcome[]
+  lastResumeError: string | null
+}
+
+async function resumeWithRetry(
+  resumeFn: (portfolioId: string) => Promise<PortfolioRebalancingPayload>,
+  portfolioId: string,
+  fallback: PortfolioRebalancingPayload,
+): Promise<{ payload: PortfolioRebalancingPayload; outcome: ResumeOutcome }> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= RESUME_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const payload = await resumeFn(portfolioId)
+      return { payload, outcome: { status: 'ok', attempts: attempt } }
+    } catch (err) {
+      lastError = err
+      if (attempt < RESUME_MAX_ATTEMPTS) {
+        await sleep(RESUME_RETRY_DELAY_MS * attempt)
+      }
+    }
+  }
+  const errorMessage = normalizeBundleResumeError(lastError)
+  return {
+    payload: fallback,
+    outcome: { status: 'failed', attempts: RESUME_MAX_ATTEMPTS, errorMessage },
+  }
 }
 
 export async function runSequentialTrades(
@@ -71,6 +112,9 @@ export async function runSequentialTrades(
 ): Promise<RunSequentialTradesResult> {
   let result = options.initial
   const legOutcomes: TradeLegOutcome[] = []
+  const resumeOutcomes: ResumeOutcome[] = []
+  let lastResumeError: string | null = null
+  let resumeRounds = 0
   const snapshotForLeg = options.snapshotForLeg ?? rebalanceLegSnapshot
   const executeLeg =
     options.executeLeg ??
@@ -78,9 +122,13 @@ export async function runSequentialTrades(
       await executeTrade(swapId, snapshot, deps)
     })
 
-  while (result.v3_status === 'RUNNING' || pendingRebalanceLegs(result).length > 0) {
+  while (
+    !isTerminalBundleV3Status(result.v3_status) &&
+    (result.v3_status === 'RUNNING' || pendingRebalanceLegs(result).length > 0)
+  ) {
     const pending = pendingRebalanceLegs(result)
     const total = pending.length
+    const hadPendingToProcess = total > 0
 
     for (let i = 0; i < pending.length; i += 1) {
       const leg = pending[i]!
@@ -124,18 +172,24 @@ export async function runSequentialTrades(
       break
     }
 
-    try {
-      result = await options.resumeFn(result.portfolio_id)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : ''
-      if (
-        /no_running_rebalance|no running rebalance/i.test(msg) &&
-        pendingRebalanceLegs(result).length === 0
-      ) {
-        break
-      }
-      throw err
+    if (!hadPendingToProcess && result.v3_status !== 'RUNNING') {
+      break
     }
+
+    if (resumeRounds >= MAX_RESUME_ROUNDS) {
+      break
+    }
+    resumeRounds += 1
+
+    const resumed = await resumeWithRetry(options.resumeFn, result.portfolio_id, result)
+    resumeOutcomes.push(resumed.outcome)
+
+    if (resumed.outcome.status === 'failed') {
+      lastResumeError = resumed.outcome.errorMessage ?? null
+      break
+    }
+
+    result = resumed.payload
 
     if (
       isTerminalBundleV3Status(result.v3_status) &&
@@ -149,5 +203,5 @@ export async function runSequentialTrades(
     }
   }
 
-  return { payload: result, legOutcomes }
+  return { payload: result, legOutcomes, resumeOutcomes, lastResumeError }
 }

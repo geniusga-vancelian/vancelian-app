@@ -68,6 +68,50 @@ def _skip_plan_drift_terminalize(trigger: str) -> bool:
     """Après funding dépôt, le plan_hash drift est attendu — ne pas clôturer."""
     return trigger == "deposit"
 
+
+def _plan_leg_assets(plan_legs: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(leg.get("asset") or "").strip()
+        for leg in plan_legs
+        if str(leg.get("asset") or "").strip()
+    }
+
+
+def has_unquoted_plan_legs(
+    *,
+    sell_plan: list[dict[str, Any]],
+    buy_plan: list[dict[str, Any]],
+    sell_results: list["V3LegExecutionResult"],
+    buy_results: list["V3LegExecutionResult"],
+) -> bool:
+    """True si le plan prévoit des actifs jamais quotés (absents des results)."""
+    for plan, results in ((sell_plan, sell_results), (buy_plan, buy_results)):
+        quoted = {r.asset for r in results}
+        for asset in _plan_leg_assets(plan):
+            if asset not in quoted:
+                return True
+    return False
+
+
+def _execution_age_minutes(running: dict[str, Any]) -> float | None:
+    started_raw = running.get("started_at")
+    if not started_raw:
+        return None
+    try:
+        started = datetime.fromisoformat(str(started_raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (
+        datetime.now(timezone.utc) - started.astimezone(timezone.utc)
+    ).total_seconds() / 60.0
+
+
+def _within_client_rebalance_grace(running: dict[str, Any]) -> bool:
+    age = _execution_age_minutes(running)
+    if age is None:
+        return False
+    return age < float(client_signature_stale_minutes())
+
 V3Status = Literal[
     "RUNNING",
     "COMPLETED",
@@ -255,6 +299,22 @@ class BundleRebalanceExecutor:
         }
         self._audit_running(db, execution_id, running_payload, actor)
         db.flush()
+
+        if _uses_client_signature(trigger):
+            from services.portfolio_engine.wallets.resolver import ensure_portfolio_wallets
+
+            spot_ids: list[UUID] = []
+            for leg in sell_plan + buy_plan:
+                raw_inst = leg.get("instrument_id")
+                if raw_inst:
+                    spot_ids.append(UUID(str(raw_inst)))
+            ensure_portfolio_wallets(
+                db,
+                portfolio_id=portfolio_id,
+                client_id=client_id,
+                spot_instrument_ids=spot_ids,
+                entry_instrument_id=entry_instrument.id,
+            )
 
         sell_results: list[V3LegExecutionResult] = []
         buy_results: list[V3LegExecutionResult] = []
@@ -519,6 +579,7 @@ class BundleRebalanceExecutor:
         trigger: V3Trigger,
     ) -> list[V3LegExecutionResult]:
         pause_on_pending = _pause_on_pending_leg(trigger)
+        quote_all_legs_upfront = _uses_client_signature(trigger)
         results: list[V3LegExecutionResult] = []
         sorted_legs = sorted(
             plan_legs,
@@ -705,7 +766,11 @@ class BundleRebalanceExecutor:
                     break
 
             results.append(leg_result)
-            if pause_on_pending and leg_result.status == "pending":
+            if (
+                pause_on_pending
+                and leg_result.status == "pending"
+                and not quote_all_legs_upfront
+            ):
                 break
         return results
 
@@ -1009,6 +1074,8 @@ class BundleRebalanceExecutor:
                 sell_results,
                 buy_results,
                 cash_remaining_usdc=drift_rebalance_plan.get("available_cash_usdc"),
+                sell_plan=list(drift_rebalance_plan.get("sell_plan") or []),
+                buy_plan=list(drift_rebalance_plan.get("buy_plan") or []),
             )
 
         cash_remaining = drift_rebalance_plan.get("available_cash_usdc")
@@ -1051,6 +1118,8 @@ class BundleRebalanceExecutor:
         buy_results: list[V3LegExecutionResult],
         *,
         cash_remaining_usdc: str | Decimal | None = None,
+        sell_plan: list[dict[str, Any]] | None = None,
+        buy_plan: list[dict[str, Any]] | None = None,
     ) -> V3Status:
         all_results = sell_results + buy_results
         if not all_results:
@@ -1060,10 +1129,18 @@ class BundleRebalanceExecutor:
         expired_or_failed = [
             r for r in all_results if r.status in ("failed", "expired")
         ]
+        unquoted_plan = has_unquoted_plan_legs(
+            sell_plan=sell_plan or [],
+            buy_plan=buy_plan or [],
+            sell_results=sell_results,
+            buy_results=buy_results,
+        )
 
         if completed and expired_or_failed:
             return "COMPLETED_WITH_RESIDUAL_CASH"
         if completed and not expired_or_failed:
+            if unquoted_plan:
+                return "COMPLETED_WITH_RESIDUAL_CASH"
             return "COMPLETED"
         if expired_or_failed and not completed:
             cash = Decimal(str(cash_remaining_usdc or "0"))
@@ -1341,6 +1418,8 @@ def _force_terminalize_running_snapshot(
         sell_results,
         buy_results,
         cash_remaining_usdc=running.get("available_cash_usdc"),
+        sell_plan=list(running.get("sell_plan") or []),
+        buy_plan=list(running.get("buy_plan") or []),
     )
     if v3_status == "RUNNING":
         v3_status = "COMPLETED_WITH_RESIDUAL_CASH"
@@ -1645,6 +1724,34 @@ def reconcile_running_v3_rebalance_execution(
     }
 
     if not has_pending:
+        sell_plan = list(running.get("sell_plan") or [])
+        buy_plan = list(running.get("buy_plan") or [])
+        if (
+            trigger == "manual"
+            and drift_rebalance_plan is not None
+            and has_unquoted_plan_legs(
+                sell_plan=sell_plan,
+                buy_plan=buy_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+            )
+            and _within_client_rebalance_grace(running)
+        ):
+            return executor._build_running_response(
+                db=db,
+                execution_id=execution_id,
+                batch_id=str(running.get("batch_id") or execution_id),
+                portfolio_id=portfolio_id,
+                plan_hash=str(running.get("plan_hash") or ""),
+                trigger=trigger,  # type: ignore[arg-type]
+                drift_rebalance_plan=drift_rebalance_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+                started_at=str(running.get("started_at") or ""),
+                running_payload=running_payload,
+                actor=actor,
+            )
+
         terminal = _force_terminalize_running_snapshot(
             db,
             running=running_payload,

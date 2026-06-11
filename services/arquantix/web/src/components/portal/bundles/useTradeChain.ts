@@ -5,7 +5,7 @@ import { useCallback, useRef } from 'react'
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import { submitSwapTx } from '@/lib/portal/swapClient'
 import type { PortfolioRebalancingPayload } from '@/lib/portal/bundleClient'
-import { runSequentialTrades } from '@/lib/portal/tradeChainRunner'
+import { runSequentialTrades, type RunSequentialTradesResult } from '@/lib/portal/tradeChainRunner'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
 export function useTradeChain(
@@ -28,8 +28,8 @@ export function useTradeChain(
   )
 
   const runChainedTrades = useCallback(
-    async (initial: PortfolioRebalancingPayload): Promise<PortfolioRebalancingPayload> => {
-      const { payload } = await runSequentialTrades({
+    async (initial: PortfolioRebalancingPayload): Promise<RunSequentialTradesResult> => {
+      return runSequentialTrades({
         initial,
         tradeDeps: {
           signAndSubmit,
@@ -40,7 +40,6 @@ export function useTradeChain(
         onLegProgress,
         resumeFn,
       })
-      return payload
     },
     [onAssetStatus, onLegProgress, onPhaseChange, pollUntilTerminal, resumeFn, signAndSubmit],
   )

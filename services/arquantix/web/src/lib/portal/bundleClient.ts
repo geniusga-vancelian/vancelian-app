@@ -367,7 +367,14 @@ function resolveBundleApiErrorMessage(
   }
 
   if (errorCode && errorCode !== 'upstream_non_json' && errorCode !== 'upstream_invalid_json') {
+    if (/internal server error/i.test(errorCode)) {
+      return 'Service temporairement indisponible — réessayez dans un instant.'
+    }
     return errorCode.replace(/_/g, ' ')
+  }
+
+  if (status === 500 || status === 502 || status === 503) {
+    return 'Service temporairement indisponible — réessayez dans un instant.'
   }
 
   return 'Requête bundle impossible'
