@@ -136,6 +136,33 @@ class BundleRebalanceExecutorError(Exception):
     """Erreur métier executor V3."""
 
 
+def _leg_quote_float(value: str) -> float | None:
+    if not value:
+        return None
+    try:
+        return float(Decimal(str(value)))
+    except Exception:
+        return None
+
+
+def _apply_leg_quote_fields(
+    leg_result: "V3LegExecutionResult",
+    *,
+    amount_in: str | Decimal | None = None,
+    estimated_receive: str | Decimal | None = None,
+    from_asset: str | None = None,
+    to_asset: str | None = None,
+) -> None:
+    if amount_in is not None and str(amount_in) != "":
+        leg_result.amount_in = _dec_str(Decimal(str(amount_in)))
+    if estimated_receive is not None and str(estimated_receive) != "":
+        leg_result.estimated_receive = _dec_str(Decimal(str(estimated_receive)))
+    if from_asset:
+        leg_result.from_asset = str(from_asset)
+    if to_asset:
+        leg_result.to_asset = str(to_asset)
+
+
 @dataclass
 class V3LegExecutionResult:
     asset: str
@@ -148,9 +175,13 @@ class V3LegExecutionResult:
     swap_id: str | None = None
     error: str = ""
     attempt_details: list[dict[str, Any]] = field(default_factory=list)
+    amount_in: str = ""
+    estimated_receive: str = ""
+    from_asset: str = ""
+    to_asset: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "asset": self.asset,
             "instrument_id": self.instrument_id,
             "action": self.action,
@@ -162,6 +193,29 @@ class V3LegExecutionResult:
             "error": self.error,
             "attempt_details": list(self.attempt_details),
         }
+        if self.amount_in:
+            payload["amount_in"] = self.amount_in
+        if self.estimated_receive:
+            payload["estimated_receive"] = self.estimated_receive
+        if self.from_asset:
+            payload["from_asset"] = self.from_asset
+        if self.to_asset:
+            payload["to_asset"] = self.to_asset
+        if self.action == "sell":
+            qty = _leg_quote_float(self.amount_in)
+            recv = _leg_quote_float(self.estimated_receive)
+            if qty is not None:
+                payload["quantity_sold"] = qty
+            if recv is not None:
+                payload["entry_asset_received"] = recv
+        elif self.action == "buy":
+            spent = _leg_quote_float(self.amount_in)
+            qty = _leg_quote_float(self.estimated_receive)
+            if spent is not None:
+                payload["entry_asset_spent"] = spent
+            if qty is not None:
+                payload["quantity_bought"] = qty
+        return payload
 
 
 class BundleRebalanceExecutor:
@@ -731,6 +785,13 @@ class BundleRebalanceExecutor:
                     continue
 
                 leg_result.swap_id = exec_result.provider_order_id
+                _apply_leg_quote_fields(
+                    leg_result,
+                    amount_in=trade_result.amount_from,
+                    estimated_receive=trade_result.amount_to,
+                    from_asset=trade_result.from_asset,
+                    to_asset=trade_result.to_asset,
+                )
                 leg_result.status = self._map_leg_status(exec_result)
                 leg_result.error = ""
                 leg_result.attempt_details.append({
@@ -877,6 +938,13 @@ class BundleRebalanceExecutor:
             swap = db.query(PersonWalletSwap).filter(PersonWalletSwap.id == swap_uuid).first()
             if swap is None:
                 continue
+            _apply_leg_quote_fields(
+                row,
+                amount_in=swap.amount_in,
+                estimated_receive=swap.estimated_receive,
+                from_asset=swap.from_asset,
+                to_asset=swap.to_asset,
+            )
             if swap.status == SwapSessionStatus.SUBMITTED.value:
                 lifi_execute.refresh_lifi_status(db, swap)
                 db.refresh(swap)
@@ -1521,6 +1589,10 @@ def _results_from_metadata(rows: list[dict[str, Any]]) -> list[V3LegExecutionRes
                 leg_ids=list(row.get("leg_ids") or []),
                 swap_id=row.get("swap_id"),
                 error=str(row.get("error") or ""),
+                amount_in=str(row.get("amount_in") or ""),
+                estimated_receive=str(row.get("estimated_receive") or ""),
+                from_asset=str(row.get("from_asset") or ""),
+                to_asset=str(row.get("to_asset") or ""),
             )
         )
     return out

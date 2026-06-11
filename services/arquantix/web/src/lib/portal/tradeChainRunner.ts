@@ -4,7 +4,10 @@
  */
 import { executeTrade, type ExecuteTradeDeps } from '@/lib/portal/executeTrade'
 import { normalizeBundleResumeError } from '@/lib/portal/bundleResumeError'
-import type { BundleLegQuoteSnapshot } from '@/lib/portal/bundleLegQuoteConfirm'
+import {
+  snapshotFromRebalanceLeg,
+  type BundleLegQuoteSnapshot,
+} from '@/lib/portal/bundleLegQuoteConfirm'
 import type { BundleRebalanceLeg, PortfolioRebalancingPayload } from '@/lib/portal/bundleClient'
 import { isTerminalBundleV3Status } from '@/components/portal/transaction/mappers/bundleSteps'
 
@@ -36,22 +39,26 @@ export function pendingRebalanceLegs(result: PortfolioRebalancingPayload): Pendi
 }
 
 export function rebalanceLegSnapshot(leg: PendingRebalanceLeg): BundleLegQuoteSnapshot {
-  const amount = String(leg.amount_usdc ?? '0')
-  const row = leg as BundleRebalanceLeg & {
-    quantity_bought?: number
-    entry_asset_spent?: number
-    quantity_sold?: number
-    entry_asset_received?: number
-    amount_crypto?: number | string
+  const fromApi = snapshotFromRebalanceLeg(leg, leg.side)
+  if (fromApi) {
+    return fromApi
   }
-  const receive =
-    leg.side === 'buy'
-      ? String(row.quantity_bought ?? row.amount_crypto ?? '0')
-      : String(row.entry_asset_received ?? row.amount_usdc ?? '0')
-  return {
-    review_amount_in: amount,
-    review_estimated_receive: receive,
+  if (leg.amount_in && leg.estimated_receive) {
+    return {
+      review_amount_in: String(leg.amount_in),
+      review_estimated_receive: String(leg.estimated_receive),
+    }
   }
+  throw new Error(
+    `Montants LI.FI manquants pour ${leg.asset} — relancez le rééquilibrage.`,
+  )
+}
+
+export function rebalanceLegFromAsset(leg: PendingRebalanceLeg, entryAsset = 'USDC'): string {
+  if (leg.from_asset) {
+    return leg.from_asset
+  }
+  return leg.side === 'sell' ? leg.asset : entryAsset
 }
 
 export type ExecuteLegFn = (
@@ -63,6 +70,7 @@ export type ExecuteLegFn = (
 export type RunSequentialTradesOptions = {
   initial: PortfolioRebalancingPayload
   tradeDeps: ExecuteTradeDeps
+  entryAsset?: string
   executeLeg?: ExecuteLegFn
   snapshotForLeg?: (leg: PendingRebalanceLeg) => BundleLegQuoteSnapshot
   onAssetStatus?: (asset: string, status: string) => void
@@ -144,8 +152,10 @@ export async function runSequentialTrades(
       options.onAssetStatus?.(leg.asset, 'pending')
 
       try {
+        const fromAsset = rebalanceLegFromAsset(leg, options.entryAsset)
         await executeLeg(swapId, snapshotForLeg(leg), {
           ...options.tradeDeps,
+          fromAsset,
           onPhaseChange: (phase) => {
             options.tradeDeps.onPhaseChange?.(phase)
             if (phase === 'signing' || phase === 'approving') {

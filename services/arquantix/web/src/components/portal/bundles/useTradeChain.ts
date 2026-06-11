@@ -31,6 +31,7 @@ export function useTradeChain(
     async (initial: PortfolioRebalancingPayload): Promise<RunSequentialTradesResult> => {
       return runSequentialTrades({
         initial,
+        entryAsset,
         tradeDeps: {
           signAndSubmit,
           pollUntilTerminal,
@@ -41,7 +42,7 @@ export function useTradeChain(
         resumeFn,
       })
     },
-    [onAssetStatus, onLegProgress, onPhaseChange, pollUntilTerminal, resumeFn, signAndSubmit],
+    [entryAsset, onAssetStatus, onLegProgress, onPhaseChange, pollUntilTerminal, resumeFn, signAndSubmit],
   )
 
   return { runChainedTrades, inFlightRef, signAndSubmit, pollUntilTerminal }

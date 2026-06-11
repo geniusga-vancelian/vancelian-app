@@ -76,7 +76,8 @@ export function useLifiSwapExecution(
   }, [])
 
   const signAndSubmit = useCallback(
-    async (exec: SwapExecutePayload) => {
+    async (exec: SwapExecutePayload, fromAssetOverride?: string) => {
+      const approvalAsset = fromAssetOverride ?? fromAsset
       const tx = exec.transaction
       if (!tx?.to || !tx.data) {
         throw new SwapExecutionError({
@@ -133,7 +134,7 @@ export function useLifiSwapExecution(
         transactionTo: tx.to,
         chainId,
         walletAddress: wallet.address as `0x${string}`,
-        fromAsset,
+        fromAsset: approvalAsset,
       })
       if (tokenApproval && isSwapTokenApprovalRequired(tokenApproval)) {
         assertSwapTokenApprovalPayload(tokenApproval)
@@ -143,7 +144,7 @@ export function useLifiSwapExecution(
             chainId,
             walletAddress: wallet.address as `0x${string}`,
             approval: tokenApproval,
-            assetSymbol: fromAsset,
+            assetSymbol: approvalAsset,
             sendTransaction: (approveTx, errorContext) =>
               sendPortalTransaction(approveTx, wallet, errorContext),
           })
@@ -173,7 +174,7 @@ export function useLifiSwapExecution(
             ...(gasLimit !== undefined ? { gasLimit } : {}),
           },
           wallet,
-          { phase: 'swap', assetSymbol: fromAsset },
+          { phase: 'swap', assetSymbol: approvalAsset },
         )
         hash = result.hash
       } catch (error) {

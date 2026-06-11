@@ -49,6 +49,28 @@ def test_resolve_terminal_status_partial_plan_is_residual_cash():
     assert status == "COMPLETED_WITH_RESIDUAL_CASH"
 
 
+def test_leg_to_dict_includes_lifi_quote_fields_for_sell():
+    leg = V3LegExecutionResult(
+        asset="AAVE",
+        instrument_id="00000000-0000-0000-0000-000000000001",
+        action="sell",
+        amount_usdc="4.33",
+        status="pending",
+        attempts=1,
+        swap_id="swap-1",
+        amount_in="0.068",
+        estimated_receive="4.31",
+        from_asset="AAVE",
+        to_asset="USDC",
+    )
+    payload = leg.to_dict()
+    assert payload["amount_in"] == "0.068"
+    assert payload["estimated_receive"] == "4.31"
+    assert payload["from_asset"] == "AAVE"
+    assert payload["quantity_sold"] == 0.068
+    assert payload["entry_asset_received"] == 4.31
+
+
 def test_resolve_terminal_status_full_plan_is_completed():
     buy_plan = [
         {"asset": "BTC", "amount_usdc": "40"},

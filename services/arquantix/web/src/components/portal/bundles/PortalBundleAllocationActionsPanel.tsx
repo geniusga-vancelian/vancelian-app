@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
   assetLineLabel,
@@ -11,6 +11,7 @@ import { TransactionProcessingPage } from '@/components/portal/transaction/Trans
 import {
   buildBundleRebalancingProcessingStepsDynamic,
   bundleRebalancingDynamicProcessingProgressIndex,
+  isTerminalBundleV3Status,
   type BundleRebalancingProcessingProgress,
 } from '@/components/portal/transaction/mappers/bundleSteps'
 import {
@@ -68,9 +69,6 @@ export function PortalBundleAllocationActionsPanel({
   const [processingProgress, setProcessingProgress] = useState<BundleRebalancingProcessingProgress>({
     stage: 'preparing',
   })
-  const maxProgressIndexRef = useRef(0)
-  const [displayProgressIndex, setDisplayProgressIndex] = useState(0)
-
   const orderedLegs = useMemo(() => orderedRebalanceLegs(assetLines), [assetLines])
 
   const processingSteps = useMemo(
@@ -105,11 +103,6 @@ export function PortalBundleAllocationActionsPanel({
       processingSteps.length,
     )
   }, [assetLines, executionPhase, orderedLegs.length, processingProgress, processingSteps.length])
-
-  useEffect(() => {
-    maxProgressIndexRef.current = Math.max(maxProgressIndexRef.current, rawProgressIndex)
-    setDisplayProgressIndex(maxProgressIndexRef.current)
-  }, [rawProgressIndex])
 
   const { runPortfolioRebalancing, inFlightRef } = useBundlePortfolioRebalancing(
     swapMockMode,
@@ -172,8 +165,6 @@ export function PortalBundleAllocationActionsPanel({
     if (busy || inFlightRef.current) return
     setBusy(true)
     setError(null)
-    maxProgressIndexRef.current = 0
-    setDisplayProgressIndex(0)
     setProcessingProgress({ stage: 'preparing', legTotal: orderedLegs.length })
     setExecutionPhase('preparing')
     try {
@@ -183,10 +174,18 @@ export function PortalBundleAllocationActionsPanel({
       const result = await runPortfolioRebalancing(portfolioId)
       setAssetLines(result.asset_lines ?? assetLines)
       setProcessingProgress({ stage: 'finalizing', legTotal: orderedLegs.length })
-      if (result.v3_status === 'RUNNING') {
-        throw new Error(
-          'Rééquilibrage interrompu — rouvrez le panier pour reprendre la signature.',
-        )
+      if (!isTerminalBundleV3Status(result.v3_status)) {
+        setExecutionPhase('idle')
+        if (result.v3_status === 'RUNNING') {
+          setError(
+            'Rééquilibrage partiellement terminé — relancez « Rééquilibrage » pour signer les swaps restants.',
+          )
+        } else {
+          setError('Rééquilibrage non terminé — vérifiez l’état du portefeuille puis réessayez.')
+        }
+        await onLockRefresh()
+        onRefresh()
+        return
       }
       invalidatePortalCache('portal:crypto-wallet')
       await onLockRefresh()
@@ -228,8 +227,8 @@ export function PortalBundleAllocationActionsPanel({
           title="Rééquilibrage en cours"
           lead={`Rééquilibrage de ${portfolioName} — ventes puis achats vers l’allocation cible.`}
           steps={processingSteps}
-          progressIndex={displayProgressIndex}
-          completedProgressIndex={Math.max(0, displayProgressIndex - 1)}
+          progressIndex={rawProgressIndex}
+          completedProgressIndex={Math.max(0, rawProgressIndex - 1)}
           onClose={() => undefined}
           cardClassName="brw brw-proc v-card w-full"
         />

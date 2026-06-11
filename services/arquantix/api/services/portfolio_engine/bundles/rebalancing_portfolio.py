@@ -347,6 +347,10 @@ def _asset_lines_from_running_snapshot(snapshot: dict[str, Any]) -> list[dict[st
                     value = result.get(field) if field in result else leg.get(field)
                     if value is not None and str(value) != "":
                         row[field] = str(value)
+                if action == "sell" and result.get("amount_in"):
+                    row["amount_crypto"] = str(result["amount_in"])
+                elif action == "buy" and result.get("estimated_receive"):
+                    row["amount_crypto"] = str(result["estimated_receive"])
                 lines.append(row)
             return
         for row in snapshot.get(results_key) or []:
