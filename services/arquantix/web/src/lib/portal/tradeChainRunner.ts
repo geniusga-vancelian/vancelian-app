@@ -33,6 +33,7 @@ export function rebalanceLegSnapshot(leg: PendingRebalanceLeg): BundleLegQuoteSn
     entry_asset_spent?: number
     quantity_sold?: number
     entry_asset_received?: number
+    amount_crypto?: number | string
   }
   const receive =
     leg.side === 'buy'
