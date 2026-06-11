@@ -561,16 +561,60 @@ class BundleRebalanceExecutor:
                 leg_result.attempts = attempt
                 leg_result.leg_ids.append(leg_id)
 
-                leg = ExecutionLeg(
-                    leg_id=leg_id,
+                from services.portfolio_engine.wallets.resolver import (
+                    ensure_portfolio_wallets,
+                    resolve_trade_wallets_for_leg,
+                )
+                from services.trade_core.execute_trade import execute_trade
+                from services.trade_core.types import TradeRequest
+
+                ensure_portfolio_wallets(
+                    db,
                     portfolio_id=portfolio_id,
                     client_id=client_id,
-                    action=leg_action,  # type: ignore[arg-type]
+                    spot_instrument_ids=[spot_instrument_id],
+                    entry_instrument_id=entry_instrument_id,
+                )
+                if leg_action == "rebalance_sell":
+                    wallet_from_id, wallet_to_id = resolve_trade_wallets_for_leg(
+                        db,
+                        portfolio_id=portfolio_id,
+                        client_id=client_id,
+                        leg_action=leg_action,
+                        from_instrument_id=spot_instrument_id,
+                        to_instrument_id=entry_instrument_id,
+                        entry_instrument_id=entry_instrument_id,
+                    )
+                    instrument_from_id = spot_instrument_id
+                    instrument_to_id = entry_instrument_id
+                else:
+                    wallet_from_id, wallet_to_id = resolve_trade_wallets_for_leg(
+                        db,
+                        portfolio_id=portfolio_id,
+                        client_id=client_id,
+                        leg_action=leg_action,
+                        from_instrument_id=entry_instrument_id,
+                        to_instrument_id=spot_instrument_id,
+                        entry_instrument_id=entry_instrument_id,
+                    )
+                    instrument_from_id = entry_instrument_id
+                    instrument_to_id = spot_instrument_id
+
+                trade_req = TradeRequest(
+                    wallet_from_id=wallet_from_id,
+                    wallet_to_id=wallet_to_id,
+                    instrument_from_id=instrument_from_id,
+                    instrument_to_id=instrument_to_id,
+                    quantity_from=amount_from,
+                    correlation_id=UUID(execution_id),
+                    client_id=client_id,
+                    portfolio_id=portfolio_id,
                     from_asset=from_asset,
                     to_asset=to_asset,
-                    amount_from=amount_from,
+                    leg_id=leg_id,
                     batch_id=batch_id,
                     bundle_action="rebalance_v3",
+                    leg_action=leg_action,
                     chain="base",
                     metadata={
                         "entry_instrument_id": str(entry_instrument_id),
@@ -582,7 +626,24 @@ class BundleRebalanceExecutor:
                     },
                 )
                 try:
-                    exec_result = self._execution.execute_leg(db, leg, actor)
+                    trade_result = execute_trade(db, trade_req, actor)
+                    exec_result = ExecutionResult(
+                        leg_id=trade_result.leg_id,
+                        status=(
+                            "pending"
+                            if trade_result.status in ("awaiting_signature", "pending")
+                            else "completed"
+                            if trade_result.status == "confirmed"
+                            else "failed"
+                        ),
+                        from_asset=trade_result.from_asset,
+                        to_asset=trade_result.to_asset,
+                        amount_from=trade_result.amount_from,
+                        amount_to=trade_result.amount_to,
+                        tx_hash=trade_result.tx_hash,
+                        provider_order_id=str(trade_result.swap_id),
+                        raw=trade_result.raw,
+                    )
                 except Exception as exc:
                     leg_result.status = "failed"
                     leg_result.error = str(exc)[:500]

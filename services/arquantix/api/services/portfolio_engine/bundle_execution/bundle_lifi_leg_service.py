@@ -72,7 +72,17 @@ class BundleLifiLegService:
             "leg_action": leg.action,
             "execution_provider": "lifi_base",
         }
-        ctx.update(leg.metadata or {})
+        meta = leg.metadata or {}
+        for key in (
+            "wallet_from_id",
+            "wallet_to_id",
+            "correlation_id",
+            "instrument_from_id",
+            "instrument_to_id",
+        ):
+            if meta.get(key):
+                ctx[key] = meta[key]
+        ctx.update(meta)
         self._swap_repo.append_audit(swap, {"event": "bundle_leg_context", **ctx})
 
     def quote_leg(self, db: Session, leg: ExecutionLeg) -> ExecutionQuote:

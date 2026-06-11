@@ -287,15 +287,31 @@ def post_swap_submit(
     _ensure_swaps_enabled()
     person_id = _resolve_person_id(credentials)
     try:
-        return _execute_svc.submit_signed_tx(
+        from services.trade_core.submit import submit_signed_trade
+
+        result = submit_signed_trade(
             db,
             person_id=person_id,
             swap_id=swap_id,
             tx_hash=body.tx_hash,
             signing_wallet_address=body.signing_wallet_address,
         )
+        if isinstance(result, dict):
+            from services.lifi.swap_repository import PersonWalletSwapRepository
+
+            swap = PersonWalletSwapRepository().get_for_person(
+                db, swap_id=swap_id, person_id=person_id,
+            )
+            if swap is not None:
+                return _execute_svc._build_status_response(swap)
+            raise SwapValidationError("swap.not_found", "Swap introuvable après submit bundle")
+        return result
     except SwapValidationError as exc:
         raise _validation_error(exc) from exc
+    except ValueError as exc:
+        raise _validation_error(
+            SwapValidationError("swap.submit_failed", str(exc)),
+        ) from exc
 
 
 @swaps_router.post("/{swap_id}/approval", response_model=SwapStatusResponse)

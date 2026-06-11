@@ -1,5 +1,5 @@
 import { resolveBundleInvestErrorMessage } from '@/components/portal/transaction/mappers/bundleUiCopy'
-import type { SwapExecutePayload } from '@/lib/portal/swapClient'
+import { submitSwapTx, type SwapExecutePayload } from '@/lib/portal/swapClient'
 
 export type BundleAllocationLeg = {
   asset: string
@@ -643,6 +643,7 @@ export async function bundleLegPrepareSign(swapId: string): Promise<SwapExecuteP
   return parseJson(res)
 }
 
+/** @deprecated Préférer submitSwapTx — route unifiée POST /api/portal/swaps/{id}. */
 export async function submitBundleLegTx(swapId: string, txHash: string): Promise<{
   leg_id: string
   status: string
@@ -650,12 +651,14 @@ export async function submitBundleLegTx(swapId: string, txHash: string): Promise
   tx_hash?: string | null
   amount_to?: string | null
 }> {
-  const res = await fetch(`/api/portal/bundles/leg/${encodeURIComponent(swapId)}/submit-tx`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tx_hash: txHash }),
-  })
-  return parseJson(res)
+  const status = await submitSwapTx(swapId, txHash)
+  return {
+    leg_id: swapId,
+    status: status.status,
+    swap_id: swapId,
+    tx_hash: status.tx_hash,
+    amount_to: null,
+  }
 }
 
 export async function finalizeBundleBatch(body: {

@@ -69,6 +69,10 @@ def settle_confirmed_swap(
         )
 
         ok = try_settle_confirmed_bundle_swap(db, swap, force=force_bundle)
+        if ok:
+            from services.settlement.wallet_ledger import settle_trade_wallets
+
+            settle_trade_wallets(db, swap)
         return SettleConfirmedSwapResult(
             settled=ok,
             scope=scope,
@@ -99,6 +103,9 @@ def settle_confirmed_swap(
             reason=str(exc.code),
         )
 
+    from services.settlement.wallet_ledger import settle_trade_wallets
+
+    settle_trade_wallets(db, swap)
     return SettleConfirmedSwapResult(settled=True, scope=scope)
 
 
