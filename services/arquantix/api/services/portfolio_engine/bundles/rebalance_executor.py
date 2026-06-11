@@ -179,6 +179,8 @@ class V3LegExecutionResult:
     estimated_receive: str = ""
     from_asset: str = ""
     to_asset: str = ""
+    wallet_from_id: str = ""
+    wallet_to_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -201,6 +203,10 @@ class V3LegExecutionResult:
             payload["from_asset"] = self.from_asset
         if self.to_asset:
             payload["to_asset"] = self.to_asset
+        if self.wallet_from_id:
+            payload["wallet_from_id"] = self.wallet_from_id
+        if self.wallet_to_id:
+            payload["wallet_to_id"] = self.wallet_to_id
         if self.action == "sell":
             qty = _leg_quote_float(self.amount_in)
             recv = _leg_quote_float(self.estimated_receive)
@@ -785,6 +791,8 @@ class BundleRebalanceExecutor:
                     continue
 
                 leg_result.swap_id = exec_result.provider_order_id
+                leg_result.wallet_from_id = str(wallet_from_id)
+                leg_result.wallet_to_id = str(wallet_to_id)
                 _apply_leg_quote_fields(
                     leg_result,
                     amount_in=trade_result.amount_from,
@@ -1593,6 +1601,8 @@ def _results_from_metadata(rows: list[dict[str, Any]]) -> list[V3LegExecutionRes
                 estimated_receive=str(row.get("estimated_receive") or ""),
                 from_asset=str(row.get("from_asset") or ""),
                 to_asset=str(row.get("to_asset") or ""),
+                wallet_from_id=str(row.get("wallet_from_id") or ""),
+                wallet_to_id=str(row.get("wallet_to_id") or ""),
             )
         )
     return out

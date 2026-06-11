@@ -209,6 +209,8 @@ export type BundleRebalanceLeg = {
   entry_asset_received?: number
   entry_asset_spent?: number
   quantity_bought?: number
+  wallet_from_id?: string
+  wallet_to_id?: string
   swap_id?: string
   leg_id?: string
   signing?: Record<string, unknown> | null

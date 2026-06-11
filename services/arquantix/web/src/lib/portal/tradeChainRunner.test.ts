@@ -4,7 +4,9 @@ import { describe, it } from 'node:test'
 import type { PortfolioRebalancingPayload } from '@/lib/portal/bundleClient'
 import {
   rebalanceLegFromAsset,
+  rebalanceLegQuotedSwap,
   rebalanceLegSnapshot,
+  rebalanceLegSwapParams,
   runSequentialTrades,
 } from '@/lib/portal/tradeChainRunner'
 
@@ -111,9 +113,9 @@ describe('runSequentialTrades', () => {
         signAndSubmit: async () => '0xabc',
         pollUntilTerminal: async () => ({ status: 'CONFIRMED', tx_hash: '0xabc' }),
       },
-      executeLeg: async (swapId) => {
-        executed.push(swapId)
-        if (swapId === 'swap-btc') {
+      runLeg: async (leg) => {
+        executed.push(leg.swap_id!)
+        if (leg.swap_id === 'swap-btc') {
           throw new Error('signal timed out')
         }
       },
@@ -176,8 +178,8 @@ describe('runSequentialTrades', () => {
           ],
         })
       },
-      executeLeg: async (swapId) => {
-        if (swapId === 'swap-eth') return
+      runLeg: async (leg) => {
+        if (leg.swap_id === 'swap-eth') return
         throw new Error('unexpected')
       },
     })
@@ -230,8 +232,8 @@ describe('runSequentialTrades', () => {
         signAndSubmit: async () => '0xabc',
         pollUntilTerminal: async () => ({ status: 'CONFIRMED', tx_hash: '0xabc' }),
       },
-      executeLeg: async (swapId) => {
-        executed.push(swapId)
+      runLeg: async (leg) => {
+        executed.push(leg.swap_id!)
       },
       resumeFn: async () => {
         resumeCalls += 1
@@ -268,7 +270,7 @@ describe('runSequentialTrades', () => {
         signAndSubmit: async () => '0xabc',
         pollUntilTerminal: async () => ({ status: 'CONFIRMED', tx_hash: '0xabc' }),
       },
-      executeLeg: async () => {
+      runLeg: async () => {
         throw new Error('confirm failed')
       },
       resumeFn: async () =>
@@ -282,46 +284,50 @@ describe('runSequentialTrades', () => {
     assert.equal(result.payload.v3_status, 'COMPLETED_WITH_RESIDUAL_CASH')
   })
 
-  it('passe fromAsset par leg à executeLeg', async () => {
-    const fromAssets: string[] = []
-    await runSequentialTrades({
-      initial: basePayload({
-        sell_results: [
-          {
-            asset: 'AAVE',
-            status: 'pending',
-            swap_id: 'swap-aave',
-            amount_usdc: '4.33',
-            amount_in: '0.068',
-            estimated_receive: '4.31',
-            from_asset: 'AAVE',
-            quantity_sold: 0.068,
-            entry_asset_received: 4.31,
-          },
-        ],
-        buy_results: [],
-      }),
+  it('rebalanceLegQuotedSwap expose fromAsset vente', () => {
+    const quoted = rebalanceLegQuotedSwap(
+      {
+        asset: 'AAVE',
+        side: 'sell',
+        status: 'pending',
+        swap_id: 'swap-aave',
+        amount_in: '0.068',
+        estimated_receive: '4.31',
+        from_asset: 'AAVE',
+      },
+      'USDC',
+    )
+    assert.equal(quoted.fromAsset, 'AAVE')
+    assert.equal(quoted.swapId, 'swap-aave')
+  })
+
+  it('rebalanceLegSwapParams mappe legAction sell/buy', () => {
+    const ctx = {
+      portfolioId: 'portfolio-1',
+      batchId: 'batch-1',
+      correlationId: 'exec-1',
       entryAsset: 'USDC',
-      tradeDeps: {
-        signAndSubmit: async () => '0xabc',
-        pollUntilTerminal: async () => ({ status: 'CONFIRMED', tx_hash: '0xabc' }),
+    }
+    const sell = rebalanceLegSwapParams(
+      {
+        asset: 'AAVE',
+        side: 'sell',
+        status: 'pending',
+        swap_id: 'swap-aave',
+        amount_in: '0.068',
+        estimated_receive: '4.31',
+        from_asset: 'AAVE',
+        wallet_from_id: 'wf-1',
+        wallet_to_id: 'wt-1',
       },
-      executeLeg: async (_swapId, _snap, deps) => {
-        fromAssets.push(deps.fromAsset ?? '')
-      },
-      resumeFn: async () =>
-        basePayload({
-          v3_status: 'COMPLETED',
-          sell_results: [
-            {
-              asset: 'AAVE',
-              status: 'completed',
-              swap_id: 'swap-aave',
-              amount_usdc: '4.33',
-            },
-          ],
-        }),
-    })
-    assert.deepEqual(fromAssets, ['AAVE'])
+      ctx,
+    )
+    assert.equal(sell.legAction, 'rebalance_sell')
+    assert.equal(sell.walletFromId, 'wf-1')
+    const buy = rebalanceLegSwapParams(
+      { ...buyLegFixture('ETH', 'pending', 'swap-eth', 0.01), side: 'buy' as const },
+      ctx,
+    )
+    assert.equal(buy.legAction, 'rebalance_buy')
   })
 })

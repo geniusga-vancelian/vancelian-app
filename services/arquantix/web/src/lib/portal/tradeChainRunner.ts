@@ -1,14 +1,19 @@
 /**
- * Enchaîne des legs LI.FI comme des swaps simples successifs.
+ * Enchaîne des legs LI.FI comme des swaps simples successifs via runVirtualWalletSwap.
  * Un leg en échec n'arrête pas les suivants — même stratégie que bundle invest legacy.
  */
-import { executeTrade, type ExecuteTradeDeps } from '@/lib/portal/executeTrade'
 import { normalizeBundleResumeError } from '@/lib/portal/bundleResumeError'
 import {
   snapshotFromRebalanceLeg,
   type BundleLegQuoteSnapshot,
 } from '@/lib/portal/bundleLegQuoteConfirm'
 import type { BundleRebalanceLeg, PortfolioRebalancingPayload } from '@/lib/portal/bundleClient'
+import {
+  runVirtualWalletSwap,
+  type QuotedVirtualWalletSwap,
+  type VirtualWalletSwapDeps,
+  type VirtualWalletSwapParams,
+} from '@/lib/portal/runVirtualWalletSwap'
 import { isTerminalBundleV3Status } from '@/components/portal/transaction/mappers/bundleSteps'
 
 const RESUME_RETRY_DELAY_MS = 800
@@ -20,6 +25,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 export type PendingRebalanceLeg = BundleRebalanceLeg & { side: 'buy' | 'sell' }
+
+export type RebalanceLegContext = {
+  portfolioId: string
+  batchId: string
+  correlationId: string
+  entryAsset?: string
+}
 
 export type TradeLegOutcome = {
   asset: string
@@ -61,18 +73,53 @@ export function rebalanceLegFromAsset(leg: PendingRebalanceLeg, entryAsset = 'US
   return leg.side === 'sell' ? leg.asset : entryAsset
 }
 
-export type ExecuteLegFn = (
-  swapId: string,
-  snapshot: BundleLegQuoteSnapshot,
-  deps: ExecuteTradeDeps,
+export function rebalanceLegQuotedSwap(
+  leg: PendingRebalanceLeg,
+  entryAsset?: string,
+): QuotedVirtualWalletSwap {
+  const reviewSnapshot = rebalanceLegSnapshot(leg)
+  return {
+    swapId: leg.swap_id!,
+    reviewSnapshot,
+    fromAsset: rebalanceLegFromAsset(leg, entryAsset),
+    toAsset: leg.to_asset,
+    amountIn: leg.amount_in ?? reviewSnapshot.review_amount_in,
+    estimatedReceive: leg.estimated_receive ?? reviewSnapshot.review_estimated_receive,
+  }
+}
+
+export function rebalanceLegSwapParams(
+  leg: PendingRebalanceLeg,
+  context: RebalanceLegContext,
+): VirtualWalletSwapParams {
+  const snapshot = rebalanceLegSnapshot(leg)
+  const legIds = (leg as BundleRebalanceLeg & { leg_ids?: string[] }).leg_ids
+  return {
+    walletFromId: leg.wallet_from_id ?? '',
+    walletToId: leg.wallet_to_id ?? '',
+    volumeFrom: snapshot.review_amount_in,
+    volumeTo: snapshot.review_estimated_receive,
+    side: leg.side,
+    portfolioId: context.portfolioId,
+    correlationId: context.correlationId,
+    legId: leg.leg_id ?? legIds?.[0] ?? `rebal-${leg.side}-${leg.asset}`,
+    batchId: context.batchId,
+    bundleAction: 'rebalance_v3',
+    legAction: leg.side === 'sell' ? 'rebalance_sell' : 'rebalance_buy',
+  }
+}
+
+export type RunLegFn = (
+  leg: PendingRebalanceLeg,
+  context: RebalanceLegContext,
+  deps: VirtualWalletSwapDeps,
 ) => Promise<void>
 
 export type RunSequentialTradesOptions = {
   initial: PortfolioRebalancingPayload
-  tradeDeps: ExecuteTradeDeps
+  tradeDeps: VirtualWalletSwapDeps
   entryAsset?: string
-  executeLeg?: ExecuteLegFn
-  snapshotForLeg?: (leg: PendingRebalanceLeg) => BundleLegQuoteSnapshot
+  runLeg?: RunLegFn
   onAssetStatus?: (asset: string, status: string) => void
   onLegProgress?: (current: number, total: number, asset: string) => void
   resumeFn?: (portfolioId: string) => Promise<PortfolioRebalancingPayload>
@@ -115,6 +162,21 @@ async function resumeWithRetry(
   }
 }
 
+function rebalanceContext(
+  payload: PortfolioRebalancingPayload,
+  entryAsset?: string,
+): RebalanceLegContext {
+  const correlationId =
+    payload.rebalance_execution_id ?? payload.batch_id ?? payload.portfolio_id
+  const batchId = payload.batch_id ?? payload.rebalance_execution_id ?? correlationId
+  return {
+    portfolioId: payload.portfolio_id,
+    batchId,
+    correlationId,
+    entryAsset,
+  }
+}
+
 export async function runSequentialTrades(
   options: RunSequentialTradesOptions,
 ): Promise<RunSequentialTradesResult> {
@@ -123,11 +185,13 @@ export async function runSequentialTrades(
   const resumeOutcomes: ResumeOutcome[] = []
   let lastResumeError: string | null = null
   let resumeRounds = 0
-  const snapshotForLeg = options.snapshotForLeg ?? rebalanceLegSnapshot
-  const executeLeg =
-    options.executeLeg ??
-    (async (swapId, snapshot, deps) => {
-      await executeTrade(swapId, snapshot, deps)
+
+  const runLeg =
+    options.runLeg ??
+    (async (leg, context, deps) => {
+      await runVirtualWalletSwap(rebalanceLegSwapParams(leg, context), deps, {
+        quoted: rebalanceLegQuotedSwap(leg, context.entryAsset),
+      })
     })
 
   const plannedLegTotal = Math.max(
@@ -144,18 +208,16 @@ export async function runSequentialTrades(
 
     const pending = pendingRebalanceLegs(result)
     if (pending.length > 0) {
-      // Un seul swap par tour : quote LI.FI + signature Privy indépendants (ADR 008).
       const leg = pending[0]!
       const swapId = leg.swap_id!
+      const context = rebalanceContext(result, options.entryAsset)
       executedLegCount += 1
       options.onLegProgress?.(executedLegCount, plannedLegTotal, leg.asset)
       options.onAssetStatus?.(leg.asset, 'pending')
 
       try {
-        const fromAsset = rebalanceLegFromAsset(leg, options.entryAsset)
-        await executeLeg(swapId, snapshotForLeg(leg), {
+        await runLeg(leg, context, {
           ...options.tradeDeps,
-          fromAsset,
           onPhaseChange: (phase) => {
             options.tradeDeps.onPhaseChange?.(phase)
             if (phase === 'signing' || phase === 'approving') {

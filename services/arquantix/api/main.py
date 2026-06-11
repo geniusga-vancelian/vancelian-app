@@ -105,6 +105,7 @@ from services.test_clients import (
     bootstrap_router as test_clients_bootstrap_router,
     mobile_flutter_router as test_clients_mobile_flutter_router,
 )
+from services.trade_core.router import router as trade_core_router
 from services.custody import custody_admin_router, custody_transfer_router, custody_webhook_router
 from services.privy_wallet.webhook_router import privy_webhook_router
 from services.privy_wallet.routes import privy_wallet_app_router
@@ -239,6 +240,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(bundle_ledger_admin_router)
     app.include_router(test_clients_bootstrap_router)
     app.include_router(test_clients_mobile_flutter_router)
+    app.include_router(trade_core_router)
     app.include_router(custody_admin_router)
     app.include_router(custody_transfer_router)
     app.include_router(custody_webhook_router)
