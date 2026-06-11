@@ -1,3 +1,4 @@
+import { classifySwapError } from '@/lib/portal/swapFailure'
 import {
   type SwapConfirmExecutePayload,
   type SwapQuotePayload,
@@ -34,7 +35,10 @@ export async function confirmSwapWithRetry(input: {
     } catch (error) {
       lastError = error
       if (!isRetryableError(error) || attempt >= MAX_ATTEMPTS - 1) {
-        throw error
+        if (error instanceof SwapPriceChangedError) {
+          throw error
+        }
+        throw classifySwapError(error, 'confirm_execute')
       }
       await sleep(RETRY_DELAY_MS * (attempt + 1))
     }

@@ -158,6 +158,8 @@ export function classifySwapError(
     haystack.includes('fetch') ||
     haystack.includes('network') ||
     haystack.includes('timeout') ||
+    haystack.includes('timed out') ||
+    haystack.includes('signal timed out') ||
     haystack.includes('econnrefused')
   ) {
     return new SwapExecutionError({

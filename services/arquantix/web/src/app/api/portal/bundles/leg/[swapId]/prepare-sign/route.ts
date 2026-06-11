@@ -17,7 +17,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(90_000),
     })
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })

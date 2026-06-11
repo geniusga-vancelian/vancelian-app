@@ -21,6 +21,12 @@ describe('swapFailure', () => {
     assert.equal(err.code, 'wallet_mismatch')
   })
 
+  it('maps AbortSignal timeout to rpc_error', () => {
+    const err = classifySwapError(new Error('signal timed out'), 'confirm_execute')
+    assert.equal(err.code, 'rpc_error')
+    assert.equal(err.userMessage, userMessageForSwapFailureCode('rpc_error'))
+  })
+
   it('preserves SwapExecutionError', () => {
     const original = new SwapExecutionError({
       code: 'insufficient_funds',

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
+import { SWAP_CONFIRM_EXECUTE_TIMEOUT_MS } from '@/lib/portal/swapClient'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(SWAP_CONFIRM_EXECUTE_TIMEOUT_MS),
     })
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })

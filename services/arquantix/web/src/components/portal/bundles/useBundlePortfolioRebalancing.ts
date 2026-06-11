@@ -61,8 +61,12 @@ export function assetLineLabel(line: PortfolioRebalancingAssetLine): string {
     line.status === 'completed'
       ? 'Terminé'
       : line.status === 'pending'
-        ? 'Signature en cours…'
-        : line.status === 'failed'
+        ? 'Préparation…'
+        : line.status === 'signing' || line.status === 'approving'
+          ? 'Signature en cours…'
+          : line.status === 'submitting'
+            ? 'Confirmation on-chain…'
+            : line.status === 'failed'
           ? 'Échec'
           : line.status === 'planned'
             ? 'Planifié'
@@ -122,8 +126,20 @@ export function useBundlePortfolioRebalancing(
         for (let i = 0; i < pending.length; i += 1) {
           const leg = pending[i]!
           onLegProgress?.(i + 1, total, leg.asset)
-          onAssetStatus?.(leg.asset, 'signing')
-          await executeBundleTrade(leg.swap_id!, v3Snapshot(leg), tradeDeps)
+          onAssetStatus?.(leg.asset, 'pending')
+          await executeBundleTrade(leg.swap_id!, v3Snapshot(leg), {
+            ...tradeDeps,
+            onPhaseChange: (phase) => {
+              tradeDeps.onPhaseChange?.(phase)
+              if (phase === 'signing' || phase === 'approving') {
+                onAssetStatus?.(leg.asset, 'signing')
+              } else if (phase === 'submitting') {
+                onAssetStatus?.(leg.asset, 'submitting')
+              } else if (phase === 'completed') {
+                onAssetStatus?.(leg.asset, 'completed')
+              }
+            },
+          })
           onAssetStatus?.(leg.asset, 'completed')
         }
 

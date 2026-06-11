@@ -15,6 +15,7 @@ import {
   type PortfolioRebalancingAssetLine,
 } from '@/lib/portal/bundleClient'
 import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
+import { SwapExecutionError } from '@/lib/portal/swapFailure'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
@@ -118,14 +119,26 @@ export function PortalBundleAllocationActionsPanel({
       onClose()
     } catch (err) {
       setExecutionPhase('failed')
-      const message = err instanceof Error ? err.message : 'Rééquilibrage impossible'
-      setError(message)
+      const message =
+        err instanceof SwapExecutionError
+          ? err.userMessage
+          : err instanceof Error
+            ? err.message
+            : 'Rééquilibrage impossible'
+      const isTimeout = /timed out|timeout|délai|abort|réseau blockchain/i.test(message)
       try {
-        await reconcileStaleBundlePortfolioState(portfolioId, {
-          forceSignableV3Close: /timed out|timeout|indisponible|signature/i.test(message),
+        const reconciled = await reconcileStaleBundlePortfolioState(portfolioId, {
+          forceSignableV3Close: isTimeout || /indisponible|signature/i.test(message),
         })
+        if (isTimeout && reconciled.active_operation?.status === 'none') {
+          setError(
+            'Préparation du swap trop longue — réessayez « Rééquilibrage » dans quelques secondes.',
+          )
+        } else {
+          setError(message)
+        }
       } catch {
-        // best-effort cleanup
+        setError(message)
       }
       await onLockRefresh()
       onRefresh()

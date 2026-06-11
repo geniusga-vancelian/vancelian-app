@@ -167,6 +167,9 @@ export async function requestSwapQuote(body: {
   return parseJson(res)
 }
 
+/** LI.FI refresh + slippage — legs bundle CBBTC peuvent dépasser 25s. */
+export const SWAP_CONFIRM_EXECUTE_TIMEOUT_MS = 90_000
+
 export async function confirmSwapExecution(body: {
   swap_id: string
   review_estimated_receive: string
@@ -176,7 +179,7 @@ export async function confirmSwapExecution(body: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(SWAP_CONFIRM_EXECUTE_TIMEOUT_MS),
   })
   return parseJson(res)
 }
