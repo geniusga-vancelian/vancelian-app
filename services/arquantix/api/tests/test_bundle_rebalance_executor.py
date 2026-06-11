@@ -1070,17 +1070,229 @@ def test_reconcile_expired_swap_pending_terminalizes(db: Session):
     assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is None
 
 
-def test_deposit_not_in_client_signature_triggers():
+def test_deposit_in_client_signature_triggers():
     from services.portfolio_engine.bundles.rebalance_executor import (
         CLIENT_SIGNATURE_TRIGGERS,
         PAUSE_ON_PENDING_TRIGGERS,
         WORKER_RESUME_TRIGGERS,
+        _uses_client_signature,
     )
 
-    assert CLIENT_SIGNATURE_TRIGGERS == frozenset({"manual"})
+    assert CLIENT_SIGNATURE_TRIGGERS == frozenset({"manual", "deposit"})
     assert "deposit" in PAUSE_ON_PENDING_TRIGGERS
     assert "deposit" in WORKER_RESUME_TRIGGERS
-    assert "deposit" not in CLIENT_SIGNATURE_TRIGGERS
+    assert "deposit" in CLIENT_SIGNATURE_TRIGGERS
+    assert _uses_client_signature("deposit") is True
+
+
+def test_deposit_trigger_quotes_one_buy_at_a_time(db: Session, monkeypatch):
+    """deposit + buy_plan multi-legs : même chaîne quote+signature que manual."""
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    btc = _instrument_for_asset(db, "BTC")
+    eth = _instrument_for_asset(db, "ETH")
+    plan = {
+        "status": "ok",
+        "plan_hash": f"sha256:deposit-buys-{uuid.uuid4().hex[:8]}",
+        "snapshot_hash": "sha256:snap",
+        "entry_asset": "USDC",
+        "available_cash_usdc": "60",
+        "sell_plan": [],
+        "buy_plan": [
+            {
+                "asset": "BTC",
+                "instrument_id": str(btc.id),
+                "amount_usdc": "30",
+                "action": "buy",
+                "funded_by": "cash_leg",
+            },
+            {
+                "asset": "ETH",
+                "instrument_id": str(eth.id),
+                "amount_usdc": "30",
+                "action": "buy",
+                "funded_by": "cash_leg",
+            },
+        ],
+    }
+    provider = _RecordingMockProvider(default_status="pending")
+    result = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        trigger="deposit",
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert result["v3_status"] == "RUNNING"
+    assert result["client_signature_required"] is True
+    assert len(result["buy_results"]) == 1
+    assert result["buy_results"][0]["asset"] == "BTC"
+    assert result["buy_results"][0]["status"] == "pending"
+    assert len(provider.calls) == 1
+
+
+def test_deposit_reconcile_does_not_terminalize_with_unquoted_buy_leg(db: Session):
+    """Après leg 1 completed, reconcile ne clôt pas — resume peut quoter leg 2."""
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    btc = _instrument_for_asset(db, "BTC")
+    eth = _instrument_for_asset(db, "ETH")
+    plan = {
+        "status": "ok",
+        "plan_hash": f"sha256:deposit-chain-{uuid.uuid4().hex[:8]}",
+        "snapshot_hash": "sha256:snap",
+        "entry_asset": "USDC",
+        "available_cash_usdc": "60",
+        "sell_plan": [],
+        "buy_plan": [
+            {
+                "asset": "BTC",
+                "instrument_id": str(btc.id),
+                "amount_usdc": "30",
+                "action": "buy",
+                "funded_by": "cash_leg",
+            },
+            {
+                "asset": "ETH",
+                "instrument_id": str(eth.id),
+                "amount_usdc": "30",
+                "action": "buy",
+                "funded_by": "cash_leg",
+            },
+        ],
+    }
+    execution_id = str(uuid.uuid4())
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_PROGRESS,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "client_id": str(pe.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "trigger": "deposit",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "available_cash_usdc": plan["available_cash_usdc"],
+            "sell_plan": [],
+            "buy_plan": plan["buy_plan"],
+            "sell_results": [],
+            "buy_results": [{
+                "asset": "BTC",
+                "instrument_id": str(btc.id),
+                "action": "buy",
+                "amount_usdc": "30",
+                "status": "completed",
+                "attempts": 1,
+                "leg_ids": ["v3-rebal-dep-btc-a1"],
+            }],
+        },
+    )
+    db.commit()
+
+    terminal = reconcile_running_v3_rebalance_execution(
+        db,
+        portfolio_id=str(portfolio.id),
+        client_id=pe.id,
+        drift_rebalance_plan=plan,
+        auto_progress=False,
+    )
+    db.commit()
+
+    assert terminal is None
+    assert find_running_v3_rebalance_execution(db, portfolio_id=str(portfolio.id)) is not None
+
+
+def test_deposit_resume_quotes_second_buy_leg(db: Session, monkeypatch):
+    """Leg 1 completed → resume quote leg 2 → RUNNING + pending ETH."""
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    btc = _instrument_for_asset(db, "BTC")
+    eth = _instrument_for_asset(db, "ETH")
+    plan = {
+        "status": "ok",
+        "plan_hash": f"sha256:deposit-resume-{uuid.uuid4().hex[:8]}",
+        "snapshot_hash": "sha256:snap",
+        "entry_asset": "USDC",
+        "available_cash_usdc": "60",
+        "sell_plan": [],
+        "buy_plan": [
+            {
+                "asset": "BTC",
+                "instrument_id": str(btc.id),
+                "amount_usdc": "30",
+                "action": "buy",
+                "funded_by": "cash_leg",
+            },
+            {
+                "asset": "ETH",
+                "instrument_id": str(eth.id),
+                "amount_usdc": "30",
+                "action": "buy",
+                "funded_by": "cash_leg",
+            },
+        ],
+    }
+    execution_id = str(uuid.uuid4())
+    AuditService.log_event(
+        db,
+        entity_type=ENTITY_TYPE_V3_REBALANCE,
+        entity_id=execution_id,
+        action=ACTION_V3_RUNNING,
+        metadata={
+            "rebalance_execution_id": execution_id,
+            "batch_id": execution_id,
+            "portfolio_id": str(portfolio.id),
+            "client_id": str(pe.id),
+            "plan_hash": plan["plan_hash"],
+            "v3_status": "RUNNING",
+            "trigger": "deposit",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "available_cash_usdc": plan["available_cash_usdc"],
+            "sell_plan": [],
+            "buy_plan": plan["buy_plan"],
+            "sell_results": [],
+            "buy_results": [{
+                "asset": "BTC",
+                "instrument_id": str(btc.id),
+                "action": "buy",
+                "amount_usdc": "30",
+                "status": "completed",
+                "attempts": 1,
+                "leg_ids": ["v3-rebal-dep-btc-a1"],
+            }],
+        },
+    )
+    db.commit()
+
+    provider = _RecordingMockProvider(default_status="pending")
+    from services.portfolio_engine.bundles.rebalance_executor import resume_v3_bundle_rebalance_execution
+
+    result = resume_v3_bundle_rebalance_execution(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        trigger="deposit",
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert result["v3_status"] == "RUNNING"
+    assert len(result["buy_results"]) == 2
+    eth_leg = next(r for r in result["buy_results"] if r["asset"] == "ETH")
+    assert eth_leg["status"] == "pending"
+    assert eth_leg.get("swap_id")
+    assert len(provider.calls) == 1
+    assert provider.calls[0]["action"] == "rebalance_buy"
 
 
 def test_reconcile_deposit_skips_plan_drift_terminalize(db: Session):

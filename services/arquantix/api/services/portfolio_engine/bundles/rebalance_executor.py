@@ -45,7 +45,7 @@ def client_signature_stale_minutes() -> int:
         return 10
 
 V3Trigger = Literal["manual", "deposit", "recovery", "cron"]
-CLIENT_SIGNATURE_TRIGGERS: frozenset[V3Trigger] = frozenset({"manual"})
+CLIENT_SIGNATURE_TRIGGERS: frozenset[V3Trigger] = frozenset({"manual", "deposit"})
 PAUSE_ON_PENDING_TRIGGERS: frozenset[V3Trigger] = frozenset({"manual", "deposit"})
 WORKER_RESUME_TRIGGERS: frozenset[V3Trigger] = frozenset({"deposit"})
 
@@ -608,7 +608,11 @@ class BundleRebalanceExecutor:
             if r.status == "completed"
             or (
                 r.status == "pending"
-                and r.error in ("awaiting_client_signature", "awaiting_confirmation")
+                and r.error in (
+                    "awaiting_client_signature",
+                    "awaiting_wallet_signature",
+                    "awaiting_confirmation",
+                )
             )
         }
         remaining_plan = [
@@ -1014,6 +1018,134 @@ class BundleRebalanceExecutor:
             )
         return None
 
+    def _progress_client_signature_chain(
+        self,
+        db: Session,
+        *,
+        client_id: UUID,
+        portfolio_id: str,
+        execution_id: str,
+        batch_id: str,
+        plan_hash: str,
+        trigger: V3Trigger,
+        drift_rebalance_plan: dict[str, Any],
+        sell_results: list[V3LegExecutionResult],
+        buy_results: list[V3LegExecutionResult],
+        started_at: str,
+        running_payload: dict[str, Any],
+        actor: ActorContext,
+    ) -> dict[str, Any] | None:
+        """Quote le leg suivant (ADR 008) — jamais terminaliser avec des legs planifiées non quotées."""
+        sell_plan = list(drift_rebalance_plan.get("sell_plan") or [])
+        buy_plan = list(drift_rebalance_plan.get("buy_plan") or [])
+        if not has_unquoted_plan_legs(
+            sell_plan=sell_plan,
+            buy_plan=buy_plan,
+            sell_results=sell_results,
+            buy_results=buy_results,
+        ):
+            return None
+
+        portfolio = BundleOrchestrator._load_and_validate_portfolio(
+            db, UUID(portfolio_id), client_id,
+        )
+        product = BundleOrchestrator._load_product(db, portfolio)
+        entry_config = BundleOrchestrator._resolve_entry_config(product)
+        entry_asset = str(
+            drift_rebalance_plan.get("entry_asset")
+            or entry_config["entry_asset_default"]
+        ).upper()
+        entry_instrument = BundleOrchestrator._resolve_or_create_instrument(db, entry_asset)
+
+        if sell_plan:
+            sell_results = self._execute_remaining_legs(
+                db,
+                client_id=client_id,
+                portfolio_id=UUID(portfolio_id),
+                batch_id=batch_id,
+                execution_id=execution_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                plan_legs=sell_plan,
+                leg_action="rebalance_sell",
+                actor=actor,
+                existing_results=sell_results,
+                trigger=trigger,
+            )
+            if not self._sells_allow_buy_phase(sell_results):
+                return None
+            running_resp = self._maybe_running_after_legs(
+                db,
+                execution_id=execution_id,
+                batch_id=batch_id,
+                portfolio_id=portfolio_id,
+                plan_hash=plan_hash,
+                trigger=trigger,
+                drift_rebalance_plan=drift_rebalance_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+                started_at=started_at,
+                running_payload=running_payload,
+                actor=actor,
+            )
+            if running_resp is not None:
+                return running_resp
+
+        if buy_plan:
+            buy_results = self._execute_remaining_legs(
+                db,
+                client_id=client_id,
+                portfolio_id=UUID(portfolio_id),
+                batch_id=batch_id,
+                execution_id=execution_id,
+                entry_asset=entry_asset,
+                entry_instrument_id=entry_instrument.id,
+                plan_legs=buy_plan,
+                leg_action="rebalance_buy",
+                actor=actor,
+                existing_results=buy_results,
+                trigger=trigger,
+            )
+
+        if any(r.status == "pending" for r in sell_results + buy_results):
+            return self._build_running_response(
+                execution_id=execution_id,
+                batch_id=batch_id,
+                portfolio_id=portfolio_id,
+                plan_hash=plan_hash,
+                trigger=trigger,
+                drift_rebalance_plan=drift_rebalance_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+                started_at=started_at,
+                running_payload=running_payload,
+                actor=actor,
+                db=db,
+            )
+
+        if has_unquoted_plan_legs(
+            sell_plan=sell_plan,
+            buy_plan=buy_plan,
+            sell_results=sell_results,
+            buy_results=buy_results,
+        ):
+            return self._build_running_response(
+                execution_id=execution_id,
+                batch_id=batch_id,
+                portfolio_id=portfolio_id,
+                plan_hash=plan_hash,
+                trigger=trigger,
+                drift_rebalance_plan=drift_rebalance_plan,
+                sell_results=sell_results,
+                buy_results=buy_results,
+                started_at=started_at,
+                running_payload=running_payload,
+                actor=actor,
+                db=db,
+            )
+
+        return None
+
     def _complete_execution_cycle(
         self,
         db: Session,
@@ -1056,6 +1188,27 @@ class BundleRebalanceExecutor:
                 actor=actor,
                 db=db,
             )
+
+        if _uses_client_signature(trigger):
+            client_id_raw = running_payload.get("client_id")
+            if client_id_raw:
+                chained = self._progress_client_signature_chain(
+                    db,
+                    client_id=UUID(str(client_id_raw)),
+                    portfolio_id=portfolio_id,
+                    execution_id=execution_id,
+                    batch_id=batch_id,
+                    plan_hash=plan_hash,
+                    trigger=trigger,
+                    drift_rebalance_plan=drift_rebalance_plan,
+                    sell_results=sell_results,
+                    buy_results=buy_results,
+                    started_at=started_at,
+                    running_payload=running_payload,
+                    actor=actor,
+                )
+                if chained is not None:
+                    return chained
 
         if not pause_on_pending:
             self._expire_pending_legs(sell_results + buy_results)
@@ -1752,7 +1905,11 @@ def _expire_unrecoverable_pending_legs(
 def _has_signable_pending_legs(results: list[V3LegExecutionResult]) -> bool:
     return any(
         r.status == "pending"
-        and r.error in ("awaiting_client_signature", "awaiting_confirmation")
+        and r.error in (
+            "awaiting_client_signature",
+            "awaiting_wallet_signature",
+            "awaiting_confirmation",
+        )
         for r in results
     )
 
@@ -1805,7 +1962,8 @@ def reconcile_running_v3_rebalance_execution(
     all_results = sell_results + buy_results
     has_pending = any(r.status == "pending" for r in all_results)
     signable_pending = (
-        trigger == "manual" and _has_signable_pending_legs(all_results)
+        _uses_client_signature(trigger)  # type: ignore[arg-type]
+        and _has_signable_pending_legs(all_results)
     )
 
     execution_id = str(running["rebalance_execution_id"])
@@ -1819,31 +1977,54 @@ def reconcile_running_v3_rebalance_execution(
     if not has_pending:
         sell_plan = list(running.get("sell_plan") or [])
         buy_plan = list(running.get("buy_plan") or [])
-        if (
-            trigger == "manual"
-            and drift_rebalance_plan is not None
+        unquoted = (
+            drift_rebalance_plan is not None
             and has_unquoted_plan_legs(
                 sell_plan=sell_plan,
                 buy_plan=buy_plan,
                 sell_results=sell_results,
                 buy_results=buy_results,
             )
-            and _within_client_rebalance_grace(running)
-        ):
-            return executor._build_running_response(
-                db=db,
-                execution_id=execution_id,
-                batch_id=str(running.get("batch_id") or execution_id),
-                portfolio_id=portfolio_id,
-                plan_hash=str(running.get("plan_hash") or ""),
-                trigger=trigger,  # type: ignore[arg-type]
-                drift_rebalance_plan=drift_rebalance_plan,
-                sell_results=sell_results,
-                buy_results=buy_results,
-                started_at=str(running.get("started_at") or ""),
-                running_payload=running_payload,
-                actor=actor,
+        )
+        if _uses_client_signature(trigger) and unquoted:  # type: ignore[arg-type]
+            if client_id is not None and auto_progress and drift_rebalance_plan is not None:
+                try:
+                    result = executor._resume_running_execution(
+                        db,
+                        client_id=client_id,
+                        portfolio_id=UUID(str(portfolio_id)),
+                        running=running_payload,
+                        drift_rebalance_plan=drift_rebalance_plan,
+                        trigger=trigger,  # type: ignore[arg-type]
+                        plan_hash=str(running.get("plan_hash") or ""),
+                    )
+                    v3_status = str(result.get("v3_status") or "")
+                    if v3_status in (
+                        "COMPLETED",
+                        "COMPLETED_WITH_RESIDUAL_CASH",
+                        "FAILED",
+                        "NO_ACTION",
+                    ):
+                        _release_v3_rebalance_guard(
+                            db, portfolio_id=portfolio_id, terminal=result,
+                        )
+                    return result
+                except Exception:
+                    logger.exception(
+                        "v3_rebalance_reconcile_auto_progress_failed portfolio=%s execution=%s",
+                        portfolio_id,
+                        execution_id,
+                    )
+            BundleRebalanceExecutor._update_running_progress(
+                db,
+                execution_id,
+                running_payload,
+                sell_results,
+                buy_results,
+                actor,
             )
+            db.flush()
+            return None
 
         terminal = _force_terminalize_running_snapshot(
             db,

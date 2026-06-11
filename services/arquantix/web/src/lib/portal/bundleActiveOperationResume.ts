@@ -6,7 +6,6 @@ import {
   type PortfolioRebalancingAssetLine,
   type PortfolioRebalancingPayload,
 } from '@/lib/portal/bundleClient'
-import { isTerminalBundleV3Status } from '@/components/portal/transaction/mappers/bundleSteps'
 import { runSequentialTrades } from '@/lib/portal/tradeChainRunner'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
 
@@ -26,6 +25,22 @@ function hasSignablePendingLegs(
         leg.error === 'awaiting_wallet_signature' ||
         leg.error === 'awaiting_confirmation'),
   )
+}
+
+/** Dépôt V3 : seul COMPLETED (ou FAILED) clôt la session — pas residual après leg 1. */
+function isDepositInvestTerminal(status: string | undefined | null): boolean {
+  return status === 'COMPLETED' || status === 'FAILED'
+}
+
+async function resumeDepositChain(params: {
+  portfolioId: string
+  initial: PortfolioRebalancingPayload
+  signAndSubmit: ExecuteTradeDeps['signAndSubmit']
+  pollUntilTerminal: ExecuteTradeDeps['pollUntilTerminal']
+  onPhaseChange?: (phase: SwapExecutionPhase) => void
+  onAssetLines?: (lines: PortfolioRebalancingAssetLine[]) => void
+}): Promise<PortfolioRebalancingPayload> {
+  return resumeActiveBundleOperation(params)
 }
 
 function toResumePayload(
@@ -59,11 +74,11 @@ export async function completeV3DepositRebalance(params: {
 }): Promise<PortfolioRebalancingPayload | null> {
   for (let attempt = 0; attempt < V3_DEPOSIT_POLL_MAX_ATTEMPTS; attempt += 1) {
     const active = await fetchActiveBundleOperation(params.portfolioId)
-    if (active.status === 'none' || isTerminalBundleV3Status(active.v3_status)) {
-      if (active.status === 'active' && isTerminalBundleV3Status(active.v3_status)) {
-        return toResumePayload(active)
-      }
+    if (active.status === 'none') {
       return null
+    }
+    if (isDepositInvestTerminal(active.v3_status)) {
+      return toResumePayload(active)
     }
     if (hasSignablePendingLegs(active)) {
       const initial = toResumePayload(active)
@@ -71,7 +86,8 @@ export async function completeV3DepositRebalance(params: {
         await sleep(V3_DEPOSIT_POLL_MS)
         continue
       }
-      return resumeActiveBundleOperation({
+      return resumeDepositChain({
+        portfolioId: params.portfolioId,
         initial,
         signAndSubmit: params.signAndSubmit,
         pollUntilTerminal: params.pollUntilTerminal,
@@ -81,17 +97,37 @@ export async function completeV3DepositRebalance(params: {
     }
     if (active.v3_status === 'RUNNING') {
       const progressed = await resumePortfolioRebalancing(params.portfolioId)
-      if (isTerminalBundleV3Status(progressed.v3_status)) {
+      if (isDepositInvestTerminal(progressed.v3_status)) {
         return progressed
       }
       if (hasSignablePendingLegs(progressed)) {
-        return resumeActiveBundleOperation({
+        return resumeDepositChain({
+          portfolioId: params.portfolioId,
           initial: progressed,
           signAndSubmit: params.signAndSubmit,
           pollUntilTerminal: params.pollUntilTerminal,
           onPhaseChange: params.onPhaseChange,
           onAssetLines: params.onAssetLines,
         })
+      }
+      if (
+        progressed.v3_status === 'COMPLETED_WITH_RESIDUAL_CASH' ||
+        progressed.v3_status === 'RUNNING'
+      ) {
+        const retry = await resumePortfolioRebalancing(params.portfolioId)
+        if (hasSignablePendingLegs(retry)) {
+          return resumeDepositChain({
+            portfolioId: params.portfolioId,
+            initial: retry,
+            signAndSubmit: params.signAndSubmit,
+            pollUntilTerminal: params.pollUntilTerminal,
+            onPhaseChange: params.onPhaseChange,
+            onAssetLines: params.onAssetLines,
+          })
+        }
+        if (isDepositInvestTerminal(retry.v3_status)) {
+          return retry
+        }
       }
     }
     await sleep(V3_DEPOSIT_POLL_MS)
