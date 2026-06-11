@@ -865,6 +865,25 @@
     border: 1.5px solid var(--v-fg-20, var(--v-fg-10));
   }
 
+  .marker--failed {
+    background: var(--v-error);
+    color: var(--v-white);
+  }
+
+  .marker--failed svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .step__title--failed {
+    color: var(--v-error);
+  }
+
+  .step__title .tag--failed {
+    background: var(--v-error-bg);
+    color: var(--v-error);
+  }
+
   .step__body {
     flex: 1;
     min-width: 0;

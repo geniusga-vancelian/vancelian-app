@@ -8,6 +8,7 @@ import {
   buildBundleReviewPreviewSteps,
   buildBundleInvestProcessingStepsDynamic,
   buildBundleRebalancingProcessingStepsDynamic,
+  buildBundleRebalancingStepStates,
   buildBundleWithdrawProcessingStepsDynamic,
   bundleRebalancingDynamicProcessingProgressIndex,
   buildBundleProcessingSteps,
@@ -76,6 +77,74 @@ describe('bundleSteps', () => {
       { stage: 'executing', legCurrent: 1, legTotal: 3 },
       stepCount,
     ))
+  })
+
+  it('rebalancing step states reflect real leg status (loading / done / failed)', () => {
+    const legs = [
+      { asset: 'AAVE', action: 'sell', amount_entry: '4.30' },
+      { asset: 'LINK', action: 'sell', amount_entry: '3.52' },
+      { asset: 'ETH', action: 'buy', amount_entry: '12.43' },
+    ]
+    const stepCount = 1 + legs.length + 1
+
+    const preparing = buildBundleRebalancingStepStates({
+      legs,
+      assetLines: [],
+      progress: { stage: 'preparing', legTotal: 3 },
+      executionPhase: 'preparing',
+    })
+    assert.equal(preparing.length, stepCount)
+    assert.equal(preparing[0], 'loading')
+    assert.equal(preparing[1], 'pending')
+
+    const aavePending = buildBundleRebalancingStepStates({
+      legs,
+      assetLines: [
+        { asset: 'AAVE', status: 'pending' },
+        { asset: 'LINK', status: 'planned' },
+        { asset: 'ETH', status: 'planned' },
+      ],
+      progress: { stage: 'executing', legCurrent: 1, legTotal: 3, activeAsset: 'AAVE' },
+      executionPhase: 'preparing',
+    })
+    assert.equal(aavePending[0], 'done')
+    assert.equal(aavePending[1], 'loading')
+    assert.equal(aavePending[2], 'pending')
+    assert.equal(aavePending[3], 'pending')
+
+    const aaveDone = buildBundleRebalancingStepStates({
+      legs,
+      assetLines: [
+        { asset: 'AAVE', status: 'completed' },
+        { asset: 'LINK', status: 'signing' },
+        { asset: 'ETH', status: 'planned' },
+      ],
+      progress: { stage: 'executing', legCurrent: 2, legTotal: 3, activeAsset: 'LINK' },
+      executionPhase: 'signing',
+    })
+    assert.equal(aaveDone[1], 'done')
+    assert.equal(aaveDone[2], 'loading')
+
+    const linkFailed = buildBundleRebalancingStepStates({
+      legs,
+      assetLines: [
+        { asset: 'AAVE', status: 'completed' },
+        { asset: 'LINK', status: 'failed' },
+        { asset: 'ETH', status: 'planned' },
+      ],
+      progress: { stage: 'executing', legCurrent: 3, legTotal: 3, activeAsset: 'ETH' },
+      executionPhase: 'submitting',
+    })
+    assert.equal(linkFailed[2], 'failed')
+    assert.equal(linkFailed[3], 'loading')
+
+    const finalizing = buildBundleRebalancingStepStates({
+      legs,
+      assetLines: legs.map((leg) => ({ asset: leg.asset, status: 'completed' })),
+      progress: { stage: 'finalizing', legTotal: 3 },
+      executionPhase: 'submitting',
+    })
+    assert.equal(finalizing[4], 'loading')
   })
 
   it('invest dynamic stepper progresses monotonically per leg', () => {

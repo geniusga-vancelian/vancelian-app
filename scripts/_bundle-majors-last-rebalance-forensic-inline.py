@@ -53,6 +53,71 @@ def _swap_row(swap: PersonWalletSwap) -> dict[str, Any]:
     }
 
 
+def _analyze_swap_execution(swap: PersonWalletSwap) -> dict[str, Any]:
+    events = _audit_events(swap.audit_log)
+    event_names = [str(e.get("event") or "") for e in events]
+    client_traces = [e for e in events if e.get("event") == "client_trace"]
+    milestones = {
+        "quote_received": any(n in event_names for n in ("bundle_quote_received", "quote_received")),
+        "quote_refreshed": "quote_refreshed" in event_names,
+        "awaiting_signature": "awaiting_signature" in event_names,
+        "client_confirm_start": any(
+            e.get("step") == "leg_confirm_start" for e in client_traces
+        ),
+        "client_confirm_done": any(e.get("step") == "leg_confirm_done" for e in client_traces),
+        "client_sign_start": any(
+            e.get("step") in ("sign_and_submit_start", "privy_embedded_tx_start")
+            for e in client_traces
+        ),
+        "client_sign_done": any(
+            e.get("step") in ("sign_and_submit_done", "privy_embedded_tx_done", "submit_tx_done")
+            for e in client_traces
+        ),
+        "submitted_on_chain": "submitted" in event_names or bool(swap.tx_hash),
+        "auto_expired": "auto_expired" in event_names,
+        "execution_failed": "execution_failed" in event_names,
+    }
+    last_blocking = None
+    if milestones["auto_expired"]:
+        last_blocking = "quote_expired_before_client_submit"
+    elif milestones["execution_failed"]:
+        last_blocking = "client_reported_failure"
+    elif milestones["awaiting_signature"] and not milestones["submitted_on_chain"]:
+        last_blocking = "stuck_after_confirm_before_submit"
+    elif milestones["quote_refreshed"] and not milestones["awaiting_signature"]:
+        last_blocking = "quote_refreshed_without_prepare_execute"
+    elif not milestones["quote_refreshed"]:
+        last_blocking = "never_reached_confirm"
+
+    return {
+        "milestones": milestones,
+        "last_blocking_hypothesis": last_blocking,
+        "client_traces": client_traces[-12:],
+        "key_events": [
+            {
+                "at": e.get("at"),
+                "event": e.get("event"),
+                "step": e.get("step"),
+                "phase": e.get("phase"),
+                "reason": e.get("reason"),
+                "detail": e.get("detail"),
+            }
+            for e in events
+            if e.get("event")
+            in (
+                "bundle_quote_received",
+                "quote_refreshed",
+                "awaiting_signature",
+                "submitted",
+                "auto_expired",
+                "execution_failed",
+                "client_signature_stale_expired",
+                "client_trace",
+            )
+        ],
+    }
+
+
 def main() -> None:
     db = SessionLocal()
     try:
@@ -141,6 +206,17 @@ def main() -> None:
             ):
                 majors_swaps.append(_swap_row(swap))
         report["recent_rebalance_swaps"] = majors_swaps
+
+        if majors_swaps:
+            latest = majors_swaps[0]
+            swap_obj = db.query(PersonWalletSwap).filter(
+                PersonWalletSwap.id == UUID(latest["swap_id"]),
+            ).first()
+            if swap_obj is not None:
+                report["latest_rebalance_leg_trace"] = {
+                    **_swap_row(swap_obj),
+                    "execution_analysis": _analyze_swap_execution(swap_obj),
+                }
 
         try:
             from services.portfolio_engine.bundles.rebalancing_portfolio import (

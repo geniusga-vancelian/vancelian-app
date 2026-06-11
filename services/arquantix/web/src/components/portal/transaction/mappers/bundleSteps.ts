@@ -21,7 +21,11 @@ import {
   BUNDLE_TERMINAL_RECONCILIATION,
   resolveBundleInvestErrorMessage,
 } from '@/components/portal/transaction/mappers/bundleUiCopy'
-import type { TransactionStep, TransactionTerminalFailureCopy } from '@/components/portal/transaction/types'
+import type {
+  TransactionStep,
+  TransactionStepMarkerState,
+  TransactionTerminalFailureCopy,
+} from '@/components/portal/transaction/types'
 
 export const BUNDLE_INVEST_REVIEW_STEP_DEFS: Array<{
   label: string
@@ -283,6 +287,134 @@ function formatRebalanceLegAmount(amount?: string, entryAsset = 'USDC'): string 
     maximumFractionDigits: 2,
   }).format(n)
   return `${formatted} ${entryAsset}`
+}
+
+const REBALANCE_LEG_COMPLETED = ['completed', 'confirmed', 'success'] as const
+const REBALANCE_LEG_FAILED = ['failed', 'expired'] as const
+const REBALANCE_LEG_IN_PROGRESS = [
+  'pending',
+  'signing',
+  'approving',
+  'submitting',
+  'running',
+] as const
+
+function normalizeRebalanceLegStatus(status: string): string {
+  return String(status).toLowerCase()
+}
+
+function rebalanceLegMarkerFromStatus(
+  status: string,
+  isActiveLeg: boolean,
+  stage: BundleRebalancingProcessingStage,
+): TransactionStepMarkerState {
+  const s = normalizeRebalanceLegStatus(status)
+  if (REBALANCE_LEG_COMPLETED.includes(s as (typeof REBALANCE_LEG_COMPLETED)[number])) {
+    return 'done'
+  }
+  if (REBALANCE_LEG_FAILED.includes(s as (typeof REBALANCE_LEG_FAILED)[number])) {
+    return 'failed'
+  }
+  if (REBALANCE_LEG_IN_PROGRESS.includes(s as (typeof REBALANCE_LEG_IN_PROGRESS)[number])) {
+    return 'loading'
+  }
+  if (isActiveLeg && stage === 'executing') {
+    return 'loading'
+  }
+  return 'pending'
+}
+
+/** États stepper rééquilibrage — dérivés des statuts réels par leg (pas d'index monotone). */
+export function buildBundleRebalancingStepStates(params: {
+  legs: BundleRebalancingLeg[]
+  assetLines: Array<{ asset: string; status: string }>
+  progress: BundleRebalancingProcessingProgress
+  executionPhase: string
+}): TransactionStepMarkerState[] {
+  const { legs, assetLines, progress, executionPhase } = params
+  const stepCount = 1 + legs.length + 1
+  const states: TransactionStepMarkerState[] = Array.from({ length: stepCount }, () => 'pending')
+
+  const statusByAsset = new Map(
+    assetLines.map((line) => [line.asset.toUpperCase(), line.status]),
+  )
+
+  const resolveActiveAsset = (): string | null => {
+    if (progress.activeAsset) {
+      return progress.activeAsset.toUpperCase()
+    }
+    if (progress.stage !== 'executing') {
+      return null
+    }
+    for (const leg of legs) {
+      const status = normalizeRebalanceLegStatus(
+        statusByAsset.get(leg.asset.toUpperCase()) ?? 'planned',
+      )
+      if (
+        REBALANCE_LEG_IN_PROGRESS.includes(
+          status as (typeof REBALANCE_LEG_IN_PROGRESS)[number],
+        )
+      ) {
+        return leg.asset.toUpperCase()
+      }
+    }
+    for (const leg of legs) {
+      const status = normalizeRebalanceLegStatus(
+        statusByAsset.get(leg.asset.toUpperCase()) ?? 'planned',
+      )
+      if (
+        !REBALANCE_LEG_COMPLETED.includes(status as (typeof REBALANCE_LEG_COMPLETED)[number]) &&
+        !REBALANCE_LEG_FAILED.includes(status as (typeof REBALANCE_LEG_FAILED)[number])
+      ) {
+        return leg.asset.toUpperCase()
+      }
+    }
+    return null
+  }
+
+  const activeAsset = resolveActiveAsset()
+
+  if (executionPhase === 'preparing' && progress.stage === 'preparing') {
+    states[0] = 'loading'
+  } else {
+    states[0] = 'done'
+  }
+
+  legs.forEach((leg, index) => {
+    const stepIndex = 1 + index
+    const status = statusByAsset.get(leg.asset.toUpperCase()) ?? 'planned'
+    const isActiveLeg = activeAsset === leg.asset.toUpperCase()
+    states[stepIndex] = rebalanceLegMarkerFromStatus(status, isActiveLeg, progress.stage)
+  })
+
+  const finalIndex = stepCount - 1
+  if (progress.stage === 'finalizing') {
+    states[finalIndex] = 'loading'
+  } else if (progress.stage === 'completed' || executionPhase === 'completed') {
+    states[finalIndex] = 'done'
+  } else {
+    const hasFailedLeg = legs.some((leg) =>
+      REBALANCE_LEG_FAILED.includes(
+        normalizeRebalanceLegStatus(
+          statusByAsset.get(leg.asset.toUpperCase()) ?? '',
+        ) as (typeof REBALANCE_LEG_FAILED)[number],
+      ),
+    )
+    const allLegsTerminal = legs.every((leg) => {
+      const status = normalizeRebalanceLegStatus(
+        statusByAsset.get(leg.asset.toUpperCase()) ?? '',
+      )
+      return (
+        REBALANCE_LEG_COMPLETED.includes(status as (typeof REBALANCE_LEG_COMPLETED)[number]) ||
+        REBALANCE_LEG_FAILED.includes(status as (typeof REBALANCE_LEG_FAILED)[number])
+      )
+    })
+    if (executionPhase === 'failed' && allLegsTerminal && hasFailedLeg) {
+      states[finalIndex] = 'failed'
+    }
+  }
+
+  return states
 }
 
 /** Stepper rééquilibrage manuel : plan → ventes → achats → finalisation. */

@@ -29,8 +29,25 @@ import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecution'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
+import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
+import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 
 const POLL_MS = 5000
+
+function rebalanceExecutionPhaseLabel(phase: SwapExecutionPhase): string | null {
+  switch (phase) {
+    case 'verifying_price':
+    case 'preparing':
+      return BUNDLE_FLOW_UI.rebalancePreparingSecureConfirmation
+    case 'approving':
+    case 'signing':
+    case 'submitting':
+    case 'bridging':
+      return BUNDLE_FLOW_UI.rebalanceExecutingSwap
+    default:
+      return null
+  }
+}
 
 type Props = {
   portfolioId: string
@@ -97,6 +114,7 @@ export function PortalBundleActiveOperationPanel({
   const [resuming, setResuming] = useState(false)
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [swapMockMode, setSwapMockMode] = useState(false)
+  const { privyReady } = usePortalAuthPrivy()
   const resumeStartedRef = useRef(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const terminalHandledRef = useRef(false)
@@ -167,6 +185,9 @@ export function PortalBundleActiveOperationPanel({
 
       try {
         setExecutionPhase('preparing')
+        if (!swapMockMode && hasSignablePendingLegs(initial)) {
+          await waitForPrivyClientReady(() => privyReady, { timeoutMs: 30_000 })
+        }
         let result: PortfolioRebalancingPayload
 
         if (hasSignablePendingLegs(initial)) {
@@ -247,7 +268,7 @@ export function PortalBundleActiveOperationPanel({
         setResuming(false)
       }
     },
-    [handleTerminal, inFlightRef, pollUntilTerminal, portfolioId, resuming, signAndSubmit],
+    [handleTerminal, inFlightRef, pollUntilTerminal, portfolioId, privyReady, resuming, signAndSubmit, swapMockMode],
   )
 
   useEffect(() => {
@@ -347,9 +368,11 @@ export function PortalBundleActiveOperationPanel({
         cardClassName="brw brw-proc v-card w-full"
       />
 
-      {executionPhase === 'signing' ? (
-        <p className="m-0 font-ui text-[13px] text-v-fg-muted">Signature portefeuille requise…</p>
-      ) : null}
+        {rebalanceExecutionPhaseLabel(executionPhase) ? (
+          <p className="m-0 font-ui text-[13px] text-v-fg-muted">
+            {rebalanceExecutionPhaseLabel(executionPhase)}
+          </p>
+        ) : null}
 
       {assetLines.length > 0 ? (
         <ul className="m-0 list-none space-y-1 rounded-v-input border border-v-border bg-v-card px-3 py-2 font-ui text-[13px] text-v-fg-body">

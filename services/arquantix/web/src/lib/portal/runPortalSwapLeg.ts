@@ -5,6 +5,7 @@
  */
 import { bundleLegConfirmAndPrepare, type BundleLegQuoteSnapshot } from '@/lib/portal/bundleLegQuoteConfirm'
 import { recordSwapFailure } from '@/lib/portal/swapClient'
+import { recordSwapClientTrace } from '@/lib/portal/swapClientTrace'
 import { classifySwapError, executionPhaseToFailurePhase, SwapExecutionError } from '@/lib/portal/swapFailure'
 import type { SwapExecutePayload } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
@@ -29,11 +30,17 @@ export async function runPortalSwapLeg(
 ): Promise<PortalSwapLegResult> {
   let phase: SwapExecutionPhase = 'verifying_price'
   try {
+    await recordSwapClientTrace(swapId, { step: 'leg_confirm_start', phase })
     const exec = await bundleLegConfirmAndPrepare(swapId, snapshot, {
       onPhaseChange: (p) => {
         phase = p
         deps.onPhaseChange?.(p)
       },
+    })
+    await recordSwapClientTrace(swapId, {
+      step: 'leg_confirm_done',
+      phase,
+      detail: exec.transaction ? 'tx_payload_ok' : 'tx_payload_missing',
     })
     if (!exec.transaction) {
       throw new SwapExecutionError({
@@ -44,7 +51,13 @@ export async function runPortalSwapLeg(
     }
     deps.onPhaseChange?.('signing')
     phase = 'signing'
+    await recordSwapClientTrace(swapId, { step: 'sign_and_submit_start', phase })
     const txHash = await deps.signAndSubmit(exec, fromAsset)
+    await recordSwapClientTrace(swapId, {
+      step: 'sign_and_submit_done',
+      phase: 'submitting',
+      detail: txHash ? `tx_hash=${txHash.slice(0, 12)}` : undefined,
+    })
     deps.onPhaseChange?.('submitting')
     phase = 'submitting'
     const terminal = await deps.pollUntilTerminal(swapId)

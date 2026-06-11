@@ -10,6 +10,7 @@ export function TransactionProcessingPage({
   steps,
   progressIndex,
   completedProgressIndex,
+  stepStates,
   onClose,
   cardClassName = 'brw brw-proc v-card',
 }: TransactionProcessingPageProps) {
@@ -34,6 +35,7 @@ export function TransactionProcessingPage({
         steps={steps}
         progressIndex={progressIndex}
         completedProgressIndex={completedProgressIndex}
+        stepStates={stepStates}
       />
     </div>
   )

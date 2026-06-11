@@ -6,6 +6,10 @@ export type TransactionStep = {
   subtext: string
 }
 
+/** État visuel d'une étape du stepper (processing). */
+export type TransactionStepMarkerState = 'pending' | 'loading' | 'done' | 'failed'
+
+/** @deprecated Préférer TransactionStepMarkerState — conservé pour l'index monotone legacy. */
 export type TransactionStepperMarkerState = 'done' | 'current' | 'pending'
 
 /** Machine UI — distincte des statuts intent / OVT backend. */
@@ -30,6 +34,8 @@ export type TransactionProcessingPageProps = {
   progressIndex: number
   /** Index à partir duquel toutes les étapes sont terminées (ex. Lombard = 4). */
   completedProgressIndex: number
+  /** États explicites par step — prioritaire sur progressIndex quand fourni. */
+  stepStates?: TransactionStepMarkerState[]
   onClose: () => void
   cardClassName?: string
 }

@@ -44,6 +44,8 @@ export const BUNDLE_FLOW_UI = {
   viewBasketCta: 'Voir mon panier',
   partialPreviewNote:
     'Certains actifs peuvent ne pas être entièrement disponibles — l’allocation pourrait être partielle.',
+  rebalancePreparingSecureConfirmation: 'Préparation de la confirmation sécurisée…',
+  rebalanceExecutingSwap: 'Exécution sécurisée du swap en cours…',
 } as const
 
 export const BUNDLE_TERMINAL_IMPOSSIBLE: TransactionTerminalFailureCopy = {

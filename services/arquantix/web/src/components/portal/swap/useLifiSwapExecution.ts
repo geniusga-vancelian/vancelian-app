@@ -27,6 +27,7 @@ import {
 import { usePortalExecutionScope } from '@/lib/portal/usePortalExecutionScope'
 import { usePrivyLiveSession } from '@/lib/portal/usePrivyLiveSession'
 import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
+import { recordSwapClientTrace } from '@/lib/portal/swapClientTrace'
 import type { ExecutionWalletMode } from '@/lib/wallet/useExecutionWallet'
 import { generateMockExternalWalletTxHash, isLocalMockExternalWallet } from '@/lib/wallet/externalWalletMock'
 import { usePortalTxSigner } from '@/lib/wallet/usePortalTxSigner'
@@ -79,6 +80,13 @@ export function useLifiSwapExecution(
     async (exec: SwapExecutePayload, fromAssetOverride?: string) => {
       const approvalAsset = fromAssetOverride ?? fromAsset
       const tx = exec.transaction
+      const trace = (step: string, extra?: { phase?: string; detail?: string }) =>
+        void recordSwapClientTrace(exec.swap_id, {
+          step,
+          phase: extra?.phase,
+          detail: extra?.detail,
+        })
+
       if (!tx?.to || !tx.data) {
         throw new SwapExecutionError({
           code: 'lifi_error',
@@ -97,6 +105,7 @@ export function useLifiSwapExecution(
       const isExternalSigning = exec.signing_wallet_mode === 'external_evm'
 
       if (!isExternalSigning) {
+        trace('privy_ready_wait_start', { phase: 'signing' })
         await waitForPrivyClientReady(
           () => {
             const session = privyLive.current
@@ -104,12 +113,18 @@ export function useLifiSwapExecution(
           },
           { timeoutMs: 30_000 },
         )
+        trace('privy_ready_wait_done', { phase: 'signing' })
       }
 
+      trace('wallet_resolve_start', { phase: 'signing' })
       const wallet = await resolveWallet(null, {
         expectedAddress: exec.signing_wallet_address ?? undefined,
         // Scope navbar (Privy par défaut), pas le mode stale en localStorage.
         forceMode: signingMode,
+      })
+      trace('wallet_resolve_done', {
+        phase: 'signing',
+        detail: `${wallet.type}:${wallet.address.slice(0, 10)}`,
       })
 
       if (
@@ -139,6 +154,7 @@ export function useLifiSwapExecution(
       if (tokenApproval && isSwapTokenApprovalRequired(tokenApproval)) {
         assertSwapTokenApprovalPayload(tokenApproval)
         onPhaseChange?.('approving')
+        trace('token_approval_start', { phase: 'approving' })
         try {
           const approvalResult = await ensureSwapTokenApproval({
             chainId,
@@ -156,11 +172,17 @@ export function useLifiSwapExecution(
             )
           }
         } catch (error) {
+          trace('token_approval_failed', {
+            phase: 'approving',
+            detail: error instanceof Error ? error.message.slice(0, 200) : String(error),
+          })
           wrapPhaseError(error, 'approving', true)
         }
+        trace('token_approval_done', { phase: 'approving' })
       }
 
       onPhaseChange?.('signing')
+      trace('privy_embedded_tx_start', { phase: 'signing' })
       const gasLimit = parseSwapGasLimit(tx.gas_limit)
 
       let hash: string
@@ -178,15 +200,28 @@ export function useLifiSwapExecution(
         )
         hash = result.hash
       } catch (error) {
+        trace('privy_embedded_tx_failed', {
+          phase: 'signing',
+          detail: error instanceof Error ? error.message.slice(0, 200) : String(error),
+        })
         wrapPhaseError(error, 'signing')
       }
+      trace('privy_embedded_tx_done', {
+        phase: 'submitting',
+        detail: hash ? `tx_hash=${hash.slice(0, 12)}` : undefined,
+      })
 
       onPhaseChange?.('submitting')
       try {
         await submitTxFn(exec.swap_id, hash!, wallet.address)
       } catch (error) {
+        trace('submit_tx_failed', {
+          phase: 'submitting',
+          detail: error instanceof Error ? error.message.slice(0, 200) : String(error),
+        })
         wrapPhaseError(error, 'submitting')
       }
+      trace('submit_tx_done', { phase: 'submitting' })
       return hash!
     },
     [

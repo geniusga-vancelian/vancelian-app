@@ -28,6 +28,7 @@ from services.lifi.lifi_validation_service import SwapPriceChangedError, SwapVal
 from services.lifi.schemas import (
     SwapAbandonRequest,
     SwapApprovalSubmitRequest,
+    SwapClientTraceRequest,
     SwapConfirmExecuteRequest,
     SwapConfirmExecuteResponse,
     SwapExecuteRequest,
@@ -40,6 +41,7 @@ from services.lifi.schemas import (
     SwapSubmitRequest,
     SwapSupportedAssetsResponse,
 )
+from services.lifi.swap_client_trace_service import record_swap_client_trace
 from services.lifi.swap_failure_service import record_swap_failure
 from services.portfolio_engine.bundles.legacy_bundle_global_lock import (
     transaction_in_progress_response_body,
@@ -213,6 +215,29 @@ def post_swap_refresh_quote(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={"code": exc.code, "message": str(exc)},
         ) from exc
+
+
+@swaps_router.post("/{swap_id}/client-trace", status_code=status.HTTP_204_NO_CONTENT)
+def post_swap_client_trace(
+    swap_id: UUID,
+    body: SwapClientTraceRequest,
+    db=Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
+):
+    _ensure_swaps_enabled()
+    person_id = _resolve_person_id(credentials)
+    try:
+        record_swap_client_trace(
+            db,
+            person_id=person_id,
+            swap_id=swap_id,
+            step=body.step,
+            phase=body.phase,
+            detail=body.detail,
+            correlation_id=body.correlation_id,
+        )
+    except SwapValidationError as exc:
+        raise _validation_error(exc) from exc
 
 
 @swaps_router.post("/{swap_id}/failure", response_model=SwapStatusResponse)

@@ -67,6 +67,24 @@ describe('rebalanceLegSnapshot', () => {
     assert.equal(snap.review_estimated_receive, '4.31')
   })
 
+  it('vente : préfère amount_in string à quantity_sold float', () => {
+    const snap = rebalanceLegSnapshot({
+      asset: 'AAVE',
+      side: 'sell',
+      status: 'pending',
+      swap_id: 'swap-aave',
+      amount_usdc: '4.33',
+      amount_in: '0.068624940000000000',
+      estimated_receive: '4.3187654321',
+      from_asset: 'AAVE',
+      to_asset: 'USDC',
+      quantity_sold: 0.068624939999999994,
+      entry_asset_received: 4.3187654321,
+    })
+    assert.equal(snap.review_amount_in, '0.068624940000000000')
+    assert.equal(snap.review_estimated_receive, '4.3187654321')
+  })
+
   it('achat : amount_in USDC', () => {
     const snap = rebalanceLegSnapshot({
       asset: 'ETH',

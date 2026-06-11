@@ -20,6 +20,16 @@ function fmtAmount(value: number | string | null | undefined): string | null {
   return String(n)
 }
 
+/** Préfère la chaîne API (précision décimale) aux champs float legacy du payload bundle. */
+function preferApiAmount(
+  apiAmount: string | null | undefined,
+  legacyFloat: number | null | undefined,
+): string | null {
+  const trimmed = apiAmount?.trim()
+  if (trimmed) return trimmed
+  return fmtAmount(legacyFloat)
+}
+
 export function snapshotFromInvestLeg(leg: BundleAllocationLeg): BundleLegQuoteSnapshot | null {
   const amountIn = fmtAmount(leg.entry_asset_consumed)
   const receive = fmtAmount(leg.crypto_received)
@@ -41,11 +51,13 @@ export function snapshotFromWithdrawLeg(leg: BundleWithdrawSellLeg): BundleLegQu
 }
 
 export function snapshotFromRebalanceSellLeg(leg: {
+  amount_in?: string
+  estimated_receive?: string
   quantity_sold?: number
   entry_asset_received?: number
 }): BundleLegQuoteSnapshot | null {
-  const amountIn = fmtAmount(leg.quantity_sold)
-  const receive = fmtAmount(leg.entry_asset_received)
+  const amountIn = preferApiAmount(leg.amount_in, leg.quantity_sold)
+  const receive = preferApiAmount(leg.estimated_receive, leg.entry_asset_received)
   if (!amountIn) return null
   return {
     review_amount_in: amountIn,
@@ -54,11 +66,13 @@ export function snapshotFromRebalanceSellLeg(leg: {
 }
 
 export function snapshotFromRebalanceBuyLeg(leg: {
+  amount_in?: string
+  estimated_receive?: string
   entry_asset_spent?: number
   quantity_bought?: number
 }): BundleLegQuoteSnapshot | null {
-  const amountIn = fmtAmount(leg.entry_asset_spent)
-  const receive = fmtAmount(leg.quantity_bought)
+  const amountIn = preferApiAmount(leg.amount_in, leg.entry_asset_spent)
+  const receive = preferApiAmount(leg.estimated_receive, leg.quantity_bought)
   if (!amountIn) return null
   return {
     review_amount_in: amountIn,

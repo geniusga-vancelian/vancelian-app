@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 
+import { usePortalAuthPrivy } from '@/components/portal/PortalAuthPrivyGate'
 import {
   assetLineLabel,
   useBundlePortfolioRebalancing,
@@ -10,10 +12,11 @@ import { AppButton } from '@/components/design-system/app/AppButton'
 import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
 import {
   buildBundleRebalancingProcessingStepsDynamic,
-  bundleRebalancingDynamicProcessingProgressIndex,
+  buildBundleRebalancingStepStates,
   isTerminalBundleV3Status,
   type BundleRebalancingProcessingProgress,
 } from '@/components/portal/transaction/mappers/bundleSteps'
+import { BUNDLE_FLOW_UI } from '@/components/portal/transaction/mappers/bundleUiCopy'
 import {
   previewPortfolioRebalancing,
   reconcileStaleBundlePortfolioState,
@@ -25,6 +28,7 @@ import { invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { SwapExecutionError } from '@/lib/portal/swapFailure'
 import { fetchSupportedSwapAssets } from '@/lib/portal/swapClient'
 import type { SwapExecutionPhase } from '@/lib/portal/swapFlowTypes'
+import { waitForPrivyClientReady } from '@/lib/portal/waitForPrivyClientReady'
 
 type Props = {
   portfolioId: string
@@ -43,10 +47,19 @@ function orderedRebalanceLegs(lines: PortfolioRebalancingAssetLine[]) {
   return [...sells, ...buys]
 }
 
-function countCompletedLegs(lines: PortfolioRebalancingAssetLine[]): number {
-  return lines.filter((line) =>
-    ['completed', 'confirmed', 'success'].includes(String(line.status).toLowerCase()),
-  ).length
+function rebalanceExecutionPhaseLabel(phase: SwapExecutionPhase): string | null {
+  switch (phase) {
+    case 'verifying_price':
+    case 'preparing':
+      return BUNDLE_FLOW_UI.rebalancePreparingSecureConfirmation
+    case 'approving':
+    case 'signing':
+    case 'submitting':
+    case 'bridging':
+      return BUNDLE_FLOW_UI.rebalanceExecutingSwap
+    default:
+      return null
+  }
 }
 
 /** Rééquilibrage portefeuille — remplace reprise legacy LI.FI (R4.5 / V3 drift). */
@@ -69,6 +82,8 @@ export function PortalBundleAllocationActionsPanel({
   const [processingProgress, setProcessingProgress] = useState<BundleRebalancingProcessingProgress>({
     stage: 'preparing',
   })
+  const [privyPrep, setPrivyPrep] = useState(false)
+  const { privyReady } = usePortalAuthPrivy()
   const orderedLegs = useMemo(() => orderedRebalanceLegs(assetLines), [assetLines])
 
   const processingSteps = useMemo(
@@ -80,29 +95,32 @@ export function PortalBundleAllocationActionsPanel({
     [orderedLegs, portfolioName],
   )
 
+  const processingStepStates = useMemo(
+    () =>
+      buildBundleRebalancingStepStates({
+        legs: orderedLegs,
+        assetLines,
+        progress:
+          executionPhase === 'preparing'
+            ? { stage: 'preparing', legTotal: orderedLegs.length }
+            : executionPhase === 'completed'
+              ? { stage: 'completed', legTotal: orderedLegs.length }
+              : processingProgress.stage === 'finalizing'
+                ? { stage: 'finalizing', legTotal: orderedLegs.length }
+                : processingProgress,
+        executionPhase,
+      }),
+    [assetLines, executionPhase, orderedLegs, processingProgress],
+  )
+
   const rawProgressIndex = useMemo(() => {
-    const completed = countCompletedLegs(assetLines)
-    const progress: BundleRebalancingProcessingProgress =
-      executionPhase === 'preparing'
-        ? { stage: 'preparing', legTotal: orderedLegs.length }
-        : executionPhase === 'completed'
-          ? { stage: 'completed', legTotal: orderedLegs.length }
-          : processingProgress.stage === 'finalizing'
-            ? { stage: 'finalizing', legTotal: orderedLegs.length }
-            : {
-                stage: 'executing',
-                legCurrent: Math.max(
-                  processingProgress.legCurrent ?? 1,
-                  completed + 1,
-                ),
-                legTotal: orderedLegs.length,
-                activeAsset: processingProgress.activeAsset,
-              }
-    return bundleRebalancingDynamicProcessingProgressIndex(
-      progress,
-      processingSteps.length,
-    )
-  }, [assetLines, executionPhase, orderedLegs.length, processingProgress, processingSteps.length])
+    const loadingIndex = processingStepStates.findIndex((state) => state === 'loading')
+    if (loadingIndex >= 0) return loadingIndex
+    const failedIndex = processingStepStates.findIndex((state) => state === 'failed')
+    if (failedIndex >= 0) return failedIndex
+    const doneCount = processingStepStates.filter((state) => state === 'done').length
+    return Math.min(doneCount, Math.max(0, processingSteps.length - 1))
+  }, [processingStepStates, processingSteps.length])
 
   const { runPortfolioRebalancing, inFlightRef } = useBundlePortfolioRebalancing(
     swapMockMode,
@@ -134,6 +152,29 @@ export function PortalBundleAllocationActionsPanel({
       .then((catalog) => setSwapMockMode(Boolean(catalog.mock_mode)))
       .catch(() => setSwapMockMode(false))
   }, [])
+
+  useEffect(() => {
+    if (busy || swapMockMode) {
+      setPrivyPrep(false)
+      return
+    }
+
+    let cancelled = false
+    setPrivyPrep(true)
+    void (async () => {
+      try {
+        await waitForPrivyClientReady(() => privyReady, { timeoutMs: 30_000 })
+      } catch {
+        /* l'exécution surfacera l'erreur */
+      } finally {
+        if (!cancelled) setPrivyPrep(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [busy, privyReady, swapMockMode])
 
   const loadPreview = async (options?: { throwOnError?: boolean }) => {
     setError(null)
@@ -171,6 +212,9 @@ export function PortalBundleAllocationActionsPanel({
       if (assetLines.length === 0) {
         await loadPreview({ throwOnError: true })
       }
+      if (!swapMockMode) {
+        await waitForPrivyClientReady(() => privyReady, { timeoutMs: 30_000 })
+      }
       const result = await runPortfolioRebalancing(portfolioId)
       setAssetLines(result.asset_lines ?? assetLines)
       setProcessingProgress({ stage: 'finalizing', legTotal: orderedLegs.length })
@@ -178,7 +222,7 @@ export function PortalBundleAllocationActionsPanel({
         setExecutionPhase('idle')
         if (result.v3_status === 'RUNNING') {
           setError(
-            'Rééquilibrage partiellement terminé — relancez « Rééquilibrage » pour signer les swaps restants.',
+            'Rééquilibrage partiellement terminé — relancez « Rééquilibrage » pour exécuter les swaps restants.',
           )
         } else {
           setError('Rééquilibrage non terminé — vérifiez l’état du portefeuille puis réessayez.')
@@ -200,7 +244,7 @@ export function PortalBundleAllocationActionsPanel({
       const isTimeout = /timed out|timeout|délai|abort|réseau blockchain/i.test(message)
       try {
         const reconciled = await reconcileStaleBundlePortfolioState(portfolioId, {
-          forceSignableV3Close: isTimeout || /indisponible|signature/i.test(message),
+          forceSignableV3Close: isTimeout,
         })
         if (isTimeout && reconciled.active_operation?.status === 'none') {
           setError(
@@ -228,13 +272,16 @@ export function PortalBundleAllocationActionsPanel({
           lead={`Rééquilibrage de ${portfolioName} — ventes puis achats vers l’allocation cible.`}
           steps={processingSteps}
           progressIndex={rawProgressIndex}
-          completedProgressIndex={Math.max(0, rawProgressIndex - 1)}
+          completedProgressIndex={processingSteps.length}
+          stepStates={processingStepStates}
           onClose={() => undefined}
           cardClassName="brw brw-proc v-card w-full"
         />
 
-        {executionPhase === 'signing' ? (
-          <p className="m-0 font-ui text-[13px] text-v-fg-muted">Signature portefeuille requise…</p>
+        {rebalanceExecutionPhaseLabel(executionPhase) ? (
+          <p className="m-0 font-ui text-[13px] text-v-fg-muted">
+            {rebalanceExecutionPhaseLabel(executionPhase)}
+          </p>
         ) : null}
 
         {orderedLegs.length > 0 ? (
@@ -273,6 +320,15 @@ export function PortalBundleAllocationActionsPanel({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
+        {privyPrep ? (
+          <p
+            className="m-0 flex w-full items-center gap-2 font-ui text-[13px] text-v-fg-muted"
+            aria-live="polite"
+          >
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+            {BUNDLE_FLOW_UI.rebalancePreparingSecureConfirmation}
+          </p>
+        ) : null}
         <AppButton
           type="button"
           variant="secondary"
@@ -284,7 +340,7 @@ export function PortalBundleAllocationActionsPanel({
         <AppButton
           type="button"
           variant="primary"
-          disabled={busy || !canExecute || previewStatus === 'no_action'}
+          disabled={busy || !canExecute || previewStatus === 'no_action' || privyPrep}
           onClick={() => void runRebalancing()}
         >
           Rééquilibrage

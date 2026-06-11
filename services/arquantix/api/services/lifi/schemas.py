@@ -132,6 +132,13 @@ class SwapFailureRecordRequest(BaseModel):
     signing_wallet_address: Optional[str] = Field(None, max_length=80)
 
 
+class SwapClientTraceRequest(BaseModel):
+    step: str = Field(..., min_length=1, max_length=64)
+    phase: Optional[str] = Field(None, max_length=32)
+    detail: Optional[str] = Field(None, max_length=500)
+    correlation_id: Optional[str] = Field(None, max_length=128)
+
+
 class SwapAbandonRequest(BaseModel):
     explicit_user_abandon: bool = Field(
         default=False,

@@ -3296,22 +3296,33 @@ def mobile_bundle_leg_submit_tx(
     if leg is None:
         raise HTTPException(status_code=400, detail="not_a_bundle_swap_leg")
 
-    svc = BundleLifiLegService()
+    from services.trade_core.submit import submit_signed_trade
+
     try:
-        result = svc.submit_leg_tx(
+        result = submit_signed_trade(
             db,
-            leg=leg,
             person_id=client.person_id,
             swap_id=sid,
             tx_hash=str(tx_hash),
         )
         db.commit()
+        if not isinstance(result, dict):
+            swap = PersonWalletSwapRepository().get_for_person(
+                db, swap_id=sid, person_id=client.person_id,
+            )
+            return {
+                "leg_id": leg.leg_id if leg else None,
+                "status": swap.status if swap else "submitted",
+                "swap_id": str(sid),
+                "tx_hash": swap.tx_hash if swap else str(tx_hash),
+                "amount_to": None,
+            }
         return {
-            "leg_id": result.leg_id,
-            "status": result.status,
+            "leg_id": result.get("leg_id"),
+            "status": result.get("status"),
             "swap_id": str(sid),
-            "tx_hash": result.tx_hash,
-            "amount_to": str(result.amount_to) if result.amount_to is not None else None,
+            "tx_hash": result.get("tx_hash"),
+            "amount_to": result.get("amount_to"),
         }
     except Exception as exc:
         db.rollback()
