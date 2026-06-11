@@ -23,18 +23,22 @@ function isRetryableError(error: unknown): boolean {
   return false
 }
 
-export async function confirmSwapWithRetry(input: {
-  swap_id: string
-  review_estimated_receive: string
-  review_amount_in?: string
-}): Promise<SwapConfirmExecutePayload> {
+export async function confirmSwapWithRetry(
+  input: {
+    swap_id: string
+    review_estimated_receive: string
+    review_amount_in?: string
+  },
+  options?: { maxAttempts?: number },
+): Promise<SwapConfirmExecutePayload> {
+  const maxAttempts = Math.max(1, options?.maxAttempts ?? MAX_ATTEMPTS)
   let lastError: unknown
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       return await confirmSwapExecution(input)
     } catch (error) {
       lastError = error
-      if (!isRetryableError(error) || attempt >= MAX_ATTEMPTS - 1) {
+      if (!isRetryableError(error) || attempt >= maxAttempts - 1) {
         if (error instanceof SwapPriceChangedError) {
           throw error
         }

@@ -103,6 +103,9 @@ export function useLifiSwapExecution(
 
       const chainId = parseSwapChainId(tx.chain_id)
       const isExternalSigning = exec.signing_wallet_mode === 'external_evm'
+      const execSigningMode: ExecutionWalletMode = isExternalSigning
+        ? 'external_evm'
+        : 'privy_embedded'
 
       if (!isExternalSigning) {
         trace('privy_ready_wait_start', { phase: 'signing' })
@@ -119,8 +122,8 @@ export function useLifiSwapExecution(
       trace('wallet_resolve_start', { phase: 'signing' })
       const wallet = await resolveWallet(null, {
         expectedAddress: exec.signing_wallet_address ?? undefined,
-        // Scope navbar (Privy par défaut), pas le mode stale en localStorage.
-        forceMode: signingMode,
+        // Legs bundle : toujours le wallet indiqué par l'API (Privy embedded), pas la navbar MetaMask.
+        forceMode: execSigningMode,
       })
       trace('wallet_resolve_done', {
         phase: 'signing',

@@ -18,7 +18,8 @@ import { isTerminalBundleV3Status } from '@/components/portal/transaction/mapper
 
 const RESUME_RETRY_DELAY_MS = 800
 const RESUME_MAX_ATTEMPTS = 2
-const MAX_RESUME_ROUNDS = 12
+/** Une reprise serveur après chaque leg réussi — pas de boucle sur échec client. */
+const MAX_RESUME_ROUNDS = 4
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -207,41 +208,59 @@ export async function runSequentialTrades(
     }
 
     const pending = pendingRebalanceLegs(result)
-    if (pending.length > 0) {
-      const leg = pending[0]!
-      const swapId = leg.swap_id!
-      const context = rebalanceContext(result, options.entryAsset)
-      executedLegCount += 1
-      options.onLegProgress?.(executedLegCount, plannedLegTotal, leg.asset)
-      options.onAssetStatus?.(leg.asset, 'pending')
-
-      try {
-        await runLeg(leg, context, {
-          ...options.tradeDeps,
-          onPhaseChange: (phase) => {
-            options.tradeDeps.onPhaseChange?.(phase)
-            if (phase === 'signing' || phase === 'approving') {
-              options.onAssetStatus?.(leg.asset, 'signing')
-            } else if (phase === 'submitting') {
-              options.onAssetStatus?.(leg.asset, 'submitting')
-            } else if (phase === 'completed') {
-              options.onAssetStatus?.(leg.asset, 'completed')
-            }
-          },
-        })
-        options.onAssetStatus?.(leg.asset, 'completed')
-        legOutcomes.push({ asset: leg.asset, swapId, status: 'completed' })
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err)
-        options.onAssetStatus?.(leg.asset, 'failed')
-        legOutcomes.push({
-          asset: leg.asset,
-          swapId,
-          status: 'failed',
-          errorMessage,
-        })
+    if (pending.length === 0) {
+      if (result.v3_status !== 'RUNNING') {
+        break
       }
-    } else if (result.v3_status !== 'RUNNING') {
+      if (!options.resumeFn || resumeRounds >= MAX_RESUME_ROUNDS) {
+        break
+      }
+      resumeRounds += 1
+      const resumed = await resumeWithRetry(options.resumeFn, result.portfolio_id, result)
+      resumeOutcomes.push(resumed.outcome)
+      if (resumed.outcome.status === 'failed') {
+        lastResumeError = resumed.outcome.errorMessage ?? null
+        break
+      }
+      result = resumed.payload
+      for (const line of result.asset_lines ?? []) {
+        options.onAssetStatus?.(line.asset, line.status)
+      }
+      continue
+    }
+
+    const leg = pending[0]!
+    const swapId = leg.swap_id!
+    const context = rebalanceContext(result, options.entryAsset)
+    executedLegCount += 1
+    options.onLegProgress?.(executedLegCount, plannedLegTotal, leg.asset)
+    options.onAssetStatus?.(leg.asset, 'pending')
+
+    try {
+      await runLeg(leg, context, {
+        ...options.tradeDeps,
+        onPhaseChange: (phase) => {
+          options.tradeDeps.onPhaseChange?.(phase)
+          if (phase === 'signing' || phase === 'approving') {
+            options.onAssetStatus?.(leg.asset, 'signing')
+          } else if (phase === 'submitting') {
+            options.onAssetStatus?.(leg.asset, 'submitting')
+          } else if (phase === 'completed') {
+            options.onAssetStatus?.(leg.asset, 'completed')
+          }
+        },
+      })
+      options.onAssetStatus?.(leg.asset, 'completed')
+      legOutcomes.push({ asset: leg.asset, swapId, status: 'completed' })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      options.onAssetStatus?.(leg.asset, 'failed')
+      legOutcomes.push({
+        asset: leg.asset,
+        swapId,
+        status: 'failed',
+        errorMessage,
+      })
       break
     }
 
@@ -249,9 +268,6 @@ export async function runSequentialTrades(
       break
     }
     if (resumeRounds >= MAX_RESUME_ROUNDS) {
-      break
-    }
-    if (result.v3_status !== 'RUNNING' && pending.length === 0) {
       break
     }
 

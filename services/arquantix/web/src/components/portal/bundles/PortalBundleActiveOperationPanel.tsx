@@ -223,8 +223,6 @@ export function PortalBundleActiveOperationPanel({
 
         if (isTerminalBundleV3Status(result.v3_status)) {
           handleTerminal()
-        } else if (hasSignablePendingLegs(result)) {
-          resumeStartedRef.current = false
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Reprise impossible'

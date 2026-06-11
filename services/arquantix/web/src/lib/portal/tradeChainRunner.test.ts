@@ -121,7 +121,7 @@ describe('rebalanceLegFromAsset', () => {
 })
 
 describe('runSequentialTrades', () => {
-  it('continue après un leg en échec et reprend via resume', async () => {
+  it('s’arrête au premier leg en échec sans relancer le même swap', async () => {
     const executed: string[] = []
     let resumeCalls = 0
 
@@ -133,9 +133,7 @@ describe('runSequentialTrades', () => {
       },
       runLeg: async (leg) => {
         executed.push(leg.swap_id!)
-        if (leg.swap_id === 'swap-btc') {
-          throw new Error('signal timed out')
-        }
+        throw new Error('signal timed out')
       },
       resumeFn: async () => {
         resumeCalls += 1
@@ -144,7 +142,45 @@ describe('runSequentialTrades', () => {
             buyLegFixture('cbBTC', 'expired', 'swap-btc', 0.0004),
             buyLegFixture('cbETH', 'pending', 'swap-eth', 0.01),
           ],
-          v3_status: resumeCalls >= 2 ? 'COMPLETED_WITH_RESIDUAL_CASH' : 'RUNNING',
+        })
+      },
+    })
+
+    assert.deepEqual(executed, ['swap-btc'])
+    assert.equal(resumeCalls, 0)
+    assert.equal(result.legOutcomes.length, 1)
+    assert.equal(result.legOutcomes[0]?.status, 'failed')
+  })
+
+  it('enchaîne le leg suivant après succès + resume serveur', async () => {
+    const executed: string[] = []
+    let resumeCalls = 0
+
+    const result = await runSequentialTrades({
+      initial: basePayload(),
+      tradeDeps: {
+        signAndSubmit: async () => '0xabc',
+        pollUntilTerminal: async () => ({ status: 'CONFIRMED', tx_hash: '0xabc' }),
+      },
+      runLeg: async (leg) => {
+        executed.push(leg.swap_id!)
+      },
+      resumeFn: async () => {
+        resumeCalls += 1
+        if (resumeCalls === 1) {
+          return basePayload({
+            buy_results: [
+              buyLegFixture('cbBTC', 'completed', 'swap-btc', 0.0004),
+              buyLegFixture('cbETH', 'pending', 'swap-eth', 0.01),
+            ],
+          })
+        }
+        return basePayload({
+          v3_status: 'COMPLETED',
+          buy_results: [
+            buyLegFixture('cbBTC', 'completed', 'swap-btc', 0.0004),
+            buyLegFixture('cbETH', 'completed', 'swap-eth', 0.01),
+          ],
         })
       },
     })
@@ -152,9 +188,7 @@ describe('runSequentialTrades', () => {
     assert.deepEqual(executed, ['swap-btc', 'swap-eth'])
     assert.ok(resumeCalls >= 1)
     assert.equal(result.legOutcomes.length, 2)
-    assert.equal(result.legOutcomes[0]?.status, 'failed')
-    assert.equal(result.legOutcomes[1]?.status, 'completed')
-    assert.equal(result.payload.v3_status, 'COMPLETED_WITH_RESIDUAL_CASH')
+    assert.equal(result.legOutcomes.every((o) => o.status === 'completed'), true)
   })
 
   it('retry resume une fois avant de sortir proprement', async () => {
@@ -279,6 +313,7 @@ describe('runSequentialTrades', () => {
   })
 
   it('ne bloque pas quand tous les legs du batch échouent', async () => {
+    let resumeCalls = 0
     const result = await runSequentialTrades({
       initial: basePayload({
         buy_results: [buyLegFixture('cbBTC', 'pending', 'swap-btc', 0.0004)],
@@ -291,15 +326,18 @@ describe('runSequentialTrades', () => {
       runLeg: async () => {
         throw new Error('confirm failed')
       },
-      resumeFn: async () =>
-        basePayload({
+      resumeFn: async () => {
+        resumeCalls += 1
+        return basePayload({
           v3_status: 'COMPLETED_WITH_RESIDUAL_CASH',
           buy_results: [buyLegFixture('cbBTC', 'expired', 'swap-btc', 0.0004)],
-        }),
+        })
+      },
     })
 
     assert.equal(result.legOutcomes[0]?.status, 'failed')
-    assert.equal(result.payload.v3_status, 'COMPLETED_WITH_RESIDUAL_CASH')
+    assert.equal(resumeCalls, 0)
+    assert.equal(result.payload.v3_status, 'RUNNING')
   })
 
   it('rebalanceLegQuotedSwap expose fromAsset vente', () => {

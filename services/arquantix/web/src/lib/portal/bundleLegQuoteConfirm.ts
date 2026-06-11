@@ -94,11 +94,14 @@ async function confirmOnce(
   swapId: string,
   snapshot: BundleLegQuoteSnapshot,
 ): Promise<SwapExecutePayload> {
-  const confirmed = await confirmSwapWithRetry({
-    swap_id: swapId,
-    review_estimated_receive: snapshot.review_estimated_receive,
-    review_amount_in: snapshot.review_amount_in,
-  })
+  const confirmed = await confirmSwapWithRetry(
+    {
+      swap_id: swapId,
+      review_estimated_receive: snapshot.review_estimated_receive,
+      review_amount_in: snapshot.review_amount_in,
+    },
+    { maxAttempts: 1 },
+  )
   return confirmed.execute
 }
 
