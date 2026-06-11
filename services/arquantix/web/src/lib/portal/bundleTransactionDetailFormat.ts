@@ -4,7 +4,10 @@ import {
   type PortalTransactionDetailStep,
   type PortalTransactionDetailSummaryRow,
 } from '@/lib/portal/cryptoTransactionDetailFormat'
-import { isBundleAllocationAggregate } from '@/lib/portal/cryptoTransactionHistoryFormat'
+import {
+  isBundleAllocationAggregate,
+  isBundleRebalanceAggregate,
+} from '@/lib/portal/cryptoTransactionHistoryFormat'
 import type {
   PortalBundleAllocationLeg,
   PortalCryptoWalletTransaction,
@@ -187,11 +190,60 @@ function buildAllocationAggregateDetail(
   }
 }
 
+function buildRebalanceAggregateDetail(
+  tx: PortalCryptoWalletTransaction,
+): PortalCryptoTransactionDetailViewModel {
+  const statusMeta = resolveAllocationStatus(tx)
+  const legs = tx.expandableLegs ?? []
+  const legsLabel =
+    tx.legsCount != null
+      ? `${tx.successfulLegsCount ?? tx.legsCount}/${tx.legsCount} legs`
+      : undefined
+
+  return {
+    id: tx.id,
+    kindLabel: 'Rééquilibrage',
+    status: statusMeta.status,
+    statusLabel: statusMeta.label,
+    statusTone: statusMeta.tone,
+    title: tx.title?.trim() || 'Rééquilibrage · Bundle',
+    subtitle: tx.subtitle?.trim() || legsLabel,
+    amountLabel: legs.length > 0 ? `${legs.length} exécutions Li.FI` : 'Rééquilibrage bundle',
+    amountPositive: true,
+    dateLong: formatTransactionDateLong(tx.createdAt),
+    stepperTitle: 'Exécutions Li.FI',
+    steps: legs.length > 0 ? legs.map(buildAllocationLegStep) : [],
+    summary: buildAllocationSummaryRows(tx).filter((row) => row.key !== 'Montant alloué'),
+    timeline: [
+      { label: 'Plan calculé', time: formatTransactionTimeShort(tx.createdAt), done: true },
+      {
+        label: 'Swaps Li.FI',
+        time: statusMeta.status === 'success' ? formatTransactionTimeShort(tx.createdAt) : 'En cours',
+        done: statusMeta.status === 'success',
+      },
+      {
+        label: 'Rééquilibrage terminé',
+        time: statusMeta.status === 'success' ? formatTransactionTimeShort(tx.createdAt) : '—',
+        done: statusMeta.status === 'success',
+      },
+    ],
+    counterparty: {
+      label: 'Li.FI',
+      sub: legs.length > 0 ? `${legs.length} exécutions on-chain` : 'Agrégat bundle',
+    },
+    flowDirection: 'in',
+    variant: 'allocation',
+  }
+}
+
 /** Détail transaction bundle — dépôt, retrait, allocation agrégée. */
 export function buildBundleTransactionDetail(
   tx: PortalCryptoWalletTransaction,
   currency: string,
 ): PortalCryptoTransactionDetailViewModel {
+  if (isBundleRebalanceAggregate(tx)) {
+    return buildRebalanceAggregateDetail(tx)
+  }
   if (isBundleAllocationAggregate(tx)) {
     return buildAllocationAggregateDetail(tx)
   }

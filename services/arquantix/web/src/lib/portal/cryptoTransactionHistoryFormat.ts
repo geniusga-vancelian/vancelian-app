@@ -111,6 +111,7 @@ export function isBundleInternalTransaction(tx: PortalCryptoWalletTransaction): 
   if (kind === 'bundle_allocation_aggregate' || kind === 'bundle_deallocation_aggregate') {
     return true
   }
+  if (kind === 'bundle_rebalance_aggregate') return true
   if (tx.portfolioScope?.trim().toLowerCase() === 'bundle' && tx.side?.trim().toLowerCase() === 'swap') {
     return true
   }
@@ -129,12 +130,21 @@ export function isBundleAllocationAggregate(tx: PortalCryptoWalletTransaction): 
   return kind === 'bundle_allocation_aggregate' || kind === 'bundle_deallocation_aggregate'
 }
 
+export function isBundleRebalanceAggregate(tx: PortalCryptoWalletTransaction): boolean {
+  return tx.transactionKind?.trim().toLowerCase() === 'bundle_rebalance_aggregate'
+}
+
+export function isBundleOperationAggregate(tx: PortalCryptoWalletTransaction): boolean {
+  return isBundleAllocationAggregate(tx) || isBundleRebalanceAggregate(tx)
+}
+
 export function isCryptoSwapTransaction(
   tx: PortalCryptoWalletTransaction,
   context: TransactionProjectionContext = 'self_trading',
 ): boolean {
   if (isLombardBorrowTransaction(tx)) return false
   if (context === 'self_trading' && isBundleInternalTransaction(tx)) return false
+  if (isBundleRebalanceAggregate(tx)) return false
   if (isBundleAllocationAggregate(tx)) return false
 
   const kind = tx.transactionKind?.trim().toLowerCase()
@@ -293,6 +303,26 @@ export function mapCryptoTransactionToHistoryItem(
     : options?.assetTicker
       ? portalCryptoWalletTransactionRoute(options.assetTicker, tx.id)
       : undefined
+
+  if (isBundleRebalanceAggregate(tx)) {
+    const legs = tx.expandableLegs ?? []
+    const legPairs = legs
+      .map((leg) => {
+        const from = normalizeAsset(leg.fromAsset)
+        const to = normalizeAsset(leg.toAsset)
+        return from && to ? `${from} → ${to}` : null
+      })
+      .filter(Boolean)
+    return {
+      id: tx.id,
+      variant: 'allocation',
+      title: tx.title?.trim() || 'Rééquilibrage · Bundle',
+      subtitle: tx.subtitle?.trim() || undefined,
+      amount: legPairs.length > 0 ? legPairs.join(' · ') : '—',
+      meta: formatAllocationMeta(tx),
+      href,
+    }
+  }
 
   if (isBundleAllocationAggregate(tx)) {
     const asset = normalizeAsset(tx.asset) || 'USDC'

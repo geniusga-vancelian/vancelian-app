@@ -307,12 +307,17 @@ function rebalanceLegMarkerFromStatus(
   status: string,
   isActiveLeg: boolean,
   stage: BundleRebalancingProcessingStage,
+  executionPhase: string,
 ): TransactionStepMarkerState {
   const s = normalizeRebalanceLegStatus(status)
   if (REBALANCE_LEG_COMPLETED.includes(s as (typeof REBALANCE_LEG_COMPLETED)[number])) {
     return 'done'
   }
   if (REBALANCE_LEG_FAILED.includes(s as (typeof REBALANCE_LEG_FAILED)[number])) {
+    // Pendant l'exécution, un leg peut être marqué failed côté client avant reprise — ne pas clore en rouge.
+    if (executionPhase !== 'failed' && stage === 'executing') {
+      return isActiveLeg ? 'loading' : 'pending'
+    }
     return 'failed'
   }
   if (REBALANCE_LEG_IN_PROGRESS.includes(s as (typeof REBALANCE_LEG_IN_PROGRESS)[number])) {
@@ -384,7 +389,12 @@ export function buildBundleRebalancingStepStates(params: {
     const stepIndex = 1 + index
     const status = statusByAsset.get(leg.asset.toUpperCase()) ?? 'planned'
     const isActiveLeg = activeAsset === leg.asset.toUpperCase()
-    states[stepIndex] = rebalanceLegMarkerFromStatus(status, isActiveLeg, progress.stage)
+    states[stepIndex] = rebalanceLegMarkerFromStatus(
+      status,
+      isActiveLeg,
+      progress.stage,
+      executionPhase,
+    )
   })
 
   const finalIndex = stepCount - 1

@@ -342,6 +342,34 @@ describe('mapCryptoTransactionToHistoryItem', () => {
     assert.match(row.href ?? '', /bundle-alloc-1/)
   })
 
+  it('renders rebalance aggregate as single row with leg pairs', () => {
+    const row = mapCryptoTransactionToHistoryItem(
+      {
+        ...baseTx,
+        id: 'bundle-rebal-1',
+        side: 'rebalance',
+        direction: 'info',
+        status: 'completed',
+        title: 'Rééquilibrage · Two Crypto Kings',
+        subtitle: '2/2 legs · completed',
+        transactionKind: 'bundle_rebalance_aggregate',
+        legsCount: 2,
+        successfulLegsCount: 2,
+        expandableLegs: [
+          { fromAsset: 'CBBTC', toAsset: 'USDC', amountIn: '0.0001', amountOut: '1.71', status: 'confirmed' },
+          { fromAsset: 'USDC', toAsset: 'CBETH', amountIn: '1.71', amountOut: '0.0008', status: 'confirmed' },
+        ],
+      },
+      'EUR',
+      { projectionContext: 'bundle', bundlePortfolioId: 'daea3720-e58e-410f-a796-3bbd541ac608' },
+    )
+    assert.equal(row.variant, 'allocation')
+    assert.match(row.title, /Rééquilibrage · Two Crypto Kings/)
+    assert.match(row.amount, /CBBTC → USDC/)
+    assert.match(row.amount, /USDC → CBETH/)
+    assert.match(row.meta ?? '', /2\/2 legs/)
+  })
+
   it('renders allocation aggregate amount ending in zero correctly', () => {
     const row = mapCryptoTransactionToHistoryItem(
       {

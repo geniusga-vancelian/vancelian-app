@@ -15,6 +15,7 @@ _BUNDLE_INTERNAL_KINDS = frozenset(
         "bundle_internal_swap",
         "bundle_allocation_aggregate",
         "bundle_deallocation_aggregate",
+        "bundle_rebalance_aggregate",
         "bundle_deposit",
         "bundle_withdrawal",
     }

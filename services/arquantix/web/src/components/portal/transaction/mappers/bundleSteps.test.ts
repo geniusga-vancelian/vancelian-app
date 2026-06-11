@@ -125,7 +125,7 @@ describe('bundleSteps', () => {
     assert.equal(aaveDone[1], 'done')
     assert.equal(aaveDone[2], 'loading')
 
-    const linkFailed = buildBundleRebalancingStepStates({
+    const linkFailedTransient = buildBundleRebalancingStepStates({
       legs,
       assetLines: [
         { asset: 'AAVE', status: 'completed' },
@@ -135,8 +135,20 @@ describe('bundleSteps', () => {
       progress: { stage: 'executing', legCurrent: 3, legTotal: 3, activeAsset: 'ETH' },
       executionPhase: 'submitting',
     })
-    assert.equal(linkFailed[2], 'failed')
-    assert.equal(linkFailed[3], 'loading')
+    assert.equal(linkFailedTransient[2], 'pending')
+    assert.equal(linkFailedTransient[3], 'loading')
+
+    const linkFailedTerminal = buildBundleRebalancingStepStates({
+      legs,
+      assetLines: [
+        { asset: 'AAVE', status: 'completed' },
+        { asset: 'LINK', status: 'failed' },
+        { asset: 'ETH', status: 'planned' },
+      ],
+      progress: { stage: 'executing', legCurrent: 3, legTotal: 3, activeAsset: 'ETH' },
+      executionPhase: 'failed',
+    })
+    assert.equal(linkFailedTerminal[2], 'failed')
 
     const finalizing = buildBundleRebalancingStepStates({
       legs,

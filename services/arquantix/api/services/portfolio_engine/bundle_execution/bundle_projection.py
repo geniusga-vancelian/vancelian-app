@@ -13,6 +13,7 @@ from services.privy_wallet.service import _format_decimal
 
 _ALLOCATION_KIND = "bundle_allocation_aggregate"
 _DEALLOCATION_KIND = "bundle_deallocation_aggregate"
+_REBALANCE_KIND = "bundle_rebalance_aggregate"
 
 _SELL_ACTIONS = frozenset(
     {
@@ -20,6 +21,15 @@ _SELL_ACTIONS = frozenset(
         "rebalance_sell",
         "sell",
         "deallocation",
+    }
+)
+
+_REBALANCE_ACTIONS = frozenset(
+    {
+        "rebalance",
+        "rebalance_v3",
+        "rebalance_sell",
+        "rebalance_buy",
     }
 )
 
@@ -106,9 +116,17 @@ def _leg_action(tx: dict[str, Any]) -> str:
     return "allocation"
 
 
+def _is_rebalance_leg(tx: dict[str, Any]) -> bool:
+    action = _leg_action(tx)
+    if action in _REBALANCE_ACTIONS:
+        return True
+    title = str(tx.get("title") or "").lower()
+    return "rééquilibrage" in title or "rebalance" in title
+
+
 def _is_internal_leg(tx: dict[str, Any]) -> bool:
     kind = str(tx.get("transaction_kind") or "").strip().lower()
-    if kind in {_ALLOCATION_KIND, _DEALLOCATION_KIND}:
+    if kind in {_ALLOCATION_KIND, _DEALLOCATION_KIND, _REBALANCE_KIND}:
         return False
     if kind == "bundle_internal_swap":
         return True
@@ -279,6 +297,66 @@ def aggregate_bundle_allocations_by_batch(
     return aggregates
 
 
+def aggregate_bundle_rebalance_by_batch(
+    legs: list[dict[str, Any]],
+    *,
+    portfolio_name: str,
+) -> list[dict[str, Any]]:
+    """Regroupe les legs rebalance_sell / rebalance_buy d'un même batch en une ligne."""
+    by_batch: dict[str, list[dict[str, Any]]] = {}
+    for leg in legs:
+        batch = _batch_id(leg)
+        if not batch:
+            continue
+        by_batch.setdefault(batch, []).append(leg)
+
+    aggregates: list[dict[str, Any]] = []
+
+    for batch_id, batch_legs in by_batch.items():
+        batch_legs.sort(key=lambda tx: _parse_dt(tx.get("created_at")))
+        anchor = batch_legs[-1]
+        expandable = [_expandable_leg(leg) for leg in batch_legs]
+
+        successful = sum(1 for leg in batch_legs if _leg_status(leg) in _SUCCESS_STATUSES)
+        failed = sum(1 for leg in batch_legs if _leg_status(leg) in _FAILED_STATUSES)
+        status = _aggregate_status(batch_legs)
+
+        aggregates.append(
+            {
+                "id": uuid5(NAMESPACE_URL, f"bundle-aggregate:{_REBALANCE_KIND}:{batch_id}"),
+                "side": "rebalance",
+                "asset": None,
+                "amount_crypto": None,
+                "amount": None,
+                "amount_fiat": "0",
+                "price": "0",
+                "currency": anchor.get("currency") or "EUR",
+                "status": status,
+                "fee_amount": None,
+                "fee_asset": None,
+                "external_reference": batch_id,
+                "bundle_batch_id": batch_id,
+                "created_at": anchor.get("created_at"),
+                "title": f"Rééquilibrage · {portfolio_name}",
+                "subtitle": f"{successful}/{len(batch_legs)} legs · {status}",
+                "direction": "info",
+                "transaction_kind": _REBALANCE_KIND,
+                "source_system": anchor.get("source_system") or "bundle_projection",
+                "tx_hash": None,
+                "custody_provider": "privy",
+                "portfolio_scope": "bundle",
+                "portfolio_id": anchor.get("portfolio_id"),
+                "legs_count": len(batch_legs),
+                "successful_legs_count": successful,
+                "failed_legs_count": failed,
+                "expandable_legs": expandable,
+            },
+        )
+
+    aggregates.sort(key=lambda tx: _parse_dt(tx.get("created_at")), reverse=True)
+    return aggregates
+
+
 def project_bundle_transactions(
     raw_txs: list[dict[str, Any]],
     *,
@@ -291,10 +369,11 @@ def project_bundle_transactions(
     projected: list[dict[str, Any]] = []
     allocation_legs: list[dict[str, Any]] = []
     deallocation_legs: list[dict[str, Any]] = []
+    rebalance_legs: list[dict[str, Any]] = []
 
     for tx in raw_txs:
         kind = str(tx.get("transaction_kind") or "").strip().lower()
-        if kind in {_ALLOCATION_KIND, _DEALLOCATION_KIND}:
+        if kind in {_ALLOCATION_KIND, _DEALLOCATION_KIND, _REBALANCE_KIND}:
             projected.append(tx)
             continue
         if _is_fund_transfer(tx):
@@ -304,6 +383,9 @@ def project_bundle_transactions(
             projected.append(project_bundle_withdrawal(tx, portfolio_name=portfolio_name))
             continue
         if _is_internal_leg(tx):
+            if _is_rebalance_leg(tx):
+                rebalance_legs.append(tx)
+                continue
             action = _leg_action(tx)
             if action in _SELL_ACTIONS or kind == "bundle_internal_swap" and "vente" in str(
                 tx.get("title") or "",
@@ -326,6 +408,12 @@ def project_bundle_transactions(
             deallocation_legs,
             portfolio_name=portfolio_name,
             deallocation=True,
+        ),
+    )
+    projected.extend(
+        aggregate_bundle_rebalance_by_batch(
+            rebalance_legs,
+            portfolio_name=portfolio_name,
         ),
     )
 

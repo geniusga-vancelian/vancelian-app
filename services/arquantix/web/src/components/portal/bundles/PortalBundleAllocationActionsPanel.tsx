@@ -13,6 +13,7 @@ import { TransactionProcessingPage } from '@/components/portal/transaction/Trans
 import {
   buildBundleRebalancingProcessingStepsDynamic,
   buildBundleRebalancingStepStates,
+  bundleRebalancingDynamicProcessingProgressIndex,
   isTerminalBundleV3Status,
   type BundleRebalancingProcessingProgress,
 } from '@/components/portal/transaction/mappers/bundleSteps'
@@ -114,13 +115,19 @@ export function PortalBundleAllocationActionsPanel({
   )
 
   const rawProgressIndex = useMemo(() => {
-    const loadingIndex = processingStepStates.findIndex((state) => state === 'loading')
-    if (loadingIndex >= 0) return loadingIndex
-    const failedIndex = processingStepStates.findIndex((state) => state === 'failed')
-    if (failedIndex >= 0) return failedIndex
-    const doneCount = processingStepStates.filter((state) => state === 'done').length
-    return Math.min(doneCount, Math.max(0, processingSteps.length - 1))
-  }, [processingStepStates, processingSteps.length])
+    const progressForIndex =
+      executionPhase === 'preparing' && processingProgress.stage !== 'executing'
+        ? { stage: 'preparing' as const, legTotal: orderedLegs.length }
+        : executionPhase === 'completed'
+          ? { stage: 'completed' as const, legTotal: orderedLegs.length }
+          : processingProgress.stage === 'finalizing'
+            ? { stage: 'finalizing' as const, legTotal: orderedLegs.length }
+            : processingProgress
+    return bundleRebalancingDynamicProcessingProgressIndex(
+      progressForIndex,
+      processingSteps.length,
+    )
+  }, [executionPhase, orderedLegs.length, processingProgress, processingSteps.length])
 
   const { runPortfolioRebalancing, inFlightRef } = useBundlePortfolioRebalancing(
     swapMockMode,
@@ -208,6 +215,7 @@ export function PortalBundleAllocationActionsPanel({
     setError(null)
     setProcessingProgress({ stage: 'preparing', legTotal: orderedLegs.length })
     setExecutionPhase('preparing')
+    let succeeded = false
     try {
       if (assetLines.length === 0) {
         await loadPreview({ throwOnError: true })
@@ -232,6 +240,9 @@ export function PortalBundleAllocationActionsPanel({
         return
       }
       invalidatePortalCache('portal:crypto-wallet')
+      setExecutionPhase('completed')
+      setProcessingProgress({ stage: 'completed', legTotal: orderedLegs.length })
+      succeeded = true
       await onLockRefresh()
       onRefresh()
       onClose()
@@ -260,7 +271,9 @@ export function PortalBundleAllocationActionsPanel({
       onRefresh()
     } finally {
       setBusy(false)
-      setProcessingProgress({ stage: 'preparing' })
+      if (!succeeded) {
+        setProcessingProgress({ stage: 'preparing', legTotal: orderedLegs.length })
+      }
     }
   }
 

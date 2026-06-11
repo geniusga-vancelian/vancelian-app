@@ -57,6 +57,43 @@ describe('buildBundleTransactionDetail', () => {
     assert.equal(detail.summary.some((row) => row.key === 'Jambes exécutées'), true)
   })
 
+  it('builds rebalance aggregate detail with sell and buy legs', () => {
+    const rebalance: PortalCryptoWalletTransaction = {
+      ...baseTx,
+      id: 'rebal-1',
+      side: 'rebalance',
+      transactionKind: 'bundle_rebalance_aggregate',
+      title: 'Rééquilibrage · Two Crypto Kings',
+      subtitle: '2/2 legs · completed',
+      amountCrypto: undefined,
+      asset: undefined,
+      legsCount: 2,
+      successfulLegsCount: 2,
+      expandableLegs: [
+        {
+          fromAsset: 'CBBTC',
+          toAsset: 'USDC',
+          amountIn: '0.0001',
+          amountOut: '1.71',
+          status: 'confirmed',
+        },
+        {
+          fromAsset: 'USDC',
+          toAsset: 'CBETH',
+          amountIn: '1.71',
+          amountOut: '0.0008',
+          status: 'confirmed',
+        },
+      ],
+    }
+    const detail = buildBundleTransactionDetail(rebalance, 'EUR')
+    assert.equal(detail.kindLabel, 'Rééquilibrage')
+    assert.equal(detail.steps.length, 2)
+    assert.match(detail.steps[0]?.name ?? '', /CBBTC → USDC/)
+    assert.match(detail.steps[1]?.name ?? '', /USDC → CBETH/)
+    assert.equal(detail.summary.some((row) => row.key === 'Montant alloué'), false)
+  })
+
   it('falls back to standard detail for bundle deposit', () => {
     const deposit: PortalCryptoWalletTransaction = {
       ...baseTx,

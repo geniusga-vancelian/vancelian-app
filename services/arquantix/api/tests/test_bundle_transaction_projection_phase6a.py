@@ -345,6 +345,91 @@ def test_project_self_trading_filters_bundle_allocation_aggregate():
     assert filtered[0]["id"] == "1"
 
 
+def test_aggregate_rebalance_groups_sell_and_buy_by_batch():
+    from services.portfolio_engine.bundle_execution.bundle_projection import (
+        aggregate_bundle_rebalance_by_batch,
+    )
+
+    batch_id = "batch-kings-rebal"
+    base = {
+        "status": "confirmed",
+        "bundle_batch_id": batch_id,
+        "external_reference": batch_id,
+        "created_at": "2026-06-07T14:00:00+00:00",
+        "portfolio_id": "daea3720-e58e-410f-a796-3bbd541ac608",
+        "bundle_action": "rebalance_sell",
+    }
+    legs = [
+        {
+            **base,
+            "from_asset": "CBBTC",
+            "to_asset": "USDC",
+            "asset": "USDC",
+            "swap_amount_from": "0.0001",
+            "amount_crypto": "1.71",
+            "bundle_action": "rebalance_sell",
+        },
+        {
+            **base,
+            "from_asset": "USDC",
+            "to_asset": "CBETH",
+            "asset": "CBETH",
+            "swap_amount_from": "1.71",
+            "amount_crypto": "0.0008",
+            "bundle_action": "rebalance_buy",
+            "created_at": "2026-06-07T14:01:00+00:00",
+        },
+    ]
+    agg = aggregate_bundle_rebalance_by_batch(legs, portfolio_name="Two Crypto Kings")[0]
+    assert agg["transaction_kind"] == "bundle_rebalance_aggregate"
+    assert agg["bundle_batch_id"] == batch_id
+    assert agg["legs_count"] == 2
+    assert len(agg.get("expandable_legs") or []) == 2
+    assert agg["title"] == "Rééquilibrage · Two Crypto Kings"
+    assert agg["subtitle"] == "2/2 legs · completed"
+
+
+def test_project_bundle_transactions_merges_rebalance_legs():
+    from services.portfolio_engine.bundle_execution.bundle_projection import (
+        project_bundle_transactions,
+    )
+
+    batch_id = "batch-rebal-merge"
+    raw = [
+        {
+            "id": "leg-sell",
+            "status": "confirmed",
+            "bundle_batch_id": batch_id,
+            "created_at": "2026-06-07T14:00:00+00:00",
+            "transaction_kind": "bundle_internal_swap",
+            "side": "swap",
+            "portfolio_scope": "bundle",
+            "bundle_action": "rebalance_sell",
+            "from_asset": "CBBTC",
+            "to_asset": "USDC",
+            "title": "Rééquilibrage · vente · CBBTC → USDC",
+        },
+        {
+            "id": "leg-buy",
+            "status": "confirmed",
+            "bundle_batch_id": batch_id,
+            "created_at": "2026-06-07T14:01:00+00:00",
+            "transaction_kind": "bundle_internal_swap",
+            "side": "swap",
+            "portfolio_scope": "bundle",
+            "bundle_action": "rebalance_buy",
+            "from_asset": "USDC",
+            "to_asset": "CBETH",
+            "title": "Rééquilibrage · achat · USDC → CBETH",
+        },
+    ]
+    projected = project_bundle_transactions(raw, portfolio_name="Two Crypto Kings")
+    rebalance_rows = [t for t in projected if t.get("transaction_kind") == "bundle_rebalance_aggregate"]
+    assert len(rebalance_rows) == 1
+    assert rebalance_rows[0]["legs_count"] == 2
+    assert not any(t.get("transaction_kind") == "bundle_internal_swap" for t in projected)
+
+
 def test_aggregate_allocation_total_preserves_whole_amounts_ending_in_zero():
     """Regression: rstrip('0') on '80' must not become '8'."""
     from services.portfolio_engine.bundle_execution.bundle_projection import (
