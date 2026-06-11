@@ -51,7 +51,7 @@ function swapStatusErrorMessage(status: { status: string; error_message?: string
 
 type LifiSwapExecutionOptions = {
   /** Soumission tx (défaut : route swap portal `/api/portal/swaps/{id}`). */
-  submitTx?: (swapId: string, txHash: string) => Promise<unknown>
+  submitTx?: (swapId: string, txHash: string, signingWalletAddress?: string) => Promise<unknown>
 }
 
 export function useLifiSwapExecution(
