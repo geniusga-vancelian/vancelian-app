@@ -55,6 +55,17 @@ def _uses_client_signature(trigger: V3Trigger) -> bool:
     return trigger in CLIENT_SIGNATURE_TRIGGERS
 
 
+def _quote_all_legs_upfront(trigger: V3Trigger, leg_action: str) -> bool:
+    """Rééquilibrage manuel = un swap unitaire par cycle HTTP (ADR 008).
+
+    Chaque vente ou achat est un swap LI.FI indépendant (quote + signature Privy).
+    Le leg suivant est quoté uniquement via POST /rebalancing/resume après clôture
+    du swap courant — jamais de quotes ou signatures groupées.
+    """
+    _ = (trigger, leg_action)
+    return False
+
+
 def _pause_on_pending_leg(trigger: V3Trigger) -> bool:
     """Pause le cycle V3 tant qu'un leg LI.FI n'est pas terminal (manuel ou dépôt worker)."""
     return trigger in PAUSE_ON_PENDING_TRIGGERS
@@ -579,7 +590,7 @@ class BundleRebalanceExecutor:
         trigger: V3Trigger,
     ) -> list[V3LegExecutionResult]:
         pause_on_pending = _pause_on_pending_leg(trigger)
-        quote_all_legs_upfront = _uses_client_signature(trigger)
+        quote_all_legs_upfront = _quote_all_legs_upfront(trigger, leg_action)
         results: list[V3LegExecutionResult] = []
         sorted_legs = sorted(
             plan_legs,

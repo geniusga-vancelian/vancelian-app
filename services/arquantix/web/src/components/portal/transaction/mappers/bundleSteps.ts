@@ -254,6 +254,98 @@ export function buildBundleActiveOperationSteps(params: {
   return steps
 }
 
+export type BundleRebalancingLeg = {
+  asset: string
+  action: string
+  amount_entry?: string
+  entry_asset?: string
+}
+
+export type BundleRebalancingProcessingStage =
+  | 'preparing'
+  | 'executing'
+  | 'finalizing'
+  | 'completed'
+
+export type BundleRebalancingProcessingProgress = {
+  stage: BundleRebalancingProcessingStage
+  legCurrent?: number
+  legTotal?: number
+  activeAsset?: string | null
+}
+
+function formatRebalanceLegAmount(amount?: string, entryAsset = 'USDC'): string {
+  if (!amount) return ''
+  const n = Number(amount)
+  if (!Number.isFinite(n)) return ''
+  const formatted = new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n)
+  return `${formatted} ${entryAsset}`
+}
+
+/** Stepper rééquilibrage manuel : plan → ventes → achats → finalisation. */
+export function buildBundleRebalancingProcessingStepsDynamic(params: {
+  bundleLabel: string
+  legs: BundleRebalancingLeg[]
+}): TransactionStep[] {
+  const { bundleLabel, legs } = params
+  const steps: TransactionStep[] = [
+    {
+      label: 'Calcul du plan',
+      subtext: `Estimation du rééquilibrage pour ${bundleLabel}.`,
+    },
+  ]
+
+  for (const leg of legs) {
+    const label = displayBundleAssetLabel(leg.asset)
+    const amount = formatRebalanceLegAmount(leg.amount_entry, leg.entry_asset ?? 'USDC')
+    if (leg.action === 'sell') {
+      steps.push({
+        label: `Vente · ${label}`,
+        subtext: amount ? `Vente de ${label} pour ${amount}.` : `Vente de la position ${label}.`,
+      })
+    } else {
+      steps.push({
+        label: `Achat · ${label}`,
+        subtext: amount ? `Achat de ${label} pour ${amount}.` : `Achat de ${label}.`,
+      })
+    }
+  }
+
+  steps.push({
+    label: 'Mise à jour du portefeuille',
+    subtext: 'Synchronisation de votre allocation cible.',
+  })
+
+  return steps
+}
+
+/** Index stepper rééquilibrage — monotone (ne recule pas en signing). */
+export function bundleRebalancingDynamicProcessingProgressIndex(
+  progress: BundleRebalancingProcessingProgress,
+  stepCount: number,
+): number {
+  const legTotal = Math.max(0, progress.legTotal ?? 0)
+  const lastIndex = Math.max(0, stepCount - 1)
+
+  switch (progress.stage) {
+    case 'preparing':
+      return 0
+    case 'executing': {
+      const leg = Math.max(1, progress.legCurrent ?? 1)
+      return Math.min(1 + leg, Math.max(1 + legTotal, 1))
+    }
+    case 'finalizing':
+      return Math.min(1 + legTotal + 1, lastIndex)
+    case 'completed':
+      return stepCount
+    default:
+      return 0
+  }
+}
+
 export function bundleActiveOperationProgressIndex(params: {
   v3Status: string | undefined
   assetLines: Array<{ asset: string; status: string }>

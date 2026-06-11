@@ -122,18 +122,25 @@ export async function runSequentialTrades(
       await executeTrade(swapId, snapshot, deps)
     })
 
-  while (
-    !isTerminalBundleV3Status(result.v3_status) &&
-    (result.v3_status === 'RUNNING' || pendingRebalanceLegs(result).length > 0)
-  ) {
-    const pending = pendingRebalanceLegs(result)
-    const total = pending.length
-    const hadPendingToProcess = total > 0
+  const plannedLegTotal = Math.max(
+    (result.sell_results?.length ?? 0) + (result.buy_results?.length ?? 0),
+    (result.asset_lines?.length ?? 0),
+    1,
+  )
+  let executedLegCount = 0
 
-    for (let i = 0; i < pending.length; i += 1) {
-      const leg = pending[i]!
+  while (true) {
+    if (isTerminalBundleV3Status(result.v3_status)) {
+      break
+    }
+
+    const pending = pendingRebalanceLegs(result)
+    if (pending.length > 0) {
+      // Un seul swap par tour : quote LI.FI + signature Privy indépendants (ADR 008).
+      const leg = pending[0]!
       const swapId = leg.swap_id!
-      options.onLegProgress?.(i + 1, total, leg.asset)
+      executedLegCount += 1
+      options.onLegProgress?.(executedLegCount, plannedLegTotal, leg.asset)
       options.onAssetStatus?.(leg.asset, 'pending')
 
       try {
@@ -162,25 +169,21 @@ export async function runSequentialTrades(
           errorMessage,
         })
       }
-    }
-
-    if (result.v3_status !== 'RUNNING') {
+    } else if (result.v3_status !== 'RUNNING') {
       break
     }
 
     if (!options.resumeFn) {
       break
     }
-
-    if (!hadPendingToProcess && result.v3_status !== 'RUNNING') {
-      break
-    }
-
     if (resumeRounds >= MAX_RESUME_ROUNDS) {
       break
     }
-    resumeRounds += 1
+    if (result.v3_status !== 'RUNNING' && pending.length === 0) {
+      break
+    }
 
+    resumeRounds += 1
     const resumed = await resumeWithRetry(options.resumeFn, result.portfolio_id, result)
     resumeOutcomes.push(resumed.outcome)
 
@@ -191,10 +194,7 @@ export async function runSequentialTrades(
 
     result = resumed.payload
 
-    if (
-      isTerminalBundleV3Status(result.v3_status) &&
-      pendingRebalanceLegs(result).length === 0
-    ) {
+    if (isTerminalBundleV3Status(result.v3_status)) {
       break
     }
 

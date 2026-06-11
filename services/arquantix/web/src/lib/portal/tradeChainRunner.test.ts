@@ -176,7 +176,7 @@ describe('runSequentialTrades', () => {
     assert.equal(result.resumeOutcomes[0]?.attempts, 2)
   })
 
-  it('enchaîne deux legs pending quotés au départ puis un resume de clôture', async () => {
+  it('un swap unitaire par tour — resume quote le leg suivant', async () => {
     const executed: string[] = []
     let resumeCalls = 0
 
@@ -208,6 +208,25 @@ describe('runSequentialTrades', () => {
       },
       resumeFn: async () => {
         resumeCalls += 1
+        if (resumeCalls === 1) {
+          return basePayload({
+            buy_results: [
+              {
+                asset: 'cbBTC',
+                status: 'completed',
+                swap_id: 'swap-btc',
+                amount_usdc: '30',
+              },
+              {
+                asset: 'cbETH',
+                status: 'pending',
+                swap_id: 'swap-eth',
+                amount_usdc: '30',
+                quantity_bought: 0.01,
+              },
+            ],
+          })
+        }
         return basePayload({
           v3_status: 'COMPLETED',
           buy_results: [
@@ -229,7 +248,7 @@ describe('runSequentialTrades', () => {
     })
 
     assert.deepEqual(executed, ['swap-btc', 'swap-eth'])
-    assert.equal(resumeCalls, 1)
+    assert.ok(resumeCalls >= 2)
     assert.equal(result.legOutcomes.length, 2)
   })
 

@@ -67,7 +67,7 @@ Dépôt bundle (direct USDC → bundle cash) = `execute_transfer(wallet_from_id,
 
 | ID | Règle |
 | --- | --- |
-| I1 | N legs = N `execute_trade` — jamais mega-swap |
+| I1 | N legs = N `execute_trade` — jamais mega-swap ; **1 quote LI.FI + 1 signature Privy par cycle HTTP** (`POST` puis `resume` entre chaque leg) |
 | I2 | Swap Core ne touche pas `pe_position_atoms` directement |
 | I3 | Tout mouvement économique = paire débit/crédit wallet virtuel |
 | I4 | `ExchangeService.swap` (ledger interne) reste distinct de `execute_trade` (LI.FI) |

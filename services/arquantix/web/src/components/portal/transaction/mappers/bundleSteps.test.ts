@@ -7,7 +7,9 @@ import {
   BUNDLE_WITHDRAW_PROCESSING_STEP_DEFS,
   buildBundleReviewPreviewSteps,
   buildBundleInvestProcessingStepsDynamic,
+  buildBundleRebalancingProcessingStepsDynamic,
   buildBundleWithdrawProcessingStepsDynamic,
+  bundleRebalancingDynamicProcessingProgressIndex,
   buildBundleProcessingSteps,
   bundleInvestDynamicProcessingProgressIndex,
   bundleWithdrawDynamicProcessingProgressIndex,
@@ -49,6 +51,31 @@ describe('bundleSteps', () => {
   it('legacy swap phase index kept for withdraw stepper', () => {
     assert.equal(bundleInvestProcessingStepperIndex('signing'), 1)
     assert.equal(bundleWithdrawProcessingStepperIndex('submitting'), 2)
+  })
+
+  it('rebalancing dynamic stepper lists sells then buys', () => {
+    const steps = buildBundleRebalancingProcessingStepsDynamic({
+      bundleLabel: 'Crypto Majors',
+      legs: [
+        { asset: 'AAVE', action: 'sell', amount_entry: '4.42' },
+        { asset: 'LINK', action: 'sell', amount_entry: '3.54' },
+        { asset: 'ETH', action: 'buy', amount_entry: '12.48' },
+      ],
+    })
+    assert.equal(steps.length, 5)
+    assert.equal(steps[0]!.label, 'Calcul du plan')
+    assert.match(steps[1]!.label, /Vente · AAVE/)
+    assert.match(steps[3]!.label, /Achat · ETH/)
+
+    const stepCount = steps.length
+    const idxLeg2 = bundleRebalancingDynamicProcessingProgressIndex(
+      { stage: 'executing', legCurrent: 2, legTotal: 3 },
+      stepCount,
+    )
+    assert.ok(idxLeg2 > bundleRebalancingDynamicProcessingProgressIndex(
+      { stage: 'executing', legCurrent: 1, legTotal: 3 },
+      stepCount,
+    ))
   })
 
   it('invest dynamic stepper progresses monotonically per leg', () => {

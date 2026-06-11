@@ -355,6 +355,9 @@ function resolveBundleApiErrorMessage(
     if (looksLikeHtmlPayload(detail)) {
       return `Service temporairement indisponible (${upstreamStatus}) — réessayez dans un instant.`
     }
+    if (/internal server error/i.test(detail)) {
+      return 'Service temporairement indisponible — réessayez dans un instant.'
+    }
     return detail
   }
 

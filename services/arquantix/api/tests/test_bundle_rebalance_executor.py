@@ -306,6 +306,120 @@ def test_timeout_pending_becomes_terminal_no_resume(db: Session, monkeypatch):
     assert len(buy_calls) == len(result["buy_results"]) * 2
 
 
+def test_manual_trigger_quotes_one_sell_at_a_time(db: Session, monkeypatch):
+    """manual + sell_plan multi-legs : 1 quote vente par POST (signatures séquentielles)."""
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    aave = _instrument_for_asset(db, "AAVE")
+    link = _instrument_for_asset(db, "LINK")
+    btc = _instrument_for_asset(db, "BTC")
+    eth = _instrument_for_asset(db, "ETH")
+    plan = {
+        "status": "ok",
+        "plan_hash": f"sha256:manual-sells-{uuid.uuid4().hex[:8]}",
+        "snapshot_hash": "sha256:snap",
+        "entry_asset": "USDC",
+        "available_cash_usdc": "2.37",
+        "sell_plan": [
+            {
+                "asset": "AAVE",
+                "instrument_id": str(aave.id),
+                "amount_usdc": "4.42",
+                "action": "sell",
+            },
+            {
+                "asset": "LINK",
+                "instrument_id": str(link.id),
+                "amount_usdc": "3.54",
+                "action": "sell",
+            },
+            {
+                "asset": "BTC",
+                "instrument_id": str(btc.id),
+                "amount_usdc": "2.15",
+                "action": "sell",
+            },
+        ],
+        "buy_plan": [{
+            "asset": "ETH",
+            "instrument_id": str(eth.id),
+            "amount_usdc": "12.48",
+            "action": "buy",
+            "funded_by": "cash_leg_and_sell_proceeds",
+        }],
+    }
+    provider = _RecordingMockProvider(default_status="pending")
+    result = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        trigger="manual",
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert result["v3_status"] == "RUNNING"
+    assert len(result["sell_results"]) == 1
+    assert result["sell_results"][0]["asset"] == "AAVE"
+    assert result["sell_results"][0]["status"] == "pending"
+    assert result["buy_results"] == []
+    assert len(provider.calls) == 1
+    assert provider.calls[0]["action"] == "rebalance_sell"
+
+
+def test_manual_trigger_quotes_one_buy_at_a_time(db: Session, monkeypatch):
+    """manual + buy_plan multi-legs : 1 quote achat par POST (swaps indépendants)."""
+    monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
+    pe = make_linked_client(db)
+    portfolio, usdc = _bundle_with_allocations(db, pe.id, _majors_weights())
+    btc = _instrument_for_asset(db, "BTC")
+    eth = _instrument_for_asset(db, "ETH")
+    plan = {
+        "status": "ok",
+        "plan_hash": f"sha256:manual-buys-{uuid.uuid4().hex[:8]}",
+        "snapshot_hash": "sha256:snap",
+        "entry_asset": "USDC",
+        "available_cash_usdc": "60",
+        "sell_plan": [],
+        "buy_plan": [
+            {
+                "asset": "BTC",
+                "instrument_id": str(btc.id),
+                "amount_usdc": "30",
+                "action": "buy",
+                "funded_by": "cash_leg",
+            },
+            {
+                "asset": "ETH",
+                "instrument_id": str(eth.id),
+                "amount_usdc": "30",
+                "action": "buy",
+                "funded_by": "cash_leg",
+            },
+        ],
+    }
+    provider = _RecordingMockProvider(default_status="pending")
+    result = execute_v3_bundle_rebalance(
+        db,
+        client_id=pe.id,
+        portfolio_id=portfolio.id,
+        drift_rebalance_plan=plan,
+        trigger="manual",
+        execution_adapter=_adapter(provider),
+    )
+    db.commit()
+
+    assert result["v3_status"] == "RUNNING"
+    assert len(result["buy_results"]) == 1
+    assert result["buy_results"][0]["asset"] == "BTC"
+    assert result["buy_results"][0]["status"] == "pending"
+    assert result["sell_results"] == []
+    assert len(provider.calls) == 1
+    assert provider.calls[0]["action"] == "rebalance_buy"
+
+
 def test_manual_trigger_returns_running_with_pending_swap(db: Session, monkeypatch):
     """manual/deposit : quote leg → RUNNING + pending (pas d'expiration immédiate)."""
     monkeypatch.setenv("MAX_SWAP_ATTEMPTS", "2")
