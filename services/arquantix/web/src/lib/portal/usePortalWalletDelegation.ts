@@ -40,7 +40,7 @@ export function usePortalWalletDelegation(): PortalWalletDelegationState {
 
   const isDelegated = useMemo(() => {
     if (!embeddedAddress) return false
-    const accounts = (user?.linkedAccounts ?? []) as Array<Record<string, unknown>>
+    const accounts = (user?.linkedAccounts ?? []) as unknown as Array<Record<string, unknown>>
     return accounts.some((account) => {
       if (account.type !== 'wallet') return false
       const address = typeof account.address === 'string' ? account.address.toLowerCase() : ''
