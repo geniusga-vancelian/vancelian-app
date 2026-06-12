@@ -14,6 +14,7 @@ export const PORTAL_ROUTES = {
   walletWithdraw: `${PORTAL_PATH_PREFIX}/wallet/withdraw`,
   walletSwap: `${PORTAL_PATH_PREFIX}/wallet/swap`,
   walletCreate: `${PORTAL_PATH_PREFIX}/wallet/create`,
+  walletAutoTrading: `${PORTAL_PATH_PREFIX}/wallet/auto-trading`,
   myWallets: `${PORTAL_PATH_PREFIX}/wallets`,
   invest: `${PORTAL_PATH_PREFIX}/invest`,
   borrow: `${PORTAL_PATH_PREFIX}/borrow`,
