@@ -33,6 +33,9 @@ DEFAULT_LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED = False
 # Exécution serveur worker (signature déléguée Privy sans navigateur) — défaut OFF.
 DEFAULT_LIFI_EXECUTION_WORKER_ENABLED = False
 
+# Rééquilibrage portefeuille piloté serveur (trigger=server, leg signé serveur) — défaut OFF.
+DEFAULT_LIFI_REBALANCE_WORKER_ENABLED = False
+
 # Pilot prod contrôlé — emails autorisés (séparés par virgule). Vide = fail-closed si flags ON.
 DEFAULT_LIFI_ORCHESTRATOR_ALLOWED_PERSON_EMAILS = ""
 
@@ -118,6 +121,15 @@ def lifi_execution_worker_enabled() -> bool:
     raw = (
         os.getenv("LIFI_EXECUTION_WORKER_ENABLED")
         or str(DEFAULT_LIFI_EXECUTION_WORKER_ENABLED)
+    ).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def lifi_rebalance_worker_enabled() -> bool:
+    """Worker de rééquilibrage serveur (drift → executor trigger=server) — défaut false."""
+    raw = (
+        os.getenv("LIFI_REBALANCE_WORKER_ENABLED")
+        or str(DEFAULT_LIFI_REBALANCE_WORKER_ENABLED)
     ).strip().lower()
     return raw in {"1", "true", "yes", "on"}
 

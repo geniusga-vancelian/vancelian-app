@@ -44,15 +44,23 @@ def client_signature_stale_minutes() -> int:
     except ValueError:
         return 10
 
-V3Trigger = Literal["manual", "deposit", "recovery", "cron"]
+V3Trigger = Literal["manual", "deposit", "recovery", "cron", "server"]
 CLIENT_SIGNATURE_TRIGGERS: frozenset[V3Trigger] = frozenset({"manual", "deposit"})
-PAUSE_ON_PENDING_TRIGGERS: frozenset[V3Trigger] = frozenset({"manual", "deposit"})
-WORKER_RESUME_TRIGGERS: frozenset[V3Trigger] = frozenset({"deposit"})
+# ``server`` : signature déléguée Privy côté serveur (worker, sans navigateur).
+SERVER_SIGNATURE_TRIGGERS: frozenset[V3Trigger] = frozenset({"server"})
+# ``server`` pause comme ``deposit`` quand un leg est encore SUBMITTED (poll au cycle suivant).
+PAUSE_ON_PENDING_TRIGGERS: frozenset[V3Trigger] = frozenset({"manual", "deposit", "server"})
+WORKER_RESUME_TRIGGERS: frozenset[V3Trigger] = frozenset({"deposit", "server"})
 
 
 def _uses_client_signature(trigger: V3Trigger) -> bool:
     """Triggers où chaque leg LI.FI est signé côté client (confirm → sign → poll)."""
     return trigger in CLIENT_SIGNATURE_TRIGGERS
+
+
+def _uses_server_signature(trigger: V3Trigger) -> bool:
+    """Triggers où chaque leg est signé côté serveur (Privy déléguée, worker)."""
+    return trigger in SERVER_SIGNATURE_TRIGGERS
 
 
 def _quote_all_legs_upfront(trigger: V3Trigger, leg_action: str) -> bool:
@@ -818,6 +826,30 @@ class BundleRebalanceExecutor:
                     break
 
                 if leg_result.status == "pending":
+                    if _uses_server_signature(trigger):
+                        signed_status, signed_error = self._sign_leg_server_side(
+                            db,
+                            leg_result=leg_result,
+                            client_id=client_id,
+                        )
+                        leg_result.status = signed_status
+                        leg_result.error = signed_error
+                        if leg_result.attempt_details:
+                            leg_result.attempt_details[-1]["status"] = signed_status
+                            leg_result.attempt_details[-1]["error_code"] = (
+                                signed_error or None
+                            )
+                        if signed_status == "completed":
+                            break
+                        if signed_status == "pending":
+                            # SUBMITTED on-chain non encore confirmé : pause + poll au cycle suivant.
+                            break
+                        if signed_status in ("expired", "failed"):
+                            if attempt >= MAX_SWAP_ATTEMPTS:
+                                break
+                            continue
+                        break
+
                     if _uses_client_signature(trigger):
                         leg_result.error = "awaiting_client_signature"
                         if leg_result.attempt_details:
@@ -926,6 +958,64 @@ class BundleRebalanceExecutor:
             return "expired", "quote_ttl_expired"
 
         return "expired", "quote_ttl_expired"
+
+    def _sign_leg_server_side(
+        self,
+        db: Session,
+        *,
+        leg_result: V3LegExecutionResult,
+        client_id: UUID,
+    ) -> tuple[str, str]:
+        """Signe + soumet + settle le leg quoté **côté serveur** (Privy déléguée).
+
+        Réutilise ``execute_prepared_swap_server_side`` (le signataire serveur unifié,
+        swap simple ET leg bundle). Mappe la phase serveur vers le statut leg V3 :
+
+          - ``confirmed``           → ``completed`` (settlement déjà appliqué)
+          - ``submitted``           → ``pending`` (poll au cycle suivant via swap sync)
+          - ``awaiting_signature``  → ``expired`` (délégation indisponible : fallback)
+          - ``failed`` / ``expired``→ idem (retryable selon attempts)
+        """
+        from services.trade_core.server_execution import (
+            execute_prepared_swap_server_side,
+        )
+
+        if not leg_result.swap_id:
+            return "expired", "server_sign_no_swap"
+        try:
+            swap_uuid = UUID(str(leg_result.swap_id))
+        except (TypeError, ValueError):
+            return "expired", "server_sign_swap_invalid"
+
+        person_id = _resolve_person_id_for_client(db, client_id)
+        if person_id is None:
+            return "failed", "server_sign_no_person"
+
+        try:
+            result = execute_prepared_swap_server_side(
+                db,
+                person_id=person_id,
+                swap_id=swap_uuid,
+            )
+        except Exception as exc:  # noqa: BLE001 — robustesse worker, retry possible
+            logger.warning(
+                "v3_rebalance_server_sign_error swap=%s err=%s",
+                swap_uuid,
+                str(exc)[:200],
+            )
+            return "failed", f"server_sign_error:{str(exc)[:120]}"
+
+        phase = result.phase
+        if phase == "confirmed":
+            return "completed", ""
+        if phase == "submitted":
+            return "pending", "awaiting_confirmation"
+        if phase == "failed":
+            return "failed", result.fallback_reason or "server_sign_failed"
+        if phase == "expired":
+            return "expired", "expired"
+        # awaiting_signature : délégation absente / non configurée → fallback non signé.
+        return "expired", f"server_sign_unavailable:{result.fallback_reason or 'unknown'}"
 
     def _sync_leg_results_from_swaps(
         self,
@@ -1502,6 +1592,14 @@ class BundleRebalanceExecutor:
 
 def _dec_str(value: Decimal) -> str:
     return format(value.quantize(Decimal("0.000001"), rounding=ROUND_DOWN), "f")
+
+
+def _resolve_person_id_for_client(db: Session, client_id: UUID) -> UUID | None:
+    """``person_id`` du client — requis pour la signature serveur (Privy déléguée)."""
+    from services.portfolio_engine.clients.models import Client
+
+    row = db.query(Client).filter(Client.id == client_id).first()
+    return row.person_id if row is not None else None
 
 
 def _latest_v3_metadata_by_execution(
