@@ -322,6 +322,56 @@ def complete_virtual_wallet_swap(
     return VirtualWalletSwapRunResult(phase=finalize.status, finalize=finalize)
 
 
+def run_virtual_wallet_swap_server_side(
+    db: Session,
+    request: VirtualWalletSwapRequest,
+    actor: ActorContext,
+    *,
+    person_id: UUID,
+) -> VirtualWalletSwapRunResult:
+    """Action atomique réutilisable — chaîne complète d'un swap **100 % serveur**.
+
+    ``f(wallet_from, wallet_to, quantity_from)`` → ``confirmed + settled`` :
+
+      1. **Quote** LI.FI (exact-in : on fige ``quantity_from``, ``to`` estimé puis réconcilié au réel)
+      2. **Signature** Privy déléguée côté serveur (Session Signers, self-custody)
+      3. **Submit** via le submit unifié (swap simple **ou** leg bundle)
+      4. **Settlement** : ledger wallets from/to (débit/crédit du montant réel reçu),
+         atoms PE, PRU/PnL, valorisation figée native/USDC/EUR (``eurusd_rate_at_execution``)
+
+    Le routage compta (self-trading vs bundle) est automatique via ``settle_confirmed_swap``.
+    Réutilisable tel quel pour le chaînage d'un rééquilibrage (leg après leg) ou pour
+    d'autres produits futurs.
+
+    Garde-fou : si la signature déléguée est indisponible (wallet non délégué, Privy non
+    configuré, mode non-embedded…), retombe sur ``awaiting_signature`` — le swap reste quoté
+    et signable côté client (zéro régression).
+    """
+    from services.trade_core.server_execution import execute_prepared_swap_server_side
+
+    if request.quantity_from <= 0:
+        raise VirtualWalletSwapError("invalid_quantity", "quantity_from doit être > 0.")
+
+    quote = quote_virtual_wallet_swap(db, request, actor)
+    exec_result = execute_prepared_swap_server_side(
+        db,
+        person_id=person_id,
+        swap_id=quote.swap_id,
+    )
+    finalize = VirtualWalletSwapFinalizeResult(
+        swap_id=quote.swap_id,
+        status=exec_result.phase,
+        tx_hash=exec_result.tx_hash,
+        settled=exec_result.settled,
+        error=exec_result.fallback_reason if not exec_result.signed_server_side else None,
+    )
+    return VirtualWalletSwapRunResult(
+        phase=exec_result.phase,
+        quote=quote,
+        finalize=finalize,
+    )
+
+
 def run_virtual_wallet_swap(
     db: Session,
     request: VirtualWalletSwapRequest,
