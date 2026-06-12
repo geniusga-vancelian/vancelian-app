@@ -17,7 +17,12 @@ import {
   academyArticleMatchesSearch,
   normalizeAcademySearch,
 } from '@/lib/portal/academyFormat'
-import type { PortalAcademyArticle, PortalAcademyHubPayload } from '@/lib/portal/academyHubTypes'
+import type {
+  PortalAcademyArticle,
+  PortalAcademyEditorialPayload,
+  PortalAcademyHubPayload,
+  PortalAcademyLibraryPayload,
+} from '@/lib/portal/academyHubTypes'
 import {
   articleMatchesAcademyEditorialTab,
   buildAcademyHubCatalog,
@@ -25,10 +30,10 @@ import {
   PORTAL_ACADEMY_EDITORIAL_TABS,
   type PortalAcademyEditorialTabId,
 } from '@/lib/portal/academyHubTabs'
-import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
+import { PORTAL_SECTION_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
+import { usePortalProgressiveSections } from '@/lib/portal/usePortalProgressiveSections'
 import { Container } from '@/components/ui/Container'
 
-const ACADEMY_CACHE_KEY = 'portal:academy:v5'
 const ARTICLES_PER_PAGE = 6
 
 function resolveSidebarHighlighted(
@@ -40,13 +45,40 @@ function resolveSidebarHighlighted(
   return highlighted.filter((item) => !exclude.has(item.id)).slice(0, 4)
 }
 
+type AcademySections = {
+  editorial: PortalAcademyEditorialPayload
+  library: PortalAcademyLibraryPayload
+}
+
 export function PortalAcademyScreen() {
-  const { data, loading, error, refresh } = usePortalCachedScreen<PortalAcademyHubPayload>({
-    cacheKey: ACADEMY_CACHE_KEY,
-    url: '/api/portal/academy',
-    ttlMs: 120_000,
-    errorMessage: 'Unable to load Academy.',
+  const { sections, refresh } = usePortalProgressiveSections<AcademySections>({
+    editorial: {
+      cacheKey: PORTAL_SECTION_CACHE_KEYS.academyEditorial,
+      url: '/api/portal/academy/editorial',
+      ttlMs: 120_000,
+      errorMessage: 'Unable to load Academy.',
+    },
+    library: {
+      cacheKey: PORTAL_SECTION_CACHE_KEYS.academyLibrary,
+      url: '/api/portal/academy/library',
+      ttlMs: 300_000,
+    },
   })
+
+  const editorial = sections.editorial
+  const library = sections.library
+
+  const data = useMemo<PortalAcademyHubPayload | null>(() => {
+    if (!editorial.data) return null
+    return {
+      featured: editorial.data.featured,
+      highlighted: editorial.data.highlighted,
+      marketNews: editorial.data.marketNews,
+      vancelianNews: editorial.data.vancelianNews,
+      analysis: editorial.data.analysis,
+      academy: library.data?.academy ?? [],
+    }
+  }, [editorial.data, library.data])
 
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<PortalAcademyEditorialTabId>(PORTAL_ACADEMY_DEFAULT_TAB)
@@ -84,12 +116,12 @@ export function PortalAcademyScreen() {
     [data],
   )
 
-  if (loading && !data) return <PortalAcademySkeleton />
+  if (editorial.loading && !data) return <PortalAcademySkeleton />
 
-  if (error && !data) {
+  if (editorial.error && !data) {
     return (
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
-        <p className="m-0 font-ui text-[15px] text-v-error">{error}</p>
+        <p className="m-0 font-ui text-[15px] text-v-error">{editorial.error}</p>
         <button
           type="button"
           onClick={() => void refresh()}

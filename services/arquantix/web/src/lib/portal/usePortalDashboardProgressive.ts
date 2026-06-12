@@ -110,12 +110,32 @@ export function usePortalDashboardProgressive(): UsePortalDashboardProgressiveRe
         )
         setCore(json)
         syncComposite(json, portfolioRef.current)
-        setError('')
+        if (
+          hasDashboardCriticalDisplayData(
+            mergePortalDashboardPayload(json, portfolioRef.current),
+          )
+        ) {
+          setError('')
+        } else if (!hasDisplayed) {
+          setError('Unable to load your dashboard.')
+        }
         return json
       } catch (err) {
         if (err instanceof PortalFetchError && err.status === 401) {
           router.replace(PORTAL_ROUTES.login)
           return null
+        }
+        const staleCore = getPortalCacheBootstrap<PortalDashboardCorePayload>(DASHBOARD_CORE_CACHE_KEY)
+        if (
+          staleCore.data &&
+          hasDashboardCriticalDisplayData(
+            mergePortalDashboardPayload(staleCore.data, portfolioRef.current),
+          )
+        ) {
+          setCore(staleCore.data)
+          syncComposite(staleCore.data, portfolioRef.current)
+          setError('')
+          return staleCore.data
         }
         if (!hasDisplayed) {
           setError('Unable to load your dashboard.')

@@ -13,3 +13,17 @@ export const PORTAL_CACHE_KEYS = {
 } as const
 
 export type PortalScreenCacheKey = (typeof PORTAL_CACHE_KEYS)[keyof typeof PORTAL_CACHE_KEYS]
+
+/**
+ * Clés cache des sections progressives (chargement indépendant par bloc).
+ * Suffixe version à incrémenter en cas de changement de forme.
+ */
+export const PORTAL_SECTION_CACHE_KEYS = {
+  marketsTop: 'portal:markets:top:v1',
+  marketsBundles: 'portal:markets:bundles:v1',
+  marketsDiscover: 'portal:markets:discover:v1',
+  cryptoWalletPositions: 'portal:crypto-wallet:positions:v1',
+  cryptoWalletActivity: 'portal:crypto-wallet:activity:v1',
+  academyEditorial: 'portal:academy:editorial:v1',
+  academyLibrary: 'portal:academy:library:v1',
+} as const

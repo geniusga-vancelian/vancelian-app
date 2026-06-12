@@ -1,6 +1,12 @@
 import { buildBackendUrl } from '@/lib/backend'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 
+/** Aligné sur markets BFF — 15s provoquait des timeouts prod sur dashboard / crypto. */
+export const PORTAL_UPSTREAM_DEFAULT_TIMEOUT_MS = 30_000
+export const PORTAL_UPSTREAM_HEAVY_TIMEOUT_MS = 45_000
+
+export type PortalUpstreamJsonResult = { ok: boolean; data: unknown }
+
 /**
  * Origine pour les appels BFF → routes `/api/*` du même process Next.
  * En prod ECS, évite le hairpin `https://app.*` (ssl3_get_record:wrong version number).
@@ -34,6 +40,39 @@ export async function portalUpstreamFetch(
     headers,
     cache: 'no-store',
   })
+}
+
+/** GET upstream JSON — timeout + erreurs réseau → `{ ok: false }` (ne fait pas échouer Promise.all). */
+export async function fetchPortalUpstreamJsonSafe(
+  path: string,
+  options?: { timeoutMs?: number },
+): Promise<PortalUpstreamJsonResult> {
+  try {
+    const res = await portalUpstreamFetch(path, {
+      signal: AbortSignal.timeout(options?.timeoutMs ?? PORTAL_UPSTREAM_DEFAULT_TIMEOUT_MS),
+    })
+    const data = await res.json().catch(() => null)
+    return { ok: res.ok, data }
+  } catch {
+    return { ok: false, data: null }
+  }
+}
+
+/** GET backend JSON (market-data, etc.) — même sémantique fail-soft que fetchPortalUpstreamJsonSafe. */
+export async function fetchPortalBackendJsonSafe(
+  path: string,
+  options?: { timeoutMs?: number },
+): Promise<PortalUpstreamJsonResult> {
+  try {
+    const res = await fetch(buildBackendUrl(path), {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(options?.timeoutMs ?? PORTAL_UPSTREAM_DEFAULT_TIMEOUT_MS),
+    })
+    const data = await res.json().catch(() => null)
+    return { ok: res.ok, data }
+  } catch {
+    return { ok: false, data: null }
+  }
 }
 
 /** Parse une réponse upstream en JSON — évite les erreurs opaques si le gateway renvoie du HTML. */

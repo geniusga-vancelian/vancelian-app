@@ -22,7 +22,10 @@ import {
 } from '@/components/portal/wallet/PortalCryptoMarketStatsGrid'
 import { PortalCryptoPositionNewsSection } from '@/components/portal/wallet/PortalCryptoPositionNewsSection'
 import { PortalCryptoWalletDetailHeader } from '@/components/portal/wallet/PortalCryptoWalletDetailHeader'
-import { PortalPositionActivityList } from '@/components/portal/wallet/PortalPositionActivityList'
+import {
+  PortalPositionActivityList,
+  PortalPositionActivityListSkeleton,
+} from '@/components/portal/wallet/PortalPositionActivityList'
 import { Button } from '@/components/ui/button'
 import { Container } from '@/components/ui/Container'
 import type { PortalChain } from '@/config/portalChains'
@@ -36,7 +39,9 @@ import {
 } from '@/lib/portal/cryptoWalletFormat'
 import {
   CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW,
-  type PortalCryptoWalletDetailPayload,
+  type PortalCryptoWalletDetailActivityPayload,
+  type PortalCryptoWalletDetailCorePayload,
+  type PortalCryptoWalletDetailNewsPayload,
 } from '@/lib/portal/cryptoWalletTypes'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import {
@@ -46,7 +51,7 @@ import {
   portalSwapSellRoute,
 } from '@/lib/portal/portalRouting'
 import { isPortalSwapTradeAsset } from '@/lib/portal/swapFlowTypes'
-import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
+import { usePortalProgressiveSections } from '@/lib/portal/usePortalProgressiveSections'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -61,21 +66,45 @@ function resolveSwapChainForAsset(asset: string, portalChain: PortalChain): stri
   return portalChain
 }
 
+type DetailSections = {
+  core: PortalCryptoWalletDetailCorePayload
+  activity: PortalCryptoWalletDetailActivityPayload
+  news: PortalCryptoWalletDetailNewsPayload
+}
+
 export function PortalCryptoWalletDetailScreen({ asset }: Props) {
   const ticker = asset.trim().toUpperCase()
   const { chain } = usePortalChainContext()
   const cmsSupport = usePortalSupportContent()
   const showSupportAside = hasSupportAsideContent(cmsSupport)
 
-  const { data, loading, refreshing, error, refresh } =
-    usePortalCachedScreen<PortalCryptoWalletDetailPayload>({
-      cacheKey: `portal:crypto-wallet:${ticker}`,
-      url: `/api/portal/crypto-wallet/${encodeURIComponent(ticker)}`,
+  const encoded = encodeURIComponent(ticker)
+  const { sections, refreshing, refresh } = usePortalProgressiveSections<DetailSections>({
+    core: {
+      cacheKey: `portal:crypto-wallet:${ticker}:core`,
+      url: `/api/portal/crypto-wallet/${encoded}/core`,
       ttlMs: 45_000,
-      errorMessage: 'Unable to load position details.',
       scopeAware: true,
-    })
+      errorMessage: 'Unable to load position details.',
+    },
+    activity: {
+      cacheKey: `portal:crypto-wallet:${ticker}:activity`,
+      url: `/api/portal/crypto-wallet/${encoded}/activity`,
+      ttlMs: 45_000,
+      scopeAware: true,
+    },
+    news: {
+      cacheKey: `portal:crypto-wallet:${ticker}:news`,
+      url: `/api/portal/crypto-wallet/${encoded}/news`,
+      ttlMs: 300_000,
+    },
+  })
 
+  const core = sections.core
+  const activity = sections.activity
+  const newsSection = sections.news
+
+  const data = core.data
   const detail = data?.detail
   const currency = data?.currency ?? 'EUR'
 
@@ -95,8 +124,8 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
   const sellHref = canTrade && swapChainKey ? portalSwapSellRoute(ticker, swapChainKey) : undefined
 
   const performanceLabels = useMemo(() => {
-    if (data?.performance) {
-      return resolveCryptoHubChangeLabels(data.performance, currency, 'YTD')
+    if (activity.data?.performance) {
+      return resolveCryptoHubChangeLabels(activity.data.performance, currency, 'YTD')
     }
     const totalGain =
       detail != null
@@ -113,7 +142,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
       )
     }
     return { positive: true }
-  }, [currency, data?.performance, detail])
+  }, [activity.data?.performance, currency, detail])
 
   const marketStats = useMemo(() => {
     if (!detail) return []
@@ -129,7 +158,7 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
   }, [currency, data?.change24hPct, data?.marketQuote, detail, ticker])
 
   const activityItems = useMemo(() => {
-    const txs = data?.transactions ?? []
+    const txs = activity.data?.transactions ?? []
     return txs
       .slice(0, CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW)
       .map((tx) =>
@@ -138,16 +167,16 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
           projectionContext: 'self_trading',
         }),
       )
-  }, [currency, data?.transactions, ticker])
+  }, [activity.data?.transactions, currency, ticker])
 
-  if (loading && !data) {
+  if (core.loading && !data) {
     return <PortalDashboardSkeleton />
   }
 
-  if (error && !data) {
+  if (core.error && !data) {
     return (
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
-        <p className="m-0 text-center font-ui text-[15px] text-v-error">{error}</p>
+        <p className="m-0 text-center font-ui text-[15px] text-v-error">{core.error}</p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Button type="button" onClick={() => void refresh()}>
             Réessayer
@@ -160,12 +189,12 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
 
   if (!detail || !data) return null
 
-  const transactions = data.transactions
-  const hasMoreTransactions =
-    transactions.length > CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW
+  const activityPending = activity.loading && !activity.data
+  const transactions = activity.data?.transactions ?? []
+  const hasMoreTransactions = transactions.length > CRYPTO_WALLET_DETAIL_TRANSACTIONS_PREVIEW
   const walletBalance = Number.parseFloat(String(detail.volume).replace(',', '.')) || 0
   const assetTitle = cryptoPositionHeaderTitle(ticker, detail.name)
-  const news = data.news ?? []
+  const news = newsSection.data?.news ?? []
 
   return (
     <PortalPageContainer>
@@ -181,10 +210,10 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
                 changeAmountLabel={performanceLabels.amountLabel}
                 changePercentLabel={performanceLabels.percentLabel}
                 changePositive={performanceLabels.positive}
-                chartValues={data.historyPoints}
+                chartValues={activity.data?.historyPoints ?? []}
                 buyHref={buyHref}
                 sellHref={sellHref}
-                balancePending={refreshing}
+                balancePending={refreshing || activityPending}
               />
             </PortalReveal>
 
@@ -214,7 +243,11 @@ export function PortalCryptoWalletDetailScreen({ asset }: Props) {
                   }
                   moreLabel="All transactions"
                 />
-                <PortalPositionActivityList items={activityItems} />
+                {activityPending ? (
+                  <PortalPositionActivityListSkeleton />
+                ) : (
+                  <PortalPositionActivityList items={activityItems} />
+                )}
               </section>
             </PortalReveal>
 

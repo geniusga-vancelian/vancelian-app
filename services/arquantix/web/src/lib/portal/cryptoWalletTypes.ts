@@ -108,6 +108,27 @@ export type PortalCryptoWalletHubPayload = {
   partial?: boolean
 }
 
+/** Section hub « positions » (liste + totaux + paniers) — chargée en premier. */
+export type PortalCryptoWalletPositionsPayload = {
+  currency: string
+  positions: PortalCryptoPositionsSummary
+  bundles: PortalMyBundleSummary[]
+  source?: 'direct' | 'privy'
+  tradingAvailableUsdc?: number | null
+  tradingAvailableEurc?: number | null
+  partial?: boolean
+}
+
+/** Section hub « historique » (courbe perf) — chargée après les positions. */
+export type PortalCryptoWalletHistoryPayload = {
+  historyPoints: number[]
+  performance?: {
+    totalPnl: number
+    performancePct: number
+  } | null
+  partial?: boolean
+}
+
 export type PortalCryptoWalletDetail = {
   asset: string
   name: string
@@ -200,5 +221,33 @@ export type PortalCryptoWalletDetailPayload = {
   logoUrl?: string | null
   marketQuote?: PortalCryptoPositionMarketQuote | null
   news?: PortalMarketsNewsItem[]
+  partial?: boolean
+}
+
+/** Section détail asset « core » (header valeur + stats marché) — rapide. */
+export type PortalCryptoWalletDetailCorePayload = {
+  currency: string
+  detail: PortalCryptoWalletDetail
+  change24hPct?: number
+  providerSymbol?: string
+  logoUrl?: string | null
+  marketQuote?: PortalCryptoPositionMarketQuote | null
+  partial?: boolean
+}
+
+/** Section détail asset « activity » (transactions + courbe + perf). */
+export type PortalCryptoWalletDetailActivityPayload = {
+  transactions: PortalCryptoWalletTransaction[]
+  historyPoints: number[]
+  performance?: {
+    totalPnl: number
+    performancePct: number
+  } | null
+  partial?: boolean
+}
+
+/** Section détail asset « news » (actualités liées). */
+export type PortalCryptoWalletDetailNewsPayload = {
+  news: PortalMarketsNewsItem[]
   partial?: boolean
 }

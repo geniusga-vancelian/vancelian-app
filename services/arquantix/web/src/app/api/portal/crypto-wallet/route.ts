@@ -14,18 +14,17 @@ import {
   resolveLombardOverlayWalletAddress,
   resolvePortalChainFromSearchParams,
 } from '@/lib/portal/lombard/resolveLombardWalletOverlayForApi'
-import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
+import { fetchPortalUpstreamJsonSafe, PORTAL_UPSTREAM_HEAVY_TIMEOUT_MS } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
 
-async function fetchUpstreamJson(path: string) {
-  const res = await portalUpstreamFetch(path, { signal: AbortSignal.timeout(15000) })
-  const data = await res.json().catch(() => null)
-  return { ok: res.ok, data }
+async function fetchUpstreamJson(path: string, options?: { timeoutMs?: number }) {
+  return fetchPortalUpstreamJsonSafe(path, options)
 }
 
 /** Hub wallet crypto — self-trading (direct_portfolio PE), bundles séparés via my-bundles. */
 export async function GET(request: NextRequest) {
+  try {
   const token = await readPortalAccessToken()
   if (!token) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -47,17 +46,13 @@ export async function GET(request: NextRequest) {
   })
 
   const [directRes, history, bootstrap, bundlesRes] = await Promise.all([
-    fetchUpstreamJson('/api/app/crypto-positions/direct'),
-    fetchUpstreamJson(
-      '/api/app/wallet/history?period=ALL&mode=performance_value&scope=crypto',
-    ),
+    fetchUpstreamJson('/api/app/crypto-positions/direct', {
+      timeoutMs: PORTAL_UPSTREAM_HEAVY_TIMEOUT_MS,
+    }),
+    fetchUpstreamJson('/api/app/wallet/history?period=ALL&mode=performance_value&scope=crypto'),
     fetchUpstreamJson('/api/app/bootstrap'),
     fetchUpstreamJson('/api/app/bundle/my-bundles'),
   ])
-
-  if (!directRes.ok || !directRes.data) {
-    return NextResponse.json({ error: 'direct_positions_unavailable' }, { status: 502 })
-  }
 
   const currency =
     bootstrap.ok && bootstrap.data && typeof bootstrap.data === 'object'
@@ -72,7 +67,8 @@ export async function GET(request: NextRequest) {
           .toUpperCase()
       : 'EUR'
 
-  let positions = parseSelfTradingCryptoPositionsPayload(directRes.data)
+  const directPayload = directRes.ok && directRes.data ? directRes.data : null
+  let positions = parseSelfTradingCryptoPositionsPayload(directPayload)
   try {
     positions = await maybeApplyLombardWalletOverlay({
       personId,
@@ -86,8 +82,12 @@ export async function GET(request: NextRequest) {
   const historyPoints = history.ok ? parseWalletHistoryPoints(history.data) : []
   const performance = history.ok ? parseWalletHistoryPerformance(history.data) : null
   const bundles = bundlesRes.ok ? parseMyBundles(bundlesRes.data) : []
-  const tradingAvailableUsdc = resolveTradingAvailableUsdcFromDirectPayload(directRes.data)
-  const tradingAvailableEurc = resolveTradingAvailableEurcFromDirectPayload(directRes.data)
+  const tradingAvailableUsdc = directPayload
+    ? resolveTradingAvailableUsdcFromDirectPayload(directPayload)
+    : null
+  const tradingAvailableEurc = directPayload
+    ? resolveTradingAvailableEurcFromDirectPayload(directPayload)
+    : null
 
   return NextResponse.json({
     currency,
@@ -98,6 +98,20 @@ export async function GET(request: NextRequest) {
     tradingAvailableUsdc,
     tradingAvailableEurc,
     source: 'direct',
-    partial: !history.ok || !bundlesRes.ok,
+    partial: !directRes.ok || !history.ok || !bundlesRes.ok,
   })
+  } catch (error) {
+    console.error('[api/portal/crypto-wallet GET]', error)
+    return NextResponse.json({
+      currency: 'EUR',
+      positions: parseSelfTradingCryptoPositionsPayload(null),
+      bundles: [],
+      historyPoints: [],
+      performance: null,
+      tradingAvailableUsdc: null,
+      tradingAvailableEurc: null,
+      source: 'direct',
+      partial: true,
+    })
+  }
 }

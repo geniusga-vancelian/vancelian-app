@@ -81,3 +81,27 @@ export type PortalMarketsPayload = {
   currency: 'USD'
   partial?: boolean
 }
+
+/** Section « top crypto » (populaires + gainers/losers + favoris) — rapide, pilote le WS. */
+export type PortalMarketsTopPayload = {
+  popular: PortalCryptoAsset[]
+  topGainers: PortalCryptoAsset[]
+  topLosers: PortalCryptoAsset[]
+  favorites: PortalCryptoAsset[]
+  marketDataPublicBaseUrl: string
+  currency: 'USD'
+  partial?: boolean
+}
+
+/** Section paniers crypto (catalog + configs CMS). */
+export type PortalMarketsBundlesPayload = {
+  bundles: PortalCryptoBundle[]
+  partial?: boolean
+}
+
+/** Section éditoriale (actualités + analyses). */
+export type PortalMarketsDiscoverPayload = {
+  news: PortalMarketsNewsItem[]
+  research: PortalResearchItem[]
+  partial?: boolean
+}

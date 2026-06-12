@@ -26,3 +26,19 @@ export type PortalAcademyHubPayload = {
   analysis: PortalAcademyArticle[]
   academy: PortalAcademyArticle[]
 }
+
+/** Section éditoriale Academy (actualités marché/entreprise + analyses) — rapide. */
+export type PortalAcademyEditorialPayload = {
+  featured: PortalAcademyArticle | null
+  highlighted: PortalAcademyArticle[]
+  marketNews: PortalAcademyArticle[]
+  vancelianNews: PortalAcademyArticle[]
+  analysis: PortalAcademyArticle[]
+  partial?: boolean
+}
+
+/** Section bibliothèque Academy (articles pédagogiques CMS). */
+export type PortalAcademyLibraryPayload = {
+  academy: PortalAcademyArticle[]
+  partial?: boolean
+}

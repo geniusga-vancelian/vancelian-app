@@ -13,24 +13,29 @@ import {
 } from '@/components/portal/markets/portalMarketsLazyChunks'
 import { PortalMarketsWhenVisible } from '@/components/portal/markets/PortalMarketsWhenVisible'
 import { PortalTopCryptoSection, type TopCryptoTabId } from '@/components/portal/markets/PortalTopCryptoSection'
-import { PortalMarketsSectionSkeleton } from '@/components/portal/PortalRouteSkeleton'
+import {
+  PortalMarketsSectionSkeleton,
+  PortalPlacerSectionSkeleton,
+} from '@/components/portal/PortalRouteSkeleton'
 import { applyQuoteUpdates } from '@/lib/portal/marketsFormat'
 import { Container } from '@/components/ui/Container'
-import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
-import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
-import { shouldShowMarketsFullSkeleton } from '@/lib/portal/portalMarketsLazySections'
-import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
+import type {
+  PortalCryptoAsset,
+  PortalMarketsBundlesPayload,
+  PortalMarketsDiscoverPayload,
+  PortalMarketsTopPayload,
+} from '@/lib/portal/marketsTypes'
+import { PORTAL_SECTION_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
+import { usePortalProgressiveSections } from '@/lib/portal/usePortalProgressiveSections'
 import { useMarketDataQuotesWs } from '@/lib/portal/useMarketDataQuotesWs'
 import { cn } from '@/lib/utils'
 
-const MARKETS_CACHE_KEY = PORTAL_CACHE_KEYS.markets
-
 function symbolsForTab(
   tab: TopCryptoTabId,
-  popular: PortalMarketsPayload['popular'],
-  topGainers: PortalMarketsPayload['topGainers'],
-  topLosers: PortalMarketsPayload['topLosers'],
-  favorites: PortalMarketsPayload['favorites'],
+  popular: PortalCryptoAsset[],
+  topGainers: PortalCryptoAsset[],
+  topLosers: PortalCryptoAsset[],
+  favorites: PortalCryptoAsset[],
 ): string[] {
   const list =
     tab === 'favorites'
@@ -43,27 +48,49 @@ function symbolsForTab(
   return list.map((asset) => asset.symbol).filter(Boolean)
 }
 
+type MarketsSections = {
+  top: PortalMarketsTopPayload
+  bundles: PortalMarketsBundlesPayload
+  discover: PortalMarketsDiscoverPayload
+}
+
 export function PortalMarketsScreen() {
-  const { data, loading, refreshing, error, refresh } = usePortalCachedScreen<PortalMarketsPayload>({
-    cacheKey: MARKETS_CACHE_KEY,
-    url: '/api/portal/markets',
-    ttlMs: 90_000,
-    errorMessage: 'Unable to load markets.',
+  const { sections, refreshing, refresh } = usePortalProgressiveSections<MarketsSections>({
+    top: {
+      cacheKey: PORTAL_SECTION_CACHE_KEYS.marketsTop,
+      url: '/api/portal/markets/top',
+      ttlMs: 90_000,
+      errorMessage: 'Unable to load markets.',
+    },
+    bundles: {
+      cacheKey: PORTAL_SECTION_CACHE_KEYS.marketsBundles,
+      url: '/api/portal/markets/bundles',
+      ttlMs: 120_000,
+    },
+    discover: {
+      cacheKey: PORTAL_SECTION_CACHE_KEYS.marketsDiscover,
+      url: '/api/portal/markets/discover',
+      ttlMs: 180_000,
+    },
   })
 
-  const [livePopular, setLivePopular] = useState<PortalMarketsPayload['popular']>([])
-  const [liveGainers, setLiveGainers] = useState<PortalMarketsPayload['topGainers']>([])
-  const [liveLosers, setLiveLosers] = useState<PortalMarketsPayload['topLosers']>([])
-  const [liveFavorites, setLiveFavorites] = useState<PortalMarketsPayload['favorites']>([])
+  const top = sections.top
+  const bundles = sections.bundles
+  const discover = sections.discover
+
+  const [livePopular, setLivePopular] = useState<PortalCryptoAsset[]>([])
+  const [liveGainers, setLiveGainers] = useState<PortalCryptoAsset[]>([])
+  const [liveLosers, setLiveLosers] = useState<PortalCryptoAsset[]>([])
+  const [liveFavorites, setLiveFavorites] = useState<PortalCryptoAsset[]>([])
   const [activeTab, setActiveTab] = useState<TopCryptoTabId>('gainers')
 
   useEffect(() => {
-    if (!data) return
-    setLivePopular(data.popular)
-    setLiveGainers(data.topGainers)
-    setLiveLosers(data.topLosers)
-    setLiveFavorites(data.favorites ?? [])
-  }, [data])
+    if (!top.data) return
+    setLivePopular(top.data.popular)
+    setLiveGainers(top.data.topGainers)
+    setLiveLosers(top.data.topLosers)
+    setLiveFavorites(top.data.favorites ?? [])
+  }, [top.data])
 
   const wsSymbols = useMemo(
     () => symbolsForTab(activeTab, livePopular, liveGainers, liveLosers, liveFavorites),
@@ -88,16 +115,16 @@ export function PortalMarketsScreen() {
   useMarketDataQuotesWs(
     wsSymbols,
     handleWsQuotes,
-    Boolean(data) && wsSymbols.length > 0,
-    data?.marketDataPublicBaseUrl,
+    Boolean(top.data) && wsSymbols.length > 0,
+    top.data?.marketDataPublicBaseUrl,
   )
 
-  if (shouldShowMarketsFullSkeleton(loading, data)) return <PortalMarketsSkeleton />
+  if (top.loading && !top.data) return <PortalMarketsSkeleton />
 
-  if (error && !data) {
+  if (top.error && !top.data) {
     return (
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
-        <p className="m-0 font-ui text-[15px] text-v-error">{error}</p>
+        <p className="m-0 font-ui text-[15px] text-v-error">{top.error}</p>
         <button
           type="button"
           onClick={() => void refresh()}
@@ -109,12 +136,17 @@ export function PortalMarketsScreen() {
     )
   }
 
-  if (!data) return null
-
   const topCryptoError =
     livePopular.length === 0 && liveGainers.length === 0 && liveLosers.length === 0
       ? 'Les données de marché sont temporairement indisponibles.'
       : undefined
+
+  const bundlesPending = bundles.loading && !bundles.data
+  const bundleList = bundles.data?.bundles ?? []
+  const discoverPending = discover.loading && !discover.data
+  const anyPartial = Boolean(
+    top.data?.partial || bundles.data?.partial || discover.data?.partial,
+  )
 
   return (
     <PortalPageContainer>
@@ -135,29 +167,44 @@ export function PortalMarketsScreen() {
               />
             </PortalReveal>
 
-            {data.bundles.length > 0 ? (
+            {bundlesPending ? (
               <PortalReveal index={1}>
-                <PortalCryptoBundlesSection bundles={data.bundles} />
+                <PortalPlacerSectionSkeleton />
+              </PortalReveal>
+            ) : bundleList.length > 0 ? (
+              <PortalReveal index={1}>
+                <PortalCryptoBundlesSection bundles={bundleList} />
               </PortalReveal>
             ) : null}
 
-            <PortalReveal index={data.bundles.length > 0 ? 2 : 1}>
+            <PortalReveal index={2}>
               <PortalMarketsWhenVisible fallback={<PortalMarketsSectionSkeleton />}>
-                <PortalMarketsNewsSectionLazy items={data.news} title="Actualités" />
+                {discoverPending ? (
+                  <PortalMarketsSectionSkeleton />
+                ) : (
+                  <PortalMarketsNewsSectionLazy
+                    items={discover.data?.news ?? []}
+                    title="Actualités"
+                  />
+                )}
               </PortalMarketsWhenVisible>
             </PortalReveal>
 
-            <PortalReveal index={data.bundles.length > 0 ? 3 : 2}>
+            <PortalReveal index={3}>
               <PortalMarketsWhenVisible fallback={<PortalMarketsSectionSkeleton variant="compact" />}>
-                <PortalResearchSectionLazy
-                  items={data.research}
-                  title="Analyses"
-                  maxItems={2}
-                />
+                {discoverPending ? (
+                  <PortalMarketsSectionSkeleton variant="compact" />
+                ) : (
+                  <PortalResearchSectionLazy
+                    items={discover.data?.research ?? []}
+                    title="Analyses"
+                    maxItems={2}
+                  />
+                )}
               </PortalMarketsWhenVisible>
             </PortalReveal>
 
-            {data.partial ? (
+            {anyPartial ? (
               <p className="m-0 font-ui text-[12px] text-v-fg-muted">
                 Certaines sections n&apos;ont pas pu être chargées entièrement.
               </p>

@@ -1,6 +1,7 @@
 import { normalizeNavPath } from '@/components/site/NavPendingContext'
 import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
 import { readPortalDashboardPayloadFromCache } from '@/lib/portal/dashboardCache'
+import { readPortalMarketsPayloadFromCache } from '@/lib/portal/marketsCache'
 import { readPortalCache } from '@/lib/portal/portalClientCache'
 import type { PortalDashboardPayload } from '@/lib/portal/dashboardTypes'
 import type { PortalInvestPayload } from '@/lib/portal/investTypes'
@@ -24,7 +25,7 @@ export function readPortalRouteCachedPayload(route: string): PortalRouteCachedPa
   }
 
   if (normalized === PORTAL_ROUTES.markets) {
-    const data = readPortalCache<PortalMarketsPayload>(PORTAL_CACHE_KEYS.markets)
+    const data = readPortalMarketsPayloadFromCache()
     return data ? { kind: 'markets', data } : null
   }
 

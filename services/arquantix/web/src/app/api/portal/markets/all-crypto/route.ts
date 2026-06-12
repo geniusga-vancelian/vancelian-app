@@ -56,6 +56,9 @@ export async function GET() {
 
     return NextResponse.json({ items, marketDataPublicBaseUrl })
   } catch {
-    return NextResponse.json({ error: 'timeout', items: [] }, { status: 504 })
+    return NextResponse.json(
+      { error: 'timeout', items: [], marketDataPublicBaseUrl: getMarketDataPublicBaseUrl(), partial: true },
+      { status: 200 },
+    )
   }
 }

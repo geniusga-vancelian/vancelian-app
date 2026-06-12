@@ -9,6 +9,20 @@ export async function GET() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const payload = await loadPortalDashboardCorePayload()
-  return NextResponse.json(payload)
+  try {
+    const payload = await loadPortalDashboardCorePayload()
+    return NextResponse.json(payload)
+  } catch (error) {
+    console.error('[api/portal/dashboard/core GET]', error)
+    return NextResponse.json({
+      bootstrap: null,
+      profile: null,
+      cash: null,
+      globalStatistics: null,
+      globalHistory: null,
+      notifications: null,
+      privyPersonWallets: null,
+      partial: true,
+    })
+  }
 }

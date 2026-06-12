@@ -83,6 +83,11 @@ export function usePortalCachedScreen<T>(options: {
           router.replace(PORTAL_ROUTES.login)
           return
         }
+        const stale = getPortalCacheBootstrap<T>(resolvedCacheKey)
+        if (stale.data) {
+          setData(stale.data)
+          return
+        }
         if (!hasDisplayedData) {
           setError(errorMessage)
         }

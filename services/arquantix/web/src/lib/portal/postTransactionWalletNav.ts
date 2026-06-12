@@ -1,6 +1,7 @@
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 
 import { PortalFetchError } from '@/lib/portal/portalClientCache'
+import { PORTAL_SECTION_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
 import { appendPortalScopeQuery, buildPortalScopeCacheSuffix } from '@/lib/portal/portalScopeQuery'
 import type { PortalWalletScope } from '@/lib/portal/portalWalletScopeTypes'
 import {
@@ -99,8 +100,12 @@ export async function navigateAfterTransactionSuccess(
     if (options?.invalidateCaches !== false) {
       const { invalidatePortalCache } = await import('@/lib/portal/portalClientCache')
       invalidatePortalCache(`portal:crypto-wallet:${scopeSuffix}`)
+      invalidatePortalCache(`${PORTAL_SECTION_CACHE_KEYS.cryptoWalletPositions}:${scopeSuffix}`)
+      invalidatePortalCache(PORTAL_SECTION_CACHE_KEYS.cryptoWalletActivity)
       if (ready) {
         invalidatePortalCache(`portal:crypto-wallet:${ticker}:${scopeSuffix}`)
+        invalidatePortalCache(`portal:crypto-wallet:${ticker}:core:${scopeSuffix}`)
+        invalidatePortalCache(`portal:crypto-wallet:${ticker}:activity:${scopeSuffix}`)
       }
     }
 
@@ -111,6 +116,8 @@ export async function navigateAfterTransactionSuccess(
   if (target.kind === 'crypto_bundle') {
     const { invalidatePortalCache } = await import('@/lib/portal/portalClientCache')
     invalidatePortalCache(`portal:crypto-wallet:${scopeSuffix}`)
+    invalidatePortalCache(`${PORTAL_SECTION_CACHE_KEYS.cryptoWalletPositions}:${scopeSuffix}`)
+    invalidatePortalCache(PORTAL_SECTION_CACHE_KEYS.cryptoWalletActivity)
     invalidatePortalCache(`portal:crypto-wallet:bundle:${target.portfolioId}:${scopeSuffix}`)
     router.push(portalCryptoWalletBundleRoute(target.portfolioId))
     return

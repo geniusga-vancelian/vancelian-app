@@ -22,9 +22,19 @@ export async function GET(request: NextRequest) {
 
   const currencyHint = request.nextUrl.searchParams.get('currency')?.trim() || undefined
   const walletAddress = request.nextUrl.searchParams.get('wallet_address')?.trim() || undefined
-  const payload = await loadPortalDashboardPortfolioPayload(personId, {
-    currencyHint,
-    walletAddress,
-  })
-  return NextResponse.json(payload)
+  try {
+    const payload = await loadPortalDashboardPortfolioPayload(personId, {
+      currencyHint,
+      walletAddress,
+    })
+    return NextResponse.json(payload)
+  } catch (error) {
+    console.error('[api/portal/dashboard/portfolio GET]', error)
+    return NextResponse.json({
+      crypto: null,
+      placements: null,
+      savings: { positions_count: 0, positions: [], total_value_eur: 0, total_value_usd: 0 },
+      partial: true,
+    })
+  }
 }

@@ -1,4 +1,3 @@
-import { buildBackendUrl } from '@/lib/backend'
 import { resolveDashboardCryptoSummary } from '@/lib/portal/dashboardFormat'
 import { resolveDashboardReferenceCurrency } from '@/lib/portal/dashboardMerge'
 import type {
@@ -11,24 +10,47 @@ import type {
   PortalGlobalStatistics,
   PortalPlacementsSummary,
   PortalPrivyPersonWallets,
+  PortalSavingsSummary,
 } from '@/lib/portal/dashboardTypes'
 import { loadPortalSavingsSummary } from '@/lib/portal/portalSavingsService'
 import { assetToMarketProviderSymbol } from '@/lib/portal/instrumentDetailFormat'
-import { portalUpstreamFetch } from '@/lib/portal/portalUpstream'
+import {
+  fetchPortalBackendJsonSafe,
+  fetchPortalUpstreamJsonSafe,
+  PORTAL_UPSTREAM_HEAVY_TIMEOUT_MS,
+} from '@/lib/portal/portalUpstream'
 
-export async function fetchPortalUpstreamJson(path: string) {
-  const res = await portalUpstreamFetch(path, { signal: AbortSignal.timeout(15000) })
-  const data = await res.json().catch(() => null)
-  return { ok: res.ok, data }
+export async function fetchPortalUpstreamJson(
+  path: string,
+  options?: { timeoutMs?: number },
+) {
+  return fetchPortalUpstreamJsonSafe(path, options)
 }
 
-export async function fetchPortalBackendJson(path: string) {
-  const res = await fetch(buildBackendUrl(path), {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(15000),
-  })
-  const data = await res.json().catch(() => null)
-  return { ok: res.ok, data }
+export async function fetchPortalBackendJson(
+  path: string,
+  options?: { timeoutMs?: number },
+) {
+  return fetchPortalBackendJsonSafe(path, options)
+}
+
+const EMPTY_SAVINGS_SUMMARY: PortalSavingsSummary = {
+  positions_count: 0,
+  positions: [],
+  total_value_eur: 0,
+  total_value_usd: 0,
+}
+
+async function loadPortalSavingsSummarySafe(args: {
+  personId: string
+  live?: boolean
+  walletAddress?: string | null
+}) {
+  try {
+    return await loadPortalSavingsSummary(args)
+  } catch {
+    return { savings: EMPTY_SAVINGS_SUMMARY, partial: true }
+  }
 }
 
 /** Données rapides — header, comptes EUR, bannière inscription (sans CMS ni crypto lourd). */
@@ -38,8 +60,12 @@ export async function loadPortalDashboardCorePayload(): Promise<PortalDashboardC
       fetchPortalUpstreamJson('/api/app/bootstrap'),
       fetchPortalUpstreamJson('/api/app/profile'),
       fetchPortalUpstreamJson('/api/app/cash'),
-      fetchPortalUpstreamJson('/api/app/portfolio/global/statistics'),
-      fetchPortalUpstreamJson('/api/app/portfolio/global/history?period=ALL'),
+      fetchPortalUpstreamJson('/api/app/portfolio/global/statistics', {
+        timeoutMs: PORTAL_UPSTREAM_HEAVY_TIMEOUT_MS,
+      }),
+      fetchPortalUpstreamJson('/api/app/portfolio/global/history?period=ALL', {
+        timeoutMs: PORTAL_UPSTREAM_HEAVY_TIMEOUT_MS,
+      }),
       fetchPortalUpstreamJson('/api/app/notifications/unread-count'),
       fetchPortalUpstreamJson('/auth/privy/person-wallets'),
     ])
@@ -78,11 +104,17 @@ export async function loadPortalDashboardPortfolioPayload(
   const walletAddress = options?.walletAddress?.trim() || undefined
 
   const [bootstrap, cryptoPositions, privyBalances, placements, savingsResult] = await Promise.all([
-    currencyHint ? Promise.resolve({ ok: true, data: null }) : fetchPortalUpstreamJson('/api/app/bootstrap'),
-    fetchPortalUpstreamJson('/api/app/crypto-positions/direct'),
-    fetchPortalUpstreamJson('/api/app/privy-wallet/balances'),
+    currencyHint
+      ? Promise.resolve({ ok: true, data: null })
+      : fetchPortalUpstreamJson('/api/app/bootstrap'),
+    fetchPortalUpstreamJson('/api/app/crypto-positions/direct', {
+      timeoutMs: PORTAL_UPSTREAM_HEAVY_TIMEOUT_MS,
+    }),
+    fetchPortalUpstreamJson('/api/app/privy-wallet/balances', {
+      timeoutMs: PORTAL_UPSTREAM_HEAVY_TIMEOUT_MS,
+    }),
     fetchPortalUpstreamJson('/api/app/lending/earn/positions'),
-    loadPortalSavingsSummary({ personId, live: true, walletAddress }),
+    loadPortalSavingsSummarySafe({ personId, live: true, walletAddress }),
   ])
 
   const currency =

@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { PortalChain } from '@/config/portalChains'
-import {
-  loadCryptoWalletDetailActivity,
-  loadCryptoWalletDetailCore,
-  loadCryptoWalletDetailNews,
-} from '@/lib/portal/cryptoWalletDetailUpstream'
+import { loadCryptoWalletDetailCore } from '@/lib/portal/cryptoWalletDetailUpstream'
 import {
   resolveLombardOverlayWalletAddress,
   resolvePortalChainFromSearchParams,
 } from '@/lib/portal/lombard/resolveLombardWalletOverlayForApi'
-import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
-import { resolvePortalBffOrigin } from '@/lib/portal/portalUpstream'
 import { readPortalAccessToken } from '@/lib/portal/portalSession'
 import { requirePortalPersonId } from '@/lib/portal/portalSessionRouteHelpers'
-import type { PortalCryptoWalletDetailPayload } from '@/lib/portal/cryptoWalletTypes'
 import type { PortalWalletScope } from '@/lib/portal/portalWalletScopeTypes'
+import type { PortalChain } from '@/config/portalChains'
 
 function resolveWalletScope(request: NextRequest, chain: PortalChain): PortalWalletScope | null {
   const walletAddress = request.nextUrl.searchParams.get('wallet_address')?.trim()
@@ -29,11 +22,7 @@ function resolveWalletScope(request: NextRequest, chain: PortalChain): PortalWal
   }
 }
 
-/**
- * Détail position crypto (agrégateur — compat écrans transactions).
- * Compose les sections core + activity + news ; le détail principal utilise
- * désormais les endpoints /core, /activity, /news en chargement progressif.
- */
+/** Détail position crypto — section core (header valeur + cotation marché). */
 export async function GET(request: NextRequest, { params }: { params: { asset: string } }) {
   const token = await readPortalAccessToken()
   if (!token) {
@@ -57,37 +46,21 @@ export async function GET(request: NextRequest, { params }: { params: { asset: s
       request,
       walletFromQuery: walletScope?.address ?? null,
     })
-    const bffOrigin = resolvePortalBffOrigin(request.nextUrl.origin)
-    const locale = request.nextUrl.searchParams.get('locale')?.trim() || PORTAL_CONTENT_LOCALE
-    const scopeArgs = { asset, personId, portalChain, walletScope, walletAddress }
 
-    const [core, activity, news] = await Promise.all([
-      loadCryptoWalletDetailCore(scopeArgs),
-      loadCryptoWalletDetailActivity(scopeArgs),
-      loadCryptoWalletDetailNews(asset, bffOrigin, locale),
-    ])
+    const core = await loadCryptoWalletDetailCore({
+      asset,
+      personId,
+      portalChain,
+      walletScope,
+      walletAddress,
+    })
 
     if (!core) {
       return NextResponse.json({ error: 'not_found' }, { status: 404 })
     }
-
-    const payload: PortalCryptoWalletDetailPayload = {
-      currency: core.currency,
-      detail: core.detail,
-      transactions: activity.transactions,
-      historyPoints: activity.historyPoints,
-      performance: activity.performance,
-      change24hPct: core.change24hPct,
-      providerSymbol: core.providerSymbol,
-      logoUrl: core.logoUrl,
-      marketQuote: core.marketQuote,
-      news: news.news,
-      partial: core.partial || activity.partial || news.partial,
-    }
-
-    return NextResponse.json(payload)
+    return NextResponse.json(core)
   } catch (error) {
-    console.error('[api/portal/crypto-wallet/[asset] GET]', error)
+    console.error('[api/portal/crypto-wallet/[asset]/core GET]', error)
     return NextResponse.json({ error: 'internal_error' }, { status: 500 })
   }
 }
