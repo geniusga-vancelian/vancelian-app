@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
  * Masquée si la fonctionnalité n'est pas configurée côté app.
  */
 export function PortalProfileDelegationSection() {
-  const { isConfigured, isDelegated, canDelegate, isDelegating, error, delegate } =
+  const { isConfigured, isDelegated, canDelegate, canRevoke, isPending, error, delegate, revoke } =
     usePortalWalletDelegation()
 
   if (!isConfigured) return null
@@ -38,15 +38,21 @@ export function PortalProfileDelegationSection() {
               type="button"
               role="switch"
               aria-checked={isDelegated}
-              aria-label="Activer l'exécution automatique"
-              disabled={isDelegated || isDelegating || !canDelegate}
+              aria-label={
+                isDelegated ? "Désactiver l'exécution automatique" : "Activer l'exécution automatique"
+              }
+              disabled={isPending || (!canDelegate && !canRevoke)}
               onClick={() => {
-                if (canDelegate) void delegate()
+                if (isDelegated) {
+                  if (canRevoke) void revoke()
+                } else if (canDelegate) {
+                  void delegate()
+                }
               }}
               className={cn(
                 'relative h-7 w-12 shrink-0 rounded-v-pill border-0 transition-colors duration-v-fast disabled:cursor-default',
                 isDelegated ? 'bg-v-fg' : 'bg-v-fg-20',
-                isDelegating && 'opacity-60',
+                isPending && 'opacity-60',
               )}
             >
               <span

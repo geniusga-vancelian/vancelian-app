@@ -12,10 +12,15 @@ export type PortalWalletDelegationState = {
   isDelegated: boolean
   /** Délégation possible (configurée, wallet présent, pas déjà délégué). */
   canDelegate: boolean
-  isDelegating: boolean
+  /** Révocation possible (configurée, wallet présent, déjà délégué). */
+  canRevoke: boolean
+  /** Opération de délégation/révocation en cours. */
+  isPending: boolean
   error: string | null
   /** Déclenche le consentement utilisateur (one-time) pour l'exécution automatique. */
   delegate: () => Promise<boolean>
+  /** Révoque le signer serveur de l'app (désactive l'exécution automatique). */
+  revoke: () => Promise<boolean>
 }
 
 function findEmbeddedWalletAddress(wallets: ReturnType<typeof useWallets>['wallets']): string | null {
@@ -31,8 +36,8 @@ export function usePortalWalletDelegation(): PortalWalletDelegationState {
   const quorumId = getPrivyAuthorizationQuorumId()
   const { user } = usePrivy()
   const { wallets } = useWallets()
-  const { addSessionSigners } = useSessionSigners()
-  const [isDelegating, setIsDelegating] = useState(false)
+  const { addSessionSigners, removeSessionSigners } = useSessionSigners()
+  const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isConfigured = Boolean(quorumId)
@@ -49,6 +54,7 @@ export function usePortalWalletDelegation(): PortalWalletDelegationState {
   }, [user, embeddedAddress])
 
   const canDelegate = isConfigured && Boolean(embeddedAddress) && !isDelegated
+  const canRevoke = isConfigured && Boolean(embeddedAddress) && isDelegated
 
   const delegate = useCallback(async (): Promise<boolean> => {
     if (!isConfigured) {
@@ -59,7 +65,7 @@ export function usePortalWalletDelegation(): PortalWalletDelegationState {
       setError('Wallet Vancelian requis — créez votre wallet crypto depuis Mon wallet.')
       return false
     }
-    setIsDelegating(true)
+    setIsPending(true)
     setError(null)
     try {
       await addSessionSigners({
@@ -73,9 +79,29 @@ export function usePortalWalletDelegation(): PortalWalletDelegationState {
       )
       return false
     } finally {
-      setIsDelegating(false)
+      setIsPending(false)
     }
   }, [isConfigured, embeddedAddress, addSessionSigners, quorumId])
 
-  return { isConfigured, isDelegated, canDelegate, isDelegating, error, delegate }
+  const revoke = useCallback(async (): Promise<boolean> => {
+    if (!embeddedAddress) {
+      setError('Wallet Vancelian requis — créez votre wallet crypto depuis Mon wallet.')
+      return false
+    }
+    setIsPending(true)
+    setError(null)
+    try {
+      await removeSessionSigners({ address: embeddedAddress })
+      return true
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Échec de la révocation de l'exécution automatique.",
+      )
+      return false
+    } finally {
+      setIsPending(false)
+    }
+  }, [embeddedAddress, removeSessionSigners])
+
+  return { isConfigured, isDelegated, canDelegate, canRevoke, isPending, error, delegate, revoke }
 }
