@@ -37,4 +37,18 @@ export type PortalInvestPayload = {
   offers: PortalExclusiveOffer[]
   /** Coffres catalogue (Flex Vault, Morpho USDC, etc.) — remplace l’affichage direct Morpho/Ledgity. */
   vaults: PortalVaultProduct[]
+  /** Vrai si au moins une source upstream a échoué (rendu dégradé). */
+  partial?: boolean
+}
+
+/** Section progressive « offres exclusives » (catalog `exclusive_offer`). */
+export type PortalInvestOffersPayload = {
+  offers: PortalExclusiveOffer[]
+  partial?: boolean
+}
+
+/** Section progressive « coffres catalogue » (catalog `vault_simple`). */
+export type PortalInvestVaultsPayload = {
+  vaults: PortalVaultProduct[]
+  partial?: boolean
 }

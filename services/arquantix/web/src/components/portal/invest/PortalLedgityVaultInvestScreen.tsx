@@ -39,7 +39,11 @@ export function PortalLedgityVaultInvestScreen({ vaultId }: Props) {
         payload.vaults.find((row) => row.vaultAddress.trim().toLowerCase() === needleLower) ??
         payload.vaults.find((row) => row.id === needleLower)
       if (!match) {
-        setError('This vault is not available.')
+        setError(
+          payload.partial
+            ? 'Vault temporarily unavailable. Please try again.'
+            : 'This vault is not available.',
+        )
         setVault(null)
         return
       }

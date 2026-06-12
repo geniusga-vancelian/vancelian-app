@@ -58,6 +58,8 @@ export type PortalMorphoVaultsPayload = {
   vaults: PortalMorphoVaultDetails[]
   configured: boolean
   beta?: PortalMorphoBetaPortalFlags
+  /** Vrai si la liste n'a pas pu être chargée (erreur interne fail-soft). */
+  partial?: boolean
 }
 
 export type PortalMorphoPreparedTx = {

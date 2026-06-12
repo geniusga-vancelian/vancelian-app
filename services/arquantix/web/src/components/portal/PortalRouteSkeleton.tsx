@@ -125,6 +125,45 @@ export function PortalAcademySkeleton() {
   )
 }
 
+/** Squelette page article (lecture) — titre, cover, paragraphes + sidebar. */
+export function PortalArticleSkeleton() {
+  return (
+    <PortalPageContainer>
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:gap-16">
+        <div className="space-y-5">
+          <ShimmerBlock className="h-6 w-28 rounded-v-pill" />
+          <ShimmerBlock className="h-12 w-full max-w-2xl rounded-v-input" />
+          <ShimmerBlock className="h-72 rounded-v-card" />
+          <ShimmerBlock className="h-4 w-full rounded-v-pill" />
+          <ShimmerBlock className="h-4 w-11/12 rounded-v-pill" />
+          <ShimmerBlock className="h-4 w-10/12 rounded-v-pill" />
+          <ShimmerBlock className="h-4 w-full rounded-v-pill" />
+          <ShimmerBlock className="h-4 w-9/12 rounded-v-pill" />
+        </div>
+        <ShimmerBlock className="hidden h-80 rounded-v-card lg:block" />
+      </div>
+    </PortalPageContainer>
+  )
+}
+
+/** Squelette détail offre / coffre — hero + colonne d'investissement. */
+export function PortalOfferDetailSkeleton() {
+  return (
+    <PortalPageContainer>
+      <ShimmerBlock className="mb-6 h-6 w-32 rounded-v-pill" />
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)] lg:gap-12">
+        <div className="space-y-6">
+          <ShimmerBlock className="aspect-[16/9] min-h-[260px] rounded-v-card" />
+          <ShimmerBlock className="h-9 w-3/4 rounded-v-input" />
+          <ShimmerBlock className="h-40 rounded-v-card" />
+          <ShimmerBlock className="h-64 rounded-v-card" />
+        </div>
+        <ShimmerBlock className="h-[420px] rounded-v-card" />
+      </div>
+    </PortalPageContainer>
+  )
+}
+
 export function PortalGenericSkeleton() {
   return (
     <PortalPageContainer>
@@ -149,8 +188,11 @@ export function PortalRouteSkeleton({ route }: { route: string }) {
   if (normalized === PORTAL_ROUTES.markets || normalized.startsWith(`${PORTAL_ROUTES.markets}/`)) {
     return <PortalMarketsSkeleton />
   }
-  if (normalized === PORTAL_ROUTES.invest || normalized.startsWith(`${PORTAL_ROUTES.invest}/`)) {
+  if (normalized === PORTAL_ROUTES.invest) {
     return <PortalInvestSkeleton />
+  }
+  if (normalized.startsWith(`${PORTAL_ROUTES.invest}/`)) {
+    return <PortalOfferDetailSkeleton />
   }
   if (normalized === PORTAL_ROUTES.profile) {
     return <PortalProfileSkeleton />
@@ -159,7 +201,7 @@ export function PortalRouteSkeleton({ route }: { route: string }) {
     return <PortalAcademySkeleton />
   }
   if (normalized.startsWith(`${PORTAL_ROUTES.academy}/`)) {
-    return <PortalGenericSkeleton />
+    return <PortalArticleSkeleton />
   }
   if (normalized === PORTAL_ROUTES.myWallets) {
     return <PortalProfileSkeleton />

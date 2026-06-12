@@ -164,12 +164,24 @@ function mapVaultProduct(row: CatalogProductRow): PortalVaultProduct {
   }
 }
 
+export function buildPortalInvestOffers(
+  exclusiveOffers: CatalogProductRow[],
+): PortalExclusiveOffer[] {
+  return exclusiveOffers.map(mapOffer)
+}
+
+export function buildPortalInvestVaults(
+  vaultProducts: CatalogProductRow[] = [],
+): PortalVaultProduct[] {
+  return vaultProducts.map(mapVaultProduct)
+}
+
 export function buildPortalInvestPayload(
   exclusiveOffers: CatalogProductRow[],
   vaultProducts: CatalogProductRow[] = [],
 ): PortalInvestPayload {
   return {
-    offers: exclusiveOffers.map(mapOffer),
-    vaults: vaultProducts.map(mapVaultProduct),
+    offers: buildPortalInvestOffers(exclusiveOffers),
+    vaults: buildPortalInvestVaults(vaultProducts),
   }
 }

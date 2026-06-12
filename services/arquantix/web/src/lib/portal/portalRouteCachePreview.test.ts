@@ -3,14 +3,14 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, it } from 'node:test'
 
-import { PORTAL_CACHE_KEYS, PORTAL_SECTION_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
+import { PORTAL_SECTION_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
 import {
   hasPortalRouteCachedPreview,
   readPortalRouteCachedPayload,
 } from '@/lib/portal/portalRouteCachePreview'
 import { writePortalCache, invalidatePortalCache } from '@/lib/portal/portalClientCache'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
-import type { PortalInvestPayload } from '@/lib/portal/investTypes'
+import type { PortalInvestOffersPayload } from '@/lib/portal/investTypes'
 import type { PortalMarketsTopPayload } from '@/lib/portal/marketsTypes'
 
 const PREVIEW_SOURCE = path.join(
@@ -28,21 +28,21 @@ describe('portalRouteCachePreview — clés alignées écrans', () => {
     assert.doesNotMatch(screenSource, /portal:markets:v2/)
   })
 
-  it('preview invest utilise la même clé que PortalInvestScreen', () => {
+  it('preview invest utilise les clés de section de PortalInvestScreen', () => {
     const screenSource = readFileSync(
       path.join(process.cwd(), 'src/components/portal/invest/PortalInvestScreen.tsx'),
       'utf8',
     )
-    assert.match(screenSource, /PORTAL_CACHE_KEYS\.invest/)
+    assert.match(screenSource, /PORTAL_SECTION_CACHE_KEYS\.investOffers/)
     assert.doesNotMatch(screenSource, /portal:invest:v2/)
   })
 
-  it('portalRouteCachePreview ne référence plus v2 et lit les sections markets', () => {
+  it('portalRouteCachePreview ne référence plus v2 et lit les sections markets + invest', () => {
     const previewSource = readFileSync(PREVIEW_SOURCE, 'utf8')
     assert.doesNotMatch(previewSource, /portal:markets:v2/)
     assert.doesNotMatch(previewSource, /portal:invest:v2/)
     assert.match(previewSource, /readPortalMarketsPayloadFromCache/)
-    assert.match(previewSource, /PORTAL_CACHE_KEYS\.invest/)
+    assert.match(previewSource, /readPortalInvestPayloadFromCache/)
   })
 
   it('reconstruit le preview markets depuis le cache de section top', () => {
@@ -65,16 +65,17 @@ describe('portalRouteCachePreview — clés alignées écrans', () => {
     assert.equal(hasPortalRouteCachedPreview(PORTAL_ROUTES.markets), false)
   })
 
-  it('lit le cache invest v3 écrit par l’écran', () => {
-    invalidatePortalCache(PORTAL_CACHE_KEYS.invest)
-    const payload = { sections: [] } as PortalInvestPayload
-    writePortalCache(PORTAL_CACHE_KEYS.invest, payload, 60_000)
+  it('reconstruit le preview invest depuis le cache de section offers', () => {
+    invalidatePortalCache(PORTAL_SECTION_CACHE_KEYS.investOffers)
+    invalidatePortalCache(PORTAL_SECTION_CACHE_KEYS.investVaults)
+    const offers = { offers: [] } as PortalInvestOffersPayload
+    writePortalCache(PORTAL_SECTION_CACHE_KEYS.investOffers, offers, 60_000)
 
     const preview = readPortalRouteCachedPayload(PORTAL_ROUTES.invest)
     assert.equal(preview?.kind, 'invest')
     assert.equal(hasPortalRouteCachedPreview(PORTAL_ROUTES.invest), true)
 
-    invalidatePortalCache(PORTAL_CACHE_KEYS.invest)
+    invalidatePortalCache(PORTAL_SECTION_CACHE_KEYS.investOffers)
     assert.equal(hasPortalRouteCachedPreview(PORTAL_ROUTES.invest), false)
   })
 })

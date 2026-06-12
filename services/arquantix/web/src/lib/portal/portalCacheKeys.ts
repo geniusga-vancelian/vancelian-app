@@ -22,6 +22,8 @@ export const PORTAL_SECTION_CACHE_KEYS = {
   marketsTop: 'portal:markets:top:v1',
   marketsBundles: 'portal:markets:bundles:v1',
   marketsDiscover: 'portal:markets:discover:v1',
+  investOffers: 'portal:invest:offers:v1',
+  investVaults: 'portal:invest:vaults:v1',
   cryptoWalletPositions: 'portal:crypto-wallet:positions:v1',
   cryptoWalletActivity: 'portal:crypto-wallet:activity:v1',
   academyEditorial: 'portal:academy:editorial:v1',

@@ -65,6 +65,8 @@ export type PortalLedgityVaultsPayload = {
   vaults: PortalLedgityVaultDetails[]
   configured: boolean
   beta?: PortalLedgityBetaPortalFlags
+  /** Vrai si la liste n'a pas pu être chargée (erreur interne fail-soft). */
+  partial?: boolean
 }
 
 export type PortalLedgityPreparedTx = {

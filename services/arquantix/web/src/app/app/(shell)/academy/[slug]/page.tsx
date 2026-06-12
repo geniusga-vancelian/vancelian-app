@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
@@ -9,6 +10,14 @@ import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 type Props = {
   params: { slug: string }
 }
+
+/**
+ * Mémoïsation par requête : `generateMetadata` et la page appellent le même
+ * loader avec les mêmes arguments → une seule résolution DB/médias au lieu de deux.
+ */
+const loadArticle = cache((slug: string, locale: string) =>
+  getPortalArticleBySlug(slug, locale),
+)
 
 function resolveTitle(view: NonNullable<Awaited<ReturnType<typeof getPortalArticleBySlug>>>) {
   if (view.kind === 'editorial') {
@@ -34,7 +43,7 @@ function resolveCover(
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const view = await getPortalArticleBySlug(params.slug, PORTAL_CONTENT_LOCALE)
+  const view = await loadArticle(params.slug, PORTAL_CONTENT_LOCALE)
   if (!view) return { title: 'Article not found' }
 
   const title = resolveTitle(view)
@@ -56,7 +65,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function PortalAcademyArticlePage({ params }: Props) {
-  const view = await getPortalArticleBySlug(params.slug, PORTAL_CONTENT_LOCALE)
+  const view = await loadArticle(params.slug, PORTAL_CONTENT_LOCALE)
 
   if (!view) {
     notFound()

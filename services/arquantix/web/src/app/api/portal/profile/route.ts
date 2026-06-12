@@ -8,14 +8,23 @@ export async function GET() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const res = await portalUpstreamFetch('/api/app/profile', {
-    signal: AbortSignal.timeout(15000),
-  })
-  const profile = await res.json().catch(() => null)
-
-  if (!res.ok) {
-    return NextResponse.json(profile ?? { error: 'upstream_error' }, { status: res.status })
+  try {
+    const res = await portalUpstreamFetch('/api/app/profile', {
+      signal: AbortSignal.timeout(15000),
+    })
+    // Session amont invalide → 401 pour laisser le client rediriger vers login.
+    if (res.status === 401) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+    const profile = await res.json().catch(() => null)
+    if (!res.ok) {
+      // Fail-soft : 200 + payload partiel pour ne pas masquer les sections indépendantes
+      // (wallets, délégation, réseau) qui ne dépendent pas du profil.
+      return NextResponse.json({ profile: null, partial: true })
+    }
+    return NextResponse.json({ profile })
+  } catch (error) {
+    console.error('[api/portal/profile GET]', error)
+    return NextResponse.json({ profile: null, partial: true })
   }
-
-  return NextResponse.json({ profile })
 }

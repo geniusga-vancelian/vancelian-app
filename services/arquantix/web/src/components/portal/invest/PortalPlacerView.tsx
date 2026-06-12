@@ -187,6 +187,10 @@ type Props = {
   panierBundles: PortalCryptoBundle[]
   defiVaults?: VaultUnion[]
   showDeFiVaults?: boolean
+  /** Offres exclusives encore en chargement sans données affichables (shimmer dédié). */
+  offersLoading?: boolean
+  /** Coffres catalogue (`vault_simple`) encore en chargement (shimmer dédié). */
+  vaultsLoading?: boolean
   /** Marchés (paniers / coffres bundle) encore en chargement sans données affichables. */
   marketsBundlesLoading?: boolean
   /** Vaults Morpho / Ledgity encore en chargement. */
@@ -200,6 +204,8 @@ export function PortalPlacerView({
   panierBundles,
   defiVaults = [],
   showDeFiVaults = false,
+  offersLoading = false,
+  vaultsLoading = false,
   marketsBundlesLoading = false,
   defiVaultsLoading = false,
 }: Props) {
@@ -263,6 +269,7 @@ export function PortalPlacerView({
   const showCoffresSection =
     show('coffres') &&
     (coffreCards.length > 0 ||
+      vaultsLoading ||
       marketsBundlesLoading ||
       (showDeFiVaults && defiVaultsLoading))
 
@@ -326,7 +333,7 @@ export function PortalPlacerView({
             </div>
           ) : null}
 
-          {show('offres') && offers.length > 0 ? (
+          {show('offres') && (offers.length > 0 || offersLoading) ? (
             <div id="placer-offres" className="placer-section">
               <PortalPlacerSectionHead
                 title="Exclusive offers"
@@ -335,11 +342,15 @@ export function PortalPlacerView({
                   <PortalPlacerSeeAll href="#placer-offres">View all offers</PortalPlacerSeeAll>
                 }
               />
-              <div className="placer-grid placer-grid--2">
-                {offers.map((offer) => (
-                  <PortalPlacerOfferCard key={offer.id} offer={offer} />
-                ))}
-              </div>
+              {offers.length > 0 ? (
+                <div className="placer-grid placer-grid--2">
+                  {offers.map((offer) => (
+                    <PortalPlacerOfferCard key={offer.id} offer={offer} />
+                  ))}
+                </div>
+              ) : (
+                <PortalPlacerSectionSkeleton />
+              )}
             </div>
           ) : null}
 

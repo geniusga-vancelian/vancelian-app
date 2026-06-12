@@ -9,7 +9,10 @@ import {
   PortalPlacerView,
 } from '@/components/portal/invest/PortalPlacerView'
 import { Container } from '@/components/ui/Container'
-import type { PortalInvestPayload } from '@/lib/portal/investTypes'
+import type {
+  PortalInvestOffersPayload,
+  PortalInvestVaultsPayload,
+} from '@/lib/portal/investTypes'
 import { fetchPortalMorphoVaults } from '@/lib/portal/morphoVaultClient'
 import type { PortalLedgityVaultDetails } from '@/lib/portal/ledgity/ledgityVaultTypes'
 import type { PortalMorphoVaultDetails } from '@/lib/portal/morphoVaultTypes'
@@ -17,36 +20,56 @@ import type { PortalMarketsPayload } from '@/lib/portal/marketsTypes'
 import { PORTAL_CONTENT_LOCALE } from '@/lib/portal/portalContentLocale'
 import { usePortalChainContext } from '@/lib/portal/portalChainContext'
 import { isPortalChainDeFiEnabled } from '@/lib/portal/portalChainFilter'
-import { PORTAL_CACHE_KEYS } from '@/lib/portal/portalCacheKeys'
+import {
+  PORTAL_CACHE_KEYS,
+  PORTAL_SECTION_CACHE_KEYS,
+} from '@/lib/portal/portalCacheKeys'
 import {
   resolveInvestHubBundles,
   shouldShowInvestDefiVaultsSectionLoading,
-  shouldShowInvestFullSkeleton,
   shouldShowInvestMarketsBundlesSectionLoading,
 } from '@/lib/portal/portalInvestProgressiveData'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
+import { usePortalProgressiveSections } from '@/lib/portal/usePortalProgressiveSections'
 import { fetchPortalLedgityVaults } from '@/lib/portal/ledgity/ledgityVaultClient'
 import { cn } from '@/lib/utils'
 
-const INVEST_CACHE_KEY = PORTAL_CACHE_KEYS.invest
 const MARKETS_CACHE_KEY = PORTAL_CACHE_KEYS.investMarkets
+
+type InvestSections = {
+  offers: PortalInvestOffersPayload
+  vaults: PortalInvestVaultsPayload
+}
 
 export function PortalInvestScreen() {
   const { chain } = usePortalChainContext()
   const showDeFiVaults = isPortalChainDeFiEnabled(chain)
 
+  // Offres et coffres catalogue chargés indépendamment : chacun arrive avec son
+  // propre shimmer, et l'échec d'une section n'impacte pas l'autre ni la page.
   const {
-    data: investData,
-    loading: investLoading,
+    sections,
     refreshing: investRefreshing,
-    error: investError,
     refresh: refreshInvest,
-  } = usePortalCachedScreen<PortalInvestPayload>({
-    cacheKey: INVEST_CACHE_KEY,
-    url: `/api/portal/invest?locale=${PORTAL_CONTENT_LOCALE}`,
-    ttlMs: 120_000,
-    errorMessage: 'Unable to load investment offers.',
+  } = usePortalProgressiveSections<InvestSections>({
+    offers: {
+      cacheKey: PORTAL_SECTION_CACHE_KEYS.investOffers,
+      url: `/api/portal/invest/offers?locale=${PORTAL_CONTENT_LOCALE}`,
+      ttlMs: 120_000,
+      errorMessage: 'Unable to load investment offers.',
+    },
+    vaults: {
+      cacheKey: PORTAL_SECTION_CACHE_KEYS.investVaults,
+      url: `/api/portal/invest/vaults?locale=${PORTAL_CONTENT_LOCALE}`,
+      ttlMs: 120_000,
+      errorMessage: 'Unable to load vaults.',
+    },
   })
+
+  const offersSection = sections.offers
+  const vaultsSection = sections.vaults
+  const offers = useMemo(() => offersSection.data?.offers ?? [], [offersSection.data])
+  const vaultProducts = useMemo(() => vaultsSection.data?.vaults ?? [], [vaultsSection.data])
 
   const { data: marketsData, loading: marketsLoading, refresh: refreshMarkets } =
     usePortalCachedScreen<PortalMarketsPayload>({
@@ -106,14 +129,20 @@ export function PortalInvestScreen() {
     return { coffreBundles: coffres, panierBundles: paniers }
   }, [bundles])
 
-  if (shouldShowInvestFullSkeleton(investLoading, investData)) {
+  const hasAnyInvestData = offersSection.data != null || vaultsSection.data != null
+  const offersLoading = offersSection.loading && offers.length === 0
+  const vaultsLoading = vaultsSection.loading && vaultProducts.length === 0
+
+  // Skeleton plein écran uniquement au tout premier rendu (aucune section résolue).
+  if (!hasAnyInvestData && (offersSection.loading || vaultsSection.loading)) {
     return <PortalInvestSkeleton />
   }
 
-  if (investError && !investData) {
+  // Échec total : les deux sections en erreur sans aucune donnée (cas rare réseau).
+  if (!hasAnyInvestData && offersSection.error && vaultsSection.error) {
     return (
       <Container className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10">
-        <p className="m-0 font-ui text-[15px] text-v-error">{investError}</p>
+        <p className="m-0 font-ui text-[15px] text-v-error">{offersSection.error}</p>
         <button
           type="button"
           onClick={() => void refreshInvest()}
@@ -125,18 +154,18 @@ export function PortalInvestScreen() {
     )
   }
 
-  if (!investData) return null
-
   return (
     <PortalPageContainer>
       <PortalReveal index={0}>
         <PortalPlacerView
-          offers={investData.offers}
-          vaultProducts={investData.vaults}
+          offers={offers}
+          vaultProducts={vaultProducts}
           coffreBundles={coffreBundles}
           panierBundles={panierBundles}
           defiVaults={defiVaults}
           showDeFiVaults={false}
+          offersLoading={offersLoading}
+          vaultsLoading={vaultsLoading}
           marketsBundlesLoading={marketsBundlesLoading}
           defiVaultsLoading={defiVaultsSectionLoading}
         />

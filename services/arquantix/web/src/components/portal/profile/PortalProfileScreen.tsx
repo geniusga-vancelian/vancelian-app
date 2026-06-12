@@ -33,6 +33,8 @@ const PROFILE_CACHE_KEY = 'portal:profile'
 
 type ProfilePayload = {
   profile: PortalDashboardProfile | null
+  /** Vrai si le profil amont n'a pas pu être chargé (rendu dégradé fail-soft). */
+  partial?: boolean
 }
 
 function CurrencyChip({
@@ -133,7 +135,12 @@ export function PortalProfileScreen() {
   }
 
   const showInitialSkeleton = loading && !data
-  const showProfileSections = !showInitialSkeleton && data != null
+  // Les sections (wallets, délégation, réseau…) sont indépendantes du profil :
+  // on les rend dès la fin du skeleton initial, même si le profil est dégradé.
+  const showProfileSections = !showInitialSkeleton
+  // Profil amont indisponible (fail-soft) : email / initiales en placeholder.
+  const profileDegraded =
+    !showInitialSkeleton && (error !== '' || (data != null && data.profile == null))
 
   return (
     <PortalPageContainer>
@@ -153,14 +160,14 @@ export function PortalProfileScreen() {
           </PortalReveal>
         ) : null}
 
-        {!showInitialSkeleton && error ? (
+        {profileDegraded ? (
           <div
-            className="rounded-v-card border border-v-error/25 bg-v-error/5 px-4 py-3"
-            role="alert"
+            className="rounded-v-card border border-v-fg-10 bg-v-bg px-4 py-3"
+            role="status"
           >
-            <p className="m-0 font-ui text-[15px] leading-relaxed text-v-error">{error}</p>
-            <p className="mb-0 mt-2 font-ui text-[14px] leading-relaxed text-v-fg-muted">
-              Utilisez « Sign out » ci-dessous pour réinitialiser votre session.
+            <p className="m-0 font-ui text-[14px] leading-relaxed text-v-fg-muted">
+              Certaines informations de profil n’ont pas pu être chargées pour le moment.
+              Vos wallets et paramètres restent accessibles ci-dessous.
             </p>
           </div>
         ) : null}

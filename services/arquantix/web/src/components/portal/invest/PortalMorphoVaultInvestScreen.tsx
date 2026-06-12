@@ -36,7 +36,11 @@ export function PortalMorphoVaultInvestScreen({ vaultAddress }: Props) {
         (row) => row.vaultAddress.trim().toLowerCase() === normalized,
       )
       if (!match) {
-        setError('This vault is not available.')
+        setError(
+          payload.partial
+            ? 'Vault temporarily unavailable. Please try again.'
+            : 'This vault is not available.',
+        )
         setVault(null)
         return
       }

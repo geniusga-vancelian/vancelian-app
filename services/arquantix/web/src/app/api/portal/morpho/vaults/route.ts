@@ -51,6 +51,12 @@ export async function GET() {
     return NextResponse.json(payload)
   } catch (error) {
     console.error('[api/portal/morpho/vaults GET]', error)
-    return NextResponse.json({ code: 'morpho.internal_error', message: 'Erreur interne.' }, { status: 500 })
+    // Fail-soft : 200 + liste vide marquée partielle plutôt qu'un 500 qui casse
+    // le hub Invest et la page détail (le détail propose un retry sur `partial`).
+    return NextResponse.json({
+      configured: true,
+      vaults: [],
+      partial: true,
+    } satisfies PortalMorphoVaultsPayload)
   }
 }
