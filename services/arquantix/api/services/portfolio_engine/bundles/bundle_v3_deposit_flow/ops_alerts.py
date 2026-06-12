@@ -148,11 +148,11 @@ def audit_bundle_rebalancing_stale_state(db: Session) -> dict[str, Any]:
             """
             SELECT p.id::text AS portfolio_id,
                    p.client_id::text,
-                   p.metadata_->'bundle_invest_lock'->>'batch_id' AS batch_id,
-                   p.metadata_->'bundle_invest_lock'->>'status' AS lock_status
+                   p.metadata->'bundle_invest_lock'->>'batch_id' AS batch_id,
+                   p.metadata->'bundle_invest_lock'->>'status' AS lock_status
             FROM pe_portfolios p
-            WHERE p.metadata_ ? 'bundle_invest_lock'
-              AND (p.metadata_->'bundle_invest_lock') IS NOT NULL
+            WHERE p.metadata ? 'bundle_invest_lock'
+              AND (p.metadata->'bundle_invest_lock') IS NOT NULL
             ORDER BY p.updated_at DESC
             LIMIT 50
             """

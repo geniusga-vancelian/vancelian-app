@@ -88,8 +88,8 @@ def discover_bundle_portfolios_for_stale_reconcile(
             SELECT id::text AS portfolio_id, client_id::text AS client_id
             FROM pe_portfolios
             WHERE portfolio_type = 'bundle_portfolio'
-              AND metadata_ ? '{BUNDLE_INVEST_LOCK_KEY}'
-              AND metadata_->'{BUNDLE_INVEST_LOCK_KEY}' IS NOT NULL
+              AND metadata ? '{BUNDLE_INVEST_LOCK_KEY}'
+              AND metadata->'{BUNDLE_INVEST_LOCK_KEY}' IS NOT NULL
             ORDER BY updated_at DESC NULLS LAST
             LIMIT :lim
             """
