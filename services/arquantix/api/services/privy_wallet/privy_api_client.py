@@ -94,6 +94,30 @@ def extract_wallet_linked_accounts(user_payload: dict[str, Any]) -> list[dict[st
     return out
 
 
+def extract_delegated_wallet_addresses(user_payload: dict[str, Any]) -> set[str]:
+    """Adresses (lowercase) des wallets délégués (signer app ajouté) — flag Privy ``delegated``.
+
+    Privy marque ``delegated: true`` sur le linked_account ``type=wallet`` dès qu'un signer
+    (key-quorum de l'app) est attaché au wallet embedded de l'utilisateur.
+    """
+    out: set[str] = set()
+    for item in extract_wallet_linked_accounts(user_payload):
+        if item.get("delegated") is not True:
+            continue
+        address = str(item.get("address") or "").strip().lower()
+        if address:
+            out.add(address)
+    return out
+
+
+def is_wallet_delegated(user_payload: dict[str, Any], wallet_address: str) -> bool:
+    """True si ``wallet_address`` est délégué (signer serveur de l'app présent)."""
+    target = (wallet_address or "").strip().lower()
+    if not target:
+        return False
+    return target in extract_delegated_wallet_addresses(user_payload)
+
+
 def extract_solana_wallet_linked_accounts(user_payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Comptes wallet Solana depuis ``linked_accounts`` Privy."""
     out: list[dict[str, Any]] = []

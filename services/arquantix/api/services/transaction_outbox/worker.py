@@ -59,6 +59,9 @@ def _apply_locks_queue_and_enqueue_settle(
     intent: TransactionIntent,
     outbox: TransactionOutbox,
 ) -> None:
+    from services.transaction_outbox.orchestrator_execute_enqueue import (
+        maybe_enqueue_orchestrator_intent_execute_after_worker_queued,
+    )
     from services.transaction_outbox.orchestrator_product_locks import (
         apply_orchestrator_product_locks_before_queued,
     )
@@ -79,7 +82,10 @@ def _apply_locks_queue_and_enqueue_settle(
     )
     intent.current_phase = IntentOrchestratorPhase.QUEUED.value
 
-    maybe_enqueue_orchestrator_intent_settle_after_worker_queued(db, intent)
+    # Swap déjà CONFIRMED (signé client) → settle ; swap quoté non signé → execute serveur.
+    settle = maybe_enqueue_orchestrator_intent_settle_after_worker_queued(db, intent)
+    if not settle.enqueued:
+        maybe_enqueue_orchestrator_intent_execute_after_worker_queued(db, intent)
 
 
 def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:

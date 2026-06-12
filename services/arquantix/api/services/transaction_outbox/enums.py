@@ -13,6 +13,7 @@ class OutboxEventStatus(str, Enum):
 
 class OutboxEventType(str, Enum):
     INTENT_CREATED = "intent.created"
+    INTENT_EXECUTE = "intent.execute"
     INTENT_PROVIDER_SUBMITTED = "intent.provider_submitted"
     INTENT_SETTLE = "intent.settle"
     INTENT_RECONCILE = "intent.reconcile"

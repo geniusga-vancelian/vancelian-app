@@ -112,6 +112,7 @@ jobs:
             --build-arg NEXT_PUBLIC_PORTAL_APP_URL=https://app.vancelian.finance \
             --build-arg NEXT_PUBLIC_GIT_SHA=${{ github.sha }} \
             --build-arg NEXT_PUBLIC_PRIVY_APP_ID="${NEXT_PUBLIC_PRIVY_APP_ID}" \
+            --build-arg NEXT_PUBLIC_PRIVY_AUTHORIZATION_QUORUM_ID=q5d2uzmmkp6u6zh6ashwbzql \
             --build-arg NEXT_PUBLIC_BASE_RPC_URL="${NEXT_PUBLIC_BASE_RPC_URL}" \
             --build-arg NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}" \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \

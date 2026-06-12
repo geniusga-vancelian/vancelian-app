@@ -422,6 +422,32 @@ def run_defi_observability_tick(
             step_errors.append("transaction_outbox_failed")
             logger.warning("defi_observability.transaction_outbox_failed", exc_info=True)
 
+        # 2c-bis — Outbox worker intent.execute (signature déléguée serveur, flag OFF par défaut)
+        try:
+            from services.lifi.config import lifi_execution_worker_enabled
+            from services.transaction_outbox.execution_worker import (
+                process_transaction_outbox_intent_execute,
+            )
+
+            if lifi_execution_worker_enabled() and not dry_run:
+                outbox_execute_step = process_transaction_outbox_intent_execute(db, limit=10)
+            else:
+                outbox_execute_step = {
+                    "skipped": True,
+                    "enabled": lifi_execution_worker_enabled(),
+                    "dry_run": dry_run,
+                }
+            summary["transaction_outbox_intent_execute"] = outbox_execute_step
+            summary["steps"]["transaction_outbox_intent_execute"] = outbox_execute_step
+        except Exception as exc:
+            summary["transaction_outbox_intent_execute"] = {"error": str(exc)}
+            summary["steps"]["transaction_outbox_intent_execute"] = {"error": str(exc)}
+            step_errors.append("transaction_outbox_intent_execute_failed")
+            logger.warning(
+                "defi_observability.transaction_outbox_intent_execute_failed",
+                exc_info=True,
+            )
+
         # 2d — Outbox worker intent.settle (Phase 2 S3a — settlement skeleton NOOP, flag OFF)
         try:
             from services.lifi.config import lifi_outbox_worker_enabled

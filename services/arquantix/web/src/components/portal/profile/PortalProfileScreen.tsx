@@ -17,6 +17,7 @@ import {
   PortalSettingsCard,
   PortalSettingsRow,
 } from '@/components/portal/profile/PortalProfileUi'
+import { PortalProfileDelegationSection } from '@/components/portal/profile/PortalProfileDelegationSection'
 import { PortalProfileWalletsSection } from '@/components/portal/profile/PortalProfileWalletsSection'
 import { PortalChainSwitcher } from '@/components/portal/PortalChainSwitcher'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
@@ -202,6 +203,10 @@ export function PortalProfileScreen() {
         </PortalReveal>
 
         <PortalReveal index={5}>
+          <PortalProfileDelegationSection />
+        </PortalReveal>
+
+        <PortalReveal index={6}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Paramètres</PortalSectionTitle>
             <PortalSettingsCard>
@@ -247,7 +252,7 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={6}>
+        <PortalReveal index={7}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Support</PortalSectionTitle>
             <PortalSettingsCard>
@@ -279,7 +284,7 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={7}>
+        <PortalReveal index={8}>
           <section className="flex flex-col gap-3">
             <PortalSectionTitle>Informations</PortalSectionTitle>
             <PortalSettingsCard>
@@ -290,7 +295,7 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={8}>
+        <PortalReveal index={9}>
           <section className="flex flex-col gap-3 pt-2">
             <PortalSignOutButton variant="profile" />
           </section>

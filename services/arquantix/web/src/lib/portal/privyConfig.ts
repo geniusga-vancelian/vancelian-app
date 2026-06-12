@@ -39,6 +39,19 @@ export function getPrivyAppClientId(): string {
   return getPrivyWebClientId()
 }
 
+/**
+ * ID du key-quorum d'autorisation de l'app (Session Signers) — créé dans le dashboard
+ * Privy. Sert à déléguer le wallet embedded de l'utilisateur au signer serveur, pour
+ * permettre l'exécution worker sans navigateur. Vide = délégation indisponible.
+ */
+export function getPrivyAuthorizationQuorumId(): string {
+  return (
+    process.env.NEXT_PUBLIC_PRIVY_AUTHORIZATION_QUORUM_ID?.trim() ||
+    process.env.PRIVY_AUTHORIZATION_QUORUM_ID?.trim() ||
+    ''
+  )
+}
+
 export function isPrivyConfigured(appIdOverride?: string): boolean {
   return Boolean((appIdOverride || getPrivyAppId()).trim())
 }

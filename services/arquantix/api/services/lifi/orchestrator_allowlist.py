@@ -57,6 +57,16 @@ def lifi_outbox_worker_enabled_for_person(db: Session, person_id: UUID | None) -
     return is_person_lifi_orchestrator_allowlisted(db, person_id)
 
 
+def lifi_execution_worker_enabled_for_person(db: Session, person_id: UUID | None) -> bool:
+    from services.lifi.config import lifi_execution_worker_enabled
+
+    if not lifi_execution_worker_enabled():
+        return False
+    if not lifi_orchestrator_allowlist_configured():
+        return False
+    return is_person_lifi_orchestrator_allowlisted(db, person_id)
+
+
 def lifi_settlement_layer_ledger_enabled_for_person(db: Session, person_id: UUID | None) -> bool:
     from services.lifi.config import lifi_settlement_layer_ledger_enabled
 
