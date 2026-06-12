@@ -80,6 +80,32 @@ def resolve_privy_wallet_id(db: Session, *, person_id: UUID, wallet_address: str
     return None
 
 
+def resolve_privy_embedded_evm_address(db: Session, *, person_id: UUID) -> str | None:
+    """Adresse du wallet embedded EVM Privy (``chain_type='ethereum'``) de la personne.
+
+    Permet de vérifier la délégation **avant** ``prepare_execute`` (donc sans verrouiller
+    le wallet ni préparer la tx) : la source de vérité reste l'API Privy côté serveur,
+    pas un flag client potentiellement périmé.
+    """
+    from database import PersonCryptoWallet
+
+    rows = (
+        db.query(PersonCryptoWallet)
+        .filter(
+            PersonCryptoWallet.person_id == person_id,
+            PersonCryptoWallet.provider == "privy",
+            PersonCryptoWallet.chain_type == "ethereum",
+        )
+        .all()
+    )
+    # Wallet primaire d'abord si plusieurs.
+    rows.sort(key=lambda r: not bool(getattr(r, "is_primary", False)))
+    for row in rows:
+        if (row.address or "").strip():
+            return row.address.strip()
+    return None
+
+
 def is_signing_wallet_delegated(db: Session, *, person_id: UUID, wallet_address: str) -> bool:
     """True si le wallet embedded est délégué au signer serveur (flag Privy ``delegated``)."""
     try:
@@ -176,17 +202,21 @@ def execute_prepared_swap_server_side(
     if not privy_delegated_signing_configured():
         return _fallback("delegated_signing_not_configured")
 
-    prepared = execute_svc.prepare_execute(db, person_id=person_id, swap_id=swap_id)
-    signing_address = (prepared.signing_wallet_address or "").strip()
-    if not signing_address:
+    # Pré-check délégation AVANT prepare_execute : source de vérité = API Privy (serveur),
+    # jamais un flag client. Si non délégué, on retombe immédiatement en signature client
+    # SANS verrouiller le wallet ni préparer la tx → zéro effet de bord, zéro régression.
+    embedded_address = resolve_privy_embedded_evm_address(db, person_id=person_id)
+    if not embedded_address:
         return _fallback("signing_wallet_unresolved")
+    if not is_signing_wallet_delegated(db, person_id=person_id, wallet_address=embedded_address):
+        return _fallback("wallet_not_delegated")
+
+    prepared = execute_svc.prepare_execute(db, person_id=person_id, swap_id=swap_id)
+    signing_address = (prepared.signing_wallet_address or "").strip() or embedded_address
     if prepared.signing_wallet_mode and prepared.signing_wallet_mode != "privy_embedded":
         return _fallback("non_privy_signing_mode")
     if prepared.transaction is None:
         return _fallback("transaction_unavailable")
-
-    if not is_signing_wallet_delegated(db, person_id=person_id, wallet_address=signing_address):
-        return _fallback("wallet_not_delegated")
 
     privy_wallet_id = resolve_privy_wallet_id(db, person_id=person_id, wallet_address=signing_address)
     if not privy_wallet_id:

@@ -61,6 +61,9 @@ class _FakeExecuteSvc:
 def _patch_common(monkeypatch, *, configured=True, delegated=True, privy_id="wallet-abc"):
     monkeypatch.setattr(se, "privy_delegated_signing_configured", lambda: configured)
     monkeypatch.setattr(
+        se, "resolve_privy_embedded_evm_address", lambda db, *, person_id: "0xWALLET"
+    )
+    monkeypatch.setattr(
         se, "is_signing_wallet_delegated", lambda db, *, person_id, wallet_address: delegated
     )
     monkeypatch.setattr(
@@ -137,6 +140,35 @@ def test_fallback_on_sign_error(monkeypatch):
     )
     assert res.phase == "awaiting_signature"
     assert res.fallback_reason == "sign_failed:privy.rpc_failed"
+
+
+def test_not_delegated_skips_prepare(monkeypatch):
+    """Zéro effet de bord : si non délégué, prepare_execute n'est jamais appelé (pas de lock)."""
+    _patch_common(monkeypatch, delegated=False)
+
+    class _NoPrepare(_FakeExecuteSvc):
+        def prepare_execute(self, db, *, person_id, swap_id):
+            raise AssertionError("prepare_execute ne doit pas être appelé si non délégué")
+
+    res = se.execute_prepared_swap_server_side(
+        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value),
+        execute_svc=_NoPrepare(_fake_prepared()),
+    )
+    assert res.fallback_reason == "wallet_not_delegated"
+    assert res.signed_server_side is False
+
+
+def test_fallback_when_embedded_address_unresolved(monkeypatch):
+    _patch_common(monkeypatch)
+    monkeypatch.setattr(se, "resolve_privy_embedded_evm_address", lambda db, *, person_id: None)
+    res = se.execute_prepared_swap_server_side(
+        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value),
+        execute_svc=_FakeExecuteSvc(_fake_prepared()),
+    )
+    assert res.fallback_reason == "signing_wallet_unresolved"
+    assert res.signed_server_side is False
 
 
 # --------------------------------------------------------------- happy paths

@@ -31,7 +31,6 @@ import {
   SwapExecutionError,
 } from '@/lib/portal/swapFailure'
 import { abandonSwap, recordSwapFailure, serverExecuteSwap, type SwapQuotePayload } from '@/lib/portal/swapClient'
-import { usePortalWalletDelegation } from '@/lib/portal/usePortalWalletDelegation'
 import {
   SwapPriceChangedError,
   buildSwapReviewSnapshot,
@@ -77,7 +76,6 @@ export function PortalSwapExecutionController({
   const router = useRouter()
   const { chain, walletScope, walletScopeId, isExternalWallet } = usePortalExecutionScope()
   const { privyReady } = usePortalAuthPrivy()
-  const { isDelegated } = usePortalWalletDelegation()
 
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [failureCopy, setFailureCopy] = useState(() => resolveSwapFailureCopy(null))
@@ -117,14 +115,21 @@ export function PortalSwapExecutionController({
         throw new Error('Payload transaction manquant')
       }
 
-      // Wallet délégué (Privy embedded) : signature + exécution côté serveur, sans
-      // signature navigateur. Sinon (non délégué, externe, mock) : flux client habituel.
-      const canServerSign = isDelegated && !swapMockMode && !isExternalWallet
+      // Wallet réel (Privy embedded) : on tente TOUJOURS l'exécution serveur. La source de
+      // vérité de la délégation est l'API Privy interrogée côté backend (jamais un flag
+      // client potentiellement périmé). Si non délégué / non configuré, le backend renvoie
+      // signed_server_side=false et on retombe sur la signature navigateur (zéro régression).
+      const canServerSign = !swapMockMode && !isExternalWallet
       let serverSigned = false
       if (canServerSign) {
         setExecutionPhase('signing')
-        const serverResult = await serverExecuteSwap(quote.swap_id)
-        serverSigned = serverResult.signed_server_side
+        try {
+          const serverResult = await serverExecuteSwap(quote.swap_id)
+          serverSigned = serverResult.signed_server_side
+        } catch {
+          // Erreur réseau / endpoint indisponible : on retombe sur le flux client.
+          serverSigned = false
+        }
       }
       if (!serverSigned) {
         await signAndSubmit(exec)
@@ -168,7 +173,7 @@ export function PortalSwapExecutionController({
       }
       onStepChange('result')
     }
-  }, [executionPhase, isDelegated, isExternalWallet, onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, signAndSubmit, swapMockMode])
+  }, [executionPhase, isExternalWallet, onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, signAndSubmit, swapMockMode])
 
   useEffect(() => {
     if (step !== 'processing' || executionStartedRef.current) return
