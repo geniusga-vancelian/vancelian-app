@@ -30,10 +30,8 @@ type Props = {
 export function PortalOfferDetailScreen({ payload }: Props) {
   const hero = useMemo(() => buildPortalOfferHeroView(payload), [payload])
   const aside = useMemo(() => buildPortalOfferAsideView(payload), [payload])
-  const contentModules = useMemo(() => {
-    if (!hero.heroCarouselModuleId) return payload.contentModules
-    return payload.contentModules.filter((mod) => mod.id !== hero.heroCarouselModuleId)
-  }, [payload.contentModules, hero.heroCarouselModuleId])
+  /** Tous les modules Vault Builder restent dans le corps (y compris les carrousels utilisés par le hero). */
+  const contentModules = payload.contentModules
   const investHref = payload.vaultEngine
     ? resolvePortalVaultEngineInvestRoute(payload.vaultEngine, payload.pageSlug, 'invest')
     : portalVaultInvestRoute(payload.pageSlug)

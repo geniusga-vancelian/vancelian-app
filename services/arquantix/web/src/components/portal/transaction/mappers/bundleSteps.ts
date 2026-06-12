@@ -263,6 +263,7 @@ export type BundleRebalancingLeg = {
   action: string
   amount_entry?: string
   entry_asset?: string
+  amount_crypto?: string
 }
 
 export type BundleRebalancingProcessingStage =
@@ -287,6 +288,15 @@ function formatRebalanceLegAmount(amount?: string, entryAsset = 'USDC'): string 
     maximumFractionDigits: 2,
   }).format(n)
   return `${formatted} ${entryAsset}`
+}
+
+/** Quantité d'actif (crypto) pour le titre du step, ex. « 2,25 cbETH ». */
+function formatRebalanceLegQty(amount?: string): string | null {
+  if (!amount) return null
+  const n = Number(amount)
+  if (!Number.isFinite(n) || n <= 0) return null
+  const maxFractionDigits = n >= 1 ? 4 : 8
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: maxFractionDigits }).format(n)
 }
 
 const REBALANCE_LEG_COMPLETED = ['completed', 'confirmed', 'success'] as const
@@ -442,15 +452,17 @@ export function buildBundleRebalancingProcessingStepsDynamic(params: {
 
   for (const leg of legs) {
     const label = displayBundleAssetLabel(leg.asset)
+    const qty = formatRebalanceLegQty(leg.amount_crypto)
+    const titleAsset = qty ? `${qty} ${label}` : label
     const amount = formatRebalanceLegAmount(leg.amount_entry, leg.entry_asset ?? 'USDC')
     if (leg.action === 'sell') {
       steps.push({
-        label: `Vente · ${label}`,
+        label: `Vente · ${titleAsset}`,
         subtext: amount ? `Vente de ${label} pour ${amount}.` : `Vente de la position ${label}.`,
       })
     } else {
       steps.push({
-        label: `Achat · ${label}`,
+        label: `Achat · ${titleAsset}`,
         subtext: amount ? `Achat de ${label} pour ${amount}.` : `Achat de ${label}.`,
       })
     }
@@ -462,6 +474,47 @@ export function buildBundleRebalancingProcessingStepsDynamic(params: {
   })
 
   return steps
+}
+
+/**
+ * Sous-texte live du trade en cours — décrit ce que fait le back, sans jargon.
+ * cote → signature → exécution (montant) → réconciliation comptable.
+ */
+export type RebalanceLegLiveContext = {
+  phase: SwapExecutionPhase
+  reconciling: boolean
+  action: string
+  asset: string
+  amountEntry?: string
+  entryAsset?: string
+}
+
+export function rebalanceActiveLegSubtext(ctx: RebalanceLegLiveContext): string {
+  const assetLabel = displayBundleAssetLabel(ctx.asset)
+  if (ctx.reconciling) {
+    return 'Mise à jour de votre position…'
+  }
+  const amount = formatRebalanceLegAmount(ctx.amountEntry, ctx.entryAsset ?? 'USDC')
+  switch (ctx.phase) {
+    case 'verifying_price':
+    case 'preparing':
+      return 'Recherche du meilleur prix…'
+    case 'approving':
+    case 'signing':
+      return 'Sécurisation de la signature…'
+    case 'submitting':
+    case 'bridging':
+      if (!amount) return 'Échange en cours…'
+      return ctx.action === 'sell'
+        ? `Échange de ${assetLabel} en ${amount}.`
+        : `Échange de ${amount} en ${assetLabel}.`
+    case 'completed':
+      return 'Mise à jour de votre position…'
+    default:
+      return ctx.action === 'sell'
+        ? `Vente de ${assetLabel} en cours…`
+        : `Achat de ${assetLabel} en cours…`
+  }
 }
 
 /** Index stepper rééquilibrage — monotone (ne recule pas en signing). */

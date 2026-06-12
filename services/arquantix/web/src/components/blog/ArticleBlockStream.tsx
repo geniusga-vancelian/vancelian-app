@@ -2,6 +2,7 @@ import { ArticleBlockType } from '@prisma/client'
 import ReactMarkdown from 'react-markdown'
 import { cn } from '@/lib/utils'
 import {
+  ArticleBodyMarkdown,
   articleBodyMarkdownComponents,
   articleBodyRemarkPlugins,
 } from '@/lib/blog/articleBodyMarkdown'
@@ -77,7 +78,7 @@ function renderBlock(
               'mt-14 scroll-mt-28 text-[26px] leading-[1.1] text-black first:mt-0 md:text-[28px]',
             )}
           >
-            {headingText}
+            <ArticleBodyMarkdown text={headingText} variant="inline" />
           </h2>
         ),
         heading,
@@ -119,7 +120,7 @@ function renderBlock(
           <ol className="my-8 list-outside list-decimal space-y-3 pl-6 text-[17px] leading-relaxed text-[#2a2d35] marker:font-semibold md:text-[18px]">
             {((block.data as { items?: string[] }).items || []).map((item, i) => (
               <li key={i} className="pl-1">
-                {item}
+                <ArticleBodyMarkdown text={item} variant="inline" />
               </li>
             ))}
           </ol>
@@ -148,7 +149,9 @@ function renderBlock(
               items={[{ url, mediaId, alt: null }]}
             />
             {caption ? (
-              <p className="mt-3 text-center text-[13px] text-[#8893b0]">{caption}</p>
+              <p className="mt-3 text-center text-[13px] text-[#8893b0]">
+                <ArticleBodyMarkdown text={caption} variant="inline" />
+              </p>
             ) : null}
           </div>
         ),
@@ -193,7 +196,10 @@ function renderBlock(
             )}
             {(block.data as { caption?: string }).caption ? (
               <figcaption className="mt-3 text-center text-[13px] text-[#62656e]">
-                {(block.data as { caption?: string }).caption}
+                <ArticleBodyMarkdown
+                  text={String((block.data as { caption?: string }).caption)}
+                  variant="inline"
+                />
               </figcaption>
             ) : null}
           </figure>
@@ -216,7 +222,9 @@ function renderBlock(
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#e8edf5] text-[10px] font-semibold">
                 PDF
               </div>
-              <p className="min-w-0 flex-1 truncate font-medium text-[#1a1d24]">{docTitle}</p>
+              <p className="min-w-0 flex-1 truncate font-medium text-[#1a1d24]">
+                <ArticleBodyMarkdown text={docTitle} variant="inline" />
+              </p>
               <svg className="h-5 w-5 shrink-0 text-[#8893b0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -484,7 +492,9 @@ export function DocumentAttachmentRow({
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#e8edf5] text-[10px] font-semibold">
         PDF
       </div>
-      <p className="min-w-0 flex-1 truncate font-medium text-[#1a1d24]">{title}</p>
+      <p className="min-w-0 flex-1 truncate font-medium text-[#1a1d24]">
+        <ArticleBodyMarkdown text={title} variant="inline" />
+      </p>
     </a>
   )
 }

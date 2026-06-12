@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 
+import { PortalHeroBackgroundVideo } from '@/components/portal/invest/PortalHeroBackgroundVideo'
 import { cn } from '@/lib/utils'
 
 const COVER_GRAD =
@@ -9,6 +10,8 @@ const COVER_GRAD =
 
 type Props = {
   photos: string[]
+  /** Vidéo promo TitlePage — prioritaire sur `photos` en variant hero (lecture auto). */
+  backgroundVideoUrl?: string | null
   /** Hero `.dh-article` (3:4 → 16:9) ou galerie in-page preview/30 (16:9). */
   variant?: 'hero' | 'gallery'
   className?: string
@@ -22,6 +25,7 @@ type Props = {
  */
 export function PortalDsImageCarousel({
   photos,
+  backgroundVideoUrl,
   variant = 'gallery',
   className,
   ariaLabel = 'Galerie photos',
@@ -30,34 +34,53 @@ export function PortalDsImageCarousel({
   const urls = photos.filter(Boolean)
   const [idx, setIdx] = useState(0)
   const [paused, setPaused] = useState(false)
-  const count = urls.length || 1
+  const heroVideoUrl =
+    variant === 'hero' && typeof backgroundVideoUrl === 'string' ? backgroundVideoUrl.trim() : ''
+  const useHeroVideo = Boolean(heroVideoUrl)
 
   useEffect(() => {
-    if (paused || urls.length <= 1) return
+    if (useHeroVideo || paused || urls.length <= 1) return
     const t = window.setInterval(() => setIdx((i) => (i + 1) % urls.length), 5000)
     return () => window.clearInterval(t)
-  }, [paused, urls.length])
+  }, [paused, urls.length, useHeroVideo])
 
   const current = urls[idx]
+  const showGalleryNav = variant === 'gallery' && urls.length > 1
+
+  const goPrev = () => {
+    setIdx((i) => (i - 1 + urls.length) % urls.length)
+    setPaused(true)
+  }
+
+  const goNext = () => {
+    setIdx((i) => (i + 1) % urls.length)
+    setPaused(true)
+  }
 
   return (
     <div
       className={cn(
         'carousel',
         variant === 'hero' && 'dh-article',
+        variant === 'hero' && useHeroVideo && 'dh-article--video',
         variant === 'gallery' && 'carousel--gallery',
         className,
       )}
-      role={urls.length > 1 ? 'region' : undefined}
-      aria-label={urls.length > 1 ? ariaLabel : undefined}
-      style={{
-        backgroundImage: current ? `url('${current}')` : undefined,
-        background: !current ? COVER_GRAD : undefined,
-      }}
+      role={!useHeroVideo && urls.length > 1 ? 'region' : undefined}
+      aria-label={!useHeroVideo && urls.length > 1 ? ariaLabel : undefined}
+      style={
+        useHeroVideo
+          ? undefined
+          : {
+              backgroundImage: current ? `url('${current}')` : undefined,
+              background: !current ? COVER_GRAD : undefined,
+            }
+      }
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      {urls.length > 1 ? (
+      {useHeroVideo ? <PortalHeroBackgroundVideo videoUrl={heroVideoUrl} /> : null}
+      {!useHeroVideo && urls.length > 1 ? (
         <div className="carousel__progress" aria-hidden="true">
           {urls.map((_, i) => (
             <button
@@ -69,6 +92,22 @@ export function PortalDsImageCarousel({
             />
           ))}
         </div>
+      ) : null}
+      {showGalleryNav ? (
+        <>
+          <button
+            type="button"
+            className="carousel__nav carousel__nav--prev"
+            onClick={goPrev}
+            aria-label="Photo précédente"
+          />
+          <button
+            type="button"
+            className="carousel__nav carousel__nav--next"
+            onClick={goNext}
+            aria-label="Photo suivante"
+          />
+        </>
       ) : null}
       {children}
     </div>

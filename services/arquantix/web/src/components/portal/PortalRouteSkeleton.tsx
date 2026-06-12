@@ -83,14 +83,22 @@ export function PortalInvestSkeleton() {
   )
 }
 
+export function PortalProfileSkeletonBlocks() {
+  return (
+    <div className="space-y-6">
+      <ShimmerBlock className="h-8 w-32 rounded-v-input" />
+      <ShimmerBlock className="h-24 rounded-v-card" />
+      <ShimmerBlock className="h-40 rounded-v-card" />
+      <ShimmerBlock className="h-48 rounded-v-card" />
+    </div>
+  )
+}
+
 export function PortalProfileSkeleton() {
   return (
     <PortalPageContainer>
-      <div className="mx-auto max-w-2xl space-y-6">
-        <ShimmerBlock className="h-8 w-32 rounded-v-input" />
-        <ShimmerBlock className="h-24 rounded-v-card" />
-        <ShimmerBlock className="h-40 rounded-v-card" />
-        <ShimmerBlock className="h-48 rounded-v-card" />
+      <div className="mx-auto max-w-2xl">
+        <PortalProfileSkeletonBlocks />
       </div>
     </PortalPageContainer>
   )

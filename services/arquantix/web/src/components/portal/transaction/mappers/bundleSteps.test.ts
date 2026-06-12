@@ -11,6 +11,7 @@ import {
   buildBundleRebalancingStepStates,
   buildBundleWithdrawProcessingStepsDynamic,
   bundleRebalancingDynamicProcessingProgressIndex,
+  rebalanceActiveLegSubtext,
   buildBundleProcessingSteps,
   bundleInvestDynamicProcessingProgressIndex,
   bundleWithdrawDynamicProcessingProgressIndex,
@@ -77,6 +78,42 @@ describe('bundleSteps', () => {
       { stage: 'executing', legCurrent: 1, legTotal: 3 },
       stepCount,
     ))
+  })
+
+  it('rebalancing leg title shows crypto qty + instrument when available', () => {
+    const steps = buildBundleRebalancingProcessingStepsDynamic({
+      bundleLabel: 'Two Crypto Kings',
+      legs: [
+        { asset: 'cbETH', action: 'buy', amount_entry: '6.13', amount_crypto: '2.25' },
+        { asset: 'ETH', action: 'buy', amount_entry: '12.48' },
+      ],
+    })
+    assert.match(steps[1]!.label, /Achat · 2,25 CBETH/)
+    // sans amount_crypto on retombe sur l'instrument seul
+    assert.match(steps[2]!.label, /Achat · ETH$/)
+  })
+
+  it('rebalanceActiveLegSubtext maps backend phase to jargon-free copy', () => {
+    const leg = { action: 'buy', asset: 'cbETH', amountEntry: '2.15', entryAsset: 'USDC' }
+    assert.match(
+      rebalanceActiveLegSubtext({ ...leg, phase: 'preparing', reconciling: false }),
+      /meilleur prix/i,
+    )
+    assert.match(
+      rebalanceActiveLegSubtext({ ...leg, phase: 'signing', reconciling: false }),
+      /signature/i,
+    )
+    const exec = rebalanceActiveLegSubtext({ ...leg, phase: 'submitting', reconciling: false })
+    assert.match(exec, /Échange de 2,15 USDC en CBETH/)
+    assert.match(
+      rebalanceActiveLegSubtext({ ...leg, phase: 'completed', reconciling: true }),
+      /Mise à jour de votre position/,
+    )
+    // jamais de jargon technique exposé
+    for (const phase of ['preparing', 'signing', 'submitting', 'completed'] as const) {
+      const text = rebalanceActiveLegSubtext({ ...leg, phase, reconciling: false })
+      assert.doesNotMatch(text, /privy|li\.fi|leg|swap/i)
+    }
   })
 
   it('rebalancing step states reflect real leg status (loading / done / failed)', () => {

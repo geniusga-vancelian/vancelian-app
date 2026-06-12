@@ -33,6 +33,10 @@ import {
   readStepsTimeline,
   type PortalVaultTimelineStep,
 } from '@/lib/portal/vaultModulePortalFormat'
+import {
+  PortalVaultFaqBodyMarkdown,
+  PortalVaultInlineMarkdown,
+} from '@/lib/portal/portalVaultInlineMarkdown'
 import { cn } from '@/lib/utils'
 
 const PILLAR_ICONS = ['star', 'globe', 'check'] as const
@@ -61,14 +65,16 @@ function FaqRow({
         tabIndex={0}
       >
         <div className="faq__head">
-          <h3 className="faq__title">{item.q}</h3>
+          <h3 className="faq__title">
+            <PortalVaultInlineMarkdown text={item.q} />
+          </h3>
           <span className="faq__toggle" aria-hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M5 12h14" />
             </svg>
           </span>
         </div>
-        <p className="faq__body">{item.a}</p>
+        <PortalVaultFaqBodyMarkdown text={item.a} />
       </div>
     )
   }
@@ -80,7 +86,9 @@ function FaqRow({
       role="button"
       tabIndex={0}
     >
-      <h3 className="faq__title">{item.q}</h3>
+      <h3 className="faq__title">
+        <PortalVaultInlineMarkdown text={item.q} />
+      </h3>
       <span className="faq__toggle" aria-hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 5v14M5 12h14" />
@@ -141,10 +149,12 @@ function PortalVaultCompetitiveAdvantages({ mod }: { mod: VaultModulePublic }) {
             <p className="pillar__text">
               {it.title ? (
                 <>
-                  <b>{it.title}.</b>{' '}
+                  <b>
+                    <PortalVaultInlineMarkdown text={it.title} />.
+                  </b>{' '}
                 </>
               ) : null}
-              {it.body}
+              <PortalVaultInlineMarkdown text={it.body} />
             </p>
           </div>
         ))}
@@ -166,10 +176,18 @@ function PortalVaultSteps({ mod }: { mod: VaultModulePublic }) {
             {timelineMarker(s.state)}
             <div className="step__body">
               <div className={cn('step__title', s.state === 'future' && 'dim')}>
-                {s.label}
-                {s.chip ? <span className="tag">{s.chip}</span> : null}
+                <PortalVaultInlineMarkdown text={s.label} />
+                {s.chip ? (
+                  <span className="tag">
+                    <PortalVaultInlineMarkdown text={s.chip} />
+                  </span>
+                ) : null}
               </div>
-              {s.sub ? <p className="step__sub">{s.sub}</p> : null}
+              {s.sub ? (
+                <p className="step__sub">
+                  <PortalVaultInlineMarkdown text={s.sub} />
+                </p>
+              ) : null}
             </div>
           </div>
         ))}
@@ -318,7 +336,11 @@ function PortalVaultLocalisation({ mod }: { mod: VaultModulePublic }) {
         </div>
         <div className="map-card__body">
           <h3 className="map-card__title">Address</h3>
-          {address ? <p className="map-card__sub">{address}</p> : null}
+          {address ? (
+            <p className="map-card__sub">
+              <PortalVaultInlineMarkdown text={address} />
+            </p>
+          ) : null}
         </div>
       </div>
     </>
@@ -376,7 +398,11 @@ function PortalVaultParagraph({ mod }: { mod: VaultModulePublic }) {
 function PortalVaultHeading({ mod }: { mod: VaultModulePublic }) {
   const text = typeof mod.content.text === 'string' ? mod.content.text.trim() : ''
   if (!text) return null
-  return <h2 className="ofd-section__title">{text}</h2>
+  return (
+    <h2 className="ofd-section__title">
+      <PortalVaultInlineMarkdown text={text} />
+    </h2>
+  )
 }
 
 function PortalVaultLegalFooter({ mod }: { mod: VaultModulePublic }) {

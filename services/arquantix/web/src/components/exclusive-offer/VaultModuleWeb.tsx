@@ -33,6 +33,7 @@ import {
 import { VaultModuleHeader } from '@/components/exclusive-offer/VaultModuleHeader'
 import { ArticleBodyBulletListBlock } from '@/components/design-system/ArticleBodyBulletListBlock'
 import { ArticleBodyQuoteBlock } from '@/components/design-system/ArticleBodyQuoteBlock'
+import { ArticleBodyMarkdown } from '@/lib/blog/articleBodyMarkdown'
 import {
   articleBodyMarkdownComponents,
   articleBodyRemarkPlugins,
@@ -371,7 +372,7 @@ export function VaultModuleWeb({ mod }: { mod: VaultModulePublic }) {
           id={headingId}
           className={VAULT_MODULE_HEADING_CLASS}
         >
-          {headingText}
+          <ArticleBodyMarkdown text={headingText} variant="inline" />
         </h2>
       )
     }
@@ -426,7 +427,7 @@ export function VaultModuleWeb({ mod }: { mod: VaultModulePublic }) {
         >
           {items.map((item, i) => (
             <li key={i} className="pl-1">
-              {item}
+              <ArticleBodyMarkdown text={item} variant="inline" />
             </li>
           ))}
         </ol>

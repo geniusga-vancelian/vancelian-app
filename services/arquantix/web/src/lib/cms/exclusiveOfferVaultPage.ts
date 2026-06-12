@@ -21,6 +21,7 @@ import {
 import { resolveMediaUrl } from '@/lib/catalog/packagedCatalogHelpers'
 import { resolvePageSeoFields } from '@/lib/cms/resolvePageI18nMetadata'
 import { resolveVaultSectionContentForExclusiveOfferPayload } from '@/lib/cms/resolveVaultSectionContent'
+import { readTitlePagePromoVideoUrl } from '@/lib/portal/vaultModulePortalFormat'
 import { normalizeVaultModulesFromSectionData } from '@/lib/vault/normalizeVaultModules'
 import {
   ensureBlogALaUneFromDraftWhenRelatedNews,
@@ -131,6 +132,11 @@ export type ExclusiveOfferVaultPayload = {
   heroTags: string[]
   /** Origine titre/sous-titre hero (TitlePage vs SEO Page/PageI18n). */
   heroTitleSource: HeroTitleProvenance
+  /**
+   * Vidéo promo hero (module `TitlePage` — `promoVideoUrl` / médiathèque).
+   * Prioritaire sur `headerImageUrl` dans le hero portail (lecture auto en arrière-plan).
+   */
+  heroPromoVideoUrl: string | null
   /** Modules sous le hero (sans le premier `TitlePage` ni le premier `TagsModule` consommés par le hero). */
   contentModules: VaultModulePublic[]
   /** @deprecated Utiliser `contentModules` ; conservé pour l’API JSON existante. */
@@ -319,11 +325,23 @@ async function enrichTitlePageModuleImages(
         }
       }
     }
+    let promoVideoMediaUrl = ''
+    const promoVideoMediaId =
+      typeof c.promoVideoMediaId === 'string' && c.promoVideoMediaId.trim().length > 0
+        ? c.promoVideoMediaId.trim()
+        : null
+    if (promoVideoMediaId) {
+      const u = await resolveMediaUrl(prisma, promoVideoMediaId, {
+        publicOrigin: publicOrigin ?? undefined,
+      })
+      if (u) promoVideoMediaUrl = u
+    }
     out.push({
       ...m,
       content: {
         ...c,
         ...(imageUrl.trim().length > 0 ? { imageUrl } : {}),
+        ...(promoVideoMediaUrl ? { promoVideoMediaUrl } : {}),
       },
     })
   }
@@ -715,7 +733,8 @@ export async function getExclusiveOfferVaultPayload(
     }
   }
 
-  let modules = await enrichMediaCarouselModules(prisma, modulesWorking)
+  let modules = await enrichTitlePageModuleImages(prisma, modulesWorking)
+  modules = await enrichMediaCarouselModules(prisma, modules)
   modules = await enrichVideoBlockArticleModules(prisma, modules)
   modules = await enrichDocumentsListModules(prisma, modules)
   modules = enrichBlogAlaUneVaultModulesForWeb(modules, locale, relatedArticlePreviews)
@@ -774,6 +793,7 @@ export async function getExclusiveOfferVaultPayload(
   const pageDescription = seo.description?.trim() || null
   const { heroTitle, heroSubtitle, heroTags, contentModules, heroTitleSource } =
     splitTitlePageHeroFromModules(pageTitle, pageDescription, modules)
+  const heroPromoVideoUrl = readTitlePagePromoVideoUrl(modules)
 
   return {
     pageSlug: page.slug,
@@ -791,6 +811,7 @@ export async function getExclusiveOfferVaultPayload(
     tagPills: [],
     heroTags,
     heroTitleSource,
+    heroPromoVideoUrl,
     contentModules,
     modules: contentModules,
   }

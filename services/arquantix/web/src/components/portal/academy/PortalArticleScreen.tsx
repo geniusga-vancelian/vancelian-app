@@ -1,6 +1,9 @@
 'use client'
 
-import { buildArticleBlockElements, DocumentAttachmentRow } from '@/components/blog/ArticleBlockStream'
+import {
+  buildPortalArticleBlockElements,
+  PortalArticleDocumentRow,
+} from '@/components/portal/academy/PortalArticleBlockStream'
 import { PortalArticleAuthorBlock } from '@/components/portal/academy/PortalArticleAuthorBlock'
 import { PortalArticleHero } from '@/components/portal/academy/PortalArticleHero'
 import { PortalArticleRelatedSection } from '@/components/portal/academy/PortalArticleRelatedSection'
@@ -56,7 +59,7 @@ function resolveMeta(view: PortalArticleView) {
 export function PortalArticleScreen({ view }: Props) {
   const blocks = resolveBlocks(view)
   const meta = resolveMeta(view)
-  const { elements, headings } = buildArticleBlockElements(blocks)
+  const { elements, headings } = buildPortalArticleBlockElements(blocks)
   const readingTime = calculateReadingTime(blocks)
   const heroTags = resolveArticleHeroTags(view)
   const slug = resolveArticleSlug(view)
@@ -98,7 +101,7 @@ export function PortalArticleScreen({ view }: Props) {
                     </h2>
                     <div className="space-y-3">
                       {docs.map((doc, index) => (
-                        <DocumentAttachmentRow
+                        <PortalArticleDocumentRow
                           key={`${doc.url}-${index}`}
                           url={doc.url!}
                           title={doc.title || 'Document'}

@@ -140,6 +140,190 @@
   text-wrap: balance;
 }
 
+.art-prose__quote {
+  position: relative;
+  margin: 16px 0;
+  padding: 8px 0 8px 28px;
+  border-left: 2px solid var(--v-terracotta);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.art-prose__quote-mark {
+  position: absolute;
+  top: -8px;
+  left: 18px;
+  font-family: var(--v-font-editorial);
+  font-style: italic;
+  font-size: 48px;
+  line-height: 1;
+  color: var(--v-terracotta);
+  opacity: 0.4;
+  pointer-events: none;
+}
+.art-prose__quote-text {
+  font-family: var(--v-font-editorial);
+  font-weight: 300;
+  font-style: italic;
+  font-size: 22px;
+  line-height: 1.45;
+  color: var(--v-fg);
+  margin: 0;
+  text-wrap: pretty;
+}
+.art-prose__quote-cite {
+  font-family: var(--v-font-ui);
+  font-style: normal;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--v-fg-muted);
+}
+
+.art-prose__ol {
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: ol-counter;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.art-prose__ol-item {
+  position: relative;
+  padding-left: 36px;
+  font-family: var(--v-font-ui);
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--v-fg-body);
+  counter-increment: ol-counter;
+}
+.art-prose__ol-item::before {
+  content: counter(ol-counter);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-fg);
+  color: #FFFFFF;
+  font-family: var(--v-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+.art-prose__check {
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.art-prose__check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-family: var(--v-font-ui);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--v-fg-body);
+}
+.art-prose__check-ic {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-green-bg);
+  color: var(--v-green);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.art-prose__grid {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0;
+}
+.art-prose__grid--c2 { grid-template-columns: 1fr 1fr; }
+.art-prose__grid--c3 { grid-template-columns: repeat(3, 1fr); }
+.art-prose__grid-cell {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--v-radius-card);
+  background-color: #DCD7CB;
+  background-size: cover;
+  background-position: center;
+}
+.art-prose__grid--c3 .art-prose__grid-cell { aspect-ratio: 3 / 4; }
+@media (max-width: 640px) {
+  .art-prose__grid--c3 { grid-template-columns: 1fr 1fr; }
+}
+
+.art-prose__video {
+  margin: 16px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.art-prose__video-play {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--v-radius-card);
+  background-color: #1A1815;
+  background-size: cover;
+  background-position: center;
+  border: 0;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+.art-prose__video-play::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(20,18,8,0.18) 0%, rgba(20,18,8,0.42) 100%);
+  pointer-events: none;
+}
+.art-prose__video-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  border-radius: var(--v-radius-pill);
+  background: #FFFFFF;
+  color: var(--v-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: transform var(--v-motion-fast) var(--v-ease-out);
+}
+.art-prose__video-play:hover .art-prose__video-btn {
+  transform: translate(-50%, -50%) scale(1.06);
+}
+.art-prose__video-cap {
+  font-family: var(--v-font-ui);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--v-fg-light);
+  text-align: center;
+}
+
 .art-prose .portal-article-body {
   display: flex;
   flex-direction: column;

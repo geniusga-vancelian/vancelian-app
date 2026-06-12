@@ -23,7 +23,12 @@ export { PortalOfferAdvisorCard }
 /** Hero carousel — handoff `.dh-article` · `.carousel__progress`. */
 export function PortalOfferHero({ hero }: { hero: PortalOfferHeroView }) {
   return (
-    <PortalDsImageCarousel photos={hero.photos} variant="hero" ariaLabel="Offer hero">
+    <PortalDsImageCarousel
+      photos={hero.photos}
+      backgroundVideoUrl={hero.promoVideoUrl}
+      variant="hero"
+      ariaLabel="Offer hero"
+    >
       <div className="dh-article__body">
         <div className="dh-article__chips">
           {hero.category ? (

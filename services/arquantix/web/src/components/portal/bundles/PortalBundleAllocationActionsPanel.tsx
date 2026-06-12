@@ -13,10 +13,11 @@ import { TransactionProcessingPage } from '@/components/portal/transaction/Trans
 import {
   buildBundleRebalancingProcessingStepsDynamic,
   buildBundleRebalancingStepStates,
-  bundleRebalancingDynamicProcessingProgressIndex,
   isTerminalBundleV3Status,
+  rebalanceActiveLegSubtext,
   type BundleRebalancingProcessingProgress,
 } from '@/components/portal/transaction/mappers/bundleSteps'
+import type { TransactionStepMarkerState } from '@/components/portal/transaction/types'
 import { BUNDLE_FLOW_UI } from '@/components/portal/transaction/mappers/bundleUiCopy'
 import {
   previewPortfolioRebalancing,
@@ -48,21 +49,6 @@ function orderedRebalanceLegs(lines: PortfolioRebalancingAssetLine[]) {
   return [...sells, ...buys]
 }
 
-function rebalanceExecutionPhaseLabel(phase: SwapExecutionPhase): string | null {
-  switch (phase) {
-    case 'verifying_price':
-    case 'preparing':
-      return BUNDLE_FLOW_UI.rebalancePreparingSecureConfirmation
-    case 'approving':
-    case 'signing':
-    case 'submitting':
-    case 'bridging':
-      return BUNDLE_FLOW_UI.rebalanceExecutingSwap
-    default:
-      return null
-  }
-}
-
 /** Rééquilibrage portefeuille — remplace reprise legacy LI.FI (R4.5 / V3 drift). */
 export function PortalBundleAllocationActionsPanel({
   portfolioId,
@@ -83,6 +69,7 @@ export function PortalBundleAllocationActionsPanel({
   const [processingProgress, setProcessingProgress] = useState<BundleRebalancingProcessingProgress>({
     stage: 'preparing',
   })
+  const [reconcile, setReconcile] = useState<{ active: boolean; asset?: string }>({ active: false })
   const [privyPrep, setPrivyPrep] = useState(false)
   const { privyReady } = usePortalAuthPrivy()
   const orderedLegs = useMemo(() => orderedRebalanceLegs(assetLines), [assetLines])
@@ -114,20 +101,76 @@ export function PortalBundleAllocationActionsPanel({
     [assetLines, executionPhase, orderedLegs, processingProgress],
   )
 
-  const rawProgressIndex = useMemo(() => {
-    const progressForIndex =
-      executionPhase === 'preparing' && processingProgress.stage !== 'executing'
-        ? { stage: 'preparing' as const, legTotal: orderedLegs.length }
-        : executionPhase === 'completed'
-          ? { stage: 'completed' as const, legTotal: orderedLegs.length }
-          : processingProgress.stage === 'finalizing'
-            ? { stage: 'finalizing' as const, legTotal: orderedLegs.length }
-            : processingProgress
-    return bundleRebalancingDynamicProcessingProgressIndex(
-      progressForIndex,
-      processingSteps.length,
-    )
-  }, [executionPhase, orderedLegs.length, processingProgress, processingSteps.length])
+  const visibleProcessing = useMemo(() => {
+    const legCount = orderedLegs.length
+    const finalIndex = processingSteps.length - 1
+
+    const effectiveStates: TransactionStepMarkerState[] = [...processingStepStates]
+    let reconcileLegIndex = -1
+    if (reconcile.active && reconcile.asset) {
+      const li = orderedLegs.findIndex(
+        (l) => l.asset.toUpperCase() === reconcile.asset!.toUpperCase(),
+      )
+      if (li >= 0) {
+        reconcileLegIndex = 1 + li
+        effectiveStates[reconcileLegIndex] = 'loading'
+      }
+    }
+
+    const inPlanning =
+      processingProgress.stage === 'preparing' &&
+      (executionPhase === 'preparing' || executionPhase === 'idle') &&
+      !reconcile.active
+
+    let lastRevealedLeg = 0
+    if (!inPlanning) {
+      for (let i = 1; i <= legCount; i += 1) {
+        if (effectiveStates[i] && effectiveStates[i] !== 'pending') lastRevealedLeg = i
+      }
+      if (processingProgress.stage === 'executing' && processingProgress.legCurrent) {
+        lastRevealedLeg = Math.max(
+          lastRevealedLeg,
+          Math.min(processingProgress.legCurrent, legCount),
+        )
+      }
+    }
+
+    const finalState = effectiveStates[finalIndex]
+    const showFinal = finalState === 'loading' || finalState === 'done' || finalState === 'failed'
+
+    const activeLegIndex =
+      reconcileLegIndex >= 0
+        ? reconcileLegIndex
+        : effectiveStates.findIndex((s, i) => i >= 1 && i <= legCount && s === 'loading')
+
+    const visibleIndices: number[] = [0]
+    for (let i = 1; i <= lastRevealedLeg; i += 1) visibleIndices.push(i)
+    if (showFinal) visibleIndices.push(finalIndex)
+
+    const steps = visibleIndices.map((idx) => {
+      const base = processingSteps[idx]!
+      if (idx === activeLegIndex) {
+        const leg = orderedLegs[idx - 1]
+        if (leg) {
+          return {
+            ...base,
+            subtext: rebalanceActiveLegSubtext({
+              phase: executionPhase,
+              reconciling: reconcile.active && idx === reconcileLegIndex,
+              action: leg.action,
+              asset: leg.asset,
+              amountEntry: leg.amount_entry,
+              entryAsset: leg.entry_asset,
+            }),
+          }
+        }
+      }
+      return base
+    })
+    const states = visibleIndices.map((idx) => effectiveStates[idx] ?? 'pending')
+
+    return { steps, states }
+  }, [executionPhase, orderedLegs, processingProgress, processingStepStates, processingSteps, reconcile])
 
   const { runPortfolioRebalancing, inFlightRef } = useBundlePortfolioRebalancing(
     swapMockMode,
@@ -145,6 +188,7 @@ export function PortalBundleAllocationActionsPanel({
       })
     },
     (current, total, asset) => {
+      setReconcile({ active: false })
       setProcessingProgress({
         stage: 'executing',
         legCurrent: current,
@@ -152,6 +196,7 @@ export function PortalBundleAllocationActionsPanel({
         activeAsset: asset,
       })
     },
+    (active, asset) => setReconcile({ active, asset }),
   )
 
   useEffect(() => {
@@ -213,6 +258,7 @@ export function PortalBundleAllocationActionsPanel({
     if (busy || inFlightRef.current) return
     setBusy(true)
     setError(null)
+    setReconcile({ active: false })
     setProcessingProgress({ stage: 'preparing', legTotal: orderedLegs.length })
     setExecutionPhase('preparing')
     let succeeded = false
@@ -225,6 +271,7 @@ export function PortalBundleAllocationActionsPanel({
       }
       const result = await runPortfolioRebalancing(portfolioId)
       setAssetLines(result.asset_lines ?? assetLines)
+      setReconcile({ active: false })
       setProcessingProgress({ stage: 'finalizing', legTotal: orderedLegs.length })
       if (!isTerminalBundleV3Status(result.v3_status)) {
         setExecutionPhase('idle')
@@ -283,27 +330,13 @@ export function PortalBundleAllocationActionsPanel({
         <TransactionProcessingPage
           title="Rééquilibrage en cours"
           lead={`Rééquilibrage de ${portfolioName} — ventes puis achats vers l’allocation cible.`}
-          steps={processingSteps}
-          progressIndex={rawProgressIndex}
-          completedProgressIndex={processingSteps.length}
-          stepStates={processingStepStates}
+          steps={visibleProcessing.steps}
+          progressIndex={visibleProcessing.steps.length}
+          completedProgressIndex={visibleProcessing.steps.length}
+          stepStates={visibleProcessing.states}
           onClose={() => undefined}
           cardClassName="brw brw-proc v-card w-full"
         />
-
-        {rebalanceExecutionPhaseLabel(executionPhase) ? (
-          <p className="m-0 font-ui text-[13px] text-v-fg-muted">
-            {rebalanceExecutionPhaseLabel(executionPhase)}
-          </p>
-        ) : null}
-
-        {orderedLegs.length > 0 ? (
-          <ul className="m-0 list-none space-y-1 rounded-v-input border border-v-border bg-v-card px-3 py-2 font-ui text-[13px] text-v-fg-body">
-            {orderedLegs.map((line) => (
-              <li key={`${line.action}-${line.asset}`}>{assetLineLabel(line)}</li>
-            ))}
-          </ul>
-        ) : null}
       </section>
     )
   }

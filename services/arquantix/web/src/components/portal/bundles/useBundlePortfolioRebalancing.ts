@@ -78,6 +78,7 @@ export function useBundlePortfolioRebalancing(
   onPhaseChange?: (phase: SwapExecutionPhase) => void,
   onAssetStatus?: (asset: string, status: string) => void,
   onLegProgress?: (current: number, total: number, asset: string) => void,
+  onReconcile?: (active: boolean, asset?: string) => void,
 ) {
   const { runChainedTrades, inFlightRef } = useTradeChain(
     swapMockMode,
@@ -86,6 +87,7 @@ export function useBundlePortfolioRebalancing(
     onAssetStatus,
     onLegProgress,
     resumePortfolioRebalancing,
+    onReconcile,
   )
 
   const runPortfolioRebalancing = useCallback(

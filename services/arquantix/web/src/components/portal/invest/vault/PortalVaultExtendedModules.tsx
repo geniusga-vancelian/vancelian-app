@@ -3,6 +3,7 @@
 import { useState } from 'react'
 
 import { PortalDsImageCarousel } from '@/components/portal/invest/PortalDsImageCarousel'
+import { PortalImageMosaic } from '@/components/portal/invest/PortalImageMosaic'
 import { AppCard } from '@/components/design-system/app/AppCard'
 import { AppNewsDeck } from '@/components/design-system/app/AppNewsDeck'
 import {
@@ -30,6 +31,7 @@ import {
   readVideoItems,
 } from '@/lib/portal/vaultModulePortalFormat'
 import { getYouTubeVideoIdFromUrl } from '@/lib/youtubeEmbed'
+import { PortalVaultInlineMarkdown } from '@/lib/portal/portalVaultInlineMarkdown'
 import { cn } from '@/lib/utils'
 
 function SectionTitle({ title, action }: { title: string; action?: React.ReactNode }) {
@@ -109,8 +111,17 @@ export function PortalVaultMediaCarousel({ mod }: { mod: VaultModulePublic }) {
   return (
     <>
       {moduleTitle ? <SectionTitle title={moduleTitle} /> : null}
-      {description ? <p className="overview__body">{description}</p> : null}
-      <PortalDsImageCarousel photos={photos} variant="gallery" ariaLabel={ariaLabel} />
+      {description ? (
+        <p className="overview__body">
+          <PortalVaultInlineMarkdown text={description} />
+        </p>
+      ) : null}
+      <div className="portal-gallery portal-gallery--desktop">
+        <PortalImageMosaic items={items} />
+      </div>
+      <div className="portal-gallery portal-gallery--mobile">
+        <PortalDsImageCarousel photos={photos} variant="gallery" ariaLabel={ariaLabel} />
+      </div>
     </>
   )
 }
@@ -185,7 +196,9 @@ export function PortalVaultTransactions({ mod }: { mod: VaultModulePublic }) {
               <KalaiIcon name="exchange" size={16} />
             </div>
             <div className="row__body">
-              <h3 className="row__title">{row.label}</h3>
+              <h3 className="row__title">
+                <PortalVaultInlineMarkdown text={row.label} />
+              </h3>
               {row.date ? <p className="row__sub">{row.date}</p> : null}
             </div>
             {row.amount ? (
@@ -218,10 +231,14 @@ function PortalMarketingCard({
       {item.title || item.description ? (
         <div className="space-y-2 p-5">
           {item.title ? (
-            <h3 className="m-0 font-ui text-[18px] font-semibold leading-snug text-v-fg">{item.title}</h3>
+            <h3 className="m-0 font-ui text-[18px] font-semibold leading-snug text-v-fg">
+              <PortalVaultInlineMarkdown text={item.title} />
+            </h3>
           ) : null}
           {item.description ? (
-            <p className="m-0 font-ui text-[15px] leading-relaxed text-v-fg-body">{item.description}</p>
+            <p className="m-0 font-ui text-[15px] leading-relaxed text-v-fg-body">
+              <PortalVaultInlineMarkdown text={item.description} />
+            </p>
           ) : null}
         </div>
       ) : null}
@@ -337,9 +354,15 @@ function PortalVideoCard({ item }: { item: ReturnType<typeof readVideoItems>[num
       {item.title || item.date ? (
         <div className="space-y-1 p-5">
           {item.title ? (
-            <h3 className="m-0 font-ui text-[18px] font-semibold text-v-fg">{item.title}</h3>
+            <h3 className="m-0 font-ui text-[18px] font-semibold text-v-fg">
+              <PortalVaultInlineMarkdown text={item.title} />
+            </h3>
           ) : null}
-          {item.date ? <p className="m-0 font-ui text-[13px] text-v-fg-muted">{item.date}</p> : null}
+          {item.date ? (
+            <p className="m-0 font-ui text-[13px] text-v-fg-muted">
+              <PortalVaultInlineMarkdown text={item.date} />
+            </p>
+          ) : null}
         </div>
       ) : null}
     </AppCard>
@@ -375,7 +398,11 @@ export function PortalVaultVirtualVisualization({ mod }: { mod: VaultModulePubli
   return (
     <>
       <SectionTitle title={title} />
-      {description ? <p className="overview__body">{description}</p> : null}
+      {description ? (
+        <p className="overview__body">
+          <PortalVaultInlineMarkdown text={description} />
+        </p>
+      ) : null}
       {url ? (
         <div className="map-card">
           <div className="map map--embed">
@@ -399,9 +426,13 @@ export function PortalVaultQuote({ mod }: { mod: VaultModulePublic }) {
   if (!text) return null
   return (
     <blockquote className="overview m-0 border-l-4 border-v-terracotta pl-5">
-      <p className="overview__body m-0 italic">&ldquo;{text}&rdquo;</p>
+      <p className="overview__body m-0 italic">
+        &ldquo;<PortalVaultInlineMarkdown text={text} />&rdquo;
+      </p>
       {author ? (
-        <footer className="mt-3 font-ui text-[14px] font-semibold text-v-fg-muted">— {author}</footer>
+        <footer className="mt-3 font-ui text-[14px] font-semibold text-v-fg-muted">
+          — <PortalVaultInlineMarkdown text={author} />
+        </footer>
       ) : null}
     </blockquote>
   )
@@ -413,7 +444,9 @@ export function PortalVaultBulletList({ mod }: { mod: VaultModulePublic }) {
   return (
     <ul className="overview__body m-0 list-disc space-y-2 pl-5">
       {items.map((it, i) => (
-        <li key={i}>{it}</li>
+        <li key={i}>
+          <PortalVaultInlineMarkdown text={it} />
+        </li>
       ))}
     </ul>
   )
@@ -425,7 +458,9 @@ export function PortalVaultNumberedList({ mod }: { mod: VaultModulePublic }) {
   return (
     <ol className="overview__body m-0 list-decimal space-y-2 pl-5">
       {items.map((it, i) => (
-        <li key={i}>{it}</li>
+        <li key={i}>
+          <PortalVaultInlineMarkdown text={it} />
+        </li>
       ))}
     </ol>
   )

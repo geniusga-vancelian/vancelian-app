@@ -12,6 +12,7 @@ import {
 import {
   VSectionHeader,
 } from "@/components/design-system/vancelian/VSectionHeader";
+import { ArticleBodyMarkdown } from "@/lib/blog/articleBodyMarkdown";
 
 export type FAQSupportAside = SupportAsideContent;
 
@@ -67,7 +68,9 @@ function FAQItemComponent({
           "transition-colors duration-v-base hover:text-v-fg-body motion-reduce:transition-none",
         )}
       >
-        <span className="min-w-0 flex-1">{item.question}</span>
+        <span className="min-w-0 flex-1">
+          <ArticleBodyMarkdown text={item.question} variant="inline" />
+        </span>
         <ChevronDown
           className={cn(
             "h-5 w-5 shrink-0 text-v-fg-muted transition-transform duration-v-base motion-reduce:transition-none",
@@ -88,9 +91,9 @@ function FAQItemComponent({
               isOpen ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0",
             )}
           >
-            <p className="m-0 max-w-[640px] font-ui text-[16px] font-normal leading-[1.6] text-v-fg-body whitespace-pre-wrap">
-              {item.answer}
-            </p>
+            <div className="m-0 max-w-[640px] font-ui text-[16px] font-normal leading-[1.6] text-v-fg-body">
+              <ArticleBodyMarkdown text={item.answer} variant="body" />
+            </div>
           </div>
         </div>
       </div>

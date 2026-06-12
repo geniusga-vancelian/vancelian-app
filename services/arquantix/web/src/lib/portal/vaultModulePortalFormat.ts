@@ -32,6 +32,25 @@ export function normVaultModuleType(type: string): string {
   return type.trim().toLowerCase()
 }
 
+/** URL vidéo promo hero — module Vault `TitlePage` (`promoVideoUrls` / `promoVideoUrl` / médiathèque). */
+export function readTitlePagePromoVideoUrl(modules: VaultModulePublic[]): string | null {
+  const titlePage = modules.find((m) => m.enabled !== false && normVaultModuleType(m.type) === 'titlepage')
+  if (!titlePage) return null
+  const c = titlePage.content
+  const multi = c.promoVideoUrls
+  if (Array.isArray(multi)) {
+    for (const item of multi) {
+      const url = typeof item === 'string' ? item.trim() : ''
+      if (url) return url
+    }
+  }
+  const single = typeof c.promoVideoUrl === 'string' ? c.promoVideoUrl.trim() : ''
+  if (single) return single
+  const mediaUrl = typeof c.promoVideoMediaUrl === 'string' ? c.promoVideoMediaUrl.trim() : ''
+  if (mediaUrl) return mediaUrl
+  return null
+}
+
 export function iconForMetricLabel(label: string): string {
   const l = label.toLowerCase()
   if (/rendement total|5 ans|cumulative/i.test(l)) return 'trending-up'

@@ -15,6 +15,7 @@ export function useTradeChain(
   onAssetStatus?: (asset: string, status: string) => void,
   onLegProgress?: (current: number, total: number, asset: string) => void,
   resumeFn?: (portfolioId: string) => Promise<PortfolioRebalancingPayload>,
+  onReconcile?: (active: boolean, asset?: string) => void,
 ) {
   const inFlightRef = useRef(false)
   const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
@@ -39,10 +40,11 @@ export function useTradeChain(
         },
         onAssetStatus,
         onLegProgress,
+        onReconcile,
         resumeFn,
       })
     },
-    [entryAsset, onAssetStatus, onLegProgress, onPhaseChange, pollUntilTerminal, resumeFn, signAndSubmit],
+    [entryAsset, onAssetStatus, onLegProgress, onPhaseChange, onReconcile, pollUntilTerminal, resumeFn, signAndSubmit],
   )
 
   return { runChainedTrades, inFlightRef, signAndSubmit, pollUntilTerminal }

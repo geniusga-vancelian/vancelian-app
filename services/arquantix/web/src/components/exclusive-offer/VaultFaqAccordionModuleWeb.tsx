@@ -8,6 +8,7 @@ import {
   localizePublicInternalHref,
 } from '@/lib/i18n/publicLocalizedRouting'
 import { VAULT_MODULE_CARD_CLASS, VAULT_MODULE_LINK_CLASS } from '@/components/design-system/vaultTokens'
+import { ArticleBodyMarkdown } from '@/lib/blog/articleBodyMarkdown'
 
 type Props = {
   content: Record<string, unknown>
@@ -77,7 +78,9 @@ export function VaultFaqAccordionModuleWeb({ content }: Props) {
             </h2>
           ) : null}
           {introRaw ? (
-            <p className="font-ui text-[18px] leading-relaxed text-v-fg-body">{introRaw}</p>
+            <p className="font-ui text-[18px] leading-relaxed text-v-fg-body">
+              <ArticleBodyMarkdown text={introRaw} variant="inline" />
+            </p>
           ) : null}
         </div>
       )}

@@ -9,8 +9,10 @@ export type PortalOfferHeroView = {
   category: string | null
   /** URLs hero — carrousel CMS ou image d'en-tête. */
   photos: string[]
+  /** Vidéo promo TitlePage — prioritaire sur `photos` (lecture auto en arrière-plan). */
+  promoVideoUrl: string | null
   closingLabel: string | null
-  /** Module carrousel consommé par le hero (à exclure du corps de page). */
+  /** Premier `MediaImageCarouselModule` alimentant le hero (reste aussi rendu dans le corps). */
   heroCarouselModuleId: string | null
 }
 
@@ -151,6 +153,7 @@ export function buildPortalOfferHeroView(payload: ExclusiveOfferVaultPayload): P
     title: payload.heroTitle,
     category: payload.heroTags[0] ?? null,
     photos,
+    promoVideoUrl: payload.heroPromoVideoUrl,
     closingLabel: readClosingLabel(payload),
     heroCarouselModuleId,
   }

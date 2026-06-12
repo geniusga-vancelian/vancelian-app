@@ -22,9 +22,8 @@ import { PortalProfileWalletsSection } from '@/components/portal/profile/PortalP
 import { PortalChainSwitcher } from '@/components/portal/PortalChainSwitcher'
 import { PortalPageContainer } from '@/components/portal/PortalPageContainer'
 import { PortalReveal } from '@/components/portal/PortalReveal'
-import { PortalProfileSkeleton } from '@/components/portal/PortalRouteSkeleton'
+import { PortalProfileSkeletonBlocks } from '@/components/portal/PortalRouteSkeleton'
 import { PortalSignOutButton } from '@/components/portal/PortalSignOutButton'
-import { Container } from '@/components/ui/Container'
 import type { PortalDashboardProfile } from '@/lib/portal/dashboardTypes'
 import { PORTAL_ROUTES } from '@/lib/portal/portalRouting'
 import { usePortalCachedScreen } from '@/lib/portal/usePortalCachedScreen'
@@ -66,6 +65,15 @@ function CurrencyChip({
 
 function resolveEmail(profile: PortalDashboardProfile | null): string {
   return profile?.email?.trim() || 'Gérer mon profil'
+}
+
+/** Toujours visible — permet de forcer la déconnexion même si la session API est incohérente. */
+function ProfileSignOutSection() {
+  return (
+    <section className="flex flex-col gap-3 pt-2">
+      <PortalSignOutButton variant="profile" />
+    </section>
+  )
 }
 
 function resolveInitials(profile: PortalDashboardProfile | null): string {
@@ -124,28 +132,41 @@ export function PortalProfileScreen() {
     }
   }
 
-  if (loading && !data) {
-    return <PortalProfileSkeleton />
-  }
-
-  if (error && !data) {
-    return (
-      <Container className="flex min-h-[50vh] items-center justify-center py-10">
-        <p className="m-0 font-ui text-[15px] text-v-error">{error}</p>
-      </Container>
-    )
-  }
+  const showInitialSkeleton = loading && !data
+  const showProfileSections = !showInitialSkeleton && data != null
 
   return (
     <PortalPageContainer>
       <div className="mx-auto flex max-w-2xl flex-col gap-8">
-        <PortalReveal index={0}>
-          <header className="flex flex-col gap-1">
-            <AppEyebrow>Account</AppEyebrow>
-            <h1 className="m-0 font-ui text-[28px] font-semibold tracking-v-tight text-v-fg">Profil</h1>
-          </header>
-        </PortalReveal>
+        {showInitialSkeleton ? (
+          <div aria-busy="true" aria-label="Chargement du profil">
+            <PortalProfileSkeletonBlocks />
+          </div>
+        ) : null}
 
+        {!showInitialSkeleton ? (
+          <PortalReveal index={0}>
+            <header className="flex flex-col gap-1">
+              <AppEyebrow>Account</AppEyebrow>
+              <h1 className="m-0 font-ui text-[28px] font-semibold tracking-v-tight text-v-fg">Profil</h1>
+            </header>
+          </PortalReveal>
+        ) : null}
+
+        {!showInitialSkeleton && error ? (
+          <div
+            className="rounded-v-card border border-v-error/25 bg-v-error/5 px-4 py-3"
+            role="alert"
+          >
+            <p className="m-0 font-ui text-[15px] leading-relaxed text-v-error">{error}</p>
+            <p className="mb-0 mt-2 font-ui text-[14px] leading-relaxed text-v-fg-muted">
+              Utilisez « Sign out » ci-dessous pour réinitialiser votre session.
+            </p>
+          </div>
+        ) : null}
+
+        {showProfileSections ? (
+          <>
         <PortalReveal index={1}>
           <PortalSettingsCard>
             <PortalSettingsRow
@@ -295,10 +316,11 @@ export function PortalProfileScreen() {
           </section>
         </PortalReveal>
 
-        <PortalReveal index={9}>
-          <section className="flex flex-col gap-3 pt-2">
-            <PortalSignOutButton variant="profile" />
-          </section>
+          </>
+        ) : null}
+
+        <PortalReveal index={showProfileSections ? 9 : 1}>
+          <ProfileSignOutSection />
         </PortalReveal>
       </div>
     </PortalPageContainer>

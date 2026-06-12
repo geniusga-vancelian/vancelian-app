@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 
 import { PortalPerformanceChart } from '@/components/portal/dashboard/PortalPerformanceChart'
 import { PortalOfferAdvisorCard } from '@/components/portal/invest/PortalOfferDetailSections'
+import {
+  PortalVaultFaqBodyMarkdown,
+  PortalVaultInlineMarkdown,
+} from '@/lib/portal/portalVaultInlineMarkdown'
 import { KalaiIcon } from '@/components/ui/KalaiIcon'
 import {
   formatPerfPctLabel,
@@ -423,14 +427,16 @@ function FaqRow({
         tabIndex={0}
       >
         <div className="faq__head">
-          <h3 className="faq__title">{item.q}</h3>
+          <h3 className="faq__title">
+            <PortalVaultInlineMarkdown text={item.q} />
+          </h3>
           <span className="faq__toggle" aria-hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M5 12h14" />
             </svg>
           </span>
         </div>
-        <p className="faq__body">{item.a}</p>
+        <PortalVaultFaqBodyMarkdown text={item.a} />
       </div>
     )
   }
@@ -442,7 +448,9 @@ function FaqRow({
       role="button"
       tabIndex={0}
     >
-      <h3 className="faq__title">{item.q}</h3>
+      <h3 className="faq__title">
+        <PortalVaultInlineMarkdown text={item.q} />
+      </h3>
       <span className="faq__toggle" aria-hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 5v14M5 12h14" />

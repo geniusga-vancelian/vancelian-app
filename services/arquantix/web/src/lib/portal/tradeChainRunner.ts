@@ -123,6 +123,8 @@ export type RunSequentialTradesOptions = {
   runLeg?: RunLegFn
   onAssetStatus?: (asset: string, status: string) => void
   onLegProgress?: (current: number, total: number, asset: string) => void
+  /** Fenêtre de réconciliation comptable serveur (après un leg réussi). */
+  onReconcile?: (active: boolean, asset?: string) => void
   resumeFn?: (portfolioId: string) => Promise<PortfolioRebalancingPayload>
 }
 
@@ -216,7 +218,9 @@ export async function runSequentialTrades(
         break
       }
       resumeRounds += 1
+      options.onReconcile?.(true)
       const resumed = await resumeWithRetry(options.resumeFn, result.portfolio_id, result)
+      options.onReconcile?.(false)
       resumeOutcomes.push(resumed.outcome)
       if (resumed.outcome.status === 'failed') {
         lastResumeError = resumed.outcome.errorMessage ?? null
@@ -272,7 +276,9 @@ export async function runSequentialTrades(
     }
 
     resumeRounds += 1
+    options.onReconcile?.(true, leg.asset)
     const resumed = await resumeWithRetry(options.resumeFn, result.portfolio_id, result)
+    options.onReconcile?.(false, leg.asset)
     resumeOutcomes.push(resumed.outcome)
 
     if (resumed.outcome.status === 'failed') {

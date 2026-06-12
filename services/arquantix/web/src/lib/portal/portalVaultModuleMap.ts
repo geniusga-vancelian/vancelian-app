@@ -21,7 +21,10 @@ export const PORTAL_VAULT_MODULE_MAP = {
   HEADING: { portal: 'PortalVaultHeading', ds: 'ofd-section__title' },
   ContentBasDePageSansModuleBlanc: { portal: 'PortalVaultLegalFooter', ds: 'ofd-narrative__prose' },
   BlogALaUne: { portal: 'PortalVaultBlogALaUne', ds: 'AppNewsDeck + AppActuCard/Flash' },
-  MediaImageCarouselModule: { portal: 'PortalVaultMediaCarousel', ds: 'gallery rounded 16px' },
+  MediaImageCarouselModule: {
+    portal: 'PortalVaultMediaCarousel (+ photos hero si 1er carrousel)',
+    ds: 'gallery rounded 16px',
+  },
   AllocationModule: { portal: 'PortalVaultAllocation', ds: 'AppPortfolioAllocationDonut' },
   PerformanceChart: { portal: 'PortalVaultPerformanceChart', ds: 'cfd-perf + PortalPerformanceChart' },
   TransactionLatest10Module: { portal: 'PortalVaultTransactions', ds: 'AppDataList + AppDataRow' },

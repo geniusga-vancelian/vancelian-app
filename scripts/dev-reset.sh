@@ -70,6 +70,9 @@ done
 
 NEXT_PID_FILE="${TMPDIR:-/tmp}/arquantix-next-dev.pid"
 NEXT_LOG_FILE="${TMPDIR:-/tmp}/arquantix-next-dev.log"
+API_PID_FILE="${TMPDIR:-/tmp}/arquantix-api-dev.pid"
+API_LOG_FILE="${TMPDIR:-/tmp}/arquantix-api-dev.log"
+API_DAEMON_PID_FILE="${TMPDIR:-/tmp}/arquantix-api-dev-daemon.pid"
 
 log() { printf '[dev] %s\n' "$*"; }
 
@@ -234,6 +237,50 @@ stop_next_from_pidfile() {
   fi
 }
 
+stop_local_api_from_pidfile() {
+  if [ -f "$API_DAEMON_PID_FILE" ]; then
+    local dpid
+    dpid="$(cat "$API_DAEMON_PID_FILE" 2>/dev/null || true)"
+    if [ -n "${dpid:-}" ] && kill -0 "$dpid" 2>/dev/null; then
+      kill "$dpid" 2>/dev/null || true
+      sleep 1
+      kill -9 "$dpid" 2>/dev/null || true
+      log "Ancien superviseur API (PID $dpid) arrêté"
+    fi
+    rm -f "$API_DAEMON_PID_FILE"
+  fi
+  if [ -f "$API_PID_FILE" ]; then
+    local pid
+    pid="$(cat "$API_PID_FILE" 2>/dev/null || true)"
+    if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      sleep 1
+      kill -9 "$pid" 2>/dev/null || true
+      log "Ancienne API locale (PID $pid) arrêtée"
+    fi
+    rm -f "$API_PID_FILE"
+  fi
+  pkill -f "uvicorn main:app.*--port ${DEV_API_PORT:-8000}" 2>/dev/null || true
+}
+
+start_local_api_background() {
+  stop_local_api_from_pidfile
+  kill_port "${DEV_API_PORT}"
+  log "Démarrage API locale (daemon uvicorn :${DEV_API_PORT}, PRIVY stub via api/.env.local)…"
+  API_PORT="${DEV_API_PORT}" bash "$REPO_ROOT/scripts/arquantix-api-dev-daemon.sh" --bg
+  sleep 4
+  if [ -f "$API_PID_FILE" ]; then
+    local apid
+    apid="$(cat "$API_PID_FILE" 2>/dev/null || true)"
+    if [ -n "${apid:-}" ] && kill -0 "$apid" 2>/dev/null; then
+      log "API locale PID $apid — log : $API_LOG_FILE"
+      return 0
+    fi
+  fi
+  msg_error "API locale n'a pas démarré — voir : tail -40 $API_LOG_FILE"
+  return 1
+}
+
 start_next_background() {
   if [ "$NO_NEXT" = true ]; then
     log "Next ignoré (--no-next). Lance manuellement : cd services/arquantix/web && npm run dev"
@@ -272,6 +319,7 @@ if [ "$STOP_ONLY" = true ]; then
     msg_info "Docker indisponible — arrêt compose / conteneurs ignorés (ports et Next nettoyés quand même)."
   fi
   stop_next_from_pidfile
+  stop_local_api_from_pidfile
   free_arquantix_host_ports
   log "Terminé (stop). Données Postgres/Redis dans les volumes Docker inchangées."
   exit 0
@@ -288,6 +336,7 @@ legacy_compose_teardown
 (cd "$REPO_ROOT" && "${COMPOSE[@]}" down --remove-orphans) || true
 
 stop_next_from_pidfile
+stop_local_api_from_pidfile
 free_arquantix_host_ports
 
 log "Suppression des conteneurs orphelins (labels projet)…"
@@ -301,36 +350,60 @@ if [ "$WITH_BUILD" = true ]; then
   log "Build des images activé (--build)…"
 fi
 _web_scale=0
+_api_scale=0
 if [ "$NO_NEXT" = true ]; then
   _web_scale=1
+  _api_scale=1
   log "Démarrage Docker : Postgres, Redis, API, arquantix-web (Next dans le conteneur)…"
 else
-  log "Démarrage Docker : Postgres, Redis, API (arquantix-web désactivé — Next = npm sur l'hôte)…"
+  log "Démarrage Docker : Postgres, Redis (API + Next sur l'hôte — mock Privy OTP / hot-reload)…"
 fi
 UP_ARGS+=(--scale "arquantix-web=${_web_scale}")
+UP_ARGS+=(--scale "arquantix-api=${_api_scale}")
 (cd "$REPO_ROOT" && "${COMPOSE[@]}" "${UP_ARGS[@]}")
 
 msg_wait "Init conteneurs + binding ports (souvent 10–30 s après démarrage à froid de Docker Desktop)…"
 sleep 15
 
-msg_check "API health..."
 ok=false
-i=0
-while [ "$i" -lt 120 ]; do
-  code="$(curl_http_code "http://127.0.0.1:${DEV_API_PORT}/health")"
-  if [ "$code" = "200" ]; then
-    ok=true
-    break
-  fi
-  sleep 1
-  i=$((i + 1))
-done
+if [ "$_api_scale" = "0" ]; then
+  log "API Docker désactivée — lancement uvicorn local (évite crash-loop Alembic image obsolète)…"
+  start_local_api_background || true
+  msg_check "API health (uvicorn local)…"
+  i=0
+  while [ "$i" -lt 60 ]; do
+    code="$(curl_http_code "http://127.0.0.1:${DEV_API_PORT}/health")"
+    if [ "$code" = "200" ]; then
+      ok=true
+      break
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+else
+  msg_check "API health (Docker)…"
+  i=0
+  while [ "$i" -lt 120 ]; do
+    code="$(curl_http_code "http://127.0.0.1:${DEV_API_PORT}/health")"
+    if [ "$code" = "200" ]; then
+      ok=true
+      break
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+fi
+
 if [ "$ok" = true ]; then
   msg_ok "API is healthy"
 else
   msg_error "API not responding"
-  log "Pas de HTTP 200 sur /health après ~120 s — voir : docker compose --project-name $COMPOSE_PROJECT ... logs arquantix-api --tail 80"
-  msg_info "Souvent : Docker Desktop venait de démarrer ; réessaie dans 1 min ou relance ce script."
+  if [ "$_api_scale" = "1" ]; then
+    log "Pas de HTTP 200 sur /health après ~120 s — voir : docker compose --project-name $COMPOSE_PROJECT ... logs arquantix-api --tail 80"
+    msg_info "Souvent : image Docker API obsolète (Alembic). Relance sans --no-next pour API locale, ou make dev-restart-build."
+  else
+    log "API locale KO — voir : tail -80 $API_LOG_FILE"
+  fi
 fi
 
 log "Postgres (arquantix-db) : volume conservé ; port hôte = DB_PORT dans .env.arquantix (souvent 5443)."
