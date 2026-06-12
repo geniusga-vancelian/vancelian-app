@@ -84,8 +84,13 @@ def _sync_legs_from_swaps_on_resume(trigger: V3Trigger) -> bool:
 
 
 def _skip_plan_drift_terminalize(trigger: str) -> bool:
-    """Après funding dépôt, le plan_hash drift est attendu — ne pas clôturer."""
-    return trigger == "deposit"
+    """Reprise plan figé (pas de clôture sur drift) : dépôt + rééquilibrage serveur.
+
+    Après funding dépôt, le drift est attendu. Côté ``server``, chaque poll worker
+    recalcule le drift (les soldes bougent après chaque leg réglé) : on reprend le
+    plan figé du cycle RUNNING plutôt que de le terminaliser/refragmenter.
+    """
+    return trigger in ("deposit", "server")
 
 
 def _plan_leg_assets(plan_legs: list[dict[str, Any]]) -> set[str]:

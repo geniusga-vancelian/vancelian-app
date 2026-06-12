@@ -122,6 +122,45 @@ def test_allowlist_fail_closed_when_flag_off_or_empty(monkeypatch):
     assert lifi_rebalance_worker_enabled_for_person(object(), None) is False
 
 
+def test_deposit_rebalance_trigger_selection(monkeypatch):
+    """bundle.v3_rebalance_requested : trigger 'server' si allowlisté, sinon 'deposit'."""
+    from services.portfolio_engine.bundles.bundle_v3_deposit_flow.deposit_service import (
+        _resolve_deposit_rebalance_trigger,
+    )
+
+    # Pas de person → deposit (fail-closed).
+    assert _resolve_deposit_rebalance_trigger(object(), None) == "deposit"
+
+    # person_id invalide → deposit (jamais d'exception).
+    assert _resolve_deposit_rebalance_trigger(object(), "not-a-uuid") == "deposit"
+
+    # Non allowlisté → deposit.
+    monkeypatch.setattr(
+        "services.lifi.orchestrator_allowlist.lifi_rebalance_worker_enabled_for_person",
+        lambda _db, _pid: False,
+    )
+    assert _resolve_deposit_rebalance_trigger(object(), str(uuid.uuid4())) == "deposit"
+
+    # Allowlisté → server.
+    monkeypatch.setattr(
+        "services.lifi.orchestrator_allowlist.lifi_rebalance_worker_enabled_for_person",
+        lambda _db, _pid: True,
+    )
+    assert _resolve_deposit_rebalance_trigger(object(), str(uuid.uuid4())) == "server"
+
+
+def test_server_trigger_skips_plan_drift_terminalize():
+    """server reprend le plan figé (comme deposit) plutôt que terminaliser sur drift."""
+    from services.portfolio_engine.bundles.rebalance_executor import (
+        _skip_plan_drift_terminalize,
+    )
+
+    assert _skip_plan_drift_terminalize("server") is True
+    assert _skip_plan_drift_terminalize("deposit") is True
+    assert _skip_plan_drift_terminalize("manual") is False
+    assert _skip_plan_drift_terminalize("cron") is False
+
+
 def test_skips_when_not_required(monkeypatch):
     monkeypatch.setattr(srw, "_resolve_person_id", lambda _db, _cid: uuid.uuid4())
     monkeypatch.setattr(

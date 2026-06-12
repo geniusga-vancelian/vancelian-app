@@ -136,15 +136,23 @@ plan_next_rebalance_legs(db, *, person_id, portfolio_id, batch_id) -> RebalanceP
 
 ---
 
-## 8. Plan d'incréments (flags OFF par défaut)
+## 8. Plan d'incréments — RÉALISÉ (flags OFF par défaut)
 
-| # | Incrément | Tests |
+> **MISE À JOUR finale.** Le plan a été simplifié à l'implémentation grâce à la réutilisation
+> de l'executor : pas de nouveau planner, pas de nouveau lock, pas de nouvel event, pas de
+> nouveau câblage de tick. Le lock batch = guard PE + lock global batch **déjà** acquis par
+> `rebalancing_portfolio` / `request_v3_bundle_deposit`. La file = `bundle.v3_rebalance_requested`
+> **déjà** enregistrée au tick DeFi (étape 2e). La re-planification = reprise du plan figé
+> (`_skip_plan_drift_terminalize` étendu à `server`).
+
+| # | Incrément réalisé | Tests |
 | --- | --- | --- |
-| R1 | Primitive planner serveur réutilisable (`plan_next_rebalance_legs`) extraite de l'existant | unit : NAV → deltas → legs ordonnés SELL/BUY |
-| R2 | Lock batch parent (acquire/release scopé portfolio+batch) | unit : acquisition, release sur terminal, blocage swap concurrent |
-| R3 | Event `intent.rebalance_step` + handler driver (1 leg + re-enqueue) | unit : 1 leg/passage, re-planification, idempotence |
-| R4 | Enregistrement dans le tick DeFi derrière `LIFI_REBALANCE_WORKER_ENABLED` (OFF) | e2e : chaîne SELL→BUY complète en mock |
-| R5 | Rollout allowlist + runbook + observabilité (legs[], transitions) | e2e partiel + échec leg → PARTIAL |
+| R1 | Trigger `server` dans `BundleRebalanceExecutor` : signature serveur par leg (`_sign_leg_server_side` → `execute_prepared_swap_server_side`) | ✅ 10 unit (mapping phases, fallback) |
+| R2 | Driver portfolio-scoped `run_server_side_rebalance_for_portfolio` (gated, start-or-resume) + flag `LIFI_REBALANCE_WORKER_ENABLED` + allowlist fail-closed | ✅ 9 unit (gating, dispatch) |
+| R3 | Bascule trigger `server` dans le worker dépôt (`bundle.v3_rebalance_requested`) pour personnes allowlistées + skip plan-drift `server` + runbook | ✅ unit trigger selection |
+
+**Aucun nouveau câblage de tick** : le worker dépôt V3 (déjà au tick) dispatche le rééquilibrage
+serveur. Producteur de rééquilibrage **standalone** (hors dépôt) via la même file = follow-up.
 
 ---
 
@@ -157,6 +165,13 @@ plan_next_rebalance_legs(db, *, person_id, portfolio_id, batch_id) -> RebalanceP
 
 ## 10. Hors scope (ce design ne fait PAS)
 
-- Pas de changement du flux client existant (`runSequentialTrades` reste le chemin par défaut tant que le flag serveur est OFF).
-- Pas de nouvelle table de file (réutilise `transaction_outbox`).
-- Pas de signature non-déléguée côté serveur (fallback client préservé).
+- Pas de changement du flux client existant (signature client reste le défaut tant que le flag serveur est OFF / personne hors allowlist).
+- Pas de nouvelle table de file ni nouvel event (réutilise `transaction_outbox` + `bundle.v3_rebalance_requested`).
+- Pas de signature non-déléguée côté serveur (fallback préservé).
+- Producteur de rééquilibrage **standalone** (déclenché hors dépôt, ex. drift sweep ou bouton dédié) : follow-up — il suffira d'enfiler `bundle.v3_rebalance_requested` ailleurs, le reste de la chaîne est déjà serveur.
+
+---
+
+## 11. Rollout
+
+Voir [CONTROLLED_PROD_ROLLOUT_SERVER_SIDE_REBALANCE.md](CONTROLLED_PROD_ROLLOUT_SERVER_SIDE_REBALANCE.md).

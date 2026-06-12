@@ -387,6 +387,26 @@ def request_v3_bundle_deposit(
     return response
 
 
+def _resolve_deposit_rebalance_trigger(db: Session, person_raw: Any) -> str:
+    """``server`` si la personne est éligible au worker de rééquilibrage, sinon ``deposit``.
+
+    Fail-closed : flag OFF / allowlist vide / personne inconnue → ``deposit`` (signature
+    client historique). Aucune exception ne remonte (robustesse worker).
+    """
+    if not person_raw:
+        return "deposit"
+    from services.lifi.orchestrator_allowlist import (
+        lifi_rebalance_worker_enabled_for_person,
+    )
+
+    try:
+        if lifi_rebalance_worker_enabled_for_person(db, UUID(str(person_raw))):
+            return "server"
+    except (ValueError, TypeError):
+        return "deposit"
+    return "deposit"
+
+
 def process_v3_deposit_rebalance_outbox_event(
     db: Session,
     *,
@@ -402,13 +422,18 @@ def process_v3_deposit_rebalance_outbox_event(
     snap = compute_bundle_drift_snapshot(db, client_id=client_id, portfolio_id=portfolio_id)
     plan = plan_bundle_rebalance_from_drift(snap)
 
+    # Signature serveur (Privy déléguée, sans navigateur) si la personne est allowlistée :
+    # le rééquilibrage s'exécute entièrement côté serveur, leg par leg. Sinon trigger
+    # ``deposit`` historique (signature client) — défaut fail-closed, zéro régression.
+    trigger = _resolve_deposit_rebalance_trigger(db, payload.get("person_id"))
+
     try:
         result = execute_v3_bundle_rebalance(
             db,
             client_id=client_id,
             portfolio_id=portfolio_id,
             drift_rebalance_plan=plan,
-            trigger="deposit",
+            trigger=trigger,  # type: ignore[arg-type]
         )
     except BundleRebalanceExecutorError as exc:
         outbox.status = OutboxEventStatus.DEAD_LETTER.value
