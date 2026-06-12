@@ -22,6 +22,40 @@ def test_build_approve_calldata_shape():
     assert ("ab" * 20).rjust(64, "0") in data
 
 
+# ------------------------------------------------- résolution adresse embedded
+
+
+def test_evm_chain_types_includes_evm():
+    # Garde-fou : le wallet embedded Privy est stocké avec chain_type='evm' en base
+    # (régression prod : un filtre 'ethereum' renvoyait None -> fallback signature client).
+    assert "evm" in se._EVM_CHAIN_TYPES
+
+
+def test_resolve_embedded_prefers_primary():
+    class _Query:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def filter(self, *a, **k):
+            return self
+
+        def all(self):
+            return self._rows
+
+    class _DB:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def query(self, *a, **k):
+            return _Query(self._rows)
+
+    rows = [
+        SimpleNamespace(address="0xSECONDARY", is_primary=False),
+        SimpleNamespace(address="0xPRIMARY", is_primary=True),
+    ]
+    assert se.resolve_privy_embedded_evm_address(_DB(rows), person_id=PERSON_ID) == "0xPRIMARY"
+
+
 # --------------------------------------------------------------- fixtures fakes
 
 

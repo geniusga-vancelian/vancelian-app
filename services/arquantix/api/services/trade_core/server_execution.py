@@ -80,12 +80,19 @@ def resolve_privy_wallet_id(db: Session, *, person_id: UUID, wallet_address: str
     return None
 
 
+# chain_type EVM tels que stockés en base (selon environnement/historique).
+_EVM_CHAIN_TYPES = ("evm", "ethereum")
+
+
 def resolve_privy_embedded_evm_address(db: Session, *, person_id: UUID) -> str | None:
-    """Adresse du wallet embedded EVM Privy (``chain_type='ethereum'``) de la personne.
+    """Adresse du wallet embedded EVM Privy de la personne.
 
     Permet de vérifier la délégation **avant** ``prepare_execute`` (donc sans verrouiller
     le wallet ni préparer la tx) : la source de vérité reste l'API Privy côté serveur,
     pas un flag client potentiellement périmé.
+
+    NB : en base ``person_crypto_wallets.chain_type`` vaut ``'evm'`` pour le wallet
+    embedded Privy (et non ``'ethereum'`` qui est la valeur côté payload API Privy).
     """
     from database import PersonCryptoWallet
 
@@ -94,7 +101,7 @@ def resolve_privy_embedded_evm_address(db: Session, *, person_id: UUID) -> str |
         .filter(
             PersonCryptoWallet.person_id == person_id,
             PersonCryptoWallet.provider == "privy",
-            PersonCryptoWallet.chain_type == "ethereum",
+            PersonCryptoWallet.chain_type.in_(_EVM_CHAIN_TYPES),
         )
         .all()
     )
@@ -191,9 +198,10 @@ def execute_prepared_swap_server_side(
         )
 
     def _fallback(reason: str) -> ServerSwapExecutionResult:
-        logger.info(
-            "server_swap.fallback_awaiting_signature",
-            extra={"swap_id": str(swap_id), "reason": reason},
+        logger.warning(
+            "server_swap.fallback_awaiting_signature swap_id=%s reason=%s",
+            str(swap_id),
+            reason,
         )
         return ServerSwapExecutionResult(
             "awaiting_signature", swap_id, signed_server_side=False, fallback_reason=reason,
