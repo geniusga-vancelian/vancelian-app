@@ -166,6 +166,17 @@ class SwapStatusResponse(BaseModel):
     error_message: Optional[str] = None
 
 
+class SwapServerExecuteResponse(BaseModel):
+    """Résultat d'une exécution serveur (signature déléguée Privy, sans navigateur)."""
+
+    swap_id: UUID
+    phase: str  # confirmed | submitted | awaiting_signature | failed | expired
+    signed_server_side: bool
+    settled: bool = False
+    tx_hash: Optional[str] = None
+    fallback_reason: Optional[str] = None
+
+
 class SwapSupportedAssetsResponse(BaseModel):
     assets: list[dict[str, Any]]
     source_assets: list[dict[str, Any]]

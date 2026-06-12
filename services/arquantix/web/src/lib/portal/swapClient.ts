@@ -109,6 +109,15 @@ export type SwapStatusPayload = {
   error_message?: string | null
 }
 
+export type SwapServerExecutePayload = {
+  swap_id: string
+  phase: string
+  signed_server_side: boolean
+  settled: boolean
+  tx_hash?: string | null
+  fallback_reason?: string | null
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
   const data = (await res.json()) as T & {
     detail?: { message?: string; code?: string } | SwapPriceChangedPayload
@@ -260,6 +269,18 @@ export async function submitSwapApproval(
       tx_hash: approvalTxHash,
       ...(signingWalletAddress ? { signing_wallet_address: signingWalletAddress } : {}),
     }),
+  })
+  return parseJson(res)
+}
+
+/** Signature serveur d'un swap déjà confirmé (wallet délégué). Timeout généreux (signature Privy + submit). */
+export const SWAP_SERVER_EXECUTE_TIMEOUT_MS = 60_000
+
+export async function serverExecuteSwap(swapId: string): Promise<SwapServerExecutePayload> {
+  const res = await fetch(`/api/portal/swaps/${swapId}/server-execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(SWAP_SERVER_EXECUTE_TIMEOUT_MS),
   })
   return parseJson(res)
 }

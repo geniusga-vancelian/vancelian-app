@@ -37,6 +37,7 @@ from services.lifi.schemas import (
     SwapPriceChangedDetail,
     SwapQuoteRequest,
     SwapQuoteResponse,
+    SwapServerExecuteResponse,
     SwapStatusResponse,
     SwapSubmitRequest,
     SwapSupportedAssetsResponse,
@@ -336,6 +337,42 @@ def post_swap_submit(
     except ValueError as exc:
         raise _validation_error(
             SwapValidationError("swap.submit_failed", str(exc)),
+        ) from exc
+
+
+@swaps_router.post("/{swap_id}/server-execute", response_model=SwapServerExecuteResponse)
+def post_swap_server_execute(
+    swap_id: UUID,
+    db=Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(mobile_bearer),
+):
+    """Exécution serveur d'un swap déjà quoté (signature déléguée Privy, sans navigateur).
+
+    Garde-fou : si le wallet n'est pas délégué ou la signature serveur n'est pas
+    configurée, on renvoie ``signed_server_side=False`` + ``fallback_reason`` pour
+    que le client retombe sur la signature navigateur (zéro régression).
+    """
+    _ensure_swaps_enabled()
+    person_id = _resolve_person_id(credentials)
+    try:
+        from services.trade_core.server_execution import execute_prepared_swap_server_side
+
+        result = execute_prepared_swap_server_side(
+            db, person_id=person_id, swap_id=swap_id,
+        )
+        return SwapServerExecuteResponse(
+            swap_id=result.swap_id,
+            phase=result.phase,
+            signed_server_side=result.signed_server_side,
+            settled=result.settled,
+            tx_hash=result.tx_hash,
+            fallback_reason=result.fallback_reason,
+        )
+    except SwapValidationError as exc:
+        raise _validation_error(exc) from exc
+    except ValueError as exc:
+        raise _validation_error(
+            SwapValidationError("swap.server_execute_failed", str(exc)),
         ) from exc
 
 

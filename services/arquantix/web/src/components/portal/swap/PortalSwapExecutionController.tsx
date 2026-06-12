@@ -30,7 +30,8 @@ import {
   executionPhaseToFailurePhase,
   SwapExecutionError,
 } from '@/lib/portal/swapFailure'
-import { abandonSwap, recordSwapFailure, type SwapQuotePayload } from '@/lib/portal/swapClient'
+import { abandonSwap, recordSwapFailure, serverExecuteSwap, type SwapQuotePayload } from '@/lib/portal/swapClient'
+import { usePortalWalletDelegation } from '@/lib/portal/usePortalWalletDelegation'
 import {
   SwapPriceChangedError,
   buildSwapReviewSnapshot,
@@ -74,8 +75,9 @@ export function PortalSwapExecutionController({
   onPriceChanged,
 }: Props) {
   const router = useRouter()
-  const { chain, walletScope, walletScopeId } = usePortalExecutionScope()
+  const { chain, walletScope, walletScopeId, isExternalWallet } = usePortalExecutionScope()
   const { privyReady } = usePortalAuthPrivy()
+  const { isDelegated } = usePortalWalletDelegation()
 
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [failureCopy, setFailureCopy] = useState(() => resolveSwapFailureCopy(null))
@@ -115,7 +117,18 @@ export function PortalSwapExecutionController({
         throw new Error('Payload transaction manquant')
       }
 
-      await signAndSubmit(exec)
+      // Wallet délégué (Privy embedded) : signature + exécution côté serveur, sans
+      // signature navigateur. Sinon (non délégué, externe, mock) : flux client habituel.
+      const canServerSign = isDelegated && !swapMockMode && !isExternalWallet
+      let serverSigned = false
+      if (canServerSign) {
+        setExecutionPhase('signing')
+        const serverResult = await serverExecuteSwap(quote.swap_id)
+        serverSigned = serverResult.signed_server_side
+      }
+      if (!serverSigned) {
+        await signAndSubmit(exec)
+      }
 
       setExecutionPhase('bridging')
       const status = await pollUntilTerminal(quote.swap_id)
@@ -155,7 +168,7 @@ export function PortalSwapExecutionController({
       }
       onStepChange('result')
     }
-  }, [executionPhase, onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, signAndSubmit])
+  }, [executionPhase, isDelegated, isExternalWallet, onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, signAndSubmit, swapMockMode])
 
   useEffect(() => {
     if (step !== 'processing' || executionStartedRef.current) return
