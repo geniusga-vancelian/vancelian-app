@@ -397,7 +397,7 @@ function renderPortalArticleBlock(
                       rel="noopener noreferrer"
                       download
                     >
-                      <KalaiIcon name="download" size={18} />
+                      <KalaiIcon name="download" size={16} />
                     </a>
                   </div>
                 </div>
@@ -625,7 +625,7 @@ export function PortalArticleDocumentRow({ url, title }: { url: string; title: s
             target="_blank"
             rel="noopener noreferrer"
           >
-            <KalaiIcon name="download" size={18} />
+            <KalaiIcon name="download" size={16} />
           </a>
         </div>
       </div>
