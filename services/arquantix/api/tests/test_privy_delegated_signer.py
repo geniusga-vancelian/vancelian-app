@@ -76,6 +76,96 @@ def test_authorization_signature_input_shape():
     assert sig_input["body"] == body
 
 
+def test_authorization_signature_input_includes_idempotency_key():
+    """PR 0.2 — la clé d'idempotence est intégrée au payload signé quand elle est fournie."""
+    rpc_url = build_wallet_rpc_url("wallet-123")
+    body = build_eth_send_transaction_rpc_body(chain_id=8453, to="0x" + "0" * 40, data="0x")
+    sig_input = build_authorization_signature_input(
+        app_id="app-xyz", rpc_url=rpc_url, rpc_body=body, idempotency_key="vance-swap:abc"
+    )
+    assert sig_input["headers"] == {
+        "privy-app-id": "app-xyz",
+        "privy-idempotency-key": "vance-swap:abc",
+    }
+
+
+def test_authorization_signature_input_omits_blank_idempotency_key():
+    """Clé vide/espaces -> absente du payload signé (parité avec un header non envoyé)."""
+    rpc_url = build_wallet_rpc_url("wallet-123")
+    body = build_eth_send_transaction_rpc_body(chain_id=8453, to="0x" + "0" * 40, data="0x")
+    sig_input = build_authorization_signature_input(
+        app_id="app-xyz", rpc_url=rpc_url, rpc_body=body, idempotency_key="   "
+    )
+    assert sig_input["headers"] == {"privy-app-id": "app-xyz"}
+
+
+def test_signed_header_matches_sent_header_parity(monkeypatch):
+    """PR 0.2 — RÉGRESSION : le header `privy-idempotency-key` envoyé == celui signé.
+
+    Reproduit le défaut HTTP 401 `zero_correct_authorization_signatures` : si la clé
+    d'idempotence transmise n'est pas dans le payload signé, Privy rejette la signature.
+    """
+    captured: dict[str, dict] = {}
+
+    monkeypatch.setattr(ds, "privy_delegated_signing_configured", lambda: True)
+    monkeypatch.setattr(ds, "_app_id", lambda: "app-xyz")
+    monkeypatch.setattr(
+        ds, "_basic_auth_headers", lambda: {"privy-app-id": "app-xyz", "Authorization": "Basic x"}
+    )
+
+    def _fake_sign(signature_input):
+        captured["signed_headers"] = signature_input["headers"]
+        return "sig=="
+
+    def _fake_post(url, headers, body, *, timeout):
+        captured["sent_headers"] = headers
+        return {"data": {"hash": "0x" + "ab" * 32}}
+
+    monkeypatch.setattr(ds, "generate_authorization_signature", _fake_sign)
+    monkeypatch.setattr(ds, "_http_post_json", _fake_post)
+
+    result = ds.send_delegated_sponsored_transaction(
+        privy_wallet_id="wallet-123",
+        chain_id=8453,
+        to="0x" + "11" * 20,
+        data="0xdeadbeef",
+        idempotency_key="vance-swap:19a00b7f",
+    )
+
+    assert result["hash"].startswith("0x")
+    sent = captured["sent_headers"].get("privy-idempotency-key")
+    signed = captured["signed_headers"].get("privy-idempotency-key")
+    assert sent == "vance-swap:19a00b7f"
+    assert signed == sent  # parité indispensable : sinon HTTP 401 Privy
+
+
+def test_no_idempotency_header_neither_sent_nor_signed(monkeypatch):
+    """Sans clé d'idempotence : ni dans la requête, ni dans le payload signé (parité)."""
+    captured: dict[str, dict] = {}
+
+    monkeypatch.setattr(ds, "privy_delegated_signing_configured", lambda: True)
+    monkeypatch.setattr(ds, "_app_id", lambda: "app-xyz")
+    monkeypatch.setattr(ds, "_basic_auth_headers", lambda: {"privy-app-id": "app-xyz"})
+    monkeypatch.setattr(
+        ds,
+        "generate_authorization_signature",
+        lambda si: captured.__setitem__("signed_headers", si["headers"]) or "sig==",
+    )
+    monkeypatch.setattr(
+        ds,
+        "_http_post_json",
+        lambda url, headers, body, *, timeout: captured.__setitem__("sent_headers", headers)
+        or {"data": {"hash": "0x" + "cd" * 32}},
+    )
+
+    ds.send_delegated_sponsored_transaction(
+        privy_wallet_id="wallet-123", chain_id=8453, to="0x" + "22" * 20, data="0x"
+    )
+
+    assert "privy-idempotency-key" not in captured["sent_headers"]
+    assert "privy-idempotency-key" not in captured["signed_headers"]
+
+
 def test_signature_verifies_with_public_key(monkeypatch):
     key_b64, public_key = _generate_authorization_key_b64()
     monkeypatch.setenv("PRIVY_AUTHORIZATION_KEY", key_b64)

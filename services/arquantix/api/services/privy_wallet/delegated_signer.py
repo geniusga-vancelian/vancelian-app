@@ -119,16 +119,24 @@ def build_authorization_signature_input(
     app_id: str,
     rpc_url: str,
     rpc_body: dict[str, Any],
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     aid = (app_id or "").strip()
     if not aid:
         raise PrivyApiError("privy.app_id_required", "Privy App ID manquant pour signer.")
+    headers: dict[str, str] = {"privy-app-id": aid}
+    # Spec Privy : tout en-tête `privy-*` présent sur la requête doit figurer dans le
+    # payload signé. La clé d'idempotence est envoyée sur la requête, elle DOIT donc être
+    # signée — sinon Privy rejette toutes les signatures (zero_correct_authorization_signatures).
+    idem = (idempotency_key or "").strip()
+    if idem:
+        headers["privy-idempotency-key"] = idem
     return {
         "version": 1,
         "method": "POST",
         "url": rpc_url,
         "body": rpc_body,
-        "headers": {"privy-app-id": aid},
+        "headers": headers,
     }
 
 
@@ -289,8 +297,9 @@ def send_delegated_sponsored_transaction(
     ``idempotency_key`` : si fourni, ajoute l'en-tête ``privy-idempotency-key``. Privy
     garantit alors qu'une requête rejouée avec la **même clé et le même corps** ne diffuse
     pas une seconde transaction (fenêtre 24 h) — garde-fou exactly-once du retry (D1).
-    La clé d'idempotence n'entre **pas** dans le payload signé d'autorisation, donc elle ne
-    modifie pas la signature.
+    La clé d'idempotence **fait partie du payload signé** (en-tête ``privy-*``) : elle est
+    donc passée à ``build_authorization_signature_input`` pour que la signature couvre le
+    header réellement envoyé (parité indispensable, sinon HTTP 401).
     """
     if not privy_delegated_signing_configured():
         raise PrivyApiError(
@@ -302,14 +311,15 @@ def send_delegated_sponsored_transaction(
     rpc_body = build_eth_send_transaction_rpc_body(
         chain_id=chain_id, to=to, data=data, value=value, gas_limit=gas_limit
     )
+    idem = (idempotency_key or "").strip() or None
     signature_input = build_authorization_signature_input(
-        app_id=_app_id(), rpc_url=rpc_url, rpc_body=rpc_body
+        app_id=_app_id(), rpc_url=rpc_url, rpc_body=rpc_body, idempotency_key=idem
     )
     authorization_signature = generate_authorization_signature(signature_input)
 
     headers = {**_basic_auth_headers(), "privy-authorization-signature": authorization_signature}
-    if idempotency_key and idempotency_key.strip():
-        headers["privy-idempotency-key"] = idempotency_key.strip()
+    if idem:
+        headers["privy-idempotency-key"] = idem
     payload = _http_post_json(
         rpc_url, headers, json.dumps(rpc_body).encode("utf-8"), timeout=rpc_timeout
     )
