@@ -33,6 +33,11 @@ DEFAULT_LIFI_SETTLEMENT_LAYER_LEDGER_ENABLED = False
 # Exécution serveur worker (signature déléguée Privy sans navigateur) — défaut OFF.
 DEFAULT_LIFI_EXECUTION_WORKER_ENABLED = False
 
+# PR2 — worker autoritaire : le worker d'exécution serveur devient l'UNIQUE exécuteur
+# du swap. Les routes d'exécution client (submit / server-execute / approval / execute legacy)
+# sont refusées (409) pour les personnes éligibles. Défaut OFF (aucun impact legacy).
+DEFAULT_LIFI_AUTHORITATIVE_EXECUTION_ENABLED = False
+
 # Rééquilibrage portefeuille piloté serveur (trigger=server, leg signé serveur) — défaut OFF.
 DEFAULT_LIFI_REBALANCE_WORKER_ENABLED = False
 
@@ -121,6 +126,15 @@ def lifi_execution_worker_enabled() -> bool:
     raw = (
         os.getenv("LIFI_EXECUTION_WORKER_ENABLED")
         or str(DEFAULT_LIFI_EXECUTION_WORKER_ENABLED)
+    ).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def lifi_authoritative_execution_enabled() -> bool:
+    """PR2 — worker serveur unique exécuteur du swap (legacy client bloqué) — défaut false."""
+    raw = (
+        os.getenv("LIFI_AUTHORITATIVE_EXECUTION_ENABLED")
+        or str(DEFAULT_LIFI_AUTHORITATIVE_EXECUTION_ENABLED)
     ).strip().lower()
     return raw in {"1", "true", "yes", "on"}
 

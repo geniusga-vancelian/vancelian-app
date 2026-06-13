@@ -192,11 +192,24 @@ Inclure `privy-idempotency-key` dans `headers` de `build_authorization_signature
 - Si après PR 0.2 le 401 disparaît → root cause entièrement résolue.
 - Si le 401 persiste → sous-cause résiduelle = **clé d'autorisation non enregistrée dans le key-quorum/owner du wallet** (vérification dashboard Privy).
 
+### 6ter. Vérification post-fix (2026-06-13 15:31 UTC) — RÉSOLU ✅
+
+Swap contrôlé `c5f0f17e-b844-4b61-b46e-b05a468e3c75` (2.2 USDC → AAVE, Base), confirmé on-chain (`tx 0x69cc0967…2673f`).
+
+| Marqueur | Avant PR 0.2 (`19a00b7f`) | Après PR 0.2 (`c5f0f17e`) |
+|---|---|---|
+| `POST /server-execute` | 200 OK | 200 OK |
+| `server_swap.sign_failed` (401) | présent | **absent** |
+| Fallback client (`client-trace`/`submit`) | présent | **absent** |
+| Exécution on-chain | via client | **via serveur** |
+
+→ La signature serveur déléguée Privy **réussit pour la première fois** (0/8 → 1/1). Root cause (`privy-idempotency-key` absent du payload signé → HTTP 401 `zero_correct_authorization_signatures`) **confirmé et résolu**. La clé d'autorisation est donc bien enrôlée (sous-cause résiduelle écartée).
+
 ---
 
 ## 7. Final verdict
 
-- **Peut-on passer à PR 2/3/4 ?** → **Non, pas encore.** Body capturé (PR 0.1), root cause identifié (clé d'idempotence non signée). Il faut d'abord **PR 0.2** + 1 reproduction verte (signature serveur réussie) avant de rendre la queue autoritaire.
+- **Peut-on passer à PR 2/3/4 ?** → **Oui.** PR 0.2 déployée + reproduction verte (signature serveur réussie 1/1, sans fallback client). Le prérequis Privy est levé : la queue autoritaire peut désormais s'appuyer sur une signature serveur fiable.
 - **`sign_failed:privy.rpc_failed` transitoire ou structurel ?** → **Structurel** (déterministe, 0/8, client OK sur même wallet) — **HTTP 401 `zero_correct_authorization_signatures`**. Cause précise : `privy-idempotency-key` envoyé mais **absent du payload signé**.
 - **Plus petit fix sûr ?** → **PR 0.2** : inclure `privy-idempotency-key` dans le payload signé (`build_authorization_signature_input`), parité header signé ↔ transmis. ~5 lignes + test de parité. Redéployer, reproduire 1 tentative. Si 401 persiste → vérifier l'enrôlement clé/key-quorum côté dashboard Privy.
 

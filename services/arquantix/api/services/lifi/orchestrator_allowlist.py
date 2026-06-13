@@ -67,6 +67,21 @@ def lifi_execution_worker_enabled_for_person(db: Session, person_id: UUID | None
     return is_person_lifi_orchestrator_allowlisted(db, person_id)
 
 
+def lifi_authoritative_execution_enabled_for_person(db: Session, person_id: UUID | None) -> bool:
+    """PR2 — le worker serveur est l'unique exécuteur du swap pour cette personne.
+
+    Exige le flag autoritaire ON **et** que le worker d'exécution serveur soit actif pour
+    la personne (flag + allowlist). Garde-fou : si aucun exécuteur serveur n'est actif, on
+    ne bloque jamais le chemin client (sinon le swap serait orphelin, sans personne pour
+    le signer/soumettre).
+    """
+    from services.lifi.config import lifi_authoritative_execution_enabled
+
+    if not lifi_authoritative_execution_enabled():
+        return False
+    return lifi_execution_worker_enabled_for_person(db, person_id)
+
+
 def lifi_rebalance_worker_enabled_for_person(db: Session, person_id: UUID | None) -> bool:
     """Rééquilibrage serveur autorisé pour cette personne (flag ON + allowlist)."""
     from services.lifi.config import lifi_rebalance_worker_enabled

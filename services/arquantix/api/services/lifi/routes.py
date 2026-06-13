@@ -105,6 +105,30 @@ def _validation_error(exc: SwapValidationError) -> HTTPException:
     )
 
 
+def _ensure_not_server_authoritative(db: Session, person_id: UUID) -> None:
+    """PR2 — refuse l'exécution client quand le worker serveur est l'unique exécuteur.
+
+    En mode autoritaire (flag + allowlist + worker d'exécution actif), le swap est exécuté
+    côté serveur via la file transactionnelle. Le navigateur ne doit jamais signer/soumettre :
+    cela éviterait la double signature et le fallback client. Renvoie 409 explicite.
+    """
+    from services.lifi.orchestrator_allowlist import (
+        lifi_authoritative_execution_enabled_for_person,
+    )
+
+    if lifi_authoritative_execution_enabled_for_person(db, person_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "swap.server_authoritative",
+                "message": (
+                    "Votre échange est exécuté côté serveur (file d'attente). "
+                    "Aucune signature navigateur n'est requise — suivez son statut."
+                ),
+            },
+        )
+
+
 @swaps_router.get("/supported-assets", response_model=SwapSupportedAssetsResponse)
 def get_supported_swap_assets():
     source_assets = list_supported_source_assets_public()
@@ -297,6 +321,7 @@ def post_swap_execute(
     """Legacy — préférer ``/confirm-execute`` (refresh + slippage + prepare)."""
     _ensure_swaps_enabled()
     person_id = _resolve_person_id(credentials)
+    _ensure_not_server_authoritative(db, person_id)
     try:
         return _execute_svc.prepare_execute(db, person_id=person_id, swap_id=body.swap_id)
     except SwapValidationError as exc:
@@ -312,6 +337,7 @@ def post_swap_submit(
 ):
     _ensure_swaps_enabled()
     person_id = _resolve_person_id(credentials)
+    _ensure_not_server_authoritative(db, person_id)
     try:
         from services.trade_core.submit import submit_signed_trade
 
@@ -354,6 +380,7 @@ def post_swap_server_execute(
     """
     _ensure_swaps_enabled()
     person_id = _resolve_person_id(credentials)
+    _ensure_not_server_authoritative(db, person_id)
     try:
         from services.trade_core.server_execution import execute_prepared_swap_server_side
 
@@ -385,6 +412,7 @@ def post_swap_approval(
 ):
     _ensure_swaps_enabled()
     person_id = _resolve_person_id(credentials)
+    _ensure_not_server_authoritative(db, person_id)
     try:
         return _execute_svc.record_token_approval(
             db,
