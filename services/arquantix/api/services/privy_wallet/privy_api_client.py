@@ -5,6 +5,7 @@ import base64
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -14,10 +15,47 @@ logger = logging.getLogger(__name__)
 
 
 class PrivyApiError(Exception):
-    def __init__(self, code: str, message: str, *, http_status: int | None = None):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        http_status: int | None = None,
+        request_id: str | None = None,
+        body: str | None = None,
+    ):
         self.code = code
         self.http_status = http_status
+        # PR 0.1 — contexte d'observabilité (jamais de secret) : id de requête Privy et
+        # corps d'erreur **rédigé** pour diagnostic, portés par l'exception sans la propager.
+        self.request_id = request_id
+        self.body = body
         super().__init__(message)
+
+
+# PR 0.1 — rédaction défensive : on ne logue jamais bearer/clé/signature/secret.
+_SENSITIVE = (
+    r"authorization|signature|secret|app[_-]?secret|token|private[_-]?key|"
+    r"privy-authorization-signature"
+)
+# JSON: "authorization":"Bearer xxx" → valeur masquée (gère guillemets + espaces).
+_REDACT_JSON_KV = re.compile(rf'(?i)"({_SENSITIVE})"\s*:\s*"[^"]*"')
+# Header/kv: Authorization=xxx ou token: xxx (valeur sans espace).
+_REDACT_HEADER_KV = re.compile(rf"(?i)\b({_SENSITIVE})\b\s*[:=]\s*[^\s,;}}\"]+")
+_REDACT_BEARER = re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-+/=]+")
+_REDACT_JWT = re.compile(r"\b[A-Za-z0-9_\-]{16,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b")
+
+
+def redact_privy_text(text: str | None, *, limit: int = 400) -> str:
+    """Tronque + masque tout matériel sensible d'un texte Privy avant log (best-effort)."""
+    if not text:
+        return ""
+    out = str(text)[:limit]
+    out = _REDACT_JSON_KV.sub(lambda m: f'"{m.group(1)}":"<redacted>"', out)
+    out = _REDACT_BEARER.sub("Bearer <redacted>", out)
+    out = _REDACT_HEADER_KV.sub(lambda m: f"{m.group(1)}=<redacted>", out)
+    out = _REDACT_JWT.sub("<redacted-jwt>", out)
+    return out
 
 
 def privy_server_api_configured() -> bool:

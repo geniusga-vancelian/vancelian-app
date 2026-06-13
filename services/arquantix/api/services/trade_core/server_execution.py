@@ -36,6 +36,7 @@ from services.privy_wallet.privy_api_client import (
     PrivyApiError,
     fetch_privy_user,
     is_wallet_delegated,
+    redact_privy_text,
 )
 
 from .run_wallet_swap import complete_virtual_wallet_swap, finalize_virtual_wallet_swap
@@ -229,6 +230,60 @@ def approval_idempotency_key(swap_id: UUID) -> str:
     return f"vance-approve:{swap_id}"
 
 
+def _resolve_intent_id_for_swap(db: Session, swap_id: UUID) -> str | None:
+    """Best-effort (read-only) : intent lié au swap, pour l'observabilité PR 0.1."""
+    try:
+        from services.onchain_indexer.models import TransactionIntent
+
+        row = (
+            db.query(TransactionIntent.id)
+            .filter(
+                TransactionIntent.linked_id == swap_id,
+                TransactionIntent.linked_table == "person_wallet_swaps",
+            )
+            .first()
+        )
+        return str(row[0]) if row else None
+    except Exception:  # noqa: BLE001 — l'observabilité ne doit jamais casser le flow
+        return None
+
+
+def _log_privy_sign_failure(
+    exc: PrivyApiError,
+    *,
+    which_tx: str,
+    swap_id: UUID,
+    intent_id: str | None,
+    wallet_id: str | None,
+    wallet_address: str | None,
+    chain_id: int | None,
+    idempotency_key: str | None,
+    event: str = "server_swap.sign_failed",
+) -> None:
+    """PR 0.1 — log structuré **inline** (visible CloudWatch), rédigé, sans secret.
+
+    N'altère aucun comportement : appelé uniquement dans les blocs ``except`` existants.
+    """
+    logger.warning(
+        "%s which_tx=%s swap_id=%s intent_id=%s wallet_id=%s wallet_address=%s "
+        "chain_id=%s privy_idempotency_key=%s http_status=%s privy_request_id=%s "
+        "error_code=%s error_message=%s body=%s",
+        event,
+        which_tx,
+        str(swap_id),
+        intent_id,
+        wallet_id,
+        wallet_address,
+        chain_id,
+        idempotency_key,
+        getattr(exc, "http_status", None),
+        getattr(exc, "request_id", None),
+        exc.code,
+        redact_privy_text(str(exc)),
+        redact_privy_text(getattr(exc, "body", None)),
+    )
+
+
 def _recover_broadcasting_swap(
     db: Session,
     *,
@@ -267,9 +322,16 @@ def _recover_broadcasting_swap(
             idempotency_key=str(intent["idempotency_key"]),
         )
     except PrivyApiError as exc:
-        logger.warning(
-            "server_swap.broadcast_recovery_pending swap_id=%s code=%s",
-            str(swap_id), exc.code,
+        _log_privy_sign_failure(
+            exc,
+            which_tx="swap",
+            swap_id=swap_id,
+            intent_id=_resolve_intent_id_for_swap(db, swap_id),
+            wallet_id=str(intent.get("privy_wallet_id")),
+            wallet_address=intent.get("signing_wallet_address"),
+            chain_id=intent.get("chain_id"),
+            idempotency_key=str(intent.get("idempotency_key")),
+            event="server_swap.broadcast_recovery_pending",
         )
         return ServerSwapExecutionResult(
             "broadcasting", swap_id, signed_server_side=False,
@@ -377,6 +439,10 @@ def execute_prepared_swap_server_side(
     tx = prepared.transaction
     chain_id = int(tx.chain_id)
 
+    # PR 0.1 — contexte observabilité (suivi de l'étape qui échouera côté Privy).
+    which_tx = "swap"
+    current_idem = broadcast_idempotency_key(swap_id)
+
     try:
         approval = prepared.token_approval
         if (
@@ -405,6 +471,8 @@ def execute_prepared_swap_server_side(
                     allowance_sufficient = False
 
             if not allowance_sufficient:
+                which_tx = "approval"
+                current_idem = approval_idempotency_key(swap_id)
                 approve_send = send_delegated_sponsored_transaction(
                     privy_wallet_id=privy_wallet_id,
                     chain_id=chain_id,
@@ -445,6 +513,8 @@ def execute_prepared_swap_server_side(
         db.commit()
         db.refresh(swap)
 
+        which_tx = "swap"
+        current_idem = swap_idem
         swap_send = send_delegated_sponsored_transaction(
             privy_wallet_id=privy_wallet_id,
             chain_id=chain_id,
@@ -455,8 +525,15 @@ def execute_prepared_swap_server_side(
             idempotency_key=swap_idem,
         )
     except PrivyApiError as exc:
-        logger.warning(
-            "server_swap.sign_failed", extra={"swap_id": str(swap_id), "code": exc.code}
+        _log_privy_sign_failure(
+            exc,
+            which_tx=which_tx,
+            swap_id=swap_id,
+            intent_id=_resolve_intent_id_for_swap(db, swap_id),
+            wallet_id=privy_wallet_id,
+            wallet_address=signing_address,
+            chain_id=chain_id,
+            idempotency_key=current_idem,
         )
         # Si BROADCASTING est déjà committé, on NE retombe PAS en awaiting_signature (qui
         # créerait un nouveau swap) : on reste en ``broadcasting`` pour reprise idempotente.

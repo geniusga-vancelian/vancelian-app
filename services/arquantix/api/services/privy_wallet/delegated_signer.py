@@ -232,10 +232,20 @@ def _http_post_json(url: str, headers: dict[str, str], body: bytes, *, timeout: 
             detail = exc.read().decode()[:400]
         except Exception:  # pragma: no cover
             detail = ""
+        # PR 0.1 — id de requête Privy (en-tête réponse) pour corrélation dashboard.
+        request_id = None
+        try:
+            hdrs = getattr(exc, "headers", None)
+            if hdrs is not None:
+                request_id = hdrs.get("x-privy-request-id") or hdrs.get("X-Privy-Request-Id")
+        except Exception:  # pragma: no cover
+            request_id = None
         raise PrivyApiError(
             "privy.rpc_failed",
             f"Appel RPC Privy échoué (HTTP {exc.code}){': ' + detail if detail else ''}.",
             http_status=exc.code,
+            request_id=request_id,
+            body=detail,
         ) from exc
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise PrivyApiError(

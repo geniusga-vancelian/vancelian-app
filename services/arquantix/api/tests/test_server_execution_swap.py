@@ -1,6 +1,7 @@
 """Tests unitaires — exécution serveur d'un swap (signature déléguée + fallback)."""
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -260,6 +261,86 @@ def test_fallback_when_embedded_address_unresolved(monkeypatch):
     )
     assert res.fallback_reason == "signing_wallet_unresolved"
     assert res.signed_server_side is False
+
+
+# --------------------------------------------------- PR 0.1 observabilité (logs)
+
+
+def _approval_ns():
+    return SimpleNamespace(
+        required=True,
+        token_address="0xtoken",
+        spender_address="0xspender",
+        amount_atomic="1000",
+    )
+
+
+def test_sign_failure_logs_structured_fields_on_approval(monkeypatch, caplog):
+    """PR 0.1 — l'échec de signature sur l'approval logue which_tx + http_status +
+    privy_request_id + body rédigé (inline, visible CloudWatch). Aucun changement de flow."""
+    _patch_common(monkeypatch)
+
+    def _raise(**kwargs):
+        raise PrivyApiError(
+            "privy.rpc_failed",
+            "Appel RPC Privy échoué (HTTP 403).",
+            http_status=403,
+            request_id="req-xyz-1",
+            body='{"error":"signer not authorized","authorization":"Bearer s3cr3t"}',
+        )
+
+    monkeypatch.setattr(se, "send_delegated_sponsored_transaction", _raise)
+
+    with caplog.at_level(logging.WARNING, logger="services.trade_core.server_execution"):
+        res = se.execute_prepared_swap_server_side(
+            _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID,
+            swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value),
+            execute_svc=_FakeExecuteSvc(_fake_prepared(approval=_approval_ns())),
+        )
+
+    # Comportement inchangé : approval avant BROADCASTING → fallback awaiting_signature.
+    assert res.phase == "awaiting_signature"
+    assert res.fallback_reason == "sign_failed:privy.rpc_failed"
+
+    msg = next(
+        r.getMessage() for r in caplog.records if "server_swap.sign_failed" in r.getMessage()
+    )
+    assert "which_tx=approval" in msg
+    assert f"swap_id={SWAP_ID}" in msg
+    assert "wallet_id=wallet-abc" in msg
+    assert "wallet_address=0xWALLET" in msg
+    assert "chain_id=8453" in msg
+    assert f"privy_idempotency_key=vance-approve:{SWAP_ID}" in msg
+    assert "http_status=403" in msg
+    assert "privy_request_id=req-xyz-1" in msg
+    assert "error_code=privy.rpc_failed" in msg
+    # body rédigé : aucun secret en clair.
+    assert "Bearer s3cr3t" not in msg
+    assert "<redacted>" in msg
+
+
+def test_sign_failure_logs_which_tx_swap_when_no_approval(monkeypatch, caplog):
+    """Sans approval, le 1ᵉʳ appel délégué est le swap → which_tx=swap."""
+    _patch_common(monkeypatch)
+
+    def _raise(**kwargs):
+        raise PrivyApiError("privy.rpc_failed", "boom", http_status=500, request_id="req-5xx")
+
+    monkeypatch.setattr(se, "send_delegated_sponsored_transaction", _raise)
+
+    with caplog.at_level(logging.WARNING, logger="services.trade_core.server_execution"):
+        se.execute_prepared_swap_server_side(
+            _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID,
+            swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value),
+            execute_svc=_FakeExecuteSvc(_fake_prepared(approval=None)),
+        )
+
+    msg = next(
+        r.getMessage() for r in caplog.records if "server_swap.sign_failed" in r.getMessage()
+    )
+    assert "which_tx=swap" in msg
+    assert "http_status=500" in msg
+    assert f"privy_idempotency_key=vance-swap:{SWAP_ID}" in msg
 
 
 # --------------------------------------------------------------- happy paths

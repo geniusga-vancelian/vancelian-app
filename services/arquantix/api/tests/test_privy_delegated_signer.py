@@ -8,6 +8,10 @@ import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
+import io
+import urllib.error
+
+from services.privy_wallet import delegated_signer as ds
 from services.privy_wallet.delegated_signer import (
     build_authorization_signature_input,
     build_eth_send_transaction_rpc_body,
@@ -16,7 +20,7 @@ from services.privy_wallet.delegated_signer import (
     generate_authorization_signature,
     privy_delegated_signing_configured,
 )
-from services.privy_wallet.privy_api_client import PrivyApiError
+from services.privy_wallet.privy_api_client import PrivyApiError, redact_privy_text
 
 
 def _generate_authorization_key_b64() -> tuple[str, ec.EllipticCurvePublicKey]:
@@ -119,3 +123,50 @@ def test_build_wallet_rpc_url_rejects_empty():
     with pytest.raises(PrivyApiError) as exc:
         build_wallet_rpc_url("  ")
     assert exc.value.code == "privy.wallet_id_required"
+
+
+# ------------------------------------------------- PR 0.1 observabilité (rédaction)
+
+
+def test_redact_privy_text_masks_secrets():
+    raw = (
+        '{"error":"bad","authorization":"Bearer abc123","privy-authorization-signature":"sig=="}'
+    )
+    out = redact_privy_text(raw)
+    assert "Bearer abc123" not in out
+    assert "<redacted>" in out
+    assert "bad" in out  # message fonctionnel conservé
+
+
+def test_redact_privy_text_masks_jwt():
+    jwt = "eyJhbGciOiJIUzI1Ni012345.eyJzdWIiOiIxMjM0567890.SflKxwRJSMeKKF2QT4"
+    out = redact_privy_text(f"token issued {jwt} ok")
+    assert jwt not in out
+    assert "<redacted-jwt>" in out
+
+
+def test_redact_privy_text_empty():
+    assert redact_privy_text(None) == ""
+    assert redact_privy_text("") == ""
+
+
+def test_http_error_carries_status_request_id_and_body(monkeypatch):
+    """PR 0.1 — l'erreur HTTP Privy porte http_status + privy_request_id + body (pour log)."""
+
+    def _raise_http(*a, **k):
+        raise urllib.error.HTTPError(
+            url="https://api.privy.io/v1/wallets/w/rpc",
+            code=403,
+            msg="Forbidden",
+            hdrs={"x-privy-request-id": "req-abc-123"},
+            fp=io.BytesIO(b'{"error":"delegated signer not authorized"}'),
+        )
+
+    monkeypatch.setattr(ds.urllib.request, "urlopen", _raise_http)
+    with pytest.raises(PrivyApiError) as exc:
+        ds._http_post_json("https://api.privy.io/v1/wallets/w/rpc", {}, b"{}", timeout=5)
+
+    assert exc.value.code == "privy.rpc_failed"
+    assert exc.value.http_status == 403
+    assert exc.value.request_id == "req-abc-123"
+    assert "delegated signer not authorized" in (exc.value.body or "")
