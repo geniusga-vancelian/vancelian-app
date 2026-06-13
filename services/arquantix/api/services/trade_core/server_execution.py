@@ -14,6 +14,7 @@ comportement client historique reste intact (zéro régression).
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -23,6 +24,13 @@ from services.lifi.enums import SwapSessionStatus
 from services.privy_wallet.delegated_signer import (
     privy_delegated_signing_configured,
     send_delegated_sponsored_transaction,
+)
+from services.privy_wallet.evm_chain_config import resolve_chain_rpc_url
+from services.privy_wallet.evm_rpc_client import (
+    EvmRpcError,
+    fetch_transaction_receipt,
+    hex_to_int,
+    json_rpc_call,
 )
 from services.privy_wallet.privy_api_client import (
     PrivyApiError,
@@ -36,6 +44,16 @@ logger = logging.getLogger(__name__)
 
 # Sélecteur ERC-20 approve(address,uint256) = keccak("approve(address,uint256)")[:4]
 APPROVE_SELECTOR = "0x095ea7b3"
+# Sélecteur ERC-20 allowance(address owner, address spender)
+ALLOWANCE_SELECTOR = "0xdd62ed3e"
+
+# Attente de confirmation on-chain de l'approval ERC-20 avant de diffuser le swap.
+# Parité avec le flux client (``ensureSwapTokenApproval`` poll le receipt jusqu'à 180 s) :
+# sans cette attente, le swap est diffusé alors que l'allowance n'est pas encore posée
+# on-chain → revert → swap jamais "submitted" → leg bloqué en AWAITING_SIGNATURE puis
+# purgé par le reaper (~10 min). Base : blocs ~2 s, donc confirme en quelques secondes.
+_APPROVAL_CONFIRM_TIMEOUT_S = 90.0
+_APPROVAL_CONFIRM_POLL_S = 3.0
 
 _SIGN_STATES = {SwapSessionStatus.QUOTE_RECEIVED.value, SwapSessionStatus.AWAITING_SIGNATURE.value}
 
@@ -141,6 +159,49 @@ def build_approve_calldata(spender_address: str, amount_atomic: str) -> str:
     return APPROVE_SELECTOR + _hex_pad_address(spender_address) + _hex_pad_amount(amount_atomic)
 
 
+# --------------------------------------------------- allowance & confirmation approval
+
+
+def read_erc20_allowance(
+    rpc_url: str, *, token_address: str, owner_address: str, spender_address: str
+) -> int:
+    """Allowance ERC-20 ``allowance(owner, spender)`` en unités atomiques (``eth_call``)."""
+    data = (
+        ALLOWANCE_SELECTOR
+        + _hex_pad_address(owner_address)
+        + _hex_pad_address(spender_address)
+    )
+    result = json_rpc_call(rpc_url, "eth_call", [{"to": token_address, "data": data}, "latest"])
+    return hex_to_int(result)
+
+
+def wait_for_approval_confirmed(
+    rpc_url: str,
+    tx_hash: str,
+    *,
+    timeout_s: float = _APPROVAL_CONFIRM_TIMEOUT_S,
+    poll_s: float = _APPROVAL_CONFIRM_POLL_S,
+    sleep_fn=time.sleep,
+    now_fn=time.monotonic,
+) -> bool:
+    """Attend que l'approval soit minée **avec succès** on-chain.
+
+    Retourne ``True`` si le receipt a un statut succès, ``False`` si la tx reverte ou si
+    le délai est dépassé (le swap ne sera alors pas diffusé → fallback propre).
+    """
+    deadline = now_fn() + timeout_s
+    while True:
+        try:
+            receipt = fetch_transaction_receipt(rpc_url, tx_hash)
+        except EvmRpcError:
+            receipt = None
+        if isinstance(receipt, dict) and receipt.get("status") is not None:
+            return str(receipt.get("status")).lower() in ("0x1", "1")
+        if now_fn() >= deadline:
+            return False
+        sleep_fn(poll_s)
+
+
 # ------------------------------------------------------------- orchestration
 
 
@@ -242,20 +303,44 @@ def execute_prepared_swap_server_side(
             and approval.spender_address
             and approval.amount_atomic
         ):
-            approve_send = send_delegated_sponsored_transaction(
-                privy_wallet_id=privy_wallet_id,
-                chain_id=chain_id,
-                to=approval.token_address,
-                data=build_approve_calldata(approval.spender_address, approval.amount_atomic),
-                value="0x0",
-            )
-            execute_svc.record_token_approval(
-                db,
-                person_id=person_id,
-                swap_id=swap_id,
-                tx_hash=str(approve_send["hash"]),
-                signing_wallet_address=signing_address,
-            )
+            rpc_url = resolve_chain_rpc_url(chain_id)
+            required_atomic = int(str(approval.amount_atomic).strip())
+
+            # 1) Allowance live : si déjà suffisante, on saute l'approval (évite une tx
+            #    redondante + la contention de nonce entre tentatives quasi simultanées).
+            allowance_sufficient = False
+            if rpc_url:
+                try:
+                    current_allowance = read_erc20_allowance(
+                        rpc_url,
+                        token_address=approval.token_address,
+                        owner_address=signing_address,
+                        spender_address=approval.spender_address,
+                    )
+                    allowance_sufficient = current_allowance >= required_atomic
+                except EvmRpcError:
+                    allowance_sufficient = False
+
+            if not allowance_sufficient:
+                approve_send = send_delegated_sponsored_transaction(
+                    privy_wallet_id=privy_wallet_id,
+                    chain_id=chain_id,
+                    to=approval.token_address,
+                    data=build_approve_calldata(approval.spender_address, approval.amount_atomic),
+                    value="0x0",
+                )
+                execute_svc.record_token_approval(
+                    db,
+                    person_id=person_id,
+                    swap_id=swap_id,
+                    tx_hash=str(approve_send["hash"]),
+                    signing_wallet_address=signing_address,
+                )
+                # 2) Parité flux client : attendre la confirmation on-chain de l'approval
+                #    AVANT de diffuser le swap. Sans RPC dispo on conserve l'ancien
+                #    comportement (best-effort) ; en prod (BASE_RPC_URL configuré) on attend.
+                if rpc_url and not wait_for_approval_confirmed(rpc_url, str(approve_send["hash"])):
+                    return _fallback("approval_unconfirmed")
 
         swap_send = send_delegated_sponsored_transaction(
             privy_wallet_id=privy_wallet_id,

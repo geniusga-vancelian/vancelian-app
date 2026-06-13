@@ -103,6 +103,8 @@ def _patch_common(monkeypatch, *, configured=True, delegated=True, privy_id="wal
     monkeypatch.setattr(
         se, "resolve_privy_wallet_id", lambda db, *, person_id, wallet_address: privy_id
     )
+    # Hermétique : pas de RPC réseau par défaut (chemin best-effort sans attente on-chain).
+    monkeypatch.setattr(se, "resolve_chain_rpc_url", lambda chain_id: None)
 
 
 # --------------------------------------------------------------- états terminaux
@@ -280,3 +282,159 @@ def test_swap_not_found_raises():
             None, person_id=PERSON_ID, swap_id=SWAP_ID, swap_repo=repo,
             execute_svc=_FakeExecuteSvc(_fake_prepared()),
         )
+
+
+# --------------------------------------------------- gating allowance / receipt
+
+
+def test_read_erc20_allowance_calldata_and_parse(monkeypatch):
+    captured = {}
+
+    def _rpc(rpc_url, method, params, **kw):
+        captured["url"] = rpc_url
+        captured["method"] = method
+        captured["params"] = params
+        return "0x" + format(123456, "x")
+
+    monkeypatch.setattr(se, "json_rpc_call", _rpc)
+    out = se.read_erc20_allowance(
+        "https://rpc", token_address="0xtoken", owner_address="0x" + "11" * 20,
+        spender_address="0x" + "22" * 20,
+    )
+    assert out == 123456
+    assert captured["method"] == "eth_call"
+    data = captured["params"][0]["data"]
+    assert data.startswith(se.ALLOWANCE_SELECTOR)
+    assert ("11" * 20).rjust(64, "0") in data  # owner padded
+    assert ("22" * 20).rjust(64, "0") in data  # spender padded
+
+
+def test_wait_for_approval_confirmed_success(monkeypatch):
+    monkeypatch.setattr(se, "fetch_transaction_receipt", lambda url, h: {"status": "0x1"})
+    assert se.wait_for_approval_confirmed("https://rpc", "0xhash", sleep_fn=lambda *_: None) is True
+
+
+def test_wait_for_approval_confirmed_revert(monkeypatch):
+    monkeypatch.setattr(se, "fetch_transaction_receipt", lambda url, h: {"status": "0x0"})
+    assert se.wait_for_approval_confirmed("https://rpc", "0xhash", sleep_fn=lambda *_: None) is False
+
+
+def test_wait_for_approval_confirmed_timeout(monkeypatch):
+    # Receipt jamais disponible (tx pending) : EvmRpcError à chaque poll → timeout → False.
+    def _raise(url, h):
+        raise se.EvmRpcError("pending", code="evm.rpc.receipt_missing")
+
+    monkeypatch.setattr(se, "fetch_transaction_receipt", _raise)
+    clock = {"t": 0.0}
+
+    def _now():
+        return clock["t"]
+
+    def _sleep(s):
+        clock["t"] += s
+
+    assert (
+        se.wait_for_approval_confirmed(
+            "https://rpc", "0xhash", timeout_s=10, poll_s=3, sleep_fn=_sleep, now_fn=_now
+        )
+        is False
+    )
+
+
+def _approval(amount="1000"):
+    return SimpleNamespace(
+        required=True, token_address="0xtoken", spender_address="0xspender", amount_atomic=amount
+    )
+
+
+def test_approval_skipped_when_allowance_sufficient(monkeypatch):
+    """Allowance live suffisante → aucune approval émise, swap seul (pas de tx redondante)."""
+    _patch_common(monkeypatch)
+    monkeypatch.setattr(se, "resolve_chain_rpc_url", lambda chain_id: "https://rpc")
+    monkeypatch.setattr(se, "read_erc20_allowance", lambda *a, **k: 5000)  # >= 1000
+    waited = []
+    monkeypatch.setattr(
+        se, "wait_for_approval_confirmed", lambda *a, **k: waited.append(1) or True
+    )
+    sent = []
+    monkeypatch.setattr(
+        se, "send_delegated_sponsored_transaction",
+        lambda **kw: sent.append(kw) or {"hash": "0xswap"},
+    )
+    monkeypatch.setattr(
+        se, "complete_virtual_wallet_swap",
+        lambda db, **kw: SimpleNamespace(
+            finalize=SimpleNamespace(status="confirmed", settled=True, tx_hash=kw["tx_hash"]),
+            phase="confirmed",
+        ),
+    )
+    svc = _FakeExecuteSvc(_fake_prepared(approval=_approval()))
+    res = se.execute_prepared_swap_server_side(
+        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value), execute_svc=svc,
+    )
+    assert res.signed_server_side is True
+    assert len(sent) == 1  # uniquement le swap
+    assert sent[0]["to"] == "0xrouter"
+    assert svc.approval_calls == []  # pas d'approval enregistrée
+    assert waited == []  # pas d'attente puisque pas d'approval
+
+
+def test_approval_waits_for_confirmation_then_swaps(monkeypatch):
+    """Allowance insuffisante → approval émise PUIS attente confirmation AVANT le swap."""
+    _patch_common(monkeypatch)
+    monkeypatch.setattr(se, "resolve_chain_rpc_url", lambda chain_id: "https://rpc")
+    monkeypatch.setattr(se, "read_erc20_allowance", lambda *a, **k: 0)  # < 1000
+    order = []
+    monkeypatch.setattr(
+        se, "wait_for_approval_confirmed",
+        lambda url, h, **k: order.append(("wait", h)) or True,
+    )
+
+    def _send(**kw):
+        order.append(("send", kw["to"]))
+        return {"hash": "0xapprove" if kw["to"] == "0xtoken" else "0xswap"}
+
+    monkeypatch.setattr(se, "send_delegated_sponsored_transaction", _send)
+    monkeypatch.setattr(
+        se, "complete_virtual_wallet_swap",
+        lambda db, **kw: SimpleNamespace(
+            finalize=SimpleNamespace(status="confirmed", settled=True, tx_hash=kw["tx_hash"]),
+            phase="confirmed",
+        ),
+    )
+    svc = _FakeExecuteSvc(_fake_prepared(approval=_approval()))
+    res = se.execute_prepared_swap_server_side(
+        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value), execute_svc=svc,
+    )
+    assert res.signed_server_side is True
+    # Ordre critique : approval → attente confirmation → swap.
+    assert order == [("send", "0xtoken"), ("wait", "0xapprove"), ("send", "0xrouter")]
+    assert svc.approval_calls == ["0xapprove"]
+
+
+def test_fallback_when_approval_unconfirmed(monkeypatch):
+    """Approval non confirmée dans le délai → fallback propre, swap NON diffusé."""
+    _patch_common(monkeypatch)
+    monkeypatch.setattr(se, "resolve_chain_rpc_url", lambda chain_id: "https://rpc")
+    monkeypatch.setattr(se, "read_erc20_allowance", lambda *a, **k: 0)
+    monkeypatch.setattr(se, "wait_for_approval_confirmed", lambda *a, **k: False)
+    sent = []
+    monkeypatch.setattr(
+        se, "send_delegated_sponsored_transaction",
+        lambda **kw: sent.append(kw["to"]) or {"hash": "0xapprove"},
+    )
+    monkeypatch.setattr(
+        se, "complete_virtual_wallet_swap",
+        lambda *a, **k: pytest.fail("le swap ne doit pas être diffusé si approval non confirmée"),
+    )
+    res = se.execute_prepared_swap_server_side(
+        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value),
+        execute_svc=_FakeExecuteSvc(_fake_prepared(approval=_approval())),
+    )
+    assert res.phase == "awaiting_signature"
+    assert res.fallback_reason == "approval_unconfirmed"
+    assert res.signed_server_side is False
+    assert sent == ["0xtoken"]  # approval émise, mais pas le swap
