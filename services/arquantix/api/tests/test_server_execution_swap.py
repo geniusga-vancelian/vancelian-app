@@ -63,9 +63,55 @@ PERSON_ID = uuid4()
 SWAP_ID = uuid4()
 
 
-def _fake_repo(status: str):
-    swap = SimpleNamespace(status=status)
-    return SimpleNamespace(get_for_person=lambda db, swap_id, person_id: swap)
+class _FakeDB:
+    """DB minimal : commit/refresh no-op (le marquage BROADCASTING commit avant broadcast)."""
+
+    def commit(self):
+        pass
+
+    def refresh(self, _obj):
+        pass
+
+
+def _fake_repo(status: str, *, broadcast_intent: dict | None = None):
+    swap = SimpleNamespace(status=status, audit_log=[])
+    if broadcast_intent is not None:
+        swap._broadcast_intent = broadcast_intent
+
+    def _mark_broadcasting(
+        s,
+        *,
+        idempotency_key,
+        privy_wallet_id,
+        chain_id,
+        to,
+        data,
+        value,
+        gas_limit,
+        signing_wallet_address=None,
+    ):
+        s.status = SwapSessionStatus.BROADCASTING.value
+        s._broadcast_intent = {
+            "event": "swap_broadcast_initiated",
+            "idempotency_key": idempotency_key,
+            "privy_wallet_id": privy_wallet_id,
+            "chain_id": chain_id,
+            "to": to,
+            "data": data,
+            "value": value,
+            "gas_limit": gas_limit,
+            "signing_wallet_address": signing_wallet_address,
+        }
+
+    def _read_broadcast_intent(s):
+        return getattr(s, "_broadcast_intent", None)
+
+    return SimpleNamespace(
+        get_for_person=lambda db, swap_id, person_id: swap,
+        mark_broadcasting=_mark_broadcasting,
+        read_broadcast_intent=_read_broadcast_intent,
+        append_audit=lambda s, e: None,
+    )
 
 
 def _fake_prepared(*, approval=None, mode="privy_embedded", address="0xWALLET"):
@@ -162,20 +208,29 @@ def test_fallback_when_wallet_not_delegated(monkeypatch):
     assert res.fallback_reason == "wallet_not_delegated"
 
 
-def test_fallback_on_sign_error(monkeypatch):
+def test_sign_error_after_broadcasting_stays_broadcasting(monkeypatch):
+    """D1 — échec broadcast APRÈS marquage BROADCASTING : on ne retombe pas en
+    awaiting_signature (qui créerait un nouveau swap). On reste en ``broadcasting``
+    pour reprise idempotente sur le même swap_id."""
     _patch_common(monkeypatch)
 
     def _raise(**kwargs):
         raise PrivyApiError("privy.rpc_failed", "boom")
 
     monkeypatch.setattr(se, "send_delegated_sponsored_transaction", _raise)
+    repo = _fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value)
     res = se.execute_prepared_swap_server_side(
-        None, person_id=PERSON_ID, swap_id=SWAP_ID,
-        swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value),
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID,
+        swap_repo=repo,
         execute_svc=_FakeExecuteSvc(_fake_prepared()),
     )
-    assert res.phase == "awaiting_signature"
+    assert res.phase == "broadcasting"
     assert res.fallback_reason == "sign_failed:privy.rpc_failed"
+    assert res.signed_server_side is False
+    # Le swap est laissé en BROADCASTING avec l'intent de rejeu persisté.
+    swap = repo.get_for_person(None, swap_id=SWAP_ID, person_id=PERSON_ID)
+    assert swap.status == SwapSessionStatus.BROADCASTING.value
+    assert repo.read_broadcast_intent(swap)["idempotency_key"] == f"vance-swap:{SWAP_ID}"
 
 
 def test_not_delegated_skips_prepare(monkeypatch):
@@ -230,7 +285,7 @@ def test_happy_path_no_approval(monkeypatch):
     )
 
     res = se.execute_prepared_swap_server_side(
-        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID,
         swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value),
         execute_svc=_FakeExecuteSvc(_fake_prepared(approval=None)),
     )
@@ -241,6 +296,8 @@ def test_happy_path_no_approval(monkeypatch):
     assert res.settled is True
     assert len(sent) == 1  # uniquement le swap, pas d'approval
     assert captured == {"tx_hash": "0xfeed", "addr": "0xWALLET"}
+    # D1 — la diffusion du swap porte la clé d'idempotence Privy déterministe.
+    assert sent[0]["idempotency_key"] == f"vance-swap:{SWAP_ID}"
 
 
 def test_happy_path_with_approval(monkeypatch):
@@ -263,7 +320,7 @@ def test_happy_path_with_approval(monkeypatch):
     svc = _FakeExecuteSvc(_fake_prepared(approval=approval))
 
     res = se.execute_prepared_swap_server_side(
-        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID,
         swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value),
         execute_svc=svc,
     )
@@ -273,6 +330,9 @@ def test_happy_path_with_approval(monkeypatch):
     assert sent[0]["to"] == "0xtoken"
     assert sent[0]["data"].startswith("0x095ea7b3")
     assert svc.approval_calls == ["0x1"]  # record_token_approval reçu avec le hash d'approval
+    # D1 — approval et swap portent des clés d'idempotence distinctes (corps différents).
+    assert sent[0]["idempotency_key"] == f"vance-approve:{SWAP_ID}"
+    assert sent[1]["idempotency_key"] == f"vance-swap:{SWAP_ID}"
 
 
 def test_swap_not_found_raises():
@@ -370,7 +430,7 @@ def test_approval_skipped_when_allowance_sufficient(monkeypatch):
     )
     svc = _FakeExecuteSvc(_fake_prepared(approval=_approval()))
     res = se.execute_prepared_swap_server_side(
-        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID,
         swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value), execute_svc=svc,
     )
     assert res.signed_server_side is True
@@ -405,7 +465,7 @@ def test_approval_waits_for_confirmation_then_swaps(monkeypatch):
     )
     svc = _FakeExecuteSvc(_fake_prepared(approval=_approval()))
     res = se.execute_prepared_swap_server_side(
-        None, person_id=PERSON_ID, swap_id=SWAP_ID,
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID,
         swap_repo=_fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value), execute_svc=svc,
     )
     assert res.signed_server_side is True
@@ -438,3 +498,157 @@ def test_fallback_when_approval_unconfirmed(monkeypatch):
     assert res.fallback_reason == "approval_unconfirmed"
     assert res.signed_server_side is False
     assert sent == ["0xtoken"]  # approval émise, mais pas le swap
+
+
+# ----------------------------------------------- D1 reprise BROADCASTING (idempotence)
+
+
+def _broadcast_intent():
+    return {
+        "event": "swap_broadcast_initiated",
+        "idempotency_key": f"vance-swap:{SWAP_ID}",
+        "privy_wallet_id": "wallet-abc",
+        "chain_id": 8453,
+        "to": "0xrouter",
+        "data": "0xdead",
+        "value": "0x0",
+        "gas_limit": "0x5208",
+        "signing_wallet_address": "0xWALLET",
+    }
+
+
+def test_broadcasting_entry_recovers_via_idempotency(monkeypatch):
+    """Swap déjà BROADCASTING : rejeu avec la MÊME clé d'idempotence (pas de nouvelle
+    signature) ; Privy renvoie la tx d'origine → CONFIRMED."""
+    sent = []
+    monkeypatch.setattr(
+        se, "send_delegated_sponsored_transaction",
+        lambda **kw: sent.append(kw) or {"hash": "0xorig", "transaction_id": "t1"},
+    )
+    captured = {}
+    monkeypatch.setattr(
+        se, "complete_virtual_wallet_swap",
+        lambda db, *, person_id, swap_id, tx_hash, signing_wallet_address=None: captured.update(
+            {"tx_hash": tx_hash}
+        )
+        or SimpleNamespace(
+            finalize=SimpleNamespace(status="confirmed", settled=True, tx_hash=tx_hash),
+            phase="confirmed",
+        ),
+    )
+    repo = _fake_repo(SwapSessionStatus.BROADCASTING.value, broadcast_intent=_broadcast_intent())
+    res = se.execute_prepared_swap_server_side(
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID, swap_repo=repo,
+        execute_svc=_FakeExecuteSvc(_fake_prepared()),
+    )
+    assert res.phase == "confirmed"
+    assert res.tx_hash == "0xorig"
+    assert len(sent) == 1
+    assert sent[0]["idempotency_key"] == f"vance-swap:{SWAP_ID}"  # MÊME clé
+    assert sent[0]["to"] == "0xrouter"  # MÊME corps RPC (rejoué depuis l'intent persisté)
+    assert captured["tx_hash"] == "0xorig"
+
+
+def test_broadcasting_entry_never_calls_prepare(monkeypatch):
+    """La reprise n'appelle JAMAIS prepare_execute (pas de nouvelle quote/calldata)."""
+    monkeypatch.setattr(
+        se, "send_delegated_sponsored_transaction", lambda **kw: {"hash": "0xorig"}
+    )
+    monkeypatch.setattr(
+        se, "complete_virtual_wallet_swap",
+        lambda db, **kw: SimpleNamespace(
+            finalize=SimpleNamespace(status="submitted", settled=False, tx_hash="0xorig"),
+            phase="submitted",
+        ),
+    )
+
+    class _NoPrepare(_FakeExecuteSvc):
+        def prepare_execute(self, db, *, person_id, swap_id):
+            raise AssertionError("prepare_execute interdit en reprise BROADCASTING")
+
+    repo = _fake_repo(SwapSessionStatus.BROADCASTING.value, broadcast_intent=_broadcast_intent())
+    res = se.execute_prepared_swap_server_side(
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID, swap_repo=repo,
+        execute_svc=_NoPrepare(_fake_prepared()),
+    )
+    assert res.phase == "submitted"
+
+
+def test_broadcasting_recovery_pending_on_privy_error(monkeypatch):
+    """Erreur Privy en reprise → reste broadcasting (pending) ; aucune double exécution."""
+
+    def _raise(**kw):
+        raise PrivyApiError("privy.rpc_unreachable", "down")
+
+    monkeypatch.setattr(se, "send_delegated_sponsored_transaction", _raise)
+    monkeypatch.setattr(
+        se, "complete_virtual_wallet_swap",
+        lambda *a, **k: pytest.fail("complete interdit si la reprise échoue"),
+    )
+    repo = _fake_repo(SwapSessionStatus.BROADCASTING.value, broadcast_intent=_broadcast_intent())
+    res = se.execute_prepared_swap_server_side(
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID, swap_repo=repo,
+        execute_svc=_FakeExecuteSvc(_fake_prepared()),
+    )
+    assert res.phase == "broadcasting"
+    assert res.fallback_reason == "recovery_pending:privy.rpc_unreachable"
+    assert res.signed_server_side is False
+
+
+def test_broadcasting_without_intent_never_broadcasts(monkeypatch):
+    """Marqueur de rejeu perdu → on ne rediffuse PAS (impossible de garantir l'unicité)."""
+    monkeypatch.setattr(
+        se, "send_delegated_sponsored_transaction",
+        lambda **kw: pytest.fail("aucune diffusion sans intent de rejeu"),
+    )
+    repo = _fake_repo(SwapSessionStatus.BROADCASTING.value, broadcast_intent=None)
+    res = se.execute_prepared_swap_server_side(
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID, swap_repo=repo,
+        execute_svc=_FakeExecuteSvc(_fake_prepared()),
+    )
+    assert res.phase == "broadcasting"
+    assert res.fallback_reason == "broadcast_intent_missing"
+
+
+def test_crash_between_broadcast_and_commit_recovers_same_key(monkeypatch):
+    """Bug D1 reproduit : 1ʳᵉ exécution diffuse puis 'crash' (complete lève) ; le retry
+    reprend en BROADCASTING avec la MÊME clé d'idempotence → Privy ne diffuse qu'UNE tx."""
+    _patch_common(monkeypatch)
+    sent = []
+    monkeypatch.setattr(
+        se, "send_delegated_sponsored_transaction",
+        lambda **kw: sent.append(kw) or {"hash": "0xorig", "transaction_id": "t1"},
+    )
+
+    calls = {"n": 0}
+
+    def _complete(db, *, person_id, swap_id, tx_hash, signing_wallet_address=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("worker crash après broadcast")
+        return SimpleNamespace(
+            finalize=SimpleNamespace(status="confirmed", settled=True, tx_hash=tx_hash),
+            phase="confirmed",
+        )
+
+    monkeypatch.setattr(se, "complete_virtual_wallet_swap", _complete)
+    repo = _fake_repo(SwapSessionStatus.QUOTE_RECEIVED.value)
+
+    with pytest.raises(RuntimeError, match="worker crash"):
+        se.execute_prepared_swap_server_side(
+            _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID, swap_repo=repo,
+            execute_svc=_FakeExecuteSvc(_fake_prepared()),
+        )
+
+    swap = repo.get_for_person(None, swap_id=SWAP_ID, person_id=PERSON_ID)
+    assert swap.status == SwapSessionStatus.BROADCASTING.value  # laissé in-flight
+
+    # Retry → reprise idempotente.
+    res = se.execute_prepared_swap_server_side(
+        _FakeDB(), person_id=PERSON_ID, swap_id=SWAP_ID, swap_repo=repo,
+        execute_svc=_FakeExecuteSvc(_fake_prepared()),
+    )
+    assert res.phase == "confirmed"
+    assert len(sent) == 2  # deux appels Privy émis...
+    assert sent[0]["idempotency_key"] == sent[1]["idempotency_key"] == f"vance-swap:{SWAP_ID}"
+    # ...mais MÊME clé d'idempotence → une seule transaction on-chain (exactly-once).

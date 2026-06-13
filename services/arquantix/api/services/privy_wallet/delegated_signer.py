@@ -270,10 +270,17 @@ def send_delegated_sponsored_transaction(
     gas_limit: Any = None,
     rpc_timeout: int = 60,
     hash_wait_timeout: int = 120,
+    idempotency_key: str | None = None,
 ) -> dict[str, str | None]:
     """Envoie une tx sponsorisée depuis le wallet user via la clé d'autorisation app.
 
     Retourne ``{"hash": ..., "transaction_id": ...}``. Lève ``PrivyApiError`` sinon.
+
+    ``idempotency_key`` : si fourni, ajoute l'en-tête ``privy-idempotency-key``. Privy
+    garantit alors qu'une requête rejouée avec la **même clé et le même corps** ne diffuse
+    pas une seconde transaction (fenêtre 24 h) — garde-fou exactly-once du retry (D1).
+    La clé d'idempotence n'entre **pas** dans le payload signé d'autorisation, donc elle ne
+    modifie pas la signature.
     """
     if not privy_delegated_signing_configured():
         raise PrivyApiError(
@@ -291,6 +298,8 @@ def send_delegated_sponsored_transaction(
     authorization_signature = generate_authorization_signature(signature_input)
 
     headers = {**_basic_auth_headers(), "privy-authorization-signature": authorization_signature}
+    if idempotency_key and idempotency_key.strip():
+        headers["privy-idempotency-key"] = idempotency_key.strip()
     payload = _http_post_json(
         rpc_url, headers, json.dumps(rpc_body).encode("utf-8"), timeout=rpc_timeout
     )

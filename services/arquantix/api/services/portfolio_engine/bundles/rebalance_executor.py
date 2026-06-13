@@ -1015,6 +1015,10 @@ class BundleRebalanceExecutor:
             return "completed", ""
         if phase == "submitted":
             return "pending", "awaiting_confirmation"
+        if phase == "broadcasting":
+            # D1 — diffusion en cours sur CE swap : rester pending pour reprise idempotente
+            # au cycle suivant (jamais un nouveau swap_id, qui pourrait doubler la tx).
+            return "pending", f"broadcasting_recovery:{result.fallback_reason or 'pending'}"
         if phase == "failed":
             return "failed", result.fallback_reason or "server_sign_failed"
         if phase == "expired":

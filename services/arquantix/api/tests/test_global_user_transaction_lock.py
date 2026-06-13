@@ -370,6 +370,55 @@ def test_conflict_maps_to_transaction_in_progress_409(db: Session, global_lock_o
     assert mapped.requested_reason == "intent_b_blocked"
 
 
+@pytestmark_db
+def test_three_concurrent_financial_intents_only_one_acquires_no_parasite_lock(
+    db: Session, global_lock_on
+):
+    """Doctrine D3 : swap + invest + retrait ~simultanés pour un même user →
+    1 seul acquiert, les 2 autres 409, AUCUN verrou parasite, et après release un
+    suivant peut acquérir (exclusion séquentielle, pas de blocage définitif)."""
+    pe = make_linked_client(db)
+    _wallet(db, pe)
+    swap_intent = _intent(db, pe.person_id, product_type="lifi_swap")
+    invest_intent = _intent(db, pe.person_id, product_type="bundle_invest")
+    withdrawal_intent = _intent(db, pe.person_id, product_type="fiat_withdrawal")
+
+    winner = acquire_global_user_transaction_lock(
+        db, person_id=pe.person_id, intent_id=swap_intent.id, expires_at=_expires_in()
+    )
+    db.flush()
+    assert winner.acquired is True
+
+    for loser in (invest_intent, withdrawal_intent):
+        with pytest.raises(ProductLockConflict) as exc:
+            acquire_global_user_transaction_lock(
+                db, person_id=pe.person_id, intent_id=loser.id, expires_at=_expires_in()
+            )
+        assert exc.value.existing_intent_id == swap_intent.id
+        assert exc.value.requested_intent_id == loser.id
+
+    active = (
+        db.query(TransactionProductLock)
+        .filter(
+            TransactionProductLock.person_id == pe.person_id,
+            TransactionProductLock.scope == GLOBAL_LOCK_SCOPE.value,
+            TransactionProductLock.status == ProductLockStatus.ACTIVE.value,
+            TransactionProductLock.released_at.is_(None),
+        )
+        .all()
+    )
+    assert len(active) == 1  # un seul verrou actif : le gagnant
+    assert active[0].intent_id == swap_intent.id  # aucun verrou parasite des rejetés
+
+    release_global_user_transaction_lock(db, intent_id=swap_intent.id, reason="done")
+    db.flush()
+    nxt = acquire_global_user_transaction_lock(
+        db, person_id=pe.person_id, intent_id=invest_intent.id, expires_at=_expires_in()
+    )
+    db.flush()
+    assert nxt.acquired is True
+
+
 def test_no_settlement_worker_controller_imports_in_module_source():
     import services.product_locks.global_user_transaction_lock as mod
 

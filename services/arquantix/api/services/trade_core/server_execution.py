@@ -210,11 +210,89 @@ def _phase_from_status(status: str) -> str:
         return "confirmed"
     if status == SwapSessionStatus.SUBMITTED.value:
         return "submitted"
+    if status == SwapSessionStatus.BROADCASTING.value:
+        return "broadcasting"
     if status == SwapSessionStatus.FAILED.value:
         return "failed"
     if status == SwapSessionStatus.EXPIRED.value:
         return "expired"
     return "awaiting_signature"
+
+
+def broadcast_idempotency_key(swap_id: UUID) -> str:
+    """Clé d'idempotence Privy déterministe du swap (D1) — stable entre retries."""
+    return f"vance-swap:{swap_id}"
+
+
+def approval_idempotency_key(swap_id: UUID) -> str:
+    """Clé d'idempotence Privy de l'approval ERC-20 (corps distinct du swap)."""
+    return f"vance-approve:{swap_id}"
+
+
+def _recover_broadcasting_swap(
+    db: Session,
+    *,
+    person_id: UUID,
+    swap_id: UUID,
+    swap,
+    swap_repo,
+) -> ServerSwapExecutionResult:
+    """Reprise d'un swap déjà passé en ``BROADCASTING`` (crash entre broadcast et commit).
+
+    Règle D1 : on ne re-signe **jamais** aveuglément. On rejoue la diffusion avec la **même**
+    clé d'idempotence Privy et le **même** corps RPC persisté. Privy renvoie la transaction
+    d'origine sans double exécution (ou l'exécute une seule fois si le 1ᵉʳ appel avait échoué
+    avant diffusion). Tant que la reprise n'aboutit pas, on reste en ``broadcasting`` (leg
+    ``pending``) — jamais un nouveau swap_id, qui aurait une clé différente et pourrait
+    doubler la transaction on-chain.
+    """
+    intent = swap_repo.read_broadcast_intent(swap)
+    if intent is None:
+        logger.error(
+            "server_swap.broadcasting_without_intent swap_id=%s — reprise impossible sans rejeu",
+            str(swap_id),
+        )
+        return ServerSwapExecutionResult(
+            "broadcasting", swap_id, signed_server_side=False,
+            fallback_reason="broadcast_intent_missing",
+        )
+    try:
+        swap_send = send_delegated_sponsored_transaction(
+            privy_wallet_id=str(intent["privy_wallet_id"]),
+            chain_id=int(intent["chain_id"]),
+            to=str(intent["to"]),
+            data=str(intent["data"]),
+            value=intent.get("value"),
+            gas_limit=intent.get("gas_limit"),
+            idempotency_key=str(intent["idempotency_key"]),
+        )
+    except PrivyApiError as exc:
+        logger.warning(
+            "server_swap.broadcast_recovery_pending swap_id=%s code=%s",
+            str(swap_id), exc.code,
+        )
+        return ServerSwapExecutionResult(
+            "broadcasting", swap_id, signed_server_side=False,
+            fallback_reason=f"recovery_pending:{exc.code}",
+        )
+
+    tx_hash = str(swap_send["hash"])
+    completed = complete_virtual_wallet_swap(
+        db,
+        person_id=person_id,
+        swap_id=swap_id,
+        tx_hash=tx_hash,
+        signing_wallet_address=intent.get("signing_wallet_address"),
+    )
+    finalize = completed.finalize
+    phase = finalize.status if finalize is not None else completed.phase
+    return ServerSwapExecutionResult(
+        phase,
+        swap_id,
+        signed_server_side=True,
+        tx_hash=tx_hash,
+        settled=bool(finalize.settled) if finalize is not None else False,
+    )
 
 
 def execute_prepared_swap_server_side(
@@ -252,6 +330,11 @@ def execute_prepared_swap_server_side(
         )
     if status in (SwapSessionStatus.FAILED.value, SwapSessionStatus.EXPIRED.value):
         return ServerSwapExecutionResult(_phase_from_status(status), swap_id, signed_server_side=False)
+    # D1 — déjà en cours de diffusion : reprise idempotente, jamais une nouvelle signature.
+    if status == SwapSessionStatus.BROADCASTING.value:
+        return _recover_broadcasting_swap(
+            db, person_id=person_id, swap_id=swap_id, swap=swap, swap_repo=swap_repo,
+        )
     if status not in _SIGN_STATES:
         return ServerSwapExecutionResult(
             _phase_from_status(status), swap_id, signed_server_side=False,
@@ -328,6 +411,7 @@ def execute_prepared_swap_server_side(
                     to=approval.token_address,
                     data=build_approve_calldata(approval.spender_address, approval.amount_atomic),
                     value="0x0",
+                    idempotency_key=approval_idempotency_key(swap_id),
                 )
                 execute_svc.record_token_approval(
                     db,
@@ -342,6 +426,25 @@ def execute_prepared_swap_server_side(
                 if rpc_url and not wait_for_approval_confirmed(rpc_url, str(approve_send["hash"])):
                     return _fallback("approval_unconfirmed")
 
+        # D1 — état durable AVANT diffusion : on persiste de quoi rejouer à l'identique
+        # (même corps + même clé d'idempotence) puis on commit. Si le worker crashe juste
+        # après le broadcast, le retry passera par ``_recover_broadcasting_swap`` au lieu de
+        # re-signer une nouvelle transaction.
+        swap_idem = broadcast_idempotency_key(swap_id)
+        swap_repo.mark_broadcasting(
+            swap,
+            idempotency_key=swap_idem,
+            privy_wallet_id=privy_wallet_id,
+            chain_id=chain_id,
+            to=tx.to,
+            data=tx.data,
+            value=tx.value,
+            gas_limit=tx.gas_limit,
+            signing_wallet_address=signing_address,
+        )
+        db.commit()
+        db.refresh(swap)
+
         swap_send = send_delegated_sponsored_transaction(
             privy_wallet_id=privy_wallet_id,
             chain_id=chain_id,
@@ -349,11 +452,19 @@ def execute_prepared_swap_server_side(
             data=tx.data,
             value=tx.value,
             gas_limit=tx.gas_limit,
+            idempotency_key=swap_idem,
         )
     except PrivyApiError as exc:
         logger.warning(
             "server_swap.sign_failed", extra={"swap_id": str(swap_id), "code": exc.code}
         )
+        # Si BROADCASTING est déjà committé, on NE retombe PAS en awaiting_signature (qui
+        # créerait un nouveau swap) : on reste en ``broadcasting`` pour reprise idempotente.
+        if str(getattr(swap, "status", "")) == SwapSessionStatus.BROADCASTING.value:
+            return ServerSwapExecutionResult(
+                "broadcasting", swap_id, signed_server_side=False,
+                fallback_reason=f"sign_failed:{exc.code}",
+            )
         return _fallback(f"sign_failed:{exc.code}")
 
     tx_hash = str(swap_send["hash"])

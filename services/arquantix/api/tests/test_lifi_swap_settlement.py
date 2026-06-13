@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
 from sqlalchemy.orm import Session
 
 from services.auth.person_identity_bridge import PROVIDER_PRIVY, link_external_identity_to_person, upsert_person_crypto_wallet
@@ -124,3 +125,49 @@ def test_swap_settlement_is_idempotent(db: Session):
     db.commit()
 
     assert swap_settlement_already_applied(swap) is True
+
+
+def test_legacy_settlement_atomic_debit_rolls_back_when_credit_fails(db: Session, monkeypatch):
+    """D2 — un échec de la jambe CRÉDIT annule la jambe DÉBIT (savepoint) : jamais de débit
+    orphelin sur le rail legacy. Le solde source reste intact."""
+    pe = make_linked_client(db)
+    _seed_wallet(db, pe)
+    PrivyWalletAdminService().simulate_deposit(
+        db,
+        PrivySimulateDepositRequest(
+            person_id=pe.person_id,
+            wallet_address=EVM_ADDR,
+            asset="USDC",
+            amount="25",
+            chain_id=8453,
+        ),
+    )
+    db.commit()
+
+    swap = _make_confirmed_base_swap(pe.person_id)
+    db.add(swap)
+    db.flush()
+
+    import services.lifi.lifi_swap_settlement as settle_mod
+
+    real_create = settle_mod._create_swap_ledger_entry
+    calls = {"n": 0}
+
+    def _patched(db, **kw):
+        calls["n"] += 1
+        if calls["n"] == 1:  # 1ʳᵉ jambe = DÉBIT : écriture réelle
+            return real_create(db, **kw)
+        raise RuntimeError("credit boom")  # 2ᵉ jambe = CRÉDIT : échec
+
+    monkeypatch.setattr(settle_mod, "_create_swap_ledger_entry", _patched)
+
+    with pytest.raises(RuntimeError, match="credit boom"):
+        apply_swap_settlement(db, swap, sync_source="lifi_swap", amount_actual=Decimal("0.00475"))
+
+    assert calls["n"] == 2  # débit puis crédit tentés
+
+    # Savepoint rollback : le débit USDC est annulé → solde inchangé, pas de crédit ETH.
+    svc = PrivyWalletLedgerService()
+    by_asset = {row.asset: row for row in svc.get_balances(db, person_id=pe.person_id).balances}
+    assert Decimal(by_asset["USDC"].balance) == Decimal("25")
+    assert "ETH" not in by_asset or Decimal(by_asset["ETH"].balance) == Decimal("0")

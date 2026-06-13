@@ -392,32 +392,42 @@ def apply_swap_settlement(
     swap_id = str(swap.id)
     credit_log_index = resolved.log_index if resolved.log_index is not None else 1
 
-    _create_swap_ledger_entry(
-        db,
-        swap=swap,
-        wallet=wallet,
-        direction=PersonWalletDirection.DEBIT.value,
-        asset=from_asset,
-        amount=amount_in,
-        chain_id=from_chain_id,
-        log_index=SWAP_LEDGER_LOG_INDEX_DEBIT_PREFERRED,
-        idempotency_key=swap_debit_idempotency_key(swap_id),
-        sync_source=sync_source,
-        settlement_meta=settlement_meta,
-    )
-    _create_swap_ledger_entry(
-        db,
-        swap=swap,
-        wallet=wallet,
-        direction=PersonWalletDirection.CREDIT.value,
-        asset=to_asset,
-        amount=amount_out,
-        chain_id=to_chain_id,
-        log_index=credit_log_index,
-        idempotency_key=swap_credit_idempotency_key(swap_id),
-        sync_source=sync_source,
-        settlement_meta=settlement_meta,
-    )
+    # D2 — atomicité débit/crédit du rail legacy : un échec après le débit (création deposit
+    # ou increment_balance du crédit) ne doit plus jamais laisser un débit orphelin. Le
+    # savepoint annule les deux jambes ensemble ; l'idempotence par clé rend le rejeu sûr.
+    savepoint = db.begin_nested()
+    try:
+        _create_swap_ledger_entry(
+            db,
+            swap=swap,
+            wallet=wallet,
+            direction=PersonWalletDirection.DEBIT.value,
+            asset=from_asset,
+            amount=amount_in,
+            chain_id=from_chain_id,
+            log_index=SWAP_LEDGER_LOG_INDEX_DEBIT_PREFERRED,
+            idempotency_key=swap_debit_idempotency_key(swap_id),
+            sync_source=sync_source,
+            settlement_meta=settlement_meta,
+        )
+        _create_swap_ledger_entry(
+            db,
+            swap=swap,
+            wallet=wallet,
+            direction=PersonWalletDirection.CREDIT.value,
+            asset=to_asset,
+            amount=amount_out,
+            chain_id=to_chain_id,
+            log_index=credit_log_index,
+            idempotency_key=swap_credit_idempotency_key(swap_id),
+            sync_source=sync_source,
+            settlement_meta=settlement_meta,
+        )
+    except Exception:
+        savepoint.rollback()
+        raise
+    else:
+        savepoint.commit()
 
     try:
         from services.cost_basis.ingest_lifi import ingest_lifi_swap_settlement

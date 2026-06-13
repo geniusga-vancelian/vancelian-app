@@ -142,7 +142,12 @@ class LifiExecuteService:
         signing_wallet_address: str | None = None,
     ) -> SwapStatusResponse:
         swap = self._get_active_swap(db, person_id=person_id, swap_id=swap_id)
-        if swap.status != SwapSessionStatus.AWAITING_SIGNATURE.value:
+        # BROADCASTING = signature serveur déjà diffusée on-chain (D1) → transition légitime
+        # vers SUBMITTED. AWAITING_SIGNATURE = chemin signature client classique.
+        if swap.status not in {
+            SwapSessionStatus.AWAITING_SIGNATURE.value,
+            SwapSessionStatus.BROADCASTING.value,
+        }:
             raise SwapValidationError("swap.invalid_state", "Signature requise avant soumission")
 
         assert_locked_signing_wallet_match(
