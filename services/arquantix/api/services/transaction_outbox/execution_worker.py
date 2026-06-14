@@ -18,7 +18,10 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from services.lifi.config import lifi_execution_worker_enabled
-from services.lifi.orchestrator_allowlist import lifi_execution_worker_enabled_for_person
+from services.lifi.orchestrator_allowlist import (
+    lifi_enqueue_and_wait_enabled_for_person,
+    lifi_execution_worker_enabled_for_person,
+)
 from services.onchain_indexer.models import TransactionIntent
 from services.transaction_outbox.enums import OutboxEventType
 from services.transaction_outbox.models import TransactionOutbox
@@ -119,6 +122,7 @@ def process_transaction_outbox_intent_execute(
     processed = 0
     failed = 0
     skipped_allowlist = 0
+    deferred = 0
     signed = 0
     errors: list[dict[str, str]] = []
 
@@ -128,6 +132,27 @@ def process_transaction_outbox_intent_execute(
             TransactionOutboxRepository.release_processing_lock(db, event)
             skipped_allowlist += 1
             continue
+        # PR3 — enqueue-and-wait : 1 transaction active par user. Le worker acquiert le slot
+        # global au moment d'exécuter ; si un autre intent du même user le détient déjà, on
+        # diffère (remise en PENDING, sans incrémenter attempt_count) → retry au prochain tick.
+        if lifi_enqueue_and_wait_enabled_for_person(db, intent.person_id):
+            from services.lifi.lifi_swap_global_lock import LIFI_SWAP_GLOBAL_LOCK_REASON
+            from services.product_locks.exceptions import TransactionInProgress409
+            from services.product_locks.financial_transaction_global_lock import (
+                acquire_financial_transaction_global_lock_or_raise,
+            )
+
+            try:
+                acquire_financial_transaction_global_lock_or_raise(
+                    db,
+                    person_id=intent.person_id,
+                    intent_id=intent.id,
+                    reason=LIFI_SWAP_GLOBAL_LOCK_REASON,
+                )
+            except TransactionInProgress409:
+                TransactionOutboxRepository.release_processing_lock(db, event)
+                deferred += 1
+                continue
         try:
             summary = handle_intent_execute_event(db, event)
             TransactionOutboxRepository.mark_processed(db, event)
@@ -146,7 +171,7 @@ def process_transaction_outbox_intent_execute(
             failed += 1
             errors.append({"outbox_id": str(event.id), "error": str(exc)})
 
-    if processed or failed or skipped_allowlist:
+    if processed or failed or skipped_allowlist or deferred:
         db.commit()
 
     return {
@@ -156,5 +181,6 @@ def process_transaction_outbox_intent_execute(
         "signed_server_side": signed,
         "failed": failed,
         "skipped_allowlist": skipped_allowlist,
+        "deferred": deferred,
         "errors": errors,
     }

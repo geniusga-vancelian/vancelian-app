@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from services.lifi.lifi_execute_service import LifiExecuteService
 from services.lifi.lifi_quote_service import LifiQuoteService
 from services.lifi.lifi_validation_service import SwapPriceChangedError, SwapValidationError
-from services.lifi.orchestrator_allowlist import lifi_intent_orchestrator_enabled_for_person
+from services.lifi.orchestrator_allowlist import (
+    lifi_enqueue_and_wait_enabled_for_person,
+    lifi_intent_orchestrator_enabled_for_person,
+)
 from services.lifi.schemas import SwapConfirmExecuteResponse, SwapStatusResponse
 from services.lifi.swap_quote_freshness import compare_receive_against_review
 from services.lifi.swap_repository import PersonWalletSwapRepository
@@ -94,13 +97,20 @@ class SwapCoreConfirmPoll:
                     swap_id=swap_id,
                 )
 
-            from services.lifi.lifi_swap_global_lock import acquire_lifi_swap_global_lock_or_raise
+            # PR3 — enqueue-and-wait : ne pas acquérir le slot user au confirm (pas de 409
+            # fail-fast). Le worker d'exécution acquiert le slot au moment d'exécuter ; un
+            # 2e swap concurrent reste en file et démarre après terminalité du 1er.
+            # Sinon (PR2 / legacy) : fail-fast 409 au confirm comme avant.
+            if not lifi_enqueue_and_wait_enabled_for_person(db, person_id):
+                from services.lifi.lifi_swap_global_lock import (
+                    acquire_lifi_swap_global_lock_or_raise,
+                )
 
-            acquire_lifi_swap_global_lock_or_raise(
-                db,
-                person_id=person_id,
-                swap_id=swap_id,
-            )
+                acquire_lifi_swap_global_lock_or_raise(
+                    db,
+                    person_id=person_id,
+                    swap_id=swap_id,
+                )
 
             execute = self._execute.prepare_execute(db, person_id=person_id, swap_id=swap_id)
             freshness = "refreshed" if comparison.delta_bps > 0 else "verified"

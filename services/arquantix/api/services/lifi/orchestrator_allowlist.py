@@ -82,6 +82,21 @@ def lifi_authoritative_execution_enabled_for_person(db: Session, person_id: UUID
     return lifi_execution_worker_enabled_for_person(db, person_id)
 
 
+def lifi_enqueue_and_wait_enabled_for_person(db: Session, person_id: UUID | None) -> bool:
+    """PR3 — file enqueue-and-wait active pour cette personne.
+
+    Exige le flag enqueue-and-wait **et** le mode autoritaire (PR2 : worker unique exécuteur).
+    Sans le mode autoritaire, le client pourrait exécuter en parallèle → la sérialisation
+    n'aurait aucun sens. Le global lock (`GLOBAL_USER_TRANSACTION_LOCK_ENABLED`) doit aussi
+    être actif pour que la sérialisation worker fonctionne.
+    """
+    from services.lifi.config import lifi_enqueue_and_wait_enabled
+
+    if not lifi_enqueue_and_wait_enabled():
+        return False
+    return lifi_authoritative_execution_enabled_for_person(db, person_id)
+
+
 def lifi_rebalance_worker_enabled_for_person(db: Session, person_id: UUID | None) -> bool:
     """Rééquilibrage serveur autorisé pour cette personne (flag ON + allowlist)."""
     from services.lifi.config import lifi_rebalance_worker_enabled

@@ -38,6 +38,12 @@ DEFAULT_LIFI_EXECUTION_WORKER_ENABLED = False
 # sont refusées (409) pour les personnes éligibles. Défaut OFF (aucun impact legacy).
 DEFAULT_LIFI_AUTHORITATIVE_EXECUTION_ENABLED = False
 
+# PR3 — enqueue-and-wait : la sérialisation passe du confirm (fail-fast 409) au worker.
+# Le slot user (global lock) est acquis par le worker au moment d'exécuter ; un 2e swap
+# concurrent reste en file (PENDING) et démarre quand le 1er atteint un état terminal.
+# Exige le mode autoritaire (PR2) + le global lock. Défaut OFF.
+DEFAULT_LIFI_ENQUEUE_AND_WAIT_ENABLED = False
+
 # Rééquilibrage portefeuille piloté serveur (trigger=server, leg signé serveur) — défaut OFF.
 DEFAULT_LIFI_REBALANCE_WORKER_ENABLED = False
 
@@ -135,6 +141,15 @@ def lifi_authoritative_execution_enabled() -> bool:
     raw = (
         os.getenv("LIFI_AUTHORITATIVE_EXECUTION_ENABLED")
         or str(DEFAULT_LIFI_AUTHORITATIVE_EXECUTION_ENABLED)
+    ).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def lifi_enqueue_and_wait_enabled() -> bool:
+    """PR3 — 2e swap concurrent mis en file (worker acquiert le slot) au lieu d'un 409 — défaut false."""
+    raw = (
+        os.getenv("LIFI_ENQUEUE_AND_WAIT_ENABLED")
+        or str(DEFAULT_LIFI_ENQUEUE_AND_WAIT_ENABLED)
     ).strip().lower()
     return raw in {"1", "true", "yes", "on"}
 
