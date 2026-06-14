@@ -57,72 +57,79 @@ export type SwapProcessingContext = {
 export const SWAP_PROCESSING_COMPLETED_INDEX = 5
 
 /**
- * PR4 — stepper du mode autoritaire / enqueue-and-wait. Le serveur exécute le swap : pas
- * d'étape d'autorisation/signature côté navigateur. Reflète la vérité backend :
- * confirmé = accepté dans la file, pas exécuté immédiatement.
+ * PR4 / PR4.1 — stepper du mode autoritaire / enqueue-and-wait. Le serveur exécute le swap :
+ * pas d'étape d'autorisation/signature côté navigateur. L'étape de file est **dynamique** et
+ * distingue deux situations très différentes (vérité backend `queue_state`) :
+ *   A. swap accepté, le worker va le préparer → « Préparation de l'échange » (cas nominal,
+ *      aucune autre opération — ne JAMAIS afficher « une autre opération en cours ») ;
+ *   B. swap qui attend qu'une autre opération financière se termine (un autre intent détient le
+ *      slot user) → « En attente dans la file de traitement ».
  */
-export const SWAP_AUTHORITATIVE_STEP_DEFS: Array<{
-  label: string
-  defaultSub: (ctx: SwapProcessingContext) => string
-}> = [
-  {
-    label: 'Demande reçue',
-    defaultSub: () => 'Votre échange a été accepté et placé dans la file de traitement.',
-  },
-  {
-    label: "En attente d'une opération en cours",
-    defaultSub: () =>
-      'Une autre opération financière est en cours. Votre échange démarrera automatiquement dès qu’elle sera terminée.',
-  },
-  {
-    label: "Préparation de l'échange",
-    defaultSub: (ctx) => `Préparation de la conversion de ${ctx.fromAsset} vers ${ctx.toAsset}.`,
-  },
-  {
-    label: 'Exécution on-chain',
-    defaultSub: (ctx) => `Exécution de l’échange ${ctx.fromAsset} → ${ctx.toAsset} sur la blockchain.`,
-  },
-  {
-    label: 'Confirmation de la transaction',
-    defaultSub: () => 'Confirmation de la transaction sur la blockchain.',
-  },
-  {
-    label: 'Terminé',
-    defaultSub: (ctx) => `Crédit de ${ctx.receiveLabel} sur votre portefeuille Vancelian.`,
-  },
-]
+export type SwapAuthoritativeStepOptions = {
+  /** Vrai uniquement si une AUTRE opération financière détient le slot (queue_state=waiting_for_previous). */
+  waitingForPrevious?: boolean
+}
 
-export const SWAP_AUTHORITATIVE_COMPLETED_INDEX = 6
+export const SWAP_AUTHORITATIVE_COMPLETED_INDEX = 5
 
-/** Index stepper autoritaire (0–5) ; 6 = terminé. */
+/** Index stepper autoritaire (0–4) ; 5 = terminé. */
 export function swapAuthoritativeStepperIndex(phase: SwapExecutionPhase): number {
   switch (phase) {
     case 'idle':
     case 'verifying_price':
       return 0
+    // File d'attente ET préparation partagent la même étape (libellé dynamique) : un swap qui
+    // n'attend personne ne doit jamais afficher « une autre opération est en cours ».
     case 'queued':
-      return 1
     case 'preparing':
-      return 2
+      return 1
     case 'server_executing':
     case 'signing':
     case 'submitting':
-      return 3
+      return 2
     case 'confirming':
     case 'bridging':
-      return 4
+      return 3
     case 'completed':
-      return 6
+      return 5
     default:
       return 0
   }
 }
 
-export function buildSwapAuthoritativeProcessingSteps(ctx: SwapProcessingContext): TransactionStep[] {
-  return SWAP_AUTHORITATIVE_STEP_DEFS.map((step) => ({
-    label: step.label,
-    subtext: step.defaultSub(ctx),
-  }))
+export function buildSwapAuthoritativeProcessingSteps(
+  ctx: SwapProcessingContext,
+  opts: SwapAuthoritativeStepOptions = {},
+): TransactionStep[] {
+  const queueStep: TransactionStep = opts.waitingForPrevious
+    ? {
+        label: 'En attente dans la file de traitement',
+        subtext:
+          'Une autre opération financière est en cours. Votre échange démarrera automatiquement ensuite.',
+      }
+    : {
+        label: "Préparation de l'échange",
+        subtext: 'Votre demande a été reçue. Nous préparons son exécution.',
+      }
+  return [
+    {
+      label: 'Demande reçue',
+      subtext: 'Votre échange a été accepté et placé dans la file de traitement.',
+    },
+    queueStep,
+    {
+      label: 'Exécution on-chain',
+      subtext: `Exécution de l’échange ${ctx.fromAsset} → ${ctx.toAsset} sur la blockchain.`,
+    },
+    {
+      label: 'Confirmation de la transaction',
+      subtext: 'Confirmation de la transaction sur la blockchain.',
+    },
+    {
+      label: 'Terminé',
+      subtext: `Crédit de ${ctx.receiveLabel} sur votre portefeuille Vancelian.`,
+    },
+  ]
 }
 
 export const SWAP_TERMINAL_FAILURE_COPY: TransactionTerminalFailureCopy = {

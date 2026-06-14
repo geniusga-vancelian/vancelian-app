@@ -112,7 +112,10 @@ export function PortalSwapExecutionController({
   const runAuthoritative = useCallback(
     async (swapId: string) => {
       setAuthoritative(true)
-      setExecutionPhase('queued')
+      // PR4.1 — défaut optimiste « préparation » (accepté). On ne bascule sur « en attente
+      // d'une autre opération » que si un poll renvoie queue_state=waiting_for_previous
+      // (mappé en phase 'queued'). Jamais de faux « une autre opération est en cours ».
+      setExecutionPhase('preparing')
       const status = await pollAuthoritativeUntilTerminal(swapId)
       if (status.status !== 'CONFIRMED') {
         throw new Error('Swap non confirmé')
@@ -356,7 +359,9 @@ export function PortalSwapExecutionController({
           }
           steps={
             authoritative
-              ? buildSwapAuthoritativeProcessingSteps(swapProcessingContext)
+              ? buildSwapAuthoritativeProcessingSteps(swapProcessingContext, {
+                  waitingForPrevious: executionPhase === 'queued',
+                })
               : buildSwapProcessingSteps(swapProcessingContext)
           }
           progressIndex={

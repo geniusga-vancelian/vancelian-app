@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  buildSwapAuthoritativeProcessingSteps,
   buildSwapProcessingSteps,
   SWAP_TERMINAL_FAILURE_COPY,
 } from '@/components/portal/transaction/mappers/swapSteps'
@@ -38,6 +39,27 @@ describe('swapFlowAntiJargon', () => {
       assertNoSwapPrimaryJargon(step.label)
       assertNoSwapPrimaryJargon(step.subtext)
     }
+  })
+
+  it('authoritative (queue) steps have no forbidden jargon — both waiting variants', () => {
+    for (const waitingForPrevious of [false, true]) {
+      const steps = buildSwapAuthoritativeProcessingSteps(ctx, { waitingForPrevious })
+      for (const step of steps) {
+        assertNoSwapPrimaryJargon(step.label)
+        assertNoSwapPrimaryJargon(step.subtext)
+      }
+    }
+  })
+
+  it('authoritative step #1 distinguishes preparation from queue wait', () => {
+    const accepted = buildSwapAuthoritativeProcessingSteps(ctx, { waitingForPrevious: false })
+    const waiting = buildSwapAuthoritativeProcessingSteps(ctx, { waitingForPrevious: true })
+    // Cas nominal (aucune autre opération) : NE DOIT PAS mentionner une autre opération.
+    assert.match(accepted[1]!.label, /Préparation/)
+    assert.doesNotMatch(accepted[1]!.subtext, /autre opération/i)
+    // Cas attente réelle : doit expliciter l'autre opération en cours.
+    assert.match(waiting[1]!.label, /file de traitement/i)
+    assert.match(waiting[1]!.subtext, /autre opération/i)
   })
 
   it('terminal failure copy has no forbidden jargon', () => {
