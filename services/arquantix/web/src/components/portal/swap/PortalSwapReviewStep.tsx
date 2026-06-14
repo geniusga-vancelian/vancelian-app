@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import { TransactionConfirmStepsPreview } from '@/components/portal/transaction/TransactionConfirmStepsPreview'
 import { TransactionReviewPage } from '@/components/portal/transaction/TransactionReviewPage'
@@ -36,6 +36,14 @@ export function PortalSwapReviewStep({
   onConfirm,
   onBack,
 }: Props) {
+  // PR4 — anti double-clic : verrouille le CTA dès la première confirmation.
+  const [submitting, setSubmitting] = useState(false)
+  const handleConfirm = useCallback(() => {
+    if (submitting) return
+    setSubmitting(true)
+    onConfirm()
+  }, [onConfirm, submitting])
+
   const parsed = Number(amount.replace(',', '.'))
   const payAmount = formatSwapCryptoAmount(parsed > 0 ? parsed : quote.amount_in, fromAsset)
   const receiveAmount = formatSwapCryptoAmount(quote.estimated_receive, toAsset)
@@ -78,7 +86,8 @@ export function PortalSwapReviewStep({
       backButtonLabel={SWAP_REVIEW_UI.modifierCta}
       primaryAction={{
         label: SWAP_REVIEW_UI.confirmCta,
-        onClick: onConfirm,
+        onClick: handleConfirm,
+        disabled: submitting,
       }}
     >
       <p className="inv-confirm__lead">

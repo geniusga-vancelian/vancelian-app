@@ -56,6 +56,75 @@ export type SwapProcessingContext = {
 
 export const SWAP_PROCESSING_COMPLETED_INDEX = 5
 
+/**
+ * PR4 — stepper du mode autoritaire / enqueue-and-wait. Le serveur exécute le swap : pas
+ * d'étape d'autorisation/signature côté navigateur. Reflète la vérité backend :
+ * confirmé = accepté dans la file, pas exécuté immédiatement.
+ */
+export const SWAP_AUTHORITATIVE_STEP_DEFS: Array<{
+  label: string
+  defaultSub: (ctx: SwapProcessingContext) => string
+}> = [
+  {
+    label: 'Demande reçue',
+    defaultSub: () => 'Votre échange a été accepté et placé dans la file de traitement.',
+  },
+  {
+    label: "En attente d'une opération en cours",
+    defaultSub: () =>
+      'Une autre opération financière est en cours. Votre échange démarrera automatiquement dès qu’elle sera terminée.',
+  },
+  {
+    label: "Préparation de l'échange",
+    defaultSub: (ctx) => `Préparation de la conversion de ${ctx.fromAsset} vers ${ctx.toAsset}.`,
+  },
+  {
+    label: 'Exécution on-chain',
+    defaultSub: (ctx) => `Exécution de l’échange ${ctx.fromAsset} → ${ctx.toAsset} sur la blockchain.`,
+  },
+  {
+    label: 'Confirmation de la transaction',
+    defaultSub: () => 'Confirmation de la transaction sur la blockchain.',
+  },
+  {
+    label: 'Terminé',
+    defaultSub: (ctx) => `Crédit de ${ctx.receiveLabel} sur votre portefeuille Vancelian.`,
+  },
+]
+
+export const SWAP_AUTHORITATIVE_COMPLETED_INDEX = 6
+
+/** Index stepper autoritaire (0–5) ; 6 = terminé. */
+export function swapAuthoritativeStepperIndex(phase: SwapExecutionPhase): number {
+  switch (phase) {
+    case 'idle':
+    case 'verifying_price':
+      return 0
+    case 'queued':
+      return 1
+    case 'preparing':
+      return 2
+    case 'server_executing':
+    case 'signing':
+    case 'submitting':
+      return 3
+    case 'confirming':
+    case 'bridging':
+      return 4
+    case 'completed':
+      return 6
+    default:
+      return 0
+  }
+}
+
+export function buildSwapAuthoritativeProcessingSteps(ctx: SwapProcessingContext): TransactionStep[] {
+  return SWAP_AUTHORITATIVE_STEP_DEFS.map((step) => ({
+    label: step.label,
+    subtext: step.defaultSub(ctx),
+  }))
+}
+
 export const SWAP_TERMINAL_FAILURE_COPY: TransactionTerminalFailureCopy = {
   title: "Impossible de finaliser l'échange",
   lines: ['Aucun actif n’a été échangé.'],

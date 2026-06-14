@@ -36,6 +36,20 @@ const TERMINAL_STATUSES = new Set(['CONFIRMED', 'FAILED', 'EXPIRED'])
 const POLL_INTERVAL_MS = 5_000
 const POLL_TIMEOUT_MS = 300_000
 
+// PR4 — exécution serveur (file enqueue-and-wait) : le worker tourne par ticks (~10 min) et
+// un swap peut attendre une opération en cours. Fenêtre de suivi plus longue, sondage plus doux.
+const AUTHORITATIVE_POLL_INTERVAL_MS = 6_000
+const AUTHORITATIVE_POLL_TIMEOUT_MS = 25 * 60_000
+
+const QUEUE_STATE_TO_PHASE: Record<string, SwapExecutionPhase> = {
+  waiting_for_previous: 'queued',
+  preparing: 'preparing',
+  executing: 'server_executing',
+  confirming: 'confirming',
+  completed: 'completed',
+  failed: 'failed',
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -274,5 +288,49 @@ export function useLifiSwapExecution(
     })
   }, [])
 
-  return { signAndSubmit, pollUntilTerminal }
+  /**
+   * PR4 — suivi du swap exécuté côté serveur (file enqueue-and-wait). Aucune signature
+   * client : on poll GET status et on mappe ``queue_state`` vers la phase d'affichage.
+   */
+  const pollAuthoritativeUntilTerminal = useCallback(
+    async (swapId: string) => {
+      const started = Date.now()
+      while (Date.now() - started < AUTHORITATIVE_POLL_TIMEOUT_MS) {
+        const status = await fetchSwapStatus(swapId)
+        const phase = status.queue_state ? QUEUE_STATE_TO_PHASE[status.queue_state] : undefined
+        if (phase) onPhaseChange?.(phase)
+        if (TERMINAL_STATUSES.has(status.status)) {
+          if (status.status === 'CONFIRMED') {
+            return status
+          }
+          throw new SwapExecutionError({
+            code: status.status === 'EXPIRED' ? 'quote_expired' : 'unknown_error',
+            failurePhase: 'polling',
+            technicalMessage: swapStatusErrorMessage(status),
+          })
+        }
+        await sleep(AUTHORITATIVE_POLL_INTERVAL_MS)
+      }
+      const last = await fetchSwapStatus(swapId)
+      if (last.status === 'CONFIRMED') {
+        return last
+      }
+      if (TERMINAL_STATUSES.has(last.status)) {
+        throw new SwapExecutionError({
+          code: last.status === 'EXPIRED' ? 'quote_expired' : 'unknown_error',
+          failurePhase: 'polling',
+          technicalMessage: swapStatusErrorMessage(last),
+        })
+      }
+      throw new SwapExecutionError({
+        code: 'unknown_error',
+        failurePhase: 'polling',
+        technicalMessage:
+          'Délai de traitement dépassé — l’échange peut encore aboutir. Vérifiez votre wallet dans quelques minutes.',
+      })
+    },
+    [onPhaseChange],
+  )
+
+  return { signAndSubmit, pollUntilTerminal, pollAuthoritativeUntilTerminal }
 }

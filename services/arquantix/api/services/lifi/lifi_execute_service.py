@@ -352,7 +352,7 @@ class LifiExecuteService:
             release_lifi_swap_global_lock_on_terminal(db, swap)
             db.commit()
             db.refresh(swap)
-            return self._build_status_response(swap)
+            return self._build_status_response(swap, db=db, person_id=person_id)
 
         if swap.status == SwapSessionStatus.SUBMITTED.value:
             self.refresh_lifi_status(db, swap)
@@ -364,7 +364,7 @@ class LifiExecuteService:
             settle_confirmed_swap(db, swap)
             db.refresh(swap)
 
-        return self._build_status_response(swap)
+        return self._build_status_response(swap, db=db, person_id=person_id)
 
     def refresh_lifi_status(self, db: Session, swap) -> None:
         if swap.status != SwapSessionStatus.SUBMITTED.value or not swap.tx_hash:
@@ -567,10 +567,36 @@ class LifiExecuteService:
 
         db.commit()
 
-    def _build_status_response(self, swap) -> SwapStatusResponse:
+    def _build_status_response(
+        self,
+        swap,
+        *,
+        db: Session | None = None,
+        person_id: UUID | None = None,
+    ) -> SwapStatusResponse:
         lifecycle = LIFECYCLE_MESSAGES.get(swap.status, swap.status)
         if swap.status == SwapSessionStatus.SUBMITTED.value:
             lifecycle = "Bridge in progress..."
+
+        # PR4 — enrichissement front (mode autoritaire / file). Calculé uniquement quand
+        # le contexte (db + person) est fourni (chemin GET status). Les autres appelants
+        # (submit/approval/abandon) gardent les défauts (False / None) — non utilisés en
+        # mode autoritaire (le front n'appelle jamais ces routes).
+        server_authoritative = False
+        queue_state = None
+        if db is not None and person_id is not None:
+            from services.lifi.orchestrator_allowlist import (
+                lifi_authoritative_execution_enabled_for_person,
+            )
+
+            server_authoritative = lifi_authoritative_execution_enabled_for_person(
+                db, person_id
+            )
+            if server_authoritative:
+                from services.lifi.swap_queue_state import compute_swap_queue_state
+
+                queue_state = compute_swap_queue_state(db, swap, person_id=person_id)
+
         return SwapStatusResponse(
             swap_id=swap.id,
             status=swap.status,
@@ -583,6 +609,8 @@ class LifiExecuteService:
             estimated_receive=_fmt_decimal(swap.estimated_receive),
             tx_hash=swap.tx_hash,
             error_message=swap.error_message,
+            server_authoritative=server_authoritative,
+            queue_state=queue_state,
         )
 
     def _get_active_swap(self, db: Session, *, person_id: UUID, swap_id: UUID):

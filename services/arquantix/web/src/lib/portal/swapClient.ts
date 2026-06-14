@@ -45,6 +45,27 @@ export type SwapConfirmExecutePayload = {
   freshness: string
   quote: SwapQuotePayload
   execute: SwapExecutePayload
+  /** PR4 — mode autoritaire : le serveur exécute, le front ne signe pas et poll le statut. */
+  server_authoritative?: boolean
+  intent_id?: string | null
+}
+
+/** PR4 — état de file exposé par GET status en mode autoritaire. */
+export type SwapQueueState =
+  | 'waiting_for_previous'
+  | 'preparing'
+  | 'executing'
+  | 'confirming'
+  | 'completed'
+  | 'failed'
+
+/** PR4 — une route d'exécution client est refusée car le serveur est l'unique exécuteur. */
+export class SwapServerAuthoritativeError extends Error {
+  readonly code = 'swap.server_authoritative'
+  constructor(message: string) {
+    super(message)
+    this.name = 'SwapServerAuthoritativeError'
+  }
 }
 
 export type SwapPriceChangedPayload = {
@@ -107,6 +128,9 @@ export type SwapStatusPayload = {
   estimated_receive?: string | null
   tx_hash?: string | null
   error_message?: string | null
+  /** PR4 — suivi mode autoritaire / enqueue-and-wait. */
+  server_authoritative?: boolean
+  queue_state?: SwapQueueState | null
 }
 
 export type SwapServerExecutePayload = {
@@ -135,6 +159,20 @@ async function parseJson<T>(res: Response): Promise<T> {
         detail.code === 'swap.price_changed'
       ) {
         throw new SwapPriceChangedError(detail as SwapPriceChangedPayload)
+      }
+      // PR4 — une route d'exécution client a été refusée (le serveur est l'exécuteur).
+      // Le front doit basculer en suivi de statut plutôt que d'afficher une erreur.
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        'code' in detail &&
+        (detail.code === 'swap.server_authoritative' ||
+          detail.code === 'transaction_in_progress')
+      ) {
+        throw new SwapServerAuthoritativeError(
+          ('message' in detail && detail.message) ||
+            'Votre échange est exécuté côté serveur.',
+        )
       }
     }
     const detail = data.detail

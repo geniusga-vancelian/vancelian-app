@@ -97,6 +97,10 @@ class SwapConfirmExecuteResponse(BaseModel):
     freshness: str = Field(..., description="verified | refreshed")
     quote: SwapQuoteResponse
     execute: SwapExecuteResponse
+    # PR4 — mode autoritaire : le worker serveur est l'unique exécuteur. Le front NE doit PAS
+    # appeler /approval, /submit, /server-execute ; il poll le statut. ``intent_id`` permet le suivi.
+    server_authoritative: bool = False
+    intent_id: Optional[UUID] = None
 
 
 class SwapPriceChangedDetail(BaseModel):
@@ -164,6 +168,11 @@ class SwapStatusResponse(BaseModel):
     estimated_receive: Optional[str] = None
     tx_hash: Optional[str] = None
     error_message: Optional[str] = None
+    # PR4 — suivi front du mode autoritaire / enqueue-and-wait.
+    # ``server_authoritative`` : le swap est exécuté côté serveur (pas de signature navigateur).
+    # ``queue_state`` : waiting_for_previous | preparing | executing | confirming | completed | failed.
+    server_authoritative: bool = False
+    queue_state: Optional[str] = None
 
 
 class SwapServerExecuteResponse(BaseModel):

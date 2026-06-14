@@ -13,11 +13,14 @@ import { useLifiSwapExecution } from '@/components/portal/swap/useLifiSwapExecut
 import { TransactionProcessingPage } from '@/components/portal/transaction/TransactionProcessingPage'
 import { TransactionResultPage } from '@/components/portal/transaction/TransactionResultPage'
 import {
+  buildSwapAuthoritativeProcessingSteps,
   buildSwapProcessingSteps,
   buildSwapSuccessSteps,
   buildSwapSuccessSummary,
   resolveSwapFailureCopy,
+  SWAP_AUTHORITATIVE_COMPLETED_INDEX,
   SWAP_PROCESSING_COMPLETED_INDEX,
+  swapAuthoritativeStepperIndex,
   swapProcessingStepperIndex,
   type SwapProcessingContext,
 } from '@/components/portal/transaction/mappers/swapSteps'
@@ -30,7 +33,13 @@ import {
   executionPhaseToFailurePhase,
   SwapExecutionError,
 } from '@/lib/portal/swapFailure'
-import { abandonSwap, recordSwapFailure, serverExecuteSwap, type SwapQuotePayload } from '@/lib/portal/swapClient'
+import {
+  abandonSwap,
+  recordSwapFailure,
+  serverExecuteSwap,
+  SwapServerAuthoritativeError,
+  type SwapQuotePayload,
+} from '@/lib/portal/swapClient'
 import {
   SwapPriceChangedError,
   buildSwapReviewSnapshot,
@@ -80,10 +89,11 @@ export function PortalSwapExecutionController({
   const [executionPhase, setExecutionPhase] = useState<SwapExecutionPhase>('idle')
   const [failureCopy, setFailureCopy] = useState(() => resolveSwapFailureCopy(null))
   const [signingPrep, setSigningPrep] = useState(false)
+  const [authoritative, setAuthoritative] = useState(false)
   const executionStartedRef = useRef(false)
   const reviewSnapshotRef = useRef(buildSwapReviewSnapshot(quote))
 
-  const { signAndSubmit, pollUntilTerminal } = useLifiSwapExecution(
+  const { signAndSubmit, pollUntilTerminal, pollAuthoritativeUntilTerminal } = useLifiSwapExecution(
     swapMockMode,
     setExecutionPhase,
     fromAsset,
@@ -92,9 +102,51 @@ export function PortalSwapExecutionController({
   const resetExecution = useCallback(() => {
     setExecutionPhase('idle')
     setFailureCopy(resolveSwapFailureCopy(null))
+    setAuthoritative(false)
     executionStartedRef.current = false
     onResetExecutionState()
   }, [onResetExecutionState])
+
+  // PR4 — suivi du swap exécuté côté serveur (file enqueue-and-wait) : aucune signature
+  // navigateur, on poll le statut et on mappe l'état de file vers le stepper autoritaire.
+  const runAuthoritative = useCallback(
+    async (swapId: string) => {
+      setAuthoritative(true)
+      setExecutionPhase('queued')
+      const status = await pollAuthoritativeUntilTerminal(swapId)
+      if (status.status !== 'CONFIRMED') {
+        throw new Error('Swap non confirmé')
+      }
+      setExecutionPhase('completed')
+      onStepChange('result')
+    },
+    [onStepChange, pollAuthoritativeUntilTerminal],
+  )
+
+  const failWith = useCallback(
+    async (error: unknown) => {
+      const classified =
+        error instanceof SwapExecutionError
+          ? error
+          : classifySwapError(error, executionPhaseToFailurePhase(executionPhase))
+
+      setExecutionPhase('failed')
+      setFailureCopy(resolveSwapFailureCopy(classified))
+      if (quote?.swap_id) {
+        try {
+          await recordSwapFailure(quote.swap_id, {
+            failure_phase: classified.failurePhase,
+            error_code: classified.code,
+            technical_message: classified.technicalMessage,
+          })
+        } catch {
+          /* failure record best-effort — audit DB peut déjà exister */
+        }
+      }
+      onStepChange('result')
+    },
+    [executionPhase, onStepChange, quote?.swap_id],
+  )
 
   const runExecution = useCallback(async () => {
     if (!quote) return
@@ -108,6 +160,13 @@ export function PortalSwapExecutionController({
         review_amount_in: snapshot.amount_in,
       })
       onQuoteUpdate(confirmed.quote)
+
+      // PR4 — mode autoritaire : le serveur exécute, le navigateur ne signe rien.
+      if (confirmed.server_authoritative) {
+        await runAuthoritative(quote.swap_id)
+        return
+      }
+
       setExecutionPhase('preparing')
 
       const exec = confirmed.execute
@@ -155,25 +214,20 @@ export function PortalSwapExecutionController({
         return
       }
 
-      const classified =
-        e instanceof SwapExecutionError
-          ? e
-          : classifySwapError(e, executionPhaseToFailurePhase(executionPhase))
-
-      setExecutionPhase('failed')
-      setFailureCopy(resolveSwapFailureCopy(classified))
-      try {
-        await recordSwapFailure(quote.swap_id, {
-          failure_phase: classified.failurePhase,
-          error_code: classified.code,
-          technical_message: classified.technicalMessage,
-        })
-      } catch {
-        /* failure record best-effort — audit DB peut déjà exister */
+      // PR4 — une route client a été refusée (serveur autoritaire) : bascule en suivi serveur.
+      if (e instanceof SwapServerAuthoritativeError) {
+        try {
+          await runAuthoritative(quote.swap_id)
+          return
+        } catch (pollError) {
+          await failWith(pollError)
+          return
+        }
       }
-      onStepChange('result')
+
+      await failWith(e)
     }
-  }, [executionPhase, isExternalWallet, onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, signAndSubmit, swapMockMode])
+  }, [failWith, isExternalWallet, onPriceChanged, onQuoteUpdate, onStepChange, pollUntilTerminal, quote, runAuthoritative, signAndSubmit, swapMockMode])
 
   useEffect(() => {
     if (step !== 'processing' || executionStartedRef.current) return
@@ -281,22 +335,38 @@ export function PortalSwapExecutionController({
   }
 
   if (step === 'processing') {
+    const authoritativeLead =
+      executionPhase === 'queued'
+        ? SWAP_FLOW_UI.queueWaitingLead
+        : SWAP_FLOW_UI.queueAcceptedLead(swapProcessingContext.payLabel, fromAsset, toAsset)
     return (
       <PortalSwapLayout backLabel={SWAP_FLOW_UI.backToWallet} onBackClick={onProcessingClose}>
         <TransactionProcessingPage
-          title={SWAP_FLOW_UI.processingTitle}
+          title={authoritative ? SWAP_FLOW_UI.queueProcessingTitle : SWAP_FLOW_UI.processingTitle}
           lead={
             <>
-              {SWAP_FLOW_UI.processingLead(
-                swapProcessingContext.payLabel,
-                fromAsset,
-                toAsset,
-              )}
+              {authoritative
+                ? authoritativeLead
+                : SWAP_FLOW_UI.processingLead(
+                    swapProcessingContext.payLabel,
+                    fromAsset,
+                    toAsset,
+                  )}
             </>
           }
-          steps={buildSwapProcessingSteps(swapProcessingContext)}
-          progressIndex={swapProcessingStepperIndex(executionPhase)}
-          completedProgressIndex={SWAP_PROCESSING_COMPLETED_INDEX}
+          steps={
+            authoritative
+              ? buildSwapAuthoritativeProcessingSteps(swapProcessingContext)
+              : buildSwapProcessingSteps(swapProcessingContext)
+          }
+          progressIndex={
+            authoritative
+              ? swapAuthoritativeStepperIndex(executionPhase)
+              : swapProcessingStepperIndex(executionPhase)
+          }
+          completedProgressIndex={
+            authoritative ? SWAP_AUTHORITATIVE_COMPLETED_INDEX : SWAP_PROCESSING_COMPLETED_INDEX
+          }
           onClose={onProcessingClose}
         />
       </PortalSwapLayout>

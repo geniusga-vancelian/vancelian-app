@@ -114,10 +114,34 @@ class SwapCoreConfirmPoll:
 
             execute = self._execute.prepare_execute(db, person_id=person_id, swap_id=swap_id)
             freshness = "refreshed" if comparison.delta_bps > 0 else "verified"
+
+            # PR4 — signaler au front le mode autoritaire + l'intent_id pour le suivi.
+            from services.lifi.orchestrator_allowlist import (
+                lifi_authoritative_execution_enabled_for_person,
+            )
+
+            server_authoritative = lifi_authoritative_execution_enabled_for_person(
+                db, person_id
+            )
+            intent_id = None
+            if server_authoritative:
+                from services.transaction_intents.repository import (
+                    TransactionIntentRepository,
+                )
+
+                intent = TransactionIntentRepository.find_by_linked(
+                    db,
+                    linked_table="person_wallet_swaps",
+                    linked_id=swap_id,
+                )
+                intent_id = intent.id if intent is not None else None
+
             return SwapConfirmExecuteResponse(
                 freshness=freshness,
                 quote=fresh_quote,
                 execute=execute,
+                server_authoritative=server_authoritative,
+                intent_id=intent_id,
             )
         except SwapPriceChangedError as exc:
             self._audit_confirm_prepare_failed(db, swap_id, person_id, code=exc.code)

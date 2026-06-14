@@ -19,6 +19,10 @@ export type SwapExecutionPhase =
   | 'signing'
   | 'submitting'
   | 'bridging'
+  // PR4 — phases du mode autoritaire / enqueue-and-wait (exécution serveur, pas de signature client)
+  | 'queued'
+  | 'server_executing'
+  | 'confirming'
   | 'completed'
   | 'failed'
 

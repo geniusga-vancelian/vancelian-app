@@ -24,6 +24,12 @@ export const SWAP_FLOW_UI = {
   processingTitle: 'Échange en cours',
   processingLead: (payLabel: string, fromAsset: string, toAsset: string) =>
     `Votre échange de ${payLabel} ${fromAsset} vers ${toAsset} est en cours d'exécution. Ne fermez pas cette fenêtre.`,
+  // PR4 — mode autoritaire / file d'attente.
+  queueProcessingTitle: 'Échange en file de traitement',
+  queueAcceptedLead: (payLabel: string, fromAsset: string, toAsset: string) =>
+    `Votre échange de ${payLabel} ${fromAsset} vers ${toAsset} a été accepté. Il est traité automatiquement — vous pouvez suivre son avancement ici.`,
+  queueWaitingLead:
+    'Une autre opération financière est en cours. Votre échange démarrera automatiquement dès qu’elle sera terminée. Aucune action de votre part n’est nécessaire.',
   successTitle: 'Échange effectué',
   successLeadReceive: (receiveLabel: string, toAsset: string) => `${receiveLabel} ${toAsset}`,
   successStepsTitle: 'Étapes de votre échange',
