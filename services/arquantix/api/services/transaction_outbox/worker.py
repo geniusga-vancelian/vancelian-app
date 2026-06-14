@@ -99,6 +99,14 @@ def handle_intent_created_event(db: Session, outbox: TransactionOutbox) -> None:
 
     intent = db.query(TransactionIntent).filter(TransactionIntent.id == outbox.intent_id).one()
 
+    # PR 1 — réconciliation read/repair-only : si le swap lié est déjà terminal, propager
+    # son état à l'intent (empêche les intents orphelins en `created`/`queued`).
+    from services.transaction_intents.orphan_intent_reconciliation import (
+        reconcile_intent_from_linked_swap,
+    )
+
+    reconcile_intent_from_linked_swap(db, intent)
+
     if intent.status == IntentStatus.FAILED.value:
         release_orchestrator_product_locks_for_intent(
             db,

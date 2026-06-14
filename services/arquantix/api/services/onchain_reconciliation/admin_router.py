@@ -188,6 +188,56 @@ def post_reconcile_stale_intents(
     return IntentStaleReconcileResponse.model_validate(report)
 
 
+@onchain_reconciliation_admin_router.get("/orphaned-intents")
+def list_orphaned_intents(
+    older_than_minutes: int = Query(10, ge=0, le=10080),
+    person_id: Optional[UUID] = Query(None),
+    limit: int = Query(200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    actor: ActorContext = Depends(_guard),
+):
+    """Visibilité — intents orchestrateur non terminaux dont le swap lié est terminal."""
+    _ = actor
+    from services.transaction_intents.orphan_intent_reconciliation import (
+        find_orphaned_lifi_intents,
+    )
+
+    items = find_orphaned_lifi_intents(
+        db,
+        older_than_minutes=older_than_minutes,
+        limit=limit,
+        person_id=person_id,
+    )
+    return {"count": len(items), "items": items}
+
+
+@onchain_reconciliation_admin_router.post("/orphaned-intents/reconcile")
+def post_reconcile_orphaned_intents(
+    dry_run: bool = Query(True, description="Si true, aucune écriture"),
+    older_than_minutes: int = Query(10, ge=0, le=10080),
+    person_id: Optional[UUID] = Query(None),
+    limit: int = Query(200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    actor: ActorContext = Depends(_guard),
+):
+    """Repair read/repair-only — propage l'état terminal du swap à l'intent orphelin."""
+    _ = actor
+    from services.transaction_intents.orphan_intent_reconciliation import (
+        reconcile_orphaned_lifi_intents,
+    )
+
+    report = reconcile_orphaned_lifi_intents(
+        db,
+        dry_run=dry_run,
+        older_than_minutes=older_than_minutes,
+        limit=limit,
+        person_id=person_id,
+    )
+    if dry_run:
+        db.rollback()
+    return report
+
+
 @onchain_reconciliation_admin_router.get(
     "/intents",
     response_model=IntentListResponse,
